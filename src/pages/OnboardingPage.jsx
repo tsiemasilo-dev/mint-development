@@ -6,11 +6,14 @@ const OnboardingPage = ({ onGetStarted }) => {
       <div className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
         <div className="order-2 flex flex-col px-6 pb-16 pt-10 lg:order-1 lg:px-16 lg:pt-12">
           <div className="flex items-center justify-between">
-            <img src="/assets/mint-logo.svg" alt="Mint logo" className="h-6 w-auto" />
+            <div className="flex items-center gap-3 animate-on-load delay-1">
+              <img src="/assets/mint-logo.svg" alt="Mint logo" className="h-6 w-auto" />
+              <span className="mint-brand text-lg font-semibold tracking-[0.12em]">MINT</span>
+            </div>
           </div>
 
           <div className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center space-y-8 pt-10 lg:pt-0">
-            <div className="space-y-3">
+            <div className="space-y-3 animate-on-load delay-2">
               <h1 className="text-4xl font-semibold text-slate-900 sm:text-5xl">
                 Welcome to <span className="mint-brand">Mint</span>
               </h1>
@@ -19,7 +22,7 @@ const OnboardingPage = ({ onGetStarted }) => {
               </p>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-4 animate-on-load delay-3">
               <button
                 type="button"
                 onClick={onGetStarted}
