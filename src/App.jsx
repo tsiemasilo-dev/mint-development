@@ -10,12 +10,13 @@ const App = () => {
   const [currentPage, setCurrentPage] = useState("auth");
 
   useEffect(() => {
+    setShowPreloader(true);
     const timeoutId = setTimeout(() => {
       setShowPreloader(false);
     }, 1200);
 
     return () => clearTimeout(timeoutId);
-  }, []);
+  }, [currentPage]);
 
   if (showPreloader) {
     return <Preloader />;
