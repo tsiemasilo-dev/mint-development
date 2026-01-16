@@ -29,3 +29,4 @@ npm run deploy
 
 - This project uses Vite + React with Tailwind CSS built through PostCSS.
 - The Vite base path is configured to `./` so static assets resolve on both GitHub Pages and Vercel. If you need a fixed base URL, update `vite.config.js`.
+- Ensure `public/assets/fonts/future-earth.ttf` exists in the repo; it is required for the branded font to load correctly.
