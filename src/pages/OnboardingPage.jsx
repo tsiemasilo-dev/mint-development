@@ -35,7 +35,7 @@ const OnboardingPage = ({ onGetStarted }) => {
         </div>
 
         <div className="order-1 lg:order-2">
-          <div className="relative h-[38vh] w-full overflow-hidden rounded-b-[3rem] lg:h-full lg:rounded-none">
+          <div className="relative h-[65vh] w-full overflow-hidden rounded-b-[3.5rem] [clip-path:ellipse(140%_90%_at_50%_0%)] lg:h-full lg:rounded-none lg:[clip-path:none]">
             <img
               src="/assets/images/onboarding-hero.png"
               alt="Person using a phone"
