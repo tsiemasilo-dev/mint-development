@@ -37,7 +37,7 @@ const OnboardingPage = ({ onGetStarted }) => {
         <div className="order-1 lg:order-2">
           <div className="relative h-[38vh] w-full overflow-hidden rounded-b-[3rem] lg:h-full lg:rounded-none">
             <img
-              src="https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&w=1200&q=80"
+              src="/assets/images/onboarding-hero.png"
               alt="Person using a phone"
               className="h-full w-full object-cover"
             />
