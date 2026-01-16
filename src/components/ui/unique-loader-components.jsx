@@ -21,7 +21,7 @@ export const LoaderOne = () => {
           y: [0, 10, 0],
         }}
         transition={transition(0)}
-        className="h-4 w-4 rounded-full border border-neutral-300 bg-gradient-to-b from-neutral-400 to-neutral-300"
+        className="h-4 w-4 rounded-full border border-purple-300/70 bg-gradient-to-b from-purple-300 via-purple-400 to-purple-600 shadow-[0_0_12px_rgba(168,85,247,0.5)]"
       />
       <motion.div
         initial={{
@@ -31,7 +31,7 @@ export const LoaderOne = () => {
           y: [0, 10, 0],
         }}
         transition={transition(1)}
-        className="h-4 w-4 rounded-full border border-neutral-300 bg-gradient-to-b from-neutral-400 to-neutral-300"
+        className="h-4 w-4 rounded-full border border-purple-300/70 bg-gradient-to-b from-purple-300 via-purple-400 to-purple-600 shadow-[0_0_12px_rgba(168,85,247,0.5)]"
       />
       <motion.div
         initial={{
@@ -41,7 +41,7 @@ export const LoaderOne = () => {
           y: [0, 10, 0],
         }}
         transition={transition(2)}
-        className="h-4 w-4 rounded-full border border-neutral-300 bg-gradient-to-b from-neutral-400 to-neutral-300"
+        className="h-4 w-4 rounded-full border border-purple-300/70 bg-gradient-to-b from-purple-300 via-purple-400 to-purple-600 shadow-[0_0_12px_rgba(168,85,247,0.5)]"
       />
     </div>
   );
