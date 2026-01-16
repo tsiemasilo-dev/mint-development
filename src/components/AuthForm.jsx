@@ -5,7 +5,7 @@ import PrimaryButton from './PrimaryButton.jsx';
 
 const OTP_LENGTH = 6;
 
-const AuthForm = () => {
+const AuthForm = ({ onSignupComplete, onLoginComplete }) => {
   const [currentStep, setCurrentStep] = useState('email');
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
@@ -15,7 +15,6 @@ const AuthForm = () => {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [otp, setOtp] = useState(Array.from({ length: OTP_LENGTH }, () => ''));
-  const [modalState, setModalState] = useState({ open: false, type: 'success' });
   const [toast, setToast] = useState({ message: '', visible: false });
   const toastTimeout = useRef(null);
   const loginTimeout = useRef(null);
@@ -44,19 +43,6 @@ const AuthForm = () => {
       setToast((prev) => ({ ...prev, visible: false }));
     }, 3200);
   };
-
-  const showSuccess = () => {
-    setModalState({ open: true, type: 'success' });
-    if (window.confetti) {
-      window.confetti({ particleCount: 140, spread: 90, origin: { y: 0.6 } });
-    }
-  };
-
-  const showLoading = () => {
-    setModalState({ open: true, type: 'loading' });
-  };
-
-  const closeModal = () => setModalState((prev) => ({ ...prev, open: false }));
 
   useEffect(() => {
     return () => {
@@ -94,7 +80,9 @@ const AuthForm = () => {
       otpRefs.current[0]?.focus();
       return;
     }
-    showSuccess();
+    if (onSignupComplete) {
+      onSignupComplete();
+    }
   };
 
   useEffect(() => {
@@ -161,9 +149,13 @@ const AuthForm = () => {
       return;
     }
 
-    showLoading();
+    if (loginTimeout.current) {
+      clearTimeout(loginTimeout.current);
+    }
     loginTimeout.current = setTimeout(() => {
-      showSuccess();
+      if (onLoginComplete) {
+        onLoginComplete();
+      }
     }, 1500);
   };
 
@@ -450,39 +442,6 @@ const AuthForm = () => {
                 Privacy Policy
               </a>
             </p>
-          </div>
-        </div>
-      </div>
-
-      <div
-        id="modal"
-        className={`fixed inset-0 bg-black/65 backdrop-blur-md ${modalState.open ? 'flex' : 'hidden'} items-center justify-center z-50`}
-      >
-        <div className="bg-card/95 border border-border/30 rounded-2xl p-10 w-full max-w-sm text-center relative shadow-2xl">
-          <button
-            id="close-modal"
-            className="absolute top-5 right-5 text-muted-foreground hover:text-foreground transition"
-            onClick={closeModal}
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-          <div id="modal-content" className="py-6">
-            {modalState.type === 'loading' && (
-              <div className="flex flex-col items-center gap-8 py-12">
-                <div className="w-14 h-14 border-4 border-[var(--primary)] border-t-transparent rounded-full animate-spin"></div>
-                <p className="text-lg font-medium">Signing you in...</p>
-              </div>
-            )}
-            {modalState.type === 'success' && (
-              <div className="flex flex-col items-center gap-8 py-14">
-                <div className="text-7xl animate-bounce">🎉</div>
-                <h3 className="text-2xl font-bold tracking-tight">
-                  Welcome to <span className="mint-brand">MINT</span>!
-                </h3>
-              </div>
-            )}
           </div>
         </div>
       </div>
