@@ -1,5 +1,24 @@
-import AuthPage from './pages/AuthPage.jsx';
+import { useEffect, useState } from "react";
 
-const App = () => <AuthPage />;
+import Preloader from "./components/Preloader.jsx";
+import AuthPage from "./pages/AuthPage.jsx";
+
+const App = () => {
+  const [showPreloader, setShowPreloader] = useState(true);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setShowPreloader(false);
+    }, 1200);
+
+    return () => clearTimeout(timeoutId);
+  }, []);
+
+  if (showPreloader) {
+    return <Preloader />;
+  }
+
+  return <AuthPage />;
+};
 
 export default App;
