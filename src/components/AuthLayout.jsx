@@ -8,8 +8,8 @@ const AuthLayout = ({ children }) => (
 
     <div className="relative z-20 flex items-center gap-4 px-6 pt-6 animate-on-load delay-1">
       <img
-        src="https://aazofjsssobejhkyyiqv.supabase.co/storage/v1/object/public/AlgoHive/ICON%20AHM.svg"
-        alt="AlgoMoney logo"
+        src="/assets/mint-logo.svg"
+        alt="Mint logo"
         className="h-4 w-auto drop-shadow-md"
       />
       <h1 className="mint-brand text-xl font-bold tracking-[0.12em]">MINT</h1>
