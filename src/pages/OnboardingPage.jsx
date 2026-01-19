@@ -2,8 +2,8 @@ import React from "react";
 
 const OnboardingPage = ({ onCreateAccount, onLogin }) => {
   return (
-    <div className="min-h-screen bg-white">
-      <div className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
+    <div className="h-screen bg-white">
+      <div className="grid h-screen lg:grid-cols-[1.05fr_1fr]">
         <div className="order-2 flex flex-col px-6 pb-16 pt-10 lg:order-1 lg:px-16 lg:pt-12">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3 animate-on-load delay-1">
@@ -22,20 +22,20 @@ const OnboardingPage = ({ onCreateAccount, onLogin }) => {
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-4 animate-on-load delay-3">
-              <button
-                type="button"
-                onClick={onCreateAccount}
-                className="inline-flex flex-1 items-center justify-center rounded-full bg-slate-900 px-6 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5 sm:flex-none"
-              >
-                Create Account
-              </button>
+            <div className="flex flex-col gap-4 animate-on-load delay-3 sm:items-start">
               <button
                 type="button"
                 onClick={onLogin}
-                className="inline-flex flex-1 items-center justify-center rounded-full border border-slate-200 bg-white px-6 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-slate-900 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 sm:flex-none"
+                className="inline-flex w-full items-center justify-center rounded-full border border-slate-200 bg-white px-6 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-slate-900 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 sm:w-auto"
               >
                 Login
+              </button>
+              <button
+                type="button"
+                onClick={onCreateAccount}
+                className="inline-flex w-full items-center justify-center rounded-full bg-slate-900 px-6 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5 sm:w-auto"
+              >
+                Create Account
               </button>
             </div>
           </div>
