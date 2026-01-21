@@ -179,21 +179,12 @@ const Navbar = ({ activeTab, setActiveTab }) => {
                       }}
                     >
                       <div className="glass flex h-20 w-20 flex-col items-center justify-center gap-1.5 border border-white/40 bg-white/30 shadow-2xl transition-all duration-300 group-active:scale-95 group-hover:bg-white/50">
-                        <motion.div
-                          /* Counter-rotation: We must invert the parent's rotation 
-                             so icons stay upright during the entire clockwise spin.
-                          */
-                          initial={{ rotate: 180 }}
-                          animate={{ rotate: 0 }}
-                          exit={{ rotate: -180 }}
-                          transition={{ type: "spring", stiffness: 100, damping: 22 }}
-                          className="flex flex-col items-center"
-                        >
+                        <div className="flex flex-col items-center">
                           <action.icon size={22} strokeWidth={1.2} className="text-slate-800" />
                           <span className="mt-1 text-[9px] font-bold uppercase tracking-[0.08em] text-slate-700">
                             {action.label}
                           </span>
-                        </motion.div>
+                        </div>
                       </div>
                     </button>
                   ))}
