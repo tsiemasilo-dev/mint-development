@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Home, 
@@ -15,6 +15,8 @@ import {
 
 const Navbar = ({ activeTab, setActiveTab }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [wheelCenter, setWheelCenter] = useState({ x: 0, y: 0 });
+  const plusButtonRef = useRef(null);
 
   const tabs = [
     { id: "home", label: "Home", icon: Home },
@@ -25,14 +27,59 @@ const Navbar = ({ activeTab, setActiveTab }) => {
   ];
 
   const transactActions = [
-    { label: "Deposit", icon: ArrowDownCircle, angle: -180 },
-    { label: "Pay loan", icon: Wallet, angle: -135 },
-    { id: "invest", label: "Invest", icon: TrendingUp, angle: -90 },
-    { label: "Credit", icon: Zap, angle: -45 },
+    { label: "Deposit", icon: ArrowDownCircle, angle: 180 },
+    { label: "Pay loan", icon: Wallet, angle: 135 },
+    { id: "invest", label: "Invest", icon: TrendingUp, angle: 90 },
+    { label: "Credit", icon: Zap, angle: 45 },
     { label: "Rewards", icon: Gift, angle: 0 },
   ];
 
-  const radius = 145; 
+  const updateWheelCenter = () => {
+    const button = plusButtonRef.current;
+    if (!button) {
+      return;
+    }
+    const rect = button.getBoundingClientRect();
+    setWheelCenter({
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2,
+    });
+  };
+
+  const radius = useMemo(() => {
+    if (!wheelCenter.x || !wheelCenter.y) {
+      return 0;
+    }
+
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    const baseRadius = Math.min(Math.max(width * 0.28, 90), 140);
+    const bubbleRadius = 40;
+    const maxRadius = Math.min(
+      wheelCenter.x,
+      width - wheelCenter.x,
+      wheelCenter.y,
+      height - wheelCenter.y
+    ) - bubbleRadius - 8;
+
+    return Math.max(0, Math.min(baseRadius, maxRadius));
+  }, [wheelCenter]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    updateWheelCenter();
+    const handleResize = () => updateWheelCenter();
+    window.addEventListener("resize", handleResize);
+    window.addEventListener("scroll", handleResize, true);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("scroll", handleResize, true);
+    };
+  }, [isOpen]);
 
   return (
     <>
@@ -49,11 +96,11 @@ const Navbar = ({ activeTab, setActiveTab }) => {
       </AnimatePresence>
 
       <nav
-        className={`fixed bottom-0 left-0 right-0 z-50 border-t border-white/20 pb-5 pt-2 shadow-[0_-10px_40px_rgba(0,0,0,0.03)] ${
+        className={`fixed bottom-0 left-0 right-0 z-50 border-t border-white/20 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-10px_40px_rgba(0,0,0,0.03)] ${
           isOpen ? "bg-white/80 backdrop-blur-3xl" : "bg-white/70 backdrop-blur-2xl"
         }`}
       >
-        <div className="mx-auto flex w-full max-w-lg items-center justify-center gap-8 relative px-4">
+        <div className="relative mx-auto flex w-full max-w-lg items-center justify-between px-4">
           
           <AnimatePresence>
             {isOpen && (
@@ -67,7 +114,11 @@ const Navbar = ({ activeTab, setActiveTab }) => {
                 animate={{ rotate: 0, opacity: 1, scale: 1 }}
                 exit={{ rotate: 180, opacity: 0, scale: 0.8 }}
                 transition={{ type: "spring", stiffness: 100, damping: 22 }}
-                className="absolute left-1/2 bottom-10 h-0 w-0 flex items-center justify-center"
+                className="fixed z-50 h-0 w-0 pointer-events-none"
+                style={{
+                  left: `${wheelCenter.x}px`,
+                  top: `${wheelCenter.y}px`,
+                }}
               >
                 {transactActions.map((action) => (
                   <button
@@ -76,9 +127,13 @@ const Navbar = ({ activeTab, setActiveTab }) => {
                       if(action.id === "invest") setActiveTab("investments");
                       setIsOpen(false);
                     }}
-                    className="absolute flex items-center justify-center group"
+                    className="absolute flex items-center justify-center group pointer-events-auto"
                     style={{
-                      transform: `translate(${Math.cos(action.angle * (Math.PI / 180)) * radius}px, ${Math.sin(action.angle * (Math.PI / 180)) * radius}px)`
+                      transform: `translate(${
+                        Math.cos(action.angle * (Math.PI / 180)) * radius
+                      }px, ${
+                        -Math.sin(action.angle * (Math.PI / 180)) * radius
+                      }px)`
                     }}
                   >
                     <div className="glass flex h-20 w-20 flex-col items-center justify-center gap-1.5 border border-white/40 bg-white shadow-2xl transition-all duration-300 group-active:scale-95 group-hover:bg-white/90">
@@ -107,15 +162,25 @@ const Navbar = ({ activeTab, setActiveTab }) => {
           {tabs.map((tab) => {
             if (tab.isCenter) {
               return (
-                <button
-                  key={tab.id}
-                  onClick={() => setIsOpen(!isOpen)}
-                  className="relative z-50 flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-white shadow-xl transition-all active:scale-90"
-                >
-                  <motion.div animate={{ rotate: isOpen ? 135 : 0 }}>
-                    <Plus size={28} strokeWidth={1.5} />
-                  </motion.div>
-                </button>
+                <div key={tab.id} className="flex flex-1 items-center justify-center">
+                  <button
+                    ref={plusButtonRef}
+                    onClick={() => {
+                      const nextIsOpen = !isOpen;
+                      setIsOpen(nextIsOpen);
+                      if (!isOpen) {
+                        requestAnimationFrame(updateWheelCenter);
+                      }
+                    }}
+                    onFocus={updateWheelCenter}
+                    onMouseEnter={updateWheelCenter}
+                    className="relative z-50 flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-white shadow-xl transition-all active:scale-90"
+                  >
+                    <motion.div animate={{ rotate: isOpen ? 135 : 0 }}>
+                      <Plus size={28} strokeWidth={1.5} />
+                    </motion.div>
+                  </button>
+                </div>
               );
             }
 
@@ -124,12 +189,12 @@ const Navbar = ({ activeTab, setActiveTab }) => {
               <button
                 key={tab.id}
                 onClick={() => { setActiveTab(tab.id); setIsOpen(false); }}
-                className={`flex flex-col items-center gap-1 transition-all duration-300 ${
+                className={`flex flex-1 flex-col items-center justify-center gap-1 leading-none transition-all duration-300 ${
                   isActive ? "text-indigo-600 scale-110" : "text-slate-400 opacity-60"
                 }`}
               >
                 <tab.icon size={20} strokeWidth={isActive ? 1.8 : 1.2} />
-                <span className="text-[8px] font-black uppercase tracking-[0.1em]">
+                <span className="text-[8px] font-black uppercase tracking-[0.1em] leading-none">
                   {tab.label}
                 </span>
               </button>
