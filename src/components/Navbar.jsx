@@ -48,7 +48,11 @@ const Navbar = ({ activeTab, setActiveTab }) => {
         )}
       </AnimatePresence>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/70 border-t border-white/20 pb-5 pt-2 backdrop-blur-2xl shadow-[0_-10px_40px_rgba(0,0,0,0.03)]">
+      <nav
+        className={`fixed bottom-0 left-0 right-0 z-50 border-t border-white/20 pb-5 pt-2 shadow-[0_-10px_40px_rgba(0,0,0,0.03)] ${
+          isOpen ? "bg-white/80 backdrop-blur-3xl" : "bg-white/70 backdrop-blur-2xl"
+        }`}
+      >
         <div className="mx-auto flex w-full max-w-lg items-center justify-center gap-8 relative px-4">
           
           <AnimatePresence>
@@ -77,7 +81,7 @@ const Navbar = ({ activeTab, setActiveTab }) => {
                       transform: `translate(${Math.cos(action.angle * (Math.PI / 180)) * radius}px, ${Math.sin(action.angle * (Math.PI / 180)) * radius}px)`
                     }}
                   >
-                    <div className="glass flex h-20 w-20 flex-col items-center justify-center gap-1.5 border border-white/40 bg-white/30 shadow-2xl transition-all duration-300 group-active:scale-95 group-hover:bg-white/50">
+                    <div className="glass flex h-20 w-20 flex-col items-center justify-center gap-1.5 border border-white/40 bg-white shadow-2xl transition-all duration-300 group-active:scale-95 group-hover:bg-white/90">
                       <motion.div
                         /* Counter-rotation: We must invert the parent's rotation 
                            so icons stay upright during the entire clockwise spin.
@@ -106,7 +110,7 @@ const Navbar = ({ activeTab, setActiveTab }) => {
                 <button
                   key={tab.id}
                   onClick={() => setIsOpen(!isOpen)}
-                  className="relative -top-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-white shadow-xl transition-all active:scale-90"
+                  className="relative z-50 flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-white shadow-xl transition-all active:scale-90"
                 >
                   <motion.div animate={{ rotate: isOpen ? 135 : 0 }}>
                     <Plus size={28} strokeWidth={1.5} />
