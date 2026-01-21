@@ -155,7 +155,9 @@ const Navbar = ({ activeTab, setActiveTab }) => {
                 updateWheelCenter();
                 setIsOpen(!isOpen);
               }}
-              className="relative z-[90] flex h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full bg-slate-900 text-white shadow-xl transition-all active:scale-90"
+              className={`relative z-[90] flex h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full bg-slate-900 text-white shadow-xl transition-all active:scale-90 ${
+                isOpen ? "blur-none opacity-100" : ""
+              }`}
             >
               <motion.div animate={{ rotate: isOpen ? 135 : 0 }}>
                 <Plus size={28} strokeWidth={1.5} />
