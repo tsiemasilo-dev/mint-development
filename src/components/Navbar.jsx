@@ -68,7 +68,7 @@ const Navbar = ({ activeTab, setActiveTab }) => {
 
     const width = window.innerWidth;
     const safeInsetBottom = getSafeAreaInsetBottom();
-    const baseRadius = Math.min(Math.max(width * 0.28, 110), 150);
+    const baseRadius = Math.min(Math.max(width * 0.56, 220), 300);
     const maxBottom = window.innerHeight - safeInsetBottom - 12;
     const bottomAngles = [210, 330];
 
