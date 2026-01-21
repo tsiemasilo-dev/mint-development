@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Home, 
@@ -65,17 +66,18 @@ const Navbar = ({ activeTab, setActiveTab }) => {
     return Math.max(0, Math.min(baseRadius, maxRadius));
   }, [wheelCenter]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!isOpen) {
       return;
     }
 
-    updateWheelCenter();
+    const rafId = requestAnimationFrame(updateWheelCenter);
     const handleResize = () => updateWheelCenter();
     window.addEventListener("resize", handleResize);
     window.addEventListener("scroll", handleResize, true);
 
     return () => {
+      cancelAnimationFrame(rafId);
       window.removeEventListener("resize", handleResize);
       window.removeEventListener("scroll", handleResize, true);
     };
@@ -83,17 +85,20 @@ const Navbar = ({ activeTab, setActiveTab }) => {
 
   return (
     <>
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setIsOpen(false)}
-            className="fixed inset-0 z-40 bg-black/10 backdrop-blur-[8px]"
-          />
-        )}
-      </AnimatePresence>
+      {createPortal(
+        <AnimatePresence>
+          {isOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsOpen(false)}
+              className="fixed inset-0 z-[60] bg-black/10 backdrop-blur-[8px]"
+            />
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
       <nav
         className={`fixed bottom-0 left-0 right-0 z-50 border-t border-white/20 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-10px_40px_rgba(0,0,0,0.03)] ${
@@ -102,62 +107,65 @@ const Navbar = ({ activeTab, setActiveTab }) => {
       >
         <div className="relative mx-auto flex w-full max-w-lg items-center justify-between px-4">
           
-          <AnimatePresence>
-            {isOpen && (
-              <motion.div
-                /* LOGIC: Always rotate clockwise.
-                   Initial: -180 (Enter from left)
-                   Animate: 0 (Resting position)
-                   Exit: 180 (Exit to right, completing the clockwise circle)
-                */
-                initial={{ rotate: -180, opacity: 0, scale: 0.8 }}
-                animate={{ rotate: 0, opacity: 1, scale: 1 }}
-                exit={{ rotate: 180, opacity: 0, scale: 0.8 }}
-                transition={{ type: "spring", stiffness: 100, damping: 22 }}
-                className="fixed z-50 h-0 w-0 pointer-events-none"
-                style={{
-                  left: `${wheelCenter.x}px`,
-                  top: `${wheelCenter.y}px`,
-                }}
-              >
-                {transactActions.map((action) => (
-                  <button
-                    key={action.label}
-                    onClick={() => {
-                      if(action.id === "invest") setActiveTab("investments");
-                      setIsOpen(false);
-                    }}
-                    className="absolute flex items-center justify-center group pointer-events-auto"
-                    style={{
-                      transform: `translate(${
-                        Math.cos(action.angle * (Math.PI / 180)) * radius
-                      }px, ${
-                        -Math.sin(action.angle * (Math.PI / 180)) * radius
-                      }px)`
-                    }}
-                  >
-                    <div className="glass flex h-20 w-20 flex-col items-center justify-center gap-1.5 border border-white/40 bg-white shadow-2xl transition-all duration-300 group-active:scale-95 group-hover:bg-white/90">
-                      <motion.div
-                        /* Counter-rotation: We must invert the parent's rotation 
-                           so icons stay upright during the entire clockwise spin.
-                        */
-                        initial={{ rotate: 180 }}
-                        animate={{ rotate: 0 }}
-                        exit={{ rotate: -180 }}
-                        transition={{ type: "spring", stiffness: 100, damping: 22 }}
-                        className="flex flex-col items-center"
-                      >
-                        <action.icon size={22} strokeWidth={1.2} className="text-slate-800" />
-                        <span className="mt-1 text-[9px] font-bold uppercase tracking-[0.08em] text-slate-700">
-                          {action.label}
-                        </span>
-                      </motion.div>
-                    </div>
-                  </button>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {createPortal(
+            <AnimatePresence>
+              {isOpen && (
+                <motion.div
+                  /* LOGIC: Always rotate clockwise.
+                     Initial: -180 (Enter from left)
+                     Animate: 0 (Resting position)
+                     Exit: 180 (Exit to right, completing the clockwise circle)
+                  */
+                  initial={{ rotate: -180, opacity: 0, scale: 0.8 }}
+                  animate={{ rotate: 0, opacity: 1, scale: 1 }}
+                  exit={{ rotate: 180, opacity: 0, scale: 0.8 }}
+                  transition={{ type: "spring", stiffness: 100, damping: 22 }}
+                  className="fixed z-[70] h-0 w-0 pointer-events-none"
+                  style={{
+                    left: `${wheelCenter.x}px`,
+                    top: `${wheelCenter.y}px`,
+                  }}
+                >
+                  {transactActions.map((action) => (
+                    <button
+                      key={action.label}
+                      onClick={() => {
+                        if(action.id === "invest") setActiveTab("investments");
+                        setIsOpen(false);
+                      }}
+                      className="absolute flex items-center justify-center group pointer-events-auto"
+                      style={{
+                        transform: `translate(${
+                          Math.cos(action.angle * (Math.PI / 180)) * radius
+                        }px, ${
+                          -Math.sin(action.angle * (Math.PI / 180)) * radius
+                        }px)`
+                      }}
+                    >
+                      <div className="glass flex h-20 w-20 flex-col items-center justify-center gap-1.5 border border-white/40 bg-white shadow-2xl transition-all duration-300 group-active:scale-95 group-hover:bg-white/90">
+                        <motion.div
+                          /* Counter-rotation: We must invert the parent's rotation 
+                             so icons stay upright during the entire clockwise spin.
+                          */
+                          initial={{ rotate: 180 }}
+                          animate={{ rotate: 0 }}
+                          exit={{ rotate: -180 }}
+                          transition={{ type: "spring", stiffness: 100, damping: 22 }}
+                          className="flex flex-col items-center"
+                        >
+                          <action.icon size={22} strokeWidth={1.2} className="text-slate-800" />
+                          <span className="mt-1 text-[9px] font-bold uppercase tracking-[0.08em] text-slate-700">
+                            {action.label}
+                          </span>
+                        </motion.div>
+                      </div>
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>,
+            document.body
+          )}
 
           {tabs.map((tab) => {
             if (tab.isCenter) {
