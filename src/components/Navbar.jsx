@@ -68,7 +68,7 @@ const Navbar = ({ activeTab, setActiveTab }) => {
 
     const width = window.innerWidth;
     const safeInsetBottom = getSafeAreaInsetBottom();
-    const baseRadius = Math.min(Math.max(width * 0.28, 110), 150);
+    const baseRadius = Math.min(Math.max(width * 0.34, 130), 180);
     const maxBottom = window.innerHeight - safeInsetBottom - 12;
     const bottomAngles = [210, 330];
 
@@ -94,9 +94,9 @@ const Navbar = ({ activeTab, setActiveTab }) => {
 
     const angles = {
       deposit: 210,
-      payLoan: 150,
+      payLoan: 160,
       invest: 90,
-      credit: 30,
+      credit: 20,
       rewards: 330,
     };
 
@@ -164,38 +164,50 @@ const Navbar = ({ activeTab, setActiveTab }) => {
                   transition={{ type: "spring", stiffness: 100, damping: 22 }}
                   className="fixed inset-0 z-[70] overflow-visible pointer-events-none"
                 >
-                  {bubblePositions.map((action) => (
-                    <button
+                  {bubblePositions.map((action, index) => (
+                    <motion.button
                       key={action.label}
                       onClick={() => {
                         if(action.id === "invest") setActiveTab("investments");
                         setIsOpen(false);
                       }}
                       className="fixed flex items-center justify-center group pointer-events-auto"
+                      initial={{
+                        left: wheelCenter.x,
+                        top: wheelCenter.y,
+                        scale: 0.85,
+                        opacity: 0,
+                      }}
+                      animate={{
+                        left: action.x,
+                        top: action.y,
+                        scale: 1,
+                        opacity: 1,
+                      }}
+                      exit={{
+                        left: wheelCenter.x,
+                        top: wheelCenter.y,
+                        scale: 0.85,
+                        opacity: 0,
+                      }}
+                      transition={{
+                        duration: 0.22,
+                        ease: "easeOut",
+                        delay: index * 0.03,
+                      }}
                       style={{
-                        left: `${action.x}px`,
-                        top: `${action.y}px`,
                         transform: "translate(-50%, -50%)",
                       }}
                     >
                       <div className="glass flex h-20 w-20 flex-col items-center justify-center gap-1.5 border border-white/40 bg-white/30 shadow-2xl transition-all duration-300 group-active:scale-95 group-hover:bg-white/50">
-                        <motion.div
-                          /* Counter-rotation: We must invert the parent's rotation 
-                             so icons stay upright during the entire clockwise spin.
-                          */
-                          initial={{ rotate: 180 }}
-                          animate={{ rotate: 0 }}
-                          exit={{ rotate: -180 }}
-                          transition={{ type: "spring", stiffness: 100, damping: 22 }}
-                          className="flex flex-col items-center"
-                        >
+                        <div className="flex flex-col items-center">
                           <action.icon size={22} strokeWidth={1.2} className="text-slate-800" />
                           <span className="mt-1 text-[9px] font-bold uppercase tracking-[0.08em] text-slate-700">
                             {action.label}
                           </span>
-                        </motion.div>
+                        </div>
                       </div>
-                    </button>
+                    </motion.button>
                   ))}
                 </motion.div>
               )}
