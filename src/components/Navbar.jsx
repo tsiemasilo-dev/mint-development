@@ -158,47 +158,36 @@ const Navbar = ({ activeTab, setActiveTab }) => {
             <AnimatePresence>
               {isOpen && (
                 <motion.div
-                  initial={{ opacity: 0, rotate: 180 }}
-                  animate={{ opacity: 1, rotate: 0 }}
-                  exit={{ opacity: 0, rotate: 180 }}
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
                   transition={{ type: "spring", stiffness: 100, damping: 22 }}
                   className="fixed inset-0 z-[70] overflow-visible pointer-events-none"
                 >
-                  <div
-                    className="absolute h-0 w-0"
-                    style={{
-                      left: `${wheelCenter.x}px`,
-                      top: `${wheelCenter.y}px`,
-                      transform: "translate(-50%, -50%)",
-                    }}
-                  >
-                    {bubblePositions.map((action) => (
-                      <button
-                        key={action.label}
-                        onClick={() => {
-                          if(action.id === "invest") setActiveTab("investments");
-                          setIsOpen(false);
-                        }}
-                        className="absolute flex items-center justify-center group pointer-events-auto"
-                        style={{
-                          transform: `translate(${
-                            action.x - wheelCenter.x
-                          }px, ${
-                            action.y - wheelCenter.y
-                          }px)`
-                        }}
-                      >
-                        <div className="glass flex h-20 w-20 flex-col items-center justify-center gap-1.5 border border-white/40 bg-white/30 shadow-2xl transition-all duration-300 group-active:scale-95 group-hover:bg-white/50">
-                          <div className="flex flex-col items-center">
-                            <action.icon size={22} strokeWidth={1.2} className="text-slate-800" />
-                            <span className="mt-1 text-[9px] font-bold uppercase tracking-[0.08em] text-slate-700">
-                              {action.label}
-                            </span>
-                          </div>
+                  {bubblePositions.map((action) => (
+                    <button
+                      key={action.label}
+                      onClick={() => {
+                        if(action.id === "invest") setActiveTab("investments");
+                        setIsOpen(false);
+                      }}
+                      className="fixed flex items-center justify-center group pointer-events-auto"
+                      style={{
+                        left: `${action.x}px`,
+                        top: `${action.y}px`,
+                        transform: "translate(-50%, -50%)",
+                      }}
+                    >
+                      <div className="glass flex h-20 w-20 flex-col items-center justify-center gap-1.5 border border-white/40 bg-white/30 shadow-2xl transition-all duration-300 group-active:scale-95 group-hover:bg-white/50">
+                        <div className="flex flex-col items-center">
+                          <action.icon size={22} strokeWidth={1.2} className="text-slate-800" />
+                          <span className="mt-1 text-[9px] font-bold uppercase tracking-[0.08em] text-slate-700">
+                            {action.label}
+                          </span>
                         </div>
-                      </button>
-                    ))}
-                  </div>
+                      </div>
+                    </button>
+                  ))}
                 </motion.div>
               )}
             </AnimatePresence>,
