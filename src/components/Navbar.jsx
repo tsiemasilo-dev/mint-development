@@ -18,6 +18,7 @@ const Navbar = ({ activeTab, setActiveTab }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [wheelCenter, setWheelCenter] = useState({ x: 0, y: 0 });
   const plusButtonRef = useRef(null);
+  const navRef = useRef(null);
 
   const tabs = [
     { id: "home", label: "Home", icon: Home },
@@ -35,15 +36,31 @@ const Navbar = ({ activeTab, setActiveTab }) => {
     { label: "Rewards", icon: Gift, angle: 0 },
   ];
 
+  const getSafeAreaInsetBottom = () => {
+    const probe = document.createElement("div");
+    probe.style.position = "fixed";
+    probe.style.bottom = "0";
+    probe.style.height = "env(safe-area-inset-bottom)";
+    probe.style.pointerEvents = "none";
+    document.body.appendChild(probe);
+    const height = parseFloat(window.getComputedStyle(probe).height) || 0;
+    document.body.removeChild(probe);
+    return height;
+  };
+
   const updateWheelCenter = () => {
     const button = plusButtonRef.current;
-    if (!button) {
+    const nav = navRef.current;
+    if (!button || !nav) {
       return;
     }
     const rect = button.getBoundingClientRect();
+    const navRect = nav.getBoundingClientRect();
+    const safeInsetBottom = getSafeAreaInsetBottom();
+    const maxCenterY = window.innerHeight - safeInsetBottom - navRect.height - 20;
     setWheelCenter({
       x: rect.left + rect.width / 2,
-      y: rect.top + rect.height / 2,
+      y: Math.min(rect.top + rect.height / 2, maxCenterY),
     });
   };
 
@@ -101,6 +118,7 @@ const Navbar = ({ activeTab, setActiveTab }) => {
       )}
 
       <nav
+        ref={navRef}
         className={`fixed bottom-0 left-0 right-0 z-50 border-t border-white/20 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-10px_40px_rgba(0,0,0,0.03)] ${
           isOpen ? "bg-white/80 backdrop-blur-3xl" : "bg-white/70 backdrop-blur-2xl"
         }`}
@@ -120,47 +138,51 @@ const Navbar = ({ activeTab, setActiveTab }) => {
                   animate={{ rotate: 0, opacity: 1, scale: 1 }}
                   exit={{ rotate: 180, opacity: 0, scale: 0.8 }}
                   transition={{ type: "spring", stiffness: 100, damping: 22 }}
-                  className="fixed z-[70] h-0 w-0 pointer-events-none"
-                  style={{
-                    left: `${wheelCenter.x}px`,
-                    top: `${wheelCenter.y}px`,
-                  }}
+                  className="fixed inset-0 z-[70] overflow-visible pointer-events-none"
                 >
-                  {transactActions.map((action) => (
-                    <button
-                      key={action.label}
-                      onClick={() => {
-                        if(action.id === "invest") setActiveTab("investments");
-                        setIsOpen(false);
-                      }}
-                      className="absolute flex items-center justify-center group pointer-events-auto"
-                      style={{
-                        transform: `translate(${
-                          Math.cos(action.angle * (Math.PI / 180)) * radius
-                        }px, ${
-                          -Math.sin(action.angle * (Math.PI / 180)) * radius
-                        }px)`
-                      }}
-                    >
-                      <div className="glass flex h-20 w-20 flex-col items-center justify-center gap-1.5 border border-white/40 bg-white shadow-2xl transition-all duration-300 group-active:scale-95 group-hover:bg-white/90">
-                        <motion.div
-                          /* Counter-rotation: We must invert the parent's rotation 
-                             so icons stay upright during the entire clockwise spin.
-                          */
-                          initial={{ rotate: 180 }}
-                          animate={{ rotate: 0 }}
-                          exit={{ rotate: -180 }}
-                          transition={{ type: "spring", stiffness: 100, damping: 22 }}
-                          className="flex flex-col items-center"
-                        >
-                          <action.icon size={22} strokeWidth={1.2} className="text-slate-800" />
-                          <span className="mt-1 text-[9px] font-bold uppercase tracking-[0.08em] text-slate-700">
-                            {action.label}
-                          </span>
-                        </motion.div>
-                      </div>
-                    </button>
-                  ))}
+                  <div
+                    className="absolute h-0 w-0"
+                    style={{
+                      left: `${wheelCenter.x}px`,
+                      top: `${wheelCenter.y}px`,
+                    }}
+                  >
+                    {transactActions.map((action) => (
+                      <button
+                        key={action.label}
+                        onClick={() => {
+                          if(action.id === "invest") setActiveTab("investments");
+                          setIsOpen(false);
+                        }}
+                        className="absolute flex items-center justify-center group pointer-events-auto"
+                        style={{
+                          transform: `translate(${
+                            Math.cos(action.angle * (Math.PI / 180)) * radius
+                          }px, ${
+                            -Math.sin(action.angle * (Math.PI / 180)) * radius
+                          }px)`
+                        }}
+                      >
+                        <div className="glass flex h-20 w-20 flex-col items-center justify-center gap-1.5 border border-white/40 bg-white/30 shadow-2xl transition-all duration-300 group-active:scale-95 group-hover:bg-white/50">
+                          <motion.div
+                            /* Counter-rotation: We must invert the parent's rotation 
+                               so icons stay upright during the entire clockwise spin.
+                            */
+                            initial={{ rotate: 180 }}
+                            animate={{ rotate: 0 }}
+                            exit={{ rotate: -180 }}
+                            transition={{ type: "spring", stiffness: 100, damping: 22 }}
+                            className="flex flex-col items-center"
+                          >
+                            <action.icon size={22} strokeWidth={1.2} className="text-slate-800" />
+                            <span className="mt-1 text-[9px] font-bold uppercase tracking-[0.08em] text-slate-700">
+                              {action.label}
+                            </span>
+                          </motion.div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>,
