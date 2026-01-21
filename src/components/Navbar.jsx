@@ -29,11 +29,11 @@ const Navbar = ({ activeTab, setActiveTab }) => {
   ];
 
   const transactActions = [
-    { label: "Deposit", icon: ArrowDownCircle, angle: 180 },
-    { label: "Pay loan", icon: Wallet, angle: 135 },
-    { id: "invest", label: "Invest", icon: TrendingUp, angle: 90 },
-    { label: "Credit", icon: Zap, angle: 45 },
-    { label: "Rewards", icon: Gift, angle: 0 },
+    { id: "deposit", label: "Deposit", icon: ArrowDownCircle },
+    { id: "payLoan", label: "Pay loan", icon: Wallet },
+    { id: "invest", label: "Invest", icon: TrendingUp },
+    { id: "credit", label: "Credit", icon: Zap },
+    { id: "rewards", label: "Rewards", icon: Gift },
   ];
 
   const getSafeAreaInsetBottom = () => {
@@ -55,12 +55,9 @@ const Navbar = ({ activeTab, setActiveTab }) => {
       return;
     }
     const rect = button.getBoundingClientRect();
-    const navRect = nav.getBoundingClientRect();
-    const safeInsetBottom = getSafeAreaInsetBottom();
-    const maxCenterY = window.innerHeight - safeInsetBottom - navRect.height - 20;
     setWheelCenter({
       x: rect.left + rect.width / 2,
-      y: Math.min(rect.top + rect.height / 2, maxCenterY),
+      y: rect.top + rect.height / 2,
     });
   };
 
@@ -70,18 +67,50 @@ const Navbar = ({ activeTab, setActiveTab }) => {
     }
 
     const width = window.innerWidth;
-    const height = window.innerHeight;
-    const baseRadius = Math.min(Math.max(width * 0.28, 90), 140);
-    const bubbleRadius = 40;
-    const maxRadius = Math.min(
-      wheelCenter.x,
-      width - wheelCenter.x,
-      wheelCenter.y,
-      height - wheelCenter.y
-    ) - bubbleRadius - 8;
+    const safeInsetBottom = getSafeAreaInsetBottom();
+    const baseRadius = Math.min(Math.max(width * 0.28, 110), 150);
+    const maxBottom = window.innerHeight - safeInsetBottom - 12;
+    const bottomAngles = [210, 330];
 
-    return Math.max(0, Math.min(baseRadius, maxRadius));
+    let adjustedRadius = baseRadius;
+    bottomAngles.forEach((angle) => {
+      const radians = angle * (Math.PI / 180);
+      const sinValue = Math.sin(radians);
+      if (sinValue < 0) {
+        const limit = (maxBottom - wheelCenter.y) / Math.abs(sinValue);
+        if (Number.isFinite(limit)) {
+          adjustedRadius = Math.min(adjustedRadius, limit);
+        }
+      }
+    });
+
+    return Math.max(0, adjustedRadius);
   }, [wheelCenter]);
+
+  const bubblePositions = useMemo(() => {
+    if (!wheelCenter.x || !wheelCenter.y || !radius) {
+      return [];
+    }
+
+    const angles = {
+      deposit: 210,
+      payLoan: 150,
+      invest: 90,
+      credit: 30,
+      rewards: 330,
+    };
+
+    return transactActions.map((action) => {
+      const angle = angles[action.id];
+      const radians = angle * (Math.PI / 180);
+      return {
+        ...action,
+        angle,
+        x: wheelCenter.x + radius * Math.cos(radians),
+        y: wheelCenter.y - radius * Math.sin(radians),
+      };
+    });
+  }, [radius, transactActions, wheelCenter]);
 
   useLayoutEffect(() => {
     if (!isOpen) {
@@ -129,60 +158,45 @@ const Navbar = ({ activeTab, setActiveTab }) => {
             <AnimatePresence>
               {isOpen && (
                 <motion.div
-                  /* LOGIC: Always rotate clockwise.
-                     Initial: -180 (Enter from left)
-                     Animate: 0 (Resting position)
-                     Exit: 180 (Exit to right, completing the clockwise circle)
-                  */
-                  initial={{ rotate: -180, opacity: 0, scale: 0.8 }}
-                  animate={{ rotate: 0, opacity: 1, scale: 1 }}
-                  exit={{ rotate: 180, opacity: 0, scale: 0.8 }}
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
                   transition={{ type: "spring", stiffness: 100, damping: 22 }}
                   className="fixed inset-0 z-[70] overflow-visible pointer-events-none"
                 >
-                  <div
-                    className="absolute h-0 w-0"
-                    style={{
-                      left: `${wheelCenter.x}px`,
-                      top: `${wheelCenter.y}px`,
-                    }}
-                  >
-                    {transactActions.map((action) => (
-                      <button
-                        key={action.label}
-                        onClick={() => {
-                          if(action.id === "invest") setActiveTab("investments");
-                          setIsOpen(false);
-                        }}
-                        className="absolute flex items-center justify-center group pointer-events-auto"
-                        style={{
-                          transform: `translate(${
-                            Math.cos(action.angle * (Math.PI / 180)) * radius
-                          }px, ${
-                            -Math.sin(action.angle * (Math.PI / 180)) * radius
-                          }px)`
-                        }}
-                      >
-                        <div className="glass flex h-20 w-20 flex-col items-center justify-center gap-1.5 border border-white/40 bg-white/30 shadow-2xl transition-all duration-300 group-active:scale-95 group-hover:bg-white/50">
-                          <motion.div
-                            /* Counter-rotation: We must invert the parent's rotation 
-                               so icons stay upright during the entire clockwise spin.
-                            */
-                            initial={{ rotate: 180 }}
-                            animate={{ rotate: 0 }}
-                            exit={{ rotate: -180 }}
-                            transition={{ type: "spring", stiffness: 100, damping: 22 }}
-                            className="flex flex-col items-center"
-                          >
-                            <action.icon size={22} strokeWidth={1.2} className="text-slate-800" />
-                            <span className="mt-1 text-[9px] font-bold uppercase tracking-[0.08em] text-slate-700">
-                              {action.label}
-                            </span>
-                          </motion.div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+                  {bubblePositions.map((action) => (
+                    <button
+                      key={action.label}
+                      onClick={() => {
+                        if(action.id === "invest") setActiveTab("investments");
+                        setIsOpen(false);
+                      }}
+                      className="fixed flex items-center justify-center group pointer-events-auto"
+                      style={{
+                        left: `${action.x}px`,
+                        top: `${action.y}px`,
+                        transform: "translate(-50%, -50%)",
+                      }}
+                    >
+                      <div className="glass flex h-20 w-20 flex-col items-center justify-center gap-1.5 border border-white/40 bg-white/30 shadow-2xl transition-all duration-300 group-active:scale-95 group-hover:bg-white/50">
+                        <motion.div
+                          /* Counter-rotation: We must invert the parent's rotation 
+                             so icons stay upright during the entire clockwise spin.
+                          */
+                          initial={{ rotate: 180 }}
+                          animate={{ rotate: 0 }}
+                          exit={{ rotate: -180 }}
+                          transition={{ type: "spring", stiffness: 100, damping: 22 }}
+                          className="flex flex-col items-center"
+                        >
+                          <action.icon size={22} strokeWidth={1.2} className="text-slate-800" />
+                          <span className="mt-1 text-[9px] font-bold uppercase tracking-[0.08em] text-slate-700">
+                            {action.label}
+                          </span>
+                        </motion.div>
+                      </div>
+                    </button>
+                  ))}
                 </motion.div>
               )}
             </AnimatePresence>,
