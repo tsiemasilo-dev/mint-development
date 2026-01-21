@@ -49,7 +49,7 @@ const Navbar = ({ activeTab, setActiveTab }) => {
       </AnimatePresence>
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/70 border-t border-white/20 pb-5 pt-2 backdrop-blur-2xl shadow-[0_-10px_40px_rgba(0,0,0,0.03)]">
-        <div className="mx-auto flex max-w-lg items-center justify-around relative px-4">
+        <div className="mx-auto flex w-full max-w-lg items-center justify-center gap-8 relative px-4">
           
           <AnimatePresence>
             {isOpen && (
