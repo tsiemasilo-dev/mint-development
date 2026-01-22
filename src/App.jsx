@@ -1,7 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "./lib/supabase.js";
 
-import Preloader from "./components/Preloader.jsx";
 import AuthPage from "./pages/AuthPage.jsx";
 import HomePage from "./pages/HomePage.jsx";
 import CreditPage from "./pages/CreditPage.jsx";
@@ -38,7 +37,6 @@ const getTokensFromHash = (hash) => {
 const recoveryTokens = isRecoveryMode ? getTokensFromHash(initialHash) : null;
 
 const App = () => {
-  const [showPreloader, setShowPreloader] = useState(true);
   const [currentPage, setCurrentPage] = useState(hasError ? "linkExpired" : (isRecoveryMode ? "auth" : "welcome"));
   const [authStep, setAuthStep] = useState(isRecoveryMode ? "newPassword" : "email");
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
@@ -101,21 +99,6 @@ const App = () => {
       subscription?.unsubscribe();
     };
   }, []);
-
-  useEffect(() => {
-    if (isCheckingAuth) return;
-    
-    setShowPreloader(true);
-    const timeoutId = setTimeout(() => {
-      setShowPreloader(false);
-    }, 1200);
-
-    return () => clearTimeout(timeoutId);
-  }, [currentPage, isCheckingAuth]);
-
-  if (showPreloader) {
-    return <Preloader />;
-  }
 
   const openAuthFlow = (step) => {
     setAuthStep(step);
