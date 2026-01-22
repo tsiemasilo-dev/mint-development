@@ -1,10 +1,9 @@
-modules = ["nodejs-20"]
-[nix]
-channel = "stable-25_05"
-packages = ["unzip"]
-
+modules = ["nodejs-20", "web"]
 [agent]
 expertMode = true
+
+[nix]
+channel = "stable-25_05"
 
 [workflows]
 runButton = "Project"
@@ -16,15 +15,15 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Mint App"
+args = "Start application"
 
 [[workflows.workflow]]
-name = "Mint App"
+name = "Start application"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd mint && npm run dev"
+args = "npm run dev"
 waitForPort = 5000
 
 [workflows.workflow.metadata]
@@ -37,3 +36,8 @@ externalPort = 80
 [[ports]]
 localPort = 5001
 externalPort = 3000
+
+[deployment]
+deploymentTarget = "static"
+build = ["npm", "run", "build"]
+publicDir = "dist"
