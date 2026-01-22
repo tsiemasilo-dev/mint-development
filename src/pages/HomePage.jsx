@@ -15,14 +15,10 @@ const HomePage = () => {
               <p className="text-xs text-white/80">Welcome Back</p>
             </div>
           </div>
-          <button
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/85 text-slate-700 shadow-sm"
-            aria-label="Notifications"
-            type="button"
-          >
+          <button aria-label="Notifications" type="button">
             <svg
               aria-hidden="true"
-              className="h-4 w-4"
+              className="h-5 w-5 text-white"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"

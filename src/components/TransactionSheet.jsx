@@ -168,9 +168,6 @@ const TransactionSheet = () => {
             <h2 className="text-sm font-semibold text-slate-800">
               Transactions
             </h2>
-            <span className="text-[11px] font-medium text-slate-400">
-              {isExpanded ? "Drag down" : "Drag up"}
-            </span>
           </div>
         </div>
         <div
