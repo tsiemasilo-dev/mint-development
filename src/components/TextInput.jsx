@@ -16,7 +16,8 @@ const TextInput = forwardRef(
       maxLength,
       minLength,
       pattern,
-      onKeyDown
+      onKeyDown,
+      disabled = false
     },
     ref
   ) => (
@@ -35,6 +36,7 @@ const TextInput = forwardRef(
       minLength={minLength}
       pattern={pattern}
       onKeyDown={onKeyDown}
+      disabled={disabled}
     />
   )
 );
