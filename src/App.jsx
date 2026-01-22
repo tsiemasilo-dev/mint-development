@@ -4,8 +4,13 @@ import { supabase } from "./lib/supabase.js";
 import Preloader from "./components/Preloader.jsx";
 import AuthPage from "./pages/AuthPage.jsx";
 import HomePage from "./pages/HomePage.jsx";
+import CreditPage from "./pages/CreditPage.jsx";
+import InvestmentsPage from "./pages/InvestmentsPage.jsx";
+import MorePage from "./pages/MorePage.jsx";
 import OnboardingPage from "./pages/OnboardingPage.jsx";
+import TransactPage from "./pages/TransactPage.jsx";
 import UserOnboardingPage from "./pages/UserOnboardingPage.jsx";
+import AppLayout from "./layouts/AppLayout.jsx";
 
 const initialHash = window.location.hash;
 const isRecoveryMode = initialHash.includes('type=recovery');
@@ -146,7 +151,43 @@ const App = () => {
   }
 
   if (currentPage === "home") {
-    return <HomePage />;
+    return (
+      <AppLayout activeTab="home" onTabChange={setCurrentPage}>
+        <HomePage />
+      </AppLayout>
+    );
+  }
+
+  if (currentPage === "credit") {
+    return (
+      <AppLayout activeTab="credit" onTabChange={setCurrentPage}>
+        <CreditPage />
+      </AppLayout>
+    );
+  }
+
+  if (currentPage === "transact") {
+    return (
+      <AppLayout activeTab="transact" onTabChange={setCurrentPage}>
+        <TransactPage />
+      </AppLayout>
+    );
+  }
+
+  if (currentPage === "investments") {
+    return (
+      <AppLayout activeTab="investments" onTabChange={setCurrentPage}>
+        <InvestmentsPage />
+      </AppLayout>
+    );
+  }
+
+  if (currentPage === "more") {
+    return (
+      <AppLayout activeTab="more" onTabChange={setCurrentPage}>
+        <MorePage />
+      </AppLayout>
+    );
   }
 
   if (currentPage === "userOnboarding") {
