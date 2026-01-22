@@ -7,7 +7,7 @@ import {
   useMotionValue,
 } from "framer-motion";
 
-const NAV_OFFSET = 96;
+const NAV_BAR_HEIGHT = 72;
 const TOP_GAP = 84;
 const COLLAPSED_VISIBLE_RATIO = 0.35;
 
@@ -67,7 +67,10 @@ const TransactionSheet = () => {
   const dragControls = useDragControls();
 
   const { sheetHeight, collapsedY } = useMemo(() => {
-    const usableHeight = Math.max(viewportHeight - TOP_GAP - NAV_OFFSET, 360);
+    const usableHeight = Math.max(
+      viewportHeight - TOP_GAP - NAV_BAR_HEIGHT,
+      360
+    );
     const collapsedVisible = Math.max(
       viewportHeight * COLLAPSED_VISIBLE_RATIO,
       240
@@ -122,20 +125,22 @@ const TransactionSheet = () => {
       <AnimatePresence>
         {isExpanded && (
           <motion.div
-            className="fixed inset-0 z-[1050] bg-black/20 backdrop-blur-sm"
+            className="fixed inset-0 z-[40] bg-black/20 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setIsExpanded(false)}
+            style={{ bottom: NAV_BAR_HEIGHT }}
           />
         )}
       </AnimatePresence>
       <motion.section
-        className="fixed inset-x-0 z-[1100] mx-auto w-full max-w-md rounded-t-[32px] bg-white px-4 pb-6 pt-3 shadow-2xl"
+        className="fixed inset-x-0 z-[40] mx-auto w-full max-w-md rounded-t-[32px] bg-white px-4 pb-6 pt-3 shadow-2xl"
         style={{
           y,
-          bottom: `calc(${NAV_OFFSET}px + env(safe-area-inset-bottom))`,
+          bottom: `calc(${NAV_BAR_HEIGHT}px + env(safe-area-inset-bottom))`,
           height: sheetHeight,
+          paddingBottom: `calc(${NAV_BAR_HEIGHT}px + env(safe-area-inset-bottom))`,
         }}
         drag="y"
         dragListener={false}
