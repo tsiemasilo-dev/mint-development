@@ -1,22 +1,67 @@
 import React from "react";
+import { Capacitor } from "@capacitor/core";
 
 const MorePage = () => {
+  const handleSetupBiometrics = async () => {
+    const isIOS = Capacitor.getPlatform() === "ios";
+    if (!isIOS) {
+      window.alert("Biometrics not available on this device");
+      return;
+    }
+
+    try {
+      // TODO: Replace with Capacitor Biometrics plugin.
+      const isAvailable = true;
+
+      if (!isAvailable) {
+        window.alert("Biometrics not available on this device");
+        return;
+      }
+
+      localStorage.setItem("biometricsEnabled", "true");
+      window.alert("Biometrics enabled successfully");
+    } catch (error) {
+      console.error("Failed to enable biometrics", error);
+      window.alert("Biometrics not available on this device");
+    }
+  };
+
   const menuItems = [
-    "Profile Details", "KYC Status", "Linked Bank Accounts", 
-    "Settings", "Setup Biometrics", "Preferences", 
-    "Help & FAQs", "Legal", "Privacy"
+    { id: "profile", label: "Profile Details" },
+    { id: "kyc", label: "KYC Status" },
+    { id: "banks", label: "Linked Bank Accounts" },
+    { id: "settings", label: "Settings" },
+    { id: "preferences", label: "Preferences" },
+    { id: "help", label: "Help & FAQs" },
+    { id: "legal", label: "Legal" },
+    { id: "privacy", label: "Privacy" },
   ];
 
   return (
     <div className="min-h-screen bg-slate-50 px-6 pt-12 pb-24">
       <h1 className="mb-8 text-3xl font-semibold text-slate-900">More</h1>
+      <div className="mb-6 rounded-2xl bg-white p-5 shadow-sm">
+        <div className="mb-4">
+          <h2 className="text-base font-semibold text-slate-900">Enable Biometrics</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Use Face ID for faster and secure login
+          </p>
+        </div>
+        <button
+          onClick={handleSetupBiometrics}
+          className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold tracking-[0.16em] text-white transition active:scale-95"
+        >
+          SETUP BIOMETRICS
+        </button>
+      </div>
       <div className="space-y-2">
         {menuItems.map((item) => (
           <button 
-            key={item} 
+            key={item.id}
+            onClick={item.onClick}
             className="w-full rounded-2xl bg-white p-5 text-left font-medium text-slate-700 shadow-sm transition active:scale-95"
           >
-            {item}
+            {item.label}
           </button>
         ))}
       </div>
