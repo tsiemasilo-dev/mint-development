@@ -2,7 +2,7 @@ import React from "react";
 
 const HomePage = () => {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#5c3bcf] via-purple-200 to-white px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-12 text-slate-900 md:px-8 md:pt-14">
+    <div className="min-h-screen bg-gradient-to-b from-[#31005e] via-purple-200 to-white px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-12 text-slate-900 md:px-8 md:pt-14">
       <div className="mx-auto flex w-full max-w-sm flex-col gap-6 md:max-w-md">
         <header className="flex items-center justify-between text-white">
           <div>
