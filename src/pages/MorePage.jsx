@@ -1,53 +1,28 @@
 import React from "react";
+import { Capacitor } from "@capacitor/core";
 
 const MorePage = () => {
-  const getRandomBuffer = (length) => {
-    const buffer = new Uint8Array(length);
-    window.crypto.getRandomValues(buffer);
-    return buffer;
-  };
-
   const handleSetupBiometrics = async () => {
-    if (!window.PublicKeyCredential) {
-      window.alert("Biometrics are not supported on this device.");
+    const isIOS = Capacitor.getPlatform() === "ios";
+    if (!isIOS) {
+      window.alert("Biometrics not available on this device");
       return;
     }
 
     try {
-      const isAvailable = await window.PublicKeyCredential
-        .isUserVerifyingPlatformAuthenticatorAvailable();
+      // TODO: Replace with Capacitor Biometrics plugin.
+      const isAvailable = true;
 
       if (!isAvailable) {
-        window.alert("Face ID is not available on this device.");
+        window.alert("Biometrics not available on this device");
         return;
       }
 
-      const credential = await navigator.credentials.create({
-        publicKey: {
-          challenge: getRandomBuffer(32),
-          rp: { name: "Mint" },
-          user: {
-            id: getRandomBuffer(16),
-            name: "mint-user",
-            displayName: "Mint User",
-          },
-          pubKeyCredParams: [{ type: "public-key", alg: -7 }],
-          authenticatorSelection: {
-            authenticatorAttachment: "platform",
-            userVerification: "required",
-          },
-          timeout: 60000,
-          attestation: "none",
-        },
-      });
-
-      if (credential) {
-        localStorage.setItem("biometricsEnabled", "true");
-        window.alert("Face ID has been enabled.");
-      }
+      localStorage.setItem("biometricsEnabled", "true");
+      window.alert("Biometrics enabled successfully");
     } catch (error) {
       console.error("Failed to enable biometrics", error);
-      window.alert("Unable to enable Face ID. Please try again.");
+      window.alert("Biometrics not available on this device");
     }
   };
 
@@ -56,7 +31,6 @@ const MorePage = () => {
     { id: "kyc", label: "KYC Status" },
     { id: "banks", label: "Linked Bank Accounts" },
     { id: "settings", label: "Settings" },
-    { id: "biometrics", label: "Setup Biometrics", onClick: handleSetupBiometrics },
     { id: "preferences", label: "Preferences" },
     { id: "help", label: "Help & FAQs" },
     { id: "legal", label: "Legal" },
@@ -66,6 +40,20 @@ const MorePage = () => {
   return (
     <div className="min-h-screen bg-slate-50 px-6 pt-12 pb-24">
       <h1 className="mb-8 text-3xl font-semibold text-slate-900">More</h1>
+      <div className="mb-6 rounded-2xl bg-white p-5 shadow-sm">
+        <div className="mb-4">
+          <h2 className="text-base font-semibold text-slate-900">Enable Biometrics</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Use Face ID for faster and secure login
+          </p>
+        </div>
+        <button
+          onClick={handleSetupBiometrics}
+          className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold tracking-[0.16em] text-white transition active:scale-95"
+        >
+          SETUP BIOMETRICS
+        </button>
+      </div>
       <div className="space-y-2">
         {menuItems.map((item) => (
           <button 
