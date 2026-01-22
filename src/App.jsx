@@ -14,7 +14,7 @@ const App = () => {
   const [showPreloader, setShowPreloader] = useState(true);
   
   // Set to 'main' so we skip onboarding and see the Navbar immediately
-  const [currentPage, setCurrentPage] = useState("auth"); 
+  const [currentPage, setCurrentPage] = useState("OnboardingPage.jsx"); 
   const [activeTab, setActiveTab] = useState("home");
   const [authStep, setAuthStep] = useState("email");
 
