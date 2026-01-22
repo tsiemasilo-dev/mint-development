@@ -5,13 +5,21 @@ const HomePage = () => {
     <div className="min-h-screen bg-gradient-to-b from-[#31005e] via-purple-200 to-white px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-12 text-slate-900 md:px-8 md:pt-14">
       <div className="mx-auto flex w-full max-w-sm flex-col gap-6 md:max-w-md">
         <header className="flex items-center justify-between text-white">
-          <div>
-            <p className="text-lg font-semibold">Hello, Riyad 👋</p>
-            <p className="text-xs text-white/80">Welcome Back</p>
-          </div>
           <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-xs font-semibold text-slate-700">
+              RR
+            </div>
+            <div>
+              <p className="text-lg font-semibold">Good Afternoon, Riyad</p>
+              <p className="text-xs text-white/80">Welcome Back</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 rounded-full bg-white/85 px-3 py-1.5 text-slate-700 shadow-sm">
+            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white shadow">
+              <img className="h-4 w-4" src="/favicon.svg" alt="Mint logo" />
+            </div>
             <button
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-white/80 text-slate-700 shadow-sm"
+              className="flex h-7 w-7 items-center justify-center rounded-full bg-white"
               aria-label="Notifications"
               type="button"
             >
@@ -30,9 +38,6 @@ const HomePage = () => {
                 />
               </svg>
             </button>
-            <div className="flex h-9 w-9 items-center justify-center rounded-full border border-white/40 bg-white/80 text-xs font-semibold text-slate-700">
-              RR
-            </div>
           </div>
         </header>
 
