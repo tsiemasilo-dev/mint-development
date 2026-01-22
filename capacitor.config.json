@@ -3,7 +3,7 @@
   "appName": "Mint",
   "webDir": "dist",
   "server": {
-    "url": "http://192.168.1.96:5174",
+    "url": "https://mint-henna.vercel.app/",
     "cleartext": true
   }
 }
