@@ -18,7 +18,7 @@ const OnboardingPage = ({ onCreateAccount, onLogin }) => {
                 Welcome to <span className="mint-brand">Mint</span>
               </h1>
               <p className="text-lg text-slate-600">
-                Let’s get your account ready in a few minutes.
+                Your money tools are ready when you are.
               </p>
             </div>
 
