@@ -1,4 +1,4 @@
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 
 const BIOMETRICS_ENABLED_KEY = 'biometricsEnabled';
 const BIOMETRICS_USER_KEY = 'biometricsUserEmail';
@@ -10,25 +10,17 @@ export const isNativePlatform = () => {
     : Capacitor.getPlatform() !== 'web';
 };
 
-const loadNativeBiometric = async () => {
-  if (!isNativePlatform()) return null;
-
-  // Dynamic import so Vite web build never tries to resolve native deps
-  const mod = await import('@capgo/capacitor-native-biometric');
-  return mod.NativeBiometric || mod.default || mod;
-};
+// Vercel safe: no import of native packages in the web bundle
+const NativeBiometric = registerPlugin('NativeBiometric');
 
 export const isBiometricsAvailable = async () => {
   if (!isNativePlatform()) return { available: false, biometryType: null };
 
   try {
-    const NativeBiometric = await loadNativeBiometric();
-    if (!NativeBiometric) return { available: false, biometryType: null };
-
     const res = await NativeBiometric.isAvailable();
     return {
-      available: !!res.isAvailable,
-      biometryType: res.biometryType || null
+      available: !!res?.isAvailable,
+      biometryType: res?.biometryType || null
     };
   } catch (error) {
     console.error('Error checking biometrics availability:', {
@@ -45,9 +37,6 @@ export const authenticateWithBiometrics = async (reason = 'Authenticate to conti
   if (!isNativePlatform()) throw new Error('Biometrics only available on native platforms');
 
   try {
-    const NativeBiometric = await loadNativeBiometric();
-    if (!NativeBiometric) throw new Error('NativeBiometric not loaded');
-
     await NativeBiometric.verifyIdentity({ reason });
     return true;
   } catch (error) {
