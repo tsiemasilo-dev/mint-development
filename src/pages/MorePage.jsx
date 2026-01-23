@@ -13,7 +13,6 @@ import {
   LogOut,
   ChevronRight,
 } from "lucide-react";
-import { useProfile } from "../lib/useProfile";
 import { supabase } from "../lib/supabase";
 import {
   authenticateWithBiometrics,
@@ -24,18 +23,24 @@ import {
   isBiometricsEnabled,
   isNativePlatform,
 } from "../lib/biometrics";
+import ProfileSkeleton from "../components/ProfileSkeleton";
 
 const MorePage = ({ onNavigate }) => {
-  const { profile } = useProfile();
+  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState(null);
+  const [error, setError] = useState("");
   const [biometricsOn, setBiometricsOn] = useState(false);
   const [biometryType, setBiometryType] = useState(null);
   const [isAvailable, setIsAvailable] = useState(false);
   const [isToggling, setIsToggling] = useState(false);
   const [userEmail, setUserEmail] = useState("");
 
-  const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(" ") || "Your Name";
-  const displayUsername =
-    profile.email ? `@${profile.email.split("@")[0]}` : "@username";
+  const displayName = [profile?.first_name, profile?.last_name]
+    .filter(Boolean)
+    .join(" ");
+  const displayUsername = profile?.email
+    ? `@${profile.email.split("@")[0]}`
+    : "";
   const initials = displayName
     .split(" ")
     .filter(Boolean)
@@ -59,6 +64,58 @@ const MorePage = ({ onNavigate }) => {
       }
     };
     init();
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+
+    const loadProfile = async () => {
+      try {
+        if (!supabase) {
+          if (alive) {
+            setError("Supabase is not configured.");
+            setLoading(false);
+          }
+          return;
+        }
+
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        if (userError || !userData?.user) {
+          if (alive) {
+            setError("Unable to load profile.");
+            setLoading(false);
+          }
+          return;
+        }
+
+        const { data: profileData, error: profileError } = await supabase
+          .from("profiles")
+          .select("first_name, last_name, email, avatar_url")
+          .eq("id", userData.user.id)
+          .single();
+
+        if (profileError) {
+          throw profileError;
+        }
+
+        if (alive) {
+          setProfile(profileData);
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error("Failed to load profile", err);
+        if (alive) {
+          setError("Unable to load profile.");
+          setLoading(false);
+        }
+      }
+    };
+
+    loadProfile();
+
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const biometryName = getBiometryTypeName(biometryType);
@@ -113,6 +170,23 @@ const MorePage = ({ onNavigate }) => {
     ],
   ];
 
+  if (loading) {
+    return <ProfileSkeleton />;
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-white px-6 pt-10 pb-24">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500 shadow-sm">
+          {error}
+        </div>
+      </div>
+    );
+  }
+
+  const nameLabel = displayName || "Not set";
+  const usernameLabel = displayUsername || "Not set";
+
   return (
     <div className="min-h-screen bg-white px-6 pt-10 pb-24">
       <div className="flex flex-col items-center text-center">
@@ -125,20 +199,20 @@ const MorePage = ({ onNavigate }) => {
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
-          {profile.avatarUrl ? (
+          {profile?.avatar_url ? (
             <img
-              src={profile.avatarUrl}
-              alt={displayName}
+              src={profile.avatar_url}
+              alt={displayName || "Profile"}
               className="h-20 w-20 rounded-full border border-slate-200 object-cover"
             />
           ) : (
             <div className="flex h-20 w-20 items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-lg font-semibold text-slate-600">
-              {initials || "ME"}
+              {initials || "—"}
             </div>
           )}
         </div>
-        <h2 className="mt-4 text-xl font-semibold text-slate-900">{displayName}</h2>
-        <p className="mt-1 text-sm text-slate-500">{displayUsername}</p>
+        <h2 className="mt-4 text-xl font-semibold text-slate-900">{nameLabel}</h2>
+        <p className="mt-1 text-sm text-slate-500">{usernameLabel}</p>
         <button
           type="button"
           onClick={() => onNavigate?.("editProfile")}
