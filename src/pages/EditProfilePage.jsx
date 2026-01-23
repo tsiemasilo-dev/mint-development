@@ -37,7 +37,11 @@ const EditProfilePage = ({ onNavigate }) => {
       }
 
       const userId = userData.user.id;
-      const filePath = `${userId}/${Date.now()}-${file.name}`;
+      const safeFileName = file.name
+        .trim()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-zA-Z0-9._-]/g, "");
+      const filePath = `${userId}/${Date.now()}-${safeFileName || "profile-image"}`;
       const { error: uploadError } = await supabase.storage
         .from("profile-images")
         .upload(filePath, file, { upsert: true });
