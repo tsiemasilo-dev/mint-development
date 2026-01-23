@@ -768,9 +768,17 @@ const AuthForm = ({ initialStep = 'email', onSignupComplete, onLoginComplete }) 
 
   return (
     <>
-      <div className="flex flex-1 items-center justify-center px-6 pt-32 pb-16 relative z-10">
+      <div className="flex flex-1 items-center justify-center px-6 pt-[calc(2rem+env(safe-area-inset-top))] pb-16 relative z-10">
         <div className="w-full max-w-md space-y-12">
           <div id="hero-copy" className={`text-center space-y-5 ${currentStep === 'otp' ? 'hidden' : ''}`}>
+            <div className="flex flex-col items-center gap-3 pb-2 animate-on-load delay-1">
+              <img
+                src="/assets/mint-logo.svg"
+                alt="Mint logo"
+                className="h-6 w-auto drop-shadow-sm"
+              />
+              <span className="mint-brand text-lg font-semibold tracking-[0.2em]">MINT</span>
+            </div>
             <h2 id="hero-heading" className="text-5xl sm:text-6xl font-light tracking-tight animate-on-load delay-2">
               {heroHeading}
             </h2>
@@ -1270,18 +1278,6 @@ const AuthForm = ({ initialStep = 'email', onSignupComplete, onLoginComplete }) 
             </div>
           </form>
 
-          <div className="text-center text-xs text-muted-foreground space-y-2 pt-6 animate-on-load delay-5">
-            <p>
-              By continuing, you agree to our{' '}
-              <a href="#" className="underline hover:text-foreground transition">
-                Terms of Service
-              </a>{' '}
-              and{' '}
-              <a href="#" className="underline hover:text-foreground transition">
-                Privacy Policy
-              </a>
-            </p>
-          </div>
         </div>
       </div>
 

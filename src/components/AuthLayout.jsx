@@ -1,14 +1,5 @@
 const AuthLayout = ({ children }) => (
   <div className="relative flex min-h-screen flex-col bg-white">
-    <div className="relative z-20 flex items-center gap-4 px-6 pt-[calc(1.5rem+env(safe-area-inset-top))] animate-on-load delay-1">
-      <img
-        src="/assets/mint-logo.svg"
-        alt="Mint logo"
-        className="h-4 w-auto drop-shadow-md"
-      />
-      <h1 className="mint-brand text-xl font-bold tracking-[0.12em]">MINT</h1>
-    </div>
-
     {children}
 
     <div className="relative z-10 px-6 pb-12">
