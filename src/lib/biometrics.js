@@ -4,6 +4,8 @@ const BIOMETRICS_ENABLED_KEY = 'biometricsEnabled';
 const BIOMETRICS_USER_KEY = 'biometricsUserEmail';
 const FIRST_LOGIN_KEY = 'hasLoggedInBefore';
 
+const { FaceId } = Plugins;
+
 export const isNativePlatform = () => {
   return typeof Capacitor.isNativePlatform === 'function'
     ? Capacitor.isNativePlatform()
@@ -16,14 +18,18 @@ export const isBiometricsAvailable = async () => {
   }
 
   try {
-    const { FaceId } = Plugins;
     const result = await FaceId.isAvailable();
     return {
       available: !!result.value,
       biometryType: result.value || null
     };
   } catch (error) {
-    console.error('Error checking biometrics availability:', error);
+    console.error('Error checking biometrics availability:', {
+      message: error?.message,
+      code: error?.code,
+      name: error?.name,
+      error
+    });
     return { available: false, biometryType: null };
   }
 };
@@ -33,9 +39,18 @@ export const authenticateWithBiometrics = async (reason = 'Authenticate to conti
     throw new Error('Biometrics only available on native platforms');
   }
 
-  const { FaceId } = Plugins;
-  await FaceId.auth({ reason });
-  return true;
+  try {
+    await FaceId.auth({ reason });
+    return true;
+  } catch (error) {
+    console.error('Biometric authentication failed:', {
+      message: error?.message,
+      code: error?.code,
+      name: error?.name,
+      error
+    });
+    throw error;
+  }
 };
 
 export const isBiometricsEnabled = () => {
@@ -71,7 +86,7 @@ export const markAsLoggedIn = (userEmail) => {
 
 export const getBiometryTypeName = (biometryType) => {
   if (!biometryType) return 'Biometrics';
-  const type = biometryType.toLowerCase();
+  const type = String(biometryType).toLowerCase();
   if (type.includes('face')) return 'Face ID';
   if (type.includes('touch') || type.includes('fingerprint')) return 'Touch ID';
   return 'Biometrics';
