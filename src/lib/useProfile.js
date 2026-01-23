@@ -2,24 +2,18 @@ import { useEffect, useState } from "react";
 import { supabase } from "./supabase";
 
 const emptyProfile = {
-  fullName: "",
-  username: "",
   email: "",
-  phone: "",
-  gender: "",
-  birthday: "",
+  firstName: "",
+  lastName: "",
   avatarUrl: "",
 };
 
 const buildProfile = ({ user, row }) => {
   const metadata = user?.user_metadata || {};
   return {
-    fullName: row?.full_name || metadata.full_name || "",
-    username: row?.username || metadata.username || metadata.preferred_username || "",
     email: row?.email || user?.email || "",
-    phone: row?.phone || metadata.phone || "",
-    gender: row?.gender || metadata.gender || "",
-    birthday: row?.birthday || metadata.birthday || "",
+    firstName: row?.first_name || metadata.first_name || "",
+    lastName: row?.last_name || metadata.last_name || "",
     avatarUrl: row?.avatar_url || metadata.avatar_url || "",
   };
 };
@@ -51,7 +45,7 @@ export const useProfile = () => {
         const user = userData.user;
         const { data: rowData, error: rowError } = await supabase
           .from("profiles")
-          .select("full_name, username, email, phone, gender, birthday, avatar_url")
+          .select("first_name, last_name, email, avatar_url")
           .eq("id", user.id)
           .maybeSingle();
 
@@ -74,5 +68,5 @@ export const useProfile = () => {
     };
   }, []);
 
-  return { profile, loading };
+  return { profile, loading, setProfile };
 };

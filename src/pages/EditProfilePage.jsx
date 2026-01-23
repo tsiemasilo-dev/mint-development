@@ -1,11 +1,16 @@
-import React from "react";
+import React, { useRef, useState } from "react";
 import { ArrowLeft, Camera } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
+import { supabase } from "../lib/supabase";
 
 const EditProfilePage = ({ onNavigate }) => {
-  const { profile } = useProfile();
-  const displayName = profile.fullName || "Your Name";
-  const displayUsername = profile.username || "@username";
+  const { profile, setProfile } = useProfile();
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(" ") || "Your Name";
+  const displayUsername =
+    profile.email ? `@${profile.email.split("@")[0]}` : "@username";
   const initials = displayName
     .split(" ")
     .filter(Boolean)
@@ -15,6 +20,56 @@ const EditProfilePage = ({ onNavigate }) => {
     .toUpperCase();
 
   const fieldValue = (value) => value || "—";
+
+  const handleAvatarSelect = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleAvatarUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file || !supabase) return;
+
+    setIsUploading(true);
+    try {
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData?.user) {
+        throw new Error("Unable to load user");
+      }
+
+      const userId = userData.user.id;
+      const filePath = `${userId}/${Date.now()}-${file.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from("profile-images")
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from("profile-images")
+        .getPublicUrl(filePath);
+      const avatarUrl = publicUrlData?.publicUrl;
+
+      if (avatarUrl) {
+        const { error: updateError } = await supabase
+          .from("profiles")
+          .update({ avatar_url: avatarUrl })
+          .eq("id", userId);
+        if (updateError) {
+          throw updateError;
+        }
+        setProfile((prev) => ({ ...prev, avatarUrl }));
+      }
+    } catch (error) {
+      console.error("Failed to upload avatar", error);
+    } finally {
+      setIsUploading(false);
+      if (event.target) {
+        event.target.value = "";
+      }
+    }
+  };
 
   return (
     <div className="min-h-screen bg-white px-6 pb-10 pt-10">
@@ -43,9 +98,22 @@ const EditProfilePage = ({ onNavigate }) => {
               {initials || "ME"}
             </div>
           )}
-          <span className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-white">
+          <button
+            type="button"
+            onClick={handleAvatarSelect}
+            className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-white shadow-sm transition active:scale-95"
+            aria-label="Upload profile photo"
+            disabled={isUploading}
+          >
             <Camera className="h-4 w-4" />
-          </span>
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleAvatarUpload}
+          />
         </div>
         <h2 className="mt-4 text-xl font-semibold text-slate-900">{displayName}</h2>
         <p className="mt-1 text-sm text-slate-500">{displayUsername}</p>
@@ -54,31 +122,16 @@ const EditProfilePage = ({ onNavigate }) => {
       <div className="mt-8 border-t border-slate-200 pt-6">
         <div className="space-y-4">
           <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-            <p className="text-xs uppercase tracking-wide text-slate-400">Full name</p>
+            <p className="text-xs uppercase tracking-wide text-slate-400">First name</p>
             <p className="mt-1 text-base font-semibold text-slate-900">
-              {fieldValue(profile.fullName)}
+              {fieldValue(profile.firstName)}
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-              <p className="text-xs uppercase tracking-wide text-slate-400">Gender</p>
-              <p className="mt-1 text-base font-semibold text-slate-900">
-                {fieldValue(profile.gender)}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-              <p className="text-xs uppercase tracking-wide text-slate-400">Birthday</p>
-              <p className="mt-1 text-base font-semibold text-slate-900">
-                {fieldValue(profile.birthday)}
-              </p>
-            </div>
-          </div>
-
           <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-            <p className="text-xs uppercase tracking-wide text-slate-400">Phone number</p>
+            <p className="text-xs uppercase tracking-wide text-slate-400">Last name</p>
             <p className="mt-1 text-base font-semibold text-slate-900">
-              {fieldValue(profile.phone)}
+              {fieldValue(profile.lastName)}
             </p>
           </div>
 
@@ -90,9 +143,9 @@ const EditProfilePage = ({ onNavigate }) => {
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-            <p className="text-xs uppercase tracking-wide text-slate-400">User name</p>
+            <p className="text-xs uppercase tracking-wide text-slate-400">Username</p>
             <p className="mt-1 text-base font-semibold text-slate-900">
-              {fieldValue(profile.username || displayUsername)}
+              {fieldValue(displayUsername)}
             </p>
           </div>
         </div>

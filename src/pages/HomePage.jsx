@@ -1,17 +1,36 @@
 import React from "react";
 import { Bell } from "lucide-react";
 import TransactionSheet from "../components/TransactionSheet";
+import { useProfile } from "../lib/useProfile";
 
 const HomePage = () => {
+  const { profile } = useProfile();
+  const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(" ") || "Your Name";
+  const initials = displayName
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+
   return (
     <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)] text-slate-900">
       <div className="rounded-b-[36px] bg-gradient-to-b from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-4 pb-12 pt-12 text-white md:px-8">
         <div className="mx-auto flex w-full max-w-sm flex-col gap-6 md:max-w-md">
           <header className="flex items-center justify-between text-white">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-xs font-semibold text-slate-700">
-                RR
-              </div>
+              {profile.avatarUrl ? (
+                <img
+                  src={profile.avatarUrl}
+                  alt={displayName}
+                  className="h-10 w-10 rounded-full border border-white/40 object-cover"
+                />
+              ) : (
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-xs font-semibold text-slate-700">
+                  {initials || "ME"}
+                </div>
+              )}
             </div>
             <button
               aria-label="Notifications"

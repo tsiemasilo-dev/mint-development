@@ -1,20 +1,41 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   ArrowLeft,
   Settings,
+  BadgeCheck,
+  Landmark,
   ReceiptText,
   MapPin,
   Lock,
   HelpCircle,
+  Scale,
+  ShieldCheck,
   LogOut,
   ChevronRight,
 } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
+import { supabase } from "../lib/supabase";
+import {
+  authenticateWithBiometrics,
+  disableBiometrics,
+  enableBiometrics,
+  getBiometryTypeName,
+  isBiometricsAvailable,
+  isBiometricsEnabled,
+  isNativePlatform,
+} from "../lib/biometrics";
 
 const MorePage = ({ onNavigate }) => {
   const { profile } = useProfile();
-  const displayName = profile.fullName || "Your Name";
-  const displayUsername = profile.username || "@username";
+  const [biometricsOn, setBiometricsOn] = useState(false);
+  const [biometryType, setBiometryType] = useState(null);
+  const [isAvailable, setIsAvailable] = useState(false);
+  const [isToggling, setIsToggling] = useState(false);
+  const [userEmail, setUserEmail] = useState("");
+
+  const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(" ") || "Your Name";
+  const displayUsername =
+    profile.email ? `@${profile.email.split("@")[0]}` : "@username";
   const initials = displayName
     .split(" ")
     .filter(Boolean)
@@ -23,15 +44,71 @@ const MorePage = ({ onNavigate }) => {
     .join("")
     .toUpperCase();
 
+  useEffect(() => {
+    const init = async () => {
+      const { available, biometryType: type } = await isBiometricsAvailable();
+      setIsAvailable(available);
+      setBiometryType(type);
+      setBiometricsOn(isBiometricsEnabled());
+
+      if (supabase) {
+        const { data } = await supabase.auth.getUser();
+        if (data?.user?.email) {
+          setUserEmail(data.user.email);
+        }
+      }
+    };
+    init();
+  }, []);
+
+  const biometryName = getBiometryTypeName(biometryType);
+
+  const handleToggle = async () => {
+    if (isToggling) return;
+
+    if (biometricsOn) {
+      disableBiometrics();
+      setBiometricsOn(false);
+      return;
+    }
+
+    if (!isNativePlatform()) {
+      window.alert("Biometrics only works in the mobile app");
+      return;
+    }
+
+    if (!userEmail) {
+      window.alert("Unable to verify your account. Please try again.");
+      return;
+    }
+
+    setIsToggling(true);
+    try {
+      await authenticateWithBiometrics(`Enable ${biometryName} for login`);
+      enableBiometrics(userEmail);
+      setBiometricsOn(true);
+    } catch (error) {
+      console.error("Failed to enable biometrics:", error);
+    } finally {
+      setIsToggling(false);
+    }
+  };
+
   const menuSections = [
     [
+      { id: "profile", label: "Profile Details", icon: BadgeCheck },
+      { id: "kyc", label: "KYC Status", icon: ShieldCheck },
+      { id: "banks", label: "Linked Bank Accounts", icon: Landmark },
       { id: "settings", label: "Settings", icon: Settings, onClick: () => onNavigate?.("settings") },
+      { id: "preferences", label: "Preferences", icon: Settings },
+    ],
+    [
+      { id: "help", label: "Help & FAQs", icon: HelpCircle },
+      { id: "legal", label: "Legal", icon: Scale },
+      { id: "privacy", label: "Privacy", icon: ShieldCheck },
       { id: "orders", label: "My Orders", icon: ReceiptText },
       { id: "address", label: "Address", icon: MapPin },
       { id: "password", label: "Change Password", icon: Lock },
-    ],
-    [
-      { id: "help", label: "Help & Support", icon: HelpCircle },
       { id: "logout", label: "Log out", icon: LogOut },
     ],
   ];
@@ -75,7 +152,37 @@ const MorePage = ({ onNavigate }) => {
         </button>
       </div>
 
-      <div className="mt-8 space-y-6">
+      <div className="mt-8">
+        <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex-1">
+              <h2 className="text-base font-semibold text-slate-900">
+                {biometricsOn ? `${biometryName} is on` : `Enable ${biometryName}`}
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Use {biometryName} for faster and secure login
+              </p>
+            </div>
+            <button
+              onClick={handleToggle}
+              disabled={isToggling || (!isAvailable && !biometricsOn)}
+              className={`relative inline-flex h-8 w-14 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
+                biometricsOn ? "bg-green-500" : "bg-slate-300"
+              }`}
+              role="switch"
+              aria-checked={biometricsOn}
+            >
+              <span
+                className={`pointer-events-none inline-block h-7 w-7 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  biometricsOn ? "translate-x-6" : "translate-x-0"
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-6">
         {menuSections.map((section, sectionIndex) => (
           <div key={`section-${sectionIndex}`} className="border-t border-slate-200 pt-4">
             <div className="space-y-2">
