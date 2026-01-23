@@ -73,12 +73,14 @@ const CreditScorePage = ({ onBack }) => {
         </div>
 
         <CreditMetricCard className="flex flex-col items-center gap-4 text-center">
-          <div className="text-5xl font-semibold text-slate-900">
-            {baseScore}
+          <div className="flex items-center gap-3">
+            <div className="text-[88px] font-light leading-none tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-purple-500 to-indigo-400">
+              {baseScore}
+            </div>
+            <span className="rounded-full border border-slate-100 bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm">
+              {scoreDelta}
+            </span>
           </div>
-          <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
-            {scoreDelta}
-          </span>
 
           <div className="w-full">
             <div className="flex items-center justify-between text-[11px] text-slate-400">
