@@ -4,13 +4,18 @@ import { useProfile } from "../lib/useProfile";
 import { supabase } from "../lib/supabase";
 
 const EditProfilePage = ({ onNavigate }) => {
-  const { profile, setProfile } = useProfile();
+  const { profile, setProfile, loading } = useProfile();
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef(null);
 
-  const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(" ") || "Your Name";
-  const displayUsername =
-    profile.email ? `@${profile.email.split("@")[0]}` : "@username";
+  const displayName = loading
+    ? ""
+    : [profile.firstName, profile.lastName].filter(Boolean).join(" ");
+  const displayUsername = loading
+    ? ""
+    : profile.email
+      ? `@${profile.email.split("@")[0]}`
+      : "";
   const initials = displayName
     .split(" ")
     .filter(Boolean)
@@ -19,7 +24,10 @@ const EditProfilePage = ({ onNavigate }) => {
     .join("")
     .toUpperCase();
 
-  const fieldValue = (value) => value || "—";
+  const fieldValue = (value) => {
+    if (loading) return "";
+    return value || "Not set";
+  };
 
   const handleAvatarSelect = () => {
     fileInputRef.current?.click();
@@ -94,12 +102,12 @@ const EditProfilePage = ({ onNavigate }) => {
           {profile.avatarUrl ? (
             <img
               src={profile.avatarUrl}
-              alt={displayName}
+              alt={displayName || "Profile"}
               className="h-20 w-20 rounded-full border border-slate-200 object-cover"
             />
           ) : (
             <div className="flex h-20 w-20 items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-lg font-semibold text-slate-600">
-              {initials || "ME"}
+              {initials || (loading ? "" : "—")}
             </div>
           )}
           <button
@@ -119,8 +127,12 @@ const EditProfilePage = ({ onNavigate }) => {
             onChange={handleAvatarUpload}
           />
         </div>
-        <h2 className="mt-4 text-xl font-semibold text-slate-900">{displayName}</h2>
-        <p className="mt-1 text-sm text-slate-500">{displayUsername}</p>
+        <h2 className="mt-4 text-xl font-semibold text-slate-900">
+          {displayName || (loading ? "" : "Not set")}
+        </h2>
+        <p className="mt-1 text-sm text-slate-500">
+          {displayUsername || (loading ? "" : "Not set")}
+        </p>
       </div>
 
       <div className="mt-8 border-t border-slate-200 pt-6">
