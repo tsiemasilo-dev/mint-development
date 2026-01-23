@@ -18,6 +18,7 @@ const Navbar = ({ activeTab, setActiveTab }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [wheelCenter, setWheelCenter] = useState({ x: 0, y: 0 });
   const plusButtonRef = useRef(null);
+  const navRef = useRef(null);
  
   const tabs = [
     { id: "home", label: "Home", icon: Home },
@@ -47,12 +48,28 @@ const Navbar = ({ activeTab, setActiveTab }) => {
       });
     }
   };
- 
+
+  const updateNavbarHeight = () => {
+    if (navRef.current) {
+      const { offsetHeight } = navRef.current;
+      document.documentElement.style.setProperty("--navbar-height", `${offsetHeight}px`);
+    }
+  };
+
   useLayoutEffect(() => {
     updateWheelCenter();
+    updateNavbarHeight();
     window.addEventListener("resize", updateWheelCenter);
-    return () => window.removeEventListener("resize", updateWheelCenter);
+    window.addEventListener("resize", updateNavbarHeight);
+    return () => {
+      window.removeEventListener("resize", updateWheelCenter);
+      window.removeEventListener("resize", updateNavbarHeight);
+    };
   }, []);
+
+  useLayoutEffect(() => {
+    updateNavbarHeight();
+  }, [isOpen]);
  
   return (
     <>
@@ -124,6 +141,7 @@ const Navbar = ({ activeTab, setActiveTab }) => {
  
       {/* 3. Bottom Navbar */}
       <nav
+        ref={navRef}
         className={`fixed bottom-0 left-0 right-0 z-[1000] border-t border-white/20 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-2 transition-all duration-500 ${
           isOpen ? "bg-white/80 backdrop-blur-3xl" : "bg-white/70 backdrop-blur-2xl"
         }`}
