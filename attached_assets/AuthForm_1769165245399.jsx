@@ -522,8 +522,20 @@ const AuthForm = ({ initialStep = 'email', onSignupComplete, onLoginComplete }) 
       }
       
       setLoginAttempts(0);
-      if (onLoginComplete) {
-        onLoginComplete();
+      
+      const { available } = await isBiometricsAvailable();
+      const firstLogin = isFirstLogin(loginEmail);
+      
+      if (available && firstLogin) {
+        markAsLoggedIn(loginEmail);
+        setPendingAuthEmail(loginEmail);
+        setPendingAuthCallback(() => onLoginComplete);
+        setShowBiometricPrompt(true);
+      } else {
+        markAsLoggedIn(loginEmail);
+        if (onLoginComplete) {
+          onLoginComplete();
+        }
       }
     } catch (err) {
       showToast('An error occurred. Please try again.');
@@ -878,6 +890,27 @@ const AuthForm = ({ initialStep = 'email', onSignupComplete, onLoginComplete }) 
                     </PrimaryButton>
                   </div>
                   
+                  {canUseBiometricLogin && (
+                    <div className="animate-on-load delay-4">
+                      <div className="flex items-center gap-4 my-4">
+                        <div className="flex-1 h-px bg-muted-foreground/30"></div>
+                        <span className="text-sm text-muted-foreground">or</span>
+                        <div className="flex-1 h-px bg-muted-foreground/30"></div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleBiometricLogin}
+                        disabled={isLoading || loginCooldown > 0}
+                        className="w-full flex items-center justify-center gap-3 rounded-full border-2 border-slate-200 bg-white py-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 active:scale-[0.98] disabled:opacity-50"
+                      >
+                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                        </svg>
+                        {isLoading ? 'Verifying...' : `Use ${getBiometryTypeName(biometryType)}`}
+                      </button>
+                    </div>
+                  )}
+                  
                   {loginAttempts > 0 && loginAttempts < MAX_LOGIN_ATTEMPTS && (
                     <p className={`otp-attempts ${MAX_LOGIN_ATTEMPTS - loginAttempts <= 3 ? 'otp-error' : ''}`}>
                       {MAX_LOGIN_ATTEMPTS - loginAttempts} attempts remaining
@@ -1214,9 +1247,14 @@ const AuthForm = ({ initialStep = 'email', onSignupComplete, onLoginComplete }) 
 
       <BiometricPromptModal
         isOpen={showBiometricPrompt}
-        onClose={() => setShowBiometricPrompt(false)}
+        onClose={() => {
+          setShowBiometricPrompt(false);
+          if (pendingAuthCallback) {
+            pendingAuthCallback();
+          }
+        }}
         userEmail={pendingAuthEmail}
-        onComplete={(enabled) => {
+        onComplete={() => {
           setShowBiometricPrompt(false);
           if (pendingAuthCallback) {
             pendingAuthCallback();
