@@ -1,5 +1,4 @@
 import { Capacitor } from '@capacitor/core';
-import { NativeBiometric } from '@capgo/capacitor-native-biometric';
 
 const BIOMETRICS_ENABLED_KEY = 'biometricsEnabled';
 const BIOMETRICS_USER_KEY = 'biometricsUserEmail';
@@ -11,12 +10,21 @@ export const isNativePlatform = () => {
     : Capacitor.getPlatform() !== 'web';
 };
 
+const loadNativeBiometric = async () => {
+  if (!isNativePlatform()) return null;
+
+  // Dynamic import so Vite web build never tries to resolve native deps
+  const mod = await import('@capgo/capacitor-native-biometric');
+  return mod.NativeBiometric || mod.default || mod;
+};
+
 export const isBiometricsAvailable = async () => {
-  if (!isNativePlatform()) {
-    return { available: false, biometryType: null };
-  }
+  if (!isNativePlatform()) return { available: false, biometryType: null };
 
   try {
+    const NativeBiometric = await loadNativeBiometric();
+    if (!NativeBiometric) return { available: false, biometryType: null };
+
     const res = await NativeBiometric.isAvailable();
     return {
       available: !!res.isAvailable,
@@ -34,11 +42,12 @@ export const isBiometricsAvailable = async () => {
 };
 
 export const authenticateWithBiometrics = async (reason = 'Authenticate to continue') => {
-  if (!isNativePlatform()) {
-    throw new Error('Biometrics only available on native platforms');
-  }
+  if (!isNativePlatform()) throw new Error('Biometrics only available on native platforms');
 
   try {
+    const NativeBiometric = await loadNativeBiometric();
+    if (!NativeBiometric) throw new Error('NativeBiometric not loaded');
+
     await NativeBiometric.verifyIdentity({ reason });
     return true;
   } catch (error) {
@@ -58,9 +67,7 @@ export const isBiometricsEnabled = () => {
 
 export const enableBiometrics = (userEmail) => {
   localStorage.setItem(BIOMETRICS_ENABLED_KEY, 'true');
-  if (userEmail) {
-    localStorage.setItem(BIOMETRICS_USER_KEY, userEmail);
-  }
+  if (userEmail) localStorage.setItem(BIOMETRICS_USER_KEY, userEmail);
 };
 
 export const disableBiometrics = () => {
