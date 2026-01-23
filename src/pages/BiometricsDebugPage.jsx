@@ -8,31 +8,20 @@ import {
 
 const formatErrorDetails = (error) => {
   if (!error) return "Unknown error";
-
   const name = error?.name || "Unknown";
   const message = error?.message || String(error);
   const code = error?.code ?? "Unknown";
-
-  const details = [
-    `Error name: ${name}`,
-    `Error code: ${code}`,
-    `Error message: ${message}`,
-  ];
-
+  const details = [`Error name: ${name}`, `Error code: ${code}`, `Error message: ${message}`];
   if (error?.stack) details.push(`Stack: ${error.stack}`);
-
   return details.join("\n");
 };
 
-const BiometricsDebugPage = ({ onNavigate }) => {
+export default function BiometricsDebugPage({ onNavigate }) {
   const [logs, setLogs] = useState([]);
   const [isTesting, setIsTesting] = useState(false);
 
   const addLog = useCallback((message) => {
-    setLogs((prev) => [
-      ...prev,
-      `[${new Date().toLocaleTimeString()}] ${message}`,
-    ]);
+    setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${message}`]);
   }, []);
 
   const platform = useMemo(() => Capacitor.getPlatform(), []);
@@ -45,8 +34,8 @@ const BiometricsDebugPage = ({ onNavigate }) => {
 
   const handleTest = async () => {
     if (isTesting) return;
-
     setIsTesting(true);
+
     addLog("Starting biometrics test...");
     addLog(`Platform live: ${Capacitor.getPlatform()}`);
     addLog(`Native live: ${isNativePlatform()}`);
@@ -114,6 +103,4 @@ const BiometricsDebugPage = ({ onNavigate }) => {
       </div>
     </div>
   );
-};
-
-export default BiometricsDebugPage;
+}
