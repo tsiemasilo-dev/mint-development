@@ -108,12 +108,6 @@ const BiometricsDebugPage = ({ onNavigate }) => {
       </div>
 
       <div className="rounded-2xl bg-slate-900 p-4 text-sm text-slate-100 shadow-inner">
-        <div className="mb-2 flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">
-            Log Output
-          </span>
-        </div>
-
         <pre className="max-h-[380px] overflow-auto whitespace-pre-wrap rounded-lg bg-slate-950/50 p-3 text-xs leading-relaxed">
           {logs.length ? logs.join("\n\n") : "No logs yet."}
         </pre>
