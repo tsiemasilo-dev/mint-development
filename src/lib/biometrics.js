@@ -1,10 +1,9 @@
-import { Capacitor, Plugins } from '@capacitor/core';
+import { Capacitor } from '@capacitor/core';
+import { NativeBiometric } from '@capgo/capacitor-native-biometric';
 
 const BIOMETRICS_ENABLED_KEY = 'biometricsEnabled';
 const BIOMETRICS_USER_KEY = 'biometricsUserEmail';
 const FIRST_LOGIN_KEY = 'hasLoggedInBefore';
-
-const { FaceId } = Plugins;
 
 export const isNativePlatform = () => {
   return typeof Capacitor.isNativePlatform === 'function'
@@ -13,44 +12,25 @@ export const isNativePlatform = () => {
 };
 
 export const isBiometricsAvailable = async () => {
-  if (!isNativePlatform()) {
-    return { available: false, biometryType: null };
-  }
+  if (!isNativePlatform()) return { available: false, biometryType: null };
 
   try {
-    const result = await FaceId.isAvailable();
+    const res = await NativeBiometric.isAvailable();
     return {
-      available: !!result.value,
-      biometryType: result.value || null
+      available: !!res.isAvailable,
+      biometryType: res.biometryType || null
     };
   } catch (error) {
-    console.error('Error checking biometrics availability:', {
-      message: error?.message,
-      code: error?.code,
-      name: error?.name,
-      error
-    });
+    console.error('Error checking biometrics availability:', error);
     return { available: false, biometryType: null };
   }
 };
 
 export const authenticateWithBiometrics = async (reason = 'Authenticate to continue') => {
-  if (!isNativePlatform()) {
-    throw new Error('Biometrics only available on native platforms');
-  }
+  if (!isNativePlatform()) throw new Error('Biometrics only available on native platforms');
 
-  try {
-    await FaceId.auth({ reason });
-    return true;
-  } catch (error) {
-    console.error('Biometric authentication failed:', {
-      message: error?.message,
-      code: error?.code,
-      name: error?.name,
-      error
-    });
-    throw error;
-  }
+  await NativeBiometric.verifyIdentity({ reason });
+  return true;
 };
 
 export const isBiometricsEnabled = () => {
@@ -59,9 +39,7 @@ export const isBiometricsEnabled = () => {
 
 export const enableBiometrics = (userEmail) => {
   localStorage.setItem(BIOMETRICS_ENABLED_KEY, 'true');
-  if (userEmail) {
-    localStorage.setItem(BIOMETRICS_USER_KEY, userEmail);
-  }
+  if (userEmail) localStorage.setItem(BIOMETRICS_USER_KEY, userEmail);
 };
 
 export const disableBiometrics = () => {
