@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { Bell } from "lucide-react";
 import CreditMetricCard from "../components/credit/CreditMetricCard.jsx";
 import CreditActionGrid from "../components/credit/CreditActionGrid.jsx";
 import CreditScorePage from "./CreditScorePage.jsx";
@@ -46,26 +47,13 @@ const CreditPage = () => {
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-xs font-semibold text-slate-700">
                 RR
               </div>
-              <div>
-                <p className="text-lg font-semibold">Good Afternoon, Riyad</p>
-                <p className="text-xs text-white/80">Welcome Back</p>
-              </div>
             </div>
-            <button aria-label="Notifications" type="button">
-              <svg
-                aria-hidden="true"
-                className="h-5 w-5 text-white"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5m6 0a3 3 0 1 1-6 0"
-                />
-              </svg>
+            <button
+              aria-label="Notifications"
+              type="button"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-white/10 text-white backdrop-blur-md"
+            >
+              <Bell className="h-5 w-5" />
             </button>
           </header>
 
