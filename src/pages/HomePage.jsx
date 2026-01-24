@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   ArrowDownToLine,
   BadgeCheck,
@@ -29,6 +29,7 @@ const HomePage = ({
   onOpenSettings,
 }) => {
   const { profile, loading } = useProfile();
+  const [failedLogos, setFailedLogos] = useState({});
   const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(" ");
   const initials = displayName
     .split(" ")
@@ -251,7 +252,12 @@ const HomePage = ({
         ) : null}
 
         <section>
-          <p className="text-sm font-semibold text-slate-900">Your best performing assets</p>
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-slate-900">
+              Your best performing assets
+            </p>
+            <p className="text-xs text-slate-500">Based on your investment portfolio</p>
+          </div>
           <div className="mt-3 flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {bestAssets.slice(0, 5).map((asset) => (
               <div
@@ -259,11 +265,22 @@ const HomePage = ({
                 className="flex min-w-[260px] flex-1 snap-start items-center gap-4 rounded-3xl bg-white p-4 shadow-md"
               >
                 <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">
-                  <img
-                    src={asset.logo}
-                    alt={asset.name}
-                    className="h-10 w-10 object-contain"
-                  />
+                  {failedLogos[asset.symbol] ? (
+                    <span className="text-sm font-semibold text-slate-600">
+                      {asset.symbol}
+                    </span>
+                  ) : (
+                    <img
+                      src={asset.logo}
+                      alt={asset.name}
+                      className="h-10 w-10 object-contain"
+                      referrerPolicy="no-referrer"
+                      crossOrigin="anonymous"
+                      onError={() =>
+                        setFailedLogos((prev) => ({ ...prev, [asset.symbol]: true }))
+                      }
+                    />
+                  )}
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-slate-900">{asset.symbol}</p>
