@@ -135,6 +135,13 @@ const HomePage = ({
     { title: "Loan repayment", date: "Yesterday", amount: "-R300" },
     { title: "Investment gain", date: "18 Apr", amount: "+R120" },
   ];
+  const bestAssets = [
+    { symbol: "AMZN", name: "Amazon, Inc", value: "$2,857.86", change: "+0.05%" },
+    { symbol: "AAPL", name: "Apple, Inc", value: "$1,942.12", change: "+0.12%" },
+    { symbol: "NVDA", name: "Nvidia Corp", value: "$3,120.48", change: "+0.31%" },
+    { symbol: "TSLA", name: "Tesla, Inc", value: "$1,284.33", change: "+0.09%" },
+    { symbol: "MSFT", name: "Microsoft", value: "$2,015.72", change: "+0.07%" },
+  ];
 
   const handleActionNavigation = (action) => {
     const routes = {
@@ -219,6 +226,30 @@ const HomePage = ({
             onSelectAction={handleActionNavigation}
           />
         ) : null}
+
+        <section>
+          <p className="text-sm font-semibold text-slate-900">Your best performing assets</p>
+          <div className="mt-3 flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {bestAssets.slice(0, 5).map((asset) => (
+              <div
+                key={asset.symbol}
+                className="flex min-w-[260px] flex-1 snap-start items-center gap-4 rounded-3xl bg-white p-4 shadow-md"
+              >
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-base font-semibold text-slate-700">
+                  {asset.symbol[0]}
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-slate-900">{asset.symbol}</p>
+                  <p className="text-xs text-slate-500">{asset.name}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-semibold text-slate-900">{asset.value}</p>
+                  <p className="text-xs font-semibold text-emerald-500">{asset.change}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
 
         <TransactionHistorySection items={transactionHistory} onViewAll={onOpenActivity} />
 
