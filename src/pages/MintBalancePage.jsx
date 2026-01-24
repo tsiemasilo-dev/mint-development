@@ -3,7 +3,13 @@ import { ArrowLeft, ChevronRight } from "lucide-react";
 import MintBalanceCard from "../components/MintBalanceCard";
 import { formatZar } from "../lib/formatCurrency";
 
-const MintBalancePage = ({ onBack, onOpenInvestments, onOpenCredit, onOpenActivity }) => {
+const MintBalancePage = ({
+  onBack,
+  onOpenInvestments,
+  onOpenCredit,
+  onOpenActivity,
+  onOpenSettings,
+}) => {
   const balanceAmount = 24806.03;
   const breakdownItems = [
     {
@@ -57,27 +63,29 @@ const MintBalancePage = ({ onBack, onOpenInvestments, onOpenCredit, onOpenActivi
       </div>
 
       <div className="mx-auto -mt-10 flex w-full max-w-sm flex-col gap-6 px-4 pb-10 md:max-w-md md:px-8">
-        <section className="rounded-3xl bg-white px-5 py-5 shadow-md">
+        <section className="rounded-3xl bg-white px-5 py-5 shadow-sm ring-1 ring-slate-100">
           <h2 className="text-sm font-semibold text-slate-900">What makes up your Mint Balance</h2>
-          <div className="mt-4 flex flex-col gap-3">
+          <div className="mt-4 flex flex-col gap-4">
             {breakdownItems.map((item) => (
               <button
                 key={item.label}
                 type="button"
                 onClick={item.onPress}
-                className="flex w-full items-center justify-between rounded-2xl border border-slate-100 bg-white/90 px-4 py-3 text-left shadow-sm"
+                className="flex w-full items-center justify-between rounded-2xl border border-slate-100 bg-white/90 px-4 py-4 text-left shadow-[0_6px_18px_rgba(15,23,42,0.06)]"
               >
-                <div className="flex flex-col gap-1">
+                <div className="flex-1">
                   <span className="text-sm font-semibold text-slate-900">{item.label}</span>
-                  <span className="text-xs text-slate-500">{item.description}</span>
+                  <span className="mt-1.5 block text-xs text-slate-500">
+                    {item.description}
+                  </span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="text-right">
+                  <div className="min-w-[110px] text-right tabular-nums">
                     <p className="text-sm font-semibold text-slate-900">
                       {formatZar(item.amount)}
                     </p>
                     {item.changeText ? (
-                      <span className="mt-1 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">
+                      <span className="mt-1 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
                         {item.changeText}
                       </span>
                     ) : null}
@@ -89,26 +97,28 @@ const MintBalancePage = ({ onBack, onOpenInvestments, onOpenCredit, onOpenActivi
           </div>
         </section>
 
-        <section className="rounded-3xl bg-white px-5 py-5 shadow-md">
+        <section className="rounded-3xl bg-white px-5 py-5 shadow-sm ring-1 ring-slate-100">
           <h2 className="text-sm font-semibold text-slate-900">Recent balance changes</h2>
-          <div className="mt-4 flex flex-col gap-3">
+          <div className="mt-4 overflow-hidden rounded-2xl border border-slate-100 bg-white/90">
             {recentChanges.slice(0, 5).map((item) => (
               <div
                 key={`${item.title}-${item.date}-${item.amount}`}
-                className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white/90 px-4 py-3"
+                className="flex items-center justify-between px-4 py-3 text-sm text-slate-700 [&:not(:last-child)]:border-b [&:not(:last-child)]:border-slate-100"
               >
                 <div>
                   <p className="text-sm font-semibold text-slate-900">{item.title}</p>
                   <p className="text-xs text-slate-500">{item.date}</p>
                 </div>
-                <p className="text-sm font-semibold text-slate-600">{item.amount}</p>
+                <p className="text-sm font-semibold text-slate-600 tabular-nums">
+                  {item.amount}
+                </p>
               </div>
             ))}
           </div>
           <button
             type="button"
             onClick={onOpenActivity}
-            className="mt-4 flex w-full items-center justify-between rounded-2xl border border-slate-100 bg-white/90 px-4 py-3 text-sm font-semibold text-slate-700"
+            className="mt-3 flex w-full items-center justify-between rounded-2xl border border-slate-100 bg-white/90 px-4 py-3 text-sm font-semibold text-slate-700 shadow-[0_6px_18px_rgba(15,23,42,0.06)]"
           >
             View full activity
             <ChevronRight className="h-4 w-4 text-slate-400" />
@@ -121,6 +131,14 @@ const MintBalancePage = ({ onBack, onOpenInvestments, onOpenCredit, onOpenActivi
             Values update as your portfolio and credit status change.
           </p>
           <p className="mt-2 text-[11px] text-slate-500">Powered by partnered financial providers</p>
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            className="mt-3 flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-[11px] font-semibold text-slate-600"
+          >
+            Manage connections in Settings
+            <ChevronRight className="h-3 w-3 text-slate-400" />
+          </button>
         </section>
       </div>
     </div>
