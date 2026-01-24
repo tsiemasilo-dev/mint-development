@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowLeft, Settings, Bell, Mailbox } from "lucide-react";
+import { ArrowLeft, Settings, Mailbox } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
 import NotificationsSkeleton from "../components/NotificationsSkeleton";
 
@@ -56,11 +56,6 @@ const NotificationsPage = ({ onBack }) => {
             <Settings className="h-5 w-5" />
           </button>
         </header>
-
-        <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-sm">
-          <Bell className="h-4 w-4" />
-          Customize your notifications!
-        </div>
 
         {hasNotifications ? (
           <div className="mt-6 space-y-4">
