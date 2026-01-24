@@ -56,7 +56,6 @@ const MintBalancePage = ({
             changeText="+R320 today"
             updatedAt={new Date()}
             isInteractive={false}
-            showVisibilityToggle={false}
             showBreakdownHint={false}
           />
         </div>
