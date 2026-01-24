@@ -228,18 +228,24 @@ const App = () => {
 
   if (currentPage === "mintBalance") {
     return (
-      <MintBalancePage
-        onBack={() => setCurrentPage("home")}
-        onOpenInvestments={() => setCurrentPage("investments")}
-        onOpenCredit={() => setCurrentPage("credit")}
-        onOpenActivity={() => setCurrentPage("activity")}
-        onOpenSettings={() => setCurrentPage("settings")}
-      />
+      <AppLayout activeTab="home" onTabChange={setCurrentPage}>
+        <MintBalancePage
+          onBack={() => setCurrentPage("home")}
+          onOpenInvestments={() => setCurrentPage("investments")}
+          onOpenCredit={() => setCurrentPage("credit")}
+          onOpenActivity={() => setCurrentPage("activity")}
+          onOpenSettings={() => setCurrentPage("settings")}
+        />
+      </AppLayout>
     );
   }
 
   if (currentPage === "activity") {
-    return <ActivityPage onBack={() => setCurrentPage("mintBalance")} />;
+    return (
+      <AppLayout activeTab="home" onTabChange={setCurrentPage}>
+        <ActivityPage onBack={() => setCurrentPage("mintBalance")} />
+      </AppLayout>
+    );
   }
 
   if (currentPage === "actions") {
