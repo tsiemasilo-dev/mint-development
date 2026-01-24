@@ -16,6 +16,7 @@ import EditProfilePage from "./pages/EditProfilePage.jsx";
 import NotificationsPage from "./pages/NotificationsPage.jsx";
 import MintBalancePage from "./pages/MintBalancePage.jsx";
 import ActivityPage from "./pages/ActivityPage.jsx";
+import ActionsPage from "./pages/ActionsPage.jsx";
 
 const initialHash = window.location.hash;
 const isRecoveryMode = initialHash.includes('type=recovery');
@@ -149,6 +150,11 @@ const App = () => {
             setCurrentPage("notifications");
           }}
           onOpenMintBalance={() => setCurrentPage("mintBalance")}
+          onOpenActivity={() => setCurrentPage("activity")}
+          onOpenActions={() => setCurrentPage("actions")}
+          onOpenInvestments={() => setCurrentPage("investments")}
+          onOpenCredit={() => setCurrentPage("credit")}
+          onOpenSettings={() => setCurrentPage("settings")}
         />
       </AppLayout>
     );
@@ -234,6 +240,10 @@ const App = () => {
 
   if (currentPage === "activity") {
     return <ActivityPage onBack={() => setCurrentPage("mintBalance")} />;
+  }
+
+  if (currentPage === "actions") {
+    return <ActionsPage onBack={() => setCurrentPage("home")} />;
   }
 
   if (currentPage === "userOnboarding") {

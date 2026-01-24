@@ -3,8 +3,18 @@ import { ArrowDownLeft, ArrowUpRight, Bell, CreditCard, QrCode } from "lucide-re
 import { useProfile } from "../lib/useProfile";
 import HomeSkeleton from "../components/HomeSkeleton";
 import MintBalanceCard from "../components/MintBalanceCard";
+import OutstandingActionsSection from "../components/OutstandingActionsSection";
+import TransactionHistorySection from "../components/TransactionHistorySection";
 
-const HomePage = ({ onOpenNotifications, onOpenMintBalance }) => {
+const HomePage = ({
+  onOpenNotifications,
+  onOpenMintBalance,
+  onOpenActivity,
+  onOpenActions,
+  onOpenInvestments,
+  onOpenCredit,
+  onOpenSettings,
+}) => {
   const { profile, loading } = useProfile();
   const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(" ");
   const initials = displayName
@@ -22,6 +32,92 @@ const HomePage = ({ onOpenNotifications, onOpenMintBalance }) => {
   const handleMintBalancePress = () => {
     if (onOpenMintBalance) {
       onOpenMintBalance();
+    }
+  };
+
+  const actionsData = [
+    {
+      id: "identity",
+      title: "Complete identity check",
+      description: "Needed to unlock higher limits",
+      priority: 1,
+      status: "Required",
+      routeName: "settings",
+      isComplete: false,
+      dueAt: "2025-01-20T12:00:00Z",
+      createdAt: "2025-01-18T09:00:00Z",
+    },
+    {
+      id: "bank-link",
+      title: "Link your primary bank",
+      description: "Connect to enable instant transfers",
+      priority: 2,
+      status: "Pending",
+      routeName: "settings",
+      isComplete: false,
+      dueAt: "2025-01-22T12:00:00Z",
+      createdAt: "2025-01-19T09:00:00Z",
+    },
+    {
+      id: "investments",
+      title: "Review investment allocation",
+      description: "Confirm your latest risk profile",
+      priority: 3,
+      status: "Pending",
+      routeName: "investments",
+      isComplete: false,
+      dueAt: "2025-01-28T12:00:00Z",
+      createdAt: "2025-01-21T09:00:00Z",
+    },
+    {
+      id: "credit",
+      title: "Confirm credit preferences",
+      description: "Set your preferred repayment day",
+      priority: 4,
+      status: "Required",
+      routeName: "credit",
+      isComplete: false,
+      dueAt: "2025-02-01T12:00:00Z",
+      createdAt: "2025-01-22T09:00:00Z",
+    },
+  ];
+
+  const isActionsAvailable = true;
+  const outstandingActions = isActionsAvailable
+    ? actionsData
+        .filter((action) => !action.isComplete)
+        .sort((a, b) => {
+          if (a.priority !== b.priority) {
+            return a.priority - b.priority;
+          }
+          const dueA = a.dueAt ? new Date(a.dueAt).getTime() : Number.POSITIVE_INFINITY;
+          const dueB = b.dueAt ? new Date(b.dueAt).getTime() : Number.POSITIVE_INFINITY;
+          if (dueA !== dueB) {
+            return dueA - dueB;
+          }
+          const createdA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const createdB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return createdA - createdB;
+        })
+    : [];
+
+  const transactionHistory = [
+    { title: "Investment deposit", date: "Today", amount: "+R500" },
+    { title: "Loan repayment", date: "Yesterday", amount: "-R300" },
+    { title: "Investment gain", date: "18 Apr", amount: "+R120" },
+  ];
+
+  const handleActionNavigation = (action) => {
+    const routes = {
+      investments: onOpenInvestments,
+      credit: onOpenCredit,
+      settings: onOpenSettings,
+      actions: onOpenActions,
+    };
+
+    const handler = routes[action.routeName];
+    if (handler) {
+      handler();
     }
   };
 
@@ -85,6 +181,16 @@ const HomePage = ({ onOpenNotifications, onOpenMintBalance }) => {
             );
           })}
         </section>
+
+        {outstandingActions.length > 0 ? (
+          <OutstandingActionsSection
+            actions={outstandingActions}
+            onViewAll={onOpenActions}
+            onSelectAction={handleActionNavigation}
+          />
+        ) : null}
+
+        <TransactionHistorySection items={transactionHistory} onViewAll={onOpenActivity} />
 
         <div className="flex items-center justify-center gap-2">
           <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
