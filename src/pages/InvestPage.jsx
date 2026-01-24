@@ -1,7 +1,7 @@
 import React from "react";
 import { ArrowLeft, ChevronRight, Layers, LineChart } from "lucide-react";
 
-const InvestPage = ({ onBack }) => (
+const InvestPage = ({ onBack, onOpenOpenStrategies, onOpenMarkets }) => (
   <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)] text-slate-900">
     <div className="mx-auto flex w-full max-w-sm flex-col px-4 pb-8 pt-12 md:max-w-md md:px-8">
       <header className="flex items-center justify-between">
@@ -22,6 +22,7 @@ const InvestPage = ({ onBack }) => (
 
         <button
           type="button"
+          onClick={onOpenOpenStrategies}
           className="flex w-full items-center gap-4 rounded-[20px] border border-white/70 bg-white/80 px-4 py-5 text-left shadow-md backdrop-blur"
         >
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-100 text-violet-700">
@@ -36,6 +37,7 @@ const InvestPage = ({ onBack }) => (
 
         <button
           type="button"
+          onClick={onOpenMarkets}
           className="flex w-full items-center gap-4 rounded-[18px] border border-slate-100 bg-white px-4 py-4 text-left"
         >
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-600">
