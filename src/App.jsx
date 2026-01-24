@@ -203,7 +203,11 @@ const App = () => {
   }
 
   if (currentPage === "invest") {
-    return <InvestPage onBack={() => setCurrentPage("home")} />;
+    return (
+      <AppLayout activeTab="home" onTabChange={setCurrentPage}>
+        <InvestPage onBack={() => setCurrentPage("home")} />
+      </AppLayout>
+    );
   }
 
   if (currentPage === "withdraw") {
