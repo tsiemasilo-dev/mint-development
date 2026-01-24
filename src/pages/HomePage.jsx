@@ -1,5 +1,15 @@
-import React from "react";
-import { ArrowDownLeft, ArrowUpRight, Bell, CreditCard, QrCode } from "lucide-react";
+import React, { useState } from "react";
+import {
+  ArrowDownToLine,
+  BadgeCheck,
+  Bell,
+  FileSignature,
+  HandCoins,
+  Landmark,
+  Info,
+  UserPlus,
+  TrendingUp,
+} from "lucide-react";
 import { useProfile } from "../lib/useProfile";
 import HomeSkeleton from "../components/HomeSkeleton";
 import MintBalanceCard from "../components/MintBalanceCard";
@@ -13,9 +23,14 @@ const HomePage = ({
   onOpenActions,
   onOpenInvestments,
   onOpenCredit,
+  onOpenCreditApply,
+  onOpenCreditRepay,
+  onOpenInvest,
+  onOpenWithdraw,
   onOpenSettings,
 }) => {
   const { profile, loading } = useProfile();
+  const [failedLogos, setFailedLogos] = useState({});
   const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(" ");
   const initials = displayName
     .split(" ")
@@ -42,6 +57,7 @@ const HomePage = ({
       description: "Needed to unlock higher limits",
       priority: 1,
       status: "Required",
+      icon: BadgeCheck,
       routeName: "settings",
       isComplete: false,
       dueAt: "2025-01-20T12:00:00Z",
@@ -52,7 +68,8 @@ const HomePage = ({
       title: "Link your primary bank",
       description: "Connect to enable instant transfers",
       priority: 2,
-      status: "Pending",
+      status: "In review",
+      icon: Landmark,
       routeName: "settings",
       isComplete: false,
       dueAt: "2025-01-22T12:00:00Z",
@@ -63,7 +80,8 @@ const HomePage = ({
       title: "Review investment allocation",
       description: "Confirm your latest risk profile",
       priority: 3,
-      status: "Pending",
+      status: "Optional",
+      icon: TrendingUp,
       routeName: "investments",
       isComplete: false,
       dueAt: "2025-01-28T12:00:00Z",
@@ -75,10 +93,23 @@ const HomePage = ({
       description: "Set your preferred repayment day",
       priority: 4,
       status: "Required",
+      icon: HandCoins,
       routeName: "credit",
       isComplete: false,
       dueAt: "2025-02-01T12:00:00Z",
       createdAt: "2025-01-22T09:00:00Z",
+    },
+    {
+      id: "invite",
+      title: "Invite a friend",
+      description: "Share Mint and earn bonus rewards",
+      priority: 5,
+      status: "Optional",
+      icon: UserPlus,
+      routeName: "actions",
+      isComplete: false,
+      dueAt: "2025-02-05T12:00:00Z",
+      createdAt: "2025-01-23T09:00:00Z",
     },
   ];
 
@@ -105,6 +136,36 @@ const HomePage = ({
     { title: "Investment deposit", date: "Today", amount: "+R500" },
     { title: "Loan repayment", date: "Yesterday", amount: "-R300" },
     { title: "Investment gain", date: "18 Apr", amount: "+R120" },
+  ];
+  const bestAssets = [
+    {
+      symbol: "CPI",
+      name: "Capitec",
+      value: "R2,857.86",
+      change: "+0.05%",
+      logo: "https://s3-symbol-logo.tradingview.com/capitec-bank-hldgs-ltd--big.svg",
+    },
+    {
+      symbol: "NPN",
+      name: "Naspers",
+      value: "R1,942.12",
+      change: "+0.12%",
+      logo: "https://s3-symbol-logo.tradingview.com/naspers--big.svg",
+    },
+    {
+      symbol: "FSR",
+      name: "First Rand",
+      value: "R3,120.48",
+      change: "+0.31%",
+      logo: "https://s3-symbol-logo.tradingview.com/firstrand-ltd--big.svg",
+    },
+    {
+      symbol: "ABG",
+      name: "ABSA Group",
+      value: "R1,284.33",
+      change: "+0.09%",
+      logo: "https://s3-symbol-logo.tradingview.com/absa-bank-ltd-pref--big.svg",
+    },
   ];
 
   const handleActionNavigation = (action) => {
@@ -161,10 +222,10 @@ const HomePage = ({
       <div className="mx-auto -mt-10 flex w-full max-w-sm flex-col gap-6 px-4 pb-10 md:max-w-md md:px-8">
         <section className="grid grid-cols-4 gap-3 text-[11px] font-medium">
           {[
-            { label: "Transfer", icon: ArrowUpRight },
-            { label: "Deposit", icon: ArrowDownLeft },
-            { label: "Pay", icon: CreditCard },
-            { label: "Scan", icon: QrCode },
+            { label: "Apply", icon: FileSignature, onClick: onOpenCreditApply },
+            { label: "Repay", icon: HandCoins, onClick: onOpenCreditRepay },
+            { label: "Invest", icon: TrendingUp, onClick: onOpenInvest },
+            { label: "Withdraw", icon: ArrowDownToLine, onClick: onOpenWithdraw },
           ].map((item) => {
             const Icon = item.icon;
             return (
@@ -172,6 +233,7 @@ const HomePage = ({
                 key={item.label}
                 className="flex flex-col items-center gap-2 rounded-2xl bg-white px-2 py-3 text-slate-700 shadow-md"
                 type="button"
+                onClick={item.onClick}
               >
                 <span className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-50 text-violet-700">
                   <Icon className="h-4 w-4" />
@@ -190,13 +252,57 @@ const HomePage = ({
           />
         ) : null}
 
+        <section>
+          <div className="space-y-1 pl-5">
+            <p className="text-sm font-semibold text-slate-900">
+              Your best performing assets
+            </p>
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 text-slate-500">
+                <Info className="h-3 w-3" />
+              </span>
+              <span>Based on your investment portfolio</span>
+            </div>
+          </div>
+          <div className="mt-3 flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {bestAssets.slice(0, 5).map((asset) => (
+              <div
+                key={asset.symbol}
+                className="flex min-w-[260px] flex-1 snap-start items-center gap-4 rounded-3xl bg-white p-4 shadow-md"
+              >
+                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">
+                  {failedLogos[asset.symbol] ? (
+                    <span className="text-sm font-semibold text-slate-600">
+                      {asset.symbol}
+                    </span>
+                  ) : (
+                    <img
+                      src={asset.logo}
+                      alt={asset.name}
+                      className="h-10 w-10 object-contain"
+                      referrerPolicy="no-referrer"
+                      crossOrigin="anonymous"
+                      onError={() =>
+                        setFailedLogos((prev) => ({ ...prev, [asset.symbol]: true }))
+                      }
+                    />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-slate-900">{asset.symbol}</p>
+                  <p className="text-xs text-slate-500">{asset.name}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-semibold text-slate-900">{asset.value}</p>
+                  <p className="text-xs font-semibold text-emerald-500">{asset.change}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
         <TransactionHistorySection items={transactionHistory} onViewAll={onOpenActivity} />
 
-        <div className="flex items-center justify-center gap-2">
-          <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
-          <span className="h-1.5 w-4 rounded-full bg-slate-900/90" />
-          <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
-        </div>
       </div>
     </div>
   );

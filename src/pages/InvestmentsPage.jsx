@@ -46,7 +46,7 @@ const InvestmentsPage = ({ onOpenNotifications }) => {
             </button>
           </header>
 
-          <section className="rounded-3xl bg-white/10 p-5 text-white shadow-sm backdrop-blur">
+          <section className="glass-card p-5 text-white">
             <p className="text-xs uppercase tracking-[0.2em] text-white/70">Total Investments</p>
             <p className="mt-3 text-3xl font-semibold">R128,450</p>
             <div className="mt-4 inline-flex items-center rounded-full bg-emerald-400/20 px-3 py-1 text-xs font-semibold text-emerald-100">

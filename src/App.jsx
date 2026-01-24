@@ -4,7 +4,10 @@ import { supabase } from "./lib/supabase.js";
 import AuthPage from "./pages/AuthPage.jsx";
 import HomePage from "./pages/HomePage.jsx";
 import CreditPage from "./pages/CreditPage.jsx";
+import CreditApplyPage from "./pages/CreditApplyPage.jsx";
+import CreditRepayPage from "./pages/CreditRepayPage.jsx";
 import InvestmentsPage from "./pages/InvestmentsPage.jsx";
+import InvestPage from "./pages/InvestPage.jsx";
 import MorePage from "./pages/MorePage.jsx";
 import OnboardingPage from "./pages/OnboardingPage.jsx";
 import SettingsPage from "./pages/SettingsPage.jsx";
@@ -17,6 +20,7 @@ import NotificationsPage from "./pages/NotificationsPage.jsx";
 import MintBalancePage from "./pages/MintBalancePage.jsx";
 import ActivityPage from "./pages/ActivityPage.jsx";
 import ActionsPage from "./pages/ActionsPage.jsx";
+import WithdrawPage from "./pages/WithdrawPage.jsx";
 
 const initialHash = window.location.hash;
 const isRecoveryMode = initialHash.includes('type=recovery');
@@ -154,6 +158,10 @@ const App = () => {
           onOpenActions={() => setCurrentPage("actions")}
           onOpenInvestments={() => setCurrentPage("investments")}
           onOpenCredit={() => setCurrentPage("credit")}
+          onOpenCreditApply={() => setCurrentPage("creditApply")}
+          onOpenCreditRepay={() => setCurrentPage("creditRepay")}
+          onOpenInvest={() => setCurrentPage("invest")}
+          onOpenWithdraw={() => setCurrentPage("withdraw")}
           onOpenSettings={() => setCurrentPage("settings")}
         />
       </AppLayout>
@@ -192,6 +200,14 @@ const App = () => {
         />
       </AppLayout>
     );
+  }
+
+  if (currentPage === "invest") {
+    return <InvestPage />;
+  }
+
+  if (currentPage === "withdraw") {
+    return <WithdrawPage />;
   }
 
   if (currentPage === "more") {
@@ -250,6 +266,14 @@ const App = () => {
 
   if (currentPage === "actions") {
     return <ActionsPage onBack={() => setCurrentPage("home")} />;
+  }
+
+  if (currentPage === "creditApply") {
+    return <CreditApplyPage />;
+  }
+
+  if (currentPage === "creditRepay") {
+    return <CreditRepayPage />;
   }
 
   if (currentPage === "userOnboarding") {
