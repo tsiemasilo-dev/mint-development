@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Eye, EyeOff, ChevronRight } from "lucide-react";
+import { Eye, EyeOff, ChevronRight, Info } from "lucide-react";
 import { formatZar } from "../lib/formatCurrency";
 import { formatRelativeTime } from "../lib/formatRelativeTime";
 
@@ -103,8 +103,11 @@ const MintBalanceCard = ({
         <div className="mt-3 h-6" />
       )}
 
-      <p className="mt-3 text-xs text-white/70">
-        Across your investments and available credit
+      <p className="mt-3 flex items-center gap-2 text-xs text-white/70">
+        <span>Across your investments and available credit</span>
+        <span className="flex h-5 w-5 items-center justify-center rounded-full border border-white/30 text-white/70">
+          <Info className="h-3 w-3" />
+        </span>
       </p>
 
       <div className="mt-4 flex items-center justify-between text-[10px] text-white/60">
