@@ -14,6 +14,8 @@ import AppLayout from "./layouts/AppLayout.jsx";
 import BiometricsDebugPage from "./pages/BiometricsDebugPage.jsx";
 import EditProfilePage from "./pages/EditProfilePage.jsx";
 import NotificationsPage from "./pages/NotificationsPage.jsx";
+import MintBalancePage from "./pages/MintBalancePage.jsx";
+import ActivityPage from "./pages/ActivityPage.jsx";
 
 const initialHash = window.location.hash;
 const isRecoveryMode = initialHash.includes('type=recovery');
@@ -146,6 +148,7 @@ const App = () => {
             setNotificationReturnPage("home");
             setCurrentPage("notifications");
           }}
+          onOpenMintBalance={() => setCurrentPage("mintBalance")}
         />
       </AppLayout>
     );
@@ -215,6 +218,21 @@ const App = () => {
 
   if (currentPage === "notifications") {
     return <NotificationsPage onBack={() => setCurrentPage(notificationReturnPage)} />;
+  }
+
+  if (currentPage === "mintBalance") {
+    return (
+      <MintBalancePage
+        onBack={() => setCurrentPage("home")}
+        onOpenInvestments={() => setCurrentPage("investments")}
+        onOpenCredit={() => setCurrentPage("credit")}
+        onOpenActivity={() => setCurrentPage("activity")}
+      />
+    );
+  }
+
+  if (currentPage === "activity") {
+    return <ActivityPage onBack={() => setCurrentPage("mintBalance")} />;
   }
 
   if (currentPage === "userOnboarding") {

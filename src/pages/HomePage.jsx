@@ -5,7 +5,7 @@ import { useProfile } from "../lib/useProfile";
 import HomeSkeleton from "../components/HomeSkeleton";
 import MintBalanceCard from "../components/MintBalanceCard";
 
-const HomePage = ({ onOpenNotifications }) => {
+const HomePage = ({ onOpenNotifications, onOpenMintBalance }) => {
   const { profile, loading } = useProfile();
   const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(" ");
   const initials = displayName
@@ -20,7 +20,11 @@ const HomePage = ({ onOpenNotifications }) => {
     return <HomeSkeleton />;
   }
 
-  const handleMintBalancePress = () => {};
+  const handleMintBalancePress = () => {
+    if (onOpenMintBalance) {
+      onOpenMintBalance();
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)] text-slate-900">

@@ -12,6 +12,9 @@ const MintBalanceCard = ({
   isLoading = false,
   error = false,
   isEmpty = false,
+  isInteractive = true,
+  showVisibilityToggle = true,
+  showBreakdownHint = true,
   onPressMintBalance,
   onRetry,
 }) => {
@@ -42,6 +45,9 @@ const MintBalanceCard = ({
   const maskedAmount = "•••••••";
 
   const handleCardPress = () => {
+    if (!isInteractive) {
+      return;
+    }
     if (error && onRetry) {
       onRetry();
       return;
@@ -51,32 +57,37 @@ const MintBalanceCard = ({
     }
   };
 
+  const cardProps = isInteractive
+    ? {
+        role: "button",
+        tabIndex: 0,
+        onClick: handleCardPress,
+        onKeyDown: (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            handleCardPress();
+          }
+        },
+      }
+    : {};
+
   return (
-    <div
-      className="glass-card p-5 text-white"
-      role="button"
-      tabIndex={0}
-      onClick={handleCardPress}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          handleCardPress();
-        }
-      }}
-    >
+    <div className="glass-card p-5 text-white" {...cardProps}>
       <div className="flex items-start justify-between">
         <p className="text-xs uppercase tracking-[0.2em] text-white/70">MINT BALANCE</p>
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            toggleVisibility();
-          }}
-          aria-label={isVisible ? "Hide balance" : "Show balance"}
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white/80 transition hover:bg-white/20"
-        >
-          {isVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-        </button>
+        {showVisibilityToggle ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              toggleVisibility();
+            }}
+            aria-label={isVisible ? "Hide balance" : "Show balance"}
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white/80 transition hover:bg-white/20"
+          >
+            {isVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+          </button>
+        ) : null}
       </div>
 
       <div className="mt-3">
@@ -112,10 +123,21 @@ const MintBalanceCard = ({
 
       <div className="mt-4 flex items-center justify-between text-[10px] text-white/60">
         <span>{updatedLabel || ""}</span>
-        <span className="flex items-center gap-1 text-white/70">
-          View breakdown
-          <ChevronRight className="h-3 w-3" />
-        </span>
+        {showBreakdownHint ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              handleCardPress();
+            }}
+            className="flex items-center gap-1 text-white/70"
+          >
+            View breakdown
+            <ChevronRight className="h-3 w-3" />
+          </button>
+        ) : (
+          <span />
+        )}
       </div>
     </div>
   );
