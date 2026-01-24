@@ -2,6 +2,7 @@ import React, { useRef, useState } from "react";
 import { ArrowLeft, Camera } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
 import { supabase } from "../lib/supabase";
+import EditProfileSkeleton from "../components/EditProfileSkeleton";
 
 const EditProfilePage = ({ onNavigate }) => {
   const { profile, setProfile, loading } = useProfile();
@@ -82,6 +83,10 @@ const EditProfilePage = ({ onNavigate }) => {
       }
     }
   };
+
+  if (loading) {
+    return <EditProfileSkeleton />;
+  }
 
   return (
     <div className="min-h-screen bg-white px-6 pb-10 pt-10">

@@ -16,7 +16,7 @@ const creditOverview = {
   utilisationPercent: 62,
 };
 
-const CreditPage = () => {
+const CreditPage = ({ onOpenNotifications }) => {
   const [view, setView] = useState(() =>
     window.location.pathname === "/credit/score" ? "score" : "overview"
   );
@@ -74,6 +74,7 @@ const CreditPage = () => {
             <button
               aria-label="Notifications"
               type="button"
+              onClick={onOpenNotifications}
               className="flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-white/10 text-white backdrop-blur-md"
             >
               <Bell className="h-5 w-5" />
