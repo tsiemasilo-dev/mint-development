@@ -15,6 +15,7 @@ const activityItems = [
   { title: "Investment gain", date: "2026-01-14", amount: "+R80", type: "Investments" },
   { title: "Loan repayment", date: "2026-01-12", amount: "-R200", type: "Loans" },
 ];
+const iconGradientId = "activity-icon-gradient";
 const formatGroupLabel = (dateString) => {
   const date = new Date(`${dateString}T00:00:00`);
   if (Number.isNaN(date.getTime())) {
@@ -79,6 +80,14 @@ const ActivityPage = ({ onBack, isLoading = false }) => {
   return (
     <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)] text-slate-900">
       <div className="mx-auto flex w-full max-w-sm flex-col px-4 pb-10 pt-12 md:max-w-md md:px-8">
+        <svg aria-hidden="true" className="absolute h-0 w-0">
+          <defs>
+            <linearGradient id={iconGradientId} x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#a855f7" />
+              <stop offset="100%" stopColor="#000000" />
+            </linearGradient>
+          </defs>
+        </svg>
         <header className="flex items-center justify-between">
           <button
             type="button"
@@ -152,7 +161,6 @@ const ActivityPage = ({ onBack, isLoading = false }) => {
               </p>
               {group.items.map((item, itemIndex) => {
                 const Icon = activityIconMap[item.type];
-                const gradientId = `activity-gradient-${groupIndex}-${itemIndex}`;
                 return (
                   <div
                     key={`${item.title}-${item.date}-${item.amount}`}
@@ -160,20 +168,10 @@ const ActivityPage = ({ onBack, isLoading = false }) => {
                   >
                     <div className="flex h-12 w-12 items-center justify-center rounded-full border border-slate-200 bg-white shadow-sm">
                       {Icon && (
-                        <Icon className="h-5 w-5" color={`url(#${gradientId})`}>
-                          <defs>
-                            <linearGradient
-                              id={gradientId}
-                              x1="0%"
-                              y1="0%"
-                              x2="100%"
-                              y2="100%"
-                            >
-                              <stop offset="0%" stopColor="#a855f7" />
-                              <stop offset="100%" stopColor="#000000" />
-                            </linearGradient>
-                          </defs>
-                        </Icon>
+                        <Icon
+                          className="h-5 w-5"
+                          style={{ stroke: `url(#${iconGradientId})` }}
+                        />
                       )}
                     </div>
                     <div className="flex-1 space-y-1">
