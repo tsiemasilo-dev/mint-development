@@ -49,7 +49,7 @@ const HomePage = ({ onOpenNotifications }) => {
 
           <section className="rounded-3xl bg-white/10 p-5 text-center text-white shadow-sm backdrop-blur">
             <p className="text-xs uppercase tracking-[0.2em] text-white/70">Mint Balance</p>
-            <p className="mt-2 text-3xl font-semibold">$24,806.03</p>
+            <p className="mt-2 text-3xl font-semibold">R 24,806.03</p>
           </section>
         </div>
       </div>
