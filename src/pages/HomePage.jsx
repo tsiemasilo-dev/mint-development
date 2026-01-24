@@ -1,10 +1,20 @@
 import React from "react";
-import { Bell } from "lucide-react";
-import TransactionSheet from "../components/TransactionSheet";
+import { ArrowDownLeft, ArrowUpRight, Bell, CreditCard, QrCode } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
 import HomeSkeleton from "../components/HomeSkeleton";
+import MintBalanceCard from "../components/MintBalanceCard";
+import OutstandingActionsSection from "../components/OutstandingActionsSection";
+import TransactionHistorySection from "../components/TransactionHistorySection";
 
-const HomePage = ({ onOpenNotifications }) => {
+const HomePage = ({
+  onOpenNotifications,
+  onOpenMintBalance,
+  onOpenActivity,
+  onOpenActions,
+  onOpenInvestments,
+  onOpenCredit,
+  onOpenSettings,
+}) => {
   const { profile, loading } = useProfile();
   const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(" ");
   const initials = displayName
@@ -18,6 +28,98 @@ const HomePage = ({ onOpenNotifications }) => {
   if (loading) {
     return <HomeSkeleton />;
   }
+
+  const handleMintBalancePress = () => {
+    if (onOpenMintBalance) {
+      onOpenMintBalance();
+    }
+  };
+
+  const actionsData = [
+    {
+      id: "identity",
+      title: "Complete identity check",
+      description: "Needed to unlock higher limits",
+      priority: 1,
+      status: "Required",
+      routeName: "settings",
+      isComplete: false,
+      dueAt: "2025-01-20T12:00:00Z",
+      createdAt: "2025-01-18T09:00:00Z",
+    },
+    {
+      id: "bank-link",
+      title: "Link your primary bank",
+      description: "Connect to enable instant transfers",
+      priority: 2,
+      status: "Pending",
+      routeName: "settings",
+      isComplete: false,
+      dueAt: "2025-01-22T12:00:00Z",
+      createdAt: "2025-01-19T09:00:00Z",
+    },
+    {
+      id: "investments",
+      title: "Review investment allocation",
+      description: "Confirm your latest risk profile",
+      priority: 3,
+      status: "Pending",
+      routeName: "investments",
+      isComplete: false,
+      dueAt: "2025-01-28T12:00:00Z",
+      createdAt: "2025-01-21T09:00:00Z",
+    },
+    {
+      id: "credit",
+      title: "Confirm credit preferences",
+      description: "Set your preferred repayment day",
+      priority: 4,
+      status: "Required",
+      routeName: "credit",
+      isComplete: false,
+      dueAt: "2025-02-01T12:00:00Z",
+      createdAt: "2025-01-22T09:00:00Z",
+    },
+  ];
+
+  const isActionsAvailable = true;
+  const outstandingActions = isActionsAvailable
+    ? actionsData
+        .filter((action) => !action.isComplete)
+        .sort((a, b) => {
+          if (a.priority !== b.priority) {
+            return a.priority - b.priority;
+          }
+          const dueA = a.dueAt ? new Date(a.dueAt).getTime() : Number.POSITIVE_INFINITY;
+          const dueB = b.dueAt ? new Date(b.dueAt).getTime() : Number.POSITIVE_INFINITY;
+          if (dueA !== dueB) {
+            return dueA - dueB;
+          }
+          const createdA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const createdB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return createdA - createdB;
+        })
+    : [];
+
+  const transactionHistory = [
+    { title: "Investment deposit", date: "Today", amount: "+R500" },
+    { title: "Loan repayment", date: "Yesterday", amount: "-R300" },
+    { title: "Investment gain", date: "18 Apr", amount: "+R120" },
+  ];
+
+  const handleActionNavigation = (action) => {
+    const routes = {
+      investments: onOpenInvestments,
+      credit: onOpenCredit,
+      settings: onOpenSettings,
+      actions: onOpenActions,
+    };
+
+    const handler = routes[action.routeName];
+    if (handler) {
+      handler();
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)] text-slate-900">
@@ -47,48 +149,48 @@ const HomePage = ({ onOpenNotifications }) => {
             </button>
           </header>
 
-          <section className="rounded-3xl bg-white/10 p-5 text-center text-white shadow-sm backdrop-blur">
-            <p className="text-xs uppercase tracking-[0.2em] text-white/70">Total Balance</p>
-            <p className="mt-2 text-3xl font-semibold">$24,806.03</p>
-            <div className="mt-5 grid grid-cols-4 gap-3 text-[11px] font-medium">
-              {[
-                { label: "Transfer", icon: "↗" },
-                { label: "Deposit", icon: "↓" },
-                { label: "Pay", icon: "▢" },
-                { label: "Scan", icon: "⌁" },
-              ].map((item) => (
-                <button
-                  key={item.label}
-                  className="flex flex-col items-center gap-2 rounded-2xl bg-white/80 px-2 py-3 text-slate-700 shadow-sm"
-                  type="button"
-                >
-                  <span className="text-lg">{item.icon}</span>
-                  <span>{item.label}</span>
-                </button>
-              ))}
-            </div>
-          </section>
+          <MintBalanceCard
+            amount={24806.03}
+            changeText="+R320 today"
+            updatedAt={new Date()}
+            onPressMintBalance={handleMintBalancePress}
+          />
         </div>
       </div>
 
       <div className="mx-auto -mt-10 flex w-full max-w-sm flex-col gap-6 px-4 pb-10 md:max-w-md md:px-8">
-        <section className="flex items-center justify-between gap-3 rounded-3xl bg-white px-4 py-3 shadow-md">
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-200 text-lg">
-              ✨
-            </div>
-            <div>
-              <p className="text-[11px] text-slate-500">Personal Balance</p>
-              <p className="text-sm font-semibold">$206.03</p>
-            </div>
-          </div>
-          <button
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100"
-            type="button"
-          >
-            →
-          </button>
+        <section className="grid grid-cols-4 gap-3 text-[11px] font-medium">
+          {[
+            { label: "Transfer", icon: ArrowUpRight },
+            { label: "Deposit", icon: ArrowDownLeft },
+            { label: "Pay", icon: CreditCard },
+            { label: "Scan", icon: QrCode },
+          ].map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.label}
+                className="flex flex-col items-center gap-2 rounded-2xl bg-white px-2 py-3 text-slate-700 shadow-md"
+                type="button"
+              >
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-50 text-violet-700">
+                  <Icon className="h-4 w-4" />
+                </span>
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
         </section>
+
+        {outstandingActions.length > 0 ? (
+          <OutstandingActionsSection
+            actions={outstandingActions}
+            onViewAll={onOpenActions}
+            onSelectAction={handleActionNavigation}
+          />
+        ) : null}
+
+        <TransactionHistorySection items={transactionHistory} onViewAll={onOpenActivity} />
 
         <div className="flex items-center justify-center gap-2">
           <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
@@ -96,7 +198,6 @@ const HomePage = ({ onOpenNotifications }) => {
           <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
         </div>
       </div>
-      <TransactionSheet />
     </div>
   );
 };

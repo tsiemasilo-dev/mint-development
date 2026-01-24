@@ -13,17 +13,20 @@ const HomeSkeleton = () => {
           <div className="rounded-3xl bg-white/10 p-5">
             <Skeleton className="h-3 w-24 bg-white/40" />
             <Skeleton className="mt-3 h-8 w-32 bg-white/40" />
-            <div className="mt-5 grid grid-cols-4 gap-3">
-              {Array.from({ length: 4 }).map((_, index) => (
-                <Skeleton key={index} className="h-14 w-full rounded-2xl bg-white/40" />
-              ))}
-            </div>
+            <Skeleton className="mt-4 h-6 w-20 bg-white/30" />
+            <Skeleton className="mt-3 h-3 w-48 bg-white/30" />
           </div>
         </div>
       </div>
 
       <div className="mx-auto -mt-10 flex w-full max-w-sm flex-col gap-6 px-4 pb-10 md:max-w-md md:px-8">
-        <Skeleton className="h-20 w-full rounded-3xl" />
+        <div className="grid grid-cols-4 gap-3">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <Skeleton key={index} className="h-16 w-full rounded-2xl" />
+          ))}
+        </div>
+        <Skeleton className="h-36 w-full rounded-3xl" />
+        <Skeleton className="h-40 w-full rounded-3xl" />
         <div className="flex items-center justify-center gap-2">
           <Skeleton className="h-1.5 w-1.5 rounded-full" />
           <Skeleton className="h-1.5 w-4 rounded-full" />
