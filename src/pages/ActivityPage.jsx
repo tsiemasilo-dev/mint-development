@@ -1,8 +1,12 @@
 import React, { useState } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Landmark, TrendingUp } from "lucide-react";
 import ActivitySkeleton from "../components/ActivitySkeleton";
 
 const filters = ["All", "Investments", "Loans"];
+const activityIconMap = {
+  Investments: TrendingUp,
+  Loans: Landmark,
+};
 
 const ActivityPage = ({ onBack, isLoading = false }) => {
   if (isLoading) {
@@ -65,8 +69,10 @@ const ActivityPage = ({ onBack, isLoading = false }) => {
               key={`${item.title}-${item.date}-${item.amount}`}
               className="flex gap-3 rounded-3xl bg-white p-4 shadow-sm"
             >
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100 text-sm font-semibold text-indigo-700">
-                {item.type.slice(0, 1)}
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-black text-white shadow-sm">
+                {activityIconMap[item.type] && React.createElement(activityIconMap[item.type], {
+                  className: "h-5 w-5",
+                })}
               </div>
               <div className="flex-1 space-y-1">
                 <div className="flex items-center justify-between gap-3">
