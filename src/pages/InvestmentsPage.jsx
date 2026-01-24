@@ -1,9 +1,10 @@
 import React from "react";
 import { Bell } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
+import InvestmentsSkeleton from "../components/InvestmentsSkeleton";
 
 const InvestmentsPage = ({ onOpenNotifications }) => {
-  const { profile } = useProfile();
+  const { profile, loading } = useProfile();
   const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(" ");
   const initials = displayName
     .split(" ")
@@ -12,6 +13,10 @@ const InvestmentsPage = ({ onOpenNotifications }) => {
     .map((part) => part[0])
     .join("")
     .toUpperCase();
+
+  if (loading) {
+    return <InvestmentsSkeleton />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)] text-slate-900">
