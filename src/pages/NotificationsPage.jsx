@@ -1,5 +1,7 @@
 import React from "react";
 import { ArrowLeft, Settings, Bell, Mailbox } from "lucide-react";
+import { useProfile } from "../lib/useProfile";
+import NotificationsSkeleton from "../components/NotificationsSkeleton";
 
 const notifications = [
   {
@@ -26,11 +28,16 @@ const notifications = [
 ];
 
 const NotificationsPage = ({ onBack }) => {
+  const { loading } = useProfile();
   const hasNotifications = notifications.length > 0;
+
+  if (loading) {
+    return <NotificationsSkeleton />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)] text-slate-900">
-      <div className="mx-auto flex w-full max-w-sm flex-col px-4 pb-10 pt-10 md:max-w-md md:px-8">
+      <div className="mx-auto flex w-full max-w-sm flex-col px-4 pb-10 pt-12 md:max-w-md md:px-8">
         <header className="flex items-center justify-between">
           <button
             type="button"
