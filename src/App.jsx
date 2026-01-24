@@ -203,7 +203,7 @@ const App = () => {
   }
 
   if (currentPage === "invest") {
-    return <InvestPage />;
+    return <InvestPage onBack={() => setCurrentPage("home")} />;
   }
 
   if (currentPage === "withdraw") {

@@ -1,5 +1,5 @@
 import React from "react";
-import { ChevronRight, Layers, LineChart } from "lucide-react";
+import { ArrowLeft, ChevronRight, Layers, LineChart } from "lucide-react";
 
 const investItems = [
   {
@@ -16,18 +16,25 @@ const investItems = [
   },
 ];
 
-const InvestPage = () => (
+const InvestPage = ({ onBack }) => (
   <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)] text-slate-900">
     <div className="mx-auto flex w-full max-w-sm flex-col px-4 pb-10 pt-12 md:max-w-md md:px-8">
       <header className="flex items-center justify-between">
-        <div className="h-10 w-10" aria-hidden="true" />
+        <button
+          type="button"
+          onClick={onBack}
+          aria-label="Back"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </button>
         <h1 className="text-lg font-semibold">Invest</h1>
         <div className="h-10 w-10" aria-hidden="true" />
       </header>
 
       <div className="mt-6 space-y-4">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-          Outstanding
+          Where would you like to put your money
         </p>
         {investItems.map((item) => (
           <div key={item.id} className="flex gap-3 rounded-3xl bg-white p-4 shadow-sm">
