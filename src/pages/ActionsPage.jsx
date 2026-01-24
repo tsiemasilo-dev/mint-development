@@ -1,7 +1,11 @@
 import React from "react";
 import { ArrowLeft, ChevronRight } from "lucide-react";
+import ActionsSkeleton from "../components/ActionsSkeleton";
 
-const ActionsPage = ({ onBack }) => {
+const ActionsPage = ({ onBack, isLoading = false }) => {
+  if (isLoading) {
+    return <ActionsSkeleton />;
+  }
   const actions = [
     {
       id: "identity",

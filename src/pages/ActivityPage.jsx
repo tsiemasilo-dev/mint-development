@@ -1,9 +1,13 @@
 import React, { useState } from "react";
 import { ArrowLeft } from "lucide-react";
+import ActivitySkeleton from "../components/ActivitySkeleton";
 
 const filters = ["All", "Investments", "Loans"];
 
-const ActivityPage = ({ onBack }) => {
+const ActivityPage = ({ onBack, isLoading = false }) => {
+  if (isLoading) {
+    return <ActivitySkeleton />;
+  }
   const [activeFilter, setActiveFilter] = useState("All");
   const activityItems = [
     { title: "Investment gain", date: "Today", amount: "+R120", type: "Investments" },

@@ -1,5 +1,4 @@
 import React from "react";
-import { ChevronRight } from "lucide-react";
 
 const TransactionHistorySection = ({ items, onViewAll }) => {
   return (
@@ -32,16 +31,6 @@ const TransactionHistorySection = ({ items, onViewAll }) => {
           <p className="text-xs text-slate-500">No activity yet</p>
         )}
       </div>
-      {items && items.length > 0 ? (
-        <button
-          type="button"
-          onClick={onViewAll}
-          className="mt-3 flex w-full items-center justify-between rounded-2xl border border-slate-100 bg-white/90 px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm"
-        >
-          View all activity
-          <ChevronRight className="h-4 w-4 text-slate-400" />
-        </button>
-      ) : null}
     </section>
   );
 };

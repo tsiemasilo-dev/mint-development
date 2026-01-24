@@ -2,6 +2,7 @@ import React from "react";
 import { ArrowLeft, ChevronRight } from "lucide-react";
 import MintBalanceCard from "../components/MintBalanceCard";
 import { formatZar } from "../lib/formatCurrency";
+import MintBalanceSkeleton from "../components/MintBalanceSkeleton";
 
 const MintBalancePage = ({
   onBack,
@@ -9,7 +10,11 @@ const MintBalancePage = ({
   onOpenCredit,
   onOpenActivity,
   onOpenSettings,
+  isLoading = false,
 }) => {
+  if (isLoading) {
+    return <MintBalanceSkeleton />;
+  }
   const balanceAmount = 24806.03;
   const breakdownItems = [
     {
