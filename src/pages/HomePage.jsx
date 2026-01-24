@@ -3,6 +3,7 @@ import { ArrowDownLeft, ArrowUpRight, Bell, CreditCard, QrCode } from "lucide-re
 import TransactionSheet from "../components/TransactionSheet";
 import { useProfile } from "../lib/useProfile";
 import HomeSkeleton from "../components/HomeSkeleton";
+import MintBalanceCard from "../components/MintBalanceCard";
 
 const HomePage = ({ onOpenNotifications }) => {
   const { profile, loading } = useProfile();
@@ -18,6 +19,8 @@ const HomePage = ({ onOpenNotifications }) => {
   if (loading) {
     return <HomeSkeleton />;
   }
+
+  const handleMintBalancePress = () => {};
 
   return (
     <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)] text-slate-900">
@@ -47,10 +50,12 @@ const HomePage = ({ onOpenNotifications }) => {
             </button>
           </header>
 
-          <section className="glass-card p-5 text-center text-white">
-            <p className="text-xs uppercase tracking-[0.2em] text-white/70">Mint Balance</p>
-            <p className="mt-2 text-3xl font-semibold">R 24,806.03</p>
-          </section>
+          <MintBalanceCard
+            amount={24806.03}
+            changeText="+R320 today"
+            updatedAt={new Date()}
+            onPressMintBalance={handleMintBalancePress}
+          />
         </div>
       </div>
 
