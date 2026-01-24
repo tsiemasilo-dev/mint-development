@@ -104,10 +104,10 @@ const MintBalanceCard = ({
       )}
 
       <p className="mt-3 flex items-center gap-2 text-xs text-white/70">
-        <span>Across your investments and available credit</span>
         <span className="flex h-5 w-5 items-center justify-center rounded-full border border-white/30 text-white/70">
           <Info className="h-3 w-3" />
         </span>
+        <span>Across your investments and available credit</span>
       </p>
 
       <div className="mt-4 flex items-center justify-between text-[10px] text-white/60">
