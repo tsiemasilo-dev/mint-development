@@ -47,7 +47,7 @@ const HomePage = ({ onOpenNotifications }) => {
             </button>
           </header>
 
-          <section className="rounded-3xl bg-white/10 p-5 text-center text-white shadow-sm backdrop-blur">
+          <section className="glass-card p-5 text-center text-white">
             <p className="text-xs uppercase tracking-[0.2em] text-white/70">Mint Balance</p>
             <p className="mt-2 text-3xl font-semibold">R 24,806.03</p>
           </section>
