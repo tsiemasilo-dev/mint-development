@@ -64,26 +64,37 @@ const ActivityPage = ({ onBack, isLoading = false }) => {
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
             Previously
           </p>
-          {visibleItems.map((item) => (
-            <div
-              key={`${item.title}-${item.date}-${item.amount}`}
-              className="flex gap-3 rounded-3xl bg-white p-4 shadow-sm"
-            >
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-black text-white shadow-sm">
-                {activityIconMap[item.type] && React.createElement(activityIconMap[item.type], {
-                  className: "h-5 w-5",
-                })}
-              </div>
-              <div className="flex-1 space-y-1">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-semibold text-slate-800">{item.title}</p>
-                  <div className="text-xs text-slate-400">{item.date}</div>
+          {visibleItems.map((item, index) => {
+            const Icon = activityIconMap[item.type];
+            const gradientId = `activity-gradient-${item.type}-${index}`;
+            return (
+              <div
+                key={`${item.title}-${item.date}-${item.amount}`}
+                className="flex gap-3 rounded-3xl bg-white p-4 shadow-sm"
+              >
+                <div className="flex h-12 w-12 items-center justify-center rounded-full border border-slate-200 bg-white shadow-sm">
+                  {Icon && (
+                    <Icon className="h-5 w-5" color={`url(#${gradientId})`}>
+                      <defs>
+                        <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stopColor="#a855f7" />
+                          <stop offset="100%" stopColor="#000000" />
+                        </linearGradient>
+                      </defs>
+                    </Icon>
+                  )}
                 </div>
-                <p className="text-xs text-slate-500">{item.type}</p>
+                <div className="flex-1 space-y-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-slate-800">{item.title}</p>
+                    <div className="text-xs text-slate-400">{item.date}</div>
+                  </div>
+                  <p className="text-xs text-slate-500">{item.type}</p>
+                </div>
+                <p className="text-sm font-semibold text-slate-600">{item.amount}</p>
               </div>
-              <p className="text-sm font-semibold text-slate-600">{item.amount}</p>
-            </div>
-          ))}
+            );
+          })}
         </section>
       </div>
     </div>
