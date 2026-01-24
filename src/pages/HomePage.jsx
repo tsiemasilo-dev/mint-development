@@ -253,16 +253,16 @@ const HomePage = ({
         ) : null}
 
         <section>
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-1">
-              <p className="text-sm font-semibold text-slate-900">
-                Your best performing assets
-              </p>
-              <p className="text-xs text-slate-500">Based on your investment portfolio</p>
+          <div className="space-y-1 pl-5">
+            <p className="text-sm font-semibold text-slate-900">
+              Your best performing assets
+            </p>
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 text-slate-500">
+                <Info className="h-3 w-3" />
+              </span>
+              <span>Based on your investment portfolio</span>
             </div>
-            <span className="flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 text-slate-500">
-              <Info className="h-3 w-3" />
-            </span>
           </div>
           <div className="mt-3 flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {bestAssets.slice(0, 5).map((asset) => (
