@@ -8,6 +8,7 @@ import CreditApplyPage from "./pages/CreditApplyPage.jsx";
 import CreditRepayPage from "./pages/CreditRepayPage.jsx";
 import InvestmentsPage from "./pages/InvestmentsPage.jsx";
 import InvestPage from "./pages/InvestPage.jsx";
+import OpenStrategiesPage from "./pages/OpenStrategiesPage.jsx";
 import MorePage from "./pages/MorePage.jsx";
 import OnboardingPage from "./pages/OnboardingPage.jsx";
 import SettingsPage from "./pages/SettingsPage.jsx";
@@ -203,7 +204,23 @@ const App = () => {
   }
 
   if (currentPage === "invest") {
-    return <InvestPage />;
+    return (
+      <AppLayout activeTab="home" onTabChange={setCurrentPage}>
+        <InvestPage
+          onBack={() => setCurrentPage("home")}
+          onOpenOpenStrategies={() => setCurrentPage("openStrategies")}
+          onOpenMarkets={() => setCurrentPage("investments")}
+        />
+      </AppLayout>
+    );
+  }
+
+  if (currentPage === "openStrategies") {
+    return (
+      <AppLayout activeTab="investments" onTabChange={setCurrentPage}>
+        <OpenStrategiesPage onBack={() => setCurrentPage("invest")} />
+      </AppLayout>
+    );
   }
 
   if (currentPage === "withdraw") {

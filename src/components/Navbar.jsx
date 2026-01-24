@@ -7,10 +7,10 @@ import {
   Plus,
   PieChart,
   MoreHorizontal,
-  ArrowDownCircle,
+  ArrowUpCircle,
   Wallet,
   TrendingUp,
-  Zap,
+  HandCoins,
   Gift,
   X
 } from "lucide-react";
@@ -35,10 +35,10 @@ const Navbar = ({ activeTab, setActiveTab }) => {
   ];
  
   const transactActions = [
-    { id: "deposit", label: "Deposit", icon: ArrowDownCircle, angle: -180 },
+    { id: "withdraw", label: "Withdraw", icon: ArrowUpCircle, angle: -180 },
     { id: "payLoan", label: "Pay loan", icon: Wallet, angle: -135 },
     { id: "invest", label: "Invest", icon: TrendingUp, angle: -90 },
-    { id: "credit", label: "Credit", icon: Zap, angle: -45 },
+    { id: "credit", label: "Borrow", icon: HandCoins, angle: -45 },
     { id: "rewards", label: "Rewards", icon: Gift, angle: 0 },
   ];
  
@@ -132,7 +132,7 @@ const Navbar = ({ activeTab, setActiveTab }) => {
                     key={action.label}
                     onClick={() => {
                       triggerHaptic(ImpactStyle.Medium);
-                      setActiveTab(action.id === "invest" ? "investments" : action.id);
+                      setActiveTab(action.id);
                       setIsOpen(false);
                     }}
                     className="absolute flex items-center justify-center group pointer-events-auto"
