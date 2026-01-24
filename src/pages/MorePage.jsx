@@ -151,6 +151,18 @@ const MorePage = ({ onNavigate }) => {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      if (supabase) {
+        await supabase.auth.signOut();
+      }
+    } catch (error) {
+      console.error("Failed to sign out:", error);
+    } finally {
+      onNavigate?.("welcome");
+    }
+  };
+
   const menuSections = [
     [
       { id: "profile", label: "Profile Details", icon: BadgeCheck },
@@ -166,7 +178,7 @@ const MorePage = ({ onNavigate }) => {
       { id: "orders", label: "My Orders", icon: ReceiptText },
       { id: "address", label: "Address", icon: MapPin },
       { id: "password", label: "Change Password", icon: Lock },
-      { id: "logout", label: "Log out", icon: LogOut },
+      { id: "logout", label: "Log out", icon: LogOut, onClick: handleLogout },
     ],
   ];
 
