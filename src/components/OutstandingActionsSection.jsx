@@ -13,11 +13,8 @@ const OutstandingActionsSection = ({ actions, onViewAll, onSelectAction }) => {
     <section className="rounded-3xl bg-white px-5 py-5 shadow-md">
       <div className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-slate-900">Outstanding actions</h2>
-        <span className="w-fit rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
-          {actions.length}
-        </span>
       </div>
-      <div className="mt-4 flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory">
+      <div className="mt-4 flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {visibleActions.map((action) => (
           <button
             key={action.id}
