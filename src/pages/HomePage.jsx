@@ -1,6 +1,5 @@
 import React from "react";
 import { ArrowDownLeft, ArrowUpRight, Bell, CreditCard, QrCode } from "lucide-react";
-import TransactionSheet from "../components/TransactionSheet";
 import { useProfile } from "../lib/useProfile";
 import HomeSkeleton from "../components/HomeSkeleton";
 import MintBalanceCard from "../components/MintBalanceCard";
@@ -93,7 +92,6 @@ const HomePage = ({ onOpenNotifications, onOpenMintBalance }) => {
           <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
         </div>
       </div>
-      <TransactionSheet />
     </div>
   );
 };
