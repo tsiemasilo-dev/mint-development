@@ -1,12 +1,8 @@
 import React, { useMemo, useState } from "react";
-import { ArrowLeft, CalendarDays, Landmark, TrendingUp } from "lucide-react";
+import { ArrowLeft, BanknoteArrowDown, BanknoteArrowUp, CalendarDays } from "lucide-react";
 import ActivitySkeleton from "../components/ActivitySkeleton";
 
 const filters = ["All", "Investments", "Loans"];
-const activityIconMap = {
-  Investments: TrendingUp,
-  Loans: Landmark,
-};
 const activityItems = [
   { title: "Investment gain", date: "2026-01-21", amount: "+R120", type: "Investments" },
   { title: "Loan repayment", date: "2026-01-21", amount: "-R300", type: "Loans" },
@@ -16,6 +12,8 @@ const activityItems = [
   { title: "Loan repayment", date: "2026-01-12", amount: "-R200", type: "Loans" },
 ];
 const iconGradientId = "activity-icon-gradient";
+const getActivityIcon = (item) =>
+  item.amount?.startsWith("+") ? BanknoteArrowUp : BanknoteArrowDown;
 const formatGroupLabel = (dateString) => {
   const date = new Date(`${dateString}T00:00:00`);
   if (Number.isNaN(date.getTime())) {
@@ -160,7 +158,7 @@ const ActivityPage = ({ onBack, isLoading = false }) => {
                 {group.label}
               </p>
               {group.items.map((item, itemIndex) => {
-                const Icon = activityIconMap[item.type];
+                const Icon = getActivityIcon(item);
                 return (
                   <div
                     key={`${item.title}-${item.date}-${item.amount}`}
