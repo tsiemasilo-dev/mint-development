@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { Badge } from '@/components/ui/badge-2';
 import { Card, CardContent, CardHeader, CardTitle, CardToolbar } from '@/components/ui/card';
-import { ChartConfig, ChartContainer, ChartTooltip } from '@/components/ui/line-charts-2';
+import { ChartContainer, ChartTooltip } from '@/components/ui/line-charts-2';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 import { Area, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from 'recharts';
@@ -29,7 +29,7 @@ const chartConfig = {
     label: 'Return',
     color: 'var(--color-mint-success, var(--color-emerald-500))',
   },
-} satisfies ChartConfig;
+};
 
 const formatPct = (v) => `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
 
