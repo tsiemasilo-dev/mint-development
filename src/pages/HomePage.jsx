@@ -192,11 +192,6 @@ const HomePage = ({
 
         <TransactionHistorySection items={transactionHistory} onViewAll={onOpenActivity} />
 
-        <div className="flex items-center justify-center gap-2">
-          <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
-          <span className="h-1.5 w-4 rounded-full bg-slate-900/90" />
-          <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
-        </div>
       </div>
     </div>
   );
