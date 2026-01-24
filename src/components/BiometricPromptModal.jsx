@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Fingerprint } from 'lucide-react';
 import { isBiometricsAvailable, authenticateWithBiometrics, enableBiometrics, getBiometryTypeName } from '../lib/biometrics';
 
 const BiometricPromptModal = ({ isOpen, onClose, userEmail, onComplete }) => {
@@ -58,19 +59,7 @@ const BiometricPromptModal = ({ isOpen, onClose, userEmail, onComplete }) => {
         >
           <div className="mb-6 flex justify-center">
             <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-purple-700">
-              <svg
-                className="h-10 w-10 text-white"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={1.5}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"
-                />
-              </svg>
+              <Fingerprint className="h-10 w-10 text-white" strokeWidth={1.5} />
             </div>
           </div>
 
@@ -94,7 +83,7 @@ const BiometricPromptModal = ({ isOpen, onClose, userEmail, onComplete }) => {
               disabled={isAuthenticating}
               className="w-full rounded-full border border-slate-200 py-4 text-sm font-semibold tracking-[0.16em] text-slate-700 transition hover:bg-slate-50 active:scale-[0.98] disabled:opacity-50"
             >
-              NOT NOW
+              Maybe Later
             </button>
           </div>
         </motion.div>
