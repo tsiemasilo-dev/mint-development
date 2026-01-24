@@ -2,7 +2,7 @@ import React from "react";
 import { Bell } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
 
-const InvestmentsPage = () => {
+const InvestmentsPage = ({ onOpenNotifications }) => {
   const { profile } = useProfile();
   const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(" ");
   const initials = displayName
@@ -34,6 +34,7 @@ const InvestmentsPage = () => {
             <button
               aria-label="Notifications"
               type="button"
+              onClick={onOpenNotifications}
               className="flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-white/10 text-white backdrop-blur-md"
             >
               <Bell className="h-5 w-5" />

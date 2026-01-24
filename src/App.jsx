@@ -13,6 +13,7 @@ import UserOnboardingPage from "./pages/UserOnboardingPage.jsx";
 import AppLayout from "./layouts/AppLayout.jsx";
 import BiometricsDebugPage from "./pages/BiometricsDebugPage.jsx";
 import EditProfilePage from "./pages/EditProfilePage.jsx";
+import NotificationsPage from "./pages/NotificationsPage.jsx";
 
 const initialHash = window.location.hash;
 const isRecoveryMode = initialHash.includes('type=recovery');
@@ -44,6 +45,7 @@ const App = () => {
   const [authStep, setAuthStep] = useState(isRecoveryMode ? "newPassword" : "email");
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [sessionReady, setSessionReady] = useState(false);
+  const [notificationReturnPage, setNotificationReturnPage] = useState("home");
   const recoveryHandled = useRef(false);
 
   useEffect(() => {
@@ -139,7 +141,12 @@ const App = () => {
   if (currentPage === "home") {
     return (
       <AppLayout activeTab="home" onTabChange={setCurrentPage}>
-        <HomePage />
+        <HomePage
+          onOpenNotifications={() => {
+            setNotificationReturnPage("home");
+            setCurrentPage("notifications");
+          }}
+        />
       </AppLayout>
     );
   }
@@ -147,7 +154,12 @@ const App = () => {
   if (currentPage === "credit") {
     return (
       <AppLayout activeTab="credit" onTabChange={setCurrentPage}>
-        <CreditPage />
+        <CreditPage
+          onOpenNotifications={() => {
+            setNotificationReturnPage("credit");
+            setCurrentPage("notifications");
+          }}
+        />
       </AppLayout>
     );
   }
@@ -163,7 +175,12 @@ const App = () => {
   if (currentPage === "investments") {
     return (
       <AppLayout activeTab="investments" onTabChange={setCurrentPage}>
-        <InvestmentsPage />
+        <InvestmentsPage
+          onOpenNotifications={() => {
+            setNotificationReturnPage("investments");
+            setCurrentPage("notifications");
+          }}
+        />
       </AppLayout>
     );
   }
@@ -194,6 +211,10 @@ const App = () => {
 
   if (currentPage === "editProfile") {
     return <EditProfilePage onNavigate={setCurrentPage} />;
+  }
+
+  if (currentPage === "notifications") {
+    return <NotificationsPage onBack={() => setCurrentPage(notificationReturnPage)} />;
   }
 
   if (currentPage === "userOnboarding") {
