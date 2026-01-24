@@ -1,5 +1,11 @@
 import React from "react";
-import { ArrowDownLeft, ArrowUpRight, Bell, CreditCard, QrCode } from "lucide-react";
+import {
+  ArrowDownToLine,
+  Bell,
+  FileSignature,
+  HandCoins,
+  TrendingUp,
+} from "lucide-react";
 import { useProfile } from "../lib/useProfile";
 import HomeSkeleton from "../components/HomeSkeleton";
 import MintBalanceCard from "../components/MintBalanceCard";
@@ -13,6 +19,10 @@ const HomePage = ({
   onOpenActions,
   onOpenInvestments,
   onOpenCredit,
+  onOpenCreditApply,
+  onOpenCreditRepay,
+  onOpenInvest,
+  onOpenWithdraw,
   onOpenSettings,
 }) => {
   const { profile, loading } = useProfile();
@@ -161,10 +171,10 @@ const HomePage = ({
       <div className="mx-auto -mt-10 flex w-full max-w-sm flex-col gap-6 px-4 pb-10 md:max-w-md md:px-8">
         <section className="grid grid-cols-4 gap-3 text-[11px] font-medium">
           {[
-            { label: "Transfer", icon: ArrowUpRight },
-            { label: "Deposit", icon: ArrowDownLeft },
-            { label: "Pay", icon: CreditCard },
-            { label: "Scan", icon: QrCode },
+            { label: "Apply", icon: FileSignature, onClick: onOpenCreditApply },
+            { label: "Repay", icon: HandCoins, onClick: onOpenCreditRepay },
+            { label: "Invest", icon: TrendingUp, onClick: onOpenInvest },
+            { label: "Withdraw", icon: ArrowDownToLine, onClick: onOpenWithdraw },
           ].map((item) => {
             const Icon = item.icon;
             return (
@@ -172,6 +182,7 @@ const HomePage = ({
                 key={item.label}
                 className="flex flex-col items-center gap-2 rounded-2xl bg-white px-2 py-3 text-slate-700 shadow-md"
                 type="button"
+                onClick={item.onClick}
               >
                 <span className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-50 text-violet-700">
                   <Icon className="h-4 w-4" />
