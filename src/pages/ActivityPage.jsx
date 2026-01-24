@@ -24,21 +24,22 @@ const ActivityPage = ({ onBack, isLoading = false }) => {
       : activityItems.filter((item) => item.type === activeFilter);
 
   return (
-    <div className="min-h-screen bg-slate-50 px-4 pb-[env(safe-area-inset-bottom)] pt-12 text-slate-900 md:px-8">
-      <div className="mx-auto flex w-full max-w-sm flex-col gap-6 md:max-w-md">
-        <header className="flex items-center gap-3">
+    <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)] text-slate-900">
+      <div className="mx-auto flex w-full max-w-sm flex-col px-4 pb-10 pt-12 md:max-w-md md:px-8">
+        <header className="flex items-center justify-between">
           <button
             type="button"
             onClick={onBack}
             aria-label="Back"
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
           <h1 className="text-lg font-semibold">Activity</h1>
+          <span className="h-10 w-10" aria-hidden="true" />
         </header>
 
-        <div className="flex gap-2 rounded-full bg-white p-1 shadow-sm">
+        <div className="mt-6 flex gap-2 rounded-full bg-white p-1 shadow-sm">
           {filters.map((filter) => (
             <button
               key={filter}
@@ -55,19 +56,26 @@ const ActivityPage = ({ onBack, isLoading = false }) => {
           ))}
         </div>
 
-        <section className="flex flex-col gap-3">
+        <section className="mt-6 space-y-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+            Previously
+          </p>
           {visibleItems.map((item) => (
             <div
               key={`${item.title}-${item.date}-${item.amount}`}
-              className="rounded-2xl border border-slate-100 bg-white px-4 py-3 shadow-sm"
+              className="flex gap-3 rounded-3xl bg-white p-4 shadow-sm"
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-slate-900">{item.title}</p>
-                  <p className="text-xs text-slate-500">{item.date}</p>
-                </div>
-                <p className="text-sm font-semibold text-slate-600">{item.amount}</p>
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100 text-sm font-semibold text-indigo-700">
+                {item.type.slice(0, 1)}
               </div>
+              <div className="flex-1 space-y-1">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-slate-800">{item.title}</p>
+                  <div className="text-xs text-slate-400">{item.date}</div>
+                </div>
+                <p className="text-xs text-slate-500">{item.type}</p>
+              </div>
+              <p className="text-sm font-semibold text-slate-600">{item.amount}</p>
             </div>
           ))}
         </section>
