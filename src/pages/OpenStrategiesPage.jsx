@@ -1,8 +1,32 @@
 import React, { useState } from "react";
-import { ArrowLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, ChevronRight, Search } from "lucide-react";
 import { StrategyReturnHeaderChart } from "../components/StrategyReturnHeaderChart";
 
+const tabOptions = ["Strategies", "Stocks"];
+
+const strategyCards = [
+  {
+    name: "Balanced Growth",
+    risk: "Balanced",
+    returnRate: "6.7%",
+    minimum: "Min. $2,500",
+  },
+  {
+    name: "Dividend Focus",
+    risk: "Low risk",
+    returnRate: "5.3%",
+    minimum: "Min. $1,500",
+  },
+  {
+    name: "Momentum Select",
+    risk: "Growth",
+    returnRate: "9.1%",
+    minimum: "Min. $5,000",
+  },
+];
+
 const OpenStrategiesPage = ({ onBack }) => {
+  const [activeTab, setActiveTab] = useState("Strategies");
   const series = [
     { label: "Jan", returnPct: 0.6 },
     { label: "Feb", returnPct: 1.4 },
@@ -63,6 +87,9 @@ const OpenStrategiesPage = ({ onBack }) => {
           <div className="mt-4 space-y-1">
             <div className="flex items-center gap-3">
               <p className="text-2xl font-semibold text-slate-900">{formattedReturn}</p>
+              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-600">
+                All time gain {formattedReturn}
+              </span>
             </div>
             <p className="text-xs text-slate-400">Last updated 2h ago</p>
           </div>
@@ -110,6 +137,55 @@ const OpenStrategiesPage = ({ onBack }) => {
           </div>
           <ChevronRight className="h-4 w-4 text-slate-400" />
         </button>
+
+        <div className="mt-5 space-y-3">
+          <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm">
+            <Search className="h-4 w-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search strategies or stocks"
+              className="flex-1 bg-transparent text-sm text-slate-700 outline-none"
+            />
+          </div>
+
+          <div className="flex gap-2">
+            {tabOptions.map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab)}
+                className={`rounded-full px-4 py-2 text-xs font-semibold ${
+                  activeTab === tab
+                    ? "bg-slate-900 text-white"
+                    : "border border-slate-200 bg-white text-slate-600"
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <section className="mt-6 space-y-3">
+          <h2 className="text-sm font-semibold text-slate-900">Other strategies</h2>
+          {strategyCards.map((strategy) => (
+            <div
+              key={strategy.name}
+              className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">{strategy.name}</p>
+                  <p className="text-xs text-slate-500">{strategy.risk}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-semibold text-emerald-500">+{strategy.returnRate}</p>
+                  <p className="text-xs text-slate-500">{strategy.minimum}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </section>
       </div>
     </div>
   );

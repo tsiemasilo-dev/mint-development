@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ChartContainer } from "./ui/line-charts-2";
-import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer } from "recharts";
+import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer, XAxis } from "recharts";
 
 const TF_ORDER = ["1D", "1W", "1M", "3M", "6M", "YTD"];
 
@@ -44,6 +44,16 @@ export function StrategyReturnHeaderChart({ series, onValueChange }) {
       color: "var(--color-mint-purple, #5b21b6)",
     },
   };
+  const [activeLabel, setActiveLabel] = useState(null);
+  const renderLastDot = ({ cx, cy, index }) => {
+    if (index !== lastIndex) return null;
+    return (
+      <g>
+        <circle cx={cx} cy={cy} r={7} fill="#ffffff" opacity={0.95} />
+        <circle cx={cx} cy={cy} r={3.5} fill={chartConfig.returnPct.color} />
+      </g>
+    );
+  };
 
   useEffect(() => {
     if (onValueChange) {
@@ -58,6 +68,22 @@ export function StrategyReturnHeaderChart({ series, onValueChange }) {
           <ComposedChart
             data={filtered}
             margin={{ top: 10, right: 12, left: -6, bottom: 10 }}
+            onMouseMove={(state) => {
+              if (!onValueChange) return;
+              const payload = state?.activePayload?.[0]?.value;
+              if (typeof payload === "number") {
+                onValueChange(payload);
+              }
+              if (state?.activeLabel) {
+                setActiveLabel(state.activeLabel);
+              }
+            }}
+            onMouseLeave={() => {
+              setActiveLabel(null);
+              if (onValueChange) {
+                onValueChange(lastValue);
+              }
+            }}
           >
             <defs>
               <linearGradient id="returnGradientMint" x1="0" y1="0" x2="0" y2="1">
@@ -68,6 +94,24 @@ export function StrategyReturnHeaderChart({ series, onValueChange }) {
             </defs>
 
             <ReferenceLine y={0} stroke="#E2E8F0" strokeOpacity={0.5} />
+            {activeLabel ? (
+              <ReferenceLine
+                x={activeLabel}
+                stroke="#CBD5E1"
+                strokeOpacity={0.7}
+                strokeDasharray="3 3"
+              />
+            ) : null}
+
+            <XAxis
+              dataKey="label"
+              axisLine={false}
+              tickLine={false}
+              interval="preserveStartEnd"
+              tickCount={3}
+              tick={{ fontSize: 11, fill: "#94A3B8" }}
+              dy={8}
+            />
 
             <Area
               type="monotone"
@@ -82,7 +126,7 @@ export function StrategyReturnHeaderChart({ series, onValueChange }) {
               dataKey="returnPct"
               stroke={chartConfig.returnPct.color}
               strokeWidth={2}
-              dot={false}
+              dot={renderLastDot}
               activeDot={false}
             />
           </ComposedChart>
