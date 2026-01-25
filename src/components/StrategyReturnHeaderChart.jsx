@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { ChartContainer } from "./ui/line-charts-2";
-import { Area, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, ComposedChart, Line, ResponsiveContainer, XAxis } from "recharts";
 
 const TF_ORDER = ["1D", "1W", "1M", "3M", "6M", "YTD"];
 
@@ -31,12 +31,13 @@ const sliceForTF = (data, tf) => {
   return data;
 };
 
-export function StrategyReturnHeaderChart({ series }) {
+export function StrategyReturnHeaderChart({ series, onValueChange }) {
   const [tf, setTf] = useState("6M");
   const fallbackSeries = useMemo(() => buildDummySeries(), []);
   const resolvedSeries = series?.length ? series : fallbackSeries;
   const filtered = useMemo(() => sliceForTF(resolvedSeries, tf), [resolvedSeries, tf]);
   const lastIndex = filtered.length - 1;
+  const lastValue = filtered[lastIndex]?.returnPct ?? 0;
   const chartConfig = {
     returnPct: {
       label: "Return",
@@ -53,14 +54,35 @@ export function StrategyReturnHeaderChart({ series }) {
     );
   };
 
+  useEffect(() => {
+    if (onValueChange) {
+      onValueChange(lastValue);
+    }
+  }, [lastValue, onValueChange]);
+
   return (
     <div className="space-y-4">
       <ChartContainer
         config={chartConfig}
-        className="h-[220px] w-full overflow-visible [&_.recharts-curve.recharts-tooltip-cursor]:stroke-dasharray-[4_6] [&_.recharts-curve.recharts-tooltip-cursor]:stroke-slate-300"
+        className="h-[220px] w-full overflow-visible"
       >
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={filtered} margin={{ top: 10, right: 12, left: -6, bottom: 10 }}>
+          <ComposedChart
+            data={filtered}
+            margin={{ top: 10, right: 12, left: -6, bottom: 10 }}
+            onMouseMove={(state) => {
+              if (!onValueChange) return;
+              const payload = state?.activePayload?.[0]?.value;
+              if (typeof payload === "number") {
+                onValueChange(payload);
+              }
+            }}
+            onMouseLeave={() => {
+              if (onValueChange) {
+                onValueChange(lastValue);
+              }
+            }}
+          >
             <defs>
               <linearGradient id="returnGradientMint" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={chartConfig.returnPct.color} stopOpacity={0.22} />
@@ -75,18 +97,6 @@ export function StrategyReturnHeaderChart({ series }) {
               interval="preserveStartEnd"
               tick={{ fontSize: 11, fill: "#94A3B8" }}
               dy={8}
-            />
-            <YAxis
-              axisLine={false}
-              tickLine={false}
-              tick={{ fontSize: 11, fill: "#94A3B8" }}
-              width={30}
-              domain={["dataMin - 1", "dataMax + 1"]}
-            />
-
-            <Tooltip
-              cursor={{ stroke: "#CBD5F5", strokeWidth: 1, strokeDasharray: "4 6" }}
-              content={null}
             />
 
             <Area

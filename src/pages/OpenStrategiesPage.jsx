@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ArrowLeft, ChevronRight, Search } from "lucide-react";
+import { ArrowLeft, ChevronRight, Search, WeightTilde } from "lucide-react";
 import { StrategyReturnHeaderChart } from "../components/StrategyReturnHeaderChart";
 
 const tabOptions = ["Strategies", "Stocks"];
@@ -41,6 +41,8 @@ const OpenStrategiesPage = ({ onBack }) => {
     { label: "Nov", returnPct: 5.2 },
     { label: "Dec", returnPct: 5.5 },
   ];
+  const [returnValue, setReturnValue] = useState(series[series.length - 1]?.returnPct ?? 5.5);
+  const formattedReturn = `${returnValue >= 0 ? "+" : ""}${returnValue.toFixed(2)}%`;
 
   return (
     <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)] text-slate-900">
@@ -81,19 +83,29 @@ const OpenStrategiesPage = ({ onBack }) => {
             </div>
           </div>
 
-          <div className="mt-4 flex items-center gap-3">
-            <p className="text-3xl font-semibold text-slate-900">+5.50%</p>
-            <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-600">
-              +5.50%
-            </span>
+          <div className="mt-4 space-y-1">
+            <div className="flex items-center gap-3">
+              <p className="text-2xl font-semibold text-slate-900">{formattedReturn}</p>
+              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-600">
+                All time gain {formattedReturn}
+              </span>
+            </div>
+            <p className="text-xs text-slate-400">Last updated 2h ago</p>
           </div>
 
           <div className="mt-4">
-            <StrategyReturnHeaderChart series={series} />
+            <StrategyReturnHeaderChart
+              series={series}
+              onValueChange={(value) => setReturnValue(value)}
+            />
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
-            {["Balanced", "Low risk", "Automated"].map((tag) => (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+              <WeightTilde className="h-3.5 w-3.5 text-slate-400" />
+              Balanced
+            </span>
+            {["Low risk", "Automated"].map((tag) => (
               <span
                 key={tag}
                 className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600"
