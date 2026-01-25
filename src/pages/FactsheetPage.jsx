@@ -36,7 +36,10 @@ const holdings = [
   { name: "NVDA", weight: "14%" },
   { name: "TSLA", weight: "9%" },
   { name: "AMZN", weight: "8%" },
+  { name: "PRX", weight: "7%" },
 ];
+
+const holdingsSnapshot = ["AAPL", "MSFT", "NVDA", "TSLA", "AMZN"];
 
 const metrics = [
   { label: "Max drawdown", value: "6.2%" },
@@ -71,16 +74,33 @@ const FactsheetPage = ({ onBack }) => {
             <ArrowLeft className="h-5 w-5" />
           </button>
           <div className="flex flex-1 flex-col items-center gap-1 text-center">
-            <h1 className="text-lg font-semibold">AlgoHive Core</h1>
+            <h1 className="text-lg font-semibold">AlgoHive Core Factsheet</h1>
             <p className="text-xs font-semibold text-slate-500">Balanced • Automated</p>
           </div>
           <div className="h-10 w-10" />
         </header>
 
         <section className="mt-6 rounded-3xl border border-slate-100 bg-white p-5 shadow-[0_16px_32px_rgba(15,23,42,0.08)]">
-          <div className="space-y-1">
-            <p className="text-3xl font-semibold text-slate-900">{formattedReturn}</p>
-            <p className="text-xs text-slate-500">{timeframe} return</p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-semibold text-slate-900">AlgoHive Core</h2>
+                <span className="rounded-full bg-violet-50 px-2.5 py-1 text-[10px] font-semibold text-violet-600">
+                  Popular
+                </span>
+              </div>
+              <p className="text-xs font-semibold text-slate-400">Balanced • Automated</p>
+            </div>
+          </div>
+
+          <div className="mt-4 space-y-1">
+            <div className="flex items-center gap-3">
+              <p className="text-3xl font-semibold text-slate-900">{formattedReturn}</p>
+              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-600">
+                {timeframe} return
+              </span>
+            </div>
+            <p className="text-xs text-slate-500">Last updated 2h ago</p>
           </div>
 
           <div className="mt-4 h-48 w-full">
@@ -146,6 +166,35 @@ const FactsheetPage = ({ onBack }) => {
                 {option.label}
               </button>
             ))}
+          </div>
+
+          <div className="mt-4 flex items-center gap-3 text-[11px] font-semibold text-slate-400">
+            <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+              Balanced
+            </span>
+            <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+              Low risk
+            </span>
+            <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+              Automated
+            </span>
+          </div>
+
+          <div className="mt-4 flex items-center gap-2">
+            <div className="flex -space-x-2">
+              {holdingsSnapshot.map((holding) => (
+                <div
+                  key={holding}
+                  className="flex h-7 w-7 items-center justify-center rounded-full border border-white bg-white text-[10px] font-semibold text-slate-500 shadow-sm"
+                >
+                  {holding}
+                </div>
+              ))}
+              <div className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500">
+                +3
+              </div>
+            </div>
+            <span className="text-xs font-semibold text-slate-500">Holdings snapshot</span>
           </div>
         </section>
 
