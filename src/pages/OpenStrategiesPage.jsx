@@ -4,8 +4,6 @@ import { StrategyReturnHeaderChart } from "../components/StrategyReturnHeaderCha
 import { ChartContainer } from "../components/ui/line-charts-2";
 import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer } from "recharts";
 
-const tabOptions = ["Strategies", "Stocks"];
-
 const strategyCards = [
   {
     name: "Balanced Growth",
@@ -187,7 +185,6 @@ const StrategyMiniChart = ({ values }) => {
 };
 
 const OpenStrategiesPage = ({ onBack }) => {
-  const [activeTab, setActiveTab] = useState("Strategies");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedHolding, setSelectedHolding] = useState(null);
   const [activeChips, setActiveChips] = useState([]);
@@ -569,22 +566,6 @@ const OpenStrategiesPage = ({ onBack }) => {
             )}
           </div>
 
-          <div className="flex gap-2">
-            {tabOptions.map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setActiveTab(tab)}
-                className={`rounded-full px-4 py-2 text-xs font-semibold ${
-                  activeTab === tab
-                    ? "bg-slate-900 text-white"
-                    : "border border-slate-200 bg-white text-slate-600"
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
         </div>
 
         <section className="mt-6 space-y-3">
