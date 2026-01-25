@@ -117,6 +117,40 @@ const OpenStrategiesPage = ({ onBack }) => {
               </span>
             ))}
           </div>
+
+          <div className="mt-4 flex items-center gap-3">
+            <div className="flex -space-x-2">
+              {[
+                {
+                  name: "Apple",
+                  src: "https://s3-symbol-logo.tradingview.com/apple--big.svg",
+                },
+                {
+                  name: "Microsoft",
+                  src: "https://s3-symbol-logo.tradingview.com/microsoft--big.svg",
+                },
+                {
+                  name: "Nvidia",
+                  src: "https://s3-symbol-logo.tradingview.com/nvidia--big.svg",
+                },
+              ].map((company) => (
+                <div
+                  key={company.name}
+                  className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-sm"
+                >
+                  <img
+                    src={company.src}
+                    alt={company.name}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              ))}
+              <div className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500">
+                +3
+              </div>
+            </div>
+            <span className="text-xs font-semibold text-slate-500">Holdings snapshot</span>
+          </div>
         </section>
 
         <button
@@ -125,17 +159,6 @@ const OpenStrategiesPage = ({ onBack }) => {
         >
           View factsheet
           <ChevronRight className="h-4 w-4" />
-        </button>
-
-        <button
-          type="button"
-          className="mt-5 flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm"
-        >
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-semibold text-slate-900">Today</span>
-            <span className="text-sm text-slate-500">US rates steady as tech rallies</span>
-          </div>
-          <ChevronRight className="h-4 w-4 text-slate-400" />
         </button>
 
         <div className="mt-5 space-y-3">

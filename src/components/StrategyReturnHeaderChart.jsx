@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { ChartContainer } from "./ui/line-charts-2";
 import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer, XAxis } from "recharts";
 
-const TF_ORDER = ["1D", "1W", "1M", "3M", "6M", "YTD"];
+const TF_ORDER = ["1W", "1M", "3M", "6M", "YTD"];
 
 const buildDummySeries = (points = 200) => {
   const base = 4.5;
@@ -38,6 +38,13 @@ export function StrategyReturnHeaderChart({ series, onValueChange }) {
   const filtered = useMemo(() => sliceForTF(resolvedSeries, tf), [resolvedSeries, tf]);
   const lastIndex = filtered.length - 1;
   const lastValue = filtered[lastIndex]?.returnPct ?? 0;
+  const tickInterval = Math.max(1, Math.ceil(filtered.length / 3));
+  const tickStartIndex = Math.max(0, lastIndex - tickInterval * 2);
+  const tickIndexes = new Set([
+    tickStartIndex,
+    Math.min(lastIndex, tickStartIndex + tickInterval),
+    lastIndex,
+  ]);
   const chartConfig = {
     returnPct: {
       label: "Return",
@@ -107,8 +114,8 @@ export function StrategyReturnHeaderChart({ series, onValueChange }) {
               dataKey="label"
               axisLine={false}
               tickLine={false}
-              interval="preserveStartEnd"
-              tickCount={3}
+              interval={0}
+              tickFormatter={(value, index) => (tickIndexes.has(index) ? value : "")}
               tick={{ fontSize: 11, fill: "#94A3B8" }}
               dy={8}
             />
