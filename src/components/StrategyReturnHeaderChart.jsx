@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ChartContainer } from "./ui/line-charts-2";
-import { Area, ComposedChart, Line, ResponsiveContainer, XAxis } from "recharts";
+import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer, XAxis } from "recharts";
 
-const TF_ORDER = ["1D", "1W", "1M", "3M", "6M", "YTD"];
+const TF_ORDER = ["1W", "3M", "6M", "YTD", "All"];
 
 const buildDummySeries = (points = 200) => {
   const base = 4.5;
@@ -23,11 +23,11 @@ const sliceForTF = (data, tf) => {
   const n = data.length;
   if (tf === "1D") return data.slice(Math.max(0, n - 2));
   if (tf === "1W") return data.slice(Math.max(0, n - 7));
-  if (tf === "1M") return data.slice(Math.max(0, n - 30));
   if (tf === "3M") return data.slice(Math.max(0, n - 90));
   if (tf === "6M") return data.slice(Math.max(0, n - 180));
   if (tf === "1Y") return data.slice(Math.max(0, n - 365));
   if (tf === "YTD") return data.slice(Math.max(0, n - 120));
+  if (tf === "All") return data;
   return data;
 };
 
@@ -38,18 +38,26 @@ export function StrategyReturnHeaderChart({ series, onValueChange }) {
   const filtered = useMemo(() => sliceForTF(resolvedSeries, tf), [resolvedSeries, tf]);
   const lastIndex = filtered.length - 1;
   const lastValue = filtered[lastIndex]?.returnPct ?? 0;
+  const tickInterval = Math.max(1, Math.ceil(filtered.length / 3));
+  const tickStartIndex = Math.max(0, lastIndex - tickInterval * 2);
+  const tickIndexes = new Set([
+    tickStartIndex,
+    Math.min(lastIndex, tickStartIndex + tickInterval),
+    lastIndex,
+  ]);
   const chartConfig = {
     returnPct: {
       label: "Return",
-      color: "var(--color-mint-purple, #7C5CFF)",
+      color: "var(--color-mint-purple, #5b21b6)",
     },
   };
+  const [activeLabel, setActiveLabel] = useState(null);
   const renderLastDot = ({ cx, cy, index }) => {
     if (index !== lastIndex) return null;
     return (
       <g>
-        <circle cx={cx} cy={cy} r={8} fill="#C7B8FF" className="animate-pulse" opacity={0.5} />
-        <circle cx={cx} cy={cy} r={4} fill="#7C5CFF" />
+        <circle cx={cx} cy={cy} r={7} fill="#ffffff" opacity={0.95} />
+        <circle cx={cx} cy={cy} r={3.5} fill={chartConfig.returnPct.color} />
       </g>
     );
   };
@@ -61,23 +69,24 @@ export function StrategyReturnHeaderChart({ series, onValueChange }) {
   }, [lastValue, onValueChange]);
 
   return (
-    <div className="space-y-4">
-      <ChartContainer
-        config={chartConfig}
-        className="h-[220px] w-full overflow-visible"
-      >
+    <div className="space-y-2">
+      <ChartContainer config={chartConfig} className="h-[210px] w-full overflow-visible">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
             data={filtered}
-            margin={{ top: 10, right: 12, left: -6, bottom: 10 }}
+            margin={{ top: 10, right: 16, left: 12, bottom: 10 }}
             onMouseMove={(state) => {
               if (!onValueChange) return;
               const payload = state?.activePayload?.[0]?.value;
               if (typeof payload === "number") {
                 onValueChange(payload);
               }
+              if (state?.activeLabel) {
+                setActiveLabel(state.activeLabel);
+              }
             }}
             onMouseLeave={() => {
+              setActiveLabel(null);
               if (onValueChange) {
                 onValueChange(lastValue);
               }
@@ -85,16 +94,28 @@ export function StrategyReturnHeaderChart({ series, onValueChange }) {
           >
             <defs>
               <linearGradient id="returnGradientMint" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={chartConfig.returnPct.color} stopOpacity={0.22} />
-                <stop offset="100%" stopColor={chartConfig.returnPct.color} stopOpacity={0} />
+                <stop offset="0%" stopColor="#5b21b6" stopOpacity={0.22} />
+                <stop offset="70%" stopColor="#3b1b7a" stopOpacity={0.08} />
+                <stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
               </linearGradient>
             </defs>
+
+            <ReferenceLine y={0} stroke="#E2E8F0" strokeOpacity={0.5} />
+            {activeLabel ? (
+              <ReferenceLine
+                x={activeLabel}
+                stroke="#CBD5E1"
+                strokeOpacity={0.7}
+                strokeDasharray="3 3"
+              />
+            ) : null}
 
             <XAxis
               dataKey="label"
               axisLine={false}
               tickLine={false}
-              interval="preserveStartEnd"
+              interval={0}
+              tickFormatter={(value, index) => (tickIndexes.has(index) ? value : "")}
               tick={{ fontSize: 11, fill: "#94A3B8" }}
               dy={8}
             />
@@ -119,7 +140,7 @@ export function StrategyReturnHeaderChart({ series, onValueChange }) {
         </ResponsiveContainer>
       </ChartContainer>
 
-      <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {TF_ORDER.map((key) => (
           <button
             key={key}
