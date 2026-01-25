@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { ChartContainer } from "./ui/line-charts-2";
-import { Area, ComposedChart, Line, XAxis, YAxis } from "recharts";
+import { Area, ComposedChart, Line, ResponsiveContainer, XAxis, YAxis } from "recharts";
 
 const TF_ORDER = ["1D", "1W", "1M", "3M", "6M", "YTD"];
 
@@ -67,34 +67,36 @@ export function StrategyReturnHeaderChart({ series }) {
         config={chartConfig}
         className="h-[190px] w-full overflow-visible [&_.recharts-curve.recharts-tooltip-cursor]:stroke-initial"
       >
-        <ComposedChart data={filtered} margin={{ top: 12, right: 14, left: 6, bottom: 0 }}>
-          <defs>
-            <linearGradient id="returnGradientMint" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={chartConfig.returnPct.color} stopOpacity={0.22} />
-              <stop offset="100%" stopColor={chartConfig.returnPct.color} stopOpacity={0} />
-            </linearGradient>
-          </defs>
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={filtered} margin={{ top: 12, right: 14, left: 6, bottom: 0 }}>
+            <defs>
+              <linearGradient id="returnGradientMint" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={chartConfig.returnPct.color} stopOpacity={0.22} />
+                <stop offset="100%" stopColor={chartConfig.returnPct.color} stopOpacity={0} />
+              </linearGradient>
+            </defs>
 
-          <XAxis dataKey="label" axisLine={false} tickLine={false} tick={false} />
-          <YAxis axisLine={false} tickLine={false} tick={false} domain={["dataMin - 1", "dataMax + 1"]} />
+            <XAxis dataKey="label" axisLine={false} tickLine={false} tick={false} />
+            <YAxis axisLine={false} tickLine={false} tick={false} domain={["dataMin - 1", "dataMax + 1"]} />
 
-          <Area
-            type="monotone"
-            dataKey="returnPct"
-            stroke="transparent"
-            fill="url(#returnGradientMint)"
-            dot={false}
-          />
+            <Area
+              type="monotone"
+              dataKey="returnPct"
+              stroke="transparent"
+              fill="url(#returnGradientMint)"
+              dot={false}
+            />
 
-          <Line
-            type="monotone"
-            dataKey="returnPct"
-            stroke={chartConfig.returnPct.color}
-            strokeWidth={3}
-            dot={false}
-            activeDot={{ r: 6, fill: chartConfig.returnPct.color, stroke: "white", strokeWidth: 2 }}
-          />
-        </ComposedChart>
+            <Line
+              type="monotone"
+              dataKey="returnPct"
+              stroke={chartConfig.returnPct.color}
+              strokeWidth={3}
+              dot={false}
+              activeDot={{ r: 6, fill: chartConfig.returnPct.color, stroke: "white", strokeWidth: 2 }}
+            />
+          </ComposedChart>
+        </ResponsiveContainer>
       </ChartContainer>
     </div>
   );
