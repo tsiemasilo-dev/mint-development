@@ -569,27 +569,6 @@ const OpenStrategiesPage = ({ onBack }) => {
             )}
           </div>
 
-          {activeChips.length > 0 && (
-            <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {activeChips.map((chip) => (
-                <span
-                  key={chip}
-                  className="flex items-center gap-2 whitespace-nowrap rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600"
-                >
-                  {chip}
-                  <button
-                    type="button"
-                    onClick={() => removeChip(chip)}
-                    className="text-slate-400 hover:text-slate-600"
-                    aria-label={`Remove ${chip}`}
-                  >
-                    ✕
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-
           <div className="flex gap-2">
             {tabOptions.map((tab) => (
               <button
@@ -693,7 +672,7 @@ const OpenStrategiesPage = ({ onBack }) => {
             }}
           />
           <div
-            className="relative z-10 flex h-[60vh] w-full max-w-sm flex-col overflow-hidden rounded-t-[32px] bg-white shadow-2xl"
+            className="relative z-10 flex h-[60vh] w-full max-w-sm flex-col overflow-hidden rounded-[32px] bg-white shadow-2xl"
             style={{ transform: `translateY(${sheetOffset}px)` }}
             onPointerDown={handleSheetPointerDown}
             onPointerMove={handleSheetPointerMove}
