@@ -217,9 +217,7 @@ const App = () => {
 
   if (currentPage === "openStrategies") {
     return (
-      <AppLayout activeTab="investments" onTabChange={setCurrentPage}>
-        <OpenStrategiesPage onBack={() => setCurrentPage("invest")} />
-      </AppLayout>
+      <OpenStrategiesPage onBack={() => setCurrentPage("invest")} />
     );
   }
 
