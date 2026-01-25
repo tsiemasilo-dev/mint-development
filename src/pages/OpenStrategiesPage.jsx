@@ -1,5 +1,5 @@
 import React, { useId, useMemo, useState } from "react";
-import { ArrowLeft, ChevronRight, Search } from "lucide-react";
+import { ArrowLeft, ChevronRight, Search, SlidersHorizontal } from "lucide-react";
 import { StrategyReturnHeaderChart } from "../components/StrategyReturnHeaderChart";
 import { ChartContainer } from "../components/ui/line-charts-2";
 import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer } from "recharts";
@@ -13,6 +13,19 @@ const strategyCards = [
     returnRate: "6.7%",
     minimum: "Min. $2,500",
     tags: ["Balanced", "Low risk", "Automated"],
+    holdings: ["Apple", "Microsoft", "Nvidia"],
+    tickers: ["AAPL", "MSFT", "NVDA"],
+    exposure: "Global",
+    minInvestment: "R2,500+",
+    timeHorizon: "Long",
+    popularity: "Most popular",
+    maxDrawdown: "Lowest max drawdown",
+    volatility: "Lowest volatility",
+    returnScore: 6.7,
+    maxDrawdownScore: 6.2,
+    volatilityScore: 3.1,
+    minInvestmentValue: 2500,
+    popularityScore: 4,
     sparkline: [12, 18, 16, 24, 28, 26, 32, 35, 40, 44],
   },
   {
@@ -21,6 +34,19 @@ const strategyCards = [
     returnRate: "5.3%",
     minimum: "Min. $1,500",
     tags: ["Income", "Low risk", "Automated"],
+    holdings: ["Apple", "Coca-Cola", "Procter & Gamble"],
+    tickers: ["AAPL", "KO", "PG"],
+    exposure: "Mixed",
+    minInvestment: "R500+",
+    timeHorizon: "Medium",
+    popularity: "Recommended",
+    maxDrawdown: "Lowest max drawdown",
+    volatility: "Lowest volatility",
+    returnScore: 5.3,
+    maxDrawdownScore: 4.8,
+    volatilityScore: 2.4,
+    minInvestmentValue: 500,
+    popularityScore: 5,
     sparkline: [10, 12, 15, 14, 18, 20, 22, 24, 26, 28],
   },
   {
@@ -29,6 +55,19 @@ const strategyCards = [
     returnRate: "9.1%",
     minimum: "Min. $5,000",
     tags: ["Growth", "Higher risk", "Automated"],
+    holdings: ["Tesla", "Nvidia", "Amazon"],
+    tickers: ["TSLA", "NVDA", "AMZN"],
+    exposure: "Equities",
+    minInvestment: "R10,000+",
+    timeHorizon: "Short",
+    popularity: "Best performance",
+    maxDrawdown: "Lowest max drawdown",
+    volatility: "Lowest volatility",
+    returnScore: 9.1,
+    maxDrawdownScore: 7.4,
+    volatilityScore: 5.6,
+    minInvestmentValue: 10000,
+    popularityScore: 3,
     sparkline: [8, 14, 12, 20, 26, 24, 30, 36, 34, 42],
   },
 ];
@@ -47,6 +86,20 @@ const holdingsSnapshot = [
     src: "https://s3-symbol-logo.tradingview.com/nvidia--big.svg",
   },
 ];
+
+const sortOptions = [
+  "Recommended",
+  "Best performance",
+  "Lowest max drawdown",
+  "Lowest volatility",
+  "Lowest minimum",
+  "Most popular",
+];
+
+const riskOptions = ["Low risk", "Balanced", "Growth", "High risk"];
+const minInvestmentOptions = ["R500+", "R2,500+", "R10,000+"];
+const exposureOptions = ["Local", "Global", "Mixed", "Equities", "ETFs"];
+const timeHorizonOptions = ["Short", "Medium", "Long"];
 
 const StrategyMiniChart = ({ values }) => {
   const chartConfig = {
@@ -131,6 +184,20 @@ const StrategyMiniChart = ({ values }) => {
 
 const OpenStrategiesPage = ({ onBack }) => {
   const [activeTab, setActiveTab] = useState("Strategies");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedHolding, setSelectedHolding] = useState(null);
+  const [activeChips, setActiveChips] = useState([]);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [selectedSort, setSelectedSort] = useState("Recommended");
+  const [selectedRisks, setSelectedRisks] = useState(new Set());
+  const [selectedMinInvestment, setSelectedMinInvestment] = useState(null);
+  const [selectedExposure, setSelectedExposure] = useState(new Set());
+  const [selectedTimeHorizon, setSelectedTimeHorizon] = useState(new Set());
+  const [draftSort, setDraftSort] = useState("Recommended");
+  const [draftRisks, setDraftRisks] = useState(new Set());
+  const [draftMinInvestment, setDraftMinInvestment] = useState(null);
+  const [draftExposure, setDraftExposure] = useState(new Set());
+  const [draftTimeHorizon, setDraftTimeHorizon] = useState(new Set());
   const series = [
     { label: "Jan", returnPct: 1.2 },
     { label: "Feb", returnPct: 2.0 },
@@ -149,6 +216,140 @@ const OpenStrategiesPage = ({ onBack }) => {
   const allTimeReturn = series[series.length - 1]?.returnPct ?? 12.4;
   const formattedReturn = `${returnValue >= 0 ? "+" : ""}${returnValue.toFixed(2)}%`;
   const formattedAllTimeReturn = `${allTimeReturn >= 0 ? "+" : ""}${allTimeReturn.toFixed(2)}%`;
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const holdingSuggestions = useMemo(() => {
+    if (!normalizedQuery) return [];
+    const suggestions = new Map();
+    strategyCards.forEach((strategy) => {
+      strategy.holdings.forEach((holding, index) => {
+        const ticker = strategy.tickers[index];
+        const label = `${holding} ${ticker}`;
+        if (
+          holding.toLowerCase().includes(normalizedQuery) ||
+          ticker.toLowerCase().includes(normalizedQuery)
+        ) {
+          suggestions.set(holding, { holding, ticker });
+        }
+      });
+    });
+    return Array.from(suggestions.values());
+  }, [normalizedQuery]);
+
+  const filteredStrategies = useMemo(() => {
+    const results = strategyCards.filter((strategy) => {
+      const matchesName =
+        normalizedQuery && !selectedHolding
+          ? strategy.name.toLowerCase().includes(normalizedQuery)
+          : true;
+      const matchesHolding = selectedHolding
+        ? strategy.holdings.includes(selectedHolding)
+        : true;
+      const matchesRisk = selectedRisks.size
+        ? selectedRisks.has(strategy.risk)
+        : true;
+      const matchesMinInvestment = selectedMinInvestment
+        ? strategy.minInvestment === selectedMinInvestment
+        : true;
+      const matchesExposure = selectedExposure.size
+        ? selectedExposure.has(strategy.exposure)
+        : true;
+      const matchesTimeHorizon = selectedTimeHorizon.size
+        ? selectedTimeHorizon.has(strategy.timeHorizon)
+        : true;
+
+      return (
+        matchesName &&
+        matchesHolding &&
+        matchesRisk &&
+        matchesMinInvestment &&
+        matchesExposure &&
+        matchesTimeHorizon
+      );
+    });
+
+    const sorted = [...results];
+    if (selectedSort === "Best performance") {
+      sorted.sort((a, b) => b.returnScore - a.returnScore);
+    }
+    if (selectedSort === "Lowest max drawdown") {
+      sorted.sort((a, b) => a.maxDrawdownScore - b.maxDrawdownScore);
+    }
+    if (selectedSort === "Lowest volatility") {
+      sorted.sort((a, b) => a.volatilityScore - b.volatilityScore);
+    }
+    if (selectedSort === "Lowest minimum") {
+      sorted.sort((a, b) => a.minInvestmentValue - b.minInvestmentValue);
+    }
+    if (selectedSort === "Most popular") {
+      sorted.sort((a, b) => b.popularityScore - a.popularityScore);
+    }
+
+    return sorted;
+  }, [
+    normalizedQuery,
+    selectedHolding,
+    selectedRisks,
+    selectedMinInvestment,
+    selectedExposure,
+    selectedTimeHorizon,
+    selectedSort,
+  ]);
+
+  const applyFilters = () => {
+    setSelectedSort(draftSort);
+    setSelectedRisks(new Set(draftRisks));
+    setSelectedMinInvestment(draftMinInvestment);
+    setSelectedExposure(new Set(draftExposure));
+    setSelectedTimeHorizon(new Set(draftTimeHorizon));
+    const chips = [];
+    if (draftRisks.size) {
+      chips.push(...Array.from(draftRisks));
+    }
+    if (draftExposure.size) {
+      chips.push(...Array.from(draftExposure));
+    }
+    if (draftMinInvestment) {
+      chips.push(draftMinInvestment);
+    }
+    if (selectedHolding) {
+      chips.push(`Holding: ${selectedHolding}`);
+    }
+    setActiveChips(chips);
+    setIsFilterOpen(false);
+  };
+
+  const clearAllFilters = () => {
+    setSelectedSort("Recommended");
+    setSelectedRisks(new Set());
+    setSelectedMinInvestment(null);
+    setSelectedExposure(new Set());
+    setSelectedTimeHorizon(new Set());
+    setDraftSort("Recommended");
+    setDraftRisks(new Set());
+    setDraftMinInvestment(null);
+    setDraftExposure(new Set());
+    setDraftTimeHorizon(new Set());
+    setSelectedHolding(null);
+    setSearchQuery("");
+    setActiveChips([]);
+  };
+
+  const removeChip = (chip) => {
+    if (chip.startsWith("Holding:")) {
+      setSelectedHolding(null);
+    } else if (chip.startsWith("R")) {
+      setSelectedMinInvestment(null);
+    } else if (["Low risk", "Balanced", "Growth", "High risk"].includes(chip)) {
+      const next = new Set(selectedRisks);
+      next.delete(chip);
+      setSelectedRisks(next);
+    } else if (["Local", "Global", "Mixed", "Equities", "ETFs"].includes(chip)) {
+      const next = new Set(selectedExposure);
+      next.delete(chip);
+      setSelectedExposure(next);
+    }
+    setActiveChips((prev) => prev.filter((item) => item !== chip));
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)] text-slate-900">
@@ -255,14 +456,82 @@ const OpenStrategiesPage = ({ onBack }) => {
         </button>
 
         <div className="mt-5 space-y-3">
-          <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm">
-            <Search className="h-4 w-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search strategies or stocks"
-              className="flex-1 bg-transparent text-sm text-slate-700 outline-none"
-            />
+          <div className="relative">
+            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm">
+              <Search className="h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search strategies or holdings"
+                value={searchQuery}
+                onChange={(event) => {
+                  setSearchQuery(event.target.value);
+                  if (!event.target.value) {
+                    setSelectedHolding(null);
+                  }
+                }}
+                className="flex-1 bg-transparent text-sm text-slate-700 outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setDraftSort(selectedSort);
+                  setDraftRisks(new Set(selectedRisks));
+                  setDraftMinInvestment(selectedMinInvestment);
+                  setDraftExposure(new Set(selectedExposure));
+                  setDraftTimeHorizon(new Set(selectedTimeHorizon));
+                  setIsFilterOpen(true);
+                }}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-600 text-white shadow-sm"
+                aria-label="Open filters"
+              >
+                <SlidersHorizontal className="h-4 w-4" />
+              </button>
+            </div>
+            {holdingSuggestions.length > 0 && (
+              <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-20 rounded-2xl border border-slate-100 bg-white p-2 shadow-lg">
+                {holdingSuggestions.map((suggestion) => (
+                  <button
+                    key={suggestion.holding}
+                    type="button"
+                    onClick={() => {
+                      setSelectedHolding(suggestion.holding);
+                      setSearchQuery(`${suggestion.holding} ${suggestion.ticker}`);
+                      setActiveChips((prev) => {
+                        const next = prev.filter((chip) => !chip.startsWith("Holding:"));
+                        const holdingChip = `Holding: ${suggestion.holding}`;
+                        return next.includes(holdingChip) ? next : [...next, holdingChip];
+                      });
+                    }}
+                    className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                  >
+                    <span className="font-semibold">{suggestion.holding}</span>
+                    <span className="text-xs font-semibold text-slate-400">{suggestion.ticker}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
+
+          {activeChips.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {activeChips.map((chip) => (
+                <span
+                  key={chip}
+                  className="flex items-center gap-2 whitespace-nowrap rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600"
+                >
+                  {chip}
+                  <button
+                    type="button"
+                    onClick={() => removeChip(chip)}
+                    className="text-slate-400 hover:text-slate-600"
+                    aria-label={`Remove ${chip}`}
+                  >
+                    ✕
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
 
           <div className="flex gap-2">
             {tabOptions.map((tab) => (
@@ -284,59 +553,246 @@ const OpenStrategiesPage = ({ onBack }) => {
 
         <section className="mt-6 space-y-3">
           <h2 className="text-sm font-semibold text-slate-900">Other strategies</h2>
-          {strategyCards.map((strategy) => (
-            <div
-              key={strategy.name}
-              className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-slate-900">{strategy.name}</p>
-                  <div>
-                    <p className="text-xs font-semibold text-emerald-500">+{strategy.returnRate}</p>
-                    <p className="text-[11px] text-slate-400">{strategy.minimum}</p>
-                  </div>
-                </div>
-                <div className="flex items-center rounded-xl bg-slate-50 px-2">
-                  <StrategyMiniChart values={strategy.sparkline} />
-                </div>
-              </div>
-
-              <div className="mt-3 flex flex-wrap gap-2">
-                {strategy.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-
-              <div className="mt-3 flex items-center gap-3">
-                <div className="flex -space-x-2">
-                  {holdingsSnapshot.map((company) => (
-                    <div
-                      key={`${strategy.name}-${company.name}`}
-                      className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-sm"
-                    >
-                      <img
-                        src={company.src}
-                        alt={company.name}
-                        className="h-full w-full object-cover"
-                      />
-                    </div>
-                  ))}
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500">
-                    +3
-                  </div>
-                </div>
-                <span className="text-xs font-semibold text-slate-500">Holdings snapshot</span>
-              </div>
+          {filteredStrategies.length === 0 ? (
+            <div className="rounded-2xl border border-slate-100 bg-white p-6 text-center shadow-sm">
+              <p className="text-sm font-semibold text-slate-700">
+                No strategies match your filters
+              </p>
+              <button
+                type="button"
+                onClick={clearAllFilters}
+                className="mt-4 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600"
+              >
+                Clear filters
+              </button>
             </div>
-          ))}
+          ) : (
+            filteredStrategies.map((strategy) => (
+              <div
+                key={strategy.name}
+                className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-slate-900">{strategy.name}</p>
+                    <div>
+                      <p className="text-xs font-semibold text-emerald-500">
+                        +{strategy.returnRate}
+                      </p>
+                      <p className="text-[11px] text-slate-400">{strategy.minimum}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center rounded-xl bg-slate-50 px-2">
+                    <StrategyMiniChart values={strategy.sparkline} />
+                  </div>
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {strategy.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="mt-3 flex items-center gap-3">
+                  <div className="flex -space-x-2">
+                    {holdingsSnapshot.map((company) => (
+                      <div
+                        key={`${strategy.name}-${company.name}`}
+                        className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-sm"
+                      >
+                        <img
+                          src={company.src}
+                          alt={company.name}
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                    ))}
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500">
+                      +3
+                    </div>
+                  </div>
+                  <span className="text-xs font-semibold text-slate-500">Holdings snapshot</span>
+                </div>
+              </div>
+            ))
+          )}
         </section>
       </div>
+
+      {isFilterOpen && (
+        <div className="fixed inset-0 z-40 flex items-end justify-center bg-slate-900/40 px-4 pb-6">
+          <button
+            type="button"
+            className="absolute inset-0 h-full w-full cursor-default"
+            aria-label="Close filters"
+            onClick={() => setIsFilterOpen(false)}
+          />
+          <div className="relative z-10 w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-slate-900">Filters</h3>
+              <button
+                type="button"
+                onClick={clearAllFilters}
+                className="text-sm font-semibold text-slate-500"
+              >
+                Clear all
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-5">
+              <div className="space-y-3">
+                <p className="text-sm font-semibold text-slate-800">Sort</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {sortOptions.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => setDraftSort(option)}
+                      className={`flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold ${
+                        draftSort === option
+                          ? "border-transparent bg-violet-600 text-white shadow-sm"
+                          : "border-slate-200 bg-white text-slate-600"
+                      }`}
+                    >
+                      <span
+                        className={`h-4 w-4 rounded-full border ${
+                          draftSort === option ? "border-white bg-white" : "border-slate-300"
+                        }`}
+                      />
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <p className="text-sm font-semibold text-slate-800">Risk level</p>
+                <div className="flex flex-wrap gap-2">
+                  {riskOptions.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() =>
+                        setDraftRisks((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(option)) {
+                            next.delete(option);
+                          } else {
+                            next.add(option);
+                          }
+                          return next;
+                        })
+                      }
+                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
+                        draftRisks.has(option)
+                          ? "border-transparent bg-violet-600 text-white"
+                          : "border-slate-200 bg-white text-slate-600"
+                      }`}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <p className="text-sm font-semibold text-slate-800">Minimum investment</p>
+                <div className="flex flex-wrap gap-2">
+                  {minInvestmentOptions.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => setDraftMinInvestment(option)}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
+                        draftMinInvestment === option
+                          ? "border-transparent bg-violet-600 text-white"
+                          : "border-slate-200 bg-white text-slate-600"
+                      }`}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <p className="text-sm font-semibold text-slate-800">Asset exposure</p>
+                <div className="flex flex-wrap gap-2">
+                  {exposureOptions.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() =>
+                        setDraftExposure((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(option)) {
+                            next.delete(option);
+                          } else {
+                            next.add(option);
+                          }
+                          return next;
+                        })
+                      }
+                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
+                        draftExposure.has(option)
+                          ? "border-transparent bg-violet-600 text-white"
+                          : "border-slate-200 bg-white text-slate-600"
+                      }`}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <p className="text-sm font-semibold text-slate-800">Time horizon</p>
+                <div className="flex flex-wrap gap-2">
+                  {timeHorizonOptions.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() =>
+                        setDraftTimeHorizon((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(option)) {
+                            next.delete(option);
+                          } else {
+                            next.add(option);
+                          }
+                          return next;
+                        })
+                      }
+                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
+                        draftTimeHorizon.has(option)
+                          ? "border-transparent bg-violet-600 text-white"
+                          : "border-slate-200 bg-white text-slate-600"
+                      }`}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 mt-6">
+              <button
+                type="button"
+                onClick={applyFilters}
+                className="w-full rounded-2xl bg-violet-600 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-200/60"
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
