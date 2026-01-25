@@ -18,6 +18,7 @@ const strategyCards = [
     exposure: "Global",
     minInvestment: "R2,500+",
     timeHorizon: "Long",
+    sectors: ["Technology", "Consumer"],
     popularity: "Most popular",
     maxDrawdown: "Lowest max drawdown",
     volatility: "Lowest volatility",
@@ -39,6 +40,7 @@ const strategyCards = [
     exposure: "Mixed",
     minInvestment: "R500+",
     timeHorizon: "Medium",
+    sectors: ["Consumer", "Healthcare"],
     popularity: "Recommended",
     maxDrawdown: "Lowest max drawdown",
     volatility: "Lowest volatility",
@@ -60,6 +62,7 @@ const strategyCards = [
     exposure: "Equities",
     minInvestment: "R10,000+",
     timeHorizon: "Short",
+    sectors: ["Technology", "Energy"],
     popularity: "Best performance",
     maxDrawdown: "Lowest max drawdown",
     volatility: "Lowest volatility",
@@ -100,6 +103,7 @@ const riskOptions = ["Low risk", "Balanced", "Growth", "High risk"];
 const minInvestmentOptions = ["R500+", "R2,500+", "R10,000+"];
 const exposureOptions = ["Local", "Global", "Mixed", "Equities", "ETFs"];
 const timeHorizonOptions = ["Short", "Medium", "Long"];
+const sectorOptions = ["Technology", "Consumer", "Healthcare", "Energy", "Financials"];
 
 const StrategyMiniChart = ({ values }) => {
   const chartConfig = {
@@ -193,11 +197,13 @@ const OpenStrategiesPage = ({ onBack }) => {
   const [selectedMinInvestment, setSelectedMinInvestment] = useState(null);
   const [selectedExposure, setSelectedExposure] = useState(new Set());
   const [selectedTimeHorizon, setSelectedTimeHorizon] = useState(new Set());
+  const [selectedSectors, setSelectedSectors] = useState(new Set());
   const [draftSort, setDraftSort] = useState("Recommended");
   const [draftRisks, setDraftRisks] = useState(new Set());
   const [draftMinInvestment, setDraftMinInvestment] = useState(null);
   const [draftExposure, setDraftExposure] = useState(new Set());
   const [draftTimeHorizon, setDraftTimeHorizon] = useState(new Set());
+  const [draftSectors, setDraftSectors] = useState(new Set());
   const series = [
     { label: "Jan", returnPct: 1.2 },
     { label: "Feb", returnPct: 2.0 },
@@ -256,6 +262,9 @@ const OpenStrategiesPage = ({ onBack }) => {
       const matchesTimeHorizon = selectedTimeHorizon.size
         ? selectedTimeHorizon.has(strategy.timeHorizon)
         : true;
+      const matchesSector = selectedSectors.size
+        ? strategy.sectors.some((sector) => selectedSectors.has(sector))
+        : true;
 
       return (
         matchesName &&
@@ -263,7 +272,8 @@ const OpenStrategiesPage = ({ onBack }) => {
         matchesRisk &&
         matchesMinInvestment &&
         matchesExposure &&
-        matchesTimeHorizon
+        matchesTimeHorizon &&
+        matchesSector
       );
     });
 
@@ -292,6 +302,7 @@ const OpenStrategiesPage = ({ onBack }) => {
     selectedMinInvestment,
     selectedExposure,
     selectedTimeHorizon,
+    selectedSectors,
     selectedSort,
   ]);
 
@@ -301,6 +312,7 @@ const OpenStrategiesPage = ({ onBack }) => {
     setSelectedMinInvestment(draftMinInvestment);
     setSelectedExposure(new Set(draftExposure));
     setSelectedTimeHorizon(new Set(draftTimeHorizon));
+    setSelectedSectors(new Set(draftSectors));
     const chips = [];
     if (draftRisks.size) {
       chips.push(...Array.from(draftRisks));
@@ -310,6 +322,12 @@ const OpenStrategiesPage = ({ onBack }) => {
     }
     if (draftMinInvestment) {
       chips.push(draftMinInvestment);
+    }
+    if (draftTimeHorizon.size) {
+      chips.push(...Array.from(draftTimeHorizon));
+    }
+    if (draftSectors.size) {
+      chips.push(...Array.from(draftSectors));
     }
     if (selectedHolding) {
       chips.push(`Holding: ${selectedHolding}`);
@@ -324,11 +342,13 @@ const OpenStrategiesPage = ({ onBack }) => {
     setSelectedMinInvestment(null);
     setSelectedExposure(new Set());
     setSelectedTimeHorizon(new Set());
+    setSelectedSectors(new Set());
     setDraftSort("Recommended");
     setDraftRisks(new Set());
     setDraftMinInvestment(null);
     setDraftExposure(new Set());
     setDraftTimeHorizon(new Set());
+    setDraftSectors(new Set());
     setSelectedHolding(null);
     setSearchQuery("");
     setActiveChips([]);
@@ -347,6 +367,14 @@ const OpenStrategiesPage = ({ onBack }) => {
       const next = new Set(selectedExposure);
       next.delete(chip);
       setSelectedExposure(next);
+    } else if (["Short", "Medium", "Long"].includes(chip)) {
+      const next = new Set(selectedTimeHorizon);
+      next.delete(chip);
+      setSelectedTimeHorizon(next);
+    } else if (sectorOptions.includes(chip)) {
+      const next = new Set(selectedSectors);
+      next.delete(chip);
+      setSelectedSectors(next);
     }
     setActiveChips((prev) => prev.filter((item) => item !== chip));
   };
@@ -479,6 +507,7 @@ const OpenStrategiesPage = ({ onBack }) => {
                   setDraftMinInvestment(selectedMinInvestment);
                   setDraftExposure(new Set(selectedExposure));
                   setDraftTimeHorizon(new Set(selectedTimeHorizon));
+                  setDraftSectors(new Set(selectedSectors));
                   setIsFilterOpen(true);
                 }}
                 className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-600 text-white shadow-sm"
@@ -655,7 +684,7 @@ const OpenStrategiesPage = ({ onBack }) => {
                       onClick={() => setDraftSort(option)}
                       className={`flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold ${
                         draftSort === option
-                          ? "border-transparent bg-violet-600 text-white shadow-sm"
+                          ? "border-transparent bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] text-white shadow-sm"
                           : "border-slate-200 bg-white text-slate-600"
                       }`}
                     >
@@ -690,7 +719,7 @@ const OpenStrategiesPage = ({ onBack }) => {
                       }
                       className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
                         draftRisks.has(option)
-                          ? "border-transparent bg-violet-600 text-white"
+                          ? "border-transparent bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] text-white"
                           : "border-slate-200 bg-white text-slate-600"
                       }`}
                     >
@@ -710,7 +739,7 @@ const OpenStrategiesPage = ({ onBack }) => {
                       onClick={() => setDraftMinInvestment(option)}
                       className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
                         draftMinInvestment === option
-                          ? "border-transparent bg-violet-600 text-white"
+                          ? "border-transparent bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] text-white"
                           : "border-slate-200 bg-white text-slate-600"
                       }`}
                     >
@@ -740,7 +769,7 @@ const OpenStrategiesPage = ({ onBack }) => {
                       }
                       className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
                         draftExposure.has(option)
-                          ? "border-transparent bg-violet-600 text-white"
+                          ? "border-transparent bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] text-white"
                           : "border-slate-200 bg-white text-slate-600"
                       }`}
                     >
@@ -770,7 +799,37 @@ const OpenStrategiesPage = ({ onBack }) => {
                       }
                       className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
                         draftTimeHorizon.has(option)
-                          ? "border-transparent bg-violet-600 text-white"
+                          ? "border-transparent bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] text-white"
+                          : "border-slate-200 bg-white text-slate-600"
+                      }`}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <p className="text-sm font-semibold text-slate-800">Sector</p>
+                <div className="flex flex-wrap gap-2">
+                  {sectorOptions.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() =>
+                        setDraftSectors((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(option)) {
+                            next.delete(option);
+                          } else {
+                            next.add(option);
+                          }
+                          return next;
+                        })
+                      }
+                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
+                        draftSectors.has(option)
+                          ? "border-transparent bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] text-white"
                           : "border-slate-200 bg-white text-slate-600"
                       }`}
                     >
