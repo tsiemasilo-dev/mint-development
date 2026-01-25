@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ArrowLeft, ChevronRight, Search, WeightTilde } from "lucide-react";
+import { ArrowLeft, ChevronRight, Scale, Search } from "lucide-react";
 import { StrategyReturnHeaderChart } from "../components/StrategyReturnHeaderChart";
 
 const tabOptions = ["Strategies", "Stocks"];
@@ -102,7 +102,7 @@ const OpenStrategiesPage = ({ onBack }) => {
 
           <div className="mt-4 flex flex-wrap gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
-              <WeightTilde className="h-3.5 w-3.5 text-slate-400" />
+              <Scale className="h-3.5 w-3.5 text-slate-400" />
               Balanced
             </span>
             {["Low risk", "Automated"].map((tag) => (
