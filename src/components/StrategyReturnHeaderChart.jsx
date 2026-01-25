@@ -36,11 +36,21 @@ export function StrategyReturnHeaderChart({ series }) {
   const fallbackSeries = useMemo(() => buildDummySeries(), []);
   const resolvedSeries = series?.length ? series : fallbackSeries;
   const filtered = useMemo(() => sliceForTF(resolvedSeries, tf), [resolvedSeries, tf]);
+  const lastIndex = filtered.length - 1;
   const chartConfig = {
     returnPct: {
       label: "Return",
       color: "var(--color-mint-purple, #7C5CFF)",
     },
+  };
+  const renderLastDot = ({ cx, cy, index }) => {
+    if (index !== lastIndex) return null;
+    return (
+      <g>
+        <circle cx={cx} cy={cy} r={8} fill="#C7B8FF" className="animate-pulse" opacity={0.5} />
+        <circle cx={cx} cy={cy} r={4} fill="#7C5CFF" />
+      </g>
+    );
   };
 
   return (
@@ -91,9 +101,9 @@ export function StrategyReturnHeaderChart({ series }) {
               type="monotone"
               dataKey="returnPct"
               stroke={chartConfig.returnPct.color}
-              strokeWidth={3}
-              dot={{ r: 3, fill: chartConfig.returnPct.color }}
-              activeDot={{ r: 6, fill: chartConfig.returnPct.color, stroke: "white", strokeWidth: 2 }}
+              strokeWidth={2}
+              dot={renderLastDot}
+              activeDot={false}
             />
           </ComposedChart>
         </ResponsiveContainer>

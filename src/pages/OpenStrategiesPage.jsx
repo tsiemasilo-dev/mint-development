@@ -66,10 +66,18 @@ const OpenStrategiesPage = ({ onBack }) => {
         <section className="mt-6 rounded-[28px] border border-slate-100 bg-white p-5 shadow-[0_18px_40px_rgba(79,70,229,0.08)]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <h2 className="text-lg font-semibold text-slate-900">AlgoHive Core</h2>
-              <span className="rounded-full bg-violet-50 px-2.5 py-1 text-[10px] font-semibold text-violet-600">
-                Popular
-              </span>
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-violet-500/20 via-purple-400/20 to-emerald-400/20 text-xs font-semibold text-violet-600 ring-1 ring-violet-100">
+                AH
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-semibold text-slate-900">AlgoHive Core</h2>
+                  <span className="rounded-full bg-violet-50 px-2.5 py-1 text-[10px] font-semibold text-violet-600">
+                    Popular
+                  </span>
+                </div>
+                <p className="text-xs font-semibold text-slate-400">MI90b · JSE</p>
+              </div>
             </div>
           </div>
 
