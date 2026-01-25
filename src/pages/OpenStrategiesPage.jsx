@@ -70,7 +70,7 @@ const OpenStrategiesPage = ({ onBack }) => {
             <div className="flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-white shadow-sm ring-1 ring-slate-100">
                 <img
-                  src="https://s3-symbol-logo.tradingview.com/country/ZA.svg"
+                  src="https://s3-symbol-logo.tradingview.com/country/ZA--big.svg"
                   alt="South Africa"
                   className="h-full w-full object-cover"
                 />
