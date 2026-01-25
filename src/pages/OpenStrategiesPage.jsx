@@ -103,10 +103,10 @@ const OpenStrategiesPage = ({ onBack }) => {
             />
           </div>
 
-          <div className="mt-3 flex items-center justify-between text-[11px] font-semibold text-slate-400">
-            <span>Max DD: 6.2%</span>
-            <span>Volatility: Low</span>
-            <span>Fees: 20%</span>
+          <div className="mt-3 grid grid-cols-3 items-center text-[11px] font-semibold text-slate-400">
+            <span className="text-left">Max DD: 6.2%</span>
+            <span className="text-center">Volatility: Low</span>
+            <span className="text-right">Fees: 20%</span>
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
