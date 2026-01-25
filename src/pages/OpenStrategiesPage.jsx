@@ -28,21 +28,23 @@ const strategyCards = [
 const OpenStrategiesPage = ({ onBack }) => {
   const [activeTab, setActiveTab] = useState("Strategies");
   const series = [
-    { label: "Jan", returnPct: 0.6 },
-    { label: "Feb", returnPct: 1.4 },
-    { label: "Mar", returnPct: 1.1 },
-    { label: "Apr", returnPct: 2.0 },
-    { label: "May", returnPct: 2.8 },
-    { label: "Jun", returnPct: 3.3 },
-    { label: "Jul", returnPct: 3.9 },
-    { label: "Aug", returnPct: 4.1 },
-    { label: "Sep", returnPct: 4.6 },
-    { label: "Oct", returnPct: 4.9 },
-    { label: "Nov", returnPct: 5.2 },
-    { label: "Dec", returnPct: 5.5 },
+    { label: "Jan", returnPct: 1.2 },
+    { label: "Feb", returnPct: 2.0 },
+    { label: "Mar", returnPct: 3.1 },
+    { label: "Apr", returnPct: 4.5 },
+    { label: "May", returnPct: 5.9 },
+    { label: "Jun", returnPct: 7.1 },
+    { label: "Jul", returnPct: 8.2 },
+    { label: "Aug", returnPct: 9.1 },
+    { label: "Sep", returnPct: 10.4 },
+    { label: "Oct", returnPct: 11.2 },
+    { label: "Nov", returnPct: 11.9 },
+    { label: "Dec", returnPct: 12.4 },
   ];
   const [returnValue, setReturnValue] = useState(series[series.length - 1]?.returnPct ?? 5.5);
+  const allTimeReturn = series[series.length - 1]?.returnPct ?? 12.4;
   const formattedReturn = `${returnValue >= 0 ? "+" : ""}${returnValue.toFixed(2)}%`;
+  const formattedAllTimeReturn = `${allTimeReturn >= 0 ? "+" : ""}${allTimeReturn.toFixed(2)}%`;
 
   return (
     <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)] text-slate-900">
@@ -88,7 +90,7 @@ const OpenStrategiesPage = ({ onBack }) => {
             <div className="flex items-center gap-3">
               <p className="text-2xl font-semibold text-slate-900">{formattedReturn}</p>
               <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-600">
-                All time gain {formattedReturn}
+                All time gain {formattedAllTimeReturn}
               </span>
             </div>
             <p className="text-xs text-slate-400">Last updated 2h ago</p>
@@ -104,7 +106,7 @@ const OpenStrategiesPage = ({ onBack }) => {
           <div className="mt-3 flex items-center justify-between text-[11px] font-semibold text-slate-400">
             <span>Max DD: 6.2%</span>
             <span>Volatility: Low</span>
-            <span>Fees: 0.6%</span>
+            <span>Fees: 20%</span>
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">

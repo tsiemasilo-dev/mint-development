@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { ChartContainer } from "./ui/line-charts-2";
 import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer, XAxis } from "recharts";
 
-const TF_ORDER = ["1W", "1M", "3M", "6M", "YTD"];
+const TF_ORDER = ["1W", "3M", "6M", "YTD", "All"];
 
 const buildDummySeries = (points = 200) => {
   const base = 4.5;
@@ -23,11 +23,11 @@ const sliceForTF = (data, tf) => {
   const n = data.length;
   if (tf === "1D") return data.slice(Math.max(0, n - 2));
   if (tf === "1W") return data.slice(Math.max(0, n - 7));
-  if (tf === "1M") return data.slice(Math.max(0, n - 30));
   if (tf === "3M") return data.slice(Math.max(0, n - 90));
   if (tf === "6M") return data.slice(Math.max(0, n - 180));
   if (tf === "1Y") return data.slice(Math.max(0, n - 365));
   if (tf === "YTD") return data.slice(Math.max(0, n - 120));
+  if (tf === "All") return data;
   return data;
 };
 
@@ -74,7 +74,7 @@ export function StrategyReturnHeaderChart({ series, onValueChange }) {
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
             data={filtered}
-            margin={{ top: 10, right: 12, left: -6, bottom: 10 }}
+            margin={{ top: 10, right: 16, left: 12, bottom: 10 }}
             onMouseMove={(state) => {
               if (!onValueChange) return;
               const payload = state?.activePayload?.[0]?.value;
