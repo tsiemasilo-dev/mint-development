@@ -1,4 +1,4 @@
-import React, { useId, useMemo, useState } from "react";
+import React, { useId, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ChevronRight, Search, SlidersHorizontal } from "lucide-react";
 import { StrategyReturnHeaderChart } from "../components/StrategyReturnHeaderChart";
 import { ChartContainer } from "../components/ui/line-charts-2";
@@ -204,6 +204,9 @@ const OpenStrategiesPage = ({ onBack }) => {
   const [draftExposure, setDraftExposure] = useState(new Set());
   const [draftTimeHorizon, setDraftTimeHorizon] = useState(new Set());
   const [draftSectors, setDraftSectors] = useState(new Set());
+  const [sheetOffset, setSheetOffset] = useState(0);
+  const dragStartY = useRef(null);
+  const isDragging = useRef(false);
   const series = [
     { label: "Jan", returnPct: 1.2 },
     { label: "Feb", returnPct: 2.0 },
@@ -352,6 +355,31 @@ const OpenStrategiesPage = ({ onBack }) => {
     setSelectedHolding(null);
     setSearchQuery("");
     setActiveChips([]);
+  };
+
+  const resetSheetPosition = () => {
+    setSheetOffset(0);
+    dragStartY.current = null;
+    isDragging.current = false;
+  };
+
+  const handleSheetPointerDown = (event) => {
+    dragStartY.current = event.clientY;
+    isDragging.current = true;
+  };
+
+  const handleSheetPointerMove = (event) => {
+    if (!isDragging.current || dragStartY.current === null) return;
+    const delta = event.clientY - dragStartY.current;
+    setSheetOffset(delta > 0 ? delta : 0);
+  };
+
+  const handleSheetPointerUp = () => {
+    if (!isDragging.current) return;
+    if (sheetOffset > 80) {
+      setIsFilterOpen(false);
+    }
+    resetSheetPosition();
   };
 
   const removeChip = (chip) => {
@@ -659,10 +687,23 @@ const OpenStrategiesPage = ({ onBack }) => {
             type="button"
             className="absolute inset-0 h-full w-full cursor-default"
             aria-label="Close filters"
-            onClick={() => setIsFilterOpen(false)}
+            onClick={() => {
+              setIsFilterOpen(false);
+              resetSheetPosition();
+            }}
           />
-          <div className="relative z-10 w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl">
-            <div className="flex items-center justify-between">
+          <div
+            className="relative z-10 flex h-[60vh] w-full max-w-sm flex-col overflow-hidden rounded-t-[32px] bg-white shadow-2xl"
+            style={{ transform: `translateY(${sheetOffset}px)` }}
+            onPointerDown={handleSheetPointerDown}
+            onPointerMove={handleSheetPointerMove}
+            onPointerUp={handleSheetPointerUp}
+            onPointerCancel={handleSheetPointerUp}
+          >
+            <div className="flex items-center justify-center pt-3">
+              <div className="h-1.5 w-12 rounded-full bg-slate-200" />
+            </div>
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-5 pb-4 pt-3">
               <h3 className="text-lg font-semibold text-slate-900">Filters</h3>
               <button
                 type="button"
@@ -673,26 +714,21 @@ const OpenStrategiesPage = ({ onBack }) => {
               </button>
             </div>
 
-            <div className="mt-5 space-y-5">
+            <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
               <div className="space-y-3">
                 <p className="text-sm font-semibold text-slate-800">Sort</p>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="flex flex-wrap gap-2">
                   {sortOptions.map((option) => (
                     <button
                       key={option}
                       type="button"
                       onClick={() => setDraftSort(option)}
-                      className={`flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold ${
+                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
                         draftSort === option
-                          ? "border-transparent bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] text-white shadow-sm"
+                          ? "border-transparent bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] text-white"
                           : "border-slate-200 bg-white text-slate-600"
                       }`}
                     >
-                      <span
-                        className={`h-4 w-4 rounded-full border ${
-                          draftSort === option ? "border-white bg-white" : "border-slate-300"
-                        }`}
-                      />
                       {option}
                     </button>
                   ))}
@@ -786,17 +822,7 @@ const OpenStrategiesPage = ({ onBack }) => {
                     <button
                       key={option}
                       type="button"
-                      onClick={() =>
-                        setDraftTimeHorizon((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(option)) {
-                            next.delete(option);
-                          } else {
-                            next.add(option);
-                          }
-                          return next;
-                        })
-                      }
+                      onClick={() => setDraftTimeHorizon(new Set([option]))}
                       className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
                         draftTimeHorizon.has(option)
                           ? "border-transparent bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] text-white"
@@ -840,11 +866,15 @@ const OpenStrategiesPage = ({ onBack }) => {
               </div>
             </div>
 
-            <div className="sticky bottom-0 mt-6">
+            <div className="sticky bottom-0 border-t border-slate-100 bg-white px-5 pb-5 pt-3">
+              <div className="pointer-events-none absolute left-0 right-0 top-0 h-6 bg-gradient-to-b from-white to-transparent" />
               <button
                 type="button"
-                onClick={applyFilters}
-                className="w-full rounded-2xl bg-violet-600 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-200/60"
+                onClick={() => {
+                  applyFilters();
+                  resetSheetPosition();
+                }}
+                className="relative w-full rounded-2xl bg-gradient-to-r from-[#111111] via-[#3b1b7a] to-[#5b21b6] py-3 text-sm font-semibold text-white shadow-lg shadow-violet-200/60"
               >
                 Apply
               </button>
