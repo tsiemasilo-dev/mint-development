@@ -9,8 +9,7 @@ const emptyProfile = {
   phoneNumber: "",
   dateOfBirth: "",
   gender: "",
-  country: "",
-  city: "",
+  address: "",
 };
 
 const buildProfile = ({ user, row }) => {
@@ -23,8 +22,7 @@ const buildProfile = ({ user, row }) => {
     phoneNumber: row?.phone_number || metadata.phone_number || "",
     dateOfBirth: row?.date_of_birth || metadata.date_of_birth || "",
     gender: row?.gender || metadata.gender || "",
-    country: row?.country || metadata.country || "",
-    city: row?.city || metadata.city || "",
+    address: row?.address || metadata.address || "",
   };
 };
 
@@ -55,7 +53,7 @@ export const useProfile = () => {
         const user = userData.user;
         const { data: rowData, error: rowError } = await supabase
           .from("profiles")
-          .select("first_name, last_name, email, avatar_url")
+          .select("first_name, last_name, email, avatar_url, phone_number, date_of_birth, gender, address")
           .eq("id", user.id)
           .maybeSingle();
 
