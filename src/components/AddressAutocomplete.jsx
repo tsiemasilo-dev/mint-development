@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { MapPin, X, Loader2 } from "lucide-react";
 
+const GOOGLE_PLACES_API_KEY = import.meta.env.VITE_GOOGLE_PLACES_API_KEY;
+
 const AddressAutocomplete = ({ value, onChange, placeholder = "Search address" }) => {
   const [query, setQuery] = useState(value || "");
   const [suggestions, setSuggestions] = useState([]);
@@ -30,45 +32,50 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "Search address" }
       return;
     }
 
+    if (!GOOGLE_PLACES_API_KEY) {
+      console.error("Google Places API key not configured");
+      return;
+    }
+
     setIsLoading(true);
     try {
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery)}&format=json&addressdetails=1&countrycodes=za&limit=6`,
+        "https://places.googleapis.com/v1/places:autocomplete",
         {
+          method: "POST",
           headers: {
-            "Accept-Language": "en",
-            "User-Agent": "MintApp/1.0",
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": GOOGLE_PLACES_API_KEY,
           },
+          body: JSON.stringify({
+            input: searchQuery,
+            includedRegionCodes: ["ZA"],
+            includedPrimaryTypes: ["street_address", "subpremise", "premise", "route"],
+            languageCode: "en",
+          }),
         }
       );
 
-      if (!response.ok) throw new Error("Search failed");
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Google Places API error:", errorData);
+        throw new Error("Search failed");
+      }
 
       const data = await response.json();
-      
-      if (data && data.length > 0) {
-        const addresses = data.map((item) => {
-          const addr = item.address || {};
-          const parts = [];
-          
-          if (addr.house_number) parts.push(addr.house_number);
-          if (addr.road) parts.push(addr.road);
-          
-          const mainText = parts.join(" ") || item.name || "";
-          
-          const secondaryParts = [];
-          if (addr.suburb) secondaryParts.push(addr.suburb);
-          if (addr.city || addr.town || addr.village) {
-            secondaryParts.push(addr.city || addr.town || addr.village);
-          }
-          if (addr.state) secondaryParts.push(addr.state);
-          
-          return {
-            displayName: item.display_name,
-            mainText: mainText,
-            secondaryText: secondaryParts.join(", "),
-          };
-        });
+
+      if (data.suggestions && data.suggestions.length > 0) {
+        const addresses = data.suggestions
+          .filter((s) => s.placePrediction)
+          .map((s) => {
+            const prediction = s.placePrediction;
+            return {
+              placeId: prediction.placeId,
+              mainText: prediction.structuredFormat?.mainText?.text || prediction.text?.text || "",
+              secondaryText: prediction.structuredFormat?.secondaryText?.text || "",
+              displayName: prediction.text?.text || "",
+            };
+          });
         setSuggestions(addresses);
         setShowSuggestions(true);
       } else {
@@ -97,8 +104,9 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "Search address" }
   };
 
   const handleSelect = (address) => {
-    setQuery(address.displayName);
-    onChange(address.displayName);
+    const fullAddress = address.displayName || `${address.mainText}, ${address.secondaryText}`;
+    setQuery(fullAddress);
+    onChange(fullAddress);
     setShowSuggestions(false);
     setSuggestions([]);
   };
@@ -141,7 +149,7 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "Search address" }
         <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg">
           {suggestions.map((address, index) => (
             <button
-              key={index}
+              key={address.placeId || index}
               type="button"
               onClick={() => handleSelect(address)}
               className="flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-slate-50"
