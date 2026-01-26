@@ -106,9 +106,7 @@ const ProfileDetailsPage = ({ onNavigate }) => {
           <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
             <p className="text-xs uppercase tracking-wide text-slate-400">Address</p>
             <p className="mt-1 text-base font-semibold text-slate-900">
-              {fieldValue(
-                [profile.city, profile.country].filter(Boolean).join(", ") || null
-              )}
+              {fieldValue(profile.address)}
             </p>
           </div>
         </div>
