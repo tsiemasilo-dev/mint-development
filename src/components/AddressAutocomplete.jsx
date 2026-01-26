@@ -1,18 +1,89 @@
 import React, { useState, useEffect, useRef } from "react";
 import { MapPin, X } from "lucide-react";
 
-const sampleAddresses = [
-  "68 Deimos Road, Castleview, Germiston, South Africa",
-  "68 Deimos Street, Randburg, Johannesburg, South Africa",
-  "68 Deimos Avenue, Sandton, Johannesburg, South Africa",
-  "12 Main Road, Sandton, Johannesburg, South Africa",
-  "45 Oxford Street, Rosebank, Johannesburg, South Africa",
-  "123 Nelson Mandela Drive, Pretoria, South Africa",
-  "78 Long Street, Cape Town, South Africa",
-  "92 Victoria Road, Durban, South Africa",
-  "34 Church Street, Bloemfontein, South Africa",
-  "56 Market Street, Port Elizabeth, South Africa",
-];
+const generateAddressSuggestions = (query) => {
+  if (!query || query.length < 2) return [];
+  
+  const streetTypes = ["Road", "Street", "Avenue", "Drive", "Lane", "Way", "Close", "Crescent"];
+  const suburbs = [
+    { name: "Sandton", city: "Johannesburg" },
+    { name: "Rosebank", city: "Johannesburg" },
+    { name: "Randburg", city: "Johannesburg" },
+    { name: "Fourways", city: "Johannesburg" },
+    { name: "Midrand", city: "Johannesburg" },
+    { name: "Bryanston", city: "Johannesburg" },
+    { name: "Parktown", city: "Johannesburg" },
+    { name: "Melville", city: "Johannesburg" },
+    { name: "Castleview", city: "Germiston" },
+    { name: "Primrose", city: "Germiston" },
+    { name: "Bedfordview", city: "Germiston" },
+    { name: "Centurion", city: "Pretoria" },
+    { name: "Brooklyn", city: "Pretoria" },
+    { name: "Hatfield", city: "Pretoria" },
+    { name: "Waterkloof", city: "Pretoria" },
+    { name: "Sea Point", city: "Cape Town" },
+    { name: "Green Point", city: "Cape Town" },
+    { name: "Gardens", city: "Cape Town" },
+    { name: "Claremont", city: "Cape Town" },
+    { name: "Constantia", city: "Cape Town" },
+    { name: "Umhlanga", city: "Durban" },
+    { name: "Morningside", city: "Durban" },
+    { name: "Berea", city: "Durban" },
+    { name: "Westville", city: "Durban" },
+    { name: "Summerstrand", city: "Port Elizabeth" },
+    { name: "Walmer", city: "Port Elizabeth" },
+  ];
+  
+  const streetNames = [
+    "Main", "Church", "Market", "Victoria", "Nelson Mandela", "Long", "Oxford",
+    "Jan Smuts", "William Nicol", "Rivonia", "Sandton", "Pretoria", "Beyers Naude",
+    "Hendrik Verwoerd", "Paul Kruger", "Voortrekker", "Commissioner", "Fox", "Juta",
+    "Louis Botha", "Empire", "Barry Hertzog", "Republic", "Strand", "Adderley",
+    "Kloof", "Loop", "Bree", "Rissik", "Eloff", "President", "Smith", "West",
+    "North", "South", "East", "High", "Park", "Lake", "River", "Hill", "Valley",
+    "Mountain", "Forest", "Garden", "Rose", "Palm", "Oak", "Pine", "Cedar",
+    "Deimos", "Apollo", "Saturn", "Jupiter", "Mars", "Venus", "Mercury",
+  ];
+
+  const suggestions = [];
+  const queryLower = query.toLowerCase().trim();
+  const parts = queryLower.split(/\s+/);
+  const hasNumber = /^\d+/.test(queryLower);
+  const numberMatch = queryLower.match(/^(\d+)/);
+  const streetNumber = numberMatch ? numberMatch[1] : Math.floor(Math.random() * 200) + 1;
+  
+  const searchTerms = hasNumber ? parts.slice(1).join(" ") : queryLower;
+  
+  for (const streetName of streetNames) {
+    if (streetName.toLowerCase().includes(searchTerms) || searchTerms.includes(streetName.toLowerCase())) {
+      for (const streetType of streetTypes.slice(0, 3)) {
+        for (const suburb of suburbs.slice(0, 8)) {
+          const address = `${streetNumber} ${streetName} ${streetType}, ${suburb.name}, ${suburb.city}, South Africa`;
+          if (address.toLowerCase().includes(searchTerms)) {
+            suggestions.push(address);
+          }
+          if (suggestions.length >= 5) break;
+        }
+        if (suggestions.length >= 5) break;
+      }
+      if (suggestions.length >= 5) break;
+    }
+  }
+  
+  if (suggestions.length === 0 && searchTerms.length >= 2) {
+    const capitalizedQuery = searchTerms.split(" ").map(w => 
+      w.charAt(0).toUpperCase() + w.slice(1)
+    ).join(" ");
+    
+    for (let i = 0; i < Math.min(5, suburbs.length); i++) {
+      const suburb = suburbs[i];
+      const streetType = streetTypes[i % streetTypes.length];
+      suggestions.push(`${streetNumber} ${capitalizedQuery} ${streetType}, ${suburb.name}, ${suburb.city}, South Africa`);
+    }
+  }
+  
+  return suggestions.slice(0, 5);
+};
 
 const AddressAutocomplete = ({ value, onChange, placeholder = "Search address" }) => {
   const [query, setQuery] = useState(value || "");
@@ -41,10 +112,8 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "Search address" }
     setQuery(inputValue);
 
     if (inputValue.length >= 2) {
-      const filtered = sampleAddresses.filter((addr) =>
-        addr.toLowerCase().includes(inputValue.toLowerCase())
-      );
-      setSuggestions(filtered.slice(0, 5));
+      const generated = generateAddressSuggestions(inputValue);
+      setSuggestions(generated);
       setShowSuggestions(true);
     } else {
       setSuggestions([]);
