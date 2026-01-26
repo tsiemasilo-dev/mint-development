@@ -6,6 +6,7 @@ import EditProfileSkeleton from "../components/EditProfileSkeleton";
 import GenderSelector from "../components/GenderSelector";
 import DateOfBirthPicker from "../components/DateOfBirthPicker";
 import AddressAutocomplete from "../components/AddressAutocomplete";
+import PhoneInput from "../components/PhoneInput";
 
 const EditProfilePage = ({ onNavigate }) => {
   const { profile, setProfile, loading } = useProfile();
@@ -237,14 +238,12 @@ const EditProfilePage = ({ onNavigate }) => {
             </p>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-            <label className="text-xs uppercase tracking-wide text-slate-400">Phone number</label>
-            <input
-              type="tel"
+          <div>
+            <label className="mb-2 block text-xs uppercase tracking-wide text-slate-400">Phone number</label>
+            <PhoneInput
               value={formData.phoneNumber}
-              onChange={(e) => handleInputChange("phoneNumber", e.target.value)}
-              placeholder="Enter phone number"
-              className="mt-1 w-full border-0 bg-transparent p-0 text-base font-semibold text-slate-900 placeholder:text-slate-300 focus:outline-none focus:ring-0"
+              onChange={(value) => handleInputChange("phoneNumber", value)}
+              placeholder="Phone number"
             />
           </div>
 
