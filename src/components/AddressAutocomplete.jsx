@@ -70,7 +70,7 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "Search address" }
 
     debounceRef.current = setTimeout(() => {
       searchAddresses(inputValue);
-    }, 400);
+    }, 150);
   };
 
   const handleSelect = (address) => {
