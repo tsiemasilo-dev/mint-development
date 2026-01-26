@@ -23,6 +23,8 @@ import MintBalancePage from "./pages/MintBalancePage.jsx";
 import ActivityPage from "./pages/ActivityPage.jsx";
 import ActionsPage from "./pages/ActionsPage.jsx";
 import WithdrawPage from "./pages/WithdrawPage.jsx";
+import ProfileDetailsPage from "./pages/ProfileDetailsPage.jsx";
+import ChangePasswordPage from "./pages/ChangePasswordPage.jsx";
 
 const initialHash = window.location.hash;
 const isRecoveryMode = initialHash.includes('type=recovery');
@@ -261,6 +263,10 @@ const App = () => {
     return <EditProfilePage onNavigate={setCurrentPage} />;
   }
 
+  if (currentPage === "profileDetails") {
+    return <ProfileDetailsPage onNavigate={setCurrentPage} />;
+  }
+
   if (currentPage === "notifications") {
     return <NotificationsPage onBack={() => setCurrentPage(notificationReturnPage)} />;
   }
@@ -297,6 +303,10 @@ const App = () => {
 
   if (currentPage === "creditRepay") {
     return <CreditRepayPage />;
+  }
+
+  if (currentPage === "changePassword") {
+    return <ChangePasswordPage onNavigate={setCurrentPage} />;
   }
 
   if (currentPage === "userOnboarding") {

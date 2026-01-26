@@ -6,6 +6,11 @@ const emptyProfile = {
   firstName: "",
   lastName: "",
   avatarUrl: "",
+  phoneNumber: "",
+  dateOfBirth: "",
+  gender: "",
+  country: "",
+  city: "",
 };
 
 const buildProfile = ({ user, row }) => {
@@ -15,6 +20,11 @@ const buildProfile = ({ user, row }) => {
     firstName: row?.first_name || metadata.first_name || "",
     lastName: row?.last_name || metadata.last_name || "",
     avatarUrl: row?.avatar_url || metadata.avatar_url || "",
+    phoneNumber: row?.phone_number || metadata.phone_number || "",
+    dateOfBirth: row?.date_of_birth || metadata.date_of_birth || "",
+    gender: row?.gender || metadata.gender || "",
+    country: row?.country || metadata.country || "",
+    city: row?.city || metadata.city || "",
   };
 };
 
@@ -45,7 +55,7 @@ export const useProfile = () => {
         const user = userData.user;
         const { data: rowData, error: rowError } = await supabase
           .from("profiles")
-          .select("first_name, last_name, email, avatar_url")
+          .select("first_name, last_name, email, avatar_url, phone_number, date_of_birth, gender, country, city")
           .eq("id", user.id)
           .maybeSingle();
 

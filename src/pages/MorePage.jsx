@@ -5,35 +5,23 @@ import {
   BadgeCheck,
   Landmark,
   ReceiptText,
-  MapPin,
-  Lock,
   HelpCircle,
   Scale,
   ShieldCheck,
   LogOut,
   ChevronRight,
+  AlertCircle,
+  User,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
-import {
-  authenticateWithBiometrics,
-  disableBiometrics,
-  enableBiometrics,
-  getBiometryTypeName,
-  isBiometricsAvailable,
-  isBiometricsEnabled,
-  isNativePlatform,
-} from "../lib/biometrics";
 import ProfileSkeleton from "../components/ProfileSkeleton";
 
 const MorePage = ({ onNavigate }) => {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
   const [error, setError] = useState("");
-  const [biometricsOn, setBiometricsOn] = useState(false);
-  const [biometryType, setBiometryType] = useState(null);
-  const [isAvailable, setIsAvailable] = useState(false);
-  const [isToggling, setIsToggling] = useState(false);
-  const [userEmail, setUserEmail] = useState("");
+  const [kycVerified, setKycVerified] = useState(false);
+  const [bankLinked, setBankLinked] = useState(false);
 
   const displayName = [profile?.first_name, profile?.last_name]
     .filter(Boolean)
@@ -48,23 +36,6 @@ const MorePage = ({ onNavigate }) => {
     .map((part) => part[0])
     .join("")
     .toUpperCase();
-
-  useEffect(() => {
-    const init = async () => {
-      const { available, biometryType: type } = await isBiometricsAvailable();
-      setIsAvailable(available);
-      setBiometryType(type);
-      setBiometricsOn(isBiometricsEnabled());
-
-      if (supabase) {
-        const { data } = await supabase.auth.getUser();
-        if (data?.user?.email) {
-          setUserEmail(data.user.email);
-        }
-      }
-    };
-    init();
-  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -90,7 +61,7 @@ const MorePage = ({ onNavigate }) => {
 
         const { data: profileData, error: profileError } = await supabase
           .from("profiles")
-          .select("first_name, last_name, email, avatar_url")
+          .select("first_name, last_name, email, avatar_url, kyc_verified, bank_linked")
           .eq("id", userData.user.id)
           .single();
 
@@ -100,6 +71,8 @@ const MorePage = ({ onNavigate }) => {
 
         if (alive) {
           setProfile(profileData);
+          setKycVerified(profileData?.kyc_verified || false);
+          setBankLinked(profileData?.bank_linked || false);
           setLoading(false);
         }
       } catch (err) {
@@ -118,39 +91,6 @@ const MorePage = ({ onNavigate }) => {
     };
   }, []);
 
-  const biometryName = getBiometryTypeName(biometryType);
-
-  const handleToggle = async () => {
-    if (isToggling) return;
-
-    if (biometricsOn) {
-      disableBiometrics();
-      setBiometricsOn(false);
-      return;
-    }
-
-    if (!isNativePlatform()) {
-      window.alert("Biometrics only works in the mobile app");
-      return;
-    }
-
-    if (!userEmail) {
-      window.alert("Unable to verify your account. Please try again.");
-      return;
-    }
-
-    setIsToggling(true);
-    try {
-      await authenticateWithBiometrics(`Enable ${biometryName} for login`);
-      enableBiometrics(userEmail);
-      setBiometricsOn(true);
-    } catch (error) {
-      console.error("Failed to enable biometrics:", error);
-    } finally {
-      setIsToggling(false);
-    }
-  };
-
   const handleLogout = async () => {
     try {
       if (supabase) {
@@ -165,19 +105,14 @@ const MorePage = ({ onNavigate }) => {
 
   const menuSections = [
     [
-      { id: "profile", label: "Profile Details", icon: BadgeCheck },
-      { id: "kyc", label: "KYC Status", icon: ShieldCheck },
-      { id: "banks", label: "Linked Bank Accounts", icon: Landmark },
+      { id: "profile", label: "Profile Details", icon: User, onClick: () => onNavigate?.("profileDetails") },
       { id: "settings", label: "Settings", icon: Settings, onClick: () => onNavigate?.("settings") },
-      { id: "preferences", label: "Preferences", icon: Settings },
     ],
     [
       { id: "help", label: "Help & FAQs", icon: HelpCircle },
-      { id: "legal", label: "Legal", icon: Scale },
+      { id: "legal", label: "Legal Documentation", icon: Scale },
       { id: "privacy", label: "Privacy", icon: ShieldCheck },
-      { id: "orders", label: "My Orders", icon: ReceiptText },
-      { id: "address", label: "Address", icon: MapPin },
-      { id: "password", label: "Change Password", icon: Lock },
+      { id: "subscriptions", label: "Subscriptions", icon: ReceiptText },
       { id: "logout", label: "Log out", icon: LogOut, onClick: handleLogout },
     ],
   ];
@@ -227,7 +162,26 @@ const MorePage = ({ onNavigate }) => {
       </header>
 
       <div className="flex flex-col items-center text-center">
-        <h2 className="mt-4 text-xl font-semibold text-slate-900">{nameLabel}</h2>
+        <span
+          className={`mt-2 inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${
+            kycVerified
+              ? "bg-green-100 text-green-700"
+              : "bg-amber-100 text-amber-700"
+          }`}
+        >
+          {kycVerified ? (
+            <>
+              <ShieldCheck className="h-3 w-3" />
+              KYC Verified
+            </>
+          ) : (
+            <>
+              <AlertCircle className="h-3 w-3" />
+              KYC Not Verified
+            </>
+          )}
+        </span>
+        <h2 className="mt-3 text-xl font-semibold text-slate-900">{nameLabel}</h2>
         <p className="mt-1 text-sm text-slate-500">{usernameLabel}</p>
         <button
           type="button"
@@ -242,29 +196,57 @@ const MorePage = ({ onNavigate }) => {
         <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between gap-4">
             <div className="flex-1">
-              <h2 className="text-base font-semibold text-slate-900">
-                {biometricsOn ? `${biometryName} is on` : `Enable ${biometryName}`}
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Use {biometryName} for faster and secure login
-              </p>
+              <h2 className="text-base font-semibold text-slate-900">Required Actions</h2>
+              <p className="mt-1 text-sm text-slate-500">Complete these to unlock all features</p>
             </div>
+          </div>
+          <div className="mt-4 space-y-3">
             <button
-              onClick={handleToggle}
-              disabled={isToggling || (!isAvailable && !biometricsOn)}
-              className={`relative inline-flex h-8 w-14 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
-                biometricsOn ? "bg-green-500" : "bg-slate-300"
-              }`}
-              role="switch"
-              aria-checked={biometricsOn}
+              type="button"
+              onClick={() => onNavigate?.("actions")}
+              className="flex w-full items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-left transition hover:bg-slate-100"
             >
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-slate-600" />
+                <span className="text-sm font-medium text-slate-700">KYC Verification</span>
+              </div>
               <span
-                className={`pointer-events-none inline-block h-7 w-7 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                  biometricsOn ? "translate-x-6" : "translate-x-0"
+                className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                  kycVerified
+                    ? "bg-green-100 text-green-700"
+                    : "bg-amber-100 text-amber-700"
                 }`}
-              />
+              >
+                {kycVerified ? "Verified" : "Not Verified"}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigate?.("actions")}
+              className="flex w-full items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-left transition hover:bg-slate-100"
+            >
+              <div className="flex items-center gap-2">
+                <Landmark className="h-4 w-4 text-slate-600" />
+                <span className="text-sm font-medium text-slate-700">Bank Account</span>
+              </div>
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                  bankLinked
+                    ? "bg-green-100 text-green-700"
+                    : "bg-amber-100 text-amber-700"
+                }`}
+              >
+                {bankLinked ? "Linked" : "Not Linked"}
+              </span>
             </button>
           </div>
+          <button
+            type="button"
+            onClick={() => onNavigate?.("actions")}
+            className="mt-4 w-full rounded-full border border-slate-200 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+          >
+            View All Actions
+          </button>
         </div>
       </div>
 

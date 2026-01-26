@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { ArrowLeft, Camera } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
 import { supabase } from "../lib/supabase";
@@ -7,16 +7,33 @@ import EditProfileSkeleton from "../components/EditProfileSkeleton";
 const EditProfilePage = ({ onNavigate }) => {
   const { profile, setProfile, loading } = useProfile();
   const [isUploading, setIsUploading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [toast, setToast] = useState({ show: false, message: "", type: "" });
   const fileInputRef = useRef(null);
+
+  const [formData, setFormData] = useState({
+    phoneNumber: "",
+    dateOfBirth: "",
+    gender: "",
+    country: "",
+    city: "",
+  });
+
+  useEffect(() => {
+    if (!loading && profile) {
+      setFormData({
+        phoneNumber: profile.phoneNumber || "",
+        dateOfBirth: profile.dateOfBirth || "",
+        gender: profile.gender || "",
+        country: profile.country || "",
+        city: profile.city || "",
+      });
+    }
+  }, [loading, profile]);
 
   const displayName = loading
     ? ""
     : [profile.firstName, profile.lastName].filter(Boolean).join(" ");
-  const displayUsername = loading
-    ? ""
-    : profile.email
-      ? `@${profile.email.split("@")[0]}`
-      : "";
   const initials = displayName
     .split(" ")
     .filter(Boolean)
@@ -84,12 +101,73 @@ const EditProfilePage = ({ onNavigate }) => {
     }
   };
 
+  const handleInputChange = (field, value) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSave = async () => {
+    if (!supabase) return;
+    
+    setIsSaving(true);
+    try {
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData?.user) {
+        throw new Error("Unable to load user");
+      }
+
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({
+          phone_number: formData.phoneNumber,
+          date_of_birth: formData.dateOfBirth,
+          gender: formData.gender,
+          country: formData.country,
+          city: formData.city,
+        })
+        .eq("id", userData.user.id);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      setProfile((prev) => ({
+        ...prev,
+        phoneNumber: formData.phoneNumber,
+        dateOfBirth: formData.dateOfBirth,
+        gender: formData.gender,
+        country: formData.country,
+        city: formData.city,
+      }));
+
+      setToast({ show: true, message: "Profile updated successfully", type: "success" });
+      setTimeout(() => setToast({ show: false, message: "", type: "" }), 3000);
+    } catch (error) {
+      console.error("Failed to save profile", error);
+      setToast({ show: true, message: "Failed to update profile", type: "error" });
+      setTimeout(() => setToast({ show: false, message: "", type: "" }), 3000);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   if (loading) {
     return <EditProfileSkeleton />;
   }
 
   return (
     <div className="min-h-screen bg-white px-6 pb-10 pt-10">
+      {toast.show && (
+        <div
+          className={`fixed left-1/2 top-4 z-50 -translate-x-1/2 transform rounded-xl px-4 py-3 text-sm font-medium shadow-lg ${
+            toast.type === "success"
+              ? "bg-green-500 text-white"
+              : "bg-red-500 text-white"
+          }`}
+        >
+          {toast.message}
+        </div>
+      )}
+
       <header className="relative mb-8 flex items-center justify-center">
         <button
           type="button"
@@ -135,48 +213,98 @@ const EditProfilePage = ({ onNavigate }) => {
         <h2 className="mt-4 text-xl font-semibold text-slate-900">
           {displayName || (loading ? "" : "Not set")}
         </h2>
-        <p className="mt-1 text-sm text-slate-500">
-          {displayUsername || (loading ? "" : "Not set")}
-        </p>
       </div>
 
       <div className="mt-8 border-t border-slate-200 pt-6">
         <div className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
             <p className="text-xs uppercase tracking-wide text-slate-400">First name</p>
-            <p className="mt-1 text-base font-semibold text-slate-900">
+            <p className="mt-1 text-base font-semibold text-slate-500">
               {fieldValue(profile.firstName)}
             </p>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
             <p className="text-xs uppercase tracking-wide text-slate-400">Last name</p>
-            <p className="mt-1 text-base font-semibold text-slate-900">
+            <p className="mt-1 text-base font-semibold text-slate-500">
               {fieldValue(profile.lastName)}
             </p>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
             <p className="text-xs uppercase tracking-wide text-slate-400">Email</p>
-            <p className="mt-1 text-base font-semibold text-slate-900">
+            <p className="mt-1 text-base font-semibold text-slate-500">
               {fieldValue(profile.email)}
             </p>
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-            <p className="text-xs uppercase tracking-wide text-slate-400">Username</p>
-            <p className="mt-1 text-base font-semibold text-slate-900">
-              {fieldValue(displayUsername)}
-            </p>
+            <label className="text-xs uppercase tracking-wide text-slate-400">Phone number</label>
+            <input
+              type="tel"
+              value={formData.phoneNumber}
+              onChange={(e) => handleInputChange("phoneNumber", e.target.value)}
+              placeholder="Enter phone number"
+              className="mt-1 w-full border-0 bg-transparent p-0 text-base font-semibold text-slate-900 placeholder:text-slate-300 focus:outline-none focus:ring-0"
+            />
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+            <label className="text-xs uppercase tracking-wide text-slate-400">Date of birth</label>
+            <input
+              type="date"
+              value={formData.dateOfBirth}
+              onChange={(e) => handleInputChange("dateOfBirth", e.target.value)}
+              className="mt-1 w-full border-0 bg-transparent p-0 text-base font-semibold text-slate-900 focus:outline-none focus:ring-0"
+            />
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+            <label className="text-xs uppercase tracking-wide text-slate-400">Gender</label>
+            <select
+              value={formData.gender}
+              onChange={(e) => handleInputChange("gender", e.target.value)}
+              className="mt-1 w-full border-0 bg-transparent p-0 text-base font-semibold text-slate-900 focus:outline-none focus:ring-0"
+            >
+              <option value="">Select gender</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="other">Other</option>
+              <option value="prefer_not_to_say">Prefer not to say</option>
+            </select>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+            <label className="text-xs uppercase tracking-wide text-slate-400">Country</label>
+            <input
+              type="text"
+              value={formData.country}
+              onChange={(e) => handleInputChange("country", e.target.value)}
+              placeholder="Enter country"
+              className="mt-1 w-full border-0 bg-transparent p-0 text-base font-semibold text-slate-900 placeholder:text-slate-300 focus:outline-none focus:ring-0"
+            />
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+            <label className="text-xs uppercase tracking-wide text-slate-400">City</label>
+            <input
+              type="text"
+              value={formData.city}
+              onChange={(e) => handleInputChange("city", e.target.value)}
+              placeholder="Enter city"
+              className="mt-1 w-full border-0 bg-transparent p-0 text-base font-semibold text-slate-900 placeholder:text-slate-300 focus:outline-none focus:ring-0"
+            />
           </div>
         </div>
       </div>
 
       <button
         type="button"
-        className="mt-10 w-full rounded-full bg-slate-900 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 transition active:scale-95"
+        onClick={handleSave}
+        disabled={isSaving}
+        className="mt-10 w-full rounded-full bg-slate-900 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 transition active:scale-95 disabled:opacity-50"
       >
-        Save
+        {isSaving ? "Saving..." : "Save"}
       </button>
     </div>
   );
