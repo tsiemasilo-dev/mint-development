@@ -33,7 +33,7 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "Search address" }
     setIsLoading(true);
     try {
       const response = await fetch(
-        `https://photon.komoot.io/api/?q=${encodeURIComponent(searchQuery)}&limit=6`,
+        `https://photon.komoot.io/api/?q=${encodeURIComponent(searchQuery)}&limit=8&lat=-28.4793&lon=24.6727`,
         {
           headers: {
             "Accept-Language": "en",
@@ -56,12 +56,21 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "Search address" }
         
         return {
           displayName: parts.length > 0 ? parts.join(", ") : props.name,
+          country: props.country,
           lat: item.geometry?.coordinates?.[1],
           lon: item.geometry?.coordinates?.[0],
         };
       });
 
-      setSuggestions(addresses);
+      const sorted = addresses.sort((a, b) => {
+        const aIsSA = a.country?.toLowerCase() === "south africa";
+        const bIsSA = b.country?.toLowerCase() === "south africa";
+        if (aIsSA && !bIsSA) return -1;
+        if (!aIsSA && bIsSA) return 1;
+        return 0;
+      });
+
+      setSuggestions(sorted.slice(0, 6));
       setShowSuggestions(true);
     } catch (error) {
       console.error("Address search error:", error);
