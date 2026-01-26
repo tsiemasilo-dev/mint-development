@@ -3,6 +3,9 @@ import { ArrowLeft, Camera } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
 import { supabase } from "../lib/supabase";
 import EditProfileSkeleton from "../components/EditProfileSkeleton";
+import GenderSelector from "../components/GenderSelector";
+import DateOfBirthPicker from "../components/DateOfBirthPicker";
+import AddressAutocomplete from "../components/AddressAutocomplete";
 
 const EditProfilePage = ({ onNavigate }) => {
   const { profile, setProfile, loading } = useProfile();
@@ -15,8 +18,7 @@ const EditProfilePage = ({ onNavigate }) => {
     phoneNumber: "",
     dateOfBirth: "",
     gender: "",
-    country: "",
-    city: "",
+    address: "",
   });
 
   useEffect(() => {
@@ -25,8 +27,7 @@ const EditProfilePage = ({ onNavigate }) => {
         phoneNumber: profile.phoneNumber || "",
         dateOfBirth: profile.dateOfBirth || "",
         gender: profile.gender || "",
-        country: profile.country || "",
-        city: profile.city || "",
+        address: profile.address || "",
       });
     }
   }, [loading, profile]);
@@ -121,8 +122,7 @@ const EditProfilePage = ({ onNavigate }) => {
           phone_number: formData.phoneNumber,
           date_of_birth: formData.dateOfBirth,
           gender: formData.gender,
-          country: formData.country,
-          city: formData.city,
+          address: formData.address,
         })
         .eq("id", userData.user.id);
 
@@ -135,8 +135,7 @@ const EditProfilePage = ({ onNavigate }) => {
         phoneNumber: formData.phoneNumber,
         dateOfBirth: formData.dateOfBirth,
         gender: formData.gender,
-        country: formData.country,
-        city: formData.city,
+        address: formData.address,
       }));
 
       setToast({ show: true, message: "Profile updated successfully", type: "success" });
@@ -249,50 +248,28 @@ const EditProfilePage = ({ onNavigate }) => {
             />
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-            <label className="text-xs uppercase tracking-wide text-slate-400">Date of birth</label>
-            <input
-              type="date"
+          <div>
+            <label className="mb-2 block text-xs uppercase tracking-wide text-slate-400">Date of birth</label>
+            <DateOfBirthPicker
               value={formData.dateOfBirth}
-              onChange={(e) => handleInputChange("dateOfBirth", e.target.value)}
-              className="mt-1 w-full border-0 bg-transparent p-0 text-base font-semibold text-slate-900 focus:outline-none focus:ring-0"
+              onChange={(value) => handleInputChange("dateOfBirth", value)}
             />
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-            <label className="text-xs uppercase tracking-wide text-slate-400">Gender</label>
-            <select
+          <div>
+            <label className="mb-2 block text-xs uppercase tracking-wide text-slate-400">Gender</label>
+            <GenderSelector
               value={formData.gender}
-              onChange={(e) => handleInputChange("gender", e.target.value)}
-              className="mt-1 w-full border-0 bg-transparent p-0 text-base font-semibold text-slate-900 focus:outline-none focus:ring-0"
-            >
-              <option value="">Select gender</option>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-              <option value="other">Other</option>
-              <option value="prefer_not_to_say">Prefer not to say</option>
-            </select>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-            <label className="text-xs uppercase tracking-wide text-slate-400">Country</label>
-            <input
-              type="text"
-              value={formData.country}
-              onChange={(e) => handleInputChange("country", e.target.value)}
-              placeholder="Enter country"
-              className="mt-1 w-full border-0 bg-transparent p-0 text-base font-semibold text-slate-900 placeholder:text-slate-300 focus:outline-none focus:ring-0"
+              onChange={(value) => handleInputChange("gender", value)}
             />
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-            <label className="text-xs uppercase tracking-wide text-slate-400">City</label>
-            <input
-              type="text"
-              value={formData.city}
-              onChange={(e) => handleInputChange("city", e.target.value)}
-              placeholder="Enter city"
-              className="mt-1 w-full border-0 bg-transparent p-0 text-base font-semibold text-slate-900 placeholder:text-slate-300 focus:outline-none focus:ring-0"
+          <div>
+            <label className="mb-2 block text-xs uppercase tracking-wide text-slate-400">Address</label>
+            <AddressAutocomplete
+              value={formData.address}
+              onChange={(value) => handleInputChange("address", value)}
+              placeholder="Search for your address"
             />
           </div>
         </div>

@@ -25,6 +25,7 @@ import ActionsPage from "./pages/ActionsPage.jsx";
 import WithdrawPage from "./pages/WithdrawPage.jsx";
 import ProfileDetailsPage from "./pages/ProfileDetailsPage.jsx";
 import ChangePasswordPage from "./pages/ChangePasswordPage.jsx";
+import LegalDocumentationPage from "./pages/LegalDocumentationPage.jsx";
 
 const initialHash = window.location.hash;
 const isRecoveryMode = initialHash.includes('type=recovery');
@@ -307,6 +308,10 @@ const App = () => {
 
   if (currentPage === "changePassword") {
     return <ChangePasswordPage onNavigate={setCurrentPage} />;
+  }
+
+  if (currentPage === "legal") {
+    return <LegalDocumentationPage onNavigate={setCurrentPage} />;
   }
 
   if (currentPage === "userOnboarding") {
