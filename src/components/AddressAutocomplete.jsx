@@ -24,7 +24,7 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "Search address" }
   }, []);
 
   const searchAddresses = async (searchQuery) => {
-    if (!searchQuery || searchQuery.length < 3) {
+    if (!searchQuery || searchQuery.length < 2) {
       setSuggestions([]);
       setShowSuggestions(false);
       return;
@@ -33,7 +33,7 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "Search address" }
     setIsLoading(true);
     try {
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=5&addressdetails=1`,
+        `https://photon.komoot.io/api/?q=${encodeURIComponent(searchQuery)}&limit=6`,
         {
           headers: {
             "Accept-Language": "en",
@@ -44,11 +44,22 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "Search address" }
       if (!response.ok) throw new Error("Search failed");
 
       const data = await response.json();
-      const addresses = data.map((item) => ({
-        displayName: item.display_name,
-        lat: item.lat,
-        lon: item.lon,
-      }));
+      const addresses = data.features.map((item) => {
+        const props = item.properties;
+        const parts = [];
+        if (props.housenumber) parts.push(props.housenumber);
+        if (props.street) parts.push(props.street);
+        if (props.district) parts.push(props.district);
+        if (props.city) parts.push(props.city);
+        if (props.state) parts.push(props.state);
+        if (props.country) parts.push(props.country);
+        
+        return {
+          displayName: parts.length > 0 ? parts.join(", ") : props.name,
+          lat: item.geometry?.coordinates?.[1],
+          lon: item.geometry?.coordinates?.[0],
+        };
+      });
 
       setSuggestions(addresses);
       setShowSuggestions(true);
@@ -130,7 +141,7 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "Search address" }
         </div>
       )}
 
-      {showSuggestions && !isLoading && query.length >= 3 && suggestions.length === 0 && (
+      {showSuggestions && !isLoading && query.length >= 2 && suggestions.length === 0 && (
         <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-lg">
           <p className="text-sm text-slate-500">No addresses found</p>
         </div>
