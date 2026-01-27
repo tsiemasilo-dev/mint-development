@@ -9,7 +9,11 @@ const AppLayout = ({ activeTab, onTabChange, children }) => {
       >
         {children}
       </main>
-      <Navbar activeTab={activeTab} setActiveTab={onTabChange} />
+        <Navbar
+          activeTab={activeTab}
+          setActiveTab={onTabChange}
+          className="fixed bottom-0 left-0 w-full z-50"
+        />
     </div>
   );
 };
