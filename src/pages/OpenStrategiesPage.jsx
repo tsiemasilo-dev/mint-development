@@ -1,5 +1,5 @@
 import React, { useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ChevronRight, Search, SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, ChevronRight, Search, SlidersHorizontal, Heart, Share2 } from "lucide-react";
 import { StrategyReturnHeaderChart } from "../components/StrategyReturnHeaderChart";
 import { ChartContainer } from "../components/ui/line-charts-2";
 import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer } from "recharts";
@@ -204,6 +204,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
   const [sheetOffset, setSheetOffset] = useState(0);
   const [activeStrategy, setActiveStrategy] = useState(strategyCards[0]);
   const [selectedSectorFilter, setSelectedSectorFilter] = useState(null);
+  const [watchlist, setWatchlist] = useState(new Set());
   const carouselRef = useRef(null);
   const dragStartY = useRef(null);
   const isDragging = useRef(false);
@@ -420,6 +421,76 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
     setActiveChips((prev) => prev.filter((item) => item !== chip));
   };
 
+  const toggleWatchlist = (strategyName) => {
+    const next = new Set(watchlist);
+    if (next.has(strategyName)) {
+      next.delete(strategyName);
+    } else {
+      next.add(strategyName);
+    }
+    setWatchlist(next);
+  };
+
+  const generateShareImage = async () => {
+    if (!activeStrategy) return;
+    
+    const canvas = document.createElement('canvas');
+    canvas.width = 1080;
+    canvas.height = 1080;
+    const ctx = canvas.getContext('2d');
+    
+    // Background
+    const gradient = ctx.createLinearGradient(0, 0, 1080, 1080);
+    gradient.addColorStop(0, '#111111');
+    gradient.addColorStop(0.5, '#3b1b7a');
+    gradient.addColorStop(1, '#5b21b6');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 1080, 1080);
+    
+    // White border
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 8;
+    ctx.strokeRect(40, 40, 1000, 1000);
+    
+    // Title
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 72px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(activeStrategy.name, 540, 200);
+    
+    // Return Rate
+    ctx.font = 'bold 96px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#10b981';
+    ctx.fillText(`+${activeStrategy.returnRate}`, 540, 380);
+    
+    // Risk level
+    ctx.fillStyle = '#e5e7eb';
+    ctx.font = '48px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText(activeStrategy.risk, 540, 520);
+    
+    // Tags
+    ctx.fillStyle = '#d1d5db';
+    ctx.font = '36px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    const tagText = activeStrategy.tags.slice(0, 2).join(' • ');
+    ctx.fillText(tagText, 540, 650);
+    
+    // Min Investment
+    ctx.fillStyle = '#9ca3af';
+    ctx.font = '32px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText(activeStrategy.minimum, 540, 800);
+    
+    // Branding
+    ctx.fillStyle = '#a78bfa';
+    ctx.font = '28px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('Mint • AlgoHive', 540, 950);
+    
+    const image = canvas.toDataURL('image/png');
+    const link = document.createElement('a');
+    link.href = image;
+    link.download = `${activeStrategy.name.replace(/\s+/g, '-').toLowerCase()}-strategy.png`;
+    link.click();
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)] text-slate-900">
       <div className="mx-auto flex w-full max-w-sm flex-col px-3 pb-10 pt-12 md:max-w-md md:px-6">
@@ -439,7 +510,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
         </header>
 
         <section className="mt-6 rounded-[28px] border border-slate-100 bg-white p-5 shadow-[0_18px_40px_rgba(79,70,229,0.08)]">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-white shadow-sm ring-1 ring-slate-100">
                 <img
@@ -449,14 +520,31 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
                 />
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-semibold text-slate-900">{activeStrategy?.name || "AlgoHive Core"}</h2>
-                  <span className="rounded-full bg-violet-50 px-2.5 py-1 text-[10px] font-semibold text-violet-600">
-                    {activeStrategy?.popularity || "Popular"}
-                  </span>
-                </div>
+                <h2 className="text-lg font-semibold text-slate-900">{activeStrategy?.name || "AlgoHive Core"}</h2>
                 <p className="text-xs font-semibold text-slate-400">MI90b · JSE</p>
               </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => toggleWatchlist(activeStrategy?.name)}
+                className={`flex h-10 w-10 items-center justify-center rounded-full transition-all ${
+                  watchlist.has(activeStrategy?.name)
+                    ? "bg-rose-100 text-rose-600"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+                aria-label="Add to watchlist"
+              >
+                <Heart className="h-5 w-5" fill={watchlist.has(activeStrategy?.name) ? "currentColor" : "none"} />
+              </button>
+              <button
+                type="button"
+                onClick={generateShareImage}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition-all hover:bg-slate-200"
+                aria-label="Share strategy"
+              >
+                <Share2 className="h-5 w-5" />
+              </button>
             </div>
           </div>
 
