@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ArrowLeft, Info, Plus, Minus, Heart } from "lucide-react";
+import { ArrowLeft, Info, Plus, Minus } from "lucide-react";
 
 const companyLogos = {
   AAPL: "https://s3-symbol-logo.tradingview.com/apple--big.svg",
@@ -23,6 +23,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
   };
 
   const [amount, setAmount] = useState(currentStrategy.minimum);
+  const [agreementChecked, setAgreementChecked] = useState(false);
 
   const tickers = currentStrategy.tickers || [];
   const extraHoldings = tickers.length > 3 ? tickers.length - 3 : 0;
@@ -50,7 +51,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <h1 className="text-lg font-semibold">Amount</h1>
+          <h1 className="text-lg font-semibold">Complete Investment</h1>
         </header>
 
         {/* Strategy Card - White Background */}
@@ -123,7 +124,6 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
 
         {/* Number Input - Increment/Decrement */}
         <section className="mb-6">
-          <p className="text-xs font-semibold text-slate-600 mb-3">Investment amount</p>
           <div className="rounded-2xl border border-slate-200 bg-white p-4">
             <div className="flex items-center justify-between gap-3">
               <button
@@ -136,7 +136,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
               </button>
               
               <div className="text-center flex-1">
-                <p className="text-xs font-semibold text-slate-600 mb-1">Total Amount</p>
+                <p className="text-xs font-semibold text-slate-600 mb-1">Investment Amount</p>
                 <p className="text-3xl font-bold text-slate-900">R{amount.toLocaleString()}</p>
               </div>
 
@@ -151,6 +151,45 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
           </div>
         </section>
 
+        {/* Fee Breakdown */}
+        <section className="mb-6 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+          <h3 className="text-xs font-semibold text-slate-600 mb-3">Fee Breakdown</h3>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-slate-600">Brokerage Fee</p>
+              <p className="text-xs font-semibold text-slate-900">0.255%</p>
+            </div>
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-slate-600">Custody Fee</p>
+              <p className="text-xs font-semibold text-slate-900">0.005%</p>
+            </div>
+            <div className="flex items-center justify-between border-t border-slate-100 pt-2">
+              <p className="text-xs text-slate-600">Transaction Fee</p>
+              <p className="text-xs font-semibold text-slate-900">2.9%</p>
+            </div>
+          </div>
+        </section>
+
+        {/* Agreement Checkbox */}
+        <section className="mb-6 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={agreementChecked}
+              onChange={(e) => setAgreementChecked(e.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500 flex-shrink-0"
+            />
+            <div className="flex-1">
+              <p className="text-xs font-semibold text-slate-900">
+                I agree to Risk Disclosure, Fee Schedule & Mandate
+              </p>
+              <p className="text-xs text-slate-600 mt-1">
+                By continuing, you confirm you have reviewed and agree to all terms and conditions
+              </p>
+            </div>
+          </label>
+        </section>
+
         {/* Info */}
         <div className="mb-6 flex items-start gap-2 rounded-lg bg-violet-50 p-3">
           <Info className="h-4 w-4 flex-shrink-0 text-violet-600 mt-0.5" />
@@ -163,7 +202,8 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
         <button
           type="button"
           onClick={() => onContinue?.(amount)}
-          className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3 text-sm font-semibold text-white shadow-lg shadow-violet-200/60 hover:-translate-y-0.5 transition"
+          disabled={!agreementChecked}
+          className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3 text-sm font-semibold text-white shadow-lg shadow-violet-200/60 disabled:opacity-50 disabled:cursor-not-allowed hover:enabled:-translate-y-0.5 transition"
         >
           Continue
         </button>
