@@ -734,7 +734,10 @@ const AuthForm = ({ initialStep = 'email', onSignupComplete, onLoginComplete }) 
       }
       
       if (data?.user?.identities?.length === 0) {
-        showToast('An account with this email already exists. Please log in instead.');
+        setResetEmail(email);
+        setResetEmailSent(false);
+        showStep('forgotPassword');
+        showToast('An account with this email already exists. Reset your password to regain access.');
         setIsLoading(false);
         return;
       }
