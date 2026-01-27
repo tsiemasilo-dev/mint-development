@@ -12,11 +12,11 @@ import {
 } from "recharts";
 
 const timeframeOptions = [
-  { key: "1W", label: "1W", points: 7 },
-  { key: "1M", label: "1M", points: 30 },
-  { key: "3M", label: "3M", points: 90 },
-  { key: "6M", label: "6M", points: 180 },
-  { key: "YTD", label: "YTD", points: 120 },
+  { key: "1W", label: "1W", points: 28 },
+  { key: "1M", label: "1M", points: 120 },
+  { key: "3M", label: "3M", points: 240 },
+  { key: "6M", label: "6M", points: 480 },
+  { key: "YTD", label: "YTD", points: 360 },
 ];
 
 const buildSeries = (points, base = 2.4, timeframe = "6M") => {
@@ -105,14 +105,18 @@ const performanceMetrics = [
 
 const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-const FactsheetPage = ({ onBack }) => {
+const FactsheetPage = ({ onBack, strategy }) => {
   const [timeframe, setTimeframe] = useState("6M");
   const [activeLabel, setActiveLabel] = useState(null);
   const [selectedMetricModal, setSelectedMetricModal] = useState(null);
   const [calendarYear, setCalendarYear] = useState(2025);
   const marqueeRef = useRef(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(true);
+
+  const currentStrategy = strategy || {
+    name: "AlgoHive Core",
+    tags: ["Balanced", "Low risk", "Automated"],
+    description: "AlgoHive Core targets steady, diversified growth using an automated allocation model that adapts to changing market regimes. It aims to smooth volatility while maintaining consistent participation in upside moves, making it suitable for investors seeking a balanced, long-term portfolio anchor.",
+  };
 
   const data = useMemo(() => {
     const selected = timeframeOptions.find((option) => option.key === timeframe);
@@ -133,7 +137,7 @@ const FactsheetPage = ({ onBack }) => {
     });
   }, [calendarYear]);
 
-  // Auto-scroll marquee
+  // Auto-scroll marquee only
   useEffect(() => {
     const marquee = marqueeRef.current;
     if (!marquee) return;
@@ -143,26 +147,11 @@ const FactsheetPage = ({ onBack }) => {
       if (marquee.scrollLeft >= marquee.scrollWidth - marquee.clientWidth) {
         marquee.scrollLeft = 0;
       }
-      updateMarqueeScroll();
     };
 
     const interval = setInterval(scroll, 30);
     return () => clearInterval(interval);
   }, []);
-
-  const updateMarqueeScroll = () => {
-    const marquee = marqueeRef.current;
-    if (!marquee) return;
-    setCanScrollLeft(marquee.scrollLeft > 0);
-    setCanScrollRight(marquee.scrollLeft < marquee.scrollWidth - marquee.clientWidth - 10);
-  };
-
-  const scrollMarquee = (direction) => {
-    const marquee = marqueeRef.current;
-    if (!marquee) return;
-    marquee.scrollBy({ left: direction === "left" ? -200 : 200, behavior: "smooth" });
-    setTimeout(updateMarqueeScroll, 100);
-  };
 
   const getReturnColor = (value) => {
     if (value > 0) return "bg-emerald-50 text-emerald-600";
@@ -172,20 +161,17 @@ const FactsheetPage = ({ onBack }) => {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      <div className="mx-auto flex w-full max-w-sm flex-col px-4 pb-32 pt-10 md:max-w-md md:px-6">
-        <header className="flex items-start justify-between">
+      <div className="mx-auto flex w-full max-w-sm flex-col px-3 pb-32 pt-12 md:max-w-md md:px-6">
+        <header className="flex items-center gap-3">
           <button
             type="button"
             onClick={onBack}
             aria-label="Back"
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm flex-shrink-0"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <div className="flex flex-1 flex-col items-center gap-1 text-center">
-            <h1 className="text-lg font-semibold">AlgoHive Core Factsheet</h1>
-          </div>
-          <div className="h-10 w-10" />
+          <h1 className="flex-1 text-lg font-semibold">{currentStrategy.name} Factsheet</h1>
         </header>
 
         <section className="mt-6 rounded-3xl border border-slate-100 bg-white p-5 shadow-[0_16px_32px_rgba(15,23,42,0.08)]">
@@ -240,7 +226,7 @@ const FactsheetPage = ({ onBack }) => {
                         backgroundColor: "#ffffff",
                         border: "none",
                         borderRadius: "20px",
-                        padding: "4px 12px",
+                        padding: "3px 8px",
                         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
                       }}
                       labelStyle={{ display: "none" }}
@@ -294,15 +280,59 @@ const FactsheetPage = ({ onBack }) => {
           </div>
 
           <div className="mt-4 flex items-center gap-3 text-[11px] font-semibold text-slate-400">
-            <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
-              Balanced
-            </span>
-            <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
-              Low risk
-            </span>
-            <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
-              Automated
-            </span>
+            {currentStrategy.tags.map((tag) => (
+              <span
+                key={tag}
+                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        </section>
+
+        {/* Marquee - Daily Change */}
+        <section className="mt-6 rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-900">Daily Change</h2>
+            <p className="text-xs text-slate-500">Updated 27 Jan, 02:00 SAST</p>
+          </div>
+          <div className="relative mt-4">
+            <div
+              ref={marqueeRef}
+              className="flex gap-3 overflow-x-auto scroll-smooth pb-2 snap-x snap-mandatory"
+              style={{ scrollBehavior: "smooth", WebkitOverflowScrolling: "touch" }}
+            >
+              {holdings.map((holding) => (
+                <div
+                  key={holding.ticker}
+                  className="flex-shrink-0 w-48 rounded-2xl border border-slate-100 bg-slate-50 p-4 snap-center"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white">
+                      <img
+                        src={`https://s3-symbol-logo.tradingview.com/${holding.ticker.toLowerCase()}--big.svg`}
+                        alt={holding.ticker}
+                        className="h-full w-full object-cover"
+                        onError={(e) => {
+                          e.target.src = `https://via.placeholder.com/32?text=${holding.ticker}`;
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-slate-900">{holding.ticker}</p>
+                      <p className="text-[10px] text-slate-500">{holding.name}</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 space-y-1">
+                    <p className={`text-sm font-semibold ${holding.dailyChange > 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                      {holding.dailyChange > 0 ? "+" : ""}{holding.dailyChange.toFixed(2)}%
+                    </p>
+                    <p className="text-xs text-slate-600">{holding.weight.toFixed(2)}% weight</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 
@@ -337,10 +367,7 @@ const FactsheetPage = ({ onBack }) => {
         <section className="mt-6 rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
           <h2 className="text-sm font-semibold text-slate-900">Strategy Description</h2>
           <p className="mt-3 text-sm text-slate-600">
-            AlgoHive Core targets steady, diversified growth using an automated allocation model
-            that adapts to changing market regimes. It aims to smooth volatility while maintaining
-            consistent participation in upside moves, making it suitable for investors seeking a
-            balanced, long-term portfolio anchor.
+            {currentStrategy.description}
           </p>
         </section>
 
@@ -452,52 +479,6 @@ const FactsheetPage = ({ onBack }) => {
                 ))}
               </tbody>
             </table>
-          </div>
-        </section>
-
-        {/* Marquee - Daily Change */}
-        <section className="mt-6 rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-900">Daily Change</h2>
-            <p className="text-xs text-slate-500">Updated 27 Jan, 02:00 SAST</p>
-          </div>
-          <div className="relative mt-4">
-            <div
-              ref={marqueeRef}
-              className="flex gap-3 overflow-x-auto scroll-smooth pb-2 snap-x snap-mandatory"
-              style={{ scrollBehavior: "smooth", WebkitOverflowScrolling: "touch" }}
-              onScroll={updateMarqueeScroll}
-            >
-              {holdings.map((holding) => (
-                <div
-                  key={holding.ticker}
-                  className="flex-shrink-0 w-48 rounded-2xl border border-slate-100 bg-slate-50 p-4 snap-center"
-                >
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white">
-                      <img
-                        src={`https://s3-symbol-logo.tradingview.com/${holding.ticker.toLowerCase()}--big.svg`}
-                        alt={holding.ticker}
-                        className="h-full w-full object-cover"
-                        onError={(e) => {
-                          e.target.src = `https://via.placeholder.com/32?text=${holding.ticker}`;
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-slate-900">{holding.ticker}</p>
-                      <p className="text-[10px] text-slate-500">{holding.name}</p>
-                    </div>
-                  </div>
-                  <div className="mt-3 space-y-1">
-                    <p className={`text-sm font-semibold ${holding.dailyChange > 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                      {holding.dailyChange > 0 ? "+" : ""}{holding.dailyChange.toFixed(2)}%
-                    </p>
-                    <p className="text-xs text-slate-600">{holding.weight.toFixed(2)}% weight</p>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
         </section>
 

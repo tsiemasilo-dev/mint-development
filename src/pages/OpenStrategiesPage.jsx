@@ -536,7 +536,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
 
         <button
           type="button"
-          onClick={onOpenFactsheet}
+          onClick={() => onOpenFactsheet(activeStrategy)}
           className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-200/70"
         >
           View factsheet

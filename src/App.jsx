@@ -58,6 +58,7 @@ const App = () => {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [sessionReady, setSessionReady] = useState(false);
   const [notificationReturnPage, setNotificationReturnPage] = useState("home");
+  const [selectedStrategy, setSelectedStrategy] = useState(null);
   const recoveryHandled = useRef(false);
 
   useEffect(() => {
@@ -235,13 +236,16 @@ const App = () => {
     return (
       <OpenStrategiesPage
         onBack={() => setCurrentPage("invest")}
-        onOpenFactsheet={() => setCurrentPage("factsheet")}
+        onOpenFactsheet={(strategy) => {
+          setSelectedStrategy(strategy);
+          setCurrentPage("factsheet");
+        }}
       />
     );
   }
 
   if (currentPage === "factsheet") {
-    return <FactsheetPage onBack={() => setCurrentPage("openStrategies")} />;
+    return <FactsheetPage onBack={() => setCurrentPage("openStrategies")} strategy={selectedStrategy} />;
   }
 
   if (currentPage === "withdraw") {
