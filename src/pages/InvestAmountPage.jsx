@@ -42,19 +42,15 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
         {/* Strategy Card - Rich Preview */}
         <section className="mb-6 rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 to-slate-100 p-5 shadow-sm">
           {/* Header Section */}
-          <div className="mb-4">
-            <h2 className="text-base font-semibold text-slate-900">{currentStrategy.name}</h2>
-            <div className="flex items-baseline gap-1 mt-1">
-              <span className="text-2xl font-semibold text-emerald-600">{currentStrategy.return}</span>
-              <span className="text-xs font-semibold text-slate-600">Min. R{currentStrategy.minimum?.toLocaleString() || "2,500"}</span>
+          <div className="mb-4 flex items-start justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">{currentStrategy.name}</h2>
+              <div className="flex items-baseline gap-1 mt-1">
+                <span className="text-2xl font-semibold text-emerald-600">{currentStrategy.return}</span>
+                <span className="text-xs font-semibold text-slate-600">Min. R{currentStrategy.minimum?.toLocaleString() || "2,500"}</span>
+              </div>
             </div>
-          </div>
-
-          {/* Placeholder for Chart */}
-          <div className="mb-4 h-16 rounded-2xl border border-slate-200 bg-white flex items-center justify-center">
-            <div className="text-center">
-              <p className="text-xs text-slate-500">Chart</p>
-            </div>
+            <span className="text-3xl">🇿🇦</span>
           </div>
 
           {/* Holdings Snapshot */}
@@ -102,9 +98,9 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
         </section>
 
         {/* Info */}
-        <div className="mb-6 flex items-start gap-2 rounded-lg bg-blue-50 p-3">
-          <Info className="h-4 w-4 flex-shrink-0 text-blue-600 mt-0.5" />
-          <p className="text-xs text-blue-700">
+        <div className="mb-6 flex items-start gap-2 rounded-lg bg-violet-50 p-3">
+          <Info className="h-4 w-4 flex-shrink-0 text-violet-600 mt-0.5" />
+          <p className="text-xs text-violet-700">
             You'll be redirected to complete payment on Paystack
           </p>
         </div>
@@ -114,7 +110,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
           type="button"
           onClick={() => onContinue?.(selectedAmount)}
           disabled={!selectedAmount}
-          className="w-full rounded-2xl bg-gradient-to-r from-emerald-400 to-emerald-500 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-200/60 disabled:opacity-50 disabled:cursor-not-allowed hover:enabled:-translate-y-0.5 transition"
+          className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3 text-sm font-semibold text-white shadow-lg shadow-violet-200/60 disabled:opacity-50 disabled:cursor-not-allowed hover:enabled:-translate-y-0.5 transition"
         >
           Continue
         </button>
