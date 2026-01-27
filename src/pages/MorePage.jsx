@@ -130,8 +130,8 @@ const MorePage = ({ onNavigate }) => {
 
   const nameLabel = displayName || "Not set";
   const usernameLabel = displayUsername || "Not set";
-  const iconGradientClasses =
-    "bg-gradient-to-br from-[#3b1b7a] via-[#5b21b6] to-[#8b5cf6] text-white shadow-sm";
+  const iconColorClasses = "text-[#5b21b6]";
+
 
   return (
     <div className="min-h-screen bg-white px-6 pt-16 pb-24">
@@ -162,11 +162,10 @@ const MorePage = ({ onNavigate }) => {
 
       <div className="flex flex-col items-center text-center">
         <span
-          className={`mt-2 inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${
-            kycVerified
-              ? "bg-green-100 text-green-700"
-              : "bg-amber-100 text-amber-700"
-          }`}
+          className={`mt-2 inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${kycVerified
+            ? "bg-green-100 text-green-700"
+            : "bg-amber-100 text-amber-700"
+            }`}
         >
           {kycVerified ? (
             <>
@@ -206,17 +205,17 @@ const MorePage = ({ onNavigate }) => {
               className="flex w-full items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-left transition hover:bg-slate-100"
             >
               <div className="flex items-center gap-2">
-                <span className={`flex h-6 w-6 items-center justify-center rounded-full ${iconGradientClasses}`}>
-                  <ShieldCheck className="h-3.5 w-3.5" />
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100">
+
+                  <ShieldCheck className={`h-5 w-5 ${iconColorClasses}`} />
                 </span>
                 <span className="text-sm font-medium text-slate-700">KYC Verification</span>
               </div>
               <span
-                className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                  kycVerified
-                    ? "bg-green-100 text-green-700"
-                    : "bg-amber-100 text-amber-700"
-                }`}
+                className={`rounded-full px-2 py-0.5 text-xs font-semibold ${kycVerified
+                  ? "bg-green-100 text-green-700"
+                  : "bg-amber-100 text-amber-700"
+                  }`}
               >
                 {kycVerified ? "Verified" : "Not Verified"}
               </span>
@@ -227,17 +226,18 @@ const MorePage = ({ onNavigate }) => {
               className="flex w-full items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-left transition hover:bg-slate-100"
             >
               <div className="flex items-center gap-2">
-                <span className={`flex h-6 w-6 items-center justify-center rounded-full ${iconGradientClasses}`}>
-                  <Landmark className="h-3.5 w-3.5" />
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100">
+
+                  <Landmark className={`h-5 w-5 ${iconColorClasses}`} />
+
                 </span>
                 <span className="text-sm font-medium text-slate-700">Bank Account</span>
               </div>
               <span
-                className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                  bankLinked
-                    ? "bg-green-100 text-green-700"
-                    : "bg-amber-100 text-amber-700"
-                }`}
+                className={`rounded-full px-2 py-0.5 text-xs font-semibold ${bankLinked
+                  ? "bg-green-100 text-green-700"
+                  : "bg-amber-100 text-amber-700"
+                  }`}
               >
                 {bankLinked ? "Linked" : "Not Linked"}
               </span>
