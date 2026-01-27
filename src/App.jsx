@@ -8,6 +8,7 @@ import CreditApplyPage from "./pages/CreditApplyPage.jsx";
 import CreditRepayPage from "./pages/CreditRepayPage.jsx";
 import InvestmentsPage from "./pages/InvestmentsPage.jsx";
 import InvestPage from "./pages/InvestPage.jsx";
+import InvestAmountPage from "./pages/InvestAmountPage.jsx";
 import FactsheetPage from "./pages/FactsheetPage.jsx";
 import OpenStrategiesPage from "./pages/OpenStrategiesPage.jsx";
 import MorePage from "./pages/MorePage.jsx";
@@ -245,7 +246,30 @@ const App = () => {
   }
 
   if (currentPage === "factsheet") {
-    return <FactsheetPage onBack={() => setCurrentPage("openStrategies")} strategy={selectedStrategy} />;
+    return (
+      <FactsheetPage 
+        onBack={() => setCurrentPage("openStrategies")} 
+        strategy={selectedStrategy}
+        onOpenInvest={(strategy) => {
+          setSelectedStrategy(strategy);
+          setCurrentPage("investAmount");
+        }}
+      />
+    );
+  }
+
+  if (currentPage === "investAmount") {
+    return (
+      <InvestAmountPage
+        onBack={() => setCurrentPage("factsheet")}
+        strategy={selectedStrategy}
+        onContinue={(amount) => {
+          // Redirect to Paystack in new browser window
+          const paystackUrl = `https://checkout.paystack.com/YOUR_PUBLIC_KEY?amount=${Math.round(amount * 100)}&email=user@example.com&ref=${Date.now()}`;
+          window.open(paystackUrl, "_blank");
+        }}
+      />
+    );
   }
 
   if (currentPage === "withdraw") {

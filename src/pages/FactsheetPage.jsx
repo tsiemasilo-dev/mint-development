@@ -105,7 +105,7 @@ const performanceMetrics = [
 
 const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-const FactsheetPage = ({ onBack, strategy }) => {
+const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
   const [timeframe, setTimeframe] = useState("6M");
   const [activeLabel, setActiveLabel] = useState(null);
   const [selectedMetricModal, setSelectedMetricModal] = useState(null);
@@ -526,9 +526,10 @@ const FactsheetPage = ({ onBack, strategy }) => {
       <div className="sticky bottom-0 bg-slate-50 px-4 pb-6 pt-2">
         <button
           type="button"
+          onClick={() => onOpenInvest?.(currentStrategy)}
           className="w-full rounded-2xl bg-gradient-to-r from-[#111111] via-[#3b1b7a] to-[#5b21b6] py-3 text-sm font-semibold text-white shadow-lg shadow-violet-200/60"
         >
-          Invest in AlgoHive Core
+          Invest in {currentStrategy.name}
         </button>
       </div>
     </div>
