@@ -202,6 +202,9 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
   const [draftTimeHorizon, setDraftTimeHorizon] = useState(new Set());
   const [draftSectors, setDraftSectors] = useState(new Set());
   const [sheetOffset, setSheetOffset] = useState(0);
+  const [activeStrategy, setActiveStrategy] = useState(strategyCards[0]);
+  const [selectedSectorFilter, setSelectedSectorFilter] = useState(null);
+  const carouselRef = useRef(null);
   const dragStartY = useRef(null);
   const isDragging = useRef(false);
   const series = [
@@ -265,6 +268,9 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
       const matchesSector = selectedSectors.size
         ? strategy.sectors.some((sector) => selectedSectors.has(sector))
         : true;
+      const matchesSectorFilter = selectedSectorFilter
+        ? strategy.sectors.includes(selectedSectorFilter)
+        : true;
 
       return (
         matchesName &&
@@ -273,7 +279,8 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
         matchesMinInvestment &&
         matchesExposure &&
         matchesTimeHorizon &&
-        matchesSector
+        matchesSector &&
+        matchesSectorFilter
       );
     });
 
@@ -294,6 +301,13 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
       sorted.sort((a, b) => b.popularityScore - a.popularityScore);
     }
 
+    // Set active strategy to first filtered result if current is filtered out
+    if (sorted.length > 0 && !sorted.includes(activeStrategy)) {
+      setActiveStrategy(sorted[0]);
+    } else if (sorted.length === 0 && activeStrategy) {
+      setActiveStrategy(null);
+    }
+
     return sorted;
   }, [
     normalizedQuery,
@@ -304,6 +318,8 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
     selectedTimeHorizon,
     selectedSectors,
     selectedSort,
+    selectedSectorFilter,
+    activeStrategy,
   ]);
 
   const applyFilters = () => {
@@ -434,9 +450,9 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-semibold text-slate-900">AlgoHive Core</h2>
+                  <h2 className="text-lg font-semibold text-slate-900">{activeStrategy?.name || "AlgoHive Core"}</h2>
                   <span className="rounded-full bg-violet-50 px-2.5 py-1 text-[10px] font-semibold text-violet-600">
-                    Popular
+                    {activeStrategy?.popularity || "Popular"}
                   </span>
                 </div>
                 <p className="text-xs font-semibold text-slate-400">MI90b · JSE</p>
@@ -446,9 +462,9 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
 
           <div className="mt-4 space-y-1">
             <div className="flex items-center gap-3">
-              <p className="text-2xl font-semibold text-slate-900">{formattedReturn}</p>
+              <p className="text-2xl font-semibold text-slate-900">{`+${activeStrategy?.returnRate || "6.7%"}`}</p>
               <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-600">
-                All time gain {formattedAllTimeReturn}
+                All time gain {`+${activeStrategy?.returnScore?.toFixed(1) || "6.7"}%`}
               </span>
             </div>
             <p className="text-xs text-slate-400">Last updated 2h ago</p>
@@ -462,13 +478,13 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
           </div>
 
           <div className="mt-3 grid grid-cols-3 items-center text-[11px] font-semibold text-slate-400">
-            <span className="text-left">Max DD: 6.2%</span>
-            <span className="text-center">Volatility: Low</span>
+            <span className="text-left">Max DD: {activeStrategy?.maxDrawdownScore?.toFixed(1)}%</span>
+            <span className="text-center">Volatility: {activeStrategy?.volatilityScore <= 3 ? "Low" : activeStrategy?.volatilityScore <= 5 ? "Medium" : "High"}</span>
             <span className="text-right">Fees: 20%</span>
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
-            {["Balanced", "Low risk", "Automated"].map((tag) => (
+            {(activeStrategy?.tags || ["Balanced", "Low risk", "Automated"]).map((tag) => (
               <span
                 key={tag}
                 className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600"
@@ -570,7 +586,29 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
         </div>
 
         <section className="mt-6 space-y-3">
-          <h2 className="text-sm font-semibold text-slate-900">Other strategies</h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-slate-900">View by Sector</h2>
+            <div className="relative">
+              <select
+                value={selectedSectorFilter || ""}
+                onChange={(e) => setSelectedSectorFilter(e.target.value || null)}
+                className="appearance-none rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 pr-7 cursor-pointer hover:border-slate-300"
+              >
+                <option value="">All Sectors</option>
+                {sectorOptions.map((sector) => (
+                  <option key={sector} value={sector}>
+                    {sector}
+                  </option>
+                ))}
+              </select>
+              <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-slate-400">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                </svg>
+              </div>
+            </div>
+          </div>
+
           {filteredStrategies.length === 0 ? (
             <div className="rounded-2xl border border-slate-100 bg-white p-6 text-center shadow-sm">
               <p className="text-sm font-semibold text-slate-700">
@@ -585,67 +623,71 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
               </button>
             </div>
           ) : (
-            filteredStrategies.map((strategy) => (
-              <div
-                key={strategy.name}
-                className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-                role="button"
-                tabIndex={0}
-                onClick={onOpenFactsheet}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    onOpenFactsheet?.();
-                  }
-                }}
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-1">
-                    <p className="text-sm font-semibold text-slate-900">{strategy.name}</p>
-                    <div>
-                      <p className="text-xs font-semibold text-emerald-500">
-                        +{strategy.returnRate}
-                      </p>
-                      <p className="text-[11px] text-slate-400">{strategy.minimum}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center rounded-xl bg-slate-50 px-2">
-                    <StrategyMiniChart values={strategy.sparkline} />
-                  </div>
-                </div>
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {strategy.tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-
-                <div className="mt-3 flex items-center gap-3">
-                  <div className="flex -space-x-2">
-                    {holdingsSnapshot.map((company) => (
-                      <div
-                        key={`${strategy.name}-${company.name}`}
-                        className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-sm"
-                      >
-                        <img
-                          src={company.src}
-                          alt={company.name}
-                          className="h-full w-full object-cover"
-                        />
+            <div
+              ref={carouselRef}
+              className="flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth pb-2"
+              style={{ scrollBehavior: "smooth", WebkitOverflowScrolling: "touch" }}
+            >
+              {filteredStrategies.map((strategy) => (
+                <button
+                  key={strategy.name}
+                  type="button"
+                  onClick={() => setActiveStrategy(strategy)}
+                  className={`flex-shrink-0 w-72 rounded-2xl border p-4 transition-all snap-center ${
+                    activeStrategy?.name === strategy.name
+                      ? "border-violet-400 bg-white shadow-md ring-1 ring-violet-200"
+                      : "border-slate-100 bg-white shadow-sm hover:shadow-md hover:border-slate-200"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="text-left space-y-1">
+                      <p className="text-sm font-semibold text-slate-900">{strategy.name}</p>
+                      <div>
+                        <p className="text-xs font-semibold text-emerald-500">
+                          +{strategy.returnRate}
+                        </p>
+                        <p className="text-[11px] text-slate-400">{strategy.minimum}</p>
                       </div>
-                    ))}
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500">
-                      +3
+                    </div>
+                    <div className="flex items-center rounded-xl bg-slate-50 px-2">
+                      <StrategyMiniChart values={strategy.sparkline} />
                     </div>
                   </div>
-                  <span className="text-xs font-semibold text-slate-500">Holdings snapshot</span>
-                </div>
-              </div>
-            ))
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {strategy.tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="mt-3 flex items-center gap-3">
+                    <div className="flex -space-x-2">
+                      {holdingsSnapshot.map((company) => (
+                        <div
+                          key={`${strategy.name}-${company.name}`}
+                          className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-sm"
+                        >
+                          <img
+                            src={company.src}
+                            alt={company.name}
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                      ))}
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500">
+                        +3
+                      </div>
+                    </div>
+                    <span className="text-xs font-semibold text-slate-500">Holdings snapshot</span>
+                  </div>
+                </button>
+              ))}
+            </div>
           )}
         </section>
       </div>
