@@ -195,7 +195,7 @@ const FactsheetPage = ({ onBack }) => {
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart
                 data={data}
-                margin={{ top: 12, right: 16, left: 8, bottom: 24 }}
+                margin={{ top: 12, right: 16, left: 8, bottom: 28 }}
                 onMouseMove={(state) => {
                   if (state?.activeLabel) {
                     setActiveLabel(state.activeLabel);
@@ -232,9 +232,10 @@ const FactsheetPage = ({ onBack }) => {
                 ) : null}
                 <XAxis
                   dataKey="dateLabel"
-                  tick={{ fontSize: 11, fill: "#94a3b8" }}
-                  axisLine={false}
+                  tick={{ fontSize: 12, fill: "#64748b" }}
+                  axisLine={{ stroke: "#e2e8f0" }}
                   tickLine={false}
+                  height={24}
                 />
                 <YAxis hide />
                 <Area
@@ -353,40 +354,85 @@ const FactsheetPage = ({ onBack }) => {
 
         {/* Calendar Returns */}
         <section className="mt-6 rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-4 mb-4">
             <h2 className="text-sm font-semibold text-slate-900">Calendar Returns</h2>
-            <select
-              value={calendarYear}
-              onChange={(e) => setCalendarYear(Number(e.target.value))}
-              className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700"
-            >
-              {Object.keys(monthlyReturns).map((year) => (
-                <option key={year} value={Number(year)}>
-                  {year}
-                </option>
-              ))}
-            </select>
           </div>
-          <div className="mt-4 space-y-2">
-            {calendarData.map((data, index) => (
-              <div key={index} className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
-                <div>
-                  <p className="text-xs font-semibold text-slate-600">{monthNames[index]}</p>
-                  <p className={`text-xs font-semibold ${data.return > 0 ? "text-emerald-600" : data.return < 0 ? "text-rose-600" : "text-slate-600"}`}>
-                    {data.return > 0 ? "+" : ""}{data.return.toFixed(2)}%
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-slate-500">YTD</p>
-                  <p className="text-xs font-semibold text-slate-900">
-                    {data.cumulative > 0 ? "+" : ""}{data.cumulative.toFixed(2)}%
-                  </p>
-                </div>
-                <div className={`rounded-lg px-2 py-1 text-xs font-semibold ${getReturnColor(data.return)}`}>
-                  {data.return > 0 ? "📈" : data.return < 0 ? "📉" : "➡️"}
-                </div>
+          
+          <div className="flex flex-col gap-3 mb-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-slate-600">Year:</span>
+                <select
+                  value={calendarYear}
+                  onChange={(e) => setCalendarYear(Number(e.target.value))}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700"
+                >
+                  <option value="all">All Years</option>
+                  {Object.keys(monthlyReturns).map((year) => (
+                    <option key={year} value={Number(year)}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
               </div>
-            ))}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-slate-600">Months:</span>
+                <select className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">
+                  <option>All Months</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto -mx-5 px-5">
+            <table className="w-full min-w-full border-collapse text-xs">
+              <thead>
+                <tr>
+                  <th className="sticky left-0 bg-white p-2 text-left font-semibold text-slate-900 border border-slate-100"></th>
+                  {monthNames.map((month) => (
+                    <th key={month} className="p-2 text-center font-semibold text-slate-900 border border-slate-100 min-w-16">
+                      {month}
+                    </th>
+                  ))}
+                  <th className="p-2 text-center font-semibold text-slate-900 border border-slate-100 min-w-16 bg-emerald-50">
+                    YTD
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(monthlyReturns).map(([year, returns]) => (
+                  <tr key={year}>
+                    <td className="sticky left-0 bg-white p-2 font-semibold text-slate-900 border border-slate-100">
+                      {year}
+                    </td>
+                    {Array.from({ length: 12 }).map((_, idx) => {
+                      const value = returns[idx];
+                      let bgColor = "bg-slate-50";
+                      let textColor = "text-slate-900";
+                      
+                      if (value !== undefined) {
+                        bgColor = value > 0 ? "bg-emerald-100" : value < 0 ? "bg-rose-100" : "bg-slate-50";
+                        textColor = value > 0 ? "text-emerald-700" : value < 0 ? "text-rose-700" : "text-slate-700";
+                      }
+                      
+                      return (
+                        <td
+                          key={`${year}-${idx}`}
+                          className={`p-2 text-center font-semibold border border-slate-100 min-w-16 ${bgColor} ${textColor}`}
+                        >
+                          {value !== undefined ? `${value > 0 ? "+" : ""}${value.toFixed(2)}%` : "—"}
+                        </td>
+                      );
+                    })}
+                    <td className={`p-2 text-center font-semibold border border-slate-100 min-w-16 ${calendarData[calendarData.length - 1]?.cumulative > 0 ? "bg-emerald-100 text-emerald-700" : "bg-slate-50 text-slate-900"}`}>
+                      {calendarYear === "all" || Number(calendarYear) === Number(year)
+                        ? `+${calendarData[calendarData.length - 1]?.cumulative.toFixed(2)}%`
+                        : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </section>
 
@@ -424,11 +470,11 @@ const FactsheetPage = ({ onBack }) => {
                       <p className="text-[10px] text-slate-500">{holding.name}</p>
                     </div>
                   </div>
-                  <div className="mt-3 flex items-center justify-between">
-                    <p className="text-xs text-slate-600">{holding.weight.toFixed(2)}% weight</p>
+                  <div className="mt-3 space-y-1">
                     <p className={`text-sm font-semibold ${holding.dailyChange > 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                      {holding.dailyChange > 0 ? "📈" : "📉"} {holding.dailyChange > 0 ? "+" : ""}{holding.dailyChange.toFixed(2)}%
+                      {holding.dailyChange > 0 ? "+" : ""}{holding.dailyChange.toFixed(2)}%
                     </p>
+                    <p className="text-xs text-slate-600">{holding.weight.toFixed(2)}% weight</p>
                   </div>
                 </div>
               ))}
