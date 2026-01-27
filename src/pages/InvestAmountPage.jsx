@@ -1,9 +1,7 @@
 import React, { useState } from "react";
-import { ArrowLeft, Info } from "lucide-react";
+import { ArrowLeft, Info, Plus, Minus } from "lucide-react";
 
 const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
-  const [selectedAmount, setSelectedAmount] = useState(null);
-
   const currentStrategy = strategy || {
     name: "Strategy",
     return: "+8.7%",
@@ -12,16 +10,20 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
     description: "",
   };
 
-  // Preset investment amounts based on minimum
-  const presetAmounts = [
-    currentStrategy.minimum,
-    currentStrategy.minimum * 2,
-    currentStrategy.minimum * 5,
-    currentStrategy.minimum * 10,
-  ];
+  const [amount, setAmount] = useState(currentStrategy.minimum);
 
   const tickers = currentStrategy.tickers || [];
   const extraHoldings = tickers.length > 3 ? tickers.length - 3 : 0;
+
+  const handleIncrement = () => {
+    setAmount(amount + currentStrategy.minimum);
+  };
+
+  const handleDecrement = () => {
+    if (amount > currentStrategy.minimum) {
+      setAmount(amount - currentStrategy.minimum);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 pb-8 text-slate-900">
@@ -39,33 +41,43 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
           <h1 className="flex-1 text-lg font-semibold">Amount</h1>
         </header>
 
-        {/* Strategy Card - Rich Preview */}
-        <section className="mb-6 rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 to-slate-100 p-5 shadow-sm">
-          {/* Header Section */}
-          <div className="mb-4 flex items-start justify-between">
-            <div>
+        {/* Strategy Card - White Background */}
+        <section className="mb-6 rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+          {/* Header Section with Flag Logo */}
+          <div className="mb-4 flex items-start gap-3">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-slate-100">
+              <span className="text-lg">🇿🇦</span>
+            </div>
+            <div className="flex-1">
               <h2 className="text-base font-semibold text-slate-900">{currentStrategy.name}</h2>
-              <div className="flex items-baseline gap-1 mt-1">
-                <span className="text-2xl font-semibold text-emerald-600">{currentStrategy.return}</span>
+              <div className="flex items-baseline gap-2 mt-1">
+                <span className="text-xl font-semibold text-emerald-600">{currentStrategy.return}</span>
                 <span className="text-xs font-semibold text-slate-600">Min. R{currentStrategy.minimum?.toLocaleString() || "2,500"}</span>
               </div>
             </div>
-            <span className="text-3xl">🇿🇦</span>
           </div>
 
-          {/* Holdings Snapshot */}
-          <div className="flex items-center justify-between pt-3 border-t border-slate-200">
-            <div className="flex items-center -space-x-3">
-              {tickers.slice(0, 3).map((ticker, idx) => (
+          {/* Holdings Snapshot with Logos */}
+          <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+            <div className="flex items-center -space-x-2">
+              {tickers.slice(0, 3).map((ticker) => (
                 <div
                   key={ticker}
-                  className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-slate-100 bg-gradient-to-r from-slate-300 to-slate-400 text-white text-[10px] font-bold"
+                  className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-slate-100 overflow-hidden flex-shrink-0"
                 >
-                  {ticker.charAt(0)}
+                  <img
+                    src={`https://s3-symbol-logo.tradingview.com/${ticker.toLowerCase()}--big.svg`}
+                    alt={ticker}
+                    className="h-full w-full object-cover"
+                    onError={(e) => {
+                      e.target.style.display = "none";
+                      e.target.parentElement.textContent = ticker.charAt(0);
+                    }}
+                  />
                 </div>
               ))}
               {extraHoldings > 0 && (
-                <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-slate-100 bg-slate-400 text-white text-[10px] font-bold">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-slate-300 text-white text-[10px] font-bold flex-shrink-0">
                   +{extraHoldings}
                 </div>
               )}
@@ -74,26 +86,33 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
           </div>
         </section>
 
-        {/* Amount Selection */}
+        {/* Number Input - Increment/Decrement */}
         <section className="mb-6">
-          <p className="text-xs font-semibold text-slate-600 mb-3">Select investment amount</p>
-          <div className="grid grid-cols-2 gap-3">
-            {presetAmounts.map((amount) => (
+          <p className="text-xs font-semibold text-slate-600 mb-3">Investment amount</p>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <div className="flex items-center justify-between gap-3">
               <button
-                key={amount}
                 type="button"
-                onClick={() => setSelectedAmount(amount)}
-                className={`rounded-2xl border-2 py-4 px-3 text-center transition ${
-                  selectedAmount === amount
-                    ? "border-violet-600 bg-violet-50"
-                    : "border-slate-200 bg-white hover:border-slate-300"
-                }`}
+                onClick={handleDecrement}
+                disabled={amount <= currentStrategy.minimum}
+                className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:enabled:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition"
               >
-                <p className={`text-sm font-semibold ${selectedAmount === amount ? "text-violet-700" : "text-slate-900"}`}>
-                  R{amount?.toLocaleString() || "0"}
-                </p>
+                <Minus className="h-5 w-5" />
               </button>
-            ))}
+              
+              <div className="text-center flex-1">
+                <p className="text-xs font-semibold text-slate-600 mb-1">Total Amount</p>
+                <p className="text-3xl font-bold text-slate-900">R{amount.toLocaleString()}</p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleIncrement}
+                className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] text-white hover:shadow-lg transition"
+              >
+                <Plus className="h-5 w-5" />
+              </button>
+            </div>
           </div>
         </section>
 
@@ -108,9 +127,8 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
         {/* Continue Button */}
         <button
           type="button"
-          onClick={() => onContinue?.(selectedAmount)}
-          disabled={!selectedAmount}
-          className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3 text-sm font-semibold text-white shadow-lg shadow-violet-200/60 disabled:opacity-50 disabled:cursor-not-allowed hover:enabled:-translate-y-0.5 transition"
+          onClick={() => onContinue?.(amount)}
+          className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3 text-sm font-semibold text-white shadow-lg shadow-violet-200/60 hover:-translate-y-0.5 transition"
         >
           Continue
         </button>
