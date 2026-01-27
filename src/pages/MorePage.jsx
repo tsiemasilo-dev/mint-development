@@ -267,8 +267,8 @@ const MorePage = ({ onNavigate }) => {
                     className="flex w-full items-center justify-between rounded-2xl px-2 py-3 text-left text-slate-700 transition hover:bg-slate-50 active:scale-[0.99]"
                   >
                     <div className="flex items-center gap-3">
-                      <span className={`flex h-10 w-10 items-center justify-center rounded-full ${iconGradientClasses}`}>
-                        <Icon className="h-5 w-5" />
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100">
+                        <Icon className={`h-5 w-5 ${iconColorClasses}`} />
                       </span>
                       <span className="text-base font-medium text-slate-800">{item.label}</span>
                     </div>
