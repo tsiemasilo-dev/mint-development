@@ -103,25 +103,6 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
           </div>
         </section>
 
-        {/* Fee Breakdown */}
-        <section className="mb-6 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-          <h3 className="text-xs font-semibold text-slate-600 mb-3">Fee Breakdown</h3>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-slate-600">Brokerage Fee</p>
-              <p className="text-xs font-semibold text-slate-900">0.255%</p>
-            </div>
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-slate-600">Custody Fee</p>
-              <p className="text-xs font-semibold text-slate-900">0.005%</p>
-            </div>
-            <div className="flex items-center justify-between border-t border-slate-100 pt-2">
-              <p className="text-xs text-slate-600">Transaction Fee</p>
-              <p className="text-xs font-semibold text-slate-900">2.9%</p>
-            </div>
-          </div>
-        </section>
-
         {/* Number Input - Increment/Decrement */}
         <section className="mb-6">
           <div className="rounded-2xl border border-slate-200 bg-white p-4">
