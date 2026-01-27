@@ -21,27 +21,45 @@ const timeframeOptions = [
 
 const buildSeries = (points, base = 2.4, timeframe = "6M") => {
   const now = new Date();
+  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  
   return Array.from({ length: points }, (_, index) => {
     const drift = (index / points) * 3.2;
     const wave = Math.sin(index / 7) * 0.6 + Math.cos(index / 11) * 0.4;
     const value = base + drift + wave;
 
     let dateLabel = "";
+    let showLabel = false;
+
+    // Calculate which indices should show labels (max 3 labels)
+    const labelIndices = [0, Math.floor(points / 2), points - 1];
+
     if (timeframe === "1W") {
       const date = new Date(now);
       date.setDate(date.getDate() - (points - index - 1));
-      dateLabel = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][date.getDay()];
+      if (labelIndices.includes(index)) {
+        dateLabel = `${dayNames[date.getDay()]} ${date.getDate()}`;
+        showLabel = true;
+      }
     } else if (timeframe === "1M") {
-      dateLabel = `${index + 1}`;
-    } else if (timeframe === "3M" || timeframe === "6M") {
-      dateLabel = index % 15 === 0 ? monthNames[Math.floor((index / points) * 12) % 12] : "";
-    } else if (timeframe === "YTD") {
-      dateLabel = index % 10 === 0 ? monthNames[Math.floor((index / points) * 12) % 12] : "";
+      const date = new Date(now);
+      date.setDate(date.getDate() - (points - index - 1));
+      if (labelIndices.includes(index)) {
+        dateLabel = `${date.getDate()}`;
+        showLabel = true;
+      }
+    } else {
+      // For 3M, 6M, YTD - show month abbreviations at key points
+      const monthIndex = Math.floor((index / points) * 12);
+      if (labelIndices.includes(index)) {
+        dateLabel = monthNames[monthIndex % 12];
+        showLabel = true;
+      }
     }
 
     return {
       label: index + 1,
-      dateLabel,
+      dateLabel: showLabel ? dateLabel : "",
       returnPct: Number(value.toFixed(2)),
     };
   });
@@ -166,7 +184,6 @@ const FactsheetPage = ({ onBack }) => {
           </button>
           <div className="flex flex-1 flex-col items-center gap-1 text-center">
             <h1 className="text-lg font-semibold">AlgoHive Core Factsheet</h1>
-            <p className="text-xs font-semibold text-slate-500">Balanced • Automated</p>
           </div>
           <div className="h-10 w-10" />
         </header>
@@ -220,13 +237,15 @@ const FactsheetPage = ({ onBack }) => {
                     />
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: "#1e293b",
-                        border: "1px solid #475569",
-                        borderRadius: "12px",
-                        padding: "8px 12px",
+                        backgroundColor: "#ffffff",
+                        border: "none",
+                        borderRadius: "20px",
+                        padding: "4px 12px",
+                        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
                       }}
-                      labelStyle={{ color: "#e2e8f0" }}
+                      labelStyle={{ display: "none" }}
                       formatter={(value) => [`${value.toFixed(2)}%`, "Return"]}
+                      cursor={{ strokeDasharray: "3 3" }}
                     />
                   </>
                 ) : null}
