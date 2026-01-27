@@ -67,10 +67,10 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
             </div>
             <div className="flex-1">
               <h2 className="text-base font-semibold text-slate-900">{currentStrategy.name}</h2>
-              <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-xl font-semibold text-emerald-600">{currentStrategy.return}</span>
-                <span className="text-xs font-semibold text-slate-600">Min. R{currentStrategy.minimum?.toLocaleString() || "2,500"}</span>
-              </div>
+              <p className="text-xs text-slate-600 mt-2">
+                {currentStrategy.description?.split('.')[0] || "Investment strategy"}
+              </p>
+              <p className="text-xs font-semibold text-slate-600 mt-1">Min. R{currentStrategy.minimum?.toLocaleString() || "2,500"}</p>
             </div>
           </div>
 
