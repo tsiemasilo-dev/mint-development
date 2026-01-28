@@ -280,10 +280,14 @@ export const useNotificationsContext = () => {
 };
 
 export const createWelcomeNotification = async (userId) => {
-  if (!supabase || !userId) return;
+  console.log("createWelcomeNotification called with userId:", userId);
+  if (!supabase || !userId) {
+    console.log("createWelcomeNotification: supabase or userId missing", { supabase: !!supabase, userId });
+    return;
+  }
 
   try {
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
       .from("notifications")
       .select("id")
       .eq("user_id", userId)
@@ -291,17 +295,27 @@ export const createWelcomeNotification = async (userId) => {
       .ilike("title", "%Welcome%")
       .limit(1);
 
-    if (existing && existing.length > 0) {
+    console.log("Existing welcome notifications check:", { existing, error: existingError });
+
+    if (existingError) {
+      console.error("Error checking existing notifications:", existingError);
       return;
     }
 
-    await supabase.from("notifications").insert({
+    if (existing && existing.length > 0) {
+      console.log("Welcome notification already exists, skipping");
+      return;
+    }
+
+    const { data: insertData, error: insertError } = await supabase.from("notifications").insert({
       user_id: userId,
       title: "Welcome to Mint!",
       body: "We're excited to have you on board. Start by completing your profile and exploring your investment options.",
       type: "system",
       payload: { action: "complete_profile" },
-    });
+    }).select();
+
+    console.log("Welcome notification insert result:", { data: insertData, error: insertError });
   } catch (err) {
     console.error("Error creating welcome notification:", err);
   }
