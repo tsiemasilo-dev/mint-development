@@ -1,7 +1,7 @@
 import React from "react";
-import { Bell } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
 import InvestmentsSkeleton from "../components/InvestmentsSkeleton";
+import NotificationBell from "../components/NotificationBell";
 
 const InvestmentsPage = ({ onOpenNotifications }) => {
   const { profile, loading } = useProfile();
@@ -36,14 +36,7 @@ const InvestmentsPage = ({ onOpenNotifications }) => {
                 </div>
               )}
             </div>
-            <button
-              aria-label="Notifications"
-              type="button"
-              onClick={onOpenNotifications}
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-white/10 text-white backdrop-blur-md"
-            >
-              <Bell className="h-5 w-5" />
-            </button>
+            <NotificationBell onClick={onOpenNotifications} />
           </header>
 
           <section className="glass-card p-5 text-white">

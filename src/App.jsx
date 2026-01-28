@@ -20,7 +20,9 @@ import AppLayout from "./layouts/AppLayout.jsx";
 import BiometricsDebugPage from "./pages/BiometricsDebugPage.jsx";
 import EditProfilePage from "./pages/EditProfilePage.jsx";
 import NotificationsPage from "./pages/NotificationsPage.jsx";
+import NotificationSettingsPage from "./pages/NotificationSettingsPage.jsx";
 import MintBalancePage from "./pages/MintBalancePage.jsx";
+import { NotificationsProvider, createWelcomeNotification } from "./lib/NotificationsContext.jsx";
 import ActivityPage from "./pages/ActivityPage.jsx";
 import ActionsPage from "./pages/ActionsPage.jsx";
 import WithdrawPage from "./pages/WithdrawPage.jsx";
@@ -309,7 +311,16 @@ const App = () => {
   }
 
   if (currentPage === "notifications") {
-    return <NotificationsPage onBack={() => setCurrentPage(notificationReturnPage)} />;
+    return (
+      <NotificationsPage
+        onBack={() => setCurrentPage(notificationReturnPage)}
+        onOpenSettings={() => setCurrentPage("notificationSettings")}
+      />
+    );
+  }
+
+  if (currentPage === "notificationSettings") {
+    return <NotificationSettingsPage onBack={() => setCurrentPage("notifications")} />;
   }
 
   if (currentPage === "mintBalance") {
@@ -358,11 +369,31 @@ const App = () => {
     return <UserOnboardingPage onComplete={() => setCurrentPage("home")} />;
   }
 
+  const handleSignupComplete = async () => {
+    if (supabase) {
+      const { data: userData } = await supabase.auth.getUser();
+      if (userData?.user) {
+        await createWelcomeNotification(userData.user.id);
+      }
+    }
+    setCurrentPage("userOnboarding");
+  };
+
+  const handleLoginComplete = async () => {
+    if (supabase) {
+      const { data: userData } = await supabase.auth.getUser();
+      if (userData?.user) {
+        await createWelcomeNotification(userData.user.id);
+      }
+    }
+    setCurrentPage("home");
+  };
+
   return (
     <AuthPage
       initialStep={authStep}
-      onSignupComplete={() => setCurrentPage("userOnboarding")}
-      onLoginComplete={() => setCurrentPage("home")}
+      onSignupComplete={handleSignupComplete}
+      onLoginComplete={handleLoginComplete}
     />
   );
 };

@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { Bell } from "lucide-react";
 import CreditMetricCard from "../components/credit/CreditMetricCard.jsx";
 import CreditActionGrid from "../components/credit/CreditActionGrid.jsx";
 import CreditScorePage from "./CreditScorePage.jsx";
 import { useProfile } from "../lib/useProfile";
 import CreditSkeleton from "../components/CreditSkeleton";
+import NotificationBell from "../components/NotificationBell";
 
 const creditOverview = {
   availableCredit: "R25,000",
@@ -68,14 +68,7 @@ const CreditPage = ({ onOpenNotifications }) => {
                 </div>
               )}
             </div>
-            <button
-              aria-label="Notifications"
-              type="button"
-              onClick={onOpenNotifications}
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-white/10 text-white backdrop-blur-md"
-            >
-              <Bell className="h-5 w-5" />
-            </button>
+            <NotificationBell onClick={onOpenNotifications} />
           </header>
 
           <section className="rounded-3xl bg-white/10 p-5 shadow-sm backdrop-blur">

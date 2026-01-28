@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import {
   ArrowDownToLine,
   BadgeCheck,
-  Bell,
   FileSignature,
   HandCoins,
   Landmark,
@@ -17,6 +16,7 @@ import HomeSkeleton from "../components/HomeSkeleton";
 import MintBalanceCard from "../components/MintBalanceCard";
 import OutstandingActionsSection from "../components/OutstandingActionsSection";
 import TransactionHistorySection from "../components/TransactionHistorySection";
+import NotificationBell from "../components/NotificationBell";
 
 const HomePage = ({
   onOpenNotifications,
@@ -191,14 +191,7 @@ const HomePage = ({
                 </div>
               )}
             </div>
-            <button
-              aria-label="Notifications"
-              type="button"
-              onClick={onOpenNotifications}
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-white/10 text-white backdrop-blur-md"
-            >
-              <Bell className="h-5 w-5" />
-            </button>
+            <NotificationBell onClick={onOpenNotifications} />
           </header>
 
           <MintBalanceCard
