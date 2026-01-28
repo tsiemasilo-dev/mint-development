@@ -207,20 +207,21 @@ const NotificationSettingsPage = ({ onBack }) => {
                 <p className="text-xs text-slate-500">Enable or disable all at once</p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={toggleAll}
-              className={`relative h-7 w-12 rounded-full transition-colors ${
-                allEnabled ? "bg-emerald-500" : "bg-slate-300"
-              }`}
-              aria-label="Toggle all notifications"
-            >
-              <span
-                className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${
-                  allEnabled ? "translate-x-5" : "translate-x-0.5"
-                }`}
+            <label className="switch cursor-pointer relative flex w-[6.7rem] scale-75 overflow-hidden p-2">
+              <input 
+                type="checkbox" 
+                checked={allEnabled}
+                onChange={toggleAll}
+                className="peer hidden" 
               />
-            </button>
+              <div className="absolute -right-[6.5rem] z-[1] flex h-12 w-24 skew-x-12 items-center justify-center text-lg font-semibold text-white duration-500 peer-checked:right-1">
+                <span className="-skew-x-12">ON</span>
+              </div>
+              <div className="z-0 h-12 w-24 -skew-x-12 border border-slate-300 bg-slate-200 duration-500 peer-checked:skew-x-12 peer-checked:border-emerald-500 peer-checked:bg-emerald-500" />
+              <div className="absolute left-[0.3rem] flex h-12 w-24 -skew-x-12 items-center justify-center text-lg font-semibold text-slate-500 duration-500 peer-checked:-left-[6.5rem]">
+                <span className="skew-x-12">OFF</span>
+              </div>
+            </label>
           </div>
         </div>
 
@@ -245,20 +246,21 @@ const NotificationSettingsPage = ({ onBack }) => {
                     <p className="text-xs text-slate-500">{type.description}</p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => togglePreference(type.id)}
-                  className={`relative h-7 w-12 rounded-full transition-colors ${
-                    isEnabled ? "bg-emerald-500" : "bg-slate-300"
-                  }`}
-                  aria-label={`Toggle ${type.label} notifications`}
-                >
-                  <span
-                    className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${
-                      isEnabled ? "translate-x-5" : "translate-x-0.5"
-                    }`}
+                <label className="switch cursor-pointer relative flex w-[6.7rem] scale-75 overflow-hidden p-2">
+                  <input 
+                    type="checkbox" 
+                    checked={isEnabled}
+                    onChange={() => togglePreference(type.id)}
+                    className="peer hidden" 
                   />
-                </button>
+                  <div className="absolute -right-[6.5rem] z-[1] flex h-12 w-24 skew-x-12 items-center justify-center text-lg font-semibold text-white duration-500 peer-checked:right-1">
+                    <span className="-skew-x-12">ON</span>
+                  </div>
+                  <div className="z-0 h-12 w-24 -skew-x-12 border border-slate-300 bg-slate-200 duration-500 peer-checked:skew-x-12 peer-checked:border-emerald-500 peer-checked:bg-emerald-500" />
+                  <div className="absolute left-[0.3rem] flex h-12 w-24 -skew-x-12 items-center justify-center text-lg font-semibold text-slate-500 duration-500 peer-checked:-left-[6.5rem]">
+                    <span className="skew-x-12">OFF</span>
+                  </div>
+                </label>
               </div>
             );
           })}
