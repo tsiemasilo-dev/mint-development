@@ -84,21 +84,24 @@ export const NotificationsProvider = ({ children }) => {
   const markAsRead = useCallback(async (notificationId) => {
     if (!supabase) return;
 
+    setState((prev) => {
+      const notification = prev.notifications.find((n) => n.id === notificationId);
+      if (!notification || notification.read_at) return prev;
+      
+      return {
+        ...prev,
+        notifications: prev.notifications.map((n) =>
+          n.id === notificationId ? { ...n, read_at: new Date().toISOString() } : n
+        ),
+        unreadCount: Math.max(0, prev.unreadCount - 1),
+      };
+    });
+
     try {
-      const { error } = await supabase
+      await supabase
         .from("notifications")
         .update({ read_at: new Date().toISOString() })
         .eq("id", notificationId);
-
-      if (!error) {
-        setState((prev) => ({
-          ...prev,
-          notifications: prev.notifications.map((n) =>
-            n.id === notificationId ? { ...n, read_at: new Date().toISOString() } : n
-          ),
-          unreadCount: Math.max(0, prev.unreadCount - 1),
-        }));
-      }
     } catch (err) {
       console.error("Error marking notification as read:", err);
     }
