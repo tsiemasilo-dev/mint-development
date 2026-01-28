@@ -207,17 +207,21 @@ const NotificationSettingsPage = ({ onBack }) => {
                 <p className="text-xs text-slate-500">Enable or disable all at once</p>
               </div>
             </div>
-            <label className="relative inline-flex w-[52px] h-[30px] cursor-pointer">
-              <input 
-                type="checkbox" 
-                checked={allEnabled}
-                onChange={toggleAll}
-                className="peer sr-only" 
+            <button
+              type="button"
+              onClick={toggleAll}
+              className={`relative inline-flex h-8 w-14 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                allEnabled ? "bg-green-500" : "bg-slate-300"
+              }`}
+              role="switch"
+              aria-checked={allEnabled}
+            >
+              <span
+                className={`pointer-events-none inline-block h-7 w-7 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  allEnabled ? "translate-x-6" : "translate-x-0"
+                }`}
               />
-              <div className={`absolute inset-0 rounded-full overflow-hidden transition-colors duration-300 ${allEnabled ? 'bg-[#34c759]' : 'bg-[#e5e5ea]'}`}>
-                <div className={`absolute top-[2px] left-[2px] w-[26px] h-[26px] bg-white rounded-full shadow-md transition-transform duration-300 ${allEnabled ? 'translate-x-[22px]' : 'translate-x-0'}`} />
-              </div>
-            </label>
+            </button>
           </div>
         </div>
 
@@ -242,17 +246,21 @@ const NotificationSettingsPage = ({ onBack }) => {
                     <p className="text-xs text-slate-500">{type.description}</p>
                   </div>
                 </div>
-                <label className="relative inline-flex w-[52px] h-[30px] cursor-pointer">
-                  <input 
-                    type="checkbox" 
-                    checked={isEnabled}
-                    onChange={() => togglePreference(type.id)}
-                    className="peer sr-only" 
+                <button
+                  type="button"
+                  onClick={() => togglePreference(type.id)}
+                  className={`relative inline-flex h-8 w-14 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    isEnabled ? "bg-green-500" : "bg-slate-300"
+                  }`}
+                  role="switch"
+                  aria-checked={isEnabled}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-7 w-7 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      isEnabled ? "translate-x-6" : "translate-x-0"
+                    }`}
                   />
-                  <div className={`absolute inset-0 rounded-full overflow-hidden transition-colors duration-300 ${isEnabled ? 'bg-[#34c759]' : 'bg-[#e5e5ea]'}`}>
-                    <div className={`absolute top-[2px] left-[2px] w-[26px] h-[26px] bg-white rounded-full shadow-md transition-transform duration-300 ${isEnabled ? 'translate-x-[22px]' : 'translate-x-0'}`} />
-                  </div>
-                </label>
+                </button>
               </div>
             );
           })}
