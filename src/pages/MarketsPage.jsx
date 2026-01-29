@@ -4,7 +4,6 @@ import { useProfile } from "../lib/useProfile";
 import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight } from "lucide-react";
 import NotificationBell from "../components/NotificationBell";
 import Skeleton from "../components/Skeleton";
-import { populateNewsArticles } from "../utils/populateNews.js";
 
 // Mock strategies data - will be replaced with real data later
 const strategyCards = [
@@ -82,7 +81,6 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const [draftSectors, setDraftSectors] = useState(new Set());
   const [draftExchanges, setDraftExchanges] = useState(new Set());
   const [activeChips, setActiveChips] = useState([]);
-  const [isPopulatingNews, setIsPopulatingNews] = useState(false);
 
   const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(" ");
   const initials = displayName
@@ -92,25 +90,6 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
     .map((part) => part[0])
     .join("")
     .toUpperCase();
-
-  const handlePopulateNews = async () => {
-    setIsPopulatingNews(true);
-    const result = await populateNewsArticles();
-    setIsPopulatingNews(false);
-    
-    if (result.success) {
-      // Refetch news articles
-      const { data, error } = await supabase
-        .from("News_articles")
-        .select("id, title, author, published_at")
-        .order("published_at", { ascending: false })
-        .limit(50);
-      
-      if (!error && data) {
-        setNewsArticles(data);
-      }
-    }
-  };
 
   useEffect(() => {
     const fetchSecurities = async () => {
@@ -903,13 +882,6 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 <p className="mt-2 text-xs text-slate-400">
                   Stay tuned for the latest market updates and insights
                 </p>
-                <button
-                  onClick={handlePopulateNews}
-                  disabled={isPopulatingNews}
-                  className="mt-4 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:shadow-lg active:scale-95 disabled:opacity-50"
-                >
-                  {isPopulatingNews ? "Loading..." : "Load Sample News"}
-                </button>
               </div>
             ) : (
               newsArticles.map((article) => {
