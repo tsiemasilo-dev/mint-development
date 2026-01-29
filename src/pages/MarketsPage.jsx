@@ -59,10 +59,11 @@ const strategyCards = [
 
 const sortOptions = ["Market Cap", "Dividend Yield", "P/E Ratio", "Beta"];
 
-const MarketsPage = ({ onOpenNotifications, onOpenStockDetail }) => {
+const MarketsPage = ({ onOpenNotifications, onOpenStockDetail, onOpenNewsArticle }) => {
   const { profile, loading: profileLoading } = useProfile();
   const [securities, setSecurities] = useState([]);
   const [holdingsSecurities, setHoldingsSecurities] = useState([]);
+  const [newsArticles, setNewsArticles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState("invest"); // "openstrategies", "invest", "news"
@@ -169,6 +170,29 @@ const MarketsPage = ({ onOpenNotifications, onOpenStockDetail }) => {
     };
 
     fetchHoldingsSecurities();
+  }, []);
+
+  // Fetch news articles
+  useEffect(() => {
+    const fetchNewsArticles = async () => {
+      if (!supabase) return;
+
+      try {
+        const { data, error } = await supabase
+          .from("News_articles")
+          .select("id, title, author, published_at")
+          .order("published_at", { ascending: false })
+          .limit(50);
+
+        if (!error && data) {
+          setNewsArticles(data);
+        }
+      } catch (error) {
+        console.error("Error fetching news articles:", error);
+      }
+    };
+
+    fetchNewsArticles();
   }, []);
 
   const sectors = useMemo(() => {
@@ -841,15 +865,57 @@ const MarketsPage = ({ onOpenNotifications, onOpenStockDetail }) => {
             })}
           </>
         ) : (
-          /* News View - Empty for now */
-          <div className="rounded-3xl bg-white px-6 py-16 text-center shadow-md">
-            <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-slate-100">
-              <TrendingUp className="h-10 w-10 text-slate-400" />
-            </div>
-            <p className="text-sm font-semibold text-slate-700">Market news coming soon</p>
-            <p className="mt-2 text-xs text-slate-400">
-              Stay tuned for the latest market updates and insights
-            </p>
+          /* News View */
+          <div className="space-y-3">
+            {newsArticles.length === 0 ? (
+              <div className="rounded-3xl bg-white px-6 py-16 text-center shadow-md">
+                <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-slate-100">
+                  <TrendingUp className="h-10 w-10 text-slate-400" />
+                </div>
+                <p className="text-sm font-semibold text-slate-700">No news articles available</p>
+                <p className="mt-2 text-xs text-slate-400">
+                  Stay tuned for the latest market updates and insights
+                </p>
+              </div>
+            ) : (
+              newsArticles.map((article) => {
+                const publishedDate = new Date(article.published_at);
+                const now = new Date();
+                const diffInHours = Math.floor((now - publishedDate) / (1000 * 60 * 60));
+                let timeText;
+                
+                if (diffInHours < 1) {
+                  const diffInMinutes = Math.floor((now - publishedDate) / (1000 * 60));
+                  timeText = diffInMinutes <= 1 ? "Just now" : `${diffInMinutes}m ago`;
+                } else if (diffInHours < 24) {
+                  timeText = `${diffInHours}h ago`;
+                } else {
+                  const diffInDays = Math.floor(diffInHours / 24);
+                  timeText = diffInDays === 1 ? "Yesterday" : `${diffInDays}d ago`;
+                }
+
+                return (
+                  <button
+                    key={article.id}
+                    onClick={() => onOpenNewsArticle(article.id)}
+                    className="w-full rounded-3xl bg-white p-5 shadow-md transition-all active:scale-[0.98] text-left"
+                  >
+                    <h3 className="text-sm font-semibold text-slate-900 line-clamp-2">
+                      {article.title}
+                    </h3>
+                    <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
+                      {article.author && (
+                        <>
+                          <span className="font-medium">{article.author}</span>
+                          <span>•</span>
+                        </>
+                      )}
+                      <span>{timeText}</span>
+                    </div>
+                  </button>
+                );
+              })
+            )}
           </div>
         )}
       </div>
