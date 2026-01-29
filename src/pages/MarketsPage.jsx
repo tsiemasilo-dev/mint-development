@@ -109,18 +109,31 @@ const MarketsPage = ({ onOpenNotifications, onOpenStockDetail }) => {
   }, [securities, searchQuery, selectedSectors, selectedExchanges, selectedSort]);
 
   const largestCompanies = useMemo(() => {
-    return securities
+    return filteredSecurities
       .filter((s) => s.market_cap)
       .sort((a, b) => b.market_cap - a.market_cap)
       .slice(0, 10);
-  }, [securities]);
+  }, [filteredSecurities]);
 
   const highestDividendYield = useMemo(() => {
-    return securities
+    return filteredSecurities
       .filter((s) => s.dividend_yield && s.dividend_yield > 0)
       .sort((a, b) => b.dividend_yield - a.dividend_yield)
       .slice(0, 10);
-  }, [securities]);
+  }, [filteredSecurities]);
+
+  const gainers = useMemo(() => {
+    // Generate mock percentage gains for now (will be replaced with real data)
+    return filteredSecurities
+      .filter((s) => s.market_cap)
+      .map((s) => ({
+        ...s,
+        // Mock gain calculation based on some metrics
+        percentGain: s.dividend_yield ? Number(s.dividend_yield) * 2 + Math.random() * 10 : Math.random() * 15 + 5
+      }))
+      .sort((a, b) => b.percentGain - a.percentGain)
+      .slice(0, 10);
+  }, [filteredSecurities]);
 
   const formatMarketCap = (value) => {
     if (!value) return "—";
@@ -414,6 +427,53 @@ const MarketsPage = ({ onOpenNotifications, onOpenStockDetail }) => {
                         </div>
                         <p className="mt-1 text-xs text-slate-500">
                           Market cap: {formatMarketCap(security.market_cap)} ZAC
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-3 h-12 w-full rounded-xl bg-slate-50"></div>
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            {/* Gainers Section */}
+            <section>
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-bold text-slate-900">Gainers</h2>
+                <ChevronRight className="h-5 w-5 text-slate-400" />
+              </div>
+              <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 scrollbar-hide">
+                {gainers.map((security) => (
+                  <button
+                    key={security.id}
+                    onClick={() => onOpenStockDetail(security)}
+                    className="flex-shrink-0 w-64 snap-center rounded-3xl border border-slate-100 bg-white p-4 text-left shadow-sm transition-all hover:shadow-md active:scale-[0.98]"
+                  >
+                    <div className="flex items-start gap-3">
+                      {security.logo_url ? (
+                        <img
+                          src={security.logo_url}
+                          alt={security.symbol}
+                          className="h-12 w-12 rounded-full border border-slate-100 object-cover flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-blue-600 text-sm font-bold text-white">
+                          {security.symbol?.substring(0, 2) || "—"}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="truncate text-sm font-bold text-slate-900">
+                          {security.short_name || security.name}
+                        </p>
+                        <p className="mt-0.5 text-xs text-slate-500">{security.symbol}</p>
+                        <div className="mt-2 flex items-baseline gap-2">
+                          <p className="text-lg font-bold text-slate-900">
+                            {formatMarketCap(security.market_cap)}
+                          </p>
+                          <span className="text-xs text-slate-400">ZAC</span>
+                        </div>
+                        <p className="mt-1 text-xs font-semibold text-emerald-600">
+                          +{security.percentGain.toFixed(2)}%
                         </p>
                       </div>
                     </div>
