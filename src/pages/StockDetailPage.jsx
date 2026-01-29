@@ -17,6 +17,11 @@ const StockDetailPage = ({ security: initialSecurity, onBack }) => {
       try {
         const updatedSecurity = await getSecurityBySymbol(initialSecurity.symbol);
         if (updatedSecurity) {
+          console.log("📊 Updated security data:", {
+            currentPrice: updatedSecurity.currentPrice,
+            changeAbs: updatedSecurity.changeAbs,
+            changePct: updatedSecurity.changePct
+          });
           setSecurity(updatedSecurity);
         }
       } catch (error) {
@@ -62,12 +67,8 @@ const StockDetailPage = ({ security: initialSecurity, onBack }) => {
 
   // Generate chart data from price history
   const chartData = priceHistory.length > 0 ? priceHistory.map(p => p.close) : [];
-  const dataMin = chartData.length > 0 ? Math.min(...chartData) : 0;
-  const dataMax = chartData.length > 0 ? Math.max(...chartData) : 0;
-  
-  // Normalize chart to start from 0 (bottom left) for proper baseline
-  const minValue = 0;
-  const maxValue = dataMax * 1.1; // Add 10% padding at top
+  const minValue = chartData.length > 0 ? Math.min(...chartData) : 0;
+  const maxValue = chartData.length > 0 ? Math.max(...chartData) : 0;
   const range = maxValue - minValue;
   const hasValidRange = range > 0 && chartData.length > 0;
 
@@ -81,9 +82,9 @@ const StockDetailPage = ({ security: initialSecurity, onBack }) => {
 
   // Helper function to safely calculate Y position (inverted so bottom = 100, top = 0)
   const getYPosition = (value) => {
-    if (!hasValidRange) return 100; // Bottom if no valid data
-    // Normalize from 0 baseline: 0 at bottom (100%), max at top (0%)
-    return 100 - ((value - minValue) / range) * 100;
+    if (!hasValidRange) return 50; // Center if no valid data
+    // Map data range to SVG coordinates: minValue -> 100% (bottom), maxValue -> 0% (top)
+    return ((maxValue - value) / range) * 100;
   };
 
   // Format date for X-axis labels
