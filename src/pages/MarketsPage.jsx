@@ -176,27 +176,34 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   useEffect(() => {
     const fetchNewsArticles = async () => {
       if (!supabase) {
-        console.log("Supabase not initialized");
+        console.log("❌ Supabase not initialized");
         return;
       }
 
       try {
-        console.log("Fetching news articles from News_articles table...");
-        const { data, error } = await supabase
+        console.log("🔍 Fetching news articles from News_articles table...");
+        const { data, error, count } = await supabase
           .from("News_articles")
-          .select("id, title, author, published_at")
+          .select("id, title, source, published_at", { count: 'exact' })
           .order("published_at", { ascending: false })
           .limit(50);
 
         if (error) {
-          console.error("Error fetching news articles:", error);
-          console.error("Error details:", JSON.stringify(error, null, 2));
+          console.error("❌ Error fetching news articles:", error);
+          console.error("Error code:", error.code);
+          console.error("Error message:", error.message);
+          console.error("Error hint:", error.hint);
+          console.error("Error details:", error.details);
+          console.error("Full error:", JSON.stringify(error, null, 2));
         } else {
-          console.log("News articles fetched successfully:", data?.length || 0, "articles");
+          console.log("✅ News articles fetched successfully!");
+          console.log("📊 Total count in DB:", count);
+          console.log("📰 Articles returned:", data?.length || 0);
+          console.log("Sample article:", data?.[0]);
           setNewsArticles(data || []);
         }
       } catch (error) {
-        console.error("Exception while fetching news articles:", error);
+        console.error("💥 Exception while fetching news articles:", error);
       }
     };
 
@@ -910,9 +917,9 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                       {article.title}
                     </h3>
                     <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
-                      {article.author && (
+                      {article.source && (
                         <>
-                          <span className="font-medium">{article.author}</span>
+                          <span className="font-medium">{article.source}</span>
                           <span>•</span>
                         </>
                       )}
