@@ -1,31 +1,74 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ArrowLeft, TrendingUp, TrendingDown } from "lucide-react";
+import { getSecurityBySymbol, getSecurityPrices, normalizePriceSeries } from "../lib/marketData.js";
 
-const StockDetailPage = ({ security, onBack }) => {
-  const [selectedPeriod, setSelectedPeriod] = useState("1D");
-  const periods = ["1D", "1W", "1M", "3M", "1Y", "5Y"];
+const StockDetailPage = ({ security: initialSecurity, onBack }) => {
+  const [selectedPeriod, setSelectedPeriod] = useState("1M");
+  const [security, setSecurity] = useState(initialSecurity);
+  const [priceHistory, setPriceHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const periods = ["1W", "1M", "3M", "6M", "YTD", "1Y"];
 
-  // Mock price data for chart visualization
-  const currentPrice = security.eps ? (security.pe * security.eps).toFixed(2) : "26,917";
-  const priceChange = "+237";
-  const percentChange = "+0.89%";
-  const isPositive = true;
+  // Fetch updated security data with metrics
+  useEffect(() => {
+    const fetchSecurityData = async () => {
+      if (!initialSecurity?.symbol) return;
+      
+      try {
+        const updatedSecurity = await getSecurityBySymbol(initialSecurity.symbol);
+        if (updatedSecurity) {
+          setSecurity(updatedSecurity);
+        }
+      } catch (error) {
+        console.error("Error fetching security data:", error);
+      }
+    };
 
-  // Generate mock chart data points
-  const generateChartData = () => {
-    const points = 50;
-    const data = [];
-    let baseValue = 26800;
-    for (let i = 0; i < points; i++) {
-      baseValue += (Math.random() - 0.45) * 100;
-      data.push(baseValue);
+    fetchSecurityData();
+  }, [initialSecurity?.symbol]);
+
+  // Fetch price history when period changes
+  useEffect(() => {
+    const fetchPriceHistory = async () => {
+      if (!security?.id) return;
+      
+      setLoading(true);
+      try {
+        const prices = await getSecurityPrices(security.id, selectedPeriod);
+        setPriceHistory(prices);
+      } catch (error) {
+        console.error("Error fetching price history:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPriceHistory();
+  }, [security?.id, selectedPeriod]);
+
+  const currentPrice = security.currentPrice != null 
+    ? security.currentPrice.toFixed(2) 
+    : "—";
+  const priceChange = security.changeAbs != null 
+    ? (security.changeAbs >= 0 ? '+' : '') + security.changeAbs.toFixed(2)
+    : "—";
+  const percentChange = security.changePct != null 
+    ? (security.changePct >= 0 ? '+' : '') + security.changePct.toFixed(2) + '%'
+    : "—";
+  const isPositive = security.changePct != null && security.changePct >= 0;
+
+  // Generate chart data from price history
+  const chartData = priceHistory.length > 0 ? priceHistory.map(p => p.close) : [];
+  const minValue = chartData.length > 0 ? Math.min(...chartData) : 0;
+  const maxValue = chartData.length > 0 ? Math.max(...chartData) : 0;
+
+  const formatTimestamp = () => {
+    if (!security.asOfDate) {
+      return new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
     }
-    return data;
+    const date = new Date(security.asOfDate);
+    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
   };
-
-  const chartData = generateChartData();
-  const minValue = Math.min(...chartData);
-  const maxValue = Math.max(...chartData);
 
   return (
     <div className="min-h-screen bg-white pb-[env(safe-area-inset-bottom)] text-slate-900">
@@ -86,7 +129,10 @@ const StockDetailPage = ({ security, onBack }) => {
             </span>
           </div>
           <p className="mt-1 text-xs text-slate-400">
-            As of today at {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })} GMT+2
+            {security.asOfDate 
+              ? `As of ${new Date(security.asOfDate).toLocaleDateString()} at ${formatTimestamp()} GMT+2`
+              : `As of today at ${formatTimestamp()} GMT+2`
+            }
           </p>
         </div>
       </div>
@@ -142,65 +188,86 @@ const StockDetailPage = ({ security, onBack }) => {
 
           {/* Chart */}
           <div className="relative mt-6 h-64">
-            <svg width="100%" height="100%" className="overflow-visible">
-              {/* Grid lines */}
-              {[0, 1, 2, 3, 4].map((i) => (
-                <line
-                  key={i}
-                  x1="0"
-                  y1={`${(i / 4) * 100}%`}
-                  x2="100%"
-                  y2={`${(i / 4) * 100}%`}
-                  stroke="#e2e8f0"
-                  strokeWidth="1"
-                />
-              ))}
+            {loading ? (
+              <div className="flex h-full items-center justify-center">
+                <div className="text-sm text-slate-400">Loading chart...</div>
+              </div>
+            ) : chartData.length === 0 ? (
+              <div className="flex h-full items-center justify-center">
+                <div className="text-sm text-slate-400">No price data available</div>
+              </div>
+            ) : (
+              <svg width="100%" height="100%" className="overflow-visible">
+                {/* Grid lines */}
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <line
+                    key={i}
+                    x1="0"
+                    y1={`${(i / 4) * 100}%`}
+                    x2="100%"
+                    y2={`${(i / 4) * 100}%`}
+                    stroke="#e2e8f0"
+                    strokeWidth="1"
+                  />
+                ))}
 
-              {/* Area fill */}
-              <defs>
-                <linearGradient id="areaGradient" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0%" stopColor="#10b981" stopOpacity="0.3" />
-                  <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
-                </linearGradient>
-              </defs>
+                {/* Area fill */}
+                <defs>
+                  <linearGradient id="areaGradient" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stopColor={isPositive ? "#10b981" : "#ef4444"} stopOpacity="0.3" />
+                    <stop offset="100%" stopColor={isPositive ? "#10b981" : "#ef4444"} stopOpacity="0" />
+                  </linearGradient>
+                </defs>
 
-              {/* Chart line and area */}
-              <g>
-                {/* Area path */}
-                <path
-                  d={`M 0,${((maxValue - chartData[0]) / (maxValue - minValue)) * 100}% ${chartData
-                    .map((value, i) => {
-                      const x = (i / (chartData.length - 1)) * 100;
-                      const y = ((maxValue - value) / (maxValue - minValue)) * 100;
-                      return `L ${x}%,${y}%`;
-                    })
-                    .join(' ')} L 100%,100% L 0,100% Z`}
-                  fill="url(#areaGradient)"
-                />
-                {/* Line path */}
-                <path
-                  d={`M 0,${((maxValue - chartData[0]) / (maxValue - minValue)) * 100}% ${chartData
-                    .map((value, i) => {
-                      const x = (i / (chartData.length - 1)) * 100;
-                      const y = ((maxValue - value) / (maxValue - minValue)) * 100;
-                      return `L ${x}%,${y}%`;
-                    })
-                    .join(' ')}`}
-                  fill="none"
-                  stroke="#10b981"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </g>
-            </svg>
+                {/* Chart line and area */}
+                <g>
+                  {/* Area path */}
+                  <path
+                    d={`M 0,${((maxValue - chartData[0]) / (maxValue - minValue)) * 100}% ${chartData
+                      .map((value, i) => {
+                        const x = (i / (chartData.length - 1)) * 100;
+                        const y = ((maxValue - value) / (maxValue - minValue)) * 100;
+                        return `L ${x}%,${y}%`;
+                      })
+                      .join(' ')} L 100%,100% L 0,100% Z`}
+                    fill="url(#areaGradient)"
+                  />
+                  {/* Line path */}
+                  <path
+                    d={`M 0,${((maxValue - chartData[0]) / (maxValue - minValue)) * 100}% ${chartData
+                      .map((value, i) => {
+                        const x = (i / (chartData.length - 1)) * 100;
+                        const y = ((maxValue - value) / (maxValue - minValue)) * 100;
+                        return `L ${x}%,${y}%`;
+                      })
+                      .join(' ')}`}
+                    fill="none"
+                    stroke={isPositive ? "#10b981" : "#ef4444"}
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </g>
 
-            {/* Y-axis labels */}
-            <div className="absolute right-0 top-0 flex h-full flex-col justify-between py-2 text-xs text-slate-400">
-              {[maxValue, (maxValue + minValue) / 2, minValue].map((val, i) => (
-                <span key={i}>{Math.round(val).toLocaleString()}</span>
-              ))}
-            </div>
+                {/* Y-axis labels */}
+                <g className="text-xs text-slate-400">
+                  {[maxValue, (maxValue + minValue) / 2, minValue].map((val, i) => (
+                    <text 
+                      key={i} 
+                      x="100%" 
+                      y={`${(i / 2) * 100}%`}
+                      textAnchor="end"
+                      dx="-5"
+                      dy="4"
+                      fill="currentColor"
+                      fontSize="10"
+                    >
+                      {val.toFixed(0)}
+                    </text>
+                  ))}
+                </g>
+              </svg>
+            )}
           </div>
         </section>
 

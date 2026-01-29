@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo, useId } from "react";
 import { supabase } from "../lib/supabase.js";
+import { getMarketsSecuritiesWithMetrics } from "../lib/marketData.js";
 import { useProfile } from "../lib/useProfile";
 import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight } from "lucide-react";
 import NotificationBell from "../components/NotificationBell";
@@ -213,55 +214,16 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
 
   useEffect(() => {
     const fetchSecurities = async () => {
-      if (!supabase) {
-        setLoading(false);
-        return;
-      }
-
-      let isMounted = true;
-
+      setLoading(true);
+      
       try {
-        const { data, error } = await supabase
-          .from("securities")
-          .select(`
-            *,
-            security_prices(close, ts)
-          `)
-          .eq("is_active", true)
-          .order("market_cap", { ascending: false, nullsFirst: false });
-
-        if (error) throw error;
-
-        if (isMounted) {
-          // Process securities with latest price
-          const processedSecurities = (data || []).map(security => {
-            const prices = security.security_prices || [];
-            const latestPrice = prices.length > 0 
-              ? prices.reduce((latest, current) => 
-                  new Date(current.ts) > new Date(latest.ts) ? current : latest
-                ).close 
-              : null;
-            
-            return {
-              ...security,
-              latestPrice: latestPrice ? Number(latestPrice) : null,
-              security_prices: undefined // Remove the nested array
-            };
-          });
-          
-          setSecurities(processedSecurities);
-          setLoading(false);
-        }
+        const data = await getMarketsSecuritiesWithMetrics();
+        setSecurities(data);
       } catch (error) {
         console.error("Error fetching securities:", error);
-        if (isMounted) {
-          setLoading(false);
-        }
+      } finally {
+        setLoading(false);
       }
-
-      return () => {
-        isMounted = false;
-      };
     };
 
     fetchSecurities();
@@ -484,8 +446,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   };
 
   const formatPrice = (security) => {
-    if (security.latestPrice) {
-      return security.latestPrice.toFixed(2);
+    if (security.currentPrice != null) {
+      return security.currentPrice.toFixed(2);
     }
     return "—";
   };
@@ -891,15 +853,23 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                         </p>
                         <p className="mt-0.5 text-xs text-slate-500">{security.symbol}</p>
                         <div className="mt-2">
-                          <p className="text-lg font-bold text-slate-900">
-                            {formatMarketCap(security.market_cap)}
-                          </p>
+                          {security.currentPrice != null ? (
+                            <>
+                              <p className="text-lg font-bold text-slate-900">
+                                {security.currency || 'R'} {formatPrice(security)}
+                              </p>
+                              {security.changePct != null && (
+                                <p className={`mt-1 text-xs font-semibold ${
+                                  security.changePct >= 0 ? 'text-emerald-600' : 'text-red-600'
+                                }`}>
+                                  {security.changePct >= 0 ? '+' : ''}{security.changePct.toFixed(2)}%
+                                </p>
+                              )}
+                            </>
+                          ) : (
+                            <p className="text-sm text-slate-400">—</p>
+                          )}
                         </div>
-                        {security.dividend_yield && (
-                          <p className="mt-1 text-xs font-semibold text-emerald-600">
-                            +{Number(security.dividend_yield).toFixed(2)}%
-                          </p>
-                        )}
                       </div>
                     </div>
                     <div className="mt-3 h-12 w-full rounded-xl bg-slate-50"></div>
@@ -938,6 +908,24 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                           {security.short_name || security.name}
                         </p>
                         <p className="mt-0.5 text-xs text-slate-500">{security.symbol}</p>
+                        <div className="mt-2">
+                          {security.currentPrice != null ? (
+                            <>
+                              <p className="text-lg font-bold text-slate-900">
+                                {security.currency || 'R'} {formatPrice(security)}
+                              </p>
+                              {security.changePct != null && (
+                                <p className={`mt-1 text-xs font-semibold ${
+                                  security.changePct >= 0 ? 'text-emerald-600' : 'text-red-600'
+                                }`}>
+                                  {security.changePct >= 0 ? '+' : ''}{security.changePct.toFixed(2)}%
+                                </p>
+                              )}
+                            </>
+                          ) : (
+                            <p className="text-sm text-slate-400">—</p>
+                          )}
+                        </div>
                         <div className="mt-2 flex items-baseline gap-2">
                           <p className="text-lg font-bold text-emerald-600">
                             {Number(security.dividend_yield).toFixed(2)}%
@@ -1037,13 +1025,24 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                               {security.symbol} · {security.exchange}
                             </p>
                           </div>
-                          {security.dividend_yield && (
-                            <div className="text-right">
-                              <p className="text-xs text-emerald-600">
-                                {Number(security.dividend_yield).toFixed(2)}% yield
-                              </p>
-                            </div>
-                          )}
+                          <div className="text-right">
+                            {security.currentPrice != null ? (
+                              <>
+                                <p className="text-sm font-semibold text-slate-900">
+                                  {security.currency || 'R'} {formatPrice(security)}
+                                </p>
+                                {security.changePct != null && (
+                                  <p className={`text-xs font-semibold ${
+                                    security.changePct >= 0 ? 'text-emerald-600' : 'text-red-600'
+                                  }`}>
+                                    {security.changePct >= 0 ? '+' : ''}{security.changePct.toFixed(2)}%
+                                  </p>
+                                )}
+                              </>
+                            ) : (
+                              <p className="text-xs text-slate-400">—</p>
+                            )}
+                          </div>
                         </div>
 
                         <div className="mt-3 flex items-center gap-2">
@@ -1121,13 +1120,24 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                                   {security.symbol} · {security.exchange}
                                 </p>
                               </div>
-                              {security.dividend_yield && (
-                                <div className="text-right">
-                                  <p className="text-xs text-emerald-600">
-                                    {Number(security.dividend_yield).toFixed(2)}% yield
-                                  </p>
-                                </div>
-                              )}
+                              <div className="text-right">
+                                {security.currentPrice != null ? (
+                                  <>
+                                    <p className="text-sm font-semibold text-slate-900">
+                                      {security.currency || 'R'} {formatPrice(security)}
+                                    </p>
+                                    {security.changePct != null && (
+                                      <p className={`text-xs font-semibold ${
+                                        security.changePct >= 0 ? 'text-emerald-600' : 'text-red-600'
+                                      }`}>
+                                        {security.changePct >= 0 ? '+' : ''}{security.changePct.toFixed(2)}%
+                                      </p>
+                                    )}
+                                  </>
+                                ) : (
+                                  <p className="text-xs text-slate-400">—</p>
+                                )}
+                              </div>
                             </div>
 
                             <div className="mt-3 flex items-center gap-2">
