@@ -106,27 +106,6 @@ const StockDetailPage = ({ security: initialSecurity, onBack }) => {
   };
   const selectedPeriodReturn = getSelectedPeriodReturn();
   
-  // Calculate chart return for the selected period
-  const chartReturn = chartData.length >= 2 
-    ? ((chartData[chartData.length - 1] - chartData[0]) / chartData[0]) * 100
-    : 0;
-  const isChartPositive = chartReturn >= 0;
-  
-  // Get return from security metrics for selected period
-  const getSelectedPeriodReturn = () => {
-    if (!displaySecurity?.returns) return null;
-    const periodMap = {
-      '1W': displaySecurity.returns.r_1w,
-      '1M': displaySecurity.returns.r_1m,
-      '3M': displaySecurity.returns.r_3m,
-      '6M': displaySecurity.returns.r_6m,
-      'YTD': displaySecurity.returns.r_ytd,
-      '1Y': displaySecurity.returns.r_1y
-    };
-    return periodMap[selectedPeriod];
-  };
-  const selectedPeriodReturn = getSelectedPeriodReturn();
-  
   // Calculate Y-axis domain with 5% padding (TradingView style)
   const dataMin = chartData.length > 0 ? Math.min(...chartData) : 0;
   const dataMax = chartData.length > 0 ? Math.max(...chartData) : 0;
