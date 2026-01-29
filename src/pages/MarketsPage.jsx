@@ -48,14 +48,33 @@ const MarketsPage = ({ onOpenNotifications, onOpenStockDetail }) => {
       try {
         const { data, error } = await supabase
           .from("securities")
-          .select("*")
+          .select(`
+            *,
+            security_prices(close, ts)
+          `)
           .eq("is_active", true)
           .order("market_cap", { ascending: false, nullsFirst: false });
 
         if (error) throw error;
 
         if (isMounted) {
-          setSecurities(data || []);
+          // Process securities with latest price
+          const processedSecurities = (data || []).map(security => {
+            const prices = security.security_prices || [];
+            const latestPrice = prices.length > 0 
+              ? prices.reduce((latest, current) => 
+                  new Date(current.ts) > new Date(latest.ts) ? current : latest
+                ).close 
+              : null;
+            
+            return {
+              ...security,
+              latestPrice: latestPrice ? Number(latestPrice) : null,
+              security_prices: undefined // Remove the nested array
+            };
+          });
+          
+          setSecurities(processedSecurities);
           setLoading(false);
         }
       } catch (error) {
@@ -138,15 +157,15 @@ const MarketsPage = ({ onOpenNotifications, onOpenStockDetail }) => {
   const formatMarketCap = (value) => {
     if (!value) return "—";
     const num = Number(value);
-    if (num >= 1e12) return `${(num / 1e12).toFixed(2)}T`;
-    if (num >= 1e9) return `${(num / 1e9).toFixed(2)}B`;
-    if (num >= 1e6) return `${(num / 1e6).toFixed(2)}M`;
-    return `${num.toFixed(2)}`;
+    if (num >= 1e12) return `R${(num / 1e12).toFixed(2)}T`;
+    if (num >= 1e9) return `R${(num / 1e9).toFixed(2)}B`;
+    if (num >= 1e6) return `R${(num / 1e6).toFixed(2)}M`;
+    return `R${num.toFixed(2)}`;
   };
 
   const formatPrice = (security) => {
-    if (security.eps && security.pe) {
-      return (security.eps * security.pe).toFixed(2);
+    if (security.latestPrice) {
+      return security.latestPrice.toFixed(2);
     }
     return "—";
   };
@@ -340,8 +359,11 @@ const MarketsPage = ({ onOpenNotifications, onOpenStockDetail }) => {
               </div>
             )}
 
-            {/* Largest Companies Section */}
-            <section>
+            {/* Grouped Sections - only show when NOT searching */}
+            {!searchQuery && (
+              <>
+                {/* Largest Companies Section */}
+                <section>
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-lg font-bold text-slate-900">Largest companies</h2>
                 <ChevronRight className="h-5 w-5 text-slate-400" />
@@ -370,11 +392,10 @@ const MarketsPage = ({ onOpenNotifications, onOpenStockDetail }) => {
                           {security.short_name || security.name}
                         </p>
                         <p className="mt-0.5 text-xs text-slate-500">{security.symbol}</p>
-                        <div className="mt-2 flex items-baseline gap-2">
+                        <div className="mt-2">
                           <p className="text-lg font-bold text-slate-900">
                             {formatMarketCap(security.market_cap)}
                           </p>
-                          <span className="text-xs text-slate-400">ZAC</span>
                         </div>
                         {security.dividend_yield && (
                           <p className="mt-1 text-xs font-semibold text-emerald-600">
@@ -426,7 +447,7 @@ const MarketsPage = ({ onOpenNotifications, onOpenStockDetail }) => {
                           <span className="text-xs text-slate-400">yield</span>
                         </div>
                         <p className="mt-1 text-xs text-slate-500">
-                          Market cap: {formatMarketCap(security.market_cap)} ZAC
+                          Market cap: {formatMarketCap(security.market_cap)}
                         </p>
                       </div>
                     </div>
@@ -466,11 +487,10 @@ const MarketsPage = ({ onOpenNotifications, onOpenStockDetail }) => {
                           {security.short_name || security.name}
                         </p>
                         <p className="mt-0.5 text-xs text-slate-500">{security.symbol}</p>
-                        <div className="mt-2 flex items-baseline gap-2">
+                        <div className="mt-2">
                           <p className="text-lg font-bold text-slate-900">
                             {formatMarketCap(security.market_cap)}
                           </p>
-                          <span className="text-xs text-slate-400">ZAC</span>
                         </div>
                         <p className="mt-1 text-xs font-semibold text-emerald-600">
                           +{security.percentGain.toFixed(2)}%
@@ -482,6 +502,8 @@ const MarketsPage = ({ onOpenNotifications, onOpenStockDetail }) => {
                 ))}
               </div>
             </section>
+              </>
+            )}
 
             {/* All Securities List */}
             {searchQuery && (
