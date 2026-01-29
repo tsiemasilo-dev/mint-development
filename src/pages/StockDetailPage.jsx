@@ -312,48 +312,6 @@ const StockDetailPage = ({ security: initialSecurity, onBack }) => {
                     vectorEffect="non-scaling-stroke"
                   />
                 </g>
-
-                {/* Y-axis labels (right side) */}
-                <g className="text-slate-400">
-                  {[dataMax, (dataMax + dataMin) / 2, dataMin].map((val, i) => (
-                    <text 
-                      key={i} 
-                      x="102" 
-                      y={i * 50}
-                      textAnchor="start"
-                      dominantBaseline="middle"
-                      fill="currentColor"
-                      style={{ fontSize: '3px', fontWeight: 500 }}
-                    >
-                      {val.toFixed(0)}
-                    </text>
-                  ))}
-                </g>
-
-                {/* X-axis labels (bottom) - max 3 to prevent overlap */}
-                <g className="text-slate-400">
-                  {(() => {
-                    // Always show start, middle, and end for clarity
-                    const indices = [
-                      0, 
-                      Math.floor(chartData.length / 2), 
-                      chartData.length - 1
-                    ].filter(idx => idx < chartData.length);
-                    
-                    return indices.map((idx, i) => (
-                      <text
-                        key={idx}
-                        x={(idx / Math.max(1, chartData.length - 1)) * 100}
-                        y="106"
-                        textAnchor={i === 0 ? 'start' : i === indices.length - 1 ? 'end' : 'middle'}
-                        fill="currentColor"
-                        style={{ fontSize: '3px', fontWeight: 500 }}
-                      >
-                        {formatXAxisDate(idx)}
-                      </text>
-                    ));
-                  })()}
-                </g>
               </svg>
             )}
           </div>
