@@ -151,6 +151,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const [newsArticles, setNewsArticles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [strategiesSearchQuery, setStrategiesSearchQuery] = useState("");
+  const [newsSearchQuery, setNewsSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState("invest"); // "openstrategies", "invest", "news"
   const [selectedStrategy, setSelectedStrategy] = useState(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -522,11 +524,61 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
               </div>
             </>
           )}
+
+          {viewMode === "openstrategies" && (
+            <>
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/50" />
+                <input
+                  type="text"
+                  placeholder="Search strategies..."
+                  value={strategiesSearchQuery}
+                  onChange={(e) => setStrategiesSearchQuery(e.target.value)}
+                  className="w-full rounded-2xl border border-white/20 bg-white/10 px-12 py-3 text-sm text-white placeholder-white/50 backdrop-blur-sm focus:border-white/40 focus:bg-white/15 focus:outline-none"
+                />
+              </div>
+            </>
+          )}
+
+          {viewMode === "news" && (
+            <>
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/50" />
+                <input
+                  type="text"
+                  placeholder="Search news..."
+                  value={newsSearchQuery}
+                  onChange={(e) => setNewsSearchQuery(e.target.value)}
+                  className="w-full rounded-2xl border border-white/20 bg-white/10 px-12 py-3 text-sm text-white placeholder-white/50 backdrop-blur-sm focus:border-white/40 focus:bg-white/15 focus:outline-none"
+                />
+              </div>
+            </>
+          )}
         </div>
       </div>
 
       {/* Content */}
       <div className="mx-auto -mt-2 flex w-full max-w-sm flex-col gap-6 px-4 pb-10 md:max-w-md md:px-8">
+        {viewMode === "openstrategies" && (
+          <div className="flex items-center justify-between gap-3">
+            <button
+              onClick={() => setIsFilterOpen(true)}
+              className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:bg-slate-50 active:scale-95"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              Filters
+            </button>
+            {activeChips.length > 0 && (
+              <button
+                onClick={clearAllFilters}
+                className="text-sm font-semibold text-slate-500 hover:text-slate-700"
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+        )}
+
         {viewMode === "invest" ? (
           <>
             {/* Filter and Sort Bar */}
@@ -880,7 +932,15 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
           <>
             {/* Strategies grouped by sector */}
             {[...new Set(strategyCards.flatMap(s => s.sectors))].map((sector) => {
-              const sectorStrategies = strategyCards.filter(s => s.sectors.includes(sector));
+              const sectorStrategies = strategyCards
+                .filter(s => s.sectors.includes(sector))
+                .filter(s => 
+                  strategiesSearchQuery.length === 0 || 
+                  s.name.toLowerCase().includes(strategiesSearchQuery.toLowerCase()) ||
+                  s.tags.some(tag => tag.toLowerCase().includes(strategiesSearchQuery.toLowerCase()))
+                );
+              
+              if (sectorStrategies.length === 0) return null;
               
               return (
                 <section key={sector}>
@@ -896,7 +956,15 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                         onClick={() => setSelectedStrategy(strategy)}
                         className="flex-shrink-0 w-72 rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md hover:border-slate-200 p-4 transition-all snap-center"
                       >
-                        <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-white shadow-sm ring-1 ring-slate-100 flex-shrink-0">
+                            <img
+                              src="https://s3-symbol-logo.tradingview.com/country/ZA--big.svg"
+                              alt="South Africa"
+                              className="h-full w-full object-cover"
+                            />
+                          </div>
+                          <div className="flex-1 flex items-start justify-between gap-4">
                           <div className="text-left space-y-1">
                             <p className="text-sm font-semibold text-slate-900">{strategy.name}</p>
                             <div>
@@ -948,6 +1016,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                           </div>
                           <span className="text-xs font-semibold text-slate-500">Holdings snapshot</span>
                         </div>
+                          </div>
+                        </div>
                       </button>
                     ))}
                   </div>
@@ -958,7 +1028,11 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
         ) : (
           /* News View */
           <div className="space-y-3">
-            {newsArticles.length === 0 ? (
+            {newsArticles.filter(article => 
+              newsSearchQuery.length === 0 ||
+              article.title?.toLowerCase().includes(newsSearchQuery.toLowerCase()) ||
+              article.source?.toLowerCase().includes(newsSearchQuery.toLowerCase())
+            ).length === 0 ? (
               <div className="rounded-3xl bg-white px-6 py-16 text-center shadow-md">
                 <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-slate-100">
                   <TrendingUp className="h-10 w-10 text-slate-400" />
@@ -969,7 +1043,13 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 </p>
               </div>
             ) : (
-              newsArticles.map((article) => {
+              newsArticles
+                .filter(article => 
+                  newsSearchQuery.length === 0 ||
+                  article.title?.toLowerCase().includes(newsSearchQuery.toLowerCase()) ||
+                  article.source?.toLowerCase().includes(newsSearchQuery.toLowerCase())
+                )
+                .map((article) => {
                 const publishedDate = new Date(article.published_at);
                 const now = new Date();
                 const diffInHours = Math.floor((now - publishedDate) / (1000 * 60 * 60));
