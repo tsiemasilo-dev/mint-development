@@ -23,6 +23,7 @@ import NotificationsPage from "./pages/NotificationsPage.jsx";
 import NotificationSettingsPage from "./pages/NotificationSettingsPage.jsx";
 import MintBalancePage from "./pages/MintBalancePage.jsx";
 import MarketsPage from "./pages/MarketsPage.jsx";
+import StockDetailPage from "./pages/StockDetailPage.jsx";
 import { NotificationsProvider, createWelcomeNotification, useNotificationsContext } from "./lib/NotificationsContext.jsx";
 import ActivityPage from "./pages/ActivityPage.jsx";
 import ActionsPage from "./pages/ActionsPage.jsx";
@@ -62,6 +63,7 @@ const App = () => {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [sessionReady, setSessionReady] = useState(false);
   const [notificationReturnPage, setNotificationReturnPage] = useState("home");
+  const [selectedSecurity, setSelectedSecurity] = useState(null);
   const [selectedStrategy, setSelectedStrategy] = useState(null);
   const recoveryHandled = useRef(false);
   const { refetch: refetchNotifications } = useNotificationsContext();
@@ -239,14 +241,25 @@ const App = () => {
 
   if (currentPage === "markets") {
     return (
-      <AppLayout activeTab="investments" onTabChange={setCurrentPage}>
-        <MarketsPage
-          onOpenNotifications={() => {
-            setNotificationReturnPage("markets");
-            setCurrentPage("notifications");
-          }}
-        />
-      </AppLayout>
+      <MarketsPage
+        onOpenNotifications={() => {
+          setNotificationReturnPage("markets");
+          setCurrentPage("notifications");
+        }}
+        onOpenStockDetail={(security) => {
+          setSelectedSecurity(security);
+          setCurrentPage("stockDetail");
+        }}
+      />
+    );
+  }
+
+  if (currentPage === "stockDetail") {
+    return (
+      <StockDetailPage
+        security={selectedSecurity}
+        onBack={() => setCurrentPage("markets")}
+      />
     );
   }
 

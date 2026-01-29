@@ -5,7 +5,7 @@ import { ArrowUpRight, ArrowDownRight, TrendingUp, Search } from "lucide-react";
 import NotificationBell from "../components/NotificationBell";
 import Skeleton from "../components/Skeleton";
 
-const MarketsPage = ({ onOpenNotifications }) => {
+const MarketsPage = ({ onOpenNotifications, onOpenStockDetail }) => {
   const { profile, loading: profileLoading } = useProfile();
   const [securities, setSecurities] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -177,6 +177,7 @@ const MarketsPage = ({ onOpenNotifications }) => {
             {filteredSecurities.map((security) => (
               <button
                 key={security.id}
+                onClick={() => onOpenStockDetail(security)}
                 className="w-full rounded-3xl bg-white p-4 text-left shadow-md transition-all hover:shadow-lg active:scale-[0.98]"
               >
                 <div className="flex items-start gap-3">
@@ -202,16 +203,13 @@ const MarketsPage = ({ onOpenNotifications }) => {
                           {security.symbol} · {security.exchange}
                         </p>
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm font-semibold text-slate-900">
-                          {formatMarketCap(security.market_cap)}
-                        </p>
-                        {security.dividend_yield && (
+                      {security.dividend_yield && (
+                        <div className="text-right">
                           <p className="text-xs text-emerald-600">
-                            {(security.dividend_yield * 100).toFixed(2)}% yield
+                            {Number(security.dividend_yield).toFixed(2)}% yield
                           </p>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="mt-3 flex items-center gap-2">
