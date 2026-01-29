@@ -187,13 +187,13 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   // Filter states for OpenStrategies view
   const [strategySort, setStrategySort] = useState("Recommended");
   const [selectedRisks, setSelectedRisks] = useState(new Set());
-  const [selectedMinInvestment, setSelectedMinInvestment] = useState(null);
+  const [selectedMinInvestment, setSelectedMinInvestment] = useState("Any");
   const [selectedExposure, setSelectedExposure] = useState(new Set());
   const [selectedTimeHorizon, setSelectedTimeHorizon] = useState(new Set());
   const [selectedStrategySectors, setSelectedStrategySectors] = useState(new Set());
   const [draftStrategySort, setDraftStrategySort] = useState("Recommended");
   const [draftRisks, setDraftRisks] = useState(new Set());
-  const [draftMinInvestment, setDraftMinInvestment] = useState(null);
+  const [draftMinInvestment, setDraftMinInvestment] = useState("Any");
   const [draftExposure, setDraftExposure] = useState(new Set());
   const [draftTimeHorizon, setDraftTimeHorizon] = useState(new Set());
   const [draftStrategySectors, setDraftStrategySectors] = useState(new Set());
@@ -732,23 +732,27 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
             </div>
 
             {/* Active Filter Chips for OpenStrategies */}
-            {(selectedRisks.length > 0 || 
-              selectedMinInvestment !== "Any" || 
-              selectedExposure.length > 0 || 
-              selectedTimeHorizon.length > 0 || 
-              selectedStrategySectors.length > 0) && (
+            {(selectedRisks.size > 0 || 
+              selectedMinInvestment !== null && selectedMinInvestment !== "Any" || 
+              selectedExposure.size > 0 || 
+              selectedTimeHorizon.size > 0 || 
+              selectedStrategySectors.size > 0) && (
               <div className="flex flex-wrap gap-2">
-                {selectedRisks.map((risk) => (
+                {Array.from(selectedRisks).map((risk) => (
                   <button
                     key={risk}
-                    onClick={() => setSelectedRisks(selectedRisks.filter(r => r !== risk))}
+                    onClick={() => {
+                      const next = new Set(selectedRisks);
+                      next.delete(risk);
+                      setSelectedRisks(next);
+                    }}
                     className="flex items-center gap-1.5 rounded-full bg-purple-100 px-3 py-1.5 text-xs font-semibold text-purple-700 transition-all active:scale-95"
                   >
                     {risk}
                     <X className="h-3 w-3" />
                   </button>
                 ))}
-                {selectedMinInvestment !== "Any" && (
+                {selectedMinInvestment !== null && selectedMinInvestment !== "Any" && (
                   <button
                     onClick={() => setSelectedMinInvestment("Any")}
                     className="flex items-center gap-1.5 rounded-full bg-purple-100 px-3 py-1.5 text-xs font-semibold text-purple-700 transition-all active:scale-95"
@@ -757,30 +761,42 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                     <X className="h-3 w-3" />
                   </button>
                 )}
-                {selectedExposure.map((exp) => (
+                {Array.from(selectedExposure).map((exp) => (
                   <button
                     key={exp}
-                    onClick={() => setSelectedExposure(selectedExposure.filter(e => e !== exp))}
+                    onClick={() => {
+                      const next = new Set(selectedExposure);
+                      next.delete(exp);
+                      setSelectedExposure(next);
+                    }}
                     className="flex items-center gap-1.5 rounded-full bg-purple-100 px-3 py-1.5 text-xs font-semibold text-purple-700 transition-all active:scale-95"
                   >
                     {exp}
                     <X className="h-3 w-3" />
                   </button>
                 ))}
-                {selectedTimeHorizon.map((th) => (
+                {Array.from(selectedTimeHorizon).map((th) => (
                   <button
                     key={th}
-                    onClick={() => setSelectedTimeHorizon(selectedTimeHorizon.filter(t => t !== th))}
+                    onClick={() => {
+                      const next = new Set(selectedTimeHorizon);
+                      next.delete(th);
+                      setSelectedTimeHorizon(next);
+                    }}
                     className="flex items-center gap-1.5 rounded-full bg-purple-100 px-3 py-1.5 text-xs font-semibold text-purple-700 transition-all active:scale-95"
                   >
                     {th}
                     <X className="h-3 w-3" />
                   </button>
                 ))}
-                {selectedStrategySectors.map((sector) => (
+                {Array.from(selectedStrategySectors).map((sector) => (
                   <button
                     key={sector}
-                    onClick={() => setSelectedStrategySectors(selectedStrategySectors.filter(s => s !== sector))}
+                    onClick={() => {
+                      const next = new Set(selectedStrategySectors);
+                      next.delete(sector);
+                      setSelectedStrategySectors(next);
+                    }}
                     className="flex items-center gap-1.5 rounded-full bg-purple-100 px-3 py-1.5 text-xs font-semibold text-purple-700 transition-all active:scale-95"
                   >
                     {sector}
