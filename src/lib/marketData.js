@@ -106,49 +106,43 @@ export const getSecurityBySymbol = async (symbol) => {
   }
 
   try {
-    console.log(`🔍 Fetching security ${symbol} with metrics...`);
+    console.log(`🔍 Fetching security ${symbol}...`);
     
-    const { data, error } = await supabase
+    // First, fetch the security
+    const { data: security, error: securityError } = await supabase
       .from("securities")
-      .select(`
-        *,
-        security_metrics!security_metrics_security_id_fkey(
-          as_of_date,
-          last_close,
-          prev_close,
-          change_abs,
-          change_pct,
-          r_1d,
-          r_1w,
-          r_1m,
-          r_3m,
-          r_6m,
-          r_ytd,
-          r_1y
-        )
-      `)
+      .select("*")
       .eq("symbol", symbol)
       .eq("is_active", true)
       .single();
 
-    if (error) {
-      console.error(`❌ Error fetching security ${symbol}:`, error);
+    if (securityError) {
+      console.error(`❌ Error fetching security ${symbol}:`, securityError);
       return null;
     }
 
-    if (!data) {
+    if (!security) {
       console.warn(`⚠️ No security found for symbol ${symbol}`);
       return null;
     }
 
-    // Flatten metrics
-    const metrics = data.security_metrics?.[0] || null;
-    
-    console.log(`🔍 Raw security_metrics for ${symbol}:`, data.security_metrics);
-    console.log(`🔍 Flattened metrics:`, metrics);
+    console.log(`✅ Found security ${symbol}, id: ${security.id}`);
+
+    // Now fetch metrics for this security_id
+    const { data: metrics, error: metricsError } = await supabase
+      .from("security_metrics")
+      .select("*")
+      .eq("security_id", security.id)
+      .single();
+
+    if (metricsError) {
+      console.warn(`⚠️ No metrics found for ${symbol}:`, metricsError.message);
+    }
+
+    console.log(`🔍 Raw metrics for ${symbol}:`, metrics);
     
     const processedSecurity = {
-      ...data,
+      ...security,
       currentPrice: metrics?.last_close ? Number(metrics.last_close) : null,
       prevClose: metrics?.prev_close ? Number(metrics.prev_close) : null,
       changeAbs: metrics?.change_abs ? Number(metrics.change_abs) : null,
@@ -163,10 +157,9 @@ export const getSecurityBySymbol = async (symbol) => {
         r_ytd: metrics?.r_ytd ? Number(metrics.r_ytd) : null,
         r_1y: metrics?.r_1y ? Number(metrics.r_1y) : null,
       },
-      security_metrics: undefined,
     };
 
-    console.log(`✅ Fetched security ${symbol} successfully`);
+    console.log(`✅ Processed ${symbol} with currentPrice: ${processedSecurity.currentPrice}, changeAbs: ${processedSecurity.changeAbs}`);
     return processedSecurity;
   } catch (error) {
     console.error(`💥 Exception while fetching security ${symbol}:`, error);
