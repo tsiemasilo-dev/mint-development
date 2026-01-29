@@ -85,6 +85,48 @@ const StockDetailPage = ({ security: initialSecurity, onBack }) => {
     ? priceHistory.filter(p => p.close != null).map(p => p.close) 
     : [];
   
+  // Calculate chart return for the selected period
+  const chartReturn = chartData.length >= 2 
+    ? ((chartData[chartData.length - 1] - chartData[0]) / chartData[0]) * 100
+    : 0;
+  const isChartPositive = chartReturn >= 0;
+  
+  // Get return from security metrics for selected period
+  const getSelectedPeriodReturn = () => {
+    if (!displaySecurity?.returns) return null;
+    const periodMap = {
+      '1W': displaySecurity.returns.r_1w,
+      '1M': displaySecurity.returns.r_1m,
+      '3M': displaySecurity.returns.r_3m,
+      '6M': displaySecurity.returns.r_6m,
+      'YTD': displaySecurity.returns.r_ytd,
+      '1Y': displaySecurity.returns.r_1y
+    };
+    return periodMap[selectedPeriod];
+  };
+  const selectedPeriodReturn = getSelectedPeriodReturn();
+  
+  // Calculate chart return for the selected period
+  const chartReturn = chartData.length >= 2 
+    ? ((chartData[chartData.length - 1] - chartData[0]) / chartData[0]) * 100
+    : 0;
+  const isChartPositive = chartReturn >= 0;
+  
+  // Get return from security metrics for selected period
+  const getSelectedPeriodReturn = () => {
+    if (!displaySecurity?.returns) return null;
+    const periodMap = {
+      '1W': displaySecurity.returns.r_1w,
+      '1M': displaySecurity.returns.r_1m,
+      '3M': displaySecurity.returns.r_3m,
+      '6M': displaySecurity.returns.r_6m,
+      'YTD': displaySecurity.returns.r_ytd,
+      '1Y': displaySecurity.returns.r_1y
+    };
+    return periodMap[selectedPeriod];
+  };
+  const selectedPeriodReturn = getSelectedPeriodReturn();
+  
   // Calculate Y-axis domain with 5% padding (TradingView style)
   const dataMin = chartData.length > 0 ? Math.min(...chartData) : 0;
   const dataMax = chartData.length > 0 ? Math.max(...chartData) : 0;
@@ -223,20 +265,29 @@ const StockDetailPage = ({ security: initialSecurity, onBack }) => {
           </div>
 
           {/* Period Selector */}
-          <div className="mt-4 flex gap-2">
-            {periods.map((period) => (
-              <button
-                key={period}
-                onClick={() => setSelectedPeriod(period)}
-                className={`rounded-full px-4 py-1.5 text-xs font-semibold transition-colors ${
-                  selectedPeriod === period
-                    ? "bg-slate-900 text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
-              >
-                {period}
-              </button>
-            ))}
+          <div className="mt-4 flex items-center justify-between">
+            <div className="flex gap-2">
+              {periods.map((period) => (
+                <button
+                  key={period}
+                  onClick={() => setSelectedPeriod(period)}
+                  className={`rounded-full px-4 py-1.5 text-xs font-semibold transition-colors ${
+                    selectedPeriod === period
+                      ? "bg-slate-900 text-white"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  {period}
+                </button>
+              ))}
+            </div>
+            {selectedPeriodReturn != null && (
+              <div className={`text-sm font-semibold ${
+                selectedPeriodReturn >= 0 ? 'text-emerald-600' : 'text-red-600'
+              }`}>
+                {selectedPeriodReturn >= 0 ? '+' : ''}{selectedPeriodReturn.toFixed(2)}%
+              </div>
+            )}
           </div>
 
           {/* Chart */}
@@ -276,8 +327,8 @@ const StockDetailPage = ({ security: initialSecurity, onBack }) => {
                 {/* Area fill */}
                 <defs>
                   <linearGradient id="areaGradient" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stopColor={isPositive ? "#10b981" : "#ef4444"} stopOpacity="0.3" />
-                    <stop offset="100%" stopColor={isPositive ? "#10b981" : "#ef4444"} stopOpacity="0" />
+                    <stop offset="0%" stopColor={isChartPositive ? "#10b981" : "#ef4444"} stopOpacity="0.3" />
+                    <stop offset="100%" stopColor={isChartPositive ? "#10b981" : "#ef4444"} stopOpacity="0" />
                   </linearGradient>
                 </defs>
 
@@ -305,7 +356,7 @@ const StockDetailPage = ({ security: initialSecurity, onBack }) => {
                       })
                       .join(' ')}`}
                     fill="none"
-                    stroke={isPositive ? "#10b981" : "#ef4444"}
+                    stroke={isChartPositive ? "#10b981" : "#ef4444"}
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
