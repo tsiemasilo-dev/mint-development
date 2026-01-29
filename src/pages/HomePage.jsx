@@ -9,6 +9,12 @@ import {
   UserPlus,
   TrendingUp,
   ShieldCheck,
+  Wallet,
+  Send,
+  MapPin,
+  Receipt,
+  Users,
+  X,
 } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
 import { useRequiredActions } from "../lib/useRequiredActions";
@@ -34,6 +40,8 @@ const HomePage = ({
   const { profile, loading } = useProfile();
   const { kycVerified, bankLinked, loading: actionsLoading } = useRequiredActions();
   const [failedLogos, setFailedLogos] = useState({});
+  const [showPayModal, setShowPayModal] = useState(false);
+  const [showReceiveModal, setShowReceiveModal] = useState(false);
   const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(" ");
   const initials = displayName
     .split(" ")
@@ -206,8 +214,8 @@ const HomePage = ({
       <div className="mx-auto -mt-10 flex w-full max-w-sm flex-col gap-6 px-4 pb-10 md:max-w-md md:px-8">
         <section className="grid grid-cols-4 gap-3 text-[11px] font-medium">
           {[
-            { label: "Apply", icon: FileSignature, onClick: onOpenCreditApply },
-            { label: "Repay", icon: HandCoins, onClick: onOpenCreditRepay },
+            { label: "Pay", icon: Wallet, onClick: () => setShowPayModal(true) },
+            { label: "Receive", icon: HandCoins, onClick: () => setShowReceiveModal(true) },
             { label: "Invest", icon: TrendingUp, onClick: onOpenInvest },
             { label: "Withdraw", icon: ArrowDownToLine, onClick: onOpenWithdraw },
           ].map((item) => {
@@ -288,6 +296,140 @@ const HomePage = ({
         <TransactionHistorySection items={transactionHistory} onViewAll={onOpenActivity} />
 
       </div>
+
+      {/* Pay Modal */}
+      {showPayModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4">
+          <button
+            type="button"
+            className="absolute inset-0 h-full w-full cursor-default"
+            aria-label="Close modal"
+            onClick={() => setShowPayModal(false)}
+          />
+          <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-[32px] bg-white shadow-2xl">
+            <div className="flex items-center justify-center pt-3">
+              <div className="h-1.5 w-12 rounded-full bg-slate-200" />
+            </div>
+            
+            <div className="p-6">
+              <div className="mb-6 flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-slate-900">Pay</h2>
+                <button
+                  type="button"
+                  onClick={() => setShowPayModal(false)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  aria-label="Close"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPayModal(false);
+                    // TODO: Navigate to EFT payment
+                  }}
+                  className="flex w-full items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-left transition-all hover:border-violet-300 hover:bg-violet-50 active:scale-[0.98]"
+                >
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-purple-600 text-white">
+                    <Send className="h-6 w-6" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-slate-900">Pay via EFT</p>
+                    <p className="text-xs text-slate-500">Transfer to any bank account</p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPayModal(false);
+                    // TODO: Navigate to GeoPay
+                  }}
+                  className="flex w-full items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-left transition-all hover:border-violet-300 hover:bg-violet-50 active:scale-[0.98]"
+                >
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-emerald-600 to-teal-600 text-white">
+                    <MapPin className="h-6 w-6" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-slate-900">GeoPay</p>
+                    <p className="text-xs text-slate-500">Pay nearby with location</p>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Receive Modal */}
+      {showReceiveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4">
+          <button
+            type="button"
+            className="absolute inset-0 h-full w-full cursor-default"
+            aria-label="Close modal"
+            onClick={() => setShowReceiveModal(false)}
+          />
+          <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-[32px] bg-white shadow-2xl">
+            <div className="flex items-center justify-center pt-3">
+              <div className="h-1.5 w-12 rounded-full bg-slate-200" />
+            </div>
+            
+            <div className="p-6">
+              <div className="mb-6 flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-slate-900">Receive</h2>
+                <button
+                  type="button"
+                  onClick={() => setShowReceiveModal(false)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  aria-label="Close"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowReceiveModal(false);
+                    // TODO: Navigate to Pay Request
+                  }}
+                  className="flex w-full items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-left transition-all hover:border-violet-300 hover:bg-violet-50 active:scale-[0.98]"
+                >
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 text-white">
+                    <Receipt className="h-6 w-6" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-slate-900">Pay Request</p>
+                    <p className="text-xs text-slate-500">Request payment from someone</p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowReceiveModal(false);
+                    // TODO: Navigate to Bill Split
+                  }}
+                  className="flex w-full items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-left transition-all hover:border-violet-300 hover:bg-violet-50 active:scale-[0.98]"
+                >
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-amber-600 to-orange-600 text-white">
+                    <Users className="h-6 w-6" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-slate-900">Bill Split</p>
+                    <p className="text-xs text-slate-500">Split expenses with friends</p>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

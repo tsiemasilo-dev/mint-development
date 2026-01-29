@@ -22,6 +22,9 @@ import EditProfilePage from "./pages/EditProfilePage.jsx";
 import NotificationsPage from "./pages/NotificationsPage.jsx";
 import NotificationSettingsPage from "./pages/NotificationSettingsPage.jsx";
 import MintBalancePage from "./pages/MintBalancePage.jsx";
+import MarketsPage from "./pages/MarketsPage.jsx";
+import StockDetailPage from "./pages/StockDetailPage.jsx";
+import NewsArticlePage from "./pages/NewsArticlePage.jsx";
 import { NotificationsProvider, createWelcomeNotification, useNotificationsContext } from "./lib/NotificationsContext.jsx";
 import ActivityPage from "./pages/ActivityPage.jsx";
 import ActionsPage from "./pages/ActionsPage.jsx";
@@ -61,7 +64,9 @@ const App = () => {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [sessionReady, setSessionReady] = useState(false);
   const [notificationReturnPage, setNotificationReturnPage] = useState("home");
+  const [selectedSecurity, setSelectedSecurity] = useState(null);
   const [selectedStrategy, setSelectedStrategy] = useState(null);
+  const [selectedArticleId, setSelectedArticleId] = useState(null);
   const recoveryHandled = useRef(false);
   const { refetch: refetchNotifications } = useNotificationsContext();
 
@@ -182,7 +187,7 @@ const App = () => {
           onOpenCredit={() => setCurrentPage("credit")}
           onOpenCreditApply={() => setCurrentPage("creditApply")}
           onOpenCreditRepay={() => setCurrentPage("creditRepay")}
-          onOpenInvest={() => setCurrentPage("invest")}
+          onOpenInvest={() => setCurrentPage("markets")}
           onOpenWithdraw={() => setCurrentPage("withdraw")}
           onOpenSettings={() => setCurrentPage("settings")}
         />
@@ -230,9 +235,51 @@ const App = () => {
         <InvestPage
           onBack={() => setCurrentPage("home")}
           onOpenOpenStrategies={() => setCurrentPage("openStrategies")}
-          onOpenMarkets={() => setCurrentPage("investments")}
+          onOpenMarkets={() => setCurrentPage("markets")}
         />
       </AppLayout>
+    );
+  }
+
+  if (currentPage === "markets") {
+    return (
+      <MarketsPage
+        onBack={() => setCurrentPage("home")}
+        onOpenNotifications={() => {
+          setNotificationReturnPage("markets");
+          setCurrentPage("notifications");
+        }}
+        onOpenStockDetail={(security) => {
+          setSelectedSecurity(security);
+          setCurrentPage("stockDetail");
+        }}
+        onOpenNewsArticle={(articleId) => {
+          setSelectedArticleId(articleId);
+          setCurrentPage("newsArticle");
+        }}
+        onOpenFactsheet={(strategy) => {
+          setSelectedStrategy(strategy);
+          setCurrentPage("factsheet");
+        }}
+      />
+    );
+  }
+
+  if (currentPage === "stockDetail") {
+    return (
+      <StockDetailPage
+        security={selectedSecurity}
+        onBack={() => setCurrentPage("markets")}
+      />
+    );
+  }
+
+  if (currentPage === "newsArticle") {
+    return (
+      <NewsArticlePage
+        articleId={selectedArticleId}
+        onBack={() => setCurrentPage("markets")}
+      />
     );
   }
 
