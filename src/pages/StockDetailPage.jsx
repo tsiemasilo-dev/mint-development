@@ -80,12 +80,26 @@ const StockDetailPage = ({ security: initialSecurity, onBack }) => {
     : "—";
   const isPositive = displaySecurity?.changePct != null && displaySecurity.changePct >= 0;
 
-  // Generate chart data from price history
-  const chartData = priceHistory.length > 0 ? priceHistory.map(p => p.close) : [];
-  const minValue = chartData.length > 0 ? Math.min(...chartData) : 0;
-  const maxValue = chartData.length > 0 ? Math.max(...chartData) : 0;
-  const range = maxValue - minValue;
-  const hasValidRange = range > 0 && chartData.length > 0;
+  // Generate chart data from price history - filter out nulls
+  const chartData = priceHistory.length > 0 
+    ? priceHistory.filter(p => p.close != null).map(p => p.close) 
+    : [];
+  
+  // Calculate Y-axis domain with 5% padding (TradingView style)
+  const dataMin = chartData.length > 0 ? Math.min(...chartData) : 0;
+  const dataMax = chartData.length > 0 ? Math.max(...chartData) : 0;
+  let range = dataMax - dataMin;
+  
+  // If range is 0 (flat line), use small percentage of max value
+  if (range === 0) {
+    range = dataMax * 0.001 || 1;
+  }
+  
+  // Apply 5% padding on top and bottom for breathing room
+  const minValue = dataMin - (range * 0.05);
+  const maxValue = dataMax + (range * 0.05);
+  const paddedRange = maxValue - minValue;
+  const hasValidRange = paddedRange > 0 && chartData.length > 1;
 
   const formatTimestamp = () => {
     if (!security.asOfDate) {
@@ -95,15 +109,15 @@ const StockDetailPage = ({ security: initialSecurity, onBack }) => {
     return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
   };
 
-  // Helper function to safely calculate Y position (inverted so bottom = 100, top = 0)
+  // Helper function to calculate Y position with proper domain
   const getYPosition = (value) => {
-    if (!hasValidRange) return 50; // Center if no valid data
-    // Map data range to SVG coordinates: minValue -> 100% (bottom), maxValue -> 0% (top)
-    return ((maxValue - value) / range) * 100;
+    if (!hasValidRange) return 50;
+    // Map value to SVG Y coordinate: maxValue -> 0% (top), minValue -> 100% (bottom)
+    return ((maxValue - value) / paddedRange) * 100;
   };
 
-  // Format date for X-axis labels
-  const formatXAxisDate = (index, total) => {
+  // Format date for X-axis labels (consistent format)
+  const formatXAxisDate = (index) => {
     if (priceHistory.length === 0 || index >= priceHistory.length) return '';
     const date = new Date(priceHistory[index].ts);
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -231,22 +245,32 @@ const StockDetailPage = ({ security: initialSecurity, onBack }) => {
               <div className="flex h-full items-center justify-center">
                 <div className="text-sm text-slate-400">Loading chart...</div>
               </div>
-            ) : chartData.length === 0 ? (
+            ) : chartData.length < 2 ? (
               <div className="flex h-full items-center justify-center">
-                <div className="text-sm text-slate-400">No price data available</div>
+                <div className="text-sm text-slate-400">
+                  {chartData.length === 0 ? 'No price data available' : 'Insufficient data for chart'}
+                </div>
               </div>
             ) : (
-              <svg width="100%" height="100%" className="overflow-visible">
-                {/* Grid lines */}
-                {[0, 1, 2, 3, 4].map((i) => (
+              <svg 
+                width="100%" 
+                height="100%" 
+                viewBox="0 0 100 100" 
+                preserveAspectRatio="none"
+                className="overflow-visible"
+                style={{ display: 'block' }}
+              >
+                {/* Grid lines (horizontal only) */}
+                {[0, 25, 50, 75, 100].map((y) => (
                   <line
-                    key={i}
+                    key={y}
                     x1="0"
-                    y1={`${(i / 4) * 100}%`}
-                    x2="100%"
-                    y2={`${(i / 4) * 100}%`}
+                    y1={y}
+                    x2="100"
+                    y2={y}
                     stroke="#e2e8f0"
-                    strokeWidth="1"
+                    strokeWidth="0.2"
+                    vectorEffect="non-scaling-stroke"
                   />
                 ))}
 
@@ -282,45 +306,44 @@ const StockDetailPage = ({ security: initialSecurity, onBack }) => {
                       .join(' ')}`}
                     fill="none"
                     stroke={isPositive ? "#10b981" : "#ef4444"}
-                    strokeWidth="2"
+                    strokeWidth="0.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
+                    vectorEffect="non-scaling-stroke"
                   />
                 </g>
 
-                {/* Y-axis labels */}
-                <g className="text-xs text-slate-400">
-                  {[maxValue, (maxValue + minValue) / 2, minValue].map((val, i) => (
+                {/* Y-axis labels (right side) */}
+                <g className="text-xs text-slate-400" style={{ fontSize: '11px', fontWeight: 500 }}>
+                  {[dataMax, (dataMax + dataMin) / 2, dataMin].map((val, i) => (
                     <text 
                       key={i} 
-                      x="100%" 
-                      y={`${(i / 2) * 100}%`}
+                      x="98" 
+                      y={i * 50}
                       textAnchor="end"
-                      dx="-5"
-                      dy="4"
+                      dominantBaseline="middle"
                       fill="currentColor"
-                      fontSize="10"
                     >
-                      {val.toFixed(0)}
+                      {val.toFixed(2)}
                     </text>
                   ))}
                 </g>
 
-                {/* X-axis labels */}
-                <g className="text-xs text-slate-400">
-                  {[0, Math.floor(chartData.length / 2), chartData.length - 1].map((idx, i) => (
-                    <text
-                      key={i}
-                      x={`${(idx / Math.max(1, chartData.length - 1)) * 100}%`}
-                      y="100%"
-                      textAnchor={i === 0 ? 'start' : i === 2 ? 'end' : 'middle'}
-                      dy="15"
-                      fill="currentColor"
-                      fontSize="10"
-                    >
-                      {formatXAxisDate(idx, chartData.length)}
-                    </text>
-                  ))}
+                {/* X-axis labels (bottom) */}
+                <g className="text-xs text-slate-400" style={{ fontSize: '11px', fontWeight: 500 }}>
+                  {[0, Math.floor(chartData.length / 2), chartData.length - 1]
+                    .filter(idx => idx < chartData.length)
+                    .map((idx, i, arr) => (
+                      <text
+                        key={i}
+                        x={(idx / Math.max(1, chartData.length - 1)) * 100}
+                        y="105"
+                        textAnchor={i === 0 ? 'start' : i === arr.length - 1 ? 'end' : 'middle'}
+                        fill="currentColor"
+                      >
+                        {formatXAxisDate(idx)}
+                      </text>
+                    ))}
                 </g>
               </svg>
             )}
