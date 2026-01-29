@@ -22,6 +22,7 @@ import EditProfilePage from "./pages/EditProfilePage.jsx";
 import NotificationsPage from "./pages/NotificationsPage.jsx";
 import NotificationSettingsPage from "./pages/NotificationSettingsPage.jsx";
 import MintBalancePage from "./pages/MintBalancePage.jsx";
+import MarketsPage from "./pages/MarketsPage.jsx";
 import { NotificationsProvider, createWelcomeNotification, useNotificationsContext } from "./lib/NotificationsContext.jsx";
 import ActivityPage from "./pages/ActivityPage.jsx";
 import ActionsPage from "./pages/ActionsPage.jsx";
@@ -230,7 +231,20 @@ const App = () => {
         <InvestPage
           onBack={() => setCurrentPage("home")}
           onOpenOpenStrategies={() => setCurrentPage("openStrategies")}
-          onOpenMarkets={() => setCurrentPage("investments")}
+          onOpenMarkets={() => setCurrentPage("markets")}
+        />
+      </AppLayout>
+    );
+  }
+
+  if (currentPage === "markets") {
+    return (
+      <AppLayout activeTab="investments" onTabChange={setCurrentPage}>
+        <MarketsPage
+          onOpenNotifications={() => {
+            setNotificationReturnPage("markets");
+            setCurrentPage("notifications");
+          }}
         />
       </AppLayout>
     );
