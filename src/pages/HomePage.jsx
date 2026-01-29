@@ -299,7 +299,7 @@ const HomePage = ({
 
       {/* Pay Modal */}
       {showPayModal && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 px-4 pb-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4">
           <button
             type="button"
             className="absolute inset-0 h-full w-full cursor-default"
@@ -366,7 +366,7 @@ const HomePage = ({
 
       {/* Receive Modal */}
       {showReceiveModal && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 px-4 pb-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4">
           <button
             type="button"
             className="absolute inset-0 h-full w-full cursor-default"

@@ -59,7 +59,7 @@ const strategyCards = [
 
 const sortOptions = ["Market Cap", "Dividend Yield", "P/E Ratio", "Beta"];
 
-const MarketsPage = ({ onOpenNotifications, onOpenStockDetail, onOpenNewsArticle }) => {
+const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNewsArticle, onOpenFactsheet }) => {
   const { profile, loading: profileLoading } = useProfile();
   const [securities, setSecurities] = useState([]);
   const [holdingsSecurities, setHoldingsSecurities] = useState([]);
@@ -360,19 +360,17 @@ const MarketsPage = ({ onOpenNotifications, onOpenStockDetail, onOpenNewsArticle
       <div className="rounded-b-[36px] bg-gradient-to-b from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-4 pb-6 pt-12 text-white md:px-8">
         <div className="mx-auto flex w-full max-w-sm flex-col gap-6 md:max-w-md">
           <header className="flex items-center justify-between text-white">
-            <div className="flex items-center gap-3">
-              {profile.avatarUrl ? (
-                <img
-                  src={profile.avatarUrl}
-                  alt={displayName || "Profile"}
-                  className="h-10 w-10 rounded-full border border-white/40 object-cover"
-                />
-              ) : (
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-xs font-semibold text-slate-700">
-                  {initials || "—"}
-                </div>
-              )}
-            </div>
+            <button
+              type="button"
+              onClick={onBack}
+              aria-label="Back"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-sm"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <h1 className="text-lg font-semibold">Markets</h1>
             <NotificationBell onClick={onOpenNotifications} />
           </header>
 
@@ -922,7 +920,7 @@ const MarketsPage = ({ onOpenNotifications, onOpenStockDetail, onOpenNewsArticle
 
       {/* Strategy Preview Modal */}
       {selectedStrategy && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 px-4 pb-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4">
           <button
             type="button"
             className="absolute inset-0 h-full w-full cursor-default"
@@ -930,24 +928,38 @@ const MarketsPage = ({ onOpenNotifications, onOpenStockDetail, onOpenNewsArticle
             onClick={() => setSelectedStrategy(null)}
           />
           <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-[32px] bg-white shadow-2xl">
-            <div className="flex items-center justify-center pt-3">
-              <div className="h-1.5 w-12 rounded-full bg-slate-200" />
-            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedStrategy(null)}
+              className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 z-10"
+              aria-label="Close"
+            >
+              <X className="h-4 w-4" />
+            </button>
             
             <div className="p-6">
-              <h2 className="text-xl font-bold text-slate-900">{selectedStrategy.name}</h2>
-              <div className="mt-4 grid grid-cols-2 gap-4">
-                <div className="rounded-2xl bg-slate-50 p-4">
-                  <p className="text-xs text-slate-500">Return</p>
-                  <p className="mt-2 text-2xl font-bold text-emerald-600">{selectedStrategy.return}</p>
+              <div className="flex items-start gap-3 mb-6">
+                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-white shadow-sm ring-1 ring-slate-100">
+                  <img
+                    src="https://s3-symbol-logo.tradingview.com/country/ZA--big.svg"
+                    alt="Strategy"
+                    className="h-full w-full object-cover"
+                  />
                 </div>
-                <div className="rounded-2xl bg-slate-50 p-4">
-                  <p className="text-xs text-slate-500">Min Investment</p>
-                  <p className="mt-2 text-lg font-bold text-slate-900">{selectedStrategy.minimum_display}</p>
+                <div className="flex-1">
+                  <h2 className="text-lg font-semibold text-slate-900">{selectedStrategy.name}</h2>
+                  <p className="text-sm text-slate-500">{selectedStrategy.minimum_display}</p>
                 </div>
               </div>
+
+              <div className="flex items-center gap-3 mb-6">
+                <p className="text-2xl font-semibold text-slate-900">{selectedStrategy.return}</p>
+                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-600">
+                  All time gain
+                </span>
+              </div>
               
-              <div className="mt-4 flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 mb-6">
                 {selectedStrategy.tags.map((tag) => (
                   <span
                     key={tag}
@@ -986,9 +998,8 @@ const MarketsPage = ({ onOpenNotifications, onOpenStockDetail, onOpenNewsArticle
 
               <button
                 onClick={() => {
-                  // Will be connected to factsheet navigation
-                  console.log("View factsheet for:", selectedStrategy.name);
                   setSelectedStrategy(null);
+                  onOpenFactsheet(selectedStrategy);
                 }}
                 className="mt-6 w-full rounded-2xl bg-gradient-to-r from-purple-600 to-purple-500 py-4 font-semibold text-white shadow-lg transition-all active:scale-95"
               >

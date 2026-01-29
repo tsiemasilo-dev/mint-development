@@ -244,6 +244,7 @@ const App = () => {
   if (currentPage === "markets") {
     return (
       <MarketsPage
+        onBack={() => setCurrentPage("home")}
         onOpenNotifications={() => {
           setNotificationReturnPage("markets");
           setCurrentPage("notifications");
@@ -255,6 +256,10 @@ const App = () => {
         onOpenNewsArticle={(articleId) => {
           setSelectedArticleId(articleId);
           setCurrentPage("newsArticle");
+        }}
+        onOpenFactsheet={(strategy) => {
+          setSelectedStrategy(strategy);
+          setCurrentPage("factsheet");
         }}
       />
     );
