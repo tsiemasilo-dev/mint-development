@@ -1,9 +1,12 @@
-import React, { useEffect, useState, useRef, useMemo } from "react";
+import React, { useEffect, useState, useRef, useMemo, useId } from "react";
 import { supabase } from "../lib/supabase.js";
 import { useProfile } from "../lib/useProfile";
 import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight } from "lucide-react";
 import NotificationBell from "../components/NotificationBell";
 import Skeleton from "../components/Skeleton";
+import { StrategyReturnHeaderChart } from "../components/StrategyReturnHeaderChart";
+import { ChartContainer } from "../components/ui/line-charts-2";
+import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer } from "recharts";
 
 // Mock strategies data - will be replaced with real data later
 const strategyCards = [
@@ -58,6 +61,88 @@ const strategyCards = [
 ];
 
 const sortOptions = ["Market Cap", "Dividend Yield", "P/E Ratio", "Beta"];
+
+// Mini chart component for strategy cards
+const StrategyMiniChart = ({ values }) => {
+  const chartConfig = {
+    returnPct: {
+      label: "Return",
+      color: "var(--color-mint-purple, #5b21b6)",
+    },
+  };
+  const data = useMemo(
+    () =>
+      values.map((value, index) => ({
+        label: `P${index + 1}`,
+        returnPct: value,
+      })),
+    [values],
+  );
+  const lastIndex = data.length - 1;
+  const gradientId = useId();
+  const [activeLabel, setActiveLabel] = useState(null);
+  const renderLastDot = ({ cx, cy, index }) => {
+    if (index !== lastIndex) return null;
+    return (
+      <g>
+        <circle cx={cx} cy={cy} r={5} fill="#ffffff" opacity={0.95} />
+        <circle cx={cx} cy={cy} r={2.5} fill={chartConfig.returnPct.color} />
+      </g>
+    );
+  };
+
+  return (
+    <ChartContainer config={chartConfig} className="h-12 w-24">
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart
+          data={data}
+          margin={{ top: 4, right: 6, left: 6, bottom: 4 }}
+          onMouseMove={(state) => {
+            if (state?.activeLabel) {
+              setActiveLabel(state.activeLabel);
+            }
+          }}
+          onMouseLeave={() => {
+            setActiveLabel(null);
+          }}
+        >
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#5b21b6" stopOpacity={0.22} />
+              <stop offset="70%" stopColor="#3b1b7a" stopOpacity={0.08} />
+              <stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+
+          {activeLabel ? (
+            <ReferenceLine
+              x={activeLabel}
+              stroke="#CBD5E1"
+              strokeOpacity={0.7}
+              strokeDasharray="3 3"
+            />
+          ) : null}
+
+          <Area
+            type="monotone"
+            dataKey="returnPct"
+            stroke="transparent"
+            fill={`url(#${gradientId})`}
+            dot={false}
+          />
+          <Line
+            type="monotone"
+            dataKey="returnPct"
+            stroke={chartConfig.returnPct.color}
+            strokeWidth={2}
+            dot={renderLastDot}
+            activeDot={false}
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </ChartContainer>
+  );
+};
 
 const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNewsArticle, onOpenFactsheet }) => {
   const { profile, loading: profileLoading } = useProfile();
@@ -804,74 +889,67 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                     <ChevronRight className="h-5 w-5 text-slate-400" />
                   </div>
                   <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 scrollbar-hide">
-                    {sectorStrategies.map((strategy) => {
-                      const holdingLogos = strategy.holdings
-                        .map(ticker => holdingsSecurities.find(s => s.symbol === ticker))
-                        .filter(Boolean);
-                      
-                      return (
-                        <button
-                          key={strategy.name}
-                          onClick={() => setSelectedStrategy(strategy)}
-                          className="flex-shrink-0 w-72 snap-center rounded-3xl border border-slate-100 bg-white p-4 text-left shadow-sm transition-all hover:shadow-md active:scale-[0.98]"
-                        >
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex-1 space-y-1">
-                              <p className="text-sm font-semibold text-slate-900">{strategy.name}</p>
-                              <div>
-                                <p className="text-xs font-semibold text-emerald-500">
-                                  {strategy.return}
-                                </p>
-                                <p className="text-[11px] text-slate-400">{strategy.minimum_display}</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center rounded-xl bg-slate-50 px-2 py-1">
-                              <div className="h-10 w-20 rounded bg-gradient-to-r from-emerald-500/20 to-emerald-500/5" />
+                    {sectorStrategies.map((strategy) => (
+                      <button
+                        key={strategy.name}
+                        type="button"
+                        onClick={() => setSelectedStrategy(strategy)}
+                        className="flex-shrink-0 w-72 rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md hover:border-slate-200 p-4 transition-all snap-center"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="text-left space-y-1">
+                            <p className="text-sm font-semibold text-slate-900">{strategy.name}</p>
+                            <div>
+                              <p className="text-xs font-semibold text-emerald-500">
+                                +{strategy.returnRate}
+                              </p>
+                              <p className="text-[11px] text-slate-400">{strategy.minimum_display}</p>
                             </div>
                           </div>
+                          <div className="flex items-center rounded-xl bg-slate-50 px-2">
+                            <StrategyMiniChart values={strategy.sparkline} />
+                          </div>
+                        </div>
 
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            {strategy.tags.map((tag) => (
-                              <span
-                                key={tag}
-                                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600"
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {strategy.tags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+
+                        <div className="mt-3 flex items-center gap-3">
+                          <div className="flex -space-x-2">
+                            {holdingsSecurities.slice(0, 3).map((company, idx) => (
+                              <div
+                                key={`${strategy.name}-${company.symbol}-${idx}`}
+                                className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-sm"
                               >
-                                {tag}
-                              </span>
+                                {company.logo_url ? (
+                                  <img
+                                    src={company.logo_url}
+                                    alt={company.symbol}
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">
+                                    {company.symbol?.substring(0, 2)}
+                                  </div>
+                                )}
+                              </div>
                             ))}
-                          </div>
-
-                          <div className="mt-3 flex items-center gap-3">
-                            <div className="flex -space-x-2">
-                              {holdingLogos.slice(0, 3).map((holding, idx) => (
-                                <div
-                                  key={`${strategy.name}-${holding.symbol}-${idx}`}
-                                  className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-sm"
-                                >
-                                  {holding.logo_url ? (
-                                    <img
-                                      src={holding.logo_url}
-                                      alt={holding.symbol}
-                                      className="h-full w-full object-cover"
-                                    />
-                                  ) : (
-                                    <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">
-                                      {holding.symbol?.substring(0, 2)}
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                              {strategy.holdings.length > 3 && (
-                                <div className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500">
-                                  +{strategy.holdings.length - 3}
-                                </div>
-                              )}
+                            <div className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500">
+                              +3
                             </div>
-                            <span className="text-xs font-semibold text-slate-500">Holdings snapshot</span>
                           </div>
-                        </button>
-                      );
-                    })}
+                          <span className="text-xs font-semibold text-slate-500">Holdings snapshot</span>
+                        </div>
+                      </button>
+                    ))}
                   </div>
                 </section>
               );
