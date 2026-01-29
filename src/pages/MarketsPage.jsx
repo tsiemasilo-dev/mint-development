@@ -977,6 +977,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                           <div className="flex items-center rounded-xl bg-slate-50 px-2">
                             <StrategyMiniChart values={strategy.sparkline} />
                           </div>
+                          </div>
                         </div>
 
                         <div className="mt-3 flex flex-wrap gap-2">
