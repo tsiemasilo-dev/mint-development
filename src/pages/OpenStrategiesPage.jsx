@@ -1,8 +1,9 @@
-import React, { useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ChevronRight, Search, SlidersHorizontal, Heart } from "lucide-react";
+import React, { useId, useMemo, useRef, useState, useEffect } from "react";
+import { ArrowLeft, ChevronRight, Search, SlidersHorizontal, Heart, X } from "lucide-react";
 import { StrategyReturnHeaderChart } from "../components/StrategyReturnHeaderChart";
 import { ChartContainer } from "../components/ui/line-charts-2";
 import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer } from "recharts";
+import { supabase } from "../lib/supabase";
 
 const strategyCards = [
   {
@@ -13,8 +14,14 @@ const strategyCards = [
     minimum: 2500,
     minimum_display: "Min. R2,500",
     tags: ["Balanced", "Low risk", "Automated"],
-    holdings: ["Apple", "Microsoft", "Nvidia"],
-    tickers: ["AAPL", "MSFT", "NVDA"],
+    holdings: [
+      { ticker: "AGL", weight: 25.5 },
+      { ticker: "NPN", weight: 22.3 },
+      { ticker: "SHP", weight: 18.7 },
+      { ticker: "ABG", weight: 15.2 },
+      { ticker: "SLM", weight: 12.1 },
+      { ticker: "SOL", weight: 6.2 },
+    ],
     exposure: "Global",
     minInvestment: "R2,500+",
     timeHorizon: "Long",
@@ -37,8 +44,13 @@ const strategyCards = [
     minimum: 1500,
     minimum_display: "Min. R1,500",
     tags: ["Income", "Low risk", "Automated"],
-    holdings: ["Apple", "Coca-Cola", "Procter & Gamble"],
-    tickers: ["AAPL", "KO", "PG"],
+    holdings: [
+      { ticker: "AGL", weight: 30.0 },
+      { ticker: "BTI", weight: 25.0 },
+      { ticker: "SBK", weight: 20.0 },
+      { ticker: "VOD", weight: 15.0 },
+      { ticker: "NED", weight: 10.0 },
+    ],
     exposure: "Mixed",
     minInvestment: "R500+",
     timeHorizon: "Medium",
@@ -61,8 +73,13 @@ const strategyCards = [
     minimum: 5000,
     minimum_display: "Min. R5,000",
     tags: ["Growth", "Higher risk", "Automated"],
-    holdings: ["Tesla", "Nvidia", "Amazon"],
-    tickers: ["TSLA", "NVDA", "AMZN"],
+    holdings: [
+      { ticker: "NPN", weight: 35.0 },
+      { ticker: "PRX", weight: 25.0 },
+      { ticker: "AMS", weight: 20.0 },
+      { ticker: "SHP", weight: 12.0 },
+      { ticker: "MTN", weight: 8.0 },
+    ],
     exposure: "Equities",
     minInvestment: "R10,000+",
     timeHorizon: "Short",
@@ -81,16 +98,16 @@ const strategyCards = [
 
 const holdingsSnapshot = [
   {
-    name: "Apple",
-    src: "https://s3-symbol-logo.tradingview.com/apple--big.svg",
+    name: "Anglo American",
+    src: "https://s3-symbol-logo.tradingview.com/anglo-american--big.svg",
   },
   {
-    name: "Microsoft",
-    src: "https://s3-symbol-logo.tradingview.com/microsoft--big.svg",
+    name: "Naspers",
+    src: "https://s3-symbol-logo.tradingview.com/naspers--big.svg",
   },
   {
-    name: "Nvidia",
-    src: "https://s3-symbol-logo.tradingview.com/nvidia--big.svg",
+    name: "Shoprite",
+    src: "https://s3-symbol-logo.tradingview.com/shoprite-holdings--big.svg",
   },
 ];
 
@@ -208,12 +225,46 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
   const [draftTimeHorizon, setDraftTimeHorizon] = useState(new Set());
   const [draftSectors, setDraftSectors] = useState(new Set());
   const [sheetOffset, setSheetOffset] = useState(0);
-  const [activeStrategy, setActiveStrategy] = useState(strategyCards[0]);
+  const [selectedStrategy, setSelectedStrategy] = useState(null);
   const [selectedSectorFilter, setSelectedSectorFilter] = useState(null);
   const [watchlist, setWatchlist] = useState(new Set());
+  const [holdingsSecurities, setHoldingsSecurities] = useState([]);
   const carouselRef = useRef(null);
   const dragStartY = useRef(null);
   const isDragging = useRef(false);
+
+  // Fetch securities for strategy holdings with logos
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchHoldingsSecurities = async () => {
+      if (!supabase) return;
+
+      try {
+        // Get all unique tickers from all strategies
+        const allTickers = [...new Set(strategyCards.flatMap((s) => s.holdings.map((h) => h.ticker)))];
+
+        const { data, error } = await supabase
+          .from("securities")
+          .select("ticker, name, logo_url")
+          .in("ticker", allTickers);
+
+        if (error) throw error;
+        if (isMounted && data) {
+          setHoldingsSecurities(data);
+        }
+      } catch (error) {
+        console.error("Error fetching holdings securities:", error);
+      }
+    };
+
+    fetchHoldingsSecurities();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+  
   const series = [
     { label: "Jan", returnPct: 1.2 },
     { label: "Feb", returnPct: 2.0 },
@@ -237,19 +288,24 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
     if (!normalizedQuery) return [];
     const suggestions = new Map();
     strategyCards.forEach((strategy) => {
-      strategy.holdings.forEach((holding, index) => {
-        const ticker = strategy.tickers[index];
-        const label = `${holding} ${ticker}`;
-        if (
-          holding.toLowerCase().includes(normalizedQuery) ||
-          ticker.toLowerCase().includes(normalizedQuery)
-        ) {
-          suggestions.set(holding, { holding, ticker });
+      strategy.holdings.forEach((holding) => {
+        const security = holdingsSecurities.find((s) => s.ticker === holding.ticker);
+        if (security) {
+          const label = `${security.name} ${security.ticker}`;
+          if (
+            security.name.toLowerCase().includes(normalizedQuery) ||
+            security.ticker.toLowerCase().includes(normalizedQuery)
+          ) {
+            suggestions.set(security.ticker, {
+              ticker: security.ticker,
+              name: security.name,
+            });
+          }
         }
       });
     });
     return Array.from(suggestions.values());
-  }, [normalizedQuery]);
+  }, [normalizedQuery, holdingsSecurities]);
 
   const filteredStrategies = useMemo(() => {
     const results = strategyCards.filter((strategy) => {
@@ -258,7 +314,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
           ? strategy.name.toLowerCase().includes(normalizedQuery)
           : true;
       const matchesHolding = selectedHolding
-        ? strategy.holdings.includes(selectedHolding)
+        ? strategy.holdings.some((h) => h.ticker === selectedHolding)
         : true;
       const matchesRisk = selectedRisks.size
         ? selectedRisks.has(strategy.risk)
@@ -308,13 +364,6 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
       sorted.sort((a, b) => b.popularityScore - a.popularityScore);
     }
 
-    // Set active strategy to first filtered result if current is filtered out
-    if (sorted.length > 0 && !sorted.includes(activeStrategy)) {
-      setActiveStrategy(sorted[0]);
-    } else if (sorted.length === 0 && activeStrategy) {
-      setActiveStrategy(null);
-    }
-
     return sorted;
   }, [
     normalizedQuery,
@@ -326,7 +375,6 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
     selectedSectors,
     selectedSort,
     selectedSectorFilter,
-    activeStrategy,
   ]);
 
   const applyFilters = () => {
@@ -455,100 +503,6 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
           <div className="h-10 w-10" />
         </header>
 
-        <section className="mt-6 rounded-[28px] border border-slate-100 bg-white p-5 shadow-[0_18px_40px_rgba(79,70,229,0.08)]">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-white shadow-sm ring-1 ring-slate-100">
-                <img
-                  src="https://s3-symbol-logo.tradingview.com/country/ZA--big.svg"
-                  alt="South Africa"
-                  className="h-full w-full object-cover"
-                />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900">{activeStrategy?.name || "AlgoHive Core"}</h2>
-                <p className="text-xs font-semibold text-slate-400">MI90b · JSE</p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => toggleWatchlist(activeStrategy?.name)}
-              className={`flex h-10 w-10 items-center justify-center rounded-full transition-all ${
-                watchlist.has(activeStrategy?.name)
-                  ? "bg-rose-100 text-rose-600"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-              aria-label="Add to watchlist"
-            >
-              <Heart className="h-5 w-5" fill={watchlist.has(activeStrategy?.name) ? "currentColor" : "none"} />
-            </button>
-          </div>
-
-          <div className="mt-4 space-y-1">
-            <div className="flex items-center gap-3">
-              <p className="text-2xl font-semibold text-slate-900">{`+${activeStrategy?.returnRate || "6.7%"}`}</p>
-              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-600">
-                All time gain {`+${activeStrategy?.returnScore?.toFixed(1) || "6.7"}%`}
-              </span>
-            </div>
-            <p className="text-xs text-slate-400">Last updated 2h ago</p>
-          </div>
-
-          <div className="mt-4">
-            <StrategyReturnHeaderChart
-              series={series}
-              onValueChange={(value) => setReturnValue(value)}
-            />
-          </div>
-
-          <div className="mt-3 grid grid-cols-3 items-center text-[11px] font-semibold text-slate-400">
-            <span className="text-left">Max DD: {activeStrategy?.maxDrawdownScore?.toFixed(1)}%</span>
-            <span className="text-center">Volatility: {activeStrategy?.volatilityScore <= 3 ? "Low" : activeStrategy?.volatilityScore <= 5 ? "Medium" : "High"}</span>
-            <span className="text-right">Fees: 20%</span>
-          </div>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            {(activeStrategy?.tags || ["Balanced", "Low risk", "Automated"]).map((tag) => (
-              <span
-                key={tag}
-                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-
-          <div className="mt-4 flex items-center gap-3">
-            <div className="flex -space-x-2">
-              {holdingsSnapshot.map((company) => (
-                <div
-                  key={company.name}
-                  className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-sm"
-                >
-                  <img
-                    src={company.src}
-                    alt={company.name}
-                    className="h-full w-full object-cover"
-                  />
-                </div>
-              ))}
-              <div className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500">
-                +3
-              </div>
-            </div>
-            <span className="text-xs font-semibold text-slate-500">Holdings snapshot</span>
-          </div>
-        </section>
-
-        <button
-          type="button"
-          onClick={() => onOpenFactsheet(activeStrategy)}
-          className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-200/70"
-        >
-          View factsheet
-          <ChevronRight className="h-4 w-4" />
-        </button>
-
         <div className="mt-5 space-y-3">
           <div className="relative">
             <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm">
@@ -586,20 +540,20 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
               <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-20 rounded-2xl border border-slate-100 bg-white p-2 shadow-lg">
                 {holdingSuggestions.map((suggestion) => (
                   <button
-                    key={suggestion.holding}
+                    key={suggestion.ticker}
                     type="button"
                     onClick={() => {
-                      setSelectedHolding(suggestion.holding);
-                      setSearchQuery(`${suggestion.holding} ${suggestion.ticker}`);
+                      setSelectedHolding(suggestion.ticker);
+                      setSearchQuery(`${suggestion.name} ${suggestion.ticker}`);
                       setActiveChips((prev) => {
                         const next = prev.filter((chip) => !chip.startsWith("Holding:"));
-                        const holdingChip = `Holding: ${suggestion.holding}`;
+                        const holdingChip = `Holding: ${suggestion.name}`;
                         return next.includes(holdingChip) ? next : [...next, holdingChip];
                       });
                     }}
                     className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
                   >
-                    <span className="font-semibold">{suggestion.holding}</span>
+                    <span className="font-semibold">{suggestion.name}</span>
                     <span className="text-xs font-semibold text-slate-400">{suggestion.ticker}</span>
                   </button>
                 ))}
@@ -656,12 +610,8 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
                 <button
                   key={strategy.name}
                   type="button"
-                  onClick={() => setActiveStrategy(strategy)}
-                  className={`flex-shrink-0 w-72 rounded-2xl border p-4 transition-all snap-center ${
-                    activeStrategy?.name === strategy.name
-                      ? "border-violet-400 bg-white shadow-md ring-1 ring-violet-200"
-                      : "border-slate-100 bg-white shadow-sm hover:shadow-md hover:border-slate-200"
-                  }`}
+                  onClick={() => setSelectedStrategy(strategy)}
+                  className="flex-shrink-0 w-72 rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md hover:border-slate-200 p-4 transition-all snap-center"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="text-left space-y-1">
@@ -912,6 +862,116 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
                 className="relative w-full rounded-2xl bg-gradient-to-r from-[#111111] via-[#3b1b7a] to-[#5b21b6] py-3 text-sm font-semibold text-white shadow-lg shadow-violet-200/60"
               >
                 Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Strategy Preview Modal */}
+      {selectedStrategy && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 px-4 pb-6">
+          <button
+            type="button"
+            className="absolute inset-0 h-full w-full cursor-default"
+            aria-label="Close preview"
+            onClick={() => setSelectedStrategy(null)}
+          />
+          
+          <div className="relative w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+            <button
+              type="button"
+              onClick={() => setSelectedStrategy(null)}
+              className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200"
+              aria-label="Close"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            <div className="space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-white shadow-sm ring-1 ring-slate-100">
+                  <img
+                    src="https://s3-symbol-logo.tradingview.com/country/ZA--big.svg"
+                    alt="Strategy"
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-slate-900">{selectedStrategy.name}</h3>
+                  <p className="text-sm text-slate-500">{selectedStrategy.minimum_display}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => toggleWatchlist(selectedStrategy.name)}
+                  className={`flex h-9 w-9 items-center justify-center rounded-full transition-all ${
+                    watchlist.has(selectedStrategy.name)
+                      ? "bg-rose-100 text-rose-600"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                  aria-label="Add to watchlist"
+                >
+                  <Heart className="h-4 w-4" fill={watchlist.has(selectedStrategy.name) ? "currentColor" : "none"} />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <p className="text-2xl font-semibold text-slate-900">{selectedStrategy.return}</p>
+                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-600">
+                  All time gain
+                </span>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {selectedStrategy.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+
+              <div>
+                <p className="mb-2 text-sm font-semibold text-slate-900">Top Holdings</p>
+                <div className="space-y-2">
+                  {selectedStrategy.holdings.slice(0, 5).map((holding) => {
+                    const security = holdingsSecurities.find((s) => s.ticker === holding.ticker);
+                    return (
+                      <div key={holding.ticker} className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-slate-50 border border-slate-100">
+                          {security?.logo_url ? (
+                            <img
+                              src={security.logo_url}
+                              alt={security.name}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-xs font-semibold text-slate-400">{holding.ticker.slice(0, 2)}</span>
+                          )}
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm font-semibold text-slate-900">{security?.name || holding.ticker}</p>
+                          <p className="text-xs text-slate-500">{holding.ticker}</p>
+                        </div>
+                        <p className="text-sm font-semibold text-slate-600">{holding.weight.toFixed(1)}%</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedStrategy(null);
+                  onOpenFactsheet(selectedStrategy);
+                }}
+                className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-200/70"
+              >
+                View Factsheet
+                <ChevronRight className="h-4 w-4" />
               </button>
             </div>
           </div>

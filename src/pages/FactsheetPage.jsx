@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import { ArrowLeft, X, Info, Heart } from "lucide-react";
+import { supabase } from "../lib/supabase";
 import {
   Area,
   Line,
@@ -111,13 +112,46 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
   const [selectedMetricModal, setSelectedMetricModal] = useState(null);
   const [calendarYear, setCalendarYear] = useState(2025);
   const [isInWatchlist, setIsInWatchlist] = useState(false);
+  const [holdingsSecurities, setHoldingsSecurities] = useState([]);
   const marqueeRef = useRef(null);
 
   const currentStrategy = strategy || {
     name: "AlgoHive Core",
     tags: ["Balanced", "Low risk", "Automated"],
     description: "AlgoHive Core targets steady, diversified growth using an automated allocation model that adapts to changing market regimes. It aims to smooth volatility while maintaining consistent participation in upside moves, making it suitable for investors seeking a balanced, long-term portfolio anchor.",
+    holdings: [],
   };
+
+  // Fetch securities for strategy holdings with logos
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchHoldingsSecurities = async () => {
+      if (!supabase || !currentStrategy.holdings || currentStrategy.holdings.length === 0) return;
+
+      try {
+        const tickers = currentStrategy.holdings.map((h) => h.ticker);
+
+        const { data, error } = await supabase
+          .from("securities")
+          .select("ticker, name, logo_url")
+          .in("ticker", tickers);
+
+        if (error) throw error;
+        if (isMounted && data) {
+          setHoldingsSecurities(data);
+        }
+      } catch (error) {
+        console.error("Error fetching holdings securities:", error);
+      }
+    };
+
+    fetchHoldingsSecurities();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentStrategy]);
 
   const data = useMemo(() => {
     const selected = timeframeOptions.find((option) => option.key === timeframe);
@@ -385,25 +419,51 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
           <h2 className="text-sm font-semibold text-slate-900">Portfolio Holdings</h2>
           <p className="mt-1 text-xs text-slate-500">Top 10 by weight</p>
           <div className="mt-4 space-y-3">
-            {holdings.map((holding) => (
-              <div key={holding.ticker} className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-                  <img
-                    src={`https://s3-symbol-logo.tradingview.com/${holding.ticker.toLowerCase()}--big.svg`}
-                    alt={holding.ticker}
-                    className="h-full w-full object-cover"
-                    onError={(e) => {
-                      e.target.src = `https://via.placeholder.com/32?text=${holding.ticker}`;
-                    }}
-                  />
+            {currentStrategy.holdings && currentStrategy.holdings.length > 0 ? (
+              currentStrategy.holdings.map((holding) => {
+                const security = holdingsSecurities.find((s) => s.ticker === holding.ticker);
+                return (
+                  <div key={holding.ticker} className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+                      {security?.logo_url ? (
+                        <img
+                          src={security.logo_url}
+                          alt={security.name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-xs font-semibold text-slate-400">{holding.ticker.slice(0, 2)}</span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-slate-900">{holding.ticker}</p>
+                      <p className="text-[11px] text-slate-500 truncate">{security?.name || holding.ticker}</p>
+                    </div>
+                    <p className="text-xs font-semibold text-slate-900">{holding.weight.toFixed(2)}%</p>
+                  </div>
+                );
+              })
+            ) : (
+              holdings.map((holding) => (
+                <div key={holding.ticker} className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+                    <img
+                      src={`https://s3-symbol-logo.tradingview.com/${holding.ticker.toLowerCase()}--big.svg`}
+                      alt={holding.ticker}
+                      className="h-full w-full object-cover"
+                      onError={(e) => {
+                        e.target.src = `https://via.placeholder.com/32?text=${holding.ticker}`;
+                      }}
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-slate-900">{holding.ticker}</p>
+                    <p className="text-[11px] text-slate-500 truncate">{holding.name}</p>
+                  </div>
+                  <p className="text-xs font-semibold text-slate-900">{holding.weight.toFixed(2)}%</p>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-slate-900">{holding.ticker}</p>
-                  <p className="text-[11px] text-slate-500 truncate">{holding.name}</p>
-                </div>
-                <p className="text-xs font-semibold text-slate-900">{holding.weight.toFixed(2)}%</p>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </section>
 
