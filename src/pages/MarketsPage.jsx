@@ -1016,8 +1016,6 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                           </div>
                           <span className="text-xs font-semibold text-slate-500">Holdings snapshot</span>
                         </div>
-                          </div>
-                        </div>
                       </button>
                     ))}
                   </div>
