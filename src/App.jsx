@@ -187,7 +187,7 @@ const App = () => {
           onOpenCredit={() => setCurrentPage("credit")}
           onOpenCreditApply={() => setCurrentPage("creditApply")}
           onOpenCreditRepay={() => setCurrentPage("creditRepay")}
-          onOpenInvest={() => setCurrentPage("invest")}
+          onOpenInvest={() => setCurrentPage("markets")}
           onOpenWithdraw={() => setCurrentPage("withdraw")}
           onOpenSettings={() => setCurrentPage("settings")}
         />

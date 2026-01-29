@@ -429,7 +429,7 @@ const MarketsPage = ({ onOpenNotifications, onOpenStockDetail, onOpenNewsArticle
 
       {/* Content */}
       <div className="mx-auto -mt-2 flex w-full max-w-sm flex-col gap-6 px-4 pb-10 md:max-w-md md:px-8">
-        {viewMode === "stocks" ? (
+        {viewMode === "invest" ? (
           <>
             {/* Filter and Sort Bar */}
             <div className="flex items-center justify-between gap-3">
@@ -790,7 +790,7 @@ const MarketsPage = ({ onOpenNotifications, onOpenStockDetail, onOpenNewsArticle
                     <h2 className="text-lg font-bold text-slate-900">{sector}</h2>
                     <ChevronRight className="h-5 w-5 text-slate-400" />
                   </div>
-                  <div className="space-y-3">
+                  <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 scrollbar-hide">
                     {sectorStrategies.map((strategy) => {
                       const holdingLogos = strategy.holdings
                         .map(ticker => holdingsSecurities.find(s => s.symbol === ticker))
@@ -800,7 +800,7 @@ const MarketsPage = ({ onOpenNotifications, onOpenStockDetail, onOpenNewsArticle
                         <button
                           key={strategy.name}
                           onClick={() => setSelectedStrategy(strategy)}
-                          className="w-full rounded-3xl border border-slate-100 bg-white p-4 text-left shadow-sm transition-all hover:shadow-md active:scale-[0.98]"
+                          className="flex-shrink-0 w-72 snap-center rounded-3xl border border-slate-100 bg-white p-4 text-left shadow-sm transition-all hover:shadow-md active:scale-[0.98]"
                         >
                           <div className="flex items-start justify-between gap-4">
                             <div className="flex-1 space-y-1">

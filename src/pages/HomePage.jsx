@@ -34,14 +34,14 @@ const HomePage = ({
   onOpenCreditApply,
   onOpenCreditRepay,
   onOpenInvest,
-  onOpen[showPayModal, setShowPayModal] = useState(false);
-  const [showReceiveModal, setShowReceiveModal] = useState(false);
-  const Withdraw,
+  onOpenWithdraw,
   onOpenSettings,
 }) => {
   const { profile, loading } = useProfile();
   const { kycVerified, bankLinked, loading: actionsLoading } = useRequiredActions();
   const [failedLogos, setFailedLogos] = useState({});
+  const [showPayModal, setShowPayModal] = useState(false);
+  const [showReceiveModal, setShowReceiveModal] = useState(false);
   const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(" ");
   const initials = displayName
     .split(" ")
