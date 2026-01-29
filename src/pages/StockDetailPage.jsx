@@ -255,6 +255,8 @@ const StockDetailPage = ({ security: initialSecurity, onBack }) => {
               <svg 
                 width="100%" 
                 height="100%" 
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
                 className="overflow-visible"
               >
                 {/* Grid lines (horizontal only) */}
@@ -262,11 +264,12 @@ const StockDetailPage = ({ security: initialSecurity, onBack }) => {
                   <line
                     key={y}
                     x1="0"
-                    y1={`${y * 100}%`}
-                    x2="100%"
-                    y2={`${y * 100}%`}
+                    y1={y * 100}
+                    x2="100"
+                    y2={y * 100}
                     stroke="#e2e8f0"
-                    strokeWidth="1"
+                    strokeWidth="0.3"
+                    vectorEffect="non-scaling-stroke"
                   />
                 ))}
 
@@ -282,22 +285,23 @@ const StockDetailPage = ({ security: initialSecurity, onBack }) => {
                 <g>
                   {/* Area path */}
                   <path
-                    d={`M 0% ${getYPosition(chartData[0])}% ${chartData
+                    d={`M 0 ${getYPosition(chartData[0])} ${chartData
                       .map((value, i) => {
                         const x = (i / Math.max(1, chartData.length - 1)) * 100;
                         const y = getYPosition(value);
-                        return `L ${x}% ${y}%`;
+                        return `L ${x} ${y}`;
                       })
-                      .join(' ')} L 100% 100% L 0% 100% Z`}
+                      .join(' ')} L 100 100 L 0 100 Z`}
                     fill="url(#areaGradient)"
+                    vectorEffect="non-scaling-stroke"
                   />
                   {/* Line path */}
                   <path
-                    d={`M 0% ${getYPosition(chartData[0])}% ${chartData
+                    d={`M 0 ${getYPosition(chartData[0])} ${chartData
                       .map((value, i) => {
                         const x = (i / Math.max(1, chartData.length - 1)) * 100;
                         const y = getYPosition(value);
-                        return `L ${x}% ${y}%`;
+                        return `L ${x} ${y}`;
                       })
                       .join(' ')}`}
                     fill="none"
@@ -305,6 +309,7 @@ const StockDetailPage = ({ security: initialSecurity, onBack }) => {
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
+                    vectorEffect="non-scaling-stroke"
                   />
                 </g>
 
@@ -313,13 +318,12 @@ const StockDetailPage = ({ security: initialSecurity, onBack }) => {
                   {[dataMax, (dataMax + dataMin) / 2, dataMin].map((val, i) => (
                     <text 
                       key={i} 
-                      x="100%" 
-                      y={`${(i / 2) * 100}%`}
-                      textAnchor="end"
+                      x="102" 
+                      y={i * 50}
+                      textAnchor="start"
                       dominantBaseline="middle"
-                      dx="-8"
                       fill="currentColor"
-                      style={{ fontSize: '11px', fontWeight: 500 }}
+                      style={{ fontSize: '3px', fontWeight: 500 }}
                     >
                       {val.toFixed(0)}
                     </text>
@@ -339,13 +343,11 @@ const StockDetailPage = ({ security: initialSecurity, onBack }) => {
                     return indices.map((idx, i) => (
                       <text
                         key={idx}
-                        x={`${(idx / Math.max(1, chartData.length - 1)) * 100}%`}
-                        y="100%"
+                        x={(idx / Math.max(1, chartData.length - 1)) * 100}
+                        y="106"
                         textAnchor={i === 0 ? 'start' : i === indices.length - 1 ? 'end' : 'middle'}
-                        dy="16"
-                        dx={i === 0 ? '4' : i === indices.length - 1 ? '-4' : '0'}
                         fill="currentColor"
-                        style={{ fontSize: '11px', fontWeight: 500 }}
+                        style={{ fontSize: '3px', fontWeight: 500 }}
                       >
                         {formatXAxisDate(idx)}
                       </text>
