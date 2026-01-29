@@ -502,6 +502,81 @@ const MarketsPage = ({ onOpenNotifications, onOpenStockDetail }) => {
                 ))}
               </div>
             </section>
+
+            {/* All Section */}
+            <section>
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-bold text-slate-900">All</h2>
+                <ChevronRight className="h-5 w-5 text-slate-400" />
+              </div>
+              <div className="space-y-3">
+                {filteredSecurities.map((security) => (
+                  <button
+                    key={security.id}
+                    onClick={() => onOpenStockDetail(security)}
+                    className="w-full rounded-3xl bg-white p-4 text-left shadow-sm transition-all hover:shadow-md active:scale-[0.98]"
+                  >
+                    <div className="flex items-start gap-3">
+                      {security.logo_url ? (
+                        <img
+                          src={security.logo_url}
+                          alt={security.symbol}
+                          className="h-12 w-12 rounded-full border border-slate-100 object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-purple-600 text-sm font-bold text-white">
+                          {security.symbol?.substring(0, 2) || "—"}
+                        </div>
+                      )}
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="truncate text-sm font-semibold text-slate-900">
+                              {security.short_name || security.name}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              {security.symbol} · {security.exchange}
+                            </p>
+                          </div>
+                          {security.dividend_yield && (
+                            <div className="text-right">
+                              <p className="text-xs text-emerald-600">
+                                {Number(security.dividend_yield).toFixed(2)}% yield
+                              </p>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="mt-3 flex items-center gap-2">
+                          {security.sector && (
+                            <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-600">
+                              {security.sector}
+                            </span>
+                          )}
+                          {security.pe && (
+                            <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-medium text-blue-700">
+                              P/E {Number(security.pe).toFixed(2)}
+                            </span>
+                          )}
+                          {security.beta && (
+                            <span
+                              className={`rounded-full px-2 py-1 text-[10px] font-medium ${
+                                security.beta > 1
+                                  ? "bg-orange-50 text-orange-700"
+                                  : "bg-green-50 text-green-700"
+                              }`}
+                            >
+                              β {Number(security.beta).toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </section>
               </>
             )}
 
