@@ -116,7 +116,7 @@ const StockDetailPage = ({ security: initialSecurity, onBack }) => {
     return ((maxValue - value) / paddedRange) * 100;
   };
 
-  // Format date for X-axis labels (consistent format)
+  // Format date for X-axis labels (short format: "Jan 29")
   const formatXAxisDate = (index) => {
     if (priceHistory.length === 0 || index >= priceHistory.length) return '';
     const date = new Date(priceHistory[index].ts);
@@ -255,22 +255,18 @@ const StockDetailPage = ({ security: initialSecurity, onBack }) => {
               <svg 
                 width="100%" 
                 height="100%" 
-                viewBox="0 0 100 100" 
-                preserveAspectRatio="none"
                 className="overflow-visible"
-                style={{ display: 'block' }}
               >
                 {/* Grid lines (horizontal only) */}
-                {[0, 25, 50, 75, 100].map((y) => (
+                {[0, 0.25, 0.5, 0.75, 1].map((y) => (
                   <line
                     key={y}
                     x1="0"
-                    y1={y}
-                    x2="100"
-                    y2={y}
+                    y1={`${y * 100}%`}
+                    x2="100%"
+                    y2={`${y * 100}%`}
                     stroke="#e2e8f0"
-                    strokeWidth="0.2"
-                    vectorEffect="non-scaling-stroke"
+                    strokeWidth="1"
                   />
                 ))}
 
@@ -286,64 +282,75 @@ const StockDetailPage = ({ security: initialSecurity, onBack }) => {
                 <g>
                   {/* Area path */}
                   <path
-                    d={`M 0 ${getYPosition(chartData[0])} ${chartData
+                    d={`M 0% ${getYPosition(chartData[0])}% ${chartData
                       .map((value, i) => {
                         const x = (i / Math.max(1, chartData.length - 1)) * 100;
                         const y = getYPosition(value);
-                        return `L ${x} ${y}`;
+                        return `L ${x}% ${y}%`;
                       })
-                      .join(' ')} L 100 100 L 0 100 Z`}
+                      .join(' ')} L 100% 100% L 0% 100% Z`}
                     fill="url(#areaGradient)"
                   />
                   {/* Line path */}
                   <path
-                    d={`M 0 ${getYPosition(chartData[0])} ${chartData
+                    d={`M 0% ${getYPosition(chartData[0])}% ${chartData
                       .map((value, i) => {
                         const x = (i / Math.max(1, chartData.length - 1)) * 100;
                         const y = getYPosition(value);
-                        return `L ${x} ${y}`;
+                        return `L ${x}% ${y}%`;
                       })
                       .join(' ')}`}
                     fill="none"
                     stroke={isPositive ? "#10b981" : "#ef4444"}
-                    strokeWidth="0.5"
+                    strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    vectorEffect="non-scaling-stroke"
                   />
                 </g>
 
                 {/* Y-axis labels (right side) */}
-                <g className="text-xs text-slate-400" style={{ fontSize: '11px', fontWeight: 500 }}>
+                <g className="text-slate-400">
                   {[dataMax, (dataMax + dataMin) / 2, dataMin].map((val, i) => (
                     <text 
                       key={i} 
-                      x="98" 
-                      y={i * 50}
+                      x="100%" 
+                      y={`${(i / 2) * 100}%`}
                       textAnchor="end"
                       dominantBaseline="middle"
+                      dx="-8"
                       fill="currentColor"
+                      style={{ fontSize: '11px', fontWeight: 500 }}
                     >
-                      {val.toFixed(2)}
+                      {val.toFixed(0)}
                     </text>
                   ))}
                 </g>
 
-                {/* X-axis labels (bottom) */}
-                <g className="text-xs text-slate-400" style={{ fontSize: '11px', fontWeight: 500 }}>
-                  {[0, Math.floor(chartData.length / 2), chartData.length - 1]
-                    .filter(idx => idx < chartData.length)
-                    .map((idx, i, arr) => (
+                {/* X-axis labels (bottom) - max 3 to prevent overlap */}
+                <g className="text-slate-400">
+                  {(() => {
+                    // Always show start, middle, and end for clarity
+                    const indices = [
+                      0, 
+                      Math.floor(chartData.length / 2), 
+                      chartData.length - 1
+                    ].filter(idx => idx < chartData.length);
+                    
+                    return indices.map((idx, i) => (
                       <text
-                        key={i}
-                        x={(idx / Math.max(1, chartData.length - 1)) * 100}
-                        y="105"
-                        textAnchor={i === 0 ? 'start' : i === arr.length - 1 ? 'end' : 'middle'}
+                        key={idx}
+                        x={`${(idx / Math.max(1, chartData.length - 1)) * 100}%`}
+                        y="100%"
+                        textAnchor={i === 0 ? 'start' : i === indices.length - 1 ? 'end' : 'middle'}
+                        dy="16"
+                        dx={i === 0 ? '4' : i === indices.length - 1 ? '-4' : '0'}
                         fill="currentColor"
+                        style={{ fontSize: '11px', fontWeight: 500 }}
                       >
                         {formatXAxisDate(idx)}
                       </text>
-                    ))}
+                    ));
+                  })()}
                 </g>
               </svg>
             )}
