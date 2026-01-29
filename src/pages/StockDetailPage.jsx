@@ -244,7 +244,7 @@ const StockDetailPage = ({ security: initialSecurity, onBack }) => {
           </div>
 
           {/* Period Selector */}
-          <div className="mt-4 flex items-center justify-between">
+          <div className="mt-4">
             <div className="flex gap-2">
               {periods.map((period) => (
                 <button
@@ -261,7 +261,7 @@ const StockDetailPage = ({ security: initialSecurity, onBack }) => {
               ))}
             </div>
             {selectedPeriodReturn != null && (
-              <div className={`text-sm font-semibold ${
+              <div className={`mt-3 text-lg font-semibold ${
                 selectedPeriodReturn >= 0 ? 'text-emerald-600' : 'text-red-600'
               }`}>
                 {selectedPeriodReturn >= 0 ? '+' : ''}{selectedPeriodReturn.toFixed(2)}%
