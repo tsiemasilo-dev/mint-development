@@ -1,24 +1,28 @@
 import React, { useEffect, useState } from "react";
+import { CreditCard } from "lucide-react";
 import CreditMetricCard from "../components/credit/CreditMetricCard.jsx";
 import CreditActionGrid from "../components/credit/CreditActionGrid.jsx";
 import CreditScorePage from "./CreditScorePage.jsx";
 import { useProfile } from "../lib/useProfile";
+import { useCreditInfo } from "../lib/useFinancialData";
 import CreditSkeleton from "../components/CreditSkeleton";
 import NotificationBell from "../components/NotificationBell";
 
-const creditOverview = {
-  availableCredit: "R25,000",
-  score: 732,
-  updatedAt: "Updated today",
-  loanBalance: "R8,450",
-  nextPaymentDate: "May 30, 2024",
-  minDue: "R950",
-  utilisationPercent: 62,
-};
-
-const CreditPage = ({ onOpenNotifications }) => {
+const CreditPage = ({ onOpenNotifications, onOpenCreditApply }) => {
   const [view, setView] = useState("overview");
   const { profile, loading } = useProfile();
+  const {
+    availableCredit,
+    score,
+    loanBalance,
+    nextPaymentDate,
+    minDue,
+    utilisationPercent,
+    scoreChanges,
+    loading: creditLoading,
+    hasCredit,
+  } = useCreditInfo();
+
   const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(" ");
   const initials = displayName
     .split(" ")
@@ -41,14 +45,14 @@ const CreditPage = ({ onOpenNotifications }) => {
   };
 
   if (view === "score") {
-    return <CreditScorePage onBack={() => navigate("overview")} />;
+    return <CreditScorePage onBack={() => navigate("overview")} scoreChanges={scoreChanges} currentScore={score} />;
   }
 
-  if (loading) {
+  if (loading || creditLoading) {
     return <CreditSkeleton />;
   }
 
-  const utilisationWidth = `${creditOverview.utilisationPercent}%`;
+  const utilisationWidth = `${utilisationPercent}%`;
 
   return (
     <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)] text-slate-900">
@@ -73,63 +77,90 @@ const CreditPage = ({ onOpenNotifications }) => {
 
           <section className="rounded-3xl bg-white/10 p-5 shadow-sm backdrop-blur">
             <p className="text-xs uppercase tracking-[0.2em] text-white/70">Available Credit</p>
-            <p className="mt-3 text-3xl font-semibold">{creditOverview.availableCredit}</p>
-            <div className="mt-4 inline-flex items-center rounded-full bg-emerald-400/20 px-3 py-1 text-xs font-semibold text-emerald-100">
-              Good standing
-            </div>
+            <p className="mt-3 text-3xl font-semibold">
+              R{availableCredit.toLocaleString()}
+            </p>
+            {hasCredit && (
+              <div className="mt-4 inline-flex items-center rounded-full bg-emerald-400/20 px-3 py-1 text-xs font-semibold text-emerald-100">
+                Good standing
+              </div>
+            )}
           </section>
         </div>
       </div>
 
       <div className="mx-auto -mt-10 flex w-full max-w-sm flex-col gap-5 px-4 pb-10 md:max-w-md md:px-8">
-        <CreditMetricCard>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-semibold text-slate-700">Credit Score</p>
-              <p className="mt-2 text-3xl font-semibold text-slate-900">{creditOverview.score}</p>
-              <p className="mt-1 text-xs text-slate-400">{creditOverview.updatedAt}</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => navigate("score")}
-              className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white"
-            >
-              View score
-            </button>
-          </div>
-        </CreditMetricCard>
-
-        <CreditMetricCard>
-          <p className="text-sm font-semibold text-slate-700">Active loan / Utilisation</p>
-          <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <p className="text-xs text-slate-400">Loan balance</p>
-              <p className="mt-1 font-semibold text-slate-800">{creditOverview.loanBalance}</p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-400">Next payment date</p>
-              <p className="mt-1 font-semibold text-slate-800">{creditOverview.nextPaymentDate}</p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-400">Minimum due</p>
-              <p className="mt-1 font-semibold text-slate-800">{creditOverview.minDue}</p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-400">Utilisation</p>
-              <p className="mt-1 font-semibold text-slate-800">
-                {creditOverview.utilisationPercent}%
+        {!hasCredit ? (
+          <CreditMetricCard>
+            <div className="text-center py-4">
+              <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-full bg-violet-50 text-violet-600 mb-4">
+                <CreditCard className="h-8 w-8" />
+              </div>
+              <p className="text-lg font-semibold text-slate-900 mb-2">No Credit Account Yet</p>
+              <p className="text-sm text-slate-500 mb-5 max-w-xs mx-auto">
+                Apply for credit to unlock additional purchasing power and build your credit score.
               </p>
+              <button
+                type="button"
+                onClick={onOpenCreditApply}
+                className="inline-flex items-center justify-center rounded-full bg-slate-900 px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.15em] text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5"
+              >
+                Apply for credit
+              </button>
             </div>
-          </div>
-          <div className="mt-5">
-            <div className="h-2 w-full rounded-full bg-slate-100">
-              <div
-                className="h-2 rounded-full bg-gradient-to-r from-purple-500 to-emerald-300"
-                style={{ width: utilisationWidth }}
-              />
-            </div>
-          </div>
-        </CreditMetricCard>
+          </CreditMetricCard>
+        ) : (
+          <>
+            <CreditMetricCard>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-slate-700">Credit Score</p>
+                  <p className="mt-2 text-3xl font-semibold text-slate-900">{score || 0}</p>
+                  <p className="mt-1 text-xs text-slate-400">Updated today</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate("score")}
+                  className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white"
+                >
+                  View score
+                </button>
+              </div>
+            </CreditMetricCard>
+
+            <CreditMetricCard>
+              <p className="text-sm font-semibold text-slate-700">Active loan / Utilisation</p>
+              <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-xs text-slate-400">Loan balance</p>
+                  <p className="mt-1 font-semibold text-slate-800">R{loanBalance.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Next payment date</p>
+                  <p className="mt-1 font-semibold text-slate-800">{nextPaymentDate || "N/A"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Minimum due</p>
+                  <p className="mt-1 font-semibold text-slate-800">R{minDue.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Utilisation</p>
+                  <p className="mt-1 font-semibold text-slate-800">
+                    {utilisationPercent}%
+                  </p>
+                </div>
+              </div>
+              <div className="mt-5">
+                <div className="h-2 w-full rounded-full bg-slate-100">
+                  <div
+                    className="h-2 rounded-full bg-gradient-to-r from-purple-500 to-emerald-300"
+                    style={{ width: utilisationWidth }}
+                  />
+                </div>
+              </div>
+            </CreditMetricCard>
+          </>
+        )}
 
         <CreditMetricCard>
           <p className="text-sm font-semibold text-slate-700">Quick Actions</p>
@@ -139,7 +170,7 @@ const CreditPage = ({ onOpenNotifications }) => {
               actions={[
                 {
                   label: "Apply for credit",
-                  onClick: () => console.log("Apply for credit"),
+                  onClick: onOpenCreditApply || (() => console.log("Apply for credit")),
                 },
                 {
                   label: "Upload bank statements",
