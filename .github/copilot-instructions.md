@@ -2,14 +2,14 @@
 
 ## Project Overview
 
-**Mint** is a React + Vite fintech application deployed as a web app and native iOS app (via Capacitor). It's a personal finance platform featuring KYC verification, credit management, investment strategies, and biometric authentication.
+**Mint** is a React + Vite fintech application deployed as a web app with native iOS and Android apps (via Capacitor). It's a personal finance platform featuring KYC verification, credit management, investment strategies, market data, and biometric authentication.
 
 **Tech Stack:**
 - Frontend: React 18 + Vite 5 with Tailwind CSS and PostCSS
-- Mobile: Capacitor 8 (iOS only currently)
-- Backend: Supabase (PostgreSQL + Auth)
+- Mobile: Capacitor 8 (iOS + Android)
+- Backend: Supabase (PostgreSQL + Auth + Realtime)
 - Charts: Recharts; Icons: Lucide React; UI: Framer Motion
-- Biometrics: Capacitor Native Biometric plugin
+- Biometrics: `@capgo/capacitor-native-biometric@^8.3.1` for Face ID/Touch ID (iOS) and Fingerprint/Face Unlock (Android)
 
 **Environment Setup:**
 - `VITE_SUPABASE_URL`: Required; Supabase project URL
@@ -22,15 +22,20 @@
 ### App Structure
 
 1. **Single-Page Routing** (`src/App.jsx`): Hash-based page navigation without a router library. App state manages:
-   - `currentPage`: Active page name ("home", "auth", "credit", etc.)
+   - `currentPage`: Active page name ("home", "auth", "credit", "markets", "investments", etc.)
    - `authStep`: Auth substep ("email", "otp", "signup", "newPassword")
+   - Recovery mode: URL hash parsing (`type=recovery`) triggers password reset flow
    - Two layouts: `AuthLayout` (minimal) and `AppLayout` (navbar + sidebar)
+   - 30+ pages in `src/pages/` including markets, news, transactions, onboarding
 
 2. **Data Layer** (`src/lib/`):
    - **`supabase.js`**: Single Supabase client instance using `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`
    - **`useProfile.js`**: Custom hook merging Supabase `auth.getUser()` + `profiles` table, builds profile from user metadata + row data
    - **`useRequiredActions.js`**: Tracks user compliance (KYC verified, bank linked) from `required_actions` table; auto-creates row if missing
-   - **`biometrics.js`**: Platform detection, biometric availability check, encrypted localStorage flags for biometric state
+   - **`biometrics.js`**: Platform detection (`isNativeIOS()`, `isNativeAndroid()`, `isNativePlatform()`), biometric availability check, encrypted localStorage flags for biometric state
+   - **`marketData.js`**: In-memory caching for securities/metrics; 60s TTL for market data, per-timeframe cache for price history
+   - **`strategyData.js`**: Strategy data fetching with caching; fetches from `strategies` + `strategy_metrics` tables, never computes strategy prices in frontend
+   - **`NotificationsContext.jsx`**: Global context provider wrapping App in `main.jsx`; manages notification state, preferences, marking as read, Supabase realtime subscriptions
 
 3. **Component Hierarchy**:
    - Pages (`src/pages/`) are feature-based: AuthPage, HomePage, CreditPage, InvestmentsPage, etc.
@@ -41,8 +46,9 @@
 
 - **Signup**: Email → OTP (sent via Supabase) → Password → Create profile
 - **Login**: Email + Password (with rate-limiting) OR biometric if enabled on first login
-- **Recovery**: Hash-based token parsing in App.jsx triggers recovery mode (`newPassword` step)
-- **Biometrics**: iOS-only; enabled after first login, stored in localStorage with email; auto-prompts on subsequent visits
+- **Recovery**: Hash-based token parsing in App.jsx triggers recovery mode (`newPassword` step); tokens from URL hash set via `supabase.auth.setSession()`
+- **Biometrics**: iOS + Android support; enabled after first login, stored in localStorage with email; auto-prompts on subsequent visits
+  - Platform checks: `isNativeIOS() || isNativeAndroid()` (never just `isNativeIOS()` alone)
 
 ## Critical Patterns
 
@@ -76,7 +82,8 @@ All data hooks follow this pattern:
 ### Rate Limiting & Security
 - **Auth rate limits**: Hardcoded in AuthForm.jsx top (OTP_EXPIRY_TIME=180s, MAX_OTP_ATTEMPTS=5, LOGIN_COOLDOWN=1800s, etc.)
 - **Progressive backoff**: Two-tier cooldown system (COOLDOWN_TIMES=[300, 1800]) for repeated failures
-- **Biometric state**: Stored in localStorage with encryption flags; iOS-only for now
+- **Biometric state**: Stored in localStorage with encryption flags; works on both iOS and Android
+- **DEBUG_BIOMETRICS flag**: Set to `true` in AuthForm.jsx (line ~26) to enable verbose biometric logging via Logcat (Android) or Safari console (iOS)
 
 ## Common Tasks
 
@@ -102,6 +109,9 @@ All data hooks follow this pattern:
 - Use `isMounted` flag in useEffect to prevent memory leaks
 - Toast messages for errors via `setToast({ message, visible })` pattern in AuthForm
 - Supabase errors auto-logged; don't repeat error logging
+- **Strategy data**: Always use `getStrategiesWithMetrics()` from `strategyData.js`; never compute strategy prices from security prices in frontend
+- **Strategy pricing**: Use `strategy_metrics.last_close` for price, `change_pct` for daily change, `change_abs` for absolute change
+- **Strategy charts**: Fetch from `strategy_prices` table via `getStrategyPriceHistory()`, not from securities
 
 ### Styling Components
 - Import Tailwind classes; no additional CSS files needed unless custom animations
@@ -122,12 +132,17 @@ All data hooks follow this pattern:
 - **Build**: `npm run build` outputs to `dist/` (configured in capacitor.config.json as webDir)
 - **Preview**: `npm run preview` tests production build locally
 - **Deploy**: `npm run deploy` pushes to GitHub Pages (via gh-pages package)
+- **Android**: `npm run build && npx cap sync android` to update native project; build APK via `cd android && ./gradlew assembleDebug`
+- **iOS**: `npm run build && npx cap sync ios` to update Xcode project in `ios/` folder
 
 ## Database Schema
 
 Key Supabase tables expected:
 - **`profiles`**: `id` (uuid), `email`, `first_name`, `last_name`, `avatar_url`, `phone_number`, `date_of_birth`, `gender`, `address`
 - **`required_actions`**: `user_id` (uuid), `kyc_verified` (bool), `bank_linked` (bool) – auto-created by useRequiredActions if missing
+- **`strategies`**: `id` (uuid), `name`, `description`, `risk_level`, `is_active` – investment strategies
+- **`strategy_metrics`**: `strategy_id` (FK), `as_of_date`, `last_close` (NAV), `prev_close`, `change_abs`, `change_pct`, `r_1w`, `r_1m`, `r_3m`, `r_6m`, `r_ytd`, `r_1y` – strategy-level metrics
+- **`strategy_prices`**: `strategy_id` (FK), `ts` (timestamp), `nav` (net asset value) – historical strategy pricing for charts
 - Auth metadata stored in Supabase `auth.users.user_metadata` (first_name, last_name, etc.)
 
 ## iOS Specific
@@ -138,6 +153,16 @@ Key Supabase tables expected:
 - **Build**: Run `npm run build` then `npx cap sync` to update Xcode project (in ios/ folder)
 - **Safe area insets**: `env(safe-area-inset-bottom)` used in [AppLayout](../src/layouts/AppLayout.jsx) for notch/home indicator padding
 - **biometricAutoPrompted** ref: Prevents duplicate biometric prompts on hot reloads (see AuthForm useEffect)
+
+## Android Specific
+
+- **Biometric support**: Use `isNativeAndroid()` from biometrics.js; Fingerprint/Face Unlock via same plugin as iOS
+- **Platform checks**: ALWAYS use `(isNativeIOS() || isNativeAndroid())` for biometric features; never iOS-only checks
+- **Permissions**: `android.permission.USE_BIOMETRIC` (API 28+) and `android.permission.USE_FINGERPRINT` (API 23-27) set in AndroidManifest.xml
+- **Build**: Run `npm run build && npx cap sync android` then `cd android && ./gradlew assembleDebug` for APK
+- **Install**: `adb install -r app/build/outputs/apk/debug/app-debug.apk` or use Android Studio
+- **Debug**: Enable `DEBUG_BIOMETRICS=true` in AuthForm.jsx, view logs via `adb logcat | grep Biometrics`
+- **Key fixes**: See [ANDROID_FIXES.md](../ANDROID_FIXES.md) for biometric integration history and [ANDROID_QUICK_REFERENCE.md](../ANDROID_QUICK_REFERENCE.md) for quick commands
 
 ## Key Files Reference
 
