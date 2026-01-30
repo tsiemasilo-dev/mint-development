@@ -1249,7 +1249,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                           console.log('Opening strategy:', { slug: strategy.slug, id: strategy.id, strategy });
                           setSelectedStrategy({ ...strategy, slug: strategy.slug });
                         }}
-                        className="flex-shrink-0 w-72 rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md hover:border-slate-200 p-4 transition-all snap-center"
+                        className="flex-shrink-0 w-80 rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md hover:border-slate-200 p-4 transition-all snap-center"
                       >
                         <div className="flex items-start gap-3">
                           <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-white shadow-sm ring-1 ring-slate-100 flex-shrink-0">
@@ -1264,7 +1264,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                           </div>
                           <div className="flex-1 flex items-start justify-between gap-4">
                           <div className="text-left space-y-1">
-                            <p className="text-sm font-semibold text-slate-900 line-clamp-1">{displayName}</p>
+                            <p className="text-sm font-semibold text-slate-900">{displayName}</p>
                             <div>
                               <p className="text-xs text-slate-600 line-clamp-1">
                                 {strategy.risk_level || 'Balanced'} {strategy.objective && `• ${strategy.objective}`}
