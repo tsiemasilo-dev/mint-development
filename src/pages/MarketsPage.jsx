@@ -878,7 +878,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                           {security.currentPrice != null ? (
                             <>
                               <p className="text-lg font-bold text-slate-900">
-                                {security.currency || 'R'} {formatPrice(security)}
+                                <span className="text-xs text-slate-400 font-normal">{security.currency || 'R'}</span>{' '}
+                                {formatPrice(security)}
                               </p>
                               {security.changePct != null && (
                                 <p className={`mt-1 text-xs font-semibold ${
@@ -933,7 +934,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                           {security.currentPrice != null ? (
                             <>
                               <p className="text-lg font-bold text-slate-900">
-                                {security.currency || 'R'} {formatPrice(security)}
+                                <span className="text-xs text-slate-400 font-normal">{security.currency || 'R'}</span>{' '}
+                                {formatPrice(security)}
                               </p>
                               {security.changePct != null && (
                                 <p className={`mt-1 text-xs font-semibold ${
@@ -1048,7 +1050,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                             {security.currentPrice != null ? (
                               <>
                                 <p className="text-sm font-semibold text-slate-900">
-                                  {security.currency || 'R'} {formatPrice(security)}
+                                  <span className="text-xs text-slate-400 font-normal">{security.currency || 'R'}</span>{' '}
+                                  {formatPrice(security)}
                                 </p>
                                 {security.changePct != null && (
                                   <p className={`text-xs font-semibold ${
@@ -1143,7 +1146,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                                 {security.currentPrice != null ? (
                                   <>
                                     <p className="text-sm font-semibold text-slate-900">
-                                      {security.currency || 'R'} {formatPrice(security)}
+                                      <span className="text-xs text-slate-400 font-normal">{security.currency || 'R'}</span>{' '}
+                                      {formatPrice(security)}
                                     </p>
                                     {security.changePct != null && (
                                       <p className={`text-xs font-semibold ${
