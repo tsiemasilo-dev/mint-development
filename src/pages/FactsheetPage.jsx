@@ -1,6 +1,8 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
-import { ArrowLeft, X, Info, Heart } from "lucide-react";
+import { ArrowLeft, X, Info, Heart, TrendingUp, TrendingDown } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { getStrategyById, getStrategyPriceHistory, formatChangePct, formatChangeAbs, getChangeColor } from "../lib/strategyData.js";
+import { formatCurrency } from "../lib/formatCurrency";
 import {
   Area,
   Line,
@@ -113,9 +115,55 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
   const [calendarYear, setCalendarYear] = useState(2025);
   const [isInWatchlist, setIsInWatchlist] = useState(false);
   const [holdingsSecurities, setHoldingsSecurities] = useState([]);
+  const [strategyData, setStrategyData] = useState(strategy);
+  const [priceHistory, setPriceHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
   const marqueeRef = useRef(null);
 
-  const currentStrategy = strategy || {
+  // Fetch updated strategy data with metrics if we have an ID
+  useEffect(() => {
+    const fetchStrategyData = async () => {
+      if (!strategy?.id) {
+        setLoading(false);
+        return;
+      }
+      
+      try {
+        const updatedStrategy = await getStrategyById(strategy.id);
+        if (updatedStrategy) {
+          console.log("📊 Updated strategy data:", updatedStrategy);
+          setStrategyData(updatedStrategy);
+        }
+      } catch (error) {
+        console.error("Error fetching strategy data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStrategyData();
+  }, [strategy?.id]);
+
+  // Fetch price history when timeframe changes
+  useEffect(() => {
+    const fetchPriceHistory = async () => {
+      if (!strategy?.id) return;
+      
+      setLoading(true);
+      try {
+        const prices = await getStrategyPriceHistory(strategy.id, timeframe);
+        setPriceHistory(prices);
+      } catch (error) {
+        console.error("Error fetching price history:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPriceHistory();
+  }, [strategy?.id, timeframe]);
+
+  const currentStrategy = strategyData || strategy || {
     name: "AlgoHive Core",
     tags: ["Balanced", "Low risk", "Automated"],
     description: "AlgoHive Core targets steady, diversified growth using an automated allocation model that adapts to changing market regimes. It aims to smooth volatility while maintaining consistent participation in upside moves, making it suitable for investors seeking a balanced, long-term portfolio anchor.",
@@ -130,12 +178,12 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
       if (!supabase || !currentStrategy.holdings || currentStrategy.holdings.length === 0) return;
 
       try {
-        const tickers = currentStrategy.holdings.map((h) => h.ticker);
+        const tickers = currentStrategy.holdings.map((h) => h.ticker || h.symbol || h);
 
         const { data, error } = await supabase
           .from("securities")
-          .select("ticker, name, logo_url")
-          .in("ticker", tickers);
+          .select("symbol, name, logo_url")
+          .in("symbol", tickers);
 
         if (error) throw error;
         if (isMounted && data) {
@@ -153,14 +201,36 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
     };
   }, [currentStrategy]);
 
+  // Generate chart data from price history
   const data = useMemo(() => {
+    if (priceHistory.length > 0) {
+      // Convert strategy_prices to chart format
+      return priceHistory.map((p, index) => ({
+        label: index + 1,
+        dateLabel: new Date(p.ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        returnPct: p.nav || 0,
+      }));
+    }
+    // Fallback to mock data if no price history
     const selected = timeframeOptions.find((option) => option.key === timeframe);
     return buildSeries(selected?.points ?? 180, 2.4, timeframe);
-  }, [timeframe]);
+  }, [priceHistory, timeframe]);
 
   const lastIndex = data.length - 1;
   const lastValue = data[lastIndex]?.returnPct ?? 0;
-  const formattedReturn = `${lastValue >= 0 ? "+" : ""}${lastValue.toFixed(2)}%`;
+  const firstValue = data[0]?.returnPct ?? 0;
+  const periodReturn = priceHistory.length > 0 
+    ? ((lastValue - firstValue) / firstValue) * 100 
+    : lastValue;
+  const formattedReturn = priceHistory.length > 0
+    ? `${periodReturn >= 0 ? "+" : ""}${periodReturn.toFixed(2)}%`
+    : `${lastValue >= 0 ? "+" : ""}${lastValue.toFixed(2)}%`;
+    
+  // Get current metrics
+  const currentPrice = currentStrategy.last_close;
+  const changePct = currentStrategy.change_pct;
+  const changeAbs = currentStrategy.change_abs;
+  const isPositive = changePct != null && changePct >= 0;
 
   // Calculate cumulative returns for calendar
   const calendarData = useMemo(() => {
@@ -221,20 +291,45 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-semibold text-slate-900">AlgoHive Core</h2>
+                <h2 className="text-lg font-semibold text-slate-900">{currentStrategy.name}</h2>
               </div>
-              <p className="text-xs font-semibold text-slate-400">Balanced • Automated</p>
+              <p className="text-xs font-semibold text-slate-400">
+                {currentStrategy.risk_level || 'Balanced'} • Automated
+              </p>
             </div>
           </div>
 
           <div className="mt-4 space-y-1">
-            <div className="flex items-center gap-3">
-              <p className="text-3xl font-semibold text-slate-900">{formattedReturn}</p>
-              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-600">
-                {timeframe} return
-              </span>
-            </div>
-            <p className="text-xs text-slate-500">Last updated 2h ago</p>
+            {currentPrice != null ? (
+              <>
+                <div className="flex items-baseline gap-3">
+                  <p className="text-3xl font-semibold text-slate-900">
+                    {formatCurrency(currentPrice, currentStrategy.currency || 'R')}
+                  </p>
+                  {changePct != null && (
+                    <div className={`flex items-center gap-1 text-sm font-semibold ${getChangeColor(changePct)}`}>
+                      {isPositive ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                      <span>{formatChangePct(changePct)}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <span>Today {changeAbs != null ? formatChangeAbs(changeAbs) : ''}</span>
+                  <span>•</span>
+                  <span>{timeframe} {formattedReturn}</span>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center gap-3">
+                <p className="text-3xl font-semibold text-slate-900">{formattedReturn}</p>
+                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-600">
+                  {timeframe} return
+                </span>
+              </div>
+            )}
+            <p className="text-xs text-slate-500">
+              Last updated {currentStrategy.as_of_date ? new Date(currentStrategy.as_of_date).toLocaleString() : '2h ago'}
+            </p>
           </div>
 
           <div className="mt-4 h-48 w-full">
@@ -405,6 +500,64 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
             ))}
           </div>
         </section>
+
+        {/* Period Returns */}
+        {(currentStrategy.r_1w != null || currentStrategy.r_1m != null || currentStrategy.r_3m != null || 
+          currentStrategy.r_6m != null || currentStrategy.r_ytd != null || currentStrategy.r_1y != null) && (
+          <section className="mt-6 rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+            <h2 className="text-sm font-semibold text-slate-900">Performance Returns</h2>
+            <div className="mt-4 grid grid-cols-3 gap-3">
+              {currentStrategy.r_1w != null && (
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3 text-center">
+                  <p className="text-xs font-semibold text-slate-600">1W</p>
+                  <p className={`mt-1 text-sm font-semibold ${getChangeColor(currentStrategy.r_1w)}`}>
+                    {formatChangePct(currentStrategy.r_1w)}
+                  </p>
+                </div>
+              )}
+              {currentStrategy.r_1m != null && (
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3 text-center">
+                  <p className="text-xs font-semibold text-slate-600">1M</p>
+                  <p className={`mt-1 text-sm font-semibold ${getChangeColor(currentStrategy.r_1m)}`}>
+                    {formatChangePct(currentStrategy.r_1m)}
+                  </p>
+                </div>
+              )}
+              {currentStrategy.r_3m != null && (
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3 text-center">
+                  <p className="text-xs font-semibold text-slate-600">3M</p>
+                  <p className={`mt-1 text-sm font-semibold ${getChangeColor(currentStrategy.r_3m)}`}>
+                    {formatChangePct(currentStrategy.r_3m)}
+                  </p>
+                </div>
+              )}
+              {currentStrategy.r_6m != null && (
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3 text-center">
+                  <p className="text-xs font-semibold text-slate-600">6M</p>
+                  <p className={`mt-1 text-sm font-semibold ${getChangeColor(currentStrategy.r_6m)}`}>
+                    {formatChangePct(currentStrategy.r_6m)}
+                  </p>
+                </div>
+              )}
+              {currentStrategy.r_ytd != null && (
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3 text-center">
+                  <p className="text-xs font-semibold text-slate-600">YTD</p>
+                  <p className={`mt-1 text-sm font-semibold ${getChangeColor(currentStrategy.r_ytd)}`}>
+                    {formatChangePct(currentStrategy.r_ytd)}
+                  </p>
+                </div>
+              )}
+              {currentStrategy.r_1y != null && (
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3 text-center">
+                  <p className="text-xs font-semibold text-slate-600">1Y</p>
+                  <p className={`mt-1 text-sm font-semibold ${getChangeColor(currentStrategy.r_1y)}`}>
+                    {formatChangePct(currentStrategy.r_1y)}
+                  </p>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
         {/* Strategy Description */}
         <section className="mt-6 rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">

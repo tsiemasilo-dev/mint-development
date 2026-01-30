@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { ArrowLeft, Info, Plus, Minus } from "lucide-react";
+import { formatCurrency } from "../lib/formatCurrency";
 
 const companyLogos = {
   AAPL: "https://s3-symbol-logo.tradingview.com/apple--big.svg",
@@ -22,19 +23,23 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
     description: "",
   };
 
-  const [amount, setAmount] = useState(currentStrategy.minimum);
+  // Default minimum investment
+  const minimumInvestment = currentStrategy.minimum_investment || 2500;
+  const currency = currentStrategy.currency || 'R';
+  
+  const [amount, setAmount] = useState(minimumInvestment);
   const [agreementChecked, setAgreementChecked] = useState(false);
 
-  const tickers = currentStrategy.tickers || [];
+  const tickers = currentStrategy.tickers || currentStrategy.holdings?.map(h => h.ticker || h.symbol) || [];
   const extraHoldings = tickers.length > 3 ? tickers.length - 3 : 0;
 
   const handleIncrement = () => {
-    setAmount(amount + currentStrategy.minimum);
+    setAmount(amount + minimumInvestment);
   };
 
   const handleDecrement = () => {
-    if (amount > currentStrategy.minimum) {
-      setAmount(amount - currentStrategy.minimum);
+    if (amount > minimumInvestment) {
+      setAmount(amount - minimumInvestment);
     }
   };
 
@@ -70,7 +75,9 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
               <p className="text-xs text-slate-600 mt-2">
                 {currentStrategy.description?.split('.')[0] || "Investment strategy"}
               </p>
-              <p className="text-xs font-semibold text-slate-600 mt-1">Min. R{currentStrategy.minimum?.toLocaleString() || "2,500"}</p>
+              <p className="text-xs font-semibold text-slate-600 mt-1">
+                Min. {formatCurrency(minimumInvestment, currency)}
+              </p>
             </div>
           </div>
 
@@ -110,7 +117,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
               <button
                 type="button"
                 onClick={handleDecrement}
-                disabled={amount <= currentStrategy.minimum}
+                disabled={amount <= minimumInvestment}
                 className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:enabled:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition"
               >
                 <Minus className="h-5 w-5" />
@@ -118,7 +125,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
               
               <div className="text-center flex-1">
                 <p className="text-xs font-semibold text-slate-600 mb-1">Investment Amount</p>
-                <p className="text-3xl font-bold text-slate-900">R{amount.toLocaleString()}</p>
+                <p className="text-3xl font-bold text-slate-900">{formatCurrency(amount, currency)}</p>
               </div>
 
               <button

@@ -14,6 +14,7 @@
 **Environment Setup:**
 - `VITE_SUPABASE_URL`: Required; Supabase project URL
 - `VITE_SUPABASE_ANON_KEY`: Required; Public anon key for client auth
+- `VITE_PAYSTACK_PUBLIC_KEY`: Required for payments; Paystack public key from dashboard
 - Dev server: `npm run dev` runs on `localhost:5000` (hardcoded in vite.config.js)
 - Build output: `dist/` directory; note that web directory is configured in capacitor.config.json
 
@@ -49,6 +50,14 @@
 - **Recovery**: Hash-based token parsing in App.jsx triggers recovery mode (`newPassword` step); tokens from URL hash set via `supabase.auth.setSession()`
 - **Biometrics**: iOS + Android support; enabled after first login, stored in localStorage with email; auto-prompts on subsequent visits
   - Platform checks: `isNativeIOS() || isNativeAndroid()` (never just `isNativeIOS()` alone)
+
+### Strategy Investment Flow
+
+- **Browse strategies**: MarketsPage → OpenStrategies tab displays strategies from database using `getStrategiesWithMetrics()`
+- **View factsheet**: Click strategy card → FactsheetPage with real data from `strategy_metrics` + `strategy_prices`
+- **Invest**: Fixed "Invest" button → InvestAmountPage → PaymentPage (Paystack integration)
+- **Payment**: Paystack SDK loaded in index.html; PaymentPage handles payment flow with callbacks
+- **Success**: Payment success redirects to home; transaction recorded in database (TODO: implement backend verification)
 
 ## Critical Patterns
 
@@ -170,7 +179,12 @@ Key Supabase tables expected:
 - [AuthForm.jsx](../src/components/AuthForm.jsx#L1): Complex auth UI (consider breaking down if extending)
 - [supabase.js](../src/lib/supabase.js#L1): Backend client
 - [useProfile.js](../src/lib/useProfile.js#L1): Profile data hook pattern
+- [strategyData.js](../src/lib/strategyData.js#L1): Strategy data fetching with caching
 - [HomePage.jsx](../src/pages/HomePage.jsx#L1): Dashboard with actions and transaction history
+- [MarketsPage.jsx](../src/pages/MarketsPage.jsx#L1): Markets dashboard with stocks, strategies, and news
+- [FactsheetPage.jsx](../src/pages/FactsheetPage.jsx#L1): Strategy detail view with real data
+- [InvestAmountPage.jsx](../src/pages/InvestAmountPage.jsx#L1): Investment amount selection
+- [PaymentPage.jsx](../src/pages/PaymentPage.jsx#L1): Paystack payment integration
 
 ## Common Gotchas & Error Handling
 
