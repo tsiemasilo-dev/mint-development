@@ -383,6 +383,7 @@ const App = () => {
           onOpenActivity={() => setCurrentPage("activity")}
           onOpenSettings={() => setCurrentPage("settings")}
           onOpenInvest={() => setCurrentPage("markets")}
+          onOpenCreditApply={() => setCurrentPage("credit")}
         />
       </AppLayout>
     );

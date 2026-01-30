@@ -11,6 +11,7 @@ const MintBalancePage = ({
   onOpenCredit,
   onOpenActivity,
   onOpenInvest,
+  onOpenCreditApply,
 }) => {
   const {
     totalBalance,
@@ -112,13 +113,22 @@ const MintBalancePage = ({
               </div>
               <p className="text-sm font-semibold text-slate-900 mb-1">Your balance is R0</p>
               <p className="text-xs text-slate-500 mb-4">Start investing or apply for credit to grow your Mint Balance</p>
-              <button
-                type="button"
-                onClick={onOpenInvest}
-                className="inline-flex items-center justify-center rounded-full bg-slate-900 px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.15em] text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5"
-              >
-                Start investing
-              </button>
+              <div className="flex items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={onOpenInvest}
+                  className="inline-flex items-center justify-center rounded-full bg-slate-900 px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.15em] text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5"
+                >
+                  Start investing
+                </button>
+                <button
+                  type="button"
+                  onClick={onOpenCreditApply}
+                  className="inline-flex items-center justify-center rounded-full border border-slate-900 bg-white px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.15em] text-slate-900 shadow-sm transition hover:-translate-y-0.5"
+                >
+                  Apply for credit
+                </button>
+              </div>
             </div>
           )}
         </section>

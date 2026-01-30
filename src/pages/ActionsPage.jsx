@@ -3,9 +3,7 @@ import {
   ArrowLeft,
   BadgeCheck,
   ChevronRight,
-  HandCoins,
   Landmark,
-  TrendingUp,
   UserPlus,
 } from "lucide-react";
 import ActionsSkeleton from "../components/ActionsSkeleton";
@@ -28,20 +26,6 @@ const ActionsPage = ({ onBack, isLoading = false }) => {
       description: "Connect to enable instant transfers",
       status: "In review",
       icon: Landmark,
-    },
-    {
-      id: "investments",
-      title: "Review investment allocation",
-      description: "Confirm your latest risk profile",
-      status: "Optional",
-      icon: TrendingUp,
-    },
-    {
-      id: "credit",
-      title: "Confirm credit preferences",
-      description: "Set your preferred repayment day",
-      status: "Required",
-      icon: HandCoins,
     },
     {
       id: "invite",
