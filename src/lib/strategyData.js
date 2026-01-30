@@ -3,6 +3,7 @@ import { supabase } from "./supabase";
 // Simple in-memory cache with timestamps
 const cache = {
   strategies: { data: null, timestamp: 0, ttl: 60000 }, // 60 seconds
+  publicStrategies: { data: null, timestamp: 0, ttl: 60000 }, // 60 seconds for public strategies
   priceHistory: new Map(), // key: `${strategy_id}_${timeframe}`, value: { data, timestamp, ttl }
 };
 
@@ -96,6 +97,60 @@ export const getStrategiesWithMetrics = async () => {
 
   } catch (error) {
     console.error("❌ Unexpected error in getStrategiesWithMetrics:", error);
+    return [];
+  }
+};
+
+/**
+ * Get public strategies for OpenStrategies view
+ * Only returns active, public strategies ordered by featured status then name
+ * @returns {Promise<Array>} Array of public strategies
+ */
+export const getPublicStrategies = async () => {
+  const now = Date.now();
+  
+  // Check cache
+  if (cache.publicStrategies.data && (now - cache.publicStrategies.timestamp) < cache.publicStrategies.ttl) {
+    console.log("📦 Using cached public strategies data");
+    return cache.publicStrategies.data;
+  }
+
+  if (!supabase) {
+    console.error("❌ Supabase client not initialized");
+    return [];
+  }
+
+  try {
+    console.log("🔍 Fetching public strategies from Supabase...");
+    
+    // Fetch only active and public strategies
+    const { data: strategies, error } = await supabase
+      .from("strategies")
+      .select("id, slug, name, short_name, description, risk_level, objective, sector, tags, base_currency, min_investment, provider_name, benchmark_symbol, benchmark_name, fee_type, management_fee_bps, performance_fee_pct, high_water_mark, status, is_public, is_featured, icon_url, image_url, created_at, updated_at")
+      .eq("status", "active")
+      .eq("is_public", true)
+      .order("is_featured", { ascending: false })
+      .order("name", { ascending: true });
+
+    if (error) {
+      console.error("❌ Error fetching public strategies:", error);
+      return [];
+    }
+
+    if (!strategies || strategies.length === 0) {
+      console.warn("⚠️ No public strategies found");
+      return [];
+    }
+
+    // Update cache
+    cache.publicStrategies.data = strategies;
+    cache.publicStrategies.timestamp = now;
+
+    console.log(`✅ Fetched ${strategies.length} public strategies`);
+    return strategies;
+
+  } catch (error) {
+    console.error("❌ Unexpected error in getPublicStrategies:", error);
     return [];
   }
 };
