@@ -32,6 +32,9 @@ import WithdrawPage from "./pages/WithdrawPage.jsx";
 import ProfileDetailsPage from "./pages/ProfileDetailsPage.jsx";
 import ChangePasswordPage from "./pages/ChangePasswordPage.jsx";
 import LegalDocumentationPage from "./pages/LegalDocumentationPage.jsx";
+import IdentityCheckPage from "./pages/IdentityCheckPage.jsx";
+import BankLinkPage from "./pages/BankLinkPage.jsx";
+import InvitePage from "./pages/InvitePage.jsx";
 
 const initialHash = window.location.hash;
 const isRecoveryMode = initialHash.includes('type=recovery');
@@ -398,7 +401,24 @@ const App = () => {
   }
 
   if (currentPage === "actions") {
-    return <ActionsPage onBack={() => setCurrentPage("home")} />;
+    return (
+      <ActionsPage
+        onBack={() => setCurrentPage("home")}
+        onNavigate={setCurrentPage}
+      />
+    );
+  }
+
+  if (currentPage === "identityCheck") {
+    return <IdentityCheckPage onBack={() => setCurrentPage("actions")} />;
+  }
+
+  if (currentPage === "bankLink") {
+    return <BankLinkPage onBack={() => setCurrentPage("actions")} />;
+  }
+
+  if (currentPage === "invite") {
+    return <InvitePage onBack={() => setCurrentPage("actions")} />;
   }
 
   if (currentPage === "creditApply") {
