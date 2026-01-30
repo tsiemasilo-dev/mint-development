@@ -11,18 +11,24 @@ import ActionsSkeleton from "../components/ActionsSkeleton";
 import { useRequiredActions } from "../lib/useRequiredActions";
 
 const ActionsPage = ({ onBack, onNavigate }) => {
-  const { kycVerified, bankLinked, loading } = useRequiredActions();
+  const { kycVerified, bankLinked, bankInReview, loading } = useRequiredActions();
 
   if (loading) {
     return <ActionsSkeleton />;
   }
+
+  const getBankStatus = () => {
+    if (bankLinked) return "Verified";
+    if (bankInReview) return "In review";
+    return "Required";
+  };
 
   const allActions = [
     {
       id: "identity",
       title: "Complete identity check",
       description: "Needed to unlock higher limits",
-      status: kycVerified ? "Completed" : "Required",
+      status: kycVerified ? "Verified" : "Required",
       icon: BadgeCheck,
       completed: kycVerified,
       navigateTo: "identityCheck",
@@ -31,7 +37,7 @@ const ActionsPage = ({ onBack, onNavigate }) => {
       id: "bank-link",
       title: "Link your primary bank",
       description: "Connect to enable instant transfers",
-      status: bankLinked ? "Completed" : "In review",
+      status: getBankStatus(),
       icon: Landmark,
       completed: bankLinked,
       navigateTo: "bankLink",
