@@ -171,6 +171,19 @@ const App = () => {
     );
   }
 
+  const openModal = (title, message) => {
+    setModal({ title, message });
+  };
+
+  const closeModal = () => {
+    setModal(null);
+  };
+
+  const handleWithdrawRequest = async () => {
+    try {
+      if (!supabase) {
+        openModal("Withdraw", "You don't have any allocations to withdraw from.");
+        return;
       }
 
       const { data: userData, error: userError } = await supabase.auth.getUser();
