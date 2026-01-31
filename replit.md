@@ -16,6 +16,7 @@ A React authentication application using Vite as the build tool with Tailwind CS
     - `Preloader.jsx` - Loading animation component
     - `AuthLayout.jsx` - Auth page layout
     - `NotificationBell.jsx` - Bell icon with unread count badge
+    - `SumsubConnector.jsx` - Sumsub SDK integration for identity verification
   - `lib/` - Utility libraries
     - `supabase.js` - Supabase client initialization
     - `biometrics.js` - Biometric authentication utilities (Face ID/Touch ID)
@@ -23,7 +24,8 @@ A React authentication application using Vite as the build tool with Tailwind CS
   - `pages/` - Page components
     - `AuthPage.jsx` - Authentication page
     - `OnboardingPage.jsx` - Welcome/landing page (before login)
-    - `UserOnboardingPage.jsx` - Post-signup onboarding page
+    - `UserOnboardingPage.jsx` - User identification onboarding flow (3-step process)
+    - `IdentityCheckPage.jsx` - Identity verification page (wraps UserOnboardingPage)
     - `HomePage.jsx` - Home page after login
     - `MorePage.jsx` - Profile and menu page with KYC badge and Required Actions
     - `EditProfilePage.jsx` - Edit profile with phone, DOB, gender, country, city fields
@@ -35,6 +37,7 @@ A React authentication application using Vite as the build tool with Tailwind CS
   - `styles/` - CSS styles
     - `auth.css` - iOS-style auth form styling
     - `tailwind.css` - Tailwind configuration
+    - `onboarding-process.css` - Onboarding flow glassmorphism styling
 - `public/` - Static assets
 - `index.html` - HTML entry point
 
@@ -100,6 +103,14 @@ A React authentication application using Vite as the build tool with Tailwind CS
   - Privacy
   - Subscriptions (formerly My Orders)
   - Log out
+- **User Identification Onboarding Flow**:
+  - 3-step verification process triggered from Actions page
+  - Step 1: Employment details (status, employer, income)
+  - Step 2: Identity verification via Sumsub SDK
+  - Step 3: Terms & Conditions and Privacy Policy agreements
+  - Saves onboarding data to Supabase `user_onboarding` table
+  - Sumsub integration for KYC verification with status checking
+  - Glassmorphism UI with smooth animations
 - **Notifications System**:
   - Centralized state management via NotificationsProvider context
   - Real-time updates via Supabase subscription (filtered by user preferences)
