@@ -309,7 +309,6 @@ const App = () => {
     );
   }
 
-              onOpenCreditApply={() => setCurrentPage("creditScore")}
     return (
       <AppLayout
         activeTab="investments"
