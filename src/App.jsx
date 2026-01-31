@@ -251,7 +251,6 @@ const App = () => {
       </AppLayout>
     );
   }
-                onOpenCreditApply={() => setCurrentPage("creditScore")}
   if (currentPage === "credit") {
     return (
       <AppLayout
