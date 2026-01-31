@@ -1459,7 +1459,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                     )}
                   </>
                 ) : (
-                  <p className="text-sm text-slate-500">Price data updating...</p>
+                  <p className="text-sm text-slate-500">Data unavailable</p>
                 )}
               </div>
               

@@ -17,6 +17,10 @@ const InvestmentsPage = ({ onOpenNotifications, onOpenInvest }) => {
     loading: investmentsLoading 
   } = useInvestments();
   const [allocations, setAllocations] = useState([]);
+  const [customGoals, setCustomGoals] = useState([]);
+  const [goalName, setGoalName] = useState("");
+  const [goalTarget, setGoalTarget] = useState("");
+  const [goalDate, setGoalDate] = useState("");
   
   const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(" ");
   const initials = displayName
@@ -75,6 +79,28 @@ const InvestmentsPage = ({ onOpenNotifications, onOpenInvest }) => {
 
   const displayPortfolioMix = portfolioMix.length > 0 ? portfolioMix : defaultPortfolioMix;
   const hasAllocations = allocations.length > 0;
+  const displayGoals = [...goals, ...customGoals];
+  const handleAddGoal = (event) => {
+    event.preventDefault();
+    if (!goalName || !goalTarget || !goalDate) return;
+    const formattedTarget = `Target R${Number(goalTarget).toLocaleString()}`;
+    const formattedDate = new Date(goalDate).toLocaleDateString("en-ZA", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+    setCustomGoals((prev) => [
+      ...prev,
+      {
+        label: goalName,
+        progress: "0%",
+        value: `${formattedTarget} • ${formattedDate}`,
+      },
+    ]);
+    setGoalName("");
+    setGoalTarget("");
+    setGoalDate("");
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)] text-slate-900">
@@ -154,8 +180,8 @@ const InvestmentsPage = ({ onOpenNotifications, onOpenInvest }) => {
               <p className="text-sm font-semibold text-slate-700">Investment Goals</p>
               <p className="mt-1 text-xs text-slate-400">Track progress for your next milestone.</p>
               <div className="mt-4 space-y-4">
-                {goals.length > 0 ? (
-                  goals.map((goal) => (
+                {displayGoals.length > 0 ? (
+                  displayGoals.map((goal) => (
                     <div key={goal.label} className="rounded-2xl bg-slate-50 px-4 py-3">
                       <div className="flex items-center justify-between text-sm font-semibold text-slate-700">
                         <span>{goal.label}</span>
@@ -177,6 +203,43 @@ const InvestmentsPage = ({ onOpenNotifications, onOpenInvest }) => {
                   </div>
                 )}
               </div>
+            </section>
+
+            <section className="rounded-3xl bg-white px-4 py-5 shadow-md">
+              <p className="text-sm font-semibold text-slate-700">Add an investment goal</p>
+              <p className="mt-1 text-xs text-slate-400">Set your target amount and date.</p>
+              <form className="mt-4 space-y-4" onSubmit={handleAddGoal}>
+                <input
+                  type="text"
+                  value={goalName}
+                  onChange={(event) => setGoalName(event.target.value)}
+                  placeholder="Goal name (e.g. First home)"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm outline-none focus:border-violet-400"
+                  required
+                />
+                <input
+                  type="number"
+                  min="1"
+                  value={goalTarget}
+                  onChange={(event) => setGoalTarget(event.target.value)}
+                  placeholder="Target amount"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm outline-none focus:border-violet-400"
+                  required
+                />
+                <input
+                  type="date"
+                  value={goalDate}
+                  onChange={(event) => setGoalDate(event.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm outline-none focus:border-violet-400"
+                  required
+                />
+                <button
+                  type="submit"
+                  className="w-full rounded-2xl bg-gradient-to-r from-black to-purple-600 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-white shadow-lg transition-all active:scale-95"
+                >
+                  Add goal
+                </button>
+              </form>
             </section>
           </>
         )}

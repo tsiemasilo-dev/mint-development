@@ -25,6 +25,7 @@ import NotificationSettingsPage from "./pages/NotificationSettingsPage.jsx";
 import MintBalancePage from "./pages/MintBalancePage.jsx";
 import MarketsPage from "./pages/MarketsPage.jsx";
 import StockDetailPage from "./pages/StockDetailPage.jsx";
+import StockBuyPage from "./pages/StockBuyPage.jsx";
 import NewsArticlePage from "./pages/NewsArticlePage.jsx";
 import { NotificationsProvider, createWelcomeNotification, useNotificationsContext } from "./lib/NotificationsContext.jsx";
 import ActivityPage from "./pages/ActivityPage.jsx";
@@ -72,6 +73,7 @@ const App = () => {
   const [selectedStrategy, setSelectedStrategy] = useState(null);
   const [selectedArticleId, setSelectedArticleId] = useState(null);
   const [investmentAmount, setInvestmentAmount] = useState(0);
+  const [stockCheckout, setStockCheckout] = useState({ security: null, amount: 0 });
   const recoveryHandled = useRef(false);
   const { refetch: refetchNotifications } = useNotificationsContext();
 
@@ -354,6 +356,42 @@ const App = () => {
       <StockDetailPage
         security={selectedSecurity}
         onBack={() => setCurrentPage("markets")}
+        onOpenBuy={() => setCurrentPage("stockBuy")}
+      />
+    );
+  }
+
+  if (currentPage === "stockBuy") {
+    return (
+      <StockBuyPage
+        security={selectedSecurity}
+        onBack={() => setCurrentPage("stockDetail")}
+        onContinue={(amount, security) => {
+          setStockCheckout({ security, amount });
+          setCurrentPage("stockPayment");
+        }}
+      />
+    );
+  }
+
+  if (currentPage === "stockPayment") {
+    const currency = stockCheckout.security?.currency || "R";
+    const normalizedCurrency = currency.toUpperCase() === "ZAC" ? "R" : currency;
+    const paymentItem = stockCheckout.security
+      ? { ...stockCheckout.security, name: stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock", currency: normalizedCurrency }
+      : null;
+    return (
+      <PaymentPage
+        onBack={() => setCurrentPage("stockBuy")}
+        strategy={paymentItem}
+        amount={stockCheckout.amount}
+        onSuccess={(response) => {
+          console.log("Payment successful:", response);
+          setCurrentPage("home");
+        }}
+        onCancel={() => {
+          setCurrentPage("stockBuy");
+        }}
       />
     );
   }
@@ -382,7 +420,7 @@ const App = () => {
   if (currentPage === "factsheet") {
     return (
       <FactsheetPage 
-        onBack={() => setCurrentPage("openStrategies")} 
+        onBack={() => setCurrentPage("markets")} 
         strategy={selectedStrategy}
         onOpenInvest={(strategy) => {
           setSelectedStrategy(strategy);
