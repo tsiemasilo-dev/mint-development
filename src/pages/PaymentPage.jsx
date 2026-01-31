@@ -24,12 +24,20 @@ const PaymentPage = ({ onBack, strategy, amount, onSuccess, onCancel }) => {
         return;
       }
 
+      const chargeAmount = Math.round((amount || 0) * 100);
+      if (!chargeAmount || chargeAmount <= 0) {
+        setPaymentStatus("failed");
+        setErrorMessage("Invalid payment amount.");
+        return;
+      }
+
       setPaymentStatus("processing");
 
-      const handler = new window.PaystackPop({
+      const paystack = new window.PaystackPop();
+      paystack.newTransaction({
         key: publicKey,
         email: profile?.email || "user@example.com",
-        amount: Math.round((amount || 0) * 100),
+        amount: chargeAmount,
         currency: strategy?.currency || "ZAR",
         ref: `MINT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         metadata: {
@@ -44,16 +52,19 @@ const PaymentPage = ({ onBack, strategy, amount, onSuccess, onCancel }) => {
           setErrorMessage("Payment cancelled");
           setTimeout(() => onCancel?.(), 2000);
         },
-        callback: function (response) {
+        onSuccess: function (response) {
           console.log("Payment successful:", response);
           setPaymentStatus("success");
           setTimeout(() => {
             onSuccess?.(response);
           }, 2000);
         },
+        onError: function (error) {
+          console.error("Payment error:", error);
+          setPaymentStatus("failed");
+          setErrorMessage("Payment failed. Please try again.");
+        },
       });
-
-      handler.open();
     };
 
     // Small delay to ensure component is mounted
