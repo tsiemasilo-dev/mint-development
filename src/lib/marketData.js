@@ -32,7 +32,7 @@ export const getMarketsSecuritiesWithMetrics = async () => {
       .from("securities")
       .select(`
         *,
-        security_metrics!security_metrics_security_id_fkey(
+        security_metrics(
           as_of_date,
           last_close,
           prev_close,
@@ -55,9 +55,17 @@ export const getMarketsSecuritiesWithMetrics = async () => {
       throw securitiesError;
     }
 
+    console.log("🔍 Raw securities sample:", securities?.[0]);
+
     // Process securities to flatten metrics
     const processedSecurities = (securities || []).map(security => {
-      const metrics = security.security_metrics?.[0] || null;
+      const metrics = Array.isArray(security.security_metrics) 
+        ? security.security_metrics[0] 
+        : security.security_metrics;
+      
+      if (!metrics) {
+        console.warn(`⚠️ No metrics for security ${security.symbol} (id: ${security.id})`);
+      }
       
       return {
         ...security,

@@ -1,6 +1,8 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
-import { ArrowLeft, X, Info, Heart } from "lucide-react";
+import { ArrowLeft, X, Info, Heart, TrendingUp, TrendingDown } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { getStrategyById, getStrategyPriceHistory, formatChangePct, formatChangeAbs, getChangeColor } from "../lib/strategyData.js";
+import { formatCurrency } from "../lib/formatCurrency";
 import {
   Area,
   Line,
@@ -66,13 +68,7 @@ const buildSeries = (points, base = 2.4, timeframe = "6M") => {
   });
 };
 
-const holdings = [
-  { name: "Apple", ticker: "AAPL", weight: 27.3, dailyChange: 1.62 },
-  { name: "Microsoft", ticker: "MSFT", weight: 27.3, dailyChange: 1.09 },
-  { name: "Visa", ticker: "V", weight: 18.2, dailyChange: 0.37 },
-  { name: "Johnson & Johnson", ticker: "JNJ", weight: 18.2, dailyChange: 0.85 },
-  { name: "Berkshire Hathaway", ticker: "BRK.B", weight: 9.09, dailyChange: 1.02 },
-];
+const holdings = [];
 
 const monthlyReturns = {
   2023: [2.1, 4.8, 5.0, -1.2, 5.9, 1.1, -2.1, -4.7, 2.0, 5.5, 1.3, 26.8],
@@ -113,9 +109,55 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
   const [calendarYear, setCalendarYear] = useState(2025);
   const [isInWatchlist, setIsInWatchlist] = useState(false);
   const [holdingsSecurities, setHoldingsSecurities] = useState([]);
+  const [strategyData, setStrategyData] = useState(strategy);
+  const [priceHistory, setPriceHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
   const marqueeRef = useRef(null);
 
-  const currentStrategy = strategy || {
+  // Fetch updated strategy data with metrics if we have an ID
+  useEffect(() => {
+    const fetchStrategyData = async () => {
+      if (!strategy?.id) {
+        setLoading(false);
+        return;
+      }
+      
+      try {
+        const updatedStrategy = await getStrategyById(strategy.id);
+        if (updatedStrategy) {
+          console.log("📊 Updated strategy data:", updatedStrategy);
+          setStrategyData(updatedStrategy);
+        }
+      } catch (error) {
+        console.error("Error fetching strategy data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStrategyData();
+  }, [strategy?.id]);
+
+  // Fetch price history when timeframe changes
+  useEffect(() => {
+    const fetchPriceHistory = async () => {
+      if (!strategy?.id) return;
+      
+      setLoading(true);
+      try {
+        const prices = await getStrategyPriceHistory(strategy.id, timeframe);
+        setPriceHistory(prices);
+      } catch (error) {
+        console.error("Error fetching price history:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPriceHistory();
+  }, [strategy?.id, timeframe]);
+
+  const currentStrategy = strategyData || strategy || {
     name: "AlgoHive Core",
     tags: ["Balanced", "Low risk", "Automated"],
     description: "AlgoHive Core targets steady, diversified growth using an automated allocation model that adapts to changing market regimes. It aims to smooth volatility while maintaining consistent participation in upside moves, making it suitable for investors seeking a balanced, long-term portfolio anchor.",
@@ -130,12 +172,12 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
       if (!supabase || !currentStrategy.holdings || currentStrategy.holdings.length === 0) return;
 
       try {
-        const tickers = currentStrategy.holdings.map((h) => h.ticker);
+        const tickers = currentStrategy.holdings.map((h) => h.ticker || h.symbol || h);
 
         const { data, error } = await supabase
           .from("securities")
-          .select("ticker, name, logo_url")
-          .in("ticker", tickers);
+          .select("symbol, name, logo_url, security_metrics(r_1d)")
+          .in("symbol", tickers);
 
         if (error) throw error;
         if (isMounted && data) {
@@ -153,40 +195,59 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
     };
   }, [currentStrategy]);
 
+  // Generate chart data from price history
   const data = useMemo(() => {
-    const selected = timeframeOptions.find((option) => option.key === timeframe);
-    return buildSeries(selected?.points ?? 180, 2.4, timeframe);
-  }, [timeframe]);
+    if (priceHistory.length > 0) {
+      // Convert strategy_prices to chart format
+      return priceHistory.map((p, index) => ({
+        label: index + 1,
+        dateLabel: new Date(p.ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        returnPct: p.nav || 0,
+      }));
+    }
+    return [];
+  }, [priceHistory, timeframe]);
 
   const lastIndex = data.length - 1;
   const lastValue = data[lastIndex]?.returnPct ?? 0;
-  const formattedReturn = `${lastValue >= 0 ? "+" : ""}${lastValue.toFixed(2)}%`;
+  const firstValue = data[0]?.returnPct ?? 0;
+  const periodReturn = priceHistory.length > 0 
+    ? ((lastValue - firstValue) / firstValue) * 100 
+    : lastValue;
+  const formattedReturn = priceHistory.length > 0
+    ? `${periodReturn >= 0 ? "+" : ""}${periodReturn.toFixed(2)}%`
+    : "Data unavailable";
+    
+  // Get current metrics
+  const currentPrice = currentStrategy.last_close;
+  const changePct = currentStrategy.change_pct;
+  const changeAbs = currentStrategy.change_abs;
+  const isPositive = changePct != null && changePct >= 0;
 
   // Calculate cumulative returns for calendar
   const calendarData = useMemo(() => {
-    const returns = monthlyReturns[calendarYear] || [];
-    let cumulative = 0;
-    return returns.map((ret) => {
-      cumulative += ret;
-      return { return: ret, cumulative: Number(cumulative.toFixed(2)) };
-    });
+    return [];
   }, [calendarYear]);
 
-  // Auto-scroll marquee only
-  useEffect(() => {
-    const marquee = marqueeRef.current;
-    if (!marquee) return;
+  const holdingsWithMetrics = useMemo(() => {
+    if (!currentStrategy.holdings || currentStrategy.holdings.length === 0) return [];
+    return currentStrategy.holdings.map((holding) => {
+      const symbol = holding.ticker || holding.symbol || holding;
+      const security = holdingsSecurities.find((s) => s.symbol === symbol);
+      const metrics = Array.isArray(security?.security_metrics)
+        ? security.security_metrics[0]
+        : security?.security_metrics;
+      return {
+        symbol,
+        name: holding.name || security?.name || symbol,
+        weight: holding.weight ?? 0,
+        logoUrl: security?.logo_url,
+        dailyChange: metrics?.r_1d ?? null,
+      };
+    });
+  }, [currentStrategy.holdings, holdingsSecurities]);
 
-    const scroll = () => {
-      marquee.scrollLeft += 2;
-      if (marquee.scrollLeft >= marquee.scrollWidth - marquee.clientWidth) {
-        marquee.scrollLeft = 0;
-      }
-    };
-
-    const interval = setInterval(scroll, 30);
-    return () => clearInterval(interval);
-  }, []);
+  // Auto-scroll removed to allow manual scrolling.
 
   const getReturnColor = (value) => {
     if (value > 0) return "bg-emerald-50 text-emerald-600";
@@ -221,88 +282,119 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-semibold text-slate-900">AlgoHive Core</h2>
+                <h2 className="text-lg font-semibold text-slate-900">{currentStrategy.name}</h2>
               </div>
-              <p className="text-xs font-semibold text-slate-400">Balanced • Automated</p>
+              <p className="text-xs font-semibold text-slate-400">
+                {currentStrategy.risk_level || 'Balanced'} • Automated
+              </p>
             </div>
           </div>
 
           <div className="mt-4 space-y-1">
-            <div className="flex items-center gap-3">
-              <p className="text-3xl font-semibold text-slate-900">{formattedReturn}</p>
-              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-600">
-                {timeframe} return
-              </span>
-            </div>
-            <p className="text-xs text-slate-500">Last updated 2h ago</p>
+            {currentPrice != null ? (
+              <>
+                <div className="flex items-baseline gap-3">
+                  <p className="text-3xl font-semibold text-slate-900">
+                    {formatCurrency(currentPrice, currentStrategy.currency || 'R')}
+                  </p>
+                  {changePct != null && (
+                    <div className={`flex items-center gap-1 text-sm font-semibold ${getChangeColor(changePct)}`}>
+                      {isPositive ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                      <span>{formatChangePct(changePct)}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <span>Today {changeAbs != null ? formatChangeAbs(changeAbs) : ''}</span>
+                  <span>•</span>
+                  <span>{timeframe} {formattedReturn}</span>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center gap-3">
+                <p className="text-3xl font-semibold text-slate-900">{formattedReturn}</p>
+                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-600">
+                  {timeframe} return
+                </span>
+              </div>
+            )}
+            <p className="text-xs text-slate-500">
+              Last updated {currentStrategy.as_of_date ? new Date(currentStrategy.as_of_date).toLocaleString() : '2h ago'}
+            </p>
           </div>
 
           <div className="mt-4 h-48 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart
-                data={data}
-                margin={{ top: 12, right: 16, left: 8, bottom: 28 }}
-                onMouseMove={(state) => {
-                  if (state?.activeLabel) {
-                    setActiveLabel(state.activeLabel);
-                  }
-                }}
-                onMouseLeave={() => setActiveLabel(null)}
-              >
-                <defs>
-                  <linearGradient id="factsheetGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#5b21b6" stopOpacity={0.25} />
-                    <stop offset="70%" stopColor="#3b1b7a" stopOpacity={0.1} />
-                    <stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                {activeLabel ? (
-                  <>
-                    <ReferenceLine
-                      x={activeLabel}
-                      stroke="#CBD5E1"
-                      strokeOpacity={0.6}
-                      strokeDasharray="3 3"
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#ffffff",
-                        border: "none",
-                        borderRadius: "20px",
-                        padding: "3px 8px",
-                        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-                      }}
-                      labelStyle={{ display: "none" }}
-                      formatter={(value) => [`${value.toFixed(2)}%`, "Return"]}
-                      cursor={{ strokeDasharray: "3 3" }}
-                    />
-                  </>
-                ) : null}
-                <XAxis
-                  dataKey="dateLabel"
-                  tick={{ fontSize: 12, fill: "#64748b" }}
-                  axisLine={{ stroke: "#e2e8f0" }}
-                  tickLine={false}
-                  height={24}
-                />
-                <YAxis hide />
-                <Area
-                  type="monotone"
-                  dataKey="returnPct"
-                  stroke="transparent"
-                  fill="url(#factsheetGradient)"
-                  dot={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="returnPct"
-                  stroke="#5b21b6"
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={false}
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
+            {data.length === 0 ? (
+              <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-500">
+                Data unavailable
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart
+                  data={data}
+                  margin={{ top: 12, right: 16, left: 8, bottom: 28 }}
+                  onMouseMove={(state) => {
+                    if (state?.activeLabel) {
+                      setActiveLabel(state.activeLabel);
+                    }
+                  }}
+                  onMouseLeave={() => setActiveLabel(null)}
+                >
+                  <defs>
+                    <linearGradient id="factsheetGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#5b21b6" stopOpacity={0.25} />
+                      <stop offset="70%" stopColor="#3b1b7a" stopOpacity={0.1} />
+                      <stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  {activeLabel ? (
+                    <>
+                      <ReferenceLine
+                        x={activeLabel}
+                        stroke="#CBD5E1"
+                        strokeOpacity={0.6}
+                        strokeDasharray="3 3"
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "#ffffff",
+                          border: "none",
+                          borderRadius: "20px",
+                          padding: "3px 8px",
+                          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                        }}
+                        labelStyle={{ display: "none" }}
+                        formatter={(value) => [`${value.toFixed(2)}%`, "Return"]}
+                        cursor={{ strokeDasharray: "3 3" }}
+                      />
+                    </>
+                  ) : null}
+                  <XAxis
+                    dataKey="dateLabel"
+                    tick={{ fontSize: 12, fill: "#64748b" }}
+                    axisLine={{ stroke: "#e2e8f0" }}
+                    tickLine={false}
+                    height={24}
+                  />
+                  <YAxis hide />
+                  <Area
+                    type="monotone"
+                    dataKey="returnPct"
+                    stroke="transparent"
+                    fill="url(#factsheetGradient)"
+                    dot={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="returnPct"
+                    stroke="#5b21b6"
+                    strokeWidth={2}
+                    dot={false}
+                    activeDot={false}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            )}
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
@@ -346,35 +438,48 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
               className="flex gap-3 overflow-x-auto scroll-smooth pb-2 snap-x snap-mandatory"
               style={{ scrollBehavior: "smooth", WebkitOverflowScrolling: "touch" }}
             >
-              {holdings.map((holding) => (
-                <div
-                  key={holding.ticker}
-                  className="flex-shrink-0 w-48 rounded-2xl border border-slate-100 bg-slate-50 p-4 snap-center"
-                >
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white">
-                      <img
-                        src={`https://s3-symbol-logo.tradingview.com/${holding.ticker.toLowerCase()}--big.svg`}
-                        alt={holding.ticker}
-                        className="h-full w-full object-cover"
-                        onError={(e) => {
-                          e.target.src = `https://via.placeholder.com/32?text=${holding.ticker}`;
-                        }}
-                      />
+              {holdingsWithMetrics.length > 0 ? (
+                holdingsWithMetrics.map((holding) => (
+                  <div
+                    key={holding.symbol}
+                    className="flex-shrink-0 w-48 rounded-2xl border border-slate-100 bg-slate-50 p-4 snap-center"
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white">
+                        {holding.logoUrl ? (
+                          <img
+                            src={holding.logoUrl}
+                            alt={holding.symbol}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-[10px] font-semibold text-slate-500">
+                            {holding.symbol?.slice(0, 2)}
+                          </span>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-slate-900">{holding.symbol}</p>
+                        <p className="text-[10px] text-slate-500">{holding.name}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs font-semibold text-slate-900">{holding.ticker}</p>
-                      <p className="text-[10px] text-slate-500">{holding.name}</p>
+                    <div className="mt-3 space-y-1">
+                      {holding.dailyChange != null ? (
+                        <p className={`text-sm font-semibold ${holding.dailyChange > 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                          {holding.dailyChange > 0 ? "+" : ""}{Number(holding.dailyChange).toFixed(2)}%
+                        </p>
+                      ) : (
+                        <p className="text-sm font-semibold text-slate-400">Data unavailable</p>
+                      )}
+                      <p className="text-xs text-slate-600">{Number(holding.weight || 0).toFixed(2)}% weight</p>
                     </div>
                   </div>
-                  <div className="mt-3 space-y-1">
-                    <p className={`text-sm font-semibold ${holding.dailyChange > 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                      {holding.dailyChange > 0 ? "+" : ""}{holding.dailyChange.toFixed(2)}%
-                    </p>
-                    <p className="text-xs text-slate-600">{holding.weight.toFixed(2)}% weight</p>
-                  </div>
+                ))
+              ) : (
+                <div className="flex h-32 w-full items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-500">
+                  Data unavailable
                 </div>
-              ))}
+              )}
             </div>
           </div>
         </section>
@@ -382,29 +487,68 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
         {/* Performance Summary */}
         <section className="mt-6 rounded-3xl border border-slate-100 bg-white p-4 shadow-sm">
           <h2 className="text-sm font-semibold text-slate-900">Performance Summary</h2>
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            {performanceMetrics.map((metric) => (
-              <div
-                key={metric.label}
-                className="rounded-2xl border border-slate-100 bg-slate-50 p-3"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-xs font-semibold text-slate-600">{metric.label}</p>
-                    <p className="mt-2 text-sm font-semibold text-slate-900">{metric.value}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedMetricModal(metric)}
-                    className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] text-white"
-                  >
-                    <Info className="h-3 w-3" />
-                  </button>
-                </div>
-              </div>
-            ))}
+          <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-sm text-slate-500">
+            Data unavailable
           </div>
         </section>
+
+        {/* Period Returns */}
+        {(currentStrategy.r_1w != null || currentStrategy.r_1m != null || currentStrategy.r_3m != null || 
+          currentStrategy.r_6m != null || currentStrategy.r_ytd != null || currentStrategy.r_1y != null) && (
+          <section className="mt-6 rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+            <h2 className="text-sm font-semibold text-slate-900">Performance Returns</h2>
+            <div className="mt-4 grid grid-cols-3 gap-3">
+              {currentStrategy.r_1w != null && (
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3 text-center">
+                  <p className="text-xs font-semibold text-slate-600">1W</p>
+                  <p className={`mt-1 text-sm font-semibold ${getChangeColor(currentStrategy.r_1w)}`}>
+                    {formatChangePct(currentStrategy.r_1w)}
+                  </p>
+                </div>
+              )}
+              {currentStrategy.r_1m != null && (
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3 text-center">
+                  <p className="text-xs font-semibold text-slate-600">1M</p>
+                  <p className={`mt-1 text-sm font-semibold ${getChangeColor(currentStrategy.r_1m)}`}>
+                    {formatChangePct(currentStrategy.r_1m)}
+                  </p>
+                </div>
+              )}
+              {currentStrategy.r_3m != null && (
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3 text-center">
+                  <p className="text-xs font-semibold text-slate-600">3M</p>
+                  <p className={`mt-1 text-sm font-semibold ${getChangeColor(currentStrategy.r_3m)}`}>
+                    {formatChangePct(currentStrategy.r_3m)}
+                  </p>
+                </div>
+              )}
+              {currentStrategy.r_6m != null && (
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3 text-center">
+                  <p className="text-xs font-semibold text-slate-600">6M</p>
+                  <p className={`mt-1 text-sm font-semibold ${getChangeColor(currentStrategy.r_6m)}`}>
+                    {formatChangePct(currentStrategy.r_6m)}
+                  </p>
+                </div>
+              )}
+              {currentStrategy.r_ytd != null && (
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3 text-center">
+                  <p className="text-xs font-semibold text-slate-600">YTD</p>
+                  <p className={`mt-1 text-sm font-semibold ${getChangeColor(currentStrategy.r_ytd)}`}>
+                    {formatChangePct(currentStrategy.r_ytd)}
+                  </p>
+                </div>
+              )}
+              {currentStrategy.r_1y != null && (
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3 text-center">
+                  <p className="text-xs font-semibold text-slate-600">1Y</p>
+                  <p className={`mt-1 text-sm font-semibold ${getChangeColor(currentStrategy.r_1y)}`}>
+                    {formatChangePct(currentStrategy.r_1y)}
+                  </p>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
         {/* Strategy Description */}
         <section className="mt-6 rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
@@ -420,49 +564,35 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
           <p className="mt-1 text-xs text-slate-500">Top 10 by weight</p>
           <div className="mt-4 space-y-3">
             {currentStrategy.holdings && currentStrategy.holdings.length > 0 ? (
-              currentStrategy.holdings.map((holding) => {
-                const security = holdingsSecurities.find((s) => s.ticker === holding.ticker);
+              currentStrategy.holdings.map((holding, index) => {
+                const symbol = holding.ticker || holding.symbol || "";
+                const security = holdingsSecurities.find((s) => s.symbol === symbol);
+                const weight = Number(holding.weight || 0);
                 return (
-                  <div key={holding.ticker} className="flex items-center gap-3">
+                  <div key={symbol || index} className="flex items-center gap-3">
                     <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
                       {security?.logo_url ? (
                         <img
                           src={security.logo_url}
-                          alt={security.name}
+                          alt={security.name || symbol}
                           className="h-full w-full object-cover"
                         />
                       ) : (
-                        <span className="text-xs font-semibold text-slate-400">{holding.ticker.slice(0, 2)}</span>
+                        <span className="text-xs font-semibold text-slate-400">{symbol ? symbol.slice(0, 2) : "—"}</span>
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-slate-900">{holding.ticker}</p>
-                      <p className="text-[11px] text-slate-500 truncate">{security?.name || holding.ticker}</p>
+                      <p className="text-xs font-semibold text-slate-900">{symbol || "—"}</p>
+                      <p className="text-[11px] text-slate-500 truncate">{security?.name || holding.name || symbol || "—"}</p>
                     </div>
-                    <p className="text-xs font-semibold text-slate-900">{holding.weight.toFixed(2)}%</p>
+                    <p className="text-xs font-semibold text-slate-900">{weight.toFixed(2)}%</p>
                   </div>
                 );
               })
             ) : (
-              holdings.map((holding) => (
-                <div key={holding.ticker} className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-                    <img
-                      src={`https://s3-symbol-logo.tradingview.com/${holding.ticker.toLowerCase()}--big.svg`}
-                      alt={holding.ticker}
-                      className="h-full w-full object-cover"
-                      onError={(e) => {
-                        e.target.src = `https://via.placeholder.com/32?text=${holding.ticker}`;
-                      }}
-                    />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-slate-900">{holding.ticker}</p>
-                    <p className="text-[11px] text-slate-500 truncate">{holding.name}</p>
-                  </div>
-                  <p className="text-xs font-semibold text-slate-900">{holding.weight.toFixed(2)}%</p>
-                </div>
-              ))
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-sm text-slate-500">
+                Data unavailable
+              </div>
             )}
           </div>
         </section>
@@ -472,82 +602,8 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
           <div className="flex items-center justify-between gap-4 mb-4">
             <h2 className="text-sm font-semibold text-slate-900">Calendar Returns</h2>
           </div>
-          
-          <div className="flex flex-col gap-3 mb-4">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-slate-600">Year:</span>
-                <select
-                  value={calendarYear}
-                  onChange={(e) => setCalendarYear(Number(e.target.value))}
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700"
-                >
-                  <option value="all">All Years</option>
-                  {Object.keys(monthlyReturns).map((year) => (
-                    <option key={year} value={Number(year)}>
-                      {year}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-slate-600">Months:</span>
-                <select className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">
-                  <option>All Months</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto -mx-5 px-5">
-            <table className="w-full min-w-full border-collapse text-xs">
-              <thead>
-                <tr>
-                  <th className="sticky left-0 bg-white p-2 text-left font-semibold text-slate-900 border border-slate-100"></th>
-                  {monthNames.map((month) => (
-                    <th key={month} className="p-2 text-center font-semibold text-slate-900 border border-slate-100 min-w-16">
-                      {month}
-                    </th>
-                  ))}
-                  <th className="p-2 text-center font-semibold text-slate-900 border border-slate-100 min-w-16 bg-emerald-50">
-                    YTD
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {Object.entries(monthlyReturns).map(([year, returns]) => (
-                  <tr key={year}>
-                    <td className="sticky left-0 bg-white p-2 font-semibold text-slate-900 border border-slate-100">
-                      {year}
-                    </td>
-                    {Array.from({ length: 12 }).map((_, idx) => {
-                      const value = returns[idx];
-                      let bgColor = "bg-slate-50";
-                      let textColor = "text-slate-900";
-                      
-                      if (value !== undefined) {
-                        bgColor = value > 0 ? "bg-emerald-100" : value < 0 ? "bg-rose-100" : "bg-slate-50";
-                        textColor = value > 0 ? "text-emerald-700" : value < 0 ? "text-rose-700" : "text-slate-700";
-                      }
-                      
-                      return (
-                        <td
-                          key={`${year}-${idx}`}
-                          className={`p-2 text-center font-semibold border border-slate-100 min-w-16 ${bgColor} ${textColor}`}
-                        >
-                          {value !== undefined ? `${value > 0 ? "+" : ""}${value.toFixed(2)}%` : "—"}
-                        </td>
-                      );
-                    })}
-                    <td className={`p-2 text-center font-semibold border border-slate-100 min-w-16 ${calendarData[calendarData.length - 1]?.cumulative > 0 ? "bg-emerald-100 text-emerald-700" : "bg-slate-50 text-slate-900"}`}>
-                      {calendarYear === "all" || Number(calendarYear) === Number(year)
-                        ? `+${calendarData[calendarData.length - 1]?.cumulative.toFixed(2)}%`
-                        : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-sm text-slate-500">
+            Data unavailable
           </div>
         </section>
 

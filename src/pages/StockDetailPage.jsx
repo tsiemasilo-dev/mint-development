@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { ArrowLeft, TrendingUp, TrendingDown } from "lucide-react";
 import { getSecurityBySymbol, getSecurityPrices, normalizePriceSeries } from "../lib/marketData.js";
 
-const StockDetailPage = ({ security: initialSecurity, onBack }) => {
+const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy }) => {
   const [selectedPeriod, setSelectedPeriod] = useState("1M");
   const [security, setSecurity] = useState(initialSecurity);
   const [priceHistory, setPriceHistory] = useState([]);
@@ -214,7 +214,7 @@ const StockDetailPage = ({ security: initialSecurity, onBack }) => {
       {/* Tabs */}
       <div className="border-b border-slate-200 px-4">
         <div className="flex gap-6">
-          {["Overview", "Financials", "News", "Documents"].map((tab, idx) => (
+          {["Overview"].map((tab, idx) => (
             <button
               key={tab}
               className={`pb-3 text-sm font-semibold transition-colors ${
@@ -420,7 +420,11 @@ const StockDetailPage = ({ security: initialSecurity, onBack }) => {
 
         {/* Action Buttons */}
         <div className="mt-8 grid grid-cols-2 gap-3">
-          <button className="rounded-2xl bg-gradient-to-r from-purple-600 to-purple-500 py-4 font-semibold text-white shadow-lg transition-all active:scale-95">
+          <button
+            type="button"
+            onClick={onOpenBuy}
+            className="rounded-2xl bg-gradient-to-r from-black to-purple-600 py-4 font-semibold text-white shadow-lg transition-all active:scale-95"
+          >
             Buy
           </button>
           <button className="rounded-2xl border-2 border-slate-200 bg-white py-4 font-semibold text-slate-900 transition-all active:scale-95">

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useMemo, useId } from "react";
 import { supabase } from "../lib/supabase.js";
 import { getMarketsSecuritiesWithMetrics } from "../lib/marketData.js";
+import { getStrategiesWithMetrics, getPublicStrategies, formatChangePct, formatChangeAbs, getChangeColor } from "../lib/strategyData.js";
 import { useProfile } from "../lib/useProfile";
 import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight } from "lucide-react";
 import NotificationBell from "../components/NotificationBell";
@@ -8,58 +9,17 @@ import Skeleton from "../components/Skeleton";
 import { StrategyReturnHeaderChart } from "../components/StrategyReturnHeaderChart";
 import { ChartContainer } from "../components/ui/line-charts-2";
 import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer } from "recharts";
+import { formatCurrency } from "../lib/formatCurrency";
 
-// Mock strategies data - will be replaced with real data later
-const strategyCards = [
-  {
-    name: "Balanced Growth",
-    risk: "Balanced",
-    return: "+8.7%",
-    returnRate: "6.7%",
-    minimum: 2500,
-    minimum_display: "Min. R2,500",
-    tags: ["Balanced", "Low risk", "Automated"],
-    holdings: ["AAPL", "MSFT", "NVDA"],
-    exposure: "Global",
-    minInvestment: "R2,500+",
-    timeHorizon: "Long",
-    sectors: ["Technology", "Consumer"],
-    returnScore: 6.7,
-    sparkline: [12, 18, 16, 24, 28, 26, 32, 35, 40, 44],
-  },
-  {
-    name: "Dividend Focus",
-    risk: "Low risk",
-    return: "+5.3%",
-    returnRate: "5.3%",
-    minimum: 1500,
-    minimum_display: "Min. R1,500",
-    tags: ["Income", "Low risk", "Automated"],
-    holdings: ["AAPL", "KO", "PG"],
-    exposure: "Mixed",
-    minInvestment: "R500+",
-    timeHorizon: "Medium",
-    sectors: ["Consumer", "Healthcare"],
-    returnScore: 5.3,
-    sparkline: [10, 12, 15, 14, 18, 20, 22, 24, 26, 28],
-  },
-  {
-    name: "Momentum Select",
-    risk: "Growth",
-    return: "+9.1%",
-    returnRate: "9.1%",
-    minimum: 5000,
-    minimum_display: "Min. R5,000",
-    tags: ["Growth", "Higher risk", "Automated"],
-    holdings: ["TSLA", "NVDA", "AMZN"],
-    exposure: "Equities",
-    minInvestment: "R10,000+",
-    timeHorizon: "Short",
-    sectors: ["Technology", "Energy"],
-    returnScore: 9.1,
-    sparkline: [8, 14, 12, 20, 26, 24, 30, 36, 34, 42],
-  },
-];
+// Fallback sparkline data for strategies without price history
+const generateSparkline = (changePct) => {
+  const base = 20;
+  const trend = changePct || 0;
+  return Array.from({ length: 10 }, (_, i) => {
+    const progress = i / 9;
+    return base + (trend * 5 * progress) + (Math.random() * 2 - 1);
+  });
+};
 
 const sortOptions = ["Market Cap", "Dividend Yield", "P/E Ratio", "Beta"];
 
@@ -163,9 +123,13 @@ const StrategyMiniChart = ({ values }) => {
 const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNewsArticle, onOpenFactsheet }) => {
   const { profile, loading: profileLoading } = useProfile();
   const [securities, setSecurities] = useState([]);
+  const [strategies, setStrategies] = useState([]);
+  const [publicStrategies, setPublicStrategies] = useState([]);
   const [holdingsSecurities, setHoldingsSecurities] = useState([]);
   const [newsArticles, setNewsArticles] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [strategiesLoading, setStrategiesLoading] = useState(true);
+  const [publicStrategiesLoading, setPublicStrategiesLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [strategiesSearchQuery, setStrategiesSearchQuery] = useState("");
   const [newsSearchQuery, setNewsSearchQuery] = useState("");
@@ -218,6 +182,9 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       
       try {
         const data = await getMarketsSecuritiesWithMetrics();
+        console.log("📊 Fetched securities:", data);
+        console.log("📊 Securities with prices:", data.filter(s => s.currentPrice != null).length);
+        console.log("📊 Securities without prices:", data.filter(s => s.currentPrice == null).length);
         setSecurities(data);
       } catch (error) {
         console.error("Error fetching securities:", error);
@@ -229,18 +196,65 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
     fetchSecurities();
   }, []);
 
-  // Fetch holdings securities for strategy cards
+  // Fetch strategies with metrics
+  useEffect(() => {
+    const fetchStrategies = async () => {
+      setStrategiesLoading(true);
+      
+      try {
+        const data = await getStrategiesWithMetrics();
+        console.log("✅ Fetched strategies:", data);
+        setStrategies(data);
+      } catch (error) {
+        console.error("Error fetching strategies:", error);
+        setStrategies([]);
+      } finally {
+        setStrategiesLoading(false);
+      }
+    };
+
+    fetchStrategies();
+  }, []);
+
+  // Fetch public strategies for OpenStrategies view
+  useEffect(() => {
+    const fetchPublicStrategies = async () => {
+      setPublicStrategiesLoading(true);
+      
+      try {
+        const data = await getPublicStrategies();
+        console.log("✅ Fetched public strategies:", data);
+        setPublicStrategies(data);
+      } catch (error) {
+        console.error("Error fetching public strategies:", error);
+        setPublicStrategies([]);
+      } finally {
+        setPublicStrategiesLoading(false);
+      }
+    };
+
+    fetchPublicStrategies();
+  }, []);
+
+  // Fetch holdings securities for strategy cards (only if we have mock data)
   useEffect(() => {
     const fetchHoldingsSecurities = async () => {
-      if (!supabase) return;
+      const strategySources = [...strategies, ...publicStrategies];
+      if (!supabase || strategySources.length === 0) return;
 
       try {
-        // Get all unique ticker symbols from strategies
-        const allTickers = [...new Set(strategyCards.flatMap(s => s.holdings))];
+        // Get all unique ticker symbols from strategies if they have holdings
+        const allTickers = [...new Set(
+          strategySources
+            .filter(s => s.holdings && Array.isArray(s.holdings))
+            .flatMap(s => s.holdings.map(h => h.ticker || h.symbol || h))
+        )];
         
+        if (allTickers.length === 0) return;
+
         const { data, error } = await supabase
           .from("securities")
-          .select("symbol, logo_url, name")
+          .select("symbol, logo_url, name, currency, security_metrics(last_close)")
           .in("symbol", allTickers);
 
         if (!error && data) {
@@ -252,7 +266,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
     };
 
     fetchHoldingsSecurities();
-  }, []);
+  }, [strategies, publicStrategies]);
 
   // Fetch news articles
   useEffect(() => {
@@ -347,26 +361,40 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   }, [filteredSecurities]);
 
   const filteredStrategies = useMemo(() => {
-    const results = strategyCards.filter((strategy) => {
+    // Use publicStrategies for OpenStrategies view
+    const results = publicStrategies.filter((strategy) => {
       const matchesName =
         strategiesSearchQuery.length === 0
           ? true
-          : strategy.name.toLowerCase().includes(strategiesSearchQuery.toLowerCase()) ||
-            strategy.tags.some(tag => tag.toLowerCase().includes(strategiesSearchQuery.toLowerCase()));
+          : (strategy.name?.toLowerCase().includes(strategiesSearchQuery.toLowerCase()) ||
+             strategy.short_name?.toLowerCase().includes(strategiesSearchQuery.toLowerCase()) ||
+             strategy.description?.toLowerCase().includes(strategiesSearchQuery.toLowerCase()) ||
+             (strategy.tags && strategy.tags.some(tag => tag.toLowerCase().includes(strategiesSearchQuery.toLowerCase()))));
+      
       const matchesRisk = selectedRisks.size
-        ? selectedRisks.has(strategy.risk)
+        ? selectedRisks.has(strategy.risk_level)
         : true;
-      const matchesMinInvestment = selectedMinInvestment
-        ? strategy.minInvestment === selectedMinInvestment
+      
+      // Convert min_investment to minInvestment categories for filtering
+      const minInvest = strategy.min_investment || 0;
+      let investmentCategory = "R500+";
+      if (minInvest >= 10000) investmentCategory = "R10,000+";
+      else if (minInvest >= 2500) investmentCategory = "R2,500+";
+      
+      const matchesMinInvestment = selectedMinInvestment && selectedMinInvestment !== "Any"
+        ? investmentCategory === selectedMinInvestment
         : true;
+      
       const matchesExposure = selectedExposure.size
-        ? selectedExposure.has(strategy.exposure)
+        ? selectedExposure.has(strategy.objective)
         : true;
+      
       const matchesTimeHorizon = selectedTimeHorizon.size
-        ? selectedTimeHorizon.has(strategy.timeHorizon)
+        ? (strategy.tags && strategy.tags.some(tag => selectedTimeHorizon.has(tag)))
         : true;
+      
       const matchesSector = selectedStrategySectors.size
-        ? strategy.sectors.some((sector) => selectedStrategySectors.has(sector))
+        ? (strategy.sector && selectedStrategySectors.has(strategy.sector))
         : true;
 
       return (
@@ -379,25 +407,20 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       );
     });
 
+    // Sort strategies - already ordered by is_featured desc, name asc from database
+    // But apply client-side sorts if selected
     const sorted = [...results];
     if (strategySort === "Best performance") {
-      sorted.sort((a, b) => b.returnScore - a.returnScore);
-    }
-    if (strategySort === "Lowest max drawdown") {
-      sorted.sort((a, b) => a.maxDrawdownScore - b.maxDrawdownScore);
-    }
-    if (strategySort === "Lowest volatility") {
-      sorted.sort((a, b) => a.volatilityScore - b.volatilityScore);
+      // Would need performance metrics for this
+      sorted.sort((a, b) => (b.performance_score || 0) - (a.performance_score || 0));
     }
     if (strategySort === "Lowest minimum") {
-      sorted.sort((a, b) => a.minInvestmentValue - b.minInvestmentValue);
-    }
-    if (strategySort === "Most popular") {
-      sorted.sort((a, b) => b.popularityScore - a.popularityScore);
+      sorted.sort((a, b) => (a.min_investment || 0) - (b.min_investment || 0));
     }
 
     return sorted;
   }, [
+    publicStrategies,
     strategiesSearchQuery,
     selectedRisks,
     selectedMinInvestment,
@@ -445,11 +468,41 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
     return `R${num.toFixed(2)}`;
   };
 
+  const getDisplayCurrency = (security) => {
+    const currency = security.currency || "R";
+    return currency.toUpperCase() === "ZAC" ? "R" : currency;
+  };
+
   const formatPrice = (security) => {
     if (security.currentPrice != null) {
-      return security.currentPrice.toFixed(2);
+      const currency = security.currency || "R";
+      const priceValue = currency.toUpperCase() === "ZAC"
+        ? Number(security.currentPrice) / 100
+        : Number(security.currentPrice);
+      return priceValue.toFixed(2);
     }
     return "—";
+  };
+
+  const getHoldingSymbol = (holding) => holding?.ticker || holding?.symbol || holding;
+
+  const getHoldingsMinInvestment = (strategy) => {
+    if (!strategy?.holdings || !Array.isArray(strategy.holdings)) return null;
+    const total = strategy.holdings.reduce((sum, holding) => {
+      const symbol = getHoldingSymbol(holding);
+      const security = holdingsSecurities.find((s) => s.symbol === symbol);
+      const metrics = Array.isArray(security?.security_metrics)
+        ? security.security_metrics[0]
+        : security?.security_metrics;
+      const lastClose = metrics?.last_close;
+      if (lastClose == null) return sum;
+      const currency = security?.currency || strategy?.base_currency || "R";
+      const normalizedPrice = currency.toUpperCase() === "ZAC"
+        ? Number(lastClose) / 100
+        : Number(lastClose);
+      return sum + (Number.isFinite(normalizedPrice) ? normalizedPrice : 0);
+    }, 0);
+    return total > 0 ? total : null;
   };
 
   const resetSheetPosition = () => {
@@ -856,7 +909,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                           {security.currentPrice != null ? (
                             <>
                               <p className="text-lg font-bold text-slate-900">
-                                {security.currency || 'R'} {formatPrice(security)}
+                                <span className="text-xs text-slate-400 font-normal">{getDisplayCurrency(security)}</span>{' '}
+                                {formatPrice(security)}
                               </p>
                               {security.changePct != null && (
                                 <p className={`mt-1 text-xs font-semibold ${
@@ -867,7 +921,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                               )}
                             </>
                           ) : (
-                            <p className="text-sm text-slate-400">—</p>
+                            <p className="text-xs text-slate-500">No pricing data</p>
                           )}
                         </div>
                       </div>
@@ -911,7 +965,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                           {security.currentPrice != null ? (
                             <>
                               <p className="text-lg font-bold text-slate-900">
-                                {security.currency || 'R'} {formatPrice(security)}
+                                <span className="text-xs text-slate-400 font-normal">{getDisplayCurrency(security)}</span>{' '}
+                                {formatPrice(security)}
                               </p>
                               {security.changePct != null && (
                                 <p className={`mt-1 text-xs font-semibold ${
@@ -1026,7 +1081,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                             {security.currentPrice != null ? (
                               <>
                                 <p className="text-sm font-semibold text-slate-900">
-                                  {security.currency || 'R'} {formatPrice(security)}
+                                  <span className="text-xs text-slate-400 font-normal">{getDisplayCurrency(security)}</span>{' '}
+                                  {formatPrice(security)}
                                 </p>
                                 {security.changePct != null && (
                                   <p className={`text-xs font-semibold ${
@@ -1037,7 +1093,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                                 )}
                               </>
                             ) : (
-                              <p className="text-xs text-slate-400">—</p>
+                              <p className="text-xs text-slate-500">No pricing data</p>
                             )}
                           </div>
                         </div>
@@ -1121,7 +1177,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                                 {security.currentPrice != null ? (
                                   <>
                                     <p className="text-sm font-semibold text-slate-900">
-                                      {security.currency || 'R'} {formatPrice(security)}
+                                      <span className="text-xs text-slate-400 font-normal">{getDisplayCurrency(security)}</span>{' '}
+                                      {formatPrice(security)}
                                     </p>
                                     {security.changePct != null && (
                                       <p className={`text-xs font-semibold ${
@@ -1172,18 +1229,23 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
         ) : viewMode === "openstrategies" ? (
           /* OpenStrategies View */
           <>
-            {filteredStrategies.length === 0 ? (
+            {publicStrategiesLoading ? (
+              <div className="space-y-4">
+                <Skeleton className="h-64 w-full rounded-2xl" />
+                <Skeleton className="h-64 w-full rounded-2xl" />
+              </div>
+            ) : filteredStrategies.length === 0 ? (
               <div className="rounded-3xl bg-white px-6 py-12 text-center shadow-md">
                 <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100">
                   <Search className="h-8 w-8 text-slate-400" />
                 </div>
-                <p className="text-sm font-semibold text-slate-700">No strategies found</p>
-                <p className="mt-1 text-xs text-slate-400">Try adjusting your search or filters</p>
+                <p className="text-sm font-semibold text-slate-700">No strategies available</p>
+                <p className="mt-1 text-xs text-slate-400">Check back soon for new investment strategies</p>
               </div>
             ) : (
               /* Strategies grouped by sector */
-              [...new Set(filteredStrategies.flatMap(s => s.sectors))].map((sector) => {
-                const sectorStrategies = filteredStrategies.filter(s => s.sectors.includes(sector));
+              [...new Set(filteredStrategies.map(s => s.sector || 'General'))].map((sector) => {
+                const sectorStrategies = filteredStrategies.filter(s => (s.sector || 'General') === sector);
                 
                 if (sectorStrategies.length === 0) return null;
               
@@ -1194,39 +1256,71 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                     <ChevronRight className="h-5 w-5 text-slate-400" />
                   </div>
                   <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 scrollbar-hide">
-                    {sectorStrategies.map((strategy) => (
+                    {sectorStrategies.map((strategy) => {
+                      // Use short_name if available, otherwise use name
+                      const displayName = strategy.short_name || strategy.name;
+                      
+                      // Truncate description to 110-140 chars
+                      const truncatedDescription = strategy.description 
+                        ? strategy.description.length > 140
+                          ? strategy.description.substring(0, 137) + '...'
+                          : strategy.description
+                        : '';
+                      
+                      // Format minimum investment
+                      const holdingsMinInvestment = getHoldingsMinInvestment(strategy);
+                      const formattedMinInvestment = holdingsMinInvestment
+                        ? `Min. ${formatCurrency(holdingsMinInvestment, strategy.base_currency || 'R')}`
+                        : 'Min. Data unavailable';
+                      
+                      // Generate sparkline (fallback until we have real price history)
+                      const sparkline = generateSparkline(0);
+                      
+                      // Icon/image handling
+                      const imageUrl = strategy.icon_url || strategy.image_url || "https://s3-symbol-logo.tradingview.com/country/ZA--big.svg";
+                      
+                      return (
                       <button
-                        key={strategy.name}
+                        key={strategy.id}
                         type="button"
-                        onClick={() => setSelectedStrategy(strategy)}
-                        className="flex-shrink-0 w-72 rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md hover:border-slate-200 p-4 transition-all snap-center"
+                        onClick={() => {
+                          // Navigate using slug and id
+                          console.log('Opening strategy:', { slug: strategy.slug, id: strategy.id, strategy });
+                          setSelectedStrategy({ ...strategy, slug: strategy.slug });
+                        }}
+                        className="flex-shrink-0 w-80 rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md hover:border-slate-200 p-4 transition-all snap-center"
                       >
                         <div className="flex items-start gap-3">
                           <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-white shadow-sm ring-1 ring-slate-100 flex-shrink-0">
                             <img
-                              src="https://s3-symbol-logo.tradingview.com/country/ZA--big.svg"
-                              alt="South Africa"
+                              src={imageUrl}
+                              alt={displayName}
                               className="h-full w-full object-cover"
+                              onError={(e) => {
+                                e.target.src = "https://s3-symbol-logo.tradingview.com/country/ZA--big.svg";
+                              }}
                             />
                           </div>
                           <div className="flex-1 flex items-start justify-between gap-4">
                           <div className="text-left space-y-1">
-                            <p className="text-sm font-semibold text-slate-900">{strategy.name}</p>
+                            <p className="text-sm font-semibold text-slate-900">{displayName}</p>
                             <div>
-                              <p className="text-xs font-semibold text-emerald-500">
-                                +{strategy.returnRate}
+                              <p className="text-xs text-slate-600 line-clamp-1">
+                                {strategy.risk_level || 'Balanced'} {strategy.objective && `• ${strategy.objective}`}
                               </p>
-                              <p className="text-[11px] text-slate-400">{strategy.minimum_display}</p>
+                              <p className="text-[11px] text-slate-400 line-clamp-1">
+                                {formattedMinInvestment || truncatedDescription.substring(0, 30)}
+                              </p>
                             </div>
                           </div>
                           <div className="flex items-center rounded-xl bg-slate-50 px-2">
-                            <StrategyMiniChart values={strategy.sparkline} />
+                            <StrategyMiniChart values={sparkline} />
                           </div>
                           </div>
                         </div>
 
                         <div className="mt-3 flex flex-wrap gap-2">
-                          {strategy.tags.map((tag) => (
+                          {(strategy.tags && strategy.tags.length > 0 ? strategy.tags.slice(0, 2) : [strategy.risk_level || 'Balanced']).map((tag) => (
                             <span
                               key={tag}
                               className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600"
@@ -1234,36 +1328,22 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                               {tag}
                             </span>
                           ))}
+                          {strategy.is_featured && (
+                            <span className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-600">
+                              Featured
+                            </span>
+                          )}
                         </div>
 
-                        <div className="mt-3 flex items-center gap-3">
-                          <div className="flex -space-x-2">
-                            {holdingsSecurities.slice(0, 3).map((company, idx) => (
-                              <div
-                                key={`${strategy.name}-${company.symbol}-${idx}`}
-                                className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-sm"
-                              >
-                                {company.logo_url ? (
-                                  <img
-                                    src={company.logo_url}
-                                    alt={company.symbol}
-                                    className="h-full w-full object-cover"
-                                  />
-                                ) : (
-                                  <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">
-                                    {company.symbol?.substring(0, 2)}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                            <div className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500">
-                              +3
-                            </div>
-                          </div>
-                          <span className="text-xs font-semibold text-slate-500">Holdings snapshot</span>
+                        {strategy.provider_name && (
+                        <div className="mt-3 flex items-center gap-2">
+                          <span className="text-xs text-slate-500">Provider:</span>
+                          <span className="text-xs font-semibold text-slate-700">{strategy.provider_name}</span>
                         </div>
+                        )}
                       </button>
-                    ))}
+                      );
+                    })}
                   </div>
                 </section>
               );
@@ -1381,19 +1461,40 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 </div>
                 <div className="flex-1">
                   <h2 className="text-lg font-semibold text-slate-900">{selectedStrategy.name}</h2>
-                  <p className="text-sm text-slate-500">{selectedStrategy.minimum_display}</p>
+                  <p className="text-sm text-slate-500">
+                    {(() => {
+                      const holdingsMinInvestment = getHoldingsMinInvestment(selectedStrategy);
+                      return holdingsMinInvestment
+                        ? `Min. ${formatCurrency(holdingsMinInvestment, selectedStrategy.base_currency || 'R')}`
+                        : 'Min. Data unavailable';
+                    })()}
+                  </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-3 mb-6">
-                <p className="text-2xl font-semibold text-slate-900">{selectedStrategy.return}</p>
-                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-600">
-                  All time gain
-                </span>
+                {selectedStrategy.last_close !== null && selectedStrategy.last_close !== undefined ? (
+                  <>
+                    <p className="text-2xl font-semibold text-slate-900">
+                      {formatCurrency(selectedStrategy.last_close, selectedStrategy.currency || 'R')}
+                    </p>
+                    {selectedStrategy.change_pct !== null && selectedStrategy.change_pct !== undefined && (
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                        selectedStrategy.change_pct >= 0 
+                          ? 'bg-emerald-50 text-emerald-600' 
+                          : 'bg-red-50 text-red-600'
+                      }`}>
+                        {formatChangePct(selectedStrategy.change_pct)} today
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-sm text-slate-500">Data unavailable</p>
+                )}
               </div>
               
               <div className="flex flex-wrap gap-2 mb-6">
-                {selectedStrategy.tags.map((tag) => (
+                {(selectedStrategy.tags || [selectedStrategy.risk_level || 'Balanced']).map((tag) => (
                   <span
                     key={tag}
                     className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600"
@@ -1403,10 +1504,12 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 ))}
               </div>
 
+              {selectedStrategy.holdings && selectedStrategy.holdings.length > 0 && (
               <div className="mt-4">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Top Holdings</p>
                 <div className="mt-3 space-y-2">
-                  {selectedStrategy.holdings.slice(0, 5).map((ticker) => {
+                  {selectedStrategy.holdings.slice(0, 5).map((holdingItem) => {
+                    const ticker = typeof holdingItem === 'string' ? holdingItem : (holdingItem.ticker || holdingItem.symbol);
                     const holding = holdingsSecurities.find(s => s.symbol === ticker);
                     return (
                       <div key={ticker} className="flex items-center gap-3">
@@ -1428,13 +1531,14 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                   })}
                 </div>
               </div>
+              )}
 
               <button
                 onClick={() => {
                   setSelectedStrategy(null);
                   onOpenFactsheet(selectedStrategy);
                 }}
-                className="mt-6 w-full rounded-2xl bg-gradient-to-r from-purple-600 to-purple-500 py-4 font-semibold text-white shadow-lg transition-all active:scale-95"
+                className="mt-6 w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-4 font-semibold text-white shadow-lg transition-all active:scale-95"
               >
                 View Factsheet
               </button>

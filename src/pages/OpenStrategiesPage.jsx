@@ -4,8 +4,11 @@ import { StrategyReturnHeaderChart } from "../components/StrategyReturnHeaderCha
 import { ChartContainer } from "../components/ui/line-charts-2";
 import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer } from "recharts";
 import { supabase } from "../lib/supabase";
+import { getStrategiesWithMetrics, formatChangePct, formatChangeAbs, getChangeColor } from "../lib/strategyData.js";
+import { formatCurrency } from "../lib/formatCurrency";
 
-const strategyCards = [
+// Mock strategies for fallback
+const mockStrategyCards = [
   {
     name: "Balanced Growth",
     risk: "Balanced",
@@ -95,6 +98,16 @@ const strategyCards = [
     sparkline: [8, 14, 12, 20, 26, 24, 30, 36, 34, 42],
   },
 ];
+
+// Fallback sparkline data for strategies without price history
+const generateSparkline = (changePct) => {
+  const base = 20;
+  const trend = changePct || 0;
+  return Array.from({ length: 10 }, (_, i) => {
+    const progress = i / 9;
+    return base + (trend * 5 * progress) + (Math.random() * 2 - 1);
+  });
+};
 
 const holdingsSnapshot = [
   {
@@ -208,6 +221,8 @@ const StrategyMiniChart = ({ values }) => {
 };
 
 const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
+  const [strategies, setStrategies] = useState([]);
+  const [strategiesLoading, setStrategiesLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedHolding, setSelectedHolding] = useState(null);
   const [activeChips, setActiveChips] = useState([]);
@@ -233,21 +248,59 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
   const dragStartY = useRef(null);
   const isDragging = useRef(false);
 
+  // Fetch strategies from database
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchStrategies = async () => {
+      setStrategiesLoading(true);
+      
+      try {
+        const data = await getStrategiesWithMetrics();
+        if (isMounted) {
+          console.log("✅ Fetched strategies:", data);
+          setStrategies(data.length > 0 ? data : mockStrategyCards);
+        }
+      } catch (error) {
+        console.error("Error fetching strategies:", error);
+        if (isMounted) {
+          setStrategies(mockStrategyCards);
+        }
+      } finally {
+        if (isMounted) {
+          setStrategiesLoading(false);
+        }
+      }
+    };
+
+    fetchStrategies();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   // Fetch securities for strategy holdings with logos
   useEffect(() => {
     let isMounted = true;
 
     const fetchHoldingsSecurities = async () => {
-      if (!supabase) return;
+      if (!supabase || strategies.length === 0) return;
 
       try {
         // Get all unique tickers from all strategies
-        const allTickers = [...new Set(strategyCards.flatMap((s) => s.holdings.map((h) => h.ticker)))];
+        const allTickers = [...new Set(
+          strategies
+            .filter(s => s.holdings && Array.isArray(s.holdings))
+            .flatMap((s) => s.holdings.map((h) => h.ticker || h.symbol || h))
+        )];
+
+        if (allTickers.length === 0) return;
 
         const { data, error } = await supabase
           .from("securities")
-          .select("ticker, name, logo_url")
-          .in("ticker", allTickers);
+          .select("symbol, name, logo_url")
+          .in("symbol", allTickers);
 
         if (error) throw error;
         if (isMounted && data) {
@@ -263,7 +316,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [strategies]);
   
   const series = [
     { label: "Jan", returnPct: 1.2 },
@@ -284,40 +337,48 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
   const formattedReturn = `${returnValue >= 0 ? "+" : ""}${returnValue.toFixed(2)}%`;
   const formattedAllTimeReturn = `${allTimeReturn >= 0 ? "+" : ""}${allTimeReturn.toFixed(2)}%`;
   const normalizedQuery = searchQuery.trim().toLowerCase();
+  const strategyData = strategies.length > 0 ? strategies : mockStrategyCards;
   const holdingSuggestions = useMemo(() => {
     if (!normalizedQuery) return [];
     const suggestions = new Map();
-    strategyCards.forEach((strategy) => {
-      strategy.holdings.forEach((holding) => {
-        const security = holdingsSecurities.find((s) => s.ticker === holding.ticker);
-        if (security) {
-          const label = `${security.name} ${security.ticker}`;
-          if (
-            security.name.toLowerCase().includes(normalizedQuery) ||
-            security.ticker.toLowerCase().includes(normalizedQuery)
+    strategyData.forEach((strategy) => {
+      if (strategy.holdings && Array.isArray(strategy.holdings)) {
+        strategy.holdings.forEach((holding) => {
+          const ticker = holding.ticker || holding.symbol || holding;
+          const security = holdingsSecurities.find((s) => s.symbol === ticker);
+          if (security) {
+            const label = `${security.name} ${security.symbol}`;
+            if (
+              security.name.toLowerCase().includes(normalizedQuery) ||
+              security.symbol.toLowerCase().includes(normalizedQuery)
           ) {
-            suggestions.set(security.ticker, {
-              ticker: security.ticker,
+            suggestions.set(security.symbol, {
+              ticker: security.symbol,
               name: security.name,
             });
           }
         }
       });
+    }
     });
     return Array.from(suggestions.values());
-  }, [normalizedQuery, holdingsSecurities]);
+  }, [normalizedQuery, holdingsSecurities, strategyData]);
 
   const filteredStrategies = useMemo(() => {
-    const results = strategyCards.filter((strategy) => {
+    const results = strategyData.filter((strategy) => {
       const matchesName =
         normalizedQuery && !selectedHolding
-          ? strategy.name.toLowerCase().includes(normalizedQuery)
+          ? (strategy.name && strategy.name.toLowerCase().includes(normalizedQuery)) ||
+            (strategy.description && strategy.description.toLowerCase().includes(normalizedQuery))
           : true;
       const matchesHolding = selectedHolding
-        ? strategy.holdings.some((h) => h.ticker === selectedHolding)
+        ? (strategy.holdings && strategy.holdings.some((h) => {
+            const ticker = h.ticker || h.symbol || h;
+            return ticker === selectedHolding;
+          }))
         : true;
       const matchesRisk = selectedRisks.size
-        ? selectedRisks.has(strategy.risk)
+        ? selectedRisks.has(strategy.risk_level || strategy.risk)
         : true;
       const matchesMinInvestment = selectedMinInvestment
         ? strategy.minInvestment === selectedMinInvestment
@@ -606,9 +667,19 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
               className="flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth pb-2"
               style={{ scrollBehavior: "smooth", WebkitOverflowScrolling: "touch" }}
             >
-              {filteredStrategies.map((strategy) => (
+              {filteredStrategies.map((strategy) => {
+                // Calculate display values from strategy_metrics
+                const price = strategy.last_close;
+                const changePct = strategy.change_pct;
+                const changeAbs = strategy.change_abs;
+                const hasMetrics = price !== null && price !== undefined;
+                
+                // Generate sparkline from real data if available, otherwise use mock
+                const sparkline = strategy.sparkline || generateSparkline(changePct);
+                
+                return (
                 <button
-                  key={strategy.name}
+                  key={strategy.id || strategy.name}
                   type="button"
                   onClick={() => setSelectedStrategy(strategy)}
                   className="flex-shrink-0 w-72 rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md hover:border-slate-200 p-4 transition-all snap-center"
@@ -617,19 +688,27 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
                     <div className="text-left space-y-1">
                       <p className="text-sm font-semibold text-slate-900">{strategy.name}</p>
                       <div>
-                        <p className="text-xs font-semibold text-emerald-500">
-                          +{strategy.returnRate}
-                        </p>
-                        <p className="text-[11px] text-slate-400">{strategy.minimum}</p>
+                        {hasMetrics ? (
+                          <>
+                            <p className={`text-xs font-semibold ${getChangeColor(changePct)}`}>
+                              {formatChangePct(changePct)}
+                            </p>
+                            <p className="text-[11px] text-slate-400">
+                              {strategy.minimum_display || strategy.description?.substring(0, 30) || 'Strategy'}
+                            </p>
+                          </>
+                        ) : (
+                          <p className="text-xs text-slate-400">Data updating...</p>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center rounded-xl bg-slate-50 px-2">
-                      <StrategyMiniChart values={strategy.sparkline} />
+                      <StrategyMiniChart values={sparkline} />
                     </div>
                   </div>
 
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {strategy.tags.map((tag) => (
+                    {(strategy.tags || [strategy.risk_level || 'Balanced']).map((tag) => (
                       <span
                         key={tag}
                         className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600"
@@ -639,28 +718,37 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
                     ))}
                   </div>
 
+                  {strategy.holdings && strategy.holdings.length > 0 && (
                   <div className="mt-3 flex items-center gap-3">
                     <div className="flex -space-x-2">
-                      {holdingsSnapshot.map((company) => (
+                      {holdingsSecurities.slice(0, 3).map((company) => (
                         <div
                           key={`${strategy.name}-${company.name}`}
                           className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-sm"
                         >
-                          <img
-                            src={company.src}
-                            alt={company.name}
-                            className="h-full w-full object-cover"
-                          />
+                          {company.logo_url ? (
+                            <img
+                              src={company.logo_url}
+                              alt={company.name}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">
+                              {company.symbol?.substring(0, 2)}
+                            </div>
+                          )}
                         </div>
                       ))}
                       <div className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500">
-                        +3
+                        +{Math.max(0, strategy.holdings.length - 3)}
                       </div>
                     </div>
                     <span className="text-xs font-semibold text-slate-500">Holdings snapshot</span>
                   </div>
+                  )}
                 </button>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>
@@ -916,14 +1004,28 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
               </div>
 
               <div className="flex items-center gap-3">
-                <p className="text-2xl font-semibold text-slate-900">{selectedStrategy.return}</p>
-                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-600">
-                  All time gain
-                </span>
+                {selectedStrategy.last_close !== null && selectedStrategy.last_close !== undefined ? (
+                  <>
+                    <p className="text-2xl font-semibold text-slate-900">
+                      {formatCurrency(selectedStrategy.last_close, selectedStrategy.currency || 'R')}
+                    </p>
+                    {selectedStrategy.change_pct !== null && selectedStrategy.change_pct !== undefined && (
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                        selectedStrategy.change_pct >= 0 
+                          ? 'bg-emerald-50 text-emerald-600' 
+                          : 'bg-red-50 text-red-600'
+                      }`}>
+                        {formatChangePct(selectedStrategy.change_pct)} today
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-sm text-slate-500">Price data updating...</p>
+                )}
               </div>
 
               <div className="flex flex-wrap gap-2">
-                {selectedStrategy.tags.map((tag) => (
+                {(selectedStrategy.tags || [selectedStrategy.risk_level || 'Balanced']).map((tag) => (
                   <span
                     key={tag}
                     className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600"
@@ -933,13 +1035,16 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
                 ))}
               </div>
 
+              {selectedStrategy.holdings && selectedStrategy.holdings.length > 0 && (
               <div>
                 <p className="mb-2 text-sm font-semibold text-slate-900">Top Holdings</p>
                 <div className="space-y-2">
-                  {selectedStrategy.holdings.slice(0, 5).map((holding) => {
-                    const security = holdingsSecurities.find((s) => s.ticker === holding.ticker);
+                  {selectedStrategy.holdings.slice(0, 5).map((holdingItem) => {
+                    const ticker = holdingItem.ticker || holdingItem.symbol || holdingItem;
+                    const weight = holdingItem.weight;
+                    const security = holdingsSecurities.find((s) => s.symbol === ticker);
                     return (
-                      <div key={holding.ticker} className="flex items-center gap-3">
+                      <div key={ticker} className="flex items-center gap-3">
                         <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-slate-50 border border-slate-100">
                           {security?.logo_url ? (
                             <img
@@ -948,19 +1053,20 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
                               className="h-full w-full object-cover"
                             />
                           ) : (
-                            <span className="text-xs font-semibold text-slate-400">{holding.ticker.slice(0, 2)}</span>
+                            <span className="text-xs font-semibold text-slate-400">{ticker.slice(0, 2)}</span>
                           )}
                         </div>
                         <div className="flex-1">
-                          <p className="text-sm font-semibold text-slate-900">{security?.name || holding.ticker}</p>
-                          <p className="text-xs text-slate-500">{holding.ticker}</p>
+                          <p className="text-sm font-semibold text-slate-900">{security?.name || ticker}</p>
+                          <p className="text-xs text-slate-500">{ticker}</p>
                         </div>
-                        <p className="text-sm font-semibold text-slate-600">{holding.weight.toFixed(1)}%</p>
+                        {weight && <p className="text-sm font-semibold text-slate-600">{weight.toFixed(1)}%</p>}
                       </div>
                     );
                   })}
                 </div>
               </div>
+              )}
 
               <button
                 type="button"

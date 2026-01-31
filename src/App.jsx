@@ -9,6 +9,8 @@ import CreditRepayPage from "./pages/CreditRepayPage.jsx";
 import InvestmentsPage from "./pages/InvestmentsPage.jsx";
 import InvestPage from "./pages/InvestPage.jsx";
 import InvestAmountPage from "./pages/InvestAmountPage.jsx";
+import PaymentPage from "./pages/PaymentPage.jsx";
+import PaymentSuccessPage from "./pages/PaymentSuccessPage.jsx";
 import FactsheetPage from "./pages/FactsheetPage.jsx";
 import OpenStrategiesPage from "./pages/OpenStrategiesPage.jsx";
 import MorePage from "./pages/MorePage.jsx";
@@ -24,11 +26,11 @@ import NotificationSettingsPage from "./pages/NotificationSettingsPage.jsx";
 import MintBalancePage from "./pages/MintBalancePage.jsx";
 import MarketsPage from "./pages/MarketsPage.jsx";
 import StockDetailPage from "./pages/StockDetailPage.jsx";
+import StockBuyPage from "./pages/StockBuyPage.jsx";
 import NewsArticlePage from "./pages/NewsArticlePage.jsx";
 import { NotificationsProvider, createWelcomeNotification, useNotificationsContext } from "./lib/NotificationsContext.jsx";
 import ActivityPage from "./pages/ActivityPage.jsx";
 import ActionsPage from "./pages/ActionsPage.jsx";
-import WithdrawPage from "./pages/WithdrawPage.jsx";
 import ProfileDetailsPage from "./pages/ProfileDetailsPage.jsx";
 import ChangePasswordPage from "./pages/ChangePasswordPage.jsx";
 import LegalDocumentationPage from "./pages/LegalDocumentationPage.jsx";
@@ -67,9 +69,12 @@ const App = () => {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [sessionReady, setSessionReady] = useState(false);
   const [notificationReturnPage, setNotificationReturnPage] = useState("home");
+  const [modal, setModal] = useState(null);
   const [selectedSecurity, setSelectedSecurity] = useState(null);
   const [selectedStrategy, setSelectedStrategy] = useState(null);
   const [selectedArticleId, setSelectedArticleId] = useState(null);
+  const [investmentAmount, setInvestmentAmount] = useState(0);
+  const [stockCheckout, setStockCheckout] = useState({ security: null, amount: 0 });
   const recoveryHandled = useRef(false);
   const { refetch: refetchNotifications } = useNotificationsContext();
 
@@ -166,18 +171,58 @@ const App = () => {
     );
   }
 
-  if (currentPage === "welcome") {
-    return (
-      <OnboardingPage
-        onCreateAccount={() => openAuthFlow("email")}
-        onLogin={() => openAuthFlow("loginEmail")}
-      />
-    );
-  }
+  const openModal = (title, message) => {
+    setModal({ title, message });
+  };
+
+  const closeModal = () => {
+    setModal(null);
+  };
+
+  const handleWithdrawRequest = async () => {
+    try {
+      if (!supabase) {
+        openModal("Withdraw", "You don't have any allocations to withdraw from.");
+        return;
+      }
+
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData?.user) {
+        openModal("Withdraw", "You don't have any allocations to withdraw from.");
+        return;
+      }
+
+      const { count, error } = await supabase
+        .from("allocations")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userData.user.id);
+
+      if (error || !count) {
+        openModal("Withdraw", "You don't have any allocations to withdraw from.");
+        return;
+      }
+
+      openModal("Withdraw", "Withdrawals are coming soon.");
+    } catch (err) {
+      console.error("Failed to check allocations", err);
+      openModal("Withdraw", "You don't have any allocations to withdraw from.");
+    }
+  };
+
+  const handleShowComingSoon = (label) => {
+    openModal(label, "Coming soon.");
+  };
 
   if (currentPage === "home") {
     return (
-      <AppLayout activeTab="home" onTabChange={setCurrentPage}>
+      <AppLayout
+        activeTab="home"
+        onTabChange={setCurrentPage}
+        onWithdraw={handleWithdrawRequest}
+        onShowComingSoon={handleShowComingSoon}
+        modal={modal}
+        onCloseModal={closeModal}
+      >
         <HomePage
           onOpenNotifications={() => {
             setNotificationReturnPage("home");
@@ -191,17 +236,45 @@ const App = () => {
           onOpenCreditApply={() => setCurrentPage("creditApply")}
           onOpenCreditRepay={() => setCurrentPage("creditRepay")}
           onOpenInvest={() => setCurrentPage("markets")}
-          onOpenWithdraw={() => setCurrentPage("withdraw")}
+          onOpenWithdraw={handleWithdrawRequest}
           onOpenSettings={() => setCurrentPage("settings")}
         />
       </AppLayout>
     );
   }
-
   if (currentPage === "credit") {
     return (
-      <AppLayout activeTab="credit" onTabChange={setCurrentPage}>
+      <AppLayout
+        activeTab="credit"
+        onTabChange={setCurrentPage}
+        onWithdraw={handleWithdrawRequest}
+        onShowComingSoon={handleShowComingSoon}
+        modal={modal}
+        onCloseModal={closeModal}
+      >
         <CreditPage
+          onOpenNotifications={() => {
+            setNotificationReturnPage("credit");
+            setCurrentPage("notifications");
+          }}
+          onOpenCreditApply={() => setCurrentPage("creditApply")}
+        />
+      </AppLayout>
+    );
+  }
+  
+  if (currentPage === "creditScore") {
+    return (
+      <AppLayout
+        activeTab="credit"
+        onTabChange={setCurrentPage}
+        onWithdraw={handleWithdrawRequest}
+        onShowComingSoon={handleShowComingSoon}
+        modal={modal}
+        onCloseModal={closeModal}
+      >
+        <CreditPage
+          initialView="score"
           onOpenNotifications={() => {
             setNotificationReturnPage("credit");
             setCurrentPage("notifications");
@@ -214,7 +287,14 @@ const App = () => {
 
   if (currentPage === "transact") {
     return (
-      <AppLayout activeTab="transact" onTabChange={setCurrentPage}>
+      <AppLayout
+        activeTab="transact"
+        onTabChange={setCurrentPage}
+        onWithdraw={handleWithdrawRequest}
+        onShowComingSoon={handleShowComingSoon}
+        modal={modal}
+        onCloseModal={closeModal}
+      >
         <TransactPage />
       </AppLayout>
     );
@@ -222,7 +302,14 @@ const App = () => {
 
   if (currentPage === "investments") {
     return (
-      <AppLayout activeTab="investments" onTabChange={setCurrentPage}>
+      <AppLayout
+        activeTab="investments"
+        onTabChange={setCurrentPage}
+        onWithdraw={handleWithdrawRequest}
+        onShowComingSoon={handleShowComingSoon}
+        modal={modal}
+        onCloseModal={closeModal}
+      >
         <InvestmentsPage
           onOpenNotifications={() => {
             setNotificationReturnPage("investments");
@@ -236,7 +323,14 @@ const App = () => {
 
   if (currentPage === "invest") {
     return (
-      <AppLayout activeTab="home" onTabChange={setCurrentPage}>
+      <AppLayout
+        activeTab="home"
+        onTabChange={setCurrentPage}
+        onWithdraw={handleWithdrawRequest}
+        onShowComingSoon={handleShowComingSoon}
+        modal={modal}
+        onCloseModal={closeModal}
+      >
         <InvestPage
           onBack={() => setCurrentPage("home")}
           onOpenOpenStrategies={() => setCurrentPage("openStrategies")}
@@ -275,6 +369,42 @@ const App = () => {
       <StockDetailPage
         security={selectedSecurity}
         onBack={() => setCurrentPage("markets")}
+        onOpenBuy={() => setCurrentPage("stockBuy")}
+      />
+    );
+  }
+
+  if (currentPage === "stockBuy") {
+    return (
+      <StockBuyPage
+        security={selectedSecurity}
+        onBack={() => setCurrentPage("stockDetail")}
+        onContinue={(amount, security) => {
+          setStockCheckout({ security, amount });
+          setCurrentPage("stockPayment");
+        }}
+      />
+    );
+  }
+
+  if (currentPage === "stockPayment") {
+    const currency = stockCheckout.security?.currency || "R";
+    const normalizedCurrency = currency.toUpperCase() === "ZAC" ? "R" : currency;
+    const paymentItem = stockCheckout.security
+      ? { ...stockCheckout.security, name: stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock", currency: normalizedCurrency }
+      : null;
+    return (
+      <PaymentPage
+        onBack={() => setCurrentPage("stockBuy")}
+        strategy={paymentItem}
+        amount={stockCheckout.amount}
+        onSuccess={(response) => {
+          console.log("Payment successful:", response);
+          setCurrentPage("paymentSuccess");
+        }}
+        onCancel={() => {
+          setCurrentPage("stockBuy");
+        }}
       />
     );
   }
@@ -303,7 +433,7 @@ const App = () => {
   if (currentPage === "factsheet") {
     return (
       <FactsheetPage 
-        onBack={() => setCurrentPage("openStrategies")} 
+        onBack={() => setCurrentPage("markets")} 
         strategy={selectedStrategy}
         onOpenInvest={(strategy) => {
           setSelectedStrategy(strategy);
@@ -319,21 +449,45 @@ const App = () => {
         onBack={() => setCurrentPage("factsheet")}
         strategy={selectedStrategy}
         onContinue={(amount) => {
-          // Redirect to Paystack in new browser window
-          const paystackUrl = `https://checkout.paystack.com/YOUR_PUBLIC_KEY?amount=${Math.round(amount * 100)}&email=user@example.com&ref=${Date.now()}`;
-          window.open(paystackUrl, "_blank");
+          setInvestmentAmount(amount);
+          setCurrentPage("payment");
         }}
       />
     );
   }
 
-  if (currentPage === "withdraw") {
-    return <WithdrawPage />;
+  if (currentPage === "payment") {
+    return (
+      <PaymentPage
+        onBack={() => setCurrentPage("investAmount")}
+        strategy={selectedStrategy}
+        amount={investmentAmount}
+        onSuccess={(response) => {
+          console.log("Payment successful:", response);
+          // TODO: Record transaction in database
+          setCurrentPage("paymentSuccess");
+        }}
+        onCancel={() => {
+          setCurrentPage("investAmount");
+        }}
+      />
+    );
+  }
+
+  if (currentPage === "paymentSuccess") {
+    return <PaymentSuccessPage onDone={() => setCurrentPage("home")} />;
   }
 
   if (currentPage === "more") {
     return (
-      <AppLayout activeTab="more" onTabChange={setCurrentPage}>
+      <AppLayout
+        activeTab="more"
+        onTabChange={setCurrentPage}
+        onWithdraw={handleWithdrawRequest}
+        onShowComingSoon={handleShowComingSoon}
+        modal={modal}
+        onCloseModal={closeModal}
+      >
         <MorePage onNavigate={setCurrentPage} />
       </AppLayout>
     );
@@ -341,7 +495,14 @@ const App = () => {
 
   if (currentPage === "settings") {
     return (
-      <AppLayout activeTab="more" onTabChange={setCurrentPage}>
+      <AppLayout
+        activeTab="more"
+        onTabChange={setCurrentPage}
+        onWithdraw={handleWithdrawRequest}
+        onShowComingSoon={handleShowComingSoon}
+        modal={modal}
+        onCloseModal={closeModal}
+      >
         <SettingsPage onNavigate={setCurrentPage} />
       </AppLayout>
     );
@@ -349,7 +510,14 @@ const App = () => {
 
   if (currentPage === "biometricsDebug") {
     return (
-      <AppLayout activeTab="more" onTabChange={setCurrentPage}>
+      <AppLayout
+        activeTab="more"
+        onTabChange={setCurrentPage}
+        onWithdraw={handleWithdrawRequest}
+        onShowComingSoon={handleShowComingSoon}
+        modal={modal}
+        onCloseModal={closeModal}
+      >
         <BiometricsDebugPage onNavigate={setCurrentPage} />
       </AppLayout>
     );
@@ -378,7 +546,14 @@ const App = () => {
 
   if (currentPage === "mintBalance") {
     return (
-      <AppLayout activeTab="home" onTabChange={setCurrentPage}>
+      <AppLayout
+        activeTab="home"
+        onTabChange={setCurrentPage}
+        onWithdraw={handleWithdrawRequest}
+        onShowComingSoon={handleShowComingSoon}
+        modal={modal}
+        onCloseModal={closeModal}
+      >
         <MintBalancePage
           onBack={() => setCurrentPage("home")}
           onOpenInvestments={() => setCurrentPage("investments")}
@@ -386,7 +561,7 @@ const App = () => {
           onOpenActivity={() => setCurrentPage("activity")}
           onOpenSettings={() => setCurrentPage("settings")}
           onOpenInvest={() => setCurrentPage("markets")}
-          onOpenCreditApply={() => setCurrentPage("credit")}
+          onOpenCreditApply={() => setCurrentPage("creditApply")}
         />
       </AppLayout>
     );
@@ -394,7 +569,14 @@ const App = () => {
 
   if (currentPage === "activity") {
     return (
-      <AppLayout activeTab="home" onTabChange={setCurrentPage}>
+      <AppLayout
+        activeTab="home"
+        onTabChange={setCurrentPage}
+        onWithdraw={handleWithdrawRequest}
+        onShowComingSoon={handleShowComingSoon}
+        modal={modal}
+        onCloseModal={closeModal}
+      >
         <ActivityPage onBack={() => setCurrentPage("mintBalance")} />
       </AppLayout>
     );
@@ -419,7 +601,12 @@ const App = () => {
   }
 
   if (currentPage === "bankLink") {
-    return <BankLinkPage onBack={() => setCurrentPage("actions")} />;
+    return (
+      <BankLinkPage
+        onBack={() => setCurrentPage("actions")}
+        onComplete={() => setCurrentPage("home")}
+      />
+    );
   }
 
   if (currentPage === "invite") {

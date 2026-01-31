@@ -15,7 +15,7 @@ import {
   X
 } from "lucide-react";
  
-const Navbar = ({ activeTab, setActiveTab }) => {
+const Navbar = ({ activeTab, setActiveTab, onWithdraw, onShowComingSoon }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [wheelCenter, setWheelCenter] = useState({ x: 0, y: 0 });
   const [dynamicRadius, setDynamicRadius] = useState(145);
@@ -36,8 +36,8 @@ const Navbar = ({ activeTab, setActiveTab }) => {
  
   const transactActions = [
     { id: "withdraw", label: "Withdraw", icon: ArrowUpCircle, angle: -180 },
-    { id: "payLoan", label: "Pay loan", icon: Wallet, angle: -135 },
-    { id: "invest", label: "Invest", icon: TrendingUp, angle: -90 },
+    { id: "payLoan", label: "Pay", icon: Wallet, angle: -135 },
+    { id: "markets", label: "Markets", icon: TrendingUp, angle: -90 },
     { id: "credit", label: "Borrow", icon: HandCoins, angle: -45 },
     { id: "rewards", label: "Rewards", icon: Gift, angle: 0 },
   ];
@@ -154,7 +154,17 @@ const Navbar = ({ activeTab, setActiveTab }) => {
                     key={action.label}
                     onClick={() => {
                       triggerHaptic(ImpactStyle.Medium);
-                      setActiveTab(action.id);
+                      if (action.id === "withdraw") {
+                        if (onWithdraw) {
+                          onWithdraw();
+                        }
+                      } else if (action.id === "payLoan" || action.id === "rewards") {
+                        if (onShowComingSoon) {
+                          onShowComingSoon(action.label);
+                        }
+                      } else {
+                        setActiveTab(action.id);
+                      }
                       setIsOpen(false);
                     }}
                     className="absolute flex items-center justify-center group pointer-events-auto"

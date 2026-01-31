@@ -8,8 +8,8 @@ import { useCreditInfo } from "../lib/useFinancialData";
 import CreditSkeleton from "../components/CreditSkeleton";
 import NotificationBell from "../components/NotificationBell";
 
-const CreditPage = ({ onOpenNotifications, onOpenCreditApply }) => {
-  const [view, setView] = useState("overview");
+const CreditPage = ({ onOpenNotifications, onOpenCreditApply, initialView = "overview" }) => {
+  const [view, setView] = useState(initialView);
   const { profile, loading } = useProfile();
   const {
     availableCredit,
@@ -40,6 +40,10 @@ const CreditPage = ({ onOpenNotifications, onOpenCreditApply }) => {
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
+
+  useEffect(() => {
+    setView(initialView);
+  }, [initialView]);
 
   const navigate = (viewName) => {
     setView(viewName);
@@ -163,32 +167,6 @@ const CreditPage = ({ onOpenNotifications, onOpenCreditApply }) => {
           </>
         )}
 
-        <CreditMetricCard>
-          <p className="text-sm font-semibold text-slate-700">Quick Actions</p>
-          <p className="mt-1 text-xs text-slate-400">Start your next credit step.</p>
-          <div className="mt-4">
-            <CreditActionGrid
-              actions={[
-                {
-                  label: "Apply for credit",
-                  onClick: onOpenCreditApply || (() => console.log("Apply for credit")),
-                },
-                {
-                  label: "Upload bank statements",
-                  onClick: () => console.log("Upload bank statements"),
-                },
-                {
-                  label: "Verify identity",
-                  onClick: () => console.log("Verify identity"),
-                },
-                {
-                  label: "Pay loan",
-                  onClick: () => console.log("Pay loan"),
-                },
-              ]}
-            />
-          </div>
-        </CreditMetricCard>
       </div>
     </div>
   );
