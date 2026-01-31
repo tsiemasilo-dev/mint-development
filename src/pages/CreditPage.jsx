@@ -182,7 +182,7 @@ const CreditPage = ({ onOpenNotifications, onOpenCreditApply }) => {
                   onClick: () => console.log("Verify identity"),
                 },
                 {
-                  label: "Pay loan",
+                  label: "Pay",
                   onClick: () => console.log("Pay loan"),
                 },
               ]}

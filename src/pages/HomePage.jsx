@@ -14,12 +14,12 @@ import {
   MapPin,
   Receipt,
   Users,
-  X,
-} from "lucide-react";
-import { useProfile } from "../lib/useProfile";
-import { useRequiredActions } from "../lib/useRequiredActions";
-import { useFinancialData } from "../lib/useFinancialData";
-import HomeSkeleton from "../components/HomeSkeleton";
+          [
+            { label: "Pay", icon: Wallet, onClick: () => setShowPayModal(true) },
+            { label: "Receive", icon: HandCoins, onClick: () => setShowReceiveModal(true) },
+            { label: "Markets", icon: TrendingUp, onClick: onOpenInvest },
+            { label: "Withdraw", icon: ArrowDownToLine, onClick: onOpenWithdraw },
+          ].map((item) => {
 import MintBalanceCard from "../components/MintBalanceCard";
 import OutstandingActionsSection from "../components/OutstandingActionsSection";
 import TransactionHistorySection from "../components/TransactionHistorySection";

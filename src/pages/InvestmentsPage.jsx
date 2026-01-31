@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { TrendingUp } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
 import { useInvestments } from "../lib/useFinancialData";
+import { supabase } from "../lib/supabase";
 import InvestmentsSkeleton from "../components/InvestmentsSkeleton";
 import NotificationBell from "../components/NotificationBell";
 
@@ -15,6 +16,7 @@ const InvestmentsPage = ({ onOpenNotifications, onOpenInvest }) => {
     hasInvestments,
     loading: investmentsLoading 
   } = useInvestments();
+  const [allocations, setAllocations] = useState([]);
   
   const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(" ");
   const initials = displayName
@@ -24,6 +26,41 @@ const InvestmentsPage = ({ onOpenNotifications, onOpenInvest }) => {
     .map((part) => part[0])
     .join("")
     .toUpperCase();
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadAllocations = async () => {
+      try {
+        if (!supabase) {
+          return;
+        }
+
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        if (userError || !userData?.user) {
+          return;
+        }
+
+        const { data, error: allocationsError } = await supabase
+          .from("allocations")
+          .select("id, asset_class, weight, value, as_of_date")
+          .eq("user_id", userData.user.id)
+          .order("as_of_date", { ascending: false });
+
+        if (isMounted && !allocationsError) {
+          setAllocations(data || []);
+        }
+      } catch (error) {
+        console.error("Failed to load allocations", error);
+      }
+    };
+
+    loadAllocations();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   if (loading || investmentsLoading) {
     return <InvestmentsSkeleton />;
@@ -37,6 +74,7 @@ const InvestmentsPage = ({ onOpenNotifications, onOpenInvest }) => {
   ];
 
   const displayPortfolioMix = portfolioMix.length > 0 ? portfolioMix : defaultPortfolioMix;
+  const hasAllocations = allocations.length > 0;
 
   return (
     <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)] text-slate-900">
@@ -142,6 +180,40 @@ const InvestmentsPage = ({ onOpenNotifications, onOpenInvest }) => {
             </section>
           </>
         )}
+
+        {hasAllocations ? (
+          <section className="rounded-3xl bg-white px-4 py-5 shadow-md">
+            <p className="text-sm font-semibold text-slate-700">Allocations</p>
+            <p className="mt-1 text-xs text-slate-400">Your latest portfolio allocations.</p>
+            <div className="mt-4 space-y-3">
+              {allocations.map((allocation) => (
+                <div
+                  key={allocation.id}
+                  className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">
+                        {allocation.asset_class}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Weight: {Number(allocation.weight || 0).toFixed(2)}%
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-slate-900">
+                        {allocation.value ? `R${Number(allocation.value).toFixed(2)}` : "—"}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        As of {allocation.as_of_date || "—"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
       </div>
     </div>
   );

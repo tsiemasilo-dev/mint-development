@@ -36,10 +36,10 @@ const Navbar = ({ activeTab, setActiveTab }) => {
  
   const transactActions = [
     { id: "withdraw", label: "Withdraw", icon: ArrowUpCircle, angle: -180 },
-    { id: "payLoan", label: "Pay loan", icon: Wallet, angle: -135 },
-    { id: "invest", label: "Invest", icon: TrendingUp, angle: -90 },
+    { id: "payLoan", label: "Pay", icon: Wallet, angle: -135 },
+    { id: "markets", label: "Invest", icon: TrendingUp, angle: -90 },
     { id: "credit", label: "Borrow", icon: HandCoins, angle: -45 },
-    { id: "rewards", label: "Rewards", icon: Gift, angle: 0 },
+    { id: "rewards", label: "Coming soon", icon: Gift, angle: 0 },
   ];
  
   const triggerHaptic = async (style) => {
