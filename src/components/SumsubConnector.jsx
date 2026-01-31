@@ -33,25 +33,20 @@ const styles = {
   },
   button: (state) => ({
     width: "100%",
-    borderRadius: 16,
+    borderRadius: 9999,
     padding: "16px 24px",
     fontWeight: 600,
     letterSpacing: "0.02em",
-    border:
-      state === "success"
-        ? "1.5px solid rgba(34,197,94,0.6)"
-        : "1px solid rgba(168,85,247,0.15)",
-    color: state === "success" ? "hsl(142 60% 30%)" : "hsl(270 40% 30%)",
+    border: "none",
+    color: state === "success" ? "hsl(142 60% 30%)" : "#ffffff",
     background:
       state === "success"
         ? "linear-gradient(135deg, rgba(209, 250, 229, 0.7) 0%, rgba(167, 243, 208, 0.5) 55%, rgba(209, 250, 229, 0.4) 100%)"
-        : state === "loading"
-        ? "linear-gradient(135deg, rgba(255, 255, 255, 0.5) 0%, rgba(216, 180, 254, 0.3) 55%, rgba(255, 255, 255, 0.25) 100%)"
-        : "linear-gradient(135deg, rgba(255,255,255,0.7), rgba(216,180,254,0.45))",
+        : "linear-gradient(90deg, #000000 0%, #5b21b6 100%)",
     boxShadow:
       state === "success"
         ? "inset 0 2px 4px rgba(255, 255, 255, 0.9), inset 0 -2px 4px rgba(34, 197, 94, 0.3), 0 16px 48px rgba(34, 197, 94, 0.25), 0 8px 24px rgba(34, 197, 94, 0.2)"
-        : "inset 0 2px 4px rgba(255, 255, 255, 0.8), inset 0 -2px 4px rgba(139, 92, 246, 0.3), 0 16px 48px rgba(139, 92, 246, 0.25), 0 8px 24px rgba(168, 85, 247, 0.2)",
+        : "0 4px 16px rgba(91, 33, 182, 0.25)",
     cursor: state === "loading" ? "not-allowed" : "pointer",
     transition: "transform 160ms ease, box-shadow 160ms ease",
     display: "flex",
@@ -168,7 +163,7 @@ export function SumsubConnector({ apiBase = "", onStart, onVerified }) {
   const buttonLabel = useMemo(() => {
     if (state === "loading") return "Processing...";
     if (state === "success") return "Session Ready";
-    return "Initialize Sumsub SDK";
+    return "Verify Identity";
   }, [state]);
 
   const setStatus = useCallback((id, value) => {
