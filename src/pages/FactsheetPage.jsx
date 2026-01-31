@@ -578,49 +578,35 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
           <p className="mt-1 text-xs text-slate-500">Top 10 by weight</p>
           <div className="mt-4 space-y-3">
             {currentStrategy.holdings && currentStrategy.holdings.length > 0 ? (
-              currentStrategy.holdings.map((holding) => {
-                const security = holdingsSecurities.find((s) => s.symbol === holding.ticker);
+              currentStrategy.holdings.map((holding, index) => {
+                const symbol = holding.ticker || holding.symbol || "";
+                const security = holdingsSecurities.find((s) => s.symbol === symbol);
+                const weight = Number(holding.weight || 0);
                 return (
-                  <div key={holding.ticker} className="flex items-center gap-3">
+                  <div key={symbol || index} className="flex items-center gap-3">
                     <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
                       {security?.logo_url ? (
                         <img
                           src={security.logo_url}
-                          alt={security.name}
+                          alt={security.name || symbol}
                           className="h-full w-full object-cover"
                         />
                       ) : (
-                        <span className="text-xs font-semibold text-slate-400">{holding.ticker.slice(0, 2)}</span>
+                        <span className="text-xs font-semibold text-slate-400">{symbol ? symbol.slice(0, 2) : "—"}</span>
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-slate-900">{holding.ticker}</p>
-                      <p className="text-[11px] text-slate-500 truncate">{security?.name || holding.ticker}</p>
+                      <p className="text-xs font-semibold text-slate-900">{symbol || "—"}</p>
+                      <p className="text-[11px] text-slate-500 truncate">{security?.name || holding.name || symbol || "—"}</p>
                     </div>
-                    <p className="text-xs font-semibold text-slate-900">{holding.weight.toFixed(2)}%</p>
+                    <p className="text-xs font-semibold text-slate-900">{weight.toFixed(2)}%</p>
                   </div>
                 );
               })
             ) : (
-              holdings.map((holding) => (
-                <div key={holding.ticker} className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-                    <img
-                      src={`https://s3-symbol-logo.tradingview.com/${holding.ticker.toLowerCase()}--big.svg`}
-                      alt={holding.ticker}
-                      className="h-full w-full object-cover"
-                      onError={(e) => {
-                        e.target.src = `https://via.placeholder.com/32?text=${holding.ticker}`;
-                      }}
-                    />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-slate-900">{holding.ticker}</p>
-                    <p className="text-[11px] text-slate-500 truncate">{holding.name}</p>
-                  </div>
-                  <p className="text-xs font-semibold text-slate-900">{holding.weight.toFixed(2)}%</p>
-                </div>
-              ))
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-sm text-slate-500">
+                Data unavailable
+              </div>
             )}
           </div>
         </section>
