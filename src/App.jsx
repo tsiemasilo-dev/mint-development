@@ -579,7 +579,12 @@ const App = () => {
   }
 
   if (currentPage === "bankLink") {
-    return <BankLinkPage onBack={() => setCurrentPage("actions")} />;
+    return (
+      <BankLinkPage
+        onBack={() => setCurrentPage("actions")}
+        onComplete={() => setCurrentPage("home")}
+      />
+    );
   }
 
   if (currentPage === "invite") {

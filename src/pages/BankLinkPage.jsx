@@ -1,21 +1,64 @@
 import React, { useState } from "react";
 import { ArrowLeft, Landmark, Shield } from "lucide-react";
+import { supabase } from "../lib/supabase";
 
-const BankLinkPage = ({ onBack }) => {
+const BankLinkPage = ({ onBack, onComplete }) => {
   const [formData, setFormData] = useState({
     accountHolder: "",
     bankName: "",
-    accountType: "",
     accountNumber: "",
     branchCode: "",
   });
+  const [isSaving, setIsSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const handleChange = (field) => (event) => {
     setFormData((prev) => ({ ...prev, [field]: event.target.value }));
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
+    setErrorMessage("");
+    setIsSaving(true);
+
+    try {
+      if (!supabase) {
+        setErrorMessage("Bank linking is unavailable right now.");
+        setIsSaving(false);
+        return;
+      }
+
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData?.user) {
+        setErrorMessage("Please sign in to link a bank account.");
+        setIsSaving(false);
+        return;
+      }
+
+      const { error } = await supabase
+        .from("linked_bank_accounts")
+        .insert({
+          user_id: userData.user.id,
+          bank_name: formData.bankName,
+          account_number: formData.accountNumber,
+          branch_code: formData.branchCode || null,
+          account_holder: formData.accountHolder || null,
+          is_default_payout: true,
+        });
+
+      if (error) {
+        console.error("Failed to save bank details", error);
+        setErrorMessage("Unable to save bank details. Please try again.");
+        setIsSaving(false);
+        return;
+      }
+
+      onComplete?.();
+    } catch (err) {
+      console.error("Failed to save bank details", err);
+      setErrorMessage("Unable to save bank details. Please try again.");
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -75,25 +118,6 @@ const BankLinkPage = ({ onBack }) => {
 
             <div className="text-left">
               <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                Account type
-              </label>
-              <select
-                required
-                value={formData.accountType}
-                onChange={handleChange("accountType")}
-                className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm outline-none focus:border-violet-400"
-              >
-                <option value="" disabled>
-                  Select account type
-                </option>
-                <option value="cheque">Cheque / Current</option>
-                <option value="savings">Savings</option>
-                <option value="transmission">Transmission</option>
-              </select>
-            </div>
-
-            <div className="text-left">
-              <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
                 Account number
               </label>
               <input
@@ -122,11 +146,16 @@ const BankLinkPage = ({ onBack }) => {
               />
             </div>
 
+            {errorMessage ? (
+              <p className="text-sm text-rose-500">{errorMessage}</p>
+            ) : null}
+
             <button
               type="submit"
-              className="inline-flex w-full items-center justify-center rounded-full bg-slate-900 px-6 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5"
+              disabled={isSaving}
+              className="inline-flex w-full items-center justify-center rounded-full bg-slate-900 px-6 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:bg-slate-400"
             >
-              Save bank details
+              {isSaving ? "Saving..." : "Save bank details"}
             </button>
           </form>
 
