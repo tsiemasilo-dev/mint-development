@@ -1,138 +1,164 @@
 const express = require("express");
 const cors = require("cors");
-const crypto = require("crypto");
+const truIDClient = require("./truidClient.cjs");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const SUMSUB_APP_TOKEN = process.env.SUMSUB_APP_TOKEN;
-const SUMSUB_SECRET_KEY = process.env.SUMSUB_SECRET_KEY;
-const SUMSUB_BASE_URL = "https://api.sumsub.com";
+const readEnv = (key) => process.env[key] || process.env[`VITE_${key}`];
 
-function createSignature(ts, method, path, body = "") {
-  const data = ts + method.toUpperCase() + path + body;
-  return crypto
-    .createHmac("sha256", SUMSUB_SECRET_KEY)
-    .update(data)
-    .digest("hex");
+const SUPABASE_URL = readEnv('SUPABASE_URL') || readEnv('VITE_SUPABASE_URL');
+const SUPABASE_ANON_KEY = readEnv('SUPABASE_ANON_KEY') || readEnv('VITE_SUPABASE_ANON_KEY');
+
+let supabase = null;
+try {
+  if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+    const { createClient } = require('@supabase/supabase-js');
+    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+} catch (e) {
+  console.warn('Supabase client not available:', e.message);
 }
 
-async function sumsubRequest(method, path, body = null) {
-  const ts = Math.floor(Date.now() / 1000).toString();
-  const bodyStr = body ? JSON.stringify(body) : "";
-  const signature = createSignature(ts, method, path, bodyStr);
+function parseServices(value) {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
 
-  const headers = {
-    "Accept": "application/json",
-    "Content-Type": "application/json",
-    "X-App-Token": SUMSUB_APP_TOKEN,
-    "X-App-Access-Sig": signature,
-    "X-App-Access-Ts": ts,
-  };
+app.post("/api/truid/initiate", async (req, res) => {
+  try {
+    const requiredEnv = ['TRUID_API_KEY', 'BRAND_ID'];
+    const missing = requiredEnv.filter((key) => !readEnv(key));
+    if (missing.length) {
+      return res.status(500).json({
+        success: false,
+        error: { message: `Missing required environment variables: ${missing.join(', ')}` }
+      });
+    }
 
-  const response = await fetch(`${SUMSUB_BASE_URL}${path}`, {
-    method,
-    headers,
-    body: bodyStr || undefined,
+    const { name, idNumber, idType = 'id', email, mobile, services } = req.body;
+
+    if (!name || !idNumber) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Name and ID number are required' }
+      });
+    }
+
+    const requestedServices = parseServices(services);
+    const envServices = parseServices(process.env.TRUID_SERVICES);
+    const defaultServices = envServices.length ? envServices : [
+      'eeh03fzauckvj8u982dbeq1d8',
+      'amqfuupe00xk3cfw3dergvb9n',
+      's8d7f67de8w9iekjrfu',
+      'mk2weodif8gutjre4kwsdfd',
+      '12wsdofikgjtm5k4eiduy',
+      'apw99w0lj1nwde4sfxd0'
+    ];
+    const finalServices = requestedServices.length ? requestedServices : defaultServices;
+
+    const collection = await truIDClient.createCollection({
+      name,
+      idNumber,
+      idType,
+      email,
+      mobile,
+      services: finalServices
+    });
+
+    res.status(201).json({
+      success: true,
+      collectionId: collection.collectionId,
+      consumerUrl: collection.consumerUrl,
+      consentId: collection.consentId
+    });
+  } catch (error) {
+    console.error("TruID initiate error:", error);
+    res.status(error.status || 500).json({
+      success: false,
+      error: { message: error.message || "Internal server error" }
+    });
+  }
+});
+
+app.get("/api/truid/status", async (req, res) => {
+  try {
+    const { collectionId } = req.query;
+    if (!collectionId) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Missing collectionId' }
+      });
+    }
+
+    const result = await truIDClient.getCollection(collectionId);
+    const statusNode = result.data?.status || result.data?.current_status;
+    const fallbackStatus = statusNode?.code || statusNode || result.data?.state;
+    const currentStatus =
+      fallbackStatus ||
+      extractLatestStatus(result.data?.statuses) ||
+      extractLatestMilestone(result.data?.milestones) ||
+      'UNKNOWN';
+
+    let outcome = 'pending';
+    const upperStatus = String(currentStatus).toUpperCase();
+    if (upperStatus === 'COMPLETED' || upperStatus === 'COMPLETE' || upperStatus === 'SUCCESS') {
+      outcome = 'completed';
+    } else if (upperStatus === 'FAILED' || upperStatus === 'REJECTED' || upperStatus === 'ERROR') {
+      outcome = 'failed';
+    }
+
+    res.json({
+      success: true,
+      collectionId,
+      currentStatus,
+      outcome,
+      raw: result.data
+    });
+  } catch (error) {
+    console.error("TruID status error:", error);
+    res.status(error.status || 500).json({
+      success: false,
+      error: { message: error.message || "Internal server error" }
+    });
+  }
+});
+
+app.post("/api/truid/webhook", async (req, res) => {
+  console.log("TruID webhook received:", JSON.stringify(req.body, null, 2));
+  res.status(200).json({ received: true });
+});
+
+function extractLatestStatus(statuses) {
+  if (!Array.isArray(statuses) || !statuses.length) return null;
+  const sorted = [...statuses].sort((a, b) => {
+    const aTime = Date.parse(a?.time || a?.created || a?.timestamp || 0);
+    const bTime = Date.parse(b?.time || b?.created || b?.timestamp || 0);
+    return bTime - aTime;
   });
-
-  return response.json();
+  const latest = sorted[0];
+  return latest?.code || latest?.status || latest?.state || null;
 }
 
-app.post("/api/samsub/init-websdk", async (req, res) => {
-  try {
-    if (!SUMSUB_APP_TOKEN || !SUMSUB_SECRET_KEY) {
-      return res.status(500).json({
-        success: false,
-        error: { message: "Sumsub credentials not configured. Please add SUMSUB_APP_TOKEN and SUMSUB_SECRET_KEY secrets." },
-      });
-    }
-
-    const { externalUserId, userId } = req.body;
-    const levelName = "basic-kyc-level";
-
-    const applicantPath = `/resources/applicants?levelName=${encodeURIComponent(levelName)}`;
-    const applicantBody = {
-      externalUserId: externalUserId || userId || `user-${Date.now()}`,
-    };
-
-    const applicantResult = await sumsubRequest("POST", applicantPath, applicantBody);
-
-    if (!applicantResult.id) {
-      return res.status(400).json({
-        success: false,
-        error: { message: applicantResult.description || "Failed to create applicant" },
-      });
-    }
-
-    const applicantId = applicantResult.id;
-
-    const tokenPath = `/resources/accessTokens?userId=${encodeURIComponent(applicantBody.externalUserId)}&levelName=${encodeURIComponent(levelName)}`;
-    const tokenResult = await sumsubRequest("POST", tokenPath);
-
-    if (!tokenResult.token) {
-      return res.status(400).json({
-        success: false,
-        error: { message: tokenResult.description || "Failed to generate access token" },
-      });
-    }
-
-    const websdkUrl = `https://cockpit.sumsub.com/checkus#/accessToken=${tokenResult.token}`;
-
-    res.json({
-      success: true,
-      data: {
-        applicantId,
-        accessToken: tokenResult.token,
-        websdkUrl,
-      },
-    });
-  } catch (error) {
-    console.error("Sumsub init error:", error);
-    res.status(500).json({
-      success: false,
-      error: { message: error.message || "Internal server error" },
-    });
-  }
-});
-
-app.get("/api/samsub/status/:applicantId", async (req, res) => {
-  try {
-    if (!SUMSUB_APP_TOKEN || !SUMSUB_SECRET_KEY) {
-      return res.status(500).json({
-        success: false,
-        error: { message: "Sumsub credentials not configured" },
-      });
-    }
-
-    const { applicantId } = req.params;
-    const path = `/resources/applicants/${encodeURIComponent(applicantId)}/requiredIdDocsStatus`;
-    const result = await sumsubRequest("GET", path);
-
-    let outcome = "pending";
-    if (result.IDENTITY) {
-      if (result.IDENTITY.reviewResult?.reviewAnswer === "GREEN") {
-        outcome = "completed";
-      } else if (result.IDENTITY.reviewResult?.reviewAnswer === "RED") {
-        outcome = "failed";
-      }
-    }
-
-    res.json({
-      success: true,
-      data: { outcome, details: result },
-    });
-  } catch (error) {
-    console.error("Sumsub status error:", error);
-    res.status(500).json({
-      success: false,
-      error: { message: error.message || "Internal server error" },
-    });
-  }
-});
+function extractLatestMilestone(milestones) {
+  if (!Array.isArray(milestones) || !milestones.length) return null;
+  const sorted = [...milestones].sort((a, b) => {
+    const aTime = Date.parse(a?.time || a?.created || a?.timestamp || 0);
+    const bTime = Date.parse(b?.time || b?.created || b?.timestamp || 0);
+    return bTime - aTime;
+  });
+  const latest = sorted[0];
+  return latest?.code || latest?.status || latest?.state || latest?.name || null;
+}
 
 const PORT = process.env.API_PORT || 3001;
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Sumsub API server running on port ${PORT}`);
+  console.log(`TruID API server running on port ${PORT}`);
 });

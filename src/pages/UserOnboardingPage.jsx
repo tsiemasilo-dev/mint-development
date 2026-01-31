@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import SumsubConnector from "../components/SumsubConnector";
+import TruidConnector from "../components/TruidConnector";
 import { supabase } from "../lib/supabase";
 import "../styles/onboarding-process.css";
 
@@ -175,7 +175,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
     }
   };
 
-  const sumsubApiBase = "";
+  const truidApiBase = "";
 
   useEffect(() => {
     const handleOutsideClick = (event) => {
@@ -642,10 +642,10 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   Identity Verification
                 </h2>
                 <p className="text-sm" style={{ color: "#6b7280" }}>
-                  Verify your identity securely with Sumsub
+                  Verify your identity securely with TruID
                 </p>
               </div>
-              <SumsubConnector apiBase={sumsubApiBase} onVerified={() => setShowProceed(true)} />
+              <TruidConnector apiBase={truidApiBase} onVerified={() => setShowProceed(true)} />
               <div className="text-center mt-8 animate-fade-in delay-2">
                 <button
                   type="button"
