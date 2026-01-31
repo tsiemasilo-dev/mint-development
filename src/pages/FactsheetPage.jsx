@@ -247,21 +247,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
     });
   }, [currentStrategy.holdings, holdingsSecurities]);
 
-  // Auto-scroll marquee only
-  useEffect(() => {
-    const marquee = marqueeRef.current;
-    if (!marquee) return;
-
-    const scroll = () => {
-      marquee.scrollLeft += 2;
-      if (marquee.scrollLeft >= marquee.scrollWidth - marquee.clientWidth) {
-        marquee.scrollLeft = 0;
-      }
-    };
-
-    const interval = setInterval(scroll, 30);
-    return () => clearInterval(interval);
-  }, []);
+  // Auto-scroll removed to allow manual scrolling.
 
   const getReturnColor = (value) => {
     if (value > 0) return "bg-emerald-50 text-emerald-600";
