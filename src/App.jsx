@@ -309,6 +309,7 @@ const App = () => {
     );
   }
 
+  if (currentPage === "investments") {
     return (
       <AppLayout
         activeTab="investments"
