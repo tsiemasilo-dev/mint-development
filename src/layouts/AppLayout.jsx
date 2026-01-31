@@ -1,7 +1,7 @@
 import React from "react";
 import Navbar from "../components/Navbar.jsx";
 
-const AppLayout = ({ activeTab, onTabChange, children }) => {
+const AppLayout = ({ activeTab, onTabChange, onWithdraw, children }) => {
   return (
     <div className="app-shell flex min-h-screen flex-col bg-white overflow-hidden">
       <main
@@ -12,6 +12,7 @@ const AppLayout = ({ activeTab, onTabChange, children }) => {
         <Navbar
           activeTab={activeTab}
           setActiveTab={onTabChange}
+          onWithdraw={onWithdraw}
           className="fixed bottom-0 left-0 w-full z-50"
         />
     </div>

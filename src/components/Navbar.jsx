@@ -15,7 +15,7 @@ import {
   X
 } from "lucide-react";
  
-const Navbar = ({ activeTab, setActiveTab }) => {
+const Navbar = ({ activeTab, setActiveTab, onWithdraw }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [wheelCenter, setWheelCenter] = useState({ x: 0, y: 0 });
   const [dynamicRadius, setDynamicRadius] = useState(145);
@@ -154,7 +154,15 @@ const Navbar = ({ activeTab, setActiveTab }) => {
                     key={action.label}
                     onClick={() => {
                       triggerHaptic(ImpactStyle.Medium);
-                      setActiveTab(action.id);
+                      if (action.id === "withdraw") {
+                        if (onWithdraw) {
+                          onWithdraw();
+                        } else {
+                          window.alert("You don't have any allocations to withdraw from.");
+                        }
+                      } else {
+                        setActiveTab(action.id);
+                      }
                       setIsOpen(false);
                     }}
                     className="absolute flex items-center justify-center group pointer-events-auto"

@@ -29,7 +29,6 @@ import NewsArticlePage from "./pages/NewsArticlePage.jsx";
 import { NotificationsProvider, createWelcomeNotification, useNotificationsContext } from "./lib/NotificationsContext.jsx";
 import ActivityPage from "./pages/ActivityPage.jsx";
 import ActionsPage from "./pages/ActionsPage.jsx";
-import WithdrawPage from "./pages/WithdrawPage.jsx";
 import ProfileDetailsPage from "./pages/ProfileDetailsPage.jsx";
 import ChangePasswordPage from "./pages/ChangePasswordPage.jsx";
 import LegalDocumentationPage from "./pages/LegalDocumentationPage.jsx";
@@ -177,9 +176,39 @@ const App = () => {
     );
   }
 
+  const handleWithdrawRequest = async () => {
+    try {
+      if (!supabase) {
+        window.alert("You don't have any allocations to withdraw from.");
+        return;
+      }
+
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData?.user) {
+        window.alert("You don't have any allocations to withdraw from.");
+        return;
+      }
+
+      const { count, error } = await supabase
+        .from("allocations")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userData.user.id);
+
+      if (error || !count) {
+        window.alert("You don't have any allocations to withdraw from.");
+        return;
+      }
+
+      window.alert("Withdrawals are coming soon.");
+    } catch (err) {
+      console.error("Failed to check allocations", err);
+      window.alert("You don't have any allocations to withdraw from.");
+    }
+  };
+
   if (currentPage === "home") {
     return (
-      <AppLayout activeTab="home" onTabChange={setCurrentPage}>
+      <AppLayout activeTab="home" onTabChange={setCurrentPage} onWithdraw={handleWithdrawRequest}>
         <HomePage
           onOpenNotifications={() => {
             setNotificationReturnPage("home");
@@ -193,7 +222,7 @@ const App = () => {
           onOpenCreditApply={() => setCurrentPage("creditApply")}
           onOpenCreditRepay={() => setCurrentPage("creditRepay")}
           onOpenInvest={() => setCurrentPage("markets")}
-          onOpenWithdraw={() => setCurrentPage("withdraw")}
+          onOpenWithdraw={handleWithdrawRequest}
           onOpenSettings={() => setCurrentPage("settings")}
         />
       </AppLayout>
@@ -202,7 +231,7 @@ const App = () => {
 
   if (currentPage === "credit") {
     return (
-      <AppLayout activeTab="credit" onTabChange={setCurrentPage}>
+      <AppLayout activeTab="credit" onTabChange={setCurrentPage} onWithdraw={handleWithdrawRequest}>
         <CreditPage
           onOpenNotifications={() => {
             setNotificationReturnPage("credit");
@@ -216,7 +245,7 @@ const App = () => {
 
   if (currentPage === "transact") {
     return (
-      <AppLayout activeTab="transact" onTabChange={setCurrentPage}>
+      <AppLayout activeTab="transact" onTabChange={setCurrentPage} onWithdraw={handleWithdrawRequest}>
         <TransactPage />
       </AppLayout>
     );
@@ -224,7 +253,7 @@ const App = () => {
 
   if (currentPage === "investments") {
     return (
-      <AppLayout activeTab="investments" onTabChange={setCurrentPage}>
+      <AppLayout activeTab="investments" onTabChange={setCurrentPage} onWithdraw={handleWithdrawRequest}>
         <InvestmentsPage
           onOpenNotifications={() => {
             setNotificationReturnPage("investments");
@@ -238,7 +267,7 @@ const App = () => {
 
   if (currentPage === "invest") {
     return (
-      <AppLayout activeTab="home" onTabChange={setCurrentPage}>
+      <AppLayout activeTab="home" onTabChange={setCurrentPage} onWithdraw={handleWithdrawRequest}>
         <InvestPage
           onBack={() => setCurrentPage("home")}
           onOpenOpenStrategies={() => setCurrentPage("openStrategies")}
@@ -346,13 +375,9 @@ const App = () => {
     );
   }
 
-  if (currentPage === "withdraw") {
-    return <WithdrawPage />;
-  }
-
   if (currentPage === "more") {
     return (
-      <AppLayout activeTab="more" onTabChange={setCurrentPage}>
+      <AppLayout activeTab="more" onTabChange={setCurrentPage} onWithdraw={handleWithdrawRequest}>
         <MorePage onNavigate={setCurrentPage} />
       </AppLayout>
     );
@@ -360,7 +385,7 @@ const App = () => {
 
   if (currentPage === "settings") {
     return (
-      <AppLayout activeTab="more" onTabChange={setCurrentPage}>
+      <AppLayout activeTab="more" onTabChange={setCurrentPage} onWithdraw={handleWithdrawRequest}>
         <SettingsPage onNavigate={setCurrentPage} />
       </AppLayout>
     );
@@ -368,7 +393,7 @@ const App = () => {
 
   if (currentPage === "biometricsDebug") {
     return (
-      <AppLayout activeTab="more" onTabChange={setCurrentPage}>
+      <AppLayout activeTab="more" onTabChange={setCurrentPage} onWithdraw={handleWithdrawRequest}>
         <BiometricsDebugPage onNavigate={setCurrentPage} />
       </AppLayout>
     );
@@ -397,7 +422,7 @@ const App = () => {
 
   if (currentPage === "mintBalance") {
     return (
-      <AppLayout activeTab="home" onTabChange={setCurrentPage}>
+      <AppLayout activeTab="home" onTabChange={setCurrentPage} onWithdraw={handleWithdrawRequest}>
         <MintBalancePage
           onBack={() => setCurrentPage("home")}
           onOpenInvestments={() => setCurrentPage("investments")}
@@ -413,7 +438,7 @@ const App = () => {
 
   if (currentPage === "activity") {
     return (
-      <AppLayout activeTab="home" onTabChange={setCurrentPage}>
+      <AppLayout activeTab="home" onTabChange={setCurrentPage} onWithdraw={handleWithdrawRequest}>
         <ActivityPage onBack={() => setCurrentPage("mintBalance")} />
       </AppLayout>
     );
