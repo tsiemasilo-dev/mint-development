@@ -6,60 +6,17 @@ import {
   useDragControls,
   useMotionValue,
 } from "framer-motion";
+import { useTransactions } from "../lib/useFinancialData";
 
 const NAV_BAR_HEIGHT = 72;
 const TOP_GAP = 84;
 const COLLAPSED_VISIBLE_RATIO = 0.35;
 
-const TRANSACTIONS = [
-  {
-    id: 1,
-    title: "Subscribed to Dribbble Pro",
-    subtitle: "12/06/24",
-    amount: -25,
-  },
-  {
-    id: 2,
-    title: "Received from Nix",
-    subtitle: "12/06/24",
-    amount: 100,
-  },
-  {
-    id: 3,
-    title: "Coffee at Verve",
-    subtitle: "11/06/24",
-    amount: -6.5,
-  },
-  {
-    id: 4,
-    title: "Salary",
-    subtitle: "10/06/24",
-    amount: 3200,
-  },
-  {
-    id: 5,
-    title: "Apple Music",
-    subtitle: "08/06/24",
-    amount: -10.99,
-  },
-  {
-    id: 6,
-    title: "Refund from Zara",
-    subtitle: "05/06/24",
-    amount: 48,
-  },
-  {
-    id: 7,
-    title: "Uber ride",
-    subtitle: "03/06/24",
-    amount: -18.2,
-  },
-];
-
 const formatAmount = (amount) =>
-  `${amount >= 0 ? "+" : "-"}$${Math.abs(amount).toFixed(2)}`;
+  `${amount >= 0 ? "+" : "-"}R${Math.abs(amount).toFixed(2)}`;
 
 const TransactionSheet = () => {
+  const { transactions, loading } = useTransactions(20);
   const [isExpanded, setIsExpanded] = useState(false);
   const [viewportHeight, setViewportHeight] = useState(() =>
     typeof window === "undefined" ? 812 : window.innerHeight
@@ -116,9 +73,11 @@ const TransactionSheet = () => {
   };
 
   const displayedTransactions = isExpanded
-    ? TRANSACTIONS
-    : TRANSACTIONS.slice(0, 3);
+    ? transactions
+    : transactions.slice(0, 3);
   const listMaxHeight = Math.max(sheetHeight - 110, 240);
+
+  const hasTransactions = transactions.length > 0;
 
   return (
     <>
@@ -176,30 +135,41 @@ const TransactionSheet = () => {
           }`}
           style={{ maxHeight: listMaxHeight }}
         >
-          {displayedTransactions.map((row) => (
-            <div key={row.id} className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-500">
-                  {row.title.slice(0, 2).toUpperCase()}
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-slate-800">
-                    {row.title}
-                  </p>
-                  <p className="text-[11px] text-slate-400">
-                    {row.subtitle}
-                  </p>
-                </div>
-              </div>
-              <span
-                className={
-                  row.amount >= 0 ? "text-emerald-500" : "text-rose-500"
-                }
-              >
-                {formatAmount(row.amount)}
-              </span>
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-200 border-t-violet-600" />
             </div>
-          ))}
+          ) : hasTransactions ? (
+            displayedTransactions.map((row) => (
+              <div key={row.id} className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-500">
+                    {row.title.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-800">
+                      {row.title}
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      {row.subtitle}
+                    </p>
+                  </div>
+                </div>
+                <span
+                  className={
+                    row.amount >= 0 ? "text-emerald-500" : "text-rose-500"
+                  }
+                >
+                  {formatAmount(row.amount)}
+                </span>
+              </div>
+            ))
+          ) : (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <p className="text-sm text-slate-500">No transactions yet</p>
+              <p className="text-xs text-slate-400 mt-1">Your transactions will appear here</p>
+            </div>
+          )}
         </div>
       </motion.section>
     </>

@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
 import { useRequiredActions } from "../lib/useRequiredActions";
+import { useFinancialData } from "../lib/useFinancialData";
 import HomeSkeleton from "../components/HomeSkeleton";
 import MintBalanceCard from "../components/MintBalanceCard";
 import OutstandingActionsSection from "../components/OutstandingActionsSection";
@@ -39,6 +40,7 @@ const HomePage = ({
 }) => {
   const { profile, loading } = useProfile();
   const { kycVerified, bankLinked, loading: actionsLoading } = useRequiredActions();
+  const { balance, investments, transactions, bestAssets, loading: financialLoading } = useFinancialData();
   const [failedLogos, setFailedLogos] = useState({});
   const [showPayModal, setShowPayModal] = useState(false);
   const [showReceiveModal, setShowReceiveModal] = useState(false);
@@ -51,7 +53,7 @@ const HomePage = ({
     .join("")
     .toUpperCase();
 
-  if (loading) {
+  if (loading || financialLoading) {
     return <HomeSkeleton />;
   }
 
@@ -131,41 +133,11 @@ const HomePage = ({
         })
     : [];
 
-  const transactionHistory = [
-    { title: "Investment deposit", date: "Today", amount: "+R500" },
-    { title: "Loan repayment", date: "Yesterday", amount: "-R300" },
-    { title: "Investment gain", date: "18 Apr", amount: "+R120" },
-  ];
-  const bestAssets = [
-    {
-      symbol: "CPI",
-      name: "Capitec",
-      value: "R2,857.86",
-      change: "+0.05%",
-      logo: "https://s3-symbol-logo.tradingview.com/capitec-bank-hldgs-ltd--big.svg",
-    },
-    {
-      symbol: "NPN",
-      name: "Naspers",
-      value: "R1,942.12",
-      change: "+0.12%",
-      logo: "https://s3-symbol-logo.tradingview.com/naspers--big.svg",
-    },
-    {
-      symbol: "FSR",
-      name: "First Rand",
-      value: "R3,120.48",
-      change: "+0.31%",
-      logo: "https://s3-symbol-logo.tradingview.com/firstrand-ltd--big.svg",
-    },
-    {
-      symbol: "ABG",
-      name: "ABSA Group",
-      value: "R1,284.33",
-      change: "+0.09%",
-      logo: "https://s3-symbol-logo.tradingview.com/absa-bank-ltd-pref--big.svg",
-    },
-  ];
+  const transactionHistory = transactions.slice(0, 3).map((t) => ({
+    title: t.title || t.description || "Transaction",
+    date: formatDate(t.created_at),
+    amount: formatAmount(t.amount, t.type),
+  }));
 
   const handleActionNavigation = (action) => {
     const routes = {
@@ -180,6 +152,8 @@ const HomePage = ({
       handler();
     }
   };
+
+  const hasInvestments = bestAssets && bestAssets.length > 0;
 
   return (
     <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)] text-slate-900">
@@ -203,8 +177,8 @@ const HomePage = ({
           </header>
 
           <MintBalanceCard
-            amount={24806.03}
-            changeText="+R320 today"
+            amount={balance}
+            changeText={balance > 0 ? "Updated just now" : ""}
             updatedAt={new Date()}
             onPressMintBalance={handleMintBalancePress}
           />
@@ -256,48 +230,79 @@ const HomePage = ({
               <span>Based on your investment portfolio</span>
             </div>
           </div>
-          <div className="mt-3 flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {bestAssets.slice(0, 5).map((asset) => (
-              <div
-                key={asset.symbol}
-                className="flex min-w-[260px] flex-1 snap-start items-center gap-4 rounded-3xl bg-white p-4 shadow-md"
-              >
-                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">
-                  {failedLogos[asset.symbol] ? (
-                    <span className="text-sm font-semibold text-slate-600">
-                      {asset.symbol}
-                    </span>
-                  ) : (
-                    <img
-                      src={asset.logo}
-                      alt={asset.name}
-                      className="h-10 w-10 object-contain"
-                      referrerPolicy="no-referrer"
-                      crossOrigin="anonymous"
-                      onError={() =>
-                        setFailedLogos((prev) => ({ ...prev, [asset.symbol]: true }))
-                      }
-                    />
-                  )}
+          
+          {hasInvestments ? (
+            <div className="mt-3 flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {bestAssets.slice(0, 5).map((asset) => (
+                <div
+                  key={asset.symbol}
+                  className="flex min-w-[260px] flex-1 snap-start items-center gap-4 rounded-3xl bg-white p-4 shadow-md"
+                >
+                  <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">
+                    {failedLogos[asset.symbol] || !asset.logo ? (
+                      <span className="text-sm font-semibold text-slate-600">
+                        {asset.symbol}
+                      </span>
+                    ) : (
+                      <img
+                        src={asset.logo}
+                        alt={asset.name}
+                        className="h-10 w-10 object-contain"
+                        referrerPolicy="no-referrer"
+                        crossOrigin="anonymous"
+                        onError={() =>
+                          setFailedLogos((prev) => ({ ...prev, [asset.symbol]: true }))
+                        }
+                      />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-slate-900">{asset.symbol}</p>
+                    <p className="text-xs text-slate-500">{asset.name}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-semibold text-slate-900">
+                      R{typeof asset.value === 'number' ? asset.value.toLocaleString() : asset.value}
+                    </p>
+                    <p className={`text-xs font-semibold ${asset.change >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                      {asset.change >= 0 ? '+' : ''}{typeof asset.change === 'number' ? asset.change.toFixed(2) : asset.change}%
+                    </p>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-slate-900">{asset.symbol}</p>
-                  <p className="text-xs text-slate-500">{asset.name}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-semibold text-slate-900">{asset.value}</p>
-                  <p className="text-xs font-semibold text-emerald-500">{asset.change}</p>
-                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-3 rounded-3xl bg-white p-6 shadow-md text-center">
+              <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-full bg-violet-50 text-violet-600 mb-4">
+                <TrendingUp className="h-8 w-8" />
               </div>
-            ))}
-          </div>
+              <p className="text-sm font-semibold text-slate-900 mb-1">No investments yet</p>
+              <p className="text-xs text-slate-500 mb-4">Start investing to see your best performing assets here</p>
+              <button
+                type="button"
+                onClick={onOpenInvest}
+                className="inline-flex items-center justify-center rounded-full bg-slate-900 px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.15em] text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5"
+              >
+                Make your first investment
+              </button>
+            </div>
+          )}
         </section>
 
-        <TransactionHistorySection items={transactionHistory} onViewAll={onOpenActivity} />
+        {transactionHistory.length > 0 ? (
+          <TransactionHistorySection items={transactionHistory} onViewAll={onOpenActivity} />
+        ) : (
+          <section className="rounded-3xl bg-white p-5 shadow-md">
+            <p className="text-sm font-semibold text-slate-900 mb-3">Recent Activity</p>
+            <div className="text-center py-4">
+              <p className="text-xs text-slate-500">No transactions yet</p>
+              <p className="text-xs text-slate-400 mt-1">Your activity will appear here</p>
+            </div>
+          </section>
+        )}
 
       </div>
 
-      {/* Pay Modal */}
       {showPayModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4">
           <button
@@ -329,7 +334,6 @@ const HomePage = ({
                   type="button"
                   onClick={() => {
                     setShowPayModal(false);
-                    // TODO: Navigate to EFT payment
                   }}
                   className="flex w-full items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-left transition-all hover:border-violet-300 hover:bg-violet-50 active:scale-[0.98]"
                 >
@@ -346,7 +350,6 @@ const HomePage = ({
                   type="button"
                   onClick={() => {
                     setShowPayModal(false);
-                    // TODO: Navigate to GeoPay
                   }}
                   className="flex w-full items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-left transition-all hover:border-violet-300 hover:bg-violet-50 active:scale-[0.98]"
                 >
@@ -364,7 +367,6 @@ const HomePage = ({
         </div>
       )}
 
-      {/* Receive Modal */}
       {showReceiveModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4">
           <button
@@ -396,7 +398,6 @@ const HomePage = ({
                   type="button"
                   onClick={() => {
                     setShowReceiveModal(false);
-                    // TODO: Navigate to Pay Request
                   }}
                   className="flex w-full items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-left transition-all hover:border-violet-300 hover:bg-violet-50 active:scale-[0.98]"
                 >
@@ -413,7 +414,6 @@ const HomePage = ({
                   type="button"
                   onClick={() => {
                     setShowReceiveModal(false);
-                    // TODO: Navigate to Bill Split
                   }}
                   className="flex w-full items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-left transition-all hover:border-violet-300 hover:bg-violet-50 active:scale-[0.98]"
                 >
@@ -433,5 +433,25 @@ const HomePage = ({
     </div>
   );
 };
+
+function formatDate(dateString) {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays} days ago`;
+
+  return date.toLocaleDateString("en-ZA", { day: "numeric", month: "short" });
+}
+
+function formatAmount(amount, type) {
+  if (amount === undefined || amount === null) return "R0";
+  const isPositive = type === "deposit" || type === "credit" || type === "gain" || amount > 0;
+  const sign = isPositive ? "+" : "-";
+  return `${sign}R${Math.abs(amount).toLocaleString()}`;
+}
 
 export default HomePage;

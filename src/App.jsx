@@ -33,6 +33,9 @@ import WithdrawPage from "./pages/WithdrawPage.jsx";
 import ProfileDetailsPage from "./pages/ProfileDetailsPage.jsx";
 import ChangePasswordPage from "./pages/ChangePasswordPage.jsx";
 import LegalDocumentationPage from "./pages/LegalDocumentationPage.jsx";
+import IdentityCheckPage from "./pages/IdentityCheckPage.jsx";
+import BankLinkPage from "./pages/BankLinkPage.jsx";
+import InvitePage from "./pages/InvitePage.jsx";
 
 const initialHash = window.location.hash;
 const isRecoveryMode = initialHash.includes('type=recovery');
@@ -205,6 +208,7 @@ const App = () => {
             setNotificationReturnPage("credit");
             setCurrentPage("notifications");
           }}
+          onOpenCreditApply={() => setCurrentPage("creditApply")}
         />
       </AppLayout>
     );
@@ -226,6 +230,7 @@ const App = () => {
             setNotificationReturnPage("investments");
             setCurrentPage("notifications");
           }}
+          onOpenInvest={() => setCurrentPage("markets")}
         />
       </AppLayout>
     );
@@ -399,6 +404,8 @@ const App = () => {
           onOpenCredit={() => setCurrentPage("credit")}
           onOpenActivity={() => setCurrentPage("activity")}
           onOpenSettings={() => setCurrentPage("settings")}
+          onOpenInvest={() => setCurrentPage("markets")}
+          onOpenCreditApply={() => setCurrentPage("credit")}
         />
       </AppLayout>
     );
@@ -413,7 +420,24 @@ const App = () => {
   }
 
   if (currentPage === "actions") {
-    return <ActionsPage onBack={() => setCurrentPage("home")} />;
+    return (
+      <ActionsPage
+        onBack={() => setCurrentPage("home")}
+        onNavigate={setCurrentPage}
+      />
+    );
+  }
+
+  if (currentPage === "identityCheck") {
+    return <IdentityCheckPage onBack={() => setCurrentPage("actions")} />;
+  }
+
+  if (currentPage === "bankLink") {
+    return <BankLinkPage onBack={() => setCurrentPage("actions")} />;
+  }
+
+  if (currentPage === "invite") {
+    return <InvitePage onBack={() => setCurrentPage("actions")} />;
   }
 
   if (currentPage === "creditApply") {

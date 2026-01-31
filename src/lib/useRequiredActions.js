@@ -4,6 +4,7 @@ import { supabase } from "./supabase";
 const defaultActions = {
   kycVerified: false,
   bankLinked: false,
+  bankInReview: false,
   loading: true,
 };
 
@@ -30,7 +31,7 @@ export const useRequiredActions = () => {
 
         let { data, error } = await supabase
           .from("required_actions")
-          .select("kyc_verified, bank_linked")
+          .select("kyc_verified, bank_linked, bank_in_review")
           .eq("user_id", userId)
           .maybeSingle();
 
@@ -38,7 +39,7 @@ export const useRequiredActions = () => {
           const { data: newData, error: insertError } = await supabase
             .from("required_actions")
             .insert({ user_id: userId })
-            .select("kyc_verified, bank_linked")
+            .select("kyc_verified, bank_linked, bank_in_review")
             .single();
 
           if (!insertError && newData) {
@@ -50,6 +51,7 @@ export const useRequiredActions = () => {
           setActions({
             kycVerified: data?.kyc_verified || false,
             bankLinked: data?.bank_linked || false,
+            bankInReview: data?.bank_in_review || false,
             loading: false,
           });
         }
