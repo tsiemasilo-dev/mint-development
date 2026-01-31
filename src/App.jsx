@@ -454,7 +454,7 @@ const App = () => {
         await refetchNotifications();
       }
     }
-    setCurrentPage("userOnboarding");
+    setCurrentPage("home");
   };
 
   const handleLoginComplete = async () => {
