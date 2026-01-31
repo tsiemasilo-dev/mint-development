@@ -175,9 +175,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
     }
   };
 
-  const sumsubApiBase =
-    import.meta.env.VITE_SUMSUB_API_BASE ||
-    (import.meta.env.DEV ? "http://localhost:3000" : "");
+  const sumsubApiBase = "";
 
   useEffect(() => {
     const handleOutsideClick = (event) => {
@@ -644,65 +642,18 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   Identity Verification
                 </h2>
                 <p className="text-sm" style={{ color: "#6b7280" }}>
-                  Verify your identity to unlock full account features
+                  Verify your identity securely with Sumsub
                 </p>
               </div>
-
-              <div className="animate-fade-in delay-2" style={{
-                background: "#ffffff",
-                border: "1px solid #e5e7eb",
-                borderRadius: 20,
-                padding: 28,
-                boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-                maxWidth: 480,
-                margin: "0 auto",
-                textAlign: "center"
-              }}>
-                <div style={{
-                  width: 64,
-                  height: 64,
-                  borderRadius: "50%",
-                  background: "#f3f4f6",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  margin: "0 auto 20px"
-                }}>
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="1.5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
-                  </svg>
-                </div>
-                <h3 style={{ fontSize: 18, fontWeight: 600, color: "#1f2937", marginBottom: 8 }}>
-                  Document Verification
-                </h3>
-                <p style={{ fontSize: 14, color: "#6b7280", marginBottom: 24, lineHeight: 1.5 }}>
-                  Upload a valid government-issued ID to verify your identity. This helps us keep your account secure.
-                </p>
-                <div style={{ 
-                  background: "#f9fafb", 
-                  border: "1px dashed #d1d5db", 
-                  borderRadius: 12, 
-                  padding: 20,
-                  marginBottom: 24
-                }}>
-                  <p style={{ fontSize: 13, color: "#9ca3af" }}>
-                    Accepted documents: Passport, Driver's License, National ID
-                  </p>
-                </div>
+              <SumsubConnector apiBase={sumsubApiBase} onVerified={() => setShowProceed(true)} />
+              <div className="text-center mt-8 animate-fade-in delay-2">
                 <button
                   type="button"
-                  className="continue-button"
+                  className="continue-button proceed-button"
                   onClick={() => goToStep(3)}
-                  style={{ maxWidth: "100%" }}
                 >
                   Continue to Agreements
                 </button>
-              </div>
-
-              <div className="text-center mt-6 animate-fade-in delay-3">
-                <p className="text-xs" style={{ color: "#9ca3af" }}>
-                  Full identity verification via Sumsub will be available soon
-                </p>
               </div>
             </div>
           ) : (
