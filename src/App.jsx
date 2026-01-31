@@ -171,28 +171,6 @@ const App = () => {
     );
   }
 
-  if (currentPage === "welcome") {
-    return (
-      <OnboardingPage
-        onCreateAccount={() => openAuthFlow("email")}
-        onLogin={() => openAuthFlow("loginEmail")}
-      />
-    );
-  }
-
-  const openModal = (title, message) => {
-    setModal({ title, message });
-  };
-
-  const closeModal = () => {
-    setModal(null);
-  };
-
-  const handleWithdrawRequest = async () => {
-    try {
-      if (!supabase) {
-        openModal("Withdraw", "You don't have any allocations to withdraw from.");
-        return;
       }
 
       const { data: userData, error: userError } = await supabase.auth.getUser();
@@ -242,7 +220,7 @@ const App = () => {
           onOpenActions={() => setCurrentPage("actions")}
           onOpenInvestments={() => setCurrentPage("investments")}
           onOpenCredit={() => setCurrentPage("credit")}
-          onOpenCreditApply={() => setCurrentPage("creditScore")}
+          onOpenCreditApply={() => setCurrentPage("creditApply")}
           onOpenCreditRepay={() => setCurrentPage("creditRepay")}
           onOpenInvest={() => setCurrentPage("markets")}
           onOpenWithdraw={handleWithdrawRequest}
@@ -266,7 +244,7 @@ const App = () => {
             setNotificationReturnPage("credit");
             setCurrentPage("notifications");
           }}
-          onOpenCreditApply={() => setCurrentPage("creditScore")}
+          onOpenCreditApply={() => setCurrentPage("creditApply")}
         />
       </AppLayout>
     );
@@ -288,7 +266,7 @@ const App = () => {
             setNotificationReturnPage("credit");
             setCurrentPage("notifications");
           }}
-          onOpenCreditApply={() => setCurrentPage("creditScore")}
+          onOpenCreditApply={() => setCurrentPage("creditApply")}
         />
       </AppLayout>
     );
@@ -570,7 +548,7 @@ const App = () => {
           onOpenActivity={() => setCurrentPage("activity")}
           onOpenSettings={() => setCurrentPage("settings")}
           onOpenInvest={() => setCurrentPage("markets")}
-          onOpenCreditApply={() => setCurrentPage("creditScore")}
+          onOpenCreditApply={() => setCurrentPage("creditApply")}
         />
       </AppLayout>
     );
