@@ -33,32 +33,11 @@
   body {
     scrollbar-width: none;
     -ms-overflow-style: none;
-    background: #0f0f17;
   }
 
   html::-webkit-scrollbar,
   body::-webkit-scrollbar {
     display: none;
-  }
-
-  #root {
-    max-width: 430px;
-    margin: 0 auto;
-    min-height: 100vh;
-    position: relative;
-    background: white;
-    box-shadow: 0 0 60px rgba(0, 0, 0, 0.3);
-  }
-
-  @media (max-width: 430px) {
-    #root {
-      max-width: 100%;
-      box-shadow: none;
-    }
-    
-    body {
-      background: white;
-    }
   }
 }
 
