@@ -1,0 +1,20 @@
+[plugin:vite:import-analysis] Failed to resolve import "../components/credit/ui/MintGradientLayout" from "src/pages/CreditApplyPage.jsx". Does the file exist?
+/home/runner/workspace/src/pages/CreditApplyPage.jsx:3:35
+18 |  import React, { useRef, useState, useEffect } from "react";
+19 |  import { ArrowLeft, ArrowRight, ShieldCheck, Landmark, CheckCircle2, UserPen, Zap, TrendingUp, Search, ChevronDown, ChevronUp, Briefcase, Info } from "lucide-react";
+20 |  import { MintGradientLayout } from "../components/credit/ui/MintGradientLayout";
+   |                                      ^
+21 |  import { MintCard } from "../components/credit/ui/MintCard";
+22 |  import { MintRadarChart } from "../components/credit/ui/MintRadarChart";
+    at TransformPluginContext._formatError (file:///home/runner/workspace/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49258:41)
+    at TransformPluginContext.error (file:///home/runner/workspace/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49253:16)
+    at normalizeUrl (file:///home/runner/workspace/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64307:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async file:///home/runner/workspace/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64439:39
+    at async Promise.all (index 5)
+    at async TransformPluginContext.transform (file:///home/runner/workspace/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64366:7)
+    at async PluginContainer.transform (file:///home/runner/workspace/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49099:18)
+    at async loadAndTransform (file:///home/runner/workspace/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:51978:27)
+    at async viteTransformMiddleware (file:///home/runner/workspace/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:62106:24
+Click outside, press Esc key, or fix the code to dismiss.
+You can also disable this overlay by setting server.hmr.overlay to false in vite.config.js.
