@@ -1156,53 +1156,62 @@ const AuthForm = ({ initialStep = 'email', onSignupComplete, onLoginComplete }) 
             </div>
 
             <div id="step-password" className={`step ${currentStep === 'password' ? 'active' : ''} space-y-6`}>
-              <div 
-                className={`glass glass-input shadow-xl ${password ? 'has-value' : ''} password-field-animate ${showConfirmPassword ? 'fade-out' : 'fade-in'}`}
-                style={{ 
-                  transition: 'opacity 0.3s ease, transform 0.3s ease',
-                  opacity: showConfirmPassword ? 0 : 1,
-                  transform: showConfirmPassword ? 'translateY(-20px)' : 'translateY(0)',
-                  position: showConfirmPassword ? 'absolute' : 'relative',
-                  pointerEvents: showConfirmPassword ? 'none' : 'auto',
-                  width: '100%'
-                }}
-              >
-                <PasswordInput
-                  id="password"
-                  placeholder="Create password"
-                  required
-                  minLength={6}
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                />
-                <PrimaryButton ariaLabel="Continue" onClick={handlePasswordContinue}>
-                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
-                  </svg>
-                </PrimaryButton>
-              </div>
-              
-              <div 
-                className={`glass glass-input shadow-xl ${confirmPassword ? 'has-value' : ''} confirm-field-animate`}
-                style={{ 
-                  transition: 'opacity 0.3s ease 0.15s, transform 0.3s ease 0.15s',
-                  opacity: showConfirmPassword ? 1 : 0,
-                  transform: showConfirmPassword ? 'translateY(0)' : 'translateY(20px)',
-                  display: showConfirmPassword ? 'flex' : 'none'
-                }}
-              >
-                <PasswordInput
-                  id="confirm"
-                  placeholder="Confirm password"
-                  required
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                />
-                <PrimaryButton ariaLabel="Continue" onClick={handleConfirmContinue}>
-                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
-                  </svg>
-                </PrimaryButton>
+              <div style={{ position: 'relative', minHeight: '56px' }}>
+                <div 
+                  className={`glass glass-input shadow-xl ${password ? 'has-value' : ''}`}
+                  style={{ 
+                    transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                    opacity: showConfirmPassword ? 0 : 1,
+                    transform: showConfirmPassword ? 'scale(0.95)' : 'scale(1)',
+                    position: showConfirmPassword ? 'absolute' : 'relative',
+                    pointerEvents: showConfirmPassword ? 'none' : 'auto',
+                    width: '100%',
+                    top: 0,
+                    left: 0
+                  }}
+                >
+                  <PasswordInput
+                    id="password"
+                    placeholder="Create password"
+                    required
+                    minLength={6}
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                  />
+                  <PrimaryButton ariaLabel="Continue" onClick={handlePasswordContinue}>
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </PrimaryButton>
+                </div>
+                
+                <div 
+                  className={`glass glass-input shadow-xl ${confirmPassword ? 'has-value' : ''}`}
+                  style={{ 
+                    transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                    transitionDelay: showConfirmPassword ? '0.1s' : '0s',
+                    opacity: showConfirmPassword ? 1 : 0,
+                    transform: showConfirmPassword ? 'scale(1)' : 'scale(0.95)',
+                    position: showConfirmPassword ? 'relative' : 'absolute',
+                    pointerEvents: showConfirmPassword ? 'auto' : 'none',
+                    width: '100%',
+                    top: 0,
+                    left: 0
+                  }}
+                >
+                  <PasswordInput
+                    id="confirm"
+                    placeholder="Confirm password"
+                    required
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                  />
+                  <PrimaryButton ariaLabel="Continue" onClick={handleConfirmContinue}>
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </PrimaryButton>
+                </div>
               </div>
               
               {!showConfirmPassword && (
