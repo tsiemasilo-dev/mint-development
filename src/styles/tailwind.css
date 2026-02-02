@@ -40,3 +40,54 @@
     display: none;
   }
 }
+
+.landscape-blocker {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f23 100%);
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 2rem;
+  text-align: center;
+}
+
+.landscape-blocker svg {
+  width: 64px;
+  height: 64px;
+  color: #a78bfa;
+  animation: rotate-phone 2s ease-in-out infinite;
+}
+
+.landscape-blocker h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: white;
+  margin: 0;
+}
+
+.landscape-blocker p {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0;
+  max-width: 280px;
+}
+
+@keyframes rotate-phone {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-15deg); }
+  75% { transform: rotate(15deg); }
+}
+
+@media screen and (orientation: landscape) and (max-height: 500px) {
+  .landscape-blocker {
+    display: flex;
+  }
+  
+  #root > *:not(.landscape-blocker) {
+    display: none !important;
+  }
+}
