@@ -1236,6 +1236,7 @@ const AuthForm = ({ initialStep = 'email', onSignupComplete, onLoginComplete }) 
                 onClick={() => {
                   if (showConfirmPassword) {
                     setShowConfirmPassword(false);
+                    setConfirmPassword('');
                   } else {
                     showStep('name');
                   }
