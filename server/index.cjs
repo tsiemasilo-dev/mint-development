@@ -11,6 +11,7 @@ app.use(express.json());
 const SUMSUB_APP_TOKEN = process.env.SUMSUB_APP_TOKEN;
 const SUMSUB_SECRET_KEY = process.env.SUMSUB_SECRET_KEY;
 const SUMSUB_BASE_URL = "https://api.sumsub.com";
+const SUMSUB_LEVEL_NAME = process.env.SUMSUB_LEVEL_NAME || "basic-kyc-level";
 
 // Create signature for Sumsub API requests
 function createSumsubSignature(ts, method, path, body = "") {
@@ -110,7 +111,7 @@ app.post("/api/sumsub/access-token", async (req, res) => {
       });
     }
 
-    const { userId, levelName = "basic-kyc-level" } = req.body;
+    const { userId, levelName = SUMSUB_LEVEL_NAME } = req.body;
     
     if (!userId) {
       return res.status(400).json({
