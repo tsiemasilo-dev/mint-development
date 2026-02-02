@@ -4,5 +4,6 @@ node_modules
 .DS_Store
 
 # local asset sources
-assets/
-assets_fixed/
+/assets/
+/assets_fixed/
+!src/assets/
