@@ -53,6 +53,11 @@ const BankLinkPage = ({ onBack, onComplete }) => {
         return;
       }
 
+      await supabase
+        .from("required_actions")
+        .update({ bank_linked: true, bank_in_review: false })
+        .eq("user_id", userData.user.id);
+
       onComplete?.();
     } catch (err) {
       console.error("Failed to save bank details", err);
