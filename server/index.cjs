@@ -1,10 +1,78 @@
 const express = require("express");
 const cors = require("cors");
+const crypto = require("crypto");
 const truIDClient = require("./truidClient.cjs");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Sumsub configuration
+const SUMSUB_APP_TOKEN = process.env.SUMSUB_APP_TOKEN;
+const SUMSUB_SECRET_KEY = process.env.SUMSUB_SECRET_KEY;
+const SUMSUB_BASE_URL = "https://api.sumsub.com";
+
+// Create signature for Sumsub API requests
+function createSumsubSignature(ts, method, path, body = "") {
+  const data = ts + method.toUpperCase() + path + body;
+  return crypto
+    .createHmac("sha256", SUMSUB_SECRET_KEY)
+    .update(data)
+    .digest("hex");
+}
+
+// Generate Sumsub access token
+async function generateSumsubAccessToken(userId, levelName = "basic-kyc-level") {
+  const ts = Math.floor(Date.now() / 1000).toString();
+  const path = `/resources/accessTokens?userId=${encodeURIComponent(userId)}&levelName=${encodeURIComponent(levelName)}`;
+  const method = "POST";
+  
+  const signature = createSumsubSignature(ts, method, path);
+  
+  const response = await fetch(`${SUMSUB_BASE_URL}${path}`, {
+    method,
+    headers: {
+      "Accept": "application/json",
+      "Content-Type": "application/json",
+      "X-App-Token": SUMSUB_APP_TOKEN,
+      "X-App-Access-Ts": ts,
+      "X-App-Access-Sig": signature,
+    },
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Sumsub API error: ${response.status} - ${errorText}`);
+  }
+  
+  return response.json();
+}
+
+// Get applicant status from Sumsub
+async function getSumsubApplicantStatus(applicantId) {
+  const ts = Math.floor(Date.now() / 1000).toString();
+  const path = `/resources/applicants/${applicantId}/requiredIdDocsStatus`;
+  const method = "GET";
+  
+  const signature = createSumsubSignature(ts, method, path);
+  
+  const response = await fetch(`${SUMSUB_BASE_URL}${path}`, {
+    method,
+    headers: {
+      "Accept": "application/json",
+      "X-App-Token": SUMSUB_APP_TOKEN,
+      "X-App-Access-Ts": ts,
+      "X-App-Access-Sig": signature,
+    },
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Sumsub API error: ${response.status} - ${errorText}`);
+  }
+  
+  return response.json();
+}
 
 const readEnv = (key) => process.env[key] || process.env[`VITE_${key}`];
 
@@ -31,6 +99,104 @@ function parseServices(value) {
   }
   return [];
 }
+
+// Sumsub API endpoints
+app.post("/api/sumsub/access-token", async (req, res) => {
+  try {
+    if (!SUMSUB_APP_TOKEN || !SUMSUB_SECRET_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: { message: "Sumsub credentials not configured. Please add SUMSUB_APP_TOKEN and SUMSUB_SECRET_KEY." }
+      });
+    }
+
+    const { userId, levelName = "basic-kyc-level" } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: { message: "userId is required" }
+      });
+    }
+
+    const tokenData = await generateSumsubAccessToken(userId, levelName);
+    
+    res.json({
+      success: true,
+      token: tokenData.token,
+      userId: tokenData.userId
+    });
+  } catch (error) {
+    console.error("Sumsub access token error:", error);
+    res.status(500).json({
+      success: false,
+      error: { message: error.message || "Failed to generate access token" }
+    });
+  }
+});
+
+app.get("/api/sumsub/status/:applicantId", async (req, res) => {
+  try {
+    if (!SUMSUB_APP_TOKEN || !SUMSUB_SECRET_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: { message: "Sumsub credentials not configured" }
+      });
+    }
+
+    const { applicantId } = req.params;
+    const status = await getSumsubApplicantStatus(applicantId);
+    
+    res.json({
+      success: true,
+      status
+    });
+  } catch (error) {
+    console.error("Sumsub status error:", error);
+    res.status(500).json({
+      success: false,
+      error: { message: error.message || "Failed to get applicant status" }
+    });
+  }
+});
+
+app.post("/api/sumsub/webhook", async (req, res) => {
+  console.log("Sumsub webhook received:", JSON.stringify(req.body, null, 2));
+  
+  const { type, applicantId, reviewResult, reviewStatus, externalUserId } = req.body;
+  
+  // Handle verification completion
+  if (type === "applicantReviewed" && reviewResult?.reviewAnswer === "GREEN") {
+    console.log(`User ${externalUserId} KYC verified successfully`);
+    
+    // Update user KYC status in database if Supabase is available
+    if (supabase && externalUserId) {
+      try {
+        const { data: existingAction } = await supabase
+          .from("required_actions")
+          .select("id")
+          .eq("user_id", externalUserId)
+          .maybeSingle();
+
+        if (existingAction) {
+          await supabase
+            .from("required_actions")
+            .update({ kyc_verified: true })
+            .eq("user_id", externalUserId);
+        } else {
+          await supabase
+            .from("required_actions")
+            .insert({ user_id: externalUserId, kyc_verified: true });
+        }
+        console.log(`Updated KYC status for user ${externalUserId}`);
+      } catch (err) {
+        console.error("Failed to update KYC status:", err);
+      }
+    }
+  }
+  
+  res.status(200).json({ received: true });
+});
 
 app.post("/api/truid/initiate", async (req, res) => {
   try {
