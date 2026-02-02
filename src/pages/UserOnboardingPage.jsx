@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import TruidConnector from "../components/TruidConnector";
+import SumsubVerification from "../components/SumsubVerification";
 import { supabase } from "../lib/supabase";
 import "../styles/onboarding-process.css";
 
@@ -174,8 +174,6 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
       setIsSubmitting(false);
     }
   };
-
-  const truidApiBase = "";
 
   useEffect(() => {
     const handleOutsideClick = (event) => {
@@ -642,19 +640,21 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   Identity Verification
                 </h2>
                 <p className="text-sm" style={{ color: "#6b7280" }}>
-                  Verify your identity securely with TruID
+                  Verify your identity securely with Sumsub
                 </p>
               </div>
-              <TruidConnector apiBase={truidApiBase} onVerified={() => setShowProceed(true)} />
-              <div className="text-center mt-8 animate-fade-in delay-2">
-                <button
-                  type="button"
-                  className="continue-button proceed-button"
-                  onClick={() => goToStep(3)}
-                >
-                  Continue to Agreements
-                </button>
-              </div>
+              <SumsubVerification onVerified={() => setShowProceed(true)} />
+              {showProceed && (
+                <div className="text-center mt-8 animate-fade-in delay-2">
+                  <button
+                    type="button"
+                    className="continue-button proceed-button"
+                    onClick={() => goToStep(3)}
+                  >
+                    Continue to Agreements
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="w-full max-w-3xl mx-auto">
