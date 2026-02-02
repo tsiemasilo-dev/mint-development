@@ -85,7 +85,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
   const handleContinue = () => {
     if (step === 0) {
-      goToStep(1);
+      goToStep(2);
     }
   };
 
@@ -93,8 +93,6 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
     if (step === 3) {
       goToStep(2);
     } else if (step === 2) {
-      goToStep(1);
-    } else if (step === 1) {
       goToStep(0);
     } else if (onBack) {
       onBack();
@@ -347,23 +345,11 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <div className="step-circle">1</div>
                 <div className="step-line"></div>
                 <div className="step-circle">2</div>
-                <div className="step-line"></div>
-                <div className="step-circle">3</div>
               </div>
 
               <div className="step-info animate-fade-in delay-3">
                 <div className="step-item">
                   <div className="step-number">1</div>
-                  <div className="step-content">
-                    <div className="step-title">Additional Details</div>
-                    <div className="step-description">
-                      Complete your profile with personal information
-                    </div>
-                  </div>
-                </div>
-
-                <div className="step-item">
-                  <div className="step-number">2</div>
                   <div className="step-content">
                     <div className="step-title">Identification</div>
                     <div className="step-description">
@@ -373,7 +359,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 </div>
 
                 <div className="step-item">
-                  <div className="step-number">3</div>
+                  <div className="step-number">2</div>
                   <div className="step-content">
                     <div className="step-title">Agreements</div>
                     <div className="step-description">
@@ -395,7 +381,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
               <div className="text-center mt-6 animate-fade-in delay-4">
                 <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  You'll be taken through our three-step process
+                  You'll be taken through our two-step process
                 </p>
               </div>
             </div>
@@ -631,7 +617,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   className="text-xs uppercase tracking-[0.2em] mb-2"
                   style={{ color: "#6b7280" }}
                 >
-                  Step 2 of 3
+                  Step 1 of 2
                 </p>
                 <h2
                   className="text-3xl font-light tracking-tight mb-2"
@@ -674,7 +660,6 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               </div>
 
               <div className="progress-bar animate-fade-in delay-1">
-                <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
               </div>
@@ -769,7 +754,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
               <div className="text-center mt-6 animate-fade-in delay-4">
                 <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  Step 3 of 3 - Final step to complete your onboarding
+                  Step 2 of 2 - Final step to complete your onboarding
                 </p>
               </div>
             </div>
