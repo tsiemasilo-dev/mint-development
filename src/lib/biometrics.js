@@ -3,6 +3,7 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 const BIOMETRICS_ENABLED_KEY = 'biometricsEnabled';
 const BIOMETRICS_USER_KEY = 'biometricsUserEmail';
 const FIRST_LOGIN_KEY = 'hasLoggedInBefore';
+const CREDENTIALS_SERVER = 'com.mint.app';
 
 export const isNativePlatform = () => {
   return typeof Capacitor.isNativePlatform === 'function'
@@ -56,7 +57,6 @@ export const authenticateWithBiometrics = async (reason = 'Authenticate to conti
     await NativeBiometric.verifyIdentity({ reason });
     return true;
   } catch (error) {
-    // Log platform-specific errors for debugging
     if (isNativeAndroid()) {
       console.error('[Biometrics] Android authentication error:', {
         message: error.message,
@@ -65,6 +65,48 @@ export const authenticateWithBiometrics = async (reason = 'Authenticate to conti
       });
     }
     throw error;
+  }
+};
+
+export const storeCredentials = async (username, password) => {
+  if (!isNativePlatform()) return false;
+  
+  try {
+    await NativeBiometric.setCredentials({
+      username,
+      password,
+      server: CREDENTIALS_SERVER,
+    });
+    return true;
+  } catch (error) {
+    console.error('[Biometrics] Failed to store credentials:', error);
+    return false;
+  }
+};
+
+export const getStoredCredentials = async () => {
+  if (!isNativePlatform()) return null;
+  
+  try {
+    const credentials = await NativeBiometric.getCredentials({
+      server: CREDENTIALS_SERVER,
+    });
+    return credentials;
+  } catch (error) {
+    console.error('[Biometrics] Failed to get credentials:', error);
+    return null;
+  }
+};
+
+export const deleteStoredCredentials = async () => {
+  if (!isNativePlatform()) return;
+  
+  try {
+    await NativeBiometric.deleteCredentials({
+      server: CREDENTIALS_SERVER,
+    });
+  } catch (error) {
+    console.error('[Biometrics] Failed to delete credentials:', error);
   }
 };
 
@@ -77,9 +119,10 @@ export const enableBiometrics = (userEmail) => {
   if (userEmail) localStorage.setItem(BIOMETRICS_USER_KEY, userEmail);
 };
 
-export const disableBiometrics = () => {
+export const disableBiometrics = async () => {
   localStorage.removeItem(BIOMETRICS_ENABLED_KEY);
   localStorage.removeItem(BIOMETRICS_USER_KEY);
+  await deleteStoredCredentials();
 };
 
 export const getBiometricsUserEmail = () => {

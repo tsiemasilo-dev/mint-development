@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Fingerprint } from 'lucide-react';
-import { isBiometricsAvailable, authenticateWithBiometrics, enableBiometrics, getBiometryTypeName } from '../lib/biometrics';
+import { isBiometricsAvailable, authenticateWithBiometrics, enableBiometrics, getBiometryTypeName, storeCredentials } from '../lib/biometrics';
 
-const BiometricPromptModal = ({ isOpen, onClose, userEmail, onComplete }) => {
+const BiometricPromptModal = ({ isOpen, onClose, userEmail, userPassword, onComplete }) => {
   const [biometryType, setBiometryType] = useState(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
 
@@ -26,6 +26,9 @@ const BiometricPromptModal = ({ isOpen, onClose, userEmail, onComplete }) => {
     try {
       await authenticateWithBiometrics(`Enable ${biometryName} for faster login`);
       enableBiometrics(userEmail);
+      if (userEmail && userPassword) {
+        await storeCredentials(userEmail, userPassword);
+      }
       onComplete?.(true);
       onClose();
     } catch (error) {

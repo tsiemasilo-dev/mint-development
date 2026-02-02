@@ -14,7 +14,9 @@ import {
   getBiometricsUserEmail,
   getBiometryTypeName,
   isNativeIOS,
-  isNativeAndroid
+  isNativeAndroid,
+  storeCredentials,
+  getStoredCredentials
 } from '../lib/biometrics.js';
 
 const OTP_LENGTH = 6;
@@ -64,6 +66,7 @@ const AuthForm = ({ initialStep = 'email', onSignupComplete, onLoginComplete }) 
   const [showBiometricPrompt, setShowBiometricPrompt] = useState(false);
   const [pendingAuthCallback, setPendingAuthCallback] = useState(null);
   const [pendingAuthEmail, setPendingAuthEmail] = useState('');
+  const [pendingAuthPassword, setPendingAuthPassword] = useState('');
   const [pendingAuthShouldMarkLogin, setPendingAuthShouldMarkLogin] = useState(false);
   const [canUseBiometricLogin, setCanUseBiometricLogin] = useState(false);
   const [biometryType, setBiometryType] = useState(null);
@@ -165,7 +168,31 @@ const AuthForm = ({ initialStep = 'email', onSignupComplete, onLoginComplete }) 
         return;
       }
       
-      showToast('Please enter your password once to enable Face ID login.');
+      const storedCredentials = await getStoredCredentials();
+      if (DEBUG_BIOMETRICS) {
+        console.debug('[Biometrics] Stored credentials check', { hasCredentials: !!storedCredentials });
+      }
+      
+      if (storedCredentials?.username && storedCredentials?.password) {
+        const { data, error: loginError } = await supabase.auth.signInWithPassword({
+          email: storedCredentials.username,
+          password: storedCredentials.password,
+        });
+        
+        if (!loginError && data?.session) {
+          markAsLoggedIn(storedCredentials.username);
+          if (onLoginComplete) {
+            onLoginComplete();
+          }
+          return;
+        }
+        
+        if (DEBUG_BIOMETRICS) {
+          console.debug('[Biometrics] Stored credentials login failed', loginError);
+        }
+      }
+      
+      showToast('Please enter your password once to enable biometric login.');
       if (emailForBiometrics) {
         setLoginEmail(emailForBiometrics);
       }
@@ -364,6 +391,7 @@ const AuthForm = ({ initialStep = 'email', onSignupComplete, onLoginComplete }) 
       const { available } = await isBiometricsAvailable();
       if (available) {
         setPendingAuthEmail(email);
+        setPendingAuthPassword(password);
         setPendingAuthCallback(() => onSignupComplete);
         setPendingAuthShouldMarkLogin(false);
         setTimeout(() => {
@@ -581,6 +609,7 @@ const AuthForm = ({ initialStep = 'email', onSignupComplete, onLoginComplete }) 
         const { available } = await isBiometricsAvailable();
         if (available && (isNativeIOS() || isNativeAndroid())) {
           setPendingAuthEmail(loginEmail);
+          setPendingAuthPassword(loginPassword);
           setPendingAuthCallback(() => onLoginComplete);
           setPendingAuthShouldMarkLogin(true);
           setShowBiometricPrompt(true);
@@ -1365,6 +1394,7 @@ const AuthForm = ({ initialStep = 'email', onSignupComplete, onLoginComplete }) 
         isOpen={showBiometricPrompt}
         onClose={() => setShowBiometricPrompt(false)}
         userEmail={pendingAuthEmail}
+        userPassword={pendingAuthPassword}
         onComplete={(enabled) => {
           setShowBiometricPrompt(false);
           if (pendingAuthShouldMarkLogin && pendingAuthEmail) {
@@ -1375,6 +1405,7 @@ const AuthForm = ({ initialStep = 'email', onSignupComplete, onLoginComplete }) 
           }
           setPendingAuthCallback(null);
           setPendingAuthEmail('');
+          setPendingAuthPassword('');
           setPendingAuthShouldMarkLogin(false);
         }}
       />
