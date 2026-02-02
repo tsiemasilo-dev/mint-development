@@ -40,7 +40,7 @@ const ActionsPage = ({ onBack, onNavigate }) => {
       status: getBankStatus(),
       icon: Landmark,
       completed: bankLinked,
-      navigateTo: "bankLink",
+      navigateTo: "creditApply",
     },
     {
       id: "invite",
