@@ -60,7 +60,6 @@ const SumsubVerification = ({ onVerified }) => {
           },
           body: JSON.stringify({
             userId: currentUserId,
-            levelName: "basic-kyc-level",
           }),
         });
 
@@ -92,7 +91,6 @@ const SumsubVerification = ({ onVerified }) => {
         },
         body: JSON.stringify({
           userId,
-          levelName: "basic-kyc-level",
         }),
       });
 
