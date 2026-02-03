@@ -45,6 +45,7 @@ const SumsubVerification = ({ onVerified, onGoHome }) => {
   const [verificationStatus, setVerificationStatus] = useState(null);
   const [rejectionDetails, setRejectionDetails] = useState(null);
   const [completedSteps, setCompletedSteps] = useState([]);
+  const [retryCount, setRetryCount] = useState(0);
 
   // Create notification in database
   const createNotification = useCallback(async (title, body, type = "kyc", payload = {}) => {
@@ -116,7 +117,7 @@ const SumsubVerification = ({ onVerified, onGoHome }) => {
     };
 
     initializeSumsub();
-  }, []);
+  }, [retryCount]);
 
   // Handler for token expiration
   const accessTokenExpirationHandler = useCallback(async () => {
@@ -439,19 +440,40 @@ const SumsubVerification = ({ onVerified, onGoHome }) => {
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={() => {
-            setRejectionDetails(null);
-            setVerificationStatus(null);
-            setCompletedSteps([]);
-            window.location.reload();
-          }}
-          className="px-6 py-2.5 rounded-xl font-medium text-white transition-all duration-200"
-          style={{ background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)' }}
-        >
-          {rejectionDetails.canRetry ? "Try Again" : "Contact Support"}
-        </button>
+        {rejectionDetails.canRetry ? (
+          <button
+            type="button"
+            onClick={() => {
+              // Reset state to allow SDK to reinitialize for retry
+              setRejectionDetails(null);
+              setVerificationStatus(null);
+              setCompletedSteps([]);
+              setAccessToken(null);
+              setLoading(true);
+              setError(null);
+              // Trigger useEffect to re-run initialization
+              setRetryCount(prev => prev + 1);
+            }}
+            className="px-6 py-2.5 rounded-xl font-medium text-white transition-all duration-200"
+            style={{ background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)' }}
+          >
+            Try Again
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              // For permanent rejection, go back to home
+              if (onGoHome) {
+                onGoHome();
+              }
+            }}
+            className="px-6 py-2.5 rounded-xl font-medium text-white transition-all duration-200"
+            style={{ background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)' }}
+          >
+            Contact Support
+          </button>
+        )}
       </div>
     );
   }
@@ -474,7 +496,11 @@ const SumsubVerification = ({ onVerified, onGoHome }) => {
         </div>
         <button
           type="button"
-          onClick={() => window.location.reload()}
+          onClick={() => {
+            setError(null);
+            setLoading(true);
+            setRetryCount(prev => prev + 1);
+          }}
           className="px-6 py-2.5 rounded-xl font-medium text-white transition-all duration-200"
           style={{ background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)' }}
         >
