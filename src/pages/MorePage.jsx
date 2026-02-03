@@ -21,7 +21,16 @@ const MorePage = ({ onNavigate }) => {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
   const [error, setError] = useState("");
-  const { kycVerified, bankLinked } = useRequiredActions();
+  const { kycVerified, kycPending, kycNeedsResubmission, bankLinked } = useRequiredActions();
+
+  const getKycStatus = () => {
+    if (kycVerified) return { text: "Verified", style: "bg-green-100 text-green-700" };
+    if (kycNeedsResubmission) return { text: "Needs Attention", style: "bg-amber-100 text-amber-700" };
+    if (kycPending) return { text: "Under Review", style: "bg-blue-100 text-blue-600" };
+    return { text: "Not Verified", style: "bg-slate-100 text-slate-600" };
+  };
+
+  const kycStatus = getKycStatus();
 
   const displayName = [profile?.first_name, profile?.last_name]
     .filter(Boolean)
@@ -162,22 +171,14 @@ const MorePage = ({ onNavigate }) => {
 
       <div className="flex flex-col items-center text-center">
         <span
-          className={`mt-2 inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${kycVerified
-            ? "bg-green-100 text-green-700"
-            : "bg-amber-100 text-amber-700"
-            }`}
+          className={`mt-2 inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${kycStatus.style}`}
         >
           {kycVerified ? (
-            <>
-              <ShieldCheck className="h-3 w-3" />
-              KYC Verified
-            </>
+            <ShieldCheck className="h-3 w-3" />
           ) : (
-            <>
-              <AlertCircle className="h-3 w-3" />
-              KYC Not Verified
-            </>
+            <AlertCircle className="h-3 w-3" />
           )}
+          {kycStatus.text === "Verified" ? "KYC Verified" : kycStatus.text === "Under Review" ? "KYC Under Review" : kycStatus.text === "Needs Attention" ? "KYC Needs Attention" : "KYC Not Verified"}
         </span>
         <h2 className="mt-3 text-xl font-semibold text-slate-900">{nameLabel}</h2>
         <p className="mt-1 text-sm text-slate-500">{usernameLabel}</p>
@@ -212,12 +213,9 @@ const MorePage = ({ onNavigate }) => {
                 <span className="text-sm font-medium text-slate-700">KYC Verification</span>
               </div>
               <span
-                className={`rounded-full px-2 py-0.5 text-xs font-semibold ${kycVerified
-                  ? "bg-green-100 text-green-700"
-                  : "bg-amber-100 text-amber-700"
-                  }`}
+                className={`rounded-full px-2 py-0.5 text-xs font-semibold ${kycStatus.style}`}
               >
-                {kycVerified ? "Verified" : "Not Verified"}
+                {kycStatus.text}
               </span>
             </button>
             <button
@@ -227,16 +225,14 @@ const MorePage = ({ onNavigate }) => {
             >
               <div className="flex items-center gap-2">
                 <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100">
-
                   <Landmark className={`h-5 w-5 ${iconColorClasses}`} />
-
                 </span>
                 <span className="text-sm font-medium text-slate-700">Bank Account</span>
               </div>
               <span
                 className={`rounded-full px-2 py-0.5 text-xs font-semibold ${bankLinked
                   ? "bg-green-100 text-green-700"
-                  : "bg-amber-100 text-amber-700"
+                  : "bg-slate-100 text-slate-600"
                   }`}
               >
                 {bankLinked ? "Linked" : "Not Linked"}

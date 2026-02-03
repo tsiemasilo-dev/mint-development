@@ -253,63 +253,66 @@ const SumsubVerification = ({ onVerified, onGoHome }) => {
         break;
       
       case "idCheck.onApplicantStatusChanged":
-      case "idCheck.applicantStatus":
+      case "idCheck.applicantStatus": {
         console.log("Applicant status changed:", payload);
         
-        if (payload?.reviewStatus === "completed") {
-          if (payload?.reviewResult?.reviewAnswer === "GREEN") {
-            setVerificationComplete(true);
-            setVerificationStatus("approved");
-            updateKycStatus('verified');
-            createNotification(
-              "Identity Verified!",
-              "Congratulations! Your identity has been successfully verified. You now have full access to all features.",
-              "kyc",
-              { status: "approved" }
-            );
-            if (onVerified) {
-              onVerified();
-            }
-          } else if (payload?.reviewResult?.reviewAnswer === "RED") {
-            setVerificationStatus("rejected");
-            
-            const rejectType = payload?.reviewResult?.reviewRejectType;
-            const rejectLabels = payload?.reviewResult?.rejectLabels || [];
-            const clientComment = payload?.reviewResult?.clientComment;
-            
-            const parsedLabels = parseRejectionLabels(rejectLabels);
-            
-            setRejectionDetails({
-              type: rejectType,
-              labels: parsedLabels,
-              comment: clientComment,
-              canRetry: rejectType === "RETRY",
-            });
-            
-            // Set appropriate status based on rejection type
-            if (rejectType === "RETRY") {
-              updateKycStatus('needs_resubmission');
-            } else {
-              updateKycStatus(false);
-            }
-            
-            const notificationBody = rejectType === "RETRY"
-              ? `Your verification needs attention: ${parsedLabels.join(", ") || "Please review and resubmit your documents."}`
-              : "Your verification was not successful. Please contact support for assistance.";
-            
-            createNotification(
-              rejectType === "RETRY" ? "Action Required: Resubmission Needed" : "Verification Unsuccessful",
-              notificationBody,
-              "kyc",
-              { status: "rejected", canRetry: rejectType === "RETRY", labels: rejectLabels }
-            );
+        const reviewStatus = payload?.reviewStatus;
+        const reviewAnswer = payload?.reviewResult?.reviewAnswer;
+        
+        // Handle verified status (completed or onHold with GREEN result)
+        if ((reviewStatus === "completed" || reviewStatus === "onHold") && reviewAnswer === "GREEN") {
+          setVerificationComplete(true);
+          setVerificationStatus("approved");
+          updateKycStatus('verified');
+          createNotification(
+            "Identity Verified!",
+            "Congratulations! Your identity has been successfully verified. You now have full access to all features.",
+            "kyc",
+            { status: "approved" }
+          );
+          if (onVerified) {
+            onVerified();
           }
-        } else if (payload?.reviewStatus === "pending" || payload?.reviewStatus === "queued") {
+        } else if (reviewAnswer === "RED") {
+          setVerificationStatus("rejected");
+          
+          const rejectType = payload?.reviewResult?.reviewRejectType;
+          const rejectLabels = payload?.reviewResult?.rejectLabels || [];
+          const clientComment = payload?.reviewResult?.clientComment;
+          
+          const parsedLabels = parseRejectionLabels(rejectLabels);
+          
+          setRejectionDetails({
+            type: rejectType,
+            labels: parsedLabels,
+            comment: clientComment,
+            canRetry: rejectType === "RETRY",
+          });
+          
+          // Set appropriate status based on rejection type
+          if (rejectType === "RETRY") {
+            updateKycStatus('needs_resubmission');
+          } else {
+            updateKycStatus(false);
+          }
+          
+          const notificationBody = rejectType === "RETRY"
+            ? `Your verification needs attention: ${parsedLabels.join(", ") || "Please review and resubmit your documents."}`
+            : "Your verification was not successful. Please contact support for assistance.";
+          
+          createNotification(
+            rejectType === "RETRY" ? "Action Required: Resubmission Needed" : "Verification Unsuccessful",
+            notificationBody,
+            "kyc",
+            { status: "rejected", canRetry: rejectType === "RETRY", labels: rejectLabels }
+          );
+        } else if (reviewStatus === "pending" || reviewStatus === "queued" || reviewStatus === "onHold") {
           // Status is pending review - do NOT mark as verified yet
           setVerificationStatus("pending");
           updateKycStatus('pending');
         }
         break;
+      }
 
       case "idCheck.onStepCompleted":
         console.log("Step completed:", payload);
