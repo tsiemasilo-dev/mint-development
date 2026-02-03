@@ -36,8 +36,6 @@ export const useRequiredActions = () => {
         .eq("user_id", userId)
         .maybeSingle();
 
-      console.log("Required actions query result:", { userId, data, error });
-
       if (error || !data) {
         const { data: newData, error: insertError } = await supabase
           .from("required_actions")

@@ -1,0 +1,50 @@
+chunk-NUMECXU6.js?v=5a0cafb6:21551 Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools
+mfxnghmuccevsxwcetej.supabase.co/rest/v1/profiles?select=notification_preferences&id=eq.3401d428-4ed7-4ba1-ae64-4bd16d2485a4:1  Failed to load resource: the server responded with a status of 400 ()
+mfxnghmuccevsxwcetej.supabase.co/rest/v1/user_balances?select=*&user_id=eq.3401d428-4ed7-4ba1-ae64-4bd16d2485a4:1  Failed to load resource: the server responded with a status of 404 ()
+useRequiredActions.js:39 Required actions query result: Object
+mfxnghmuccevsxwcetej.supabase.co/rest/v1/transactions?select=type%2Camount&user_id=eq.3401d428-4ed7-4ba1-ae64-4bd16d2485a4:1  Failed to load resource: the server responded with a status of 400 ()
+mfxnghmuccevsxwcetej.supabase.co/rest/v1/user_holdings?select=*%2Csecurities%28symbol%2Cname%2Clogo_url%29&user_id=eq.3401d428-4ed7-4ba1-ae64-4bd16d2485a4:1  Failed to load resource: the server responded with a status of 404 ()
+mfxnghmuccevsxwcetej.supabase.co/rest/v1/user_balances?select=*&user_id=eq.3401d428-4ed7-4ba1-ae64-4bd16d2485a4:1  Failed to load resource: the server responded with a status of 404 ()
+useRequiredActions.js:39 Required actions query result: Object
+mfxnghmuccevsxwcetej.supabase.co/rest/v1/transactions?select=type%2Camount&user_id=eq.3401d428-4ed7-4ba1-ae64-4bd16d2485a4:1  Failed to load resource: the server responded with a status of 400 ()
+mfxnghmuccevsxwcetej.supabase.co/rest/v1/user_holdings?select=*%2Csecurities%28symbol%2Cname%2Clogo_url%29&user_id=eq.3401d428-4ed7-4ba1-ae64-4bd16d2485a4:1  Failed to load resource: the server responded with a status of 404 ()
+useRequiredActions.js:39 Required actions query result: {userId: '3401d428-4ed7-4ba1-ae64-4bd16d2485a4', data: {…}, error: null}
+useRequiredActions.js:39 Required actions query result: {userId: '3401d428-4ed7-4ba1-ae64-4bd16d2485a4', data: {…}, error: null}
+useRequiredActions.js:39 Required actions query result: {userId: '3401d428-4ed7-4ba1-ae64-4bd16d2485a4', data: {…}, error: null}
+@supabase_supabase-js.js?v=5a0cafb6:11480  GET https://mfxnghmuccevsxwcetej.supabase.co/rest/v1/user_balances?select=*&user_id=eq.3401d428-4ed7-4ba1-ae64-4bd16d2485a4 404 (Not Found)
+(anonymous) @ @supabase_supabase-js.js?v=5a0cafb6:11480
+(anonymous) @ @supabase_supabase-js.js?v=5a0cafb6:11494
+await in (anonymous)
+then @ @supabase_supabase-js.js?v=5a0cafb6:309
+@supabase_supabase-js.js?v=5a0cafb6:11480  GET https://mfxnghmuccevsxwcetej.supabase.co/rest/v1/user_holdings?select=*%2Csecurities%28symbol%2Cname%2Clogo_url%29&user_id=eq.3401d428-4ed7-4ba1-ae64-4bd16d2485a4 404 (Not Found)
+(anonymous) @ @supabase_supabase-js.js?v=5a0cafb6:11480
+(anonymous) @ @supabase_supabase-js.js?v=5a0cafb6:11494
+await in (anonymous)
+then @ @supabase_supabase-js.js?v=5a0cafb6:309
+@supabase_supabase-js.js?v=5a0cafb6:11480  GET https://mfxnghmuccevsxwcetej.supabase.co/rest/v1/transactions?select=type%2Camount&user_id=eq.3401d428-4ed7-4ba1-ae64-4bd16d2485a4 400 (Bad Request)
+(anonymous) @ @supabase_supabase-js.js?v=5a0cafb6:11480
+(anonymous) @ @supabase_supabase-js.js?v=5a0cafb6:11494
+await in (anonymous)
+then @ @supabase_supabase-js.js?v=5a0cafb6:309
+useRequiredActions.js:39 Required actions query result: {userId: '3401d428-4ed7-4ba1-ae64-4bd16d2485a4', data: {…}, error: null}
+@supabase_supabase-js.js?v=5a0cafb6:11480  GET https://mfxnghmuccevsxwcetej.supabase.co/rest/v1/user_holdings?select=*%2Csecurities%28symbol%2Cname%2Clogo_url%29&user_id=eq.3401d428-4ed7-4ba1-ae64-4bd16d2485a4 404 (Not Found)
+(anonymous) @ @supabase_supabase-js.js?v=5a0cafb6:11480
+(anonymous) @ @supabase_supabase-js.js?v=5a0cafb6:11494
+await in (anonymous)
+then @ @supabase_supabase-js.js?v=5a0cafb6:309
+@supabase_supabase-js.js?v=5a0cafb6:11480  GET https://mfxnghmuccevsxwcetej.supabase.co/rest/v1/user_balances?select=*&user_id=eq.3401d428-4ed7-4ba1-ae64-4bd16d2485a4 404 (Not Found)
+(anonymous) @ @supabase_supabase-js.js?v=5a0cafb6:11480
+(anonymous) @ @supabase_supabase-js.js?v=5a0cafb6:11494
+await in (anonymous)
+then @ @supabase_supabase-js.js?v=5a0cafb6:309
+@supabase_supabase-js.js?v=5a0cafb6:11480  GET https://mfxnghmuccevsxwcetej.supabase.co/rest/v1/transactions?select=type%2Camount&user_id=eq.3401d428-4ed7-4ba1-ae64-4bd16d2485a4 400 (Bad Request)
+(anonymous) @ @supabase_supabase-js.js?v=5a0cafb6:11480
+(anonymous) @ @supabase_supabase-js.js?v=5a0cafb6:11494
+await in (anonymous)
+then @ @supabase_supabase-js.js?v=5a0cafb6:309
+useRequiredActions.js:39 Required actions query result: {userId: '3401d428-4ed7-4ba1-ae64-4bd16d2485a4', data: {…}, error: null}
+Navbar.jsx:53 Native haptics only
+useRequiredActions.js:39 Required actions query result: {userId: '3401d428-4ed7-4ba1-ae64-4bd16d2485a4', data: {…}, error: null}
+useRequiredActions.js:39 Required actions query result: {userId: '3401d428-4ed7-4ba1-ae64-4bd16d2485a4', data: {…}, error: null}
+useRequiredActions.js:39 Required actions query result: {userId: '3401d428-4ed7-4ba1-ae64-4bd16d2485a4', data: {…}, error: null}
+useRequiredActions.js:39 Required actions query result: {userId: '3401d428-4ed7-4ba1-ae64-4bd16d2485a4', data: {…}, error: null}
