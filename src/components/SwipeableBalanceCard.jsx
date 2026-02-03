@@ -53,87 +53,57 @@ const MiniChart = ({ data, color = "#FFD700" }) => {
   );
 };
 
-const MintLogoGold = ({ className = "" }) => (
-  <svg viewBox="0 0 1826.64 722.72" className={className}>
-    <defs>
-      <linearGradient id="gold-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#FFD700" />
-        <stop offset="50%" stopColor="#FFC000" />
-        <stop offset="100%" stopColor="#DAA520" />
-      </linearGradient>
-    </defs>
-    <g>
-      <path fill="url(#gold-gradient)" d="M1089.47,265.13c25.29,12.34,16.69,50.37-11.45,50.63h0s-512.36,0-512.36,0c-14.73,0-26.67,11.94-26.67,26.67v227.94c0,14.73-11.94,26.67-26.67,26.67H26.67c-14.73,0-26.67-11.94-26.67-26.67v-248.55c0-9.54,5.1-18.36,13.38-23.12L526.75,3.55c7.67-4.41,17.03-4.73,24.99-.85l537.73,262.43Z"/>
-      <path fill="url(#gold-gradient)" d="M737.17,457.58c-25.29-12.34-16.69-50.37,11.45-50.63h0s512.36,0,512.36,0c14.73,0,26.67-11.94,26.67-26.67v-227.94c0-14.73,11.94-26.67,26.67-26.67h485.66c14.73,0,26.67,11.94,26.67,26.67v248.55c0,9.54-5.1,18.36-13.38,23.12l-513.38,295.15c-7.67,4.41-17.03,4.73-24.99.85l-537.73-262.43Z"/>
-    </g>
+const MintLogo = ({ className = "", color = "#FFD700" }) => (
+  <svg width="60" height="60" viewBox="0 0 100 100" fill="none" className={className}>
+    <path
+      d="M50 15 L85 85 L15 85 Z"
+      fill={color}
+      stroke={color}
+      strokeWidth="4"
+    />
+    <circle cx="50" cy="50" r="18" fill="#4B0082" />
+    <path d="M50 35 L65 55 L50 50 L35 55 Z" fill={color} />
   </svg>
 );
 
-const MintLogoSilver = ({ className = "" }) => (
-  <svg viewBox="0 0 1826.64 722.72" className={className}>
-    <g opacity="0.08">
-      <path fill="#C0C0C0" d="M1089.47,265.13c25.29,12.34,16.69,50.37-11.45,50.63h0s-512.36,0-512.36,0c-14.73,0-26.67,11.94-26.67,26.67v227.94c0,14.73-11.94,26.67-26.67,26.67H26.67c-14.73,0-26.67-11.94-26.67-26.67v-248.55c0-9.54,5.1-18.36,13.38-23.12L526.75,3.55c7.67-4.41,17.03-4.73,24.99-.85l537.73,262.43Z"/>
-      <path fill="#C0C0C0" d="M737.17,457.58c-25.29-12.34-16.69-50.37,11.45-50.63h0s512.36,0,512.36,0c14.73,0,26.67-11.94,26.67-26.67v-227.94c0-14.73,11.94-26.67,26.67-26.67h485.66c14.73,0,26.67,11.94,26.67,26.67v248.55c0,9.54-5.1,18.36-13.38,23.12l-513.38,295.15c-7.67,4.41-17.03,4.73-24.99.85l-537.73-262.43Z"/>
-    </g>
+const EMVChip = () => (
+  <div className="w-14 h-10 bg-gradient-to-br from-gray-300 to-gray-400 rounded-md border border-gray-500 shadow-inner">
+    <div className="grid grid-cols-4 grid-rows-3 gap-0.5 p-1.5 h-full">
+      {Array(12).fill(null).map((_, i) => (
+        <div key={i} className="bg-yellow-600 rounded-sm" />
+      ))}
+    </div>
+  </div>
+);
+
+const ContactlessSymbol = () => (
+  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#FFD700" strokeWidth="2">
+    <path d="M5 12.55a11 11 0 0 1 14.08 0" />
+    <path d="M1.42 9a16 16 0 0 1 21.16 0" />
+    <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+    <path d="M12 20h.01" />
   </svg>
 );
 
-const MastercardCircles = ({ className = "" }) => (
-  <svg viewBox="0 0 48 32" className={className}>
-    <circle cx="16" cy="16" r="14" fill="rgba(255,255,255,0.25)" />
-    <circle cx="32" cy="16" r="14" fill="rgba(255,255,255,0.4)" />
-  </svg>
-);
-
-const CardFace = ({ children, showCenterLogo = true }) => (
+const CardFace = ({ children, showChip = true }) => (
   <div
-    className="absolute inset-0 rounded-[24px] overflow-hidden"
+    className="absolute inset-0 rounded-2xl overflow-hidden"
     style={{
-      background: "linear-gradient(135deg, #2d1052 0%, #4a1d7a 25%, #6b2fa0 50%, #5a2391 75%, #3d1a6d 100%)",
-      boxShadow: "0 25px 50px -12px rgba(91, 33, 182, 0.5)",
+      background: 'linear-gradient(135deg, #4B0082 0%, #8A2BE2 100%)',
+      boxShadow: '0 20px 40px rgba(0,0,0,0.6)',
+      fontFamily: "'Courier New', Courier, monospace",
     }}
   >
     <div
-      className="absolute inset-0"
+      className="absolute inset-0 opacity-20"
       style={{
         backgroundImage: `
-          repeating-linear-gradient(
-            45deg,
-            transparent,
-            transparent 8px,
-            rgba(255,255,255,0.02) 8px,
-            rgba(255,255,255,0.02) 9px
-          ),
-          repeating-linear-gradient(
-            -45deg,
-            transparent,
-            transparent 8px,
-            rgba(255,255,255,0.02) 8px,
-            rgba(255,255,255,0.02) 9px
-          ),
-          repeating-linear-gradient(
-            60deg,
-            transparent,
-            transparent 15px,
-            rgba(255,255,255,0.015) 15px,
-            rgba(255,255,255,0.015) 16px
-          ),
-          repeating-linear-gradient(
-            -60deg,
-            transparent,
-            transparent 15px,
-            rgba(255,255,255,0.015) 15px,
-            rgba(255,255,255,0.015) 16px
-          )
+          repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.05) 10px, rgba(255,255,255,0.05) 20px),
+          repeating-linear-gradient(-45deg, transparent, transparent 10px, rgba(255,255,255,0.05) 10px, rgba(255,255,255,0.05) 20px)
         `,
       }}
     />
-    {showCenterLogo && (
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <MintLogoSilver className="w-40 h-auto" />
-      </div>
-    )}
-    <div className="absolute top-[48%] left-[42%] w-24 h-24 rounded-full border border-white/10" />
+    <div className="absolute top-0 left-0 w-full h-10 bg-black" />
     {children}
   </div>
 );
@@ -212,30 +182,49 @@ const SwipeableBalanceCard = ({
     {
       id: "balance",
       content: (
-        <CardFace showCenterLogo={true}>
-          <div className="relative h-full p-5 flex flex-col">
-            <div className="flex items-start justify-between">
-              <MintLogoGold className="h-7 w-auto" />
-              <MastercardCircles className="h-8 w-auto" />
+        <CardFace showChip={true}>
+          <div className="relative h-full p-5 flex flex-col text-[#FFD700]">
+            <div className="flex items-start justify-between mt-10">
+              <MintLogo />
+              <ContactlessSymbol />
+            </div>
+
+            <div className="flex items-center gap-4 mt-2">
+              <EMVChip />
             </div>
 
             <div className="flex-1 flex items-center justify-center">
-              <p className="text-3xl md:text-4xl font-bold text-[#FFD700] tracking-wider font-mono">
+              <p 
+                className="text-3xl md:text-4xl font-bold tracking-wider"
+                style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.6)' }}
+              >
                 {isVisible ? formattedAmount : maskedAmount}
               </p>
             </div>
 
             <div className="flex items-end justify-between">
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.15em] text-[#C9A227] font-medium">
-                  {userName || "MINT MEMBER"}
-                </p>
-              </div>
+              <p 
+                className="text-lg tracking-wide uppercase"
+                style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.8)' }}
+              >
+                {userName || "MINT MEMBER"}
+              </p>
               <div className="text-right">
-                <p className="text-xl font-bold text-[#FFD700] tracking-wider italic" style={{ fontFamily: "Arial, sans-serif" }}>
+                <p 
+                  className="text-3xl font-bold"
+                  style={{ 
+                    fontFamily: 'Arial Black, sans-serif',
+                    textShadow: '2px 2px 4px rgba(0,0,0,0.6)'
+                  }}
+                >
                   VISA
                 </p>
-                <p className="text-[10px] text-[#C9A227] tracking-wide">Mint</p>
+                <p 
+                  className="text-lg font-medium tracking-wider"
+                  style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.8)' }}
+                >
+                  Mint
+                </p>
               </div>
             </div>
           </div>
@@ -245,34 +234,42 @@ const SwipeableBalanceCard = ({
     {
       id: "investments",
       content: (
-        <CardFace showCenterLogo={false}>
-          <div className="relative h-full p-5 flex flex-col">
-            <div className="flex items-start justify-between">
+        <CardFace showChip={false}>
+          <div className="relative h-full p-5 flex flex-col text-[#FFD700]">
+            <div className="flex items-start justify-between mt-10">
               <div className="flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-[#FFD700]" />
-                <span className="text-[10px] uppercase tracking-[0.15em] text-white/60">Total Investments</span>
+                <TrendingUp className="h-5 w-5" />
+                <span className="text-sm uppercase tracking-wide text-white/80">Total Investments</span>
               </div>
-              <MastercardCircles className="h-7 w-auto" />
+              <ContactlessSymbol />
             </div>
 
-            <div className="mt-2">
-              <p className="text-2xl md:text-3xl font-bold text-[#FFD700] tracking-wider">
+            <div className="mt-4">
+              <p 
+                className="text-2xl md:text-3xl font-bold tracking-wider"
+                style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.6)' }}
+              >
                 {isVisible ? formattedInvestments : maskedAmount}
               </p>
-              <p className={`text-xs font-semibold mt-0.5 ${investmentChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+              <p className={`text-sm font-semibold mt-1 ${investmentChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                 {investmentChange >= 0 ? "+" : ""}{investmentChange.toFixed(2)}% this month
               </p>
             </div>
 
-            <div className="flex-1 mt-2 min-h-[60px]">
+            <div className="flex-1 mt-2 min-h-[50px]">
               <MiniChart data={investmentChartData} color="#FFD700" />
             </div>
 
-            <div className="flex items-center justify-between mt-1">
-              <span className="text-[9px] text-white/50">Swipe for more</span>
+            <div className="flex items-end justify-between">
+              <span className="text-xs text-white/60">Swipe for more</span>
               <div className="text-right">
-                <p className="text-lg font-bold text-[#FFD700] tracking-wider italic">VISA</p>
-                <p className="text-[9px] text-[#C9A227]">Mint</p>
+                <p 
+                  className="text-2xl font-bold"
+                  style={{ fontFamily: 'Arial Black, sans-serif' }}
+                >
+                  VISA
+                </p>
+                <p className="text-sm font-medium tracking-wider">Mint</p>
               </div>
             </div>
           </div>
@@ -282,45 +279,50 @@ const SwipeableBalanceCard = ({
     {
       id: "best-performing",
       content: (
-        <CardFace showCenterLogo={false}>
-          <div className="relative h-full p-5 flex flex-col">
-            <div className="flex items-start justify-between">
+        <CardFace showChip={false}>
+          <div className="relative h-full p-5 flex flex-col text-[#FFD700]">
+            <div className="flex items-start justify-between mt-10">
               <div className="flex items-center gap-2">
-                <Trophy className="h-4 w-4 text-[#FFD700]" />
-                <span className="text-[10px] uppercase tracking-[0.15em] text-white/60">Best Performers</span>
+                <Trophy className="h-5 w-5" />
+                <span className="text-sm uppercase tracking-wide text-white/80">Best Performers</span>
               </div>
-              <MastercardCircles className="h-7 w-auto" />
+              <ContactlessSymbol />
             </div>
 
-            <div className="mt-2">
+            <div className="mt-3">
               {topAssets.length > 0 ? (
                 <div className="flex items-center gap-2">
                   {topAssets.map((asset, idx) => (
-                    <div key={asset.symbol || idx} className="flex-1 text-center bg-white/5 rounded-lg py-1.5 px-1">
-                      <p className="text-[10px] font-semibold text-white/70 truncate">{asset.symbol}</p>
-                      <p className={`text-xs font-bold ${(asset.change || 0) >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                    <div key={asset.symbol || idx} className="flex-1 text-center bg-white/10 rounded-lg py-2 px-1">
+                      <p className="text-xs font-semibold text-white/80 truncate">{asset.symbol}</p>
+                      <p className={`text-sm font-bold ${(asset.change || 0) >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                         {(asset.change || 0) >= 0 ? "+" : ""}{(asset.change || 0).toFixed(1)}%
                       </p>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-xs text-white/50">No investments yet</p>
+                <p className="text-sm text-white/60">No investments yet</p>
               )}
-              <p className={`text-sm font-bold mt-1.5 ${avgPerformance >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+              <p className={`text-base font-bold mt-2 ${avgPerformance >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                 Avg: {avgPerformance >= 0 ? "+" : ""}{avgPerformance.toFixed(2)}%
               </p>
             </div>
 
-            <div className="flex-1 mt-1 min-h-[50px]">
+            <div className="flex-1 mt-1 min-h-[40px]">
               <MiniChart data={bestPerformingChartData} color="#10B981" />
             </div>
 
-            <div className="flex items-center justify-between mt-1">
-              <span className="text-[9px] text-white/50">Swipe back</span>
+            <div className="flex items-end justify-between">
+              <span className="text-xs text-white/60">Swipe back</span>
               <div className="text-right">
-                <p className="text-lg font-bold text-[#FFD700] tracking-wider italic">VISA</p>
-                <p className="text-[9px] text-[#C9A227]">Mint</p>
+                <p 
+                  className="text-2xl font-bold"
+                  style={{ fontFamily: 'Arial Black, sans-serif' }}
+                >
+                  VISA
+                </p>
+                <p className="text-sm font-medium tracking-wider">Mint</p>
               </div>
             </div>
           </div>
@@ -330,10 +332,13 @@ const SwipeableBalanceCard = ({
   ];
 
   return (
-    <div className="relative select-none">
+    <div className="relative select-none" style={{ perspective: '1200px' }}>
       <div
         className="relative w-full overflow-hidden touch-pan-y"
-        style={{ aspectRatio: "1.7 / 1" }}
+        style={{ 
+          aspectRatio: "1.6 / 1",
+          transformStyle: 'preserve-3d',
+        }}
         onTouchStart={handleDragStart}
         onTouchEnd={handleDragEnd}
         onMouseDown={handleDragStart}
@@ -358,14 +363,14 @@ const SwipeableBalanceCard = ({
         <button
           type="button"
           onClick={toggleVisibility}
-          className="absolute top-4 right-14 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20"
+          className="absolute top-12 right-14 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20"
           aria-label={isVisible ? "Hide values" : "Show values"}
         >
-          {isVisible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+          {isVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
         </button>
       </div>
 
-      <div className="flex justify-center gap-2 mt-3">
+      <div className="flex justify-center gap-2 mt-4">
         {cards.map((card, idx) => (
           <button
             key={card.id}
