@@ -70,16 +70,25 @@ const MintLogoSilver = ({ className = "" }) => (
   </svg>
 );
 
-const CardFace = ({ children, isFront = true, isFlipped = false }) => (
+const CardFace = ({ children, isFront = true, isFlipped = false, flipDirection = 1 }) => {
+  const getFrontTransform = () => {
+    if (!isFlipped) return "rotateY(0deg)";
+    return flipDirection > 0 ? "rotateY(-180deg)" : "rotateY(180deg)";
+  };
+  
+  const getBackTransform = () => {
+    if (isFlipped) return "rotateY(0deg)";
+    return flipDirection > 0 ? "rotateY(180deg)" : "rotateY(-180deg)";
+  };
+
+  return (
   <div
     className="absolute inset-0 rounded-[24px] overflow-hidden"
     style={{
       background: "linear-gradient(135deg, #2d1052 0%, #4a1d7a 25%, #6b2fa0 50%, #5a2391 75%, #3d1a6d 100%)",
       boxShadow: "0 25px 50px -12px rgba(91, 33, 182, 0.5)",
       backfaceVisibility: "hidden",
-      transform: isFront 
-        ? (isFlipped ? "rotateY(180deg)" : "rotateY(0deg)")
-        : (isFlipped ? "rotateY(0deg)" : "rotateY(-180deg)"),
+      transform: isFront ? getFrontTransform() : getBackTransform(),
       transition: "transform 0.7s ease-out",
     }}
   >
@@ -123,7 +132,8 @@ const CardFace = ({ children, isFront = true, isFlipped = false }) => (
     </div>
     {children}
   </div>
-);
+  );
+};
 
 const SwipeableBalanceCard = ({
   amount = 0,
@@ -134,6 +144,7 @@ const SwipeableBalanceCard = ({
   onPressMintBalance,
 }) => {
   const [isFlipped, setIsFlipped] = useState(false);
+  const [flipDirection, setFlipDirection] = useState(1);
   const [isVisible, setIsVisible] = useState(() => {
     if (typeof window !== "undefined") {
       const stored = window.localStorage.getItem(VISIBILITY_STORAGE_KEY);
@@ -177,6 +188,7 @@ const SwipeableBalanceCard = ({
     const threshold = 50;
     
     if (Math.abs(diff) > threshold) {
+      setFlipDirection(diff > 0 ? 1 : -1);
       setIsFlipped(!isFlipped);
     }
   };
@@ -195,7 +207,7 @@ const SwipeableBalanceCard = ({
         onMouseDown={handleDragStart}
         onMouseUp={handleDragEnd}
       >
-        <CardFace isFront={true} isFlipped={isFlipped}>
+        <CardFace isFront={true} isFlipped={isFlipped} flipDirection={flipDirection}>
           <div className="relative h-full p-5 flex flex-col">
             <div className="flex items-start justify-between">
               <MintLogoWhite className="h-8 w-auto" />
@@ -225,7 +237,7 @@ const SwipeableBalanceCard = ({
           </div>
         </CardFace>
 
-        <CardFace isFront={false} isFlipped={isFlipped}>
+        <CardFace isFront={false} isFlipped={isFlipped} flipDirection={flipDirection}>
           <div className="relative h-full p-5 flex flex-col">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
@@ -294,7 +306,10 @@ const SwipeableBalanceCard = ({
           <button
             key={idx}
             type="button"
-            onClick={() => setIsFlipped(idx === 1)}
+            onClick={() => {
+              setFlipDirection(idx === 1 ? 1 : -1);
+              setIsFlipped(idx === 1);
+            }}
             className={`h-2 rounded-full transition-all duration-300 ${
               (isFlipped ? 1 : 0) === idx
                 ? "w-6 bg-white"
