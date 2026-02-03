@@ -184,16 +184,11 @@ const SwipeableBalanceCard = ({
     }
   };
 
-  const handleCardClick = (e) => {
-    if (Math.abs(dragStartX - (e.clientX || 0)) < 10) {
-      onPressMintBalance?.();
-    }
-  };
 
   return (
     <div className="relative select-none">
       <div
-        className="relative w-full touch-pan-y cursor-pointer"
+        className="relative w-full touch-pan-y"
         style={{ 
           aspectRatio: "1.7 / 1",
           perspective: "800px",
@@ -202,7 +197,6 @@ const SwipeableBalanceCard = ({
         onTouchEnd={handleDragEnd}
         onMouseDown={handleDragStart}
         onMouseUp={handleDragEnd}
-        onClick={handleCardClick}
       >
         <CardFace showCenterLogo={true} isFront={true} isFlipped={isFlipped}>
           <div className="relative h-full p-5 flex flex-col">
@@ -313,6 +307,21 @@ const SwipeableBalanceCard = ({
           />
         ))}
       </div>
+
+      {onPressMintBalance && (
+        <button
+          type="button"
+          onClick={onPressMintBalance}
+          className="w-full mt-4 py-3 px-6 rounded-xl font-semibold text-white transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
+          style={{
+            background: "linear-gradient(135deg, #2d1052 0%, #4a1d7a 50%, #3d1a6d 100%)",
+            boxShadow: "0 8px 24px -8px rgba(91, 33, 182, 0.5)",
+            fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+          }}
+        >
+          View Breakdown
+        </button>
+      )}
     </div>
   );
 };
