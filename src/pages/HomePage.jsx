@@ -182,6 +182,7 @@ const HomePage = ({
             totalInvestments={investments}
             investmentChange={monthlyChangePercent || 0}
             bestPerformingAssets={bestAssets}
+            userName={displayName}
             onPressMintBalance={handleMintBalancePress}
           />
         </div>

@@ -53,24 +53,87 @@ const MiniChart = ({ data, color = "#FFD700" }) => {
   );
 };
 
-const CardFace = ({ children }) => (
+const MintLogoGold = ({ className = "" }) => (
+  <svg viewBox="0 0 1826.64 722.72" className={className}>
+    <defs>
+      <linearGradient id="gold-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#FFD700" />
+        <stop offset="50%" stopColor="#FFC000" />
+        <stop offset="100%" stopColor="#DAA520" />
+      </linearGradient>
+    </defs>
+    <g>
+      <path fill="url(#gold-gradient)" d="M1089.47,265.13c25.29,12.34,16.69,50.37-11.45,50.63h0s-512.36,0-512.36,0c-14.73,0-26.67,11.94-26.67,26.67v227.94c0,14.73-11.94,26.67-26.67,26.67H26.67c-14.73,0-26.67-11.94-26.67-26.67v-248.55c0-9.54,5.1-18.36,13.38-23.12L526.75,3.55c7.67-4.41,17.03-4.73,24.99-.85l537.73,262.43Z"/>
+      <path fill="url(#gold-gradient)" d="M737.17,457.58c-25.29-12.34-16.69-50.37,11.45-50.63h0s512.36,0,512.36,0c14.73,0,26.67-11.94,26.67-26.67v-227.94c0-14.73,11.94-26.67,26.67-26.67h485.66c14.73,0,26.67,11.94,26.67,26.67v248.55c0,9.54-5.1,18.36-13.38,23.12l-513.38,295.15c-7.67,4.41-17.03,4.73-24.99.85l-537.73-262.43Z"/>
+    </g>
+  </svg>
+);
+
+const MintLogoSilver = ({ className = "" }) => (
+  <svg viewBox="0 0 1826.64 722.72" className={className}>
+    <g opacity="0.08">
+      <path fill="#C0C0C0" d="M1089.47,265.13c25.29,12.34,16.69,50.37-11.45,50.63h0s-512.36,0-512.36,0c-14.73,0-26.67,11.94-26.67,26.67v227.94c0,14.73-11.94,26.67-26.67,26.67H26.67c-14.73,0-26.67-11.94-26.67-26.67v-248.55c0-9.54,5.1-18.36,13.38-23.12L526.75,3.55c7.67-4.41,17.03-4.73,24.99-.85l537.73,262.43Z"/>
+      <path fill="#C0C0C0" d="M737.17,457.58c-25.29-12.34-16.69-50.37,11.45-50.63h0s512.36,0,512.36,0c14.73,0,26.67-11.94,26.67-26.67v-227.94c0-14.73,11.94-26.67,26.67-26.67h485.66c14.73,0,26.67,11.94,26.67,26.67v248.55c0,9.54-5.1,18.36-13.38,23.12l-513.38,295.15c-7.67,4.41-17.03,4.73-24.99.85l-537.73-262.43Z"/>
+    </g>
+  </svg>
+);
+
+const MastercardCircles = ({ className = "" }) => (
+  <svg viewBox="0 0 48 32" className={className}>
+    <circle cx="16" cy="16" r="14" fill="rgba(255,255,255,0.25)" />
+    <circle cx="32" cy="16" r="14" fill="rgba(255,255,255,0.4)" />
+  </svg>
+);
+
+const CardFace = ({ children, showCenterLogo = true }) => (
   <div
     className="absolute inset-0 rounded-[24px] overflow-hidden"
     style={{
-      background: "linear-gradient(135deg, #1a0a2e 0%, #3b1b7a 35%, #5b21b6 70%, #4c1d95 100%)",
-      boxShadow: "0 25px 50px -12px rgba(91, 33, 182, 0.4)",
+      background: "linear-gradient(135deg, #2d1052 0%, #4a1d7a 25%, #6b2fa0 50%, #5a2391 75%, #3d1a6d 100%)",
+      boxShadow: "0 25px 50px -12px rgba(91, 33, 182, 0.5)",
     }}
   >
     <div
-      className="absolute inset-0 opacity-15"
+      className="absolute inset-0"
       style={{
         backgroundImage: `
-          repeating-linear-gradient(45deg, transparent, transparent 20px, rgba(255,255,255,0.03) 20px, rgba(255,255,255,0.03) 40px),
-          repeating-linear-gradient(-45deg, transparent, transparent 20px, rgba(255,255,255,0.03) 20px, rgba(255,255,255,0.03) 40px)
+          repeating-linear-gradient(
+            45deg,
+            transparent,
+            transparent 8px,
+            rgba(255,255,255,0.02) 8px,
+            rgba(255,255,255,0.02) 9px
+          ),
+          repeating-linear-gradient(
+            -45deg,
+            transparent,
+            transparent 8px,
+            rgba(255,255,255,0.02) 8px,
+            rgba(255,255,255,0.02) 9px
+          ),
+          repeating-linear-gradient(
+            60deg,
+            transparent,
+            transparent 15px,
+            rgba(255,255,255,0.015) 15px,
+            rgba(255,255,255,0.015) 16px
+          ),
+          repeating-linear-gradient(
+            -60deg,
+            transparent,
+            transparent 15px,
+            rgba(255,255,255,0.015) 15px,
+            rgba(255,255,255,0.015) 16px
+          )
         `,
       }}
     />
-    <div className="absolute top-[45%] left-[40%] w-32 h-32 rounded-full border border-white/10" />
+    {showCenterLogo && (
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <MintLogoSilver className="w-40 h-auto" />
+      </div>
+    )}
+    <div className="absolute top-[48%] left-[42%] w-24 h-24 rounded-full border border-white/10" />
     {children}
   </div>
 );
@@ -80,6 +143,7 @@ const SwipeableBalanceCard = ({
   totalInvestments = 0,
   investmentChange = 0,
   bestPerformingAssets = [],
+  userName = "",
   onPressMintBalance,
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -148,31 +212,30 @@ const SwipeableBalanceCard = ({
     {
       id: "balance",
       content: (
-        <CardFace>
+        <CardFace showCenterLogo={true}>
           <div className="relative h-full p-5 flex flex-col">
             <div className="flex items-start justify-between">
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.2em] text-white/60 mb-0.5">MINT BALANCE</p>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-5 h-5 rounded-full bg-white/20" />
-                <div className="w-5 h-5 rounded-full bg-white/35 -ml-2" />
-              </div>
+              <MintLogoGold className="h-7 w-auto" />
+              <MastercardCircles className="h-8 w-auto" />
             </div>
 
             <div className="flex-1 flex items-center justify-center">
-              <p className="text-3xl md:text-4xl font-bold text-[#FFD700] tracking-wider">
+              <p className="text-3xl md:text-4xl font-bold text-[#FFD700] tracking-wider font-mono">
                 {isVisible ? formattedAmount : maskedAmount}
               </p>
             </div>
 
             <div className="flex items-end justify-between">
               <div>
-                <p className="text-[10px] uppercase tracking-widest text-white/50">MINT MEMBER</p>
+                <p className="text-[11px] uppercase tracking-[0.15em] text-[#C9A227] font-medium">
+                  {userName || "MINT MEMBER"}
+                </p>
               </div>
               <div className="text-right">
-                <p className="text-lg font-bold text-[#FFD700] tracking-wider">MINT</p>
-                <p className="text-[9px] text-white/50">AlgoHive Money</p>
+                <p className="text-xl font-bold text-[#FFD700] tracking-wider italic" style={{ fontFamily: "Arial, sans-serif" }}>
+                  VISA
+                </p>
+                <p className="text-[10px] text-[#C9A227] tracking-wide">Mint</p>
               </div>
             </div>
           </div>
@@ -182,17 +245,14 @@ const SwipeableBalanceCard = ({
     {
       id: "investments",
       content: (
-        <CardFace>
+        <CardFace showCenterLogo={false}>
           <div className="relative h-full p-5 flex flex-col">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-[#FFD700]" />
                 <span className="text-[10px] uppercase tracking-[0.15em] text-white/60">Total Investments</span>
               </div>
-              <div className="flex items-center gap-1">
-                <div className="w-5 h-5 rounded-full bg-white/20" />
-                <div className="w-5 h-5 rounded-full bg-white/35 -ml-2" />
-              </div>
+              <MastercardCircles className="h-7 w-auto" />
             </div>
 
             <div className="mt-2">
@@ -208,9 +268,12 @@ const SwipeableBalanceCard = ({
               <MiniChart data={investmentChartData} color="#FFD700" />
             </div>
 
-            <div className="flex items-center justify-between text-[9px] text-white/50 mt-1">
-              <span>Swipe for more</span>
-              <span className="font-bold text-[#FFD700] text-sm tracking-wider">MINT</span>
+            <div className="flex items-center justify-between mt-1">
+              <span className="text-[9px] text-white/50">Swipe for more</span>
+              <div className="text-right">
+                <p className="text-lg font-bold text-[#FFD700] tracking-wider italic">VISA</p>
+                <p className="text-[9px] text-[#C9A227]">Mint</p>
+              </div>
             </div>
           </div>
         </CardFace>
@@ -219,17 +282,14 @@ const SwipeableBalanceCard = ({
     {
       id: "best-performing",
       content: (
-        <CardFace>
+        <CardFace showCenterLogo={false}>
           <div className="relative h-full p-5 flex flex-col">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
                 <Trophy className="h-4 w-4 text-[#FFD700]" />
                 <span className="text-[10px] uppercase tracking-[0.15em] text-white/60">Best Performers</span>
               </div>
-              <div className="flex items-center gap-1">
-                <div className="w-5 h-5 rounded-full bg-white/20" />
-                <div className="w-5 h-5 rounded-full bg-white/35 -ml-2" />
-              </div>
+              <MastercardCircles className="h-7 w-auto" />
             </div>
 
             <div className="mt-2">
@@ -256,9 +316,12 @@ const SwipeableBalanceCard = ({
               <MiniChart data={bestPerformingChartData} color="#10B981" />
             </div>
 
-            <div className="flex items-center justify-between text-[9px] text-white/50 mt-1">
-              <span>Swipe back</span>
-              <span className="font-bold text-[#FFD700] text-sm tracking-wider">MINT</span>
+            <div className="flex items-center justify-between mt-1">
+              <span className="text-[9px] text-white/50">Swipe back</span>
+              <div className="text-right">
+                <p className="text-lg font-bold text-[#FFD700] tracking-wider italic">VISA</p>
+                <p className="text-[9px] text-[#C9A227]">Mint</p>
+              </div>
             </div>
           </div>
         </CardFace>
@@ -295,7 +358,7 @@ const SwipeableBalanceCard = ({
         <button
           type="button"
           onClick={toggleVisibility}
-          className="absolute top-4 right-12 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20"
+          className="absolute top-4 right-14 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20"
           aria-label={isVisible ? "Hide values" : "Show values"}
         >
           {isVisible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
