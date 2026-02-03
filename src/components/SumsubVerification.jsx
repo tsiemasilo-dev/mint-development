@@ -29,6 +29,7 @@ const SumsubVerification = ({ onVerified }) => {
   const [userId, setUserId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [rejectionError, setRejectionError] = useState(null);
   const [verificationComplete, setVerificationComplete] = useState(false);
   const [verificationStatus, setVerificationStatus] = useState(null);
 
@@ -170,7 +171,12 @@ const SumsubVerification = ({ onVerified }) => {
           } else if (payload?.reviewResult?.reviewAnswer === "RED") {
             setVerificationStatus("rejected");
             updateKycStatus(false);
-            setError("Verification was not successful. Please try again or contact support.");
+            const rejectType = payload?.reviewResult?.reviewRejectType;
+            if (rejectType === "RETRY") {
+              setRejectionError("Your verification needs additional information. Please try again with clearer documents.");
+            } else {
+              setRejectionError("Verification was not successful. Please contact support for assistance.");
+            }
           }
         } else if (payload?.reviewStatus === "pending") {
           // Mark as submitted when review is pending
@@ -218,6 +224,39 @@ const SumsubVerification = ({ onVerified }) => {
         </div>
         <h3 className="text-lg font-medium text-slate-800 mb-2">Initializing Verification</h3>
         <p className="text-sm text-slate-500">Please wait while we set up your identity verification...</p>
+      </div>
+    );
+  }
+
+  if (rejectionError) {
+    return (
+      <div className="w-full max-w-md mx-auto text-center py-8">
+        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-red-500 to-rose-600 flex items-center justify-center">
+          <AlertCircleIcon className="w-8 h-8 text-white" />
+        </div>
+        <h3 className="text-lg font-medium text-slate-800 mb-2">Verification Needs Attention</h3>
+        <p className="text-sm text-slate-500 mb-4">{rejectionError}</p>
+        <div className="bg-slate-50 rounded-xl p-4 text-left mb-4">
+          <p className="text-xs text-slate-600 mb-2">Tips for successful verification:</p>
+          <ul className="text-xs text-slate-500 space-y-1 list-disc list-inside">
+            <li>Ensure good lighting when taking photos</li>
+            <li>Make sure documents are clear and readable</li>
+            <li>Use a valid, unexpired ID document</li>
+            <li>Follow all on-screen instructions carefully</li>
+          </ul>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setRejectionError(null);
+            setVerificationStatus(null);
+            window.location.reload();
+          }}
+          className="px-6 py-2.5 rounded-xl font-medium text-white transition-all duration-200"
+          style={{ background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)' }}
+        >
+          Try Again
+        </button>
       </div>
     );
   }
