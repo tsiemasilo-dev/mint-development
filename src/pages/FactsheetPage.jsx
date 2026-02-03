@@ -1,8 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
-import { ArrowLeft, X, Info, Heart, TrendingUp, TrendingDown } from "lucide-react";
+import { ArrowLeft, X, Info, Heart } from "lucide-react";
 import { supabase } from "../lib/supabase";
-import { formatChangePct, formatChangeAbs, getChangeColor } from "../lib/strategyData.js";
-import { formatCurrency } from "../lib/formatCurrency";
+import { formatChangePct, getChangeColor } from "../lib/strategyData.js";
 import {
   Area,
   Line,
@@ -247,13 +246,30 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
     : null;
   const formattedReturn = periodReturn != null
     ? `${periodReturn >= 0 ? "+" : ""}${periodReturn.toFixed(2)}%`
-    : "Data unavailable";
+    : "—";
+  const allTimeReturn = analytics?.latest_value != null
+    ? (Number(analytics.latest_value) / 100 - 1)
+    : null;
+  const formattedAllTimeReturn = allTimeReturn != null
+    ? `${allTimeReturn >= 0 ? "+" : ""}${(allTimeReturn * 100).toFixed(2)}%`
+    : "—";
+  const returnTextClass = periodReturn > 0
+    ? "text-emerald-600"
+    : periodReturn < 0
+      ? "text-rose-600"
+      : "text-slate-500";
+  const allTimeTextClass = allTimeReturn > 0
+    ? "text-emerald-600"
+    : allTimeReturn < 0
+      ? "text-rose-600"
+      : "text-slate-500";
+  const chartLineColor = periodReturn > 0
+    ? "#16a34a"
+    : periodReturn < 0
+      ? "#dc2626"
+      : "#94a3b8";
     
   // Get current metrics
-  const currentPrice = analytics?.latest_value ?? currentStrategy.last_close;
-  const changePct = currentStrategy.change_pct ?? null;
-  const changeAbs = currentStrategy.change_abs ?? null;
-  const isPositive = changePct != null && changePct >= 0;
 
   // Calculate cumulative returns for calendar
   const calendarData = useMemo(() => {
@@ -332,6 +348,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
   // Auto-scroll removed to allow manual scrolling.
 
   const getReturnColor = (value) => {
+    if (value == null) return "bg-slate-50 text-slate-600";
     if (value > 0) return "bg-emerald-50 text-emerald-600";
     if (value < 0) return "bg-rose-50 text-rose-600";
     return "bg-slate-50 text-slate-600";
@@ -373,33 +390,18 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
           </div>
 
           <div className="mt-4 space-y-1">
-            {currentPrice != null ? (
-              <>
-                <div className="flex items-baseline gap-3">
-                  <p className="text-3xl font-semibold text-slate-900">
-                    {formatCurrency(currentPrice, currentStrategy.currency || 'R')}
-                  </p>
-                  {changePct != null && (
-                    <div className={`flex items-center gap-1 text-sm font-semibold ${getChangeColor(changePct)}`}>
-                      {isPositive ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-                      <span>{formatChangePct(changePct)}</span>
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 text-xs text-slate-500">
-                  <span>Today {changeAbs != null ? formatChangeAbs(changeAbs) : ''}</span>
-                  <span>•</span>
-                  <span>{timeframe} {formattedReturn}</span>
-                </div>
-              </>
-            ) : (
-              <div className="flex items-center gap-3">
-                <p className="text-3xl font-semibold text-slate-900">{formattedReturn}</p>
-                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-600">
-                  {timeframe} return
-                </span>
+            <div className="flex items-baseline gap-3">
+              <p className={`text-3xl font-semibold ${returnTextClass}`}>{formattedReturn}</p>
+              <div className="text-xs">
+                <p className={`font-semibold ${allTimeTextClass}`}>{formattedAllTimeReturn}</p>
+                <p className="text-[10px] font-semibold text-slate-400">All-time</p>
               </div>
-            )}
+            </div>
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <span>{timeframe} return</span>
+              <span>•</span>
+              <span className={returnTextClass}>{formattedReturn}</span>
+            </div>
             <p className="text-xs text-slate-500">
               {lastUpdatedLabel ? `Last updated ${lastUpdatedLabel}` : ""}
             </p>
@@ -431,8 +433,8 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
                 >
                   <defs>
                     <linearGradient id="factsheetGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#5b21b6" stopOpacity={0.25} />
-                      <stop offset="70%" stopColor="#3b1b7a" stopOpacity={0.1} />
+                      <stop offset="0%" stopColor={chartLineColor} stopOpacity={0.25} />
+                      <stop offset="70%" stopColor={chartLineColor} stopOpacity={0.1} />
                       <stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
                     </linearGradient>
                   </defs>
@@ -483,7 +485,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
                   <Line
                     type="monotone"
                     dataKey="returnPct"
-                    stroke="#5b21b6"
+                    stroke={chartLineColor}
                     strokeWidth={2}
                     dot={false}
                     activeDot={false}
@@ -751,22 +753,25 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
               {analyticsMessage}
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-3">
-              {monthNames.map((label, index) => {
-                const monthKey = String(index + 1).padStart(2, "0");
-                const value = calendarData[String(calendarYear)]?.[monthKey];
-                return (
-                  <div
-                    key={`${calendarYear}-${label}`}
-                    className={`rounded-2xl px-3 py-3 text-center text-xs font-semibold ${getReturnColor(value || 0)}`}
-                  >
-                    <p className="text-[11px] font-semibold text-slate-600">{label}</p>
-                    <p className="mt-1 text-sm text-slate-900">
-                      {value == null ? "—" : `${(Number(value) * 100).toFixed(2)}%`}
-                    </p>
-                  </div>
-                );
-              })}
+            <div>
+              <p className="mb-2 text-xs font-semibold text-slate-500">{calendarYear}</p>
+              <div className="grid grid-cols-3 gap-3">
+                {monthNames.map((label, index) => {
+                  const monthKey = String(index + 1).padStart(2, "0");
+                  const value = calendarData[String(calendarYear)]?.[monthKey];
+                  return (
+                    <div
+                      key={`${calendarYear}-${label}`}
+                      className={`rounded-2xl px-3 py-3 text-center text-xs font-semibold ${getReturnColor(value)}`}
+                    >
+                      <p className="text-[11px] font-semibold text-slate-600">{label}</p>
+                      <p className="mt-1 text-sm text-slate-900">
+                        {value == null ? "—" : `${(Number(value) * 100).toFixed(2)}%`}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </section>
