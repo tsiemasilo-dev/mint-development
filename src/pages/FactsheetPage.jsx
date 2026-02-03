@@ -392,10 +392,6 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
           <div className="mt-4 space-y-1">
             <div className="flex items-baseline gap-3">
               <p className={`text-3xl font-semibold ${returnTextClass}`}>{formattedReturn}</p>
-              <div className="text-xs">
-                <p className={`font-semibold ${allTimeTextClass}`}>{formattedAllTimeReturn}</p>
-                <p className="text-[10px] font-semibold text-slate-400">All-time</p>
-              </div>
             </div>
             <div className="flex items-center gap-2 text-xs text-slate-500">
               <span>{timeframe} return</span>
@@ -514,6 +510,11 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
                 </button>
               );
             })}
+            <span
+              className={`rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold ${allTimeTextClass}`}
+            >
+              All-time {formattedAllTimeReturn}
+            </span>
           </div>
 
           <div className="mt-4 flex items-center gap-3 text-[11px] font-semibold text-slate-400">
