@@ -16,7 +16,7 @@ const MintLogoWhite = ({ className = "" }) => (
 
 const MintLogoSilver = ({ className = "" }) => (
   <svg viewBox="0 0 1826.64 722.72" className={className}>
-    <g opacity="0.08">
+    <g opacity="0.12">
       <path fill="#C0C0C0" d="M1089.47,265.13c25.29,12.34,16.69,50.37-11.45,50.63h0s-512.36,0-512.36,0c-14.73,0-26.67,11.94-26.67,26.67v227.94c0,14.73-11.94,26.67-26.67,26.67H26.67c-14.73,0-26.67-11.94-26.67-26.67v-248.55c0-9.54,5.1-18.36,13.38-23.12L526.75,3.55c7.67-4.41,17.03-4.73,24.99-.85l537.73,262.43Z"/>
       <path fill="#C0C0C0" d="M737.17,457.58c-25.29-12.34-16.69-50.37,11.45-50.63h0s512.36,0,512.36,0c14.73,0,26.67-11.94,26.67-26.67v-227.94c0-14.73,11.94-26.67,26.67-26.67h485.66c14.73,0,26.67,11.94,26.67,26.67v248.55c0,9.54-5.1,18.36-13.38,23.12l-513.38,295.15c-7.67,4.41-17.03,4.73-24.99.85l-537.73-262.43Z"/>
     </g>
@@ -135,10 +135,11 @@ const MintBalanceCard = ({
       />
       
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <MintLogoSilver className="w-40 h-auto" />
+        <div className="relative flex items-center justify-center">
+          <div className="absolute w-44 h-44 rounded-full border border-white/10" />
+          <MintLogoSilver className="w-52 h-auto" />
+        </div>
       </div>
-      
-      <div className="absolute top-[48%] left-[42%] w-24 h-24 rounded-full border border-white/10 pointer-events-none" />
 
       <div className="relative">
         <div className="flex items-start justify-between">

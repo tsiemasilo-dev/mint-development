@@ -63,14 +63,14 @@ const MintLogoWhite = ({ className = "" }) => (
 
 const MintLogoSilver = ({ className = "" }) => (
   <svg viewBox="0 0 1826.64 722.72" className={className}>
-    <g opacity="0.08">
+    <g opacity="0.12">
       <path fill="#C0C0C0" d="M1089.47,265.13c25.29,12.34,16.69,50.37-11.45,50.63h0s-512.36,0-512.36,0c-14.73,0-26.67,11.94-26.67,26.67v227.94c0,14.73-11.94,26.67-26.67,26.67H26.67c-14.73,0-26.67-11.94-26.67-26.67v-248.55c0-9.54,5.1-18.36,13.38-23.12L526.75,3.55c7.67-4.41,17.03-4.73,24.99-.85l537.73,262.43Z"/>
       <path fill="#C0C0C0" d="M737.17,457.58c-25.29-12.34-16.69-50.37,11.45-50.63h0s512.36,0,512.36,0c14.73,0,26.67-11.94,26.67-26.67v-227.94c0-14.73,11.94-26.67,26.67-26.67h485.66c14.73,0,26.67,11.94,26.67,26.67v248.55c0,9.54-5.1,18.36-13.38,23.12l-513.38,295.15c-7.67,4.41-17.03,4.73-24.99.85l-537.73-262.43Z"/>
     </g>
   </svg>
 );
 
-const CardFace = ({ children, showCenterLogo = true, isFront = true, isFlipped = false }) => (
+const CardFace = ({ children, isFront = true, isFlipped = false }) => (
   <div
     className="absolute inset-0 rounded-[24px] overflow-hidden"
     style={{
@@ -118,12 +118,12 @@ const CardFace = ({ children, showCenterLogo = true, isFront = true, isFlipped =
         `,
       }}
     />
-    {showCenterLogo && (
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <MintLogoSilver className="w-40 h-auto" />
+    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+      <div className="relative flex items-center justify-center">
+        <div className="absolute w-44 h-44 rounded-full border border-white/10" />
+        <MintLogoSilver className="w-52 h-auto" />
       </div>
-    )}
-    <div className="absolute top-[48%] left-[42%] w-24 h-24 rounded-full border border-white/10" />
+    </div>
     {children}
   </div>
 );
@@ -198,7 +198,7 @@ const SwipeableBalanceCard = ({
         onMouseDown={handleDragStart}
         onMouseUp={handleDragEnd}
       >
-        <CardFace showCenterLogo={true} isFront={true} isFlipped={isFlipped}>
+        <CardFace isFront={true} isFlipped={isFlipped}>
           <div className="relative h-full p-5 flex flex-col">
             <div className="flex items-start justify-between">
               <MintLogoWhite className="h-8 w-auto" />
@@ -228,7 +228,7 @@ const SwipeableBalanceCard = ({
           </div>
         </CardFace>
 
-        <CardFace showCenterLogo={false} isFront={false} isFlipped={isFlipped}>
+        <CardFace isFront={false} isFlipped={isFlipped}>
           <div className="relative h-full p-5 flex flex-col">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
@@ -312,14 +312,14 @@ const SwipeableBalanceCard = ({
         <button
           type="button"
           onClick={onPressMintBalance}
-          className="w-full mt-4 py-3 px-6 rounded-xl font-semibold text-white transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
+          className="mt-4 py-2.5 px-5 rounded-lg text-sm font-medium text-white/90 transition-all duration-300 hover:text-white hover:bg-white/10 active:scale-[0.98] mx-auto flex items-center gap-2"
           style={{
-            background: "linear-gradient(135deg, #2d1052 0%, #4a1d7a 50%, #3d1a6d 100%)",
-            boxShadow: "0 8px 24px -8px rgba(91, 33, 182, 0.5)",
+            background: "rgba(255,255,255,0.05)",
+            border: "1px solid rgba(255,255,255,0.15)",
             fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
           }}
         >
-          View Breakdown
+          View Investment Breakdown
         </button>
       )}
     </div>
