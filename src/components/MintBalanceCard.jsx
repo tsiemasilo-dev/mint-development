@@ -135,10 +135,7 @@ const MintBalanceCard = ({
       />
       
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <div className="relative flex items-center justify-center">
-          <div className="absolute w-44 h-44 rounded-full border border-white/10" />
-          <MintLogoSilver className="w-52 h-auto" />
-        </div>
+        <MintLogoSilver className="w-52 h-auto" />
       </div>
 
       <div className="relative">
