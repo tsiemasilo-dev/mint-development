@@ -207,16 +207,23 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
     };
   }, [currentStrategy]);
 
-  // Generate chart data from analytics curves
-  const data = useMemo(() => {
+  // Generate chart data from analytics curves (index levels)
+  const { data, yDomain, baseIndexValue } = useMemo(() => {
     const curves = analytics?.curves || {};
     const series = Array.isArray(curves[timeframe]) ? curves[timeframe] : [];
     const labelIndices = series.length ? [0, Math.floor(series.length / 2), series.length - 1] : [];
+    const values = series.map((point) => point?.v ?? 0);
+    const minValue = values.length ? Math.min(...values) : 0;
+    const maxValue = values.length ? Math.max(...values) : 0;
+    const padding = (maxValue - minValue) * 0.2;
+    const domain = values.length
+      ? [minValue - padding, maxValue + padding]
+      : [0, 0];
 
-    return series.map((point, index) => {
+    const mapped = series.map((point, index) => {
       const date = point?.d ? new Date(point.d) : null;
       const dateLabel = labelIndices.includes(index) && date
-        ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        ? date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
         : "";
       return {
         label: index + 1,
@@ -224,11 +231,17 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
         returnPct: point?.v ?? 0,
       };
     });
+
+    return {
+      data: mapped,
+      yDomain: domain,
+      baseIndexValue: values.length ? values[0] : null,
+    };
   }, [analytics, timeframe]);
 
   const lastIndex = data.length - 1;
   const lastValue = data[lastIndex]?.returnPct ?? null;
-  const firstValue = data[0]?.returnPct ?? null;
+  const firstValue = baseIndexValue;
   const periodReturn = data.length > 1 && firstValue
     ? ((lastValue - firstValue) / firstValue) * 100
     : null;
@@ -423,6 +436,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
                       <stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
                     </linearGradient>
                   </defs>
+                  <ReferenceLine y={100} stroke="#e2e8f0" strokeDasharray="3 3" />
                   {activeLabel ? (
                     <>
                       <ReferenceLine
@@ -440,7 +454,13 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
                           boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
                         }}
                         labelStyle={{ display: "none" }}
-                        formatter={(value) => [`${value.toFixed(2)}%`, "Return"]}
+                        formatter={(value) => {
+                          if (!baseIndexValue) {
+                            return [`${Number(value).toFixed(2)}`, "Index"];
+                          }
+                          const delta = ((Number(value) - baseIndexValue) / baseIndexValue) * 100;
+                          return [`${delta >= 0 ? "+" : ""}${delta.toFixed(2)}%`, "Change"];
+                        }}
                         cursor={{ strokeDasharray: "3 3" }}
                       />
                     </>
@@ -452,7 +472,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
                     tickLine={false}
                     height={24}
                   />
-                  <YAxis hide />
+                  <YAxis hide domain={yDomain} />
                   <Area
                     type="monotone"
                     dataKey="returnPct"
