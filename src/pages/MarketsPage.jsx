@@ -6,9 +6,8 @@ import { useProfile } from "../lib/useProfile";
 import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight } from "lucide-react";
 import NotificationBell from "../components/NotificationBell";
 import Skeleton from "../components/Skeleton";
-import { StrategyReturnHeaderChart } from "../components/StrategyReturnHeaderChart";
 import { ChartContainer } from "../components/ui/line-charts-2";
-import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer } from "recharts";
+import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatCurrency } from "../lib/formatCurrency";
 
 // Fallback sparkline data for strategies without price history
@@ -37,6 +36,13 @@ const minInvestmentOptions = ["R500+", "R2,500+", "R10,000+"];
 const exposureOptions = ["Local", "Global", "Mixed", "Equities", "ETFs"];
 const timeHorizonOptions = ["Short", "Medium", "Long"];
 const strategySectorOptions = ["Technology", "Consumer", "Healthcare", "Energy", "Financials"];
+const strategyTimeframeOptions = [
+  { key: "1W", label: "1W" },
+  { key: "1M", label: "1M" },
+  { key: "3M", label: "3M" },
+  { key: "6M", label: "6M" },
+  { key: "YTD", label: "YTD" },
+];
 
 // Mini chart component for strategy cards
 const StrategyMiniChart = ({ values }) => {
@@ -135,6 +141,11 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const [newsSearchQuery, setNewsSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState("invest"); // "openstrategies", "invest", "news"
   const [selectedStrategy, setSelectedStrategy] = useState(null);
+  const [selectedStrategyTimeframe, setSelectedStrategyTimeframe] = useState("1M");
+  const [selectedStrategyActiveLabel, setSelectedStrategyActiveLabel] = useState(null);
+  const [selectedStrategyAnalytics, setSelectedStrategyAnalytics] = useState(null);
+  const [selectedStrategyAnalyticsLoading, setSelectedStrategyAnalyticsLoading] = useState(false);
+  const [selectedStrategyAnalyticsError, setSelectedStrategyAnalyticsError] = useState(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [sheetOffset, setSheetOffset] = useState(0);
   const dragStartY = useRef(null);
@@ -167,6 +178,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
     () => new Map(holdingsSecurities.map((security) => [security.symbol, security])),
     [holdingsSecurities],
   );
+  const previewGradientId = useId();
 
   const getStrategyHoldingsSnapshot = (strategy) => {
     if (!strategy?.holdings || !Array.isArray(strategy.holdings)) return [];
@@ -522,6 +534,128 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
     }, 0);
     return total > 0 ? total : null;
   };
+
+  useEffect(() => {
+    if (!selectedStrategy) {
+      setSelectedStrategyAnalytics(null);
+      setSelectedStrategyAnalyticsError(null);
+      setSelectedStrategyAnalyticsLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+    const fetchAnalytics = async () => {
+      if (!supabase) {
+        if (isMounted) {
+          setSelectedStrategyAnalytics(null);
+          setSelectedStrategyAnalyticsError("Database not connected");
+        }
+        return;
+      }
+
+      setSelectedStrategyAnalyticsLoading(true);
+      setSelectedStrategyAnalyticsError(null);
+
+      try {
+        const strategyId = selectedStrategy.id || selectedStrategy.strategy_id;
+        if (!strategyId) {
+          setSelectedStrategyAnalytics(null);
+          setSelectedStrategyAnalyticsError("Strategy not found");
+          return;
+        }
+
+        const { data, error } = await supabase
+          .from("strategy_analytics")
+          .select("strategy_id, as_of_date, base_currency, latest_value, curves, computed_at, error")
+          .eq("strategy_id", strategyId)
+          .maybeSingle();
+
+        if (error) throw error;
+        if (isMounted) {
+          setSelectedStrategyAnalytics(data || null);
+          if (data?.error) {
+            setSelectedStrategyAnalyticsError(data.error);
+          }
+        }
+      } catch (error) {
+        if (isMounted) {
+          setSelectedStrategyAnalytics(null);
+          setSelectedStrategyAnalyticsError(error.message || "Unable to load analytics");
+        }
+      } finally {
+        if (isMounted) {
+          setSelectedStrategyAnalyticsLoading(false);
+        }
+      }
+    };
+
+    fetchAnalytics();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedStrategy]);
+
+  const availablePreviewTimeframes = useMemo(() => {
+    const curves = selectedStrategyAnalytics?.curves || {};
+    return strategyTimeframeOptions
+      .map((option) => option.key)
+      .filter((key) => Array.isArray(curves[key]) && curves[key].length > 0);
+  }, [selectedStrategyAnalytics]);
+
+  useEffect(() => {
+    if (!availablePreviewTimeframes.length) return;
+    setSelectedStrategyTimeframe((prev) => {
+      if (availablePreviewTimeframes.includes(prev)) return prev;
+      if (availablePreviewTimeframes.includes("1M")) return "1M";
+      return availablePreviewTimeframes[0];
+    });
+  }, [availablePreviewTimeframes]);
+
+  const { previewChartData, previewChartDomain, previewBaseIndexValue } = useMemo(() => {
+    const curves = selectedStrategyAnalytics?.curves || {};
+    const series = Array.isArray(curves[selectedStrategyTimeframe]) ? curves[selectedStrategyTimeframe] : [];
+    const labelIndices = series.length ? [0, Math.floor(series.length / 2), series.length - 1] : [];
+    const values = series.map((point) => point?.v ?? 0);
+    const minValue = values.length ? Math.min(...values) : 0;
+    const maxValue = values.length ? Math.max(...values) : 0;
+    const padding = (maxValue - minValue) * 0.2;
+    const domain = values.length
+      ? [minValue - padding, maxValue + padding]
+      : [0, 0];
+    const mapped = series.map((point, index) => {
+      const date = point?.d ? new Date(point.d) : null;
+      const dateLabel = labelIndices.includes(index) && date
+        ? date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+        : "";
+      return {
+        label: index + 1,
+        dateLabel,
+        returnPct: point?.v ?? 0,
+      };
+    });
+
+    return {
+      previewChartData: mapped,
+      previewChartDomain: domain,
+      previewBaseIndexValue: values.length ? values[0] : null,
+    };
+  }, [selectedStrategyAnalytics, selectedStrategyTimeframe]);
+
+  const previewLastIndex = previewChartData.length - 1;
+  const previewLastValue = previewChartData[previewLastIndex]?.returnPct ?? null;
+  const previewFirstValue = previewBaseIndexValue;
+  const previewPeriodReturn = previewChartData.length > 1 && previewFirstValue
+    ? ((previewLastValue - previewFirstValue) / previewFirstValue) * 100
+    : null;
+  const previewChartLineColor = previewPeriodReturn > 0
+    ? "#16a34a"
+    : previewPeriodReturn < 0
+      ? "#dc2626"
+      : "#94a3b8";
+  const previewAnalyticsUnavailable = !selectedStrategyAnalytics || selectedStrategyAnalytics?.error || selectedStrategyAnalyticsError;
+  const previewAnalyticsMessage = selectedStrategyAnalytics?.error || selectedStrategyAnalyticsError
+    ? "Analytics unavailable. Data is being updated."
+    : "Analytics not available yet.";
 
   const resetSheetPosition = () => {
     setSheetOffset(0);
@@ -1295,6 +1429,10 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                       const sparkline = generateSparkline(0);
                       
                       const holdingsSnapshot = getStrategyHoldingsSnapshot(strategy);
+                      const holdingsList = holdingsSnapshot
+                        .slice(0, 3)
+                        .map((holding) => holding.name || holding.symbol)
+                        .filter(Boolean);
                       
                       return (
                       <button
@@ -1368,6 +1506,12 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                             </span>
                           )}
                         </div>
+
+                        {holdingsList.length > 0 && (
+                          <p className="mt-2 text-xs font-medium text-slate-500">
+                            Top holdings: {holdingsList.join(" · ")}
+                          </p>
+                        )}
 
                         {holdingsSnapshot.length > 0 && (
                           <div className="mt-3 flex items-center gap-3">
@@ -1582,6 +1726,115 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                   </>
                 ) : (
                   <p className="text-sm text-slate-500">Data unavailable</p>
+                )}
+              </div>
+
+              <div className="mb-5">
+                <div className="h-44 w-full">
+                  {selectedStrategyAnalyticsLoading ? (
+                    <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-500">
+                      Loading analytics...
+                    </div>
+                  ) : previewAnalyticsUnavailable || previewChartData.length === 0 ? (
+                    <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-500">
+                      {previewAnalyticsMessage}
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart
+                        data={previewChartData}
+                        margin={{ top: 12, right: 16, left: 8, bottom: 28 }}
+                        onMouseMove={(state) => {
+                          if (state?.activeLabel) {
+                            setSelectedStrategyActiveLabel(state.activeLabel);
+                          }
+                        }}
+                        onMouseLeave={() => setSelectedStrategyActiveLabel(null)}
+                      >
+                        <defs>
+                          <linearGradient id={previewGradientId} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={previewChartLineColor} stopOpacity={0.25} />
+                            <stop offset="70%" stopColor={previewChartLineColor} stopOpacity={0.1} />
+                            <stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <ReferenceLine y={100} stroke="#e2e8f0" strokeDasharray="3 3" />
+                        {selectedStrategyActiveLabel ? (
+                          <>
+                            <ReferenceLine
+                              x={selectedStrategyActiveLabel}
+                              stroke="#CBD5E1"
+                              strokeOpacity={0.6}
+                              strokeDasharray="3 3"
+                            />
+                            <Tooltip
+                              contentStyle={{
+                                backgroundColor: "#ffffff",
+                                border: "none",
+                                borderRadius: "20px",
+                                padding: "3px 8px",
+                                boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                              }}
+                              labelStyle={{ display: "none" }}
+                              formatter={(value) => {
+                                if (!previewBaseIndexValue) {
+                                  return [`${Number(value).toFixed(2)}`, "Index"];
+                                }
+                                const delta = ((Number(value) - previewBaseIndexValue) / previewBaseIndexValue) * 100;
+                                return [`${delta >= 0 ? "+" : ""}${delta.toFixed(2)}%`, "Change"];
+                              }}
+                              cursor={{ strokeDasharray: "3 3" }}
+                            />
+                          </>
+                        ) : null}
+                        <XAxis
+                          dataKey="dateLabel"
+                          tick={{ fontSize: 11, fill: "#64748b" }}
+                          axisLine={{ stroke: "#e2e8f0" }}
+                          tickLine={false}
+                          height={24}
+                        />
+                        <YAxis hide domain={previewChartDomain} />
+                        <Area
+                          type="monotone"
+                          dataKey="returnPct"
+                          stroke="transparent"
+                          fill={`url(#${previewGradientId})`}
+                          dot={false}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="returnPct"
+                          stroke={previewChartLineColor}
+                          strokeWidth={2}
+                          dot={false}
+                          activeDot={false}
+                        />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+                {availablePreviewTimeframes.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {strategyTimeframeOptions.map((option) => {
+                      const isDisabled = !availablePreviewTimeframes.includes(option.key);
+                      return (
+                        <button
+                          key={option.key}
+                          type="button"
+                          onClick={() => setSelectedStrategyTimeframe(option.key)}
+                          disabled={isDisabled}
+                          className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+                            selectedStrategyTimeframe === option.key
+                              ? "bg-slate-900 text-white"
+                              : "border border-slate-200 bg-white text-slate-600"
+                          } ${isDisabled ? "opacity-40 cursor-not-allowed" : ""}`}
+                        >
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
               
