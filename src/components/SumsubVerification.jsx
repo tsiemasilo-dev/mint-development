@@ -32,69 +32,12 @@ const SumsubVerification = ({ onVerified }) => {
   const [verificationComplete, setVerificationComplete] = useState(false);
   const [verificationStatus, setVerificationStatus] = useState(null);
 
-  const updateKycStatus = useCallback(async (status) => {
-    if (!supabase) return;
-    
-    try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData?.user?.id) return;
-      
-      const userId = userData.user.id;
-      
-      let updateData = {};
-      if (status === 'verified') {
-        updateData = { kyc_verified: true, kyc_pending: false, kyc_needs_resubmission: false };
-      } else if (status === 'pending') {
-        updateData = { kyc_verified: false, kyc_pending: true, kyc_needs_resubmission: false };
-      } else if (status === 'needs_resubmission') {
-        updateData = { kyc_verified: false, kyc_pending: false, kyc_needs_resubmission: true };
-      } else {
-        updateData = { kyc_verified: false, kyc_pending: false, kyc_needs_resubmission: false };
-      }
-
-      const { data: existing } = await supabase
-        .from("required_actions")
-        .select("id, kyc_verified, kyc_pending, kyc_needs_resubmission")
-        .eq("user_id", userId)
-        .maybeSingle();
-
-      const previousStatus = existing ? {
-        verified: existing.kyc_verified,
-        pending: existing.kyc_pending,
-        needsResubmission: existing.kyc_needs_resubmission,
-      } : null;
-
-      const statusChanged = !previousStatus || 
-        (status === 'verified' && !previousStatus.verified) ||
-        (status === 'pending' && !previousStatus.pending) ||
-        (status === 'needs_resubmission' && !previousStatus.needsResubmission);
-
-      if (existing) {
-        await supabase
-          .from("required_actions")
-          .update(updateData)
-          .eq("user_id", userId);
-      } else {
-        await supabase
-          .from("required_actions")
-          .insert({ user_id: userId, ...updateData });
-      }
-
-      console.log("KYC status update:", { status, previousStatus });
-      
-      window.dispatchEvent(new CustomEvent('kycStatusChanged', { detail: { status } }));
-    } catch (err) {
-      console.error("Failed to update KYC status:", err);
-    }
-  }, []);
-
   useEffect(() => {
     const initializeSumsub = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        // Get current user from Supabase
         let currentUserId = null;
         if (supabase) {
           const { data: userData } = await supabase.auth.getUser();
@@ -102,13 +45,11 @@ const SumsubVerification = ({ onVerified }) => {
         }
         
         if (!currentUserId) {
-          // Generate a temporary ID for demo purposes
           currentUserId = `user_${Date.now()}`;
         }
         
         setUserId(currentUserId);
 
-        // Request access token from backend
         const response = await fetch("/api/sumsub/access-token", {
           method: "POST",
           headers: {
@@ -137,7 +78,6 @@ const SumsubVerification = ({ onVerified }) => {
     initializeSumsub();
   }, []);
 
-  // Handler for token expiration - request a new token
   const accessTokenExpirationHandler = useCallback(async () => {
     try {
       const response = await fetch("/api/sumsub/access-token", {
@@ -161,7 +101,6 @@ const SumsubVerification = ({ onVerified }) => {
     }
   }, [userId]);
 
-  // Handle SDK messages
   const messageHandler = useCallback((type, payload) => {
     console.log("Sumsub SDK message:", type, payload);
 
@@ -173,7 +112,6 @@ const SumsubVerification = ({ onVerified }) => {
       case "idCheck.onApplicantSubmitted":
         console.log("Applicant submitted for review");
         setVerificationStatus("submitted");
-        updateKycStatus('pending');
         break;
         
       case "idCheck.onApplicantResubmitted":
@@ -190,22 +128,18 @@ const SumsubVerification = ({ onVerified }) => {
         if ((reviewStatus === "completed" || reviewStatus === "onHold") && reviewAnswer === "GREEN") {
           setVerificationComplete(true);
           setVerificationStatus("approved");
-          updateKycStatus('verified');
           if (onVerified) {
             onVerified();
           }
         } else if (reviewAnswer === "RED") {
           setVerificationStatus("rejected");
           if (rejectType === "RETRY") {
-            updateKycStatus('needs_resubmission');
             setError("Some documents need to be resubmitted. Please try again with clearer images.");
           } else {
-            updateKycStatus(false);
             setError("Verification was not successful. Please contact support for assistance.");
           }
         } else if (reviewStatus === "pending" || reviewStatus === "queued" || reviewStatus === "onHold") {
           setVerificationStatus("pending");
-          updateKycStatus('pending');
         }
         break;
       }
@@ -221,21 +155,18 @@ const SumsubVerification = ({ onVerified }) => {
       default:
         break;
     }
-  }, [onVerified, updateKycStatus]);
+  }, [onVerified]);
 
-  // Handle SDK errors
   const errorHandler = useCallback((error) => {
     console.error("Sumsub SDK error:", error);
     setError("An error occurred during verification. Please try again.");
   }, []);
 
-  // SDK configuration
   const config = {
     lang: "en",
     theme: "light",
   };
 
-  // SDK options
   const options = {
     addViewportTag: false,
     adaptIframeHeight: true,
