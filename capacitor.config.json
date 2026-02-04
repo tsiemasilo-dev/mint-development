@@ -1,9 +1,5 @@
 {
   "appId": "com.algohive.mint.app",
   "appName": "Mint",
-  "webDir": "dist",
-  "server": {
-    "url": "https://mint-henna.vercel.app/",
-    "cleartext": true
-  }
+  "webDir": "dist"
 }
