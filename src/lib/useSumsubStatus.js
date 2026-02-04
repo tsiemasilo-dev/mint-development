@@ -40,6 +40,19 @@ const shouldNotifyStatusChange = (oldStatus, newStatus) => {
   );
 };
 
+// Global flag to pause polling when Sumsub widget is active
+let pollingPaused = false;
+
+export const pauseSumsubPolling = () => {
+  pollingPaused = true;
+  console.log("Sumsub polling paused");
+};
+
+export const resumeSumsubPolling = () => {
+  pollingPaused = false;
+  console.log("Sumsub polling resumed");
+};
+
 export const useSumsubStatus = () => {
   const [status, setStatus] = useState({
     loading: true,
@@ -221,7 +234,7 @@ export const useSumsubStatus = () => {
     
     // Set up polling to detect external status changes
     const pollInterval = setInterval(() => {
-      if (isMountedRef.current) {
+      if (isMountedRef.current && !pollingPaused) {
         // Reset notification flag to allow new notifications on status change
         hasNotifiedRef.current = false;
         fetchStatus(true); // Force refresh to bypass cache

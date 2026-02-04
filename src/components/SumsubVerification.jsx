@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import SumsubWebSdk from "@sumsub/websdk-react";
 import { supabase } from "../lib/supabase";
+import { pauseSumsubPolling, resumeSumsubPolling } from "../lib/useSumsubStatus";
 
 const ShieldCheckIcon = (props) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" {...props}>
@@ -32,6 +33,14 @@ const SumsubVerification = ({ onVerified }) => {
   const [errorType, setErrorType] = useState(null); // 'config' | 'resubmit' | 'rejected' | 'generic'
   const [verificationComplete, setVerificationComplete] = useState(false);
   const [verificationStatus, setVerificationStatus] = useState(null);
+
+  // Pause polling while the Sumsub widget is active to prevent refreshes
+  useEffect(() => {
+    pauseSumsubPolling();
+    return () => {
+      resumeSumsubPolling();
+    };
+  }, []);
 
   useEffect(() => {
     const initializeSumsub = async () => {
