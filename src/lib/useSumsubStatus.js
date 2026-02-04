@@ -1,5 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "./supabase";
+
+const CACHE_DURATION_MS = 30000;
+
+let cachedStatus = null;
+let cacheTimestamp = 0;
 
 export const useSumsubStatus = () => {
   const [status, setStatus] = useState({
@@ -7,104 +12,141 @@ export const useSumsubStatus = () => {
     kycVerified: false,
     kycPending: false,
     kycNeedsResubmission: false,
+    notVerified: true,
     reviewStatus: null,
     reviewAnswer: null,
     rejectLabels: [],
+    applicantId: null,
   });
 
-  const fetchStatus = useCallback(async () => {
+  const isMountedRef = useRef(true);
+
+  const fetchStatus = useCallback(async (forceRefresh = false) => {
+    const now = Date.now();
+    
+    if (!forceRefresh && cachedStatus && (now - cacheTimestamp) < CACHE_DURATION_MS) {
+      setStatus(cachedStatus);
+      return;
+    }
+
     setStatus(prev => ({ ...prev, loading: true }));
     
     try {
-      // Get current user
       if (!supabase) {
-        setStatus(prev => ({ ...prev, loading: false }));
+        const defaultStatus = {
+          loading: false,
+          kycVerified: false,
+          kycPending: false,
+          kycNeedsResubmission: false,
+          notVerified: true,
+          reviewStatus: null,
+          reviewAnswer: null,
+          rejectLabels: [],
+          applicantId: null,
+        };
+        cachedStatus = defaultStatus;
+        cacheTimestamp = now;
+        if (isMountedRef.current) setStatus(defaultStatus);
         return;
       }
 
       const { data: userData } = await supabase.auth.getUser();
       if (!userData?.user?.id) {
-        setStatus(prev => ({ ...prev, loading: false }));
+        const defaultStatus = {
+          loading: false,
+          kycVerified: false,
+          kycPending: false,
+          kycNeedsResubmission: false,
+          notVerified: true,
+          reviewStatus: null,
+          reviewAnswer: null,
+          rejectLabels: [],
+          applicantId: null,
+        };
+        cachedStatus = defaultStatus;
+        cacheTimestamp = now;
+        if (isMountedRef.current) setStatus(defaultStatus);
         return;
       }
 
       const userId = userData.user.id;
       const apiBase = import.meta.env.VITE_API_URL || window.location.origin;
       
-      // Fetch directly from Sumsub via our API
-      const response = await fetch(`${apiBase}/api/sumsub/sync-status`, {
+      const response = await fetch(`${apiBase}/api/sumsub/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId })
       });
       
       const result = await response.json();
-      console.log("Sumsub status fetched:", result);
       
       if (result.success) {
-        const reviewAnswer = result.applicant?.reviewAnswer;
-        const reviewStatus = result.applicant?.reviewStatus;
-        const rejectLabels = result.applicant?.rejectLabels || [];
+        const kycVerified = result.status === "verified";
+        const kycPending = result.status === "pending";
+        const kycNeedsResubmission = result.status === "needs_resubmission";
+        const notVerified = result.status === "not_verified";
         
-        // Determine status based on Sumsub response
-        let kycVerified = false;
-        let kycPending = false;
-        let kycNeedsResubmission = false;
-        
-        if (reviewAnswer === "GREEN") {
-          kycVerified = true;
-        } else if (reviewAnswer === "RED") {
-          kycNeedsResubmission = true;
-        } else if (reviewStatus === "pending" || reviewStatus === "queued") {
-          kycPending = true;
-        } else if (reviewStatus === "onHold" || result.status === "needs_resubmission") {
-          kycNeedsResubmission = true;
-        } else if (result.status === "not_verified" || result.status === "not_started") {
-          // Not verified yet
-        } else if (result.status === "pending") {
-          kycPending = true;
-        } else if (result.status === "verified") {
-          kycVerified = true;
-        } else if (result.status === "needs_resubmission") {
-          kycNeedsResubmission = true;
-        }
-        
-        setStatus({
+        const newStatus = {
           loading: false,
           kycVerified,
           kycPending,
           kycNeedsResubmission,
-          reviewStatus,
-          reviewAnswer,
-          rejectLabels,
-        });
-      } else {
-        // API call failed, fallback to database
-        const { data } = await supabase
-          .from("required_actions")
-          .select("kyc_verified, kyc_pending, kyc_needs_resubmission")
-          .eq("user_id", userId)
-          .maybeSingle();
+          notVerified,
+          reviewStatus: result.reviewStatus,
+          reviewAnswer: result.reviewAnswer,
+          rejectLabels: result.rejectLabels || [],
+          applicantId: result.applicantId,
+        };
         
-        setStatus({
+        cachedStatus = newStatus;
+        cacheTimestamp = now;
+        if (isMountedRef.current) setStatus(newStatus);
+      } else {
+        const errorStatus = {
           loading: false,
-          kycVerified: data?.kyc_verified || false,
-          kycPending: data?.kyc_pending || false,
-          kycNeedsResubmission: data?.kyc_needs_resubmission || false,
+          kycVerified: false,
+          kycPending: false,
+          kycNeedsResubmission: false,
+          notVerified: true,
           reviewStatus: null,
           reviewAnswer: null,
           rejectLabels: [],
-        });
+          applicantId: null,
+        };
+        cachedStatus = errorStatus;
+        cacheTimestamp = now;
+        if (isMountedRef.current) setStatus(errorStatus);
       }
     } catch (error) {
       console.error("Failed to fetch Sumsub status:", error);
-      setStatus(prev => ({ ...prev, loading: false }));
+      const errorStatus = {
+        loading: false,
+        kycVerified: false,
+        kycPending: false,
+        kycNeedsResubmission: false,
+        notVerified: true,
+        reviewStatus: null,
+        reviewAnswer: null,
+        rejectLabels: [],
+        applicantId: null,
+      };
+      cachedStatus = errorStatus;
+      cacheTimestamp = Date.now();
+      if (isMountedRef.current) setStatus(errorStatus);
     }
   }, []);
 
-  useEffect(() => {
-    fetchStatus();
+  const refetch = useCallback(() => {
+    return fetchStatus(true);
   }, [fetchStatus]);
 
-  return { ...status, refetch: fetchStatus };
+  useEffect(() => {
+    isMountedRef.current = true;
+    fetchStatus();
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [fetchStatus]);
+
+  return { ...status, refetch };
 };

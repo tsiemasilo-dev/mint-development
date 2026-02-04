@@ -237,7 +237,77 @@ app.post("/api/sumsub/check-status", async (req, res) => {
   }
 });
 
-// Sync KYC status from Sumsub to database
+app.post("/api/sumsub/status", async (req, res) => {
+  try {
+    if (!SUMSUB_APP_TOKEN || !SUMSUB_SECRET_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: { message: "Sumsub credentials not configured" }
+      });
+    }
+
+    const { userId } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: { message: "userId is required" }
+      });
+    }
+
+    const applicant = await getSumsubApplicantByExternalId(userId);
+    
+    if (!applicant) {
+      return res.json({
+        success: true,
+        status: "not_verified",
+        applicantId: null,
+        reviewStatus: null,
+        reviewAnswer: null,
+        rejectLabels: [],
+        createdAt: null
+      });
+    }
+
+    const reviewStatus = applicant.review?.reviewStatus;
+    const reviewAnswer = applicant.review?.reviewResult?.reviewAnswer;
+    const rejectLabels = applicant.review?.reviewResult?.rejectLabels || [];
+    
+    let status = "not_verified";
+    
+    if (reviewAnswer === "GREEN") {
+      status = "verified";
+    } else if (reviewAnswer === "RED") {
+      status = rejectLabels.length > 0 ? "needs_resubmission" : "not_verified";
+    } else if (reviewStatus === "pending" || reviewStatus === "queued") {
+      status = "pending";
+    } else if (reviewStatus === "onHold" || applicant.requiredIdDocs?.length > 0) {
+      status = "needs_resubmission";
+    } else if (reviewStatus === "init" || !reviewStatus) {
+      status = "not_verified";
+    } else {
+      status = "pending";
+    }
+
+    res.json({
+      success: true,
+      status,
+      applicantId: applicant.id,
+      reviewStatus,
+      reviewAnswer: reviewAnswer || null,
+      rejectLabels,
+      createdAt: applicant.createdAt || null
+    });
+  } catch (error) {
+    console.error("Sumsub status error:", error);
+    res.status(500).json({
+      success: false,
+      error: { message: error.message || "Failed to get status" }
+    });
+  }
+});
+
+// Legacy endpoint - redirects to /api/sumsub/status (no database writes)
 app.post("/api/sumsub/sync-status", async (req, res) => {
   try {
     if (!SUMSUB_APP_TOKEN || !SUMSUB_SECRET_KEY) {
@@ -259,128 +329,49 @@ app.post("/api/sumsub/sync-status", async (req, res) => {
     const applicant = await getSumsubApplicantByExternalId(userId);
     
     if (!applicant) {
-      // No applicant means not verified
-      if (supabase) {
-        const { data: existingAction } = await supabase
-          .from("required_actions")
-          .select("id")
-          .eq("user_id", userId)
-          .maybeSingle();
-
-        const kycUpdate = { 
-          kyc_verified: false, 
-          kyc_pending: false, 
-          kyc_needs_resubmission: false 
-        };
-
-        if (existingAction) {
-          await supabase
-            .from("required_actions")
-            .update(kycUpdate)
-            .eq("user_id", userId);
-        } else {
-          await supabase
-            .from("required_actions")
-            .insert({ user_id: userId, ...kycUpdate });
-        }
-      }
-
       return res.json({
         success: true,
         status: "not_verified",
-        message: "No applicant found - status set to not verified"
+        applicantId: null,
+        reviewStatus: null,
+        reviewAnswer: null,
+        rejectLabels: [],
+        createdAt: null
       });
     }
 
-    // Determine status from applicant data
     const reviewStatus = applicant.review?.reviewStatus;
     const reviewAnswer = applicant.review?.reviewResult?.reviewAnswer;
     const rejectLabels = applicant.review?.reviewResult?.rejectLabels || [];
     
-    let kycUpdate = null;
-    let statusMessage = "";
-
+    let status = "not_verified";
+    
     if (reviewAnswer === "GREEN") {
-      kycUpdate = { 
-        kyc_verified: true, 
-        kyc_pending: false, 
-        kyc_needs_resubmission: false 
-      };
-      statusMessage = "verified";
+      status = "verified";
     } else if (reviewAnswer === "RED") {
-      // Check for temporary vs permanent rejection
-      const canResubmit = rejectLabels.length > 0;
-      kycUpdate = { 
-        kyc_verified: false, 
-        kyc_pending: false, 
-        kyc_needs_resubmission: canResubmit 
-      };
-      statusMessage = canResubmit ? "needs_resubmission" : "rejected";
-    } else if (reviewStatus === "pending" || reviewStatus === "queued" || reviewStatus === "onHold") {
-      // Check if there are required actions
-      const needsAction = reviewStatus === "onHold" || applicant.requiredIdDocs?.length > 0;
-      
-      if (needsAction) {
-        kycUpdate = { 
-          kyc_verified: false, 
-          kyc_pending: false, 
-          kyc_needs_resubmission: true 
-        };
-        statusMessage = "needs_resubmission";
-      } else {
-        kycUpdate = { 
-          kyc_verified: false, 
-          kyc_pending: true, 
-          kyc_needs_resubmission: false 
-        };
-        statusMessage = "pending";
-      }
+      status = rejectLabels.length > 0 ? "needs_resubmission" : "not_verified";
+    } else if (reviewStatus === "pending" || reviewStatus === "queued") {
+      status = "pending";
+    } else if (reviewStatus === "onHold" || applicant.requiredIdDocs?.length > 0) {
+      status = "needs_resubmission";
     } else if (reviewStatus === "init" || !reviewStatus) {
-      // Not started or just created
-      kycUpdate = { 
-        kyc_verified: false, 
-        kyc_pending: false, 
-        kyc_needs_resubmission: false 
-      };
-      statusMessage = "not_started";
+      status = "not_verified";
     } else {
-      // Default to pending
-      kycUpdate = { 
-        kyc_verified: false, 
-        kyc_pending: true, 
-        kyc_needs_resubmission: false 
-      };
-      statusMessage = "pending";
-    }
-
-    // Update database
-    if (supabase && kycUpdate) {
-      const { data: existingAction } = await supabase
-        .from("required_actions")
-        .select("id")
-        .eq("user_id", userId)
-        .maybeSingle();
-
-      if (existingAction) {
-        await supabase
-          .from("required_actions")
-          .update(kycUpdate)
-          .eq("user_id", userId);
-      } else {
-        await supabase
-          .from("required_actions")
-          .insert({ user_id: userId, ...kycUpdate });
-      }
+      status = "pending";
     }
 
     res.json({
       success: true,
-      status: statusMessage,
-      kycUpdate,
+      status,
+      applicantId: applicant.id,
+      reviewStatus,
+      reviewAnswer: reviewAnswer || null,
+      rejectLabels,
+      createdAt: applicant.createdAt || null,
       applicant: {
         id: applicant.id,
         reviewStatus,
-        reviewAnswer,
+        reviewAnswer: reviewAnswer || null,
         rejectLabels
       }
     });
