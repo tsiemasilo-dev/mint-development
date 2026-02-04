@@ -1422,7 +1422,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                       const holdingsMinInvestment = getHoldingsMinInvestment(strategy);
                       const formattedMinInvestment = holdingsMinInvestment
                         ? `Min. ${formatCurrency(holdingsMinInvestment, strategy.base_currency || 'R')}`
-                        : 'Min. Data unavailable';
+                        : null;
                       
                       // Generate sparkline (fallback until we have real price history)
                       const sparkline = generateSparkline(0);
@@ -1599,12 +1599,15 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                         {article.title}
                       </h3>
                       <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
-                        {article.source && (
-                          <>
-                            <span className="font-medium">{article.source}</span>
-                            <span>•</span>
-                          </>
-                        )}
+                        <span className="inline-flex items-center gap-1.5">
+                          <img
+                            src="/assets/mint-logo.svg"
+                            alt="Mint"
+                            className="h-3.5 w-3.5"
+                          />
+                          <span className="font-medium">Mint News</span>
+                        </span>
+                        <span>•</span>
                         <span>{timeText}</span>
                       </div>
                     </button>
@@ -1701,7 +1704,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                       const holdingsMinInvestment = getHoldingsMinInvestment(selectedStrategy);
                       return holdingsMinInvestment
                         ? `Min. ${formatCurrency(holdingsMinInvestment, selectedStrategy.base_currency || 'R')}`
-                        : 'Min. Data unavailable';
+                        : 'Min. —';
                     })()}
                   </p>
                 </div>
@@ -1723,9 +1726,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                       </span>
                     )}
                   </>
-                ) : (
-                  <p className="text-sm text-slate-500">Data unavailable</p>
-                )}
+                ) : null}
               </div>
 
               <div className="mb-5">
