@@ -3,7 +3,7 @@ import { ArrowLeft } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
 import EditProfileSkeleton from "../components/EditProfileSkeleton";
 
-const ProfileDetailsPage = ({ onNavigate }) => {
+const ProfileDetailsPage = ({ onNavigate, onBack }) => {
   const { profile, loading } = useProfile();
 
   const displayName = loading
@@ -31,7 +31,7 @@ const ProfileDetailsPage = ({ onNavigate }) => {
       <header className="relative mb-8 flex items-center justify-center">
         <button
           type="button"
-          onClick={() => onNavigate?.("more")}
+          onClick={() => onBack ? onBack() : onNavigate?.("more")}
           className="absolute left-0 flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-700 transition active:scale-95"
           aria-label="Back"
         >

@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
-const ChangePasswordPage = ({ onNavigate }) => {
+const ChangePasswordPage = ({ onNavigate, onBack }) => {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -81,7 +81,7 @@ const ChangePasswordPage = ({ onNavigate }) => {
       <header className="relative mb-8 flex items-center justify-center">
         <button
           type="button"
-          onClick={() => onNavigate?.("settings")}
+          onClick={() => onBack ? onBack() : onNavigate?.("settings")}
           className="absolute left-0 flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-700 transition active:scale-95"
           aria-label="Back"
         >

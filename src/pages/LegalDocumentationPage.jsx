@@ -1,7 +1,7 @@
 import React from "react";
 import { ArrowLeft, ChevronRight, ShieldCheck, FileText, ScrollText } from "lucide-react";
 
-const LegalDocumentationPage = ({ onNavigate }) => {
+const LegalDocumentationPage = ({ onNavigate, onBack }) => {
   const legalItems = [
     { id: "privacy", label: "Privacy Policy", icon: ShieldCheck },
     { id: "terms", label: "Terms of Service", icon: FileText },
@@ -13,7 +13,7 @@ const LegalDocumentationPage = ({ onNavigate }) => {
       <header className="relative mb-8 flex items-center justify-center">
         <button
           type="button"
-          onClick={() => onNavigate?.("more")}
+          onClick={() => onBack ? onBack() : onNavigate?.("more")}
           className="absolute left-0 flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-700 transition active:scale-95"
           aria-label="Back"
         >
