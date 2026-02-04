@@ -526,7 +526,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
         : security?.security_metrics;
       const lastClose = metrics?.last_close;
       if (lastClose == null) return sum;
-      const currency = security?.currency || strategy?.base_currency || "R";
+      const currency = security?.currency || "R";
       const normalizedPrice = currency.toUpperCase() === "ZAC"
         ? Number(lastClose) / 100
         : Number(lastClose);
@@ -1421,7 +1421,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                       // Format minimum investment
                       const holdingsMinInvestment = getHoldingsMinInvestment(strategy);
                       const formattedMinInvestment = holdingsMinInvestment
-                        ? `Min. ${formatCurrency(holdingsMinInvestment, strategy.base_currency || 'R')}`
+                        ? `Min. ${formatCurrency(holdingsMinInvestment, "R")}`
                         : null;
                       
                       // Generate sparkline (fallback until we have real price history)
@@ -1703,7 +1703,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                     {(() => {
                       const holdingsMinInvestment = getHoldingsMinInvestment(selectedStrategy);
                       return holdingsMinInvestment
-                        ? `Min. ${formatCurrency(holdingsMinInvestment, selectedStrategy.base_currency || 'R')}`
+                        ? `Min. ${formatCurrency(holdingsMinInvestment, "R")}`
                         : 'Min. —';
                     })()}
                   </p>
