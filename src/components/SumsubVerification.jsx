@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import SumsubWebSdk from "@sumsub/websdk-react";
 import { supabase } from "../lib/supabase";
+import { pauseSumsubPolling, resumeSumsubPolling } from "../lib/useSumsubStatus";
 
 const ShieldCheckIcon = (props) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" {...props}>
@@ -34,6 +35,17 @@ const SumsubVerification = ({ onVerified }) => {
   const [verificationStatus, setVerificationStatus] = useState(null);
   const initializedRef = useRef(false);
   const sdkKeyRef = useRef(`sumsub-${Date.now()}`);
+
+  // Pause polling while widget is active to prevent camera interference
+  useEffect(() => {
+    pauseSumsubPolling();
+    console.log("Sumsub widget mounted - polling paused");
+    
+    return () => {
+      resumeSumsubPolling();
+      console.log("Sumsub widget unmounted - polling resumed");
+    };
+  }, []);
 
   useEffect(() => {
     // Prevent double initialization in React StrictMode

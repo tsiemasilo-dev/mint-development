@@ -232,8 +232,19 @@ export const useSumsubStatus = () => {
     isMountedRef.current = true;
     fetchStatus();
     
+    // Set up polling interval that respects the pause flag
+    const pollInterval = setInterval(() => {
+      if (!pollingPaused && isMountedRef.current) {
+        console.log("Polling Sumsub status...");
+        fetchStatus(true); // Force refresh to bypass cache
+      } else if (pollingPaused) {
+        console.log("Polling paused (widget active)");
+      }
+    }, POLL_INTERVAL_MS);
+    
     return () => {
       isMountedRef.current = false;
+      clearInterval(pollInterval);
     };
   }, [fetchStatus]);
 
