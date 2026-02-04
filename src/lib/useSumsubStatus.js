@@ -30,6 +30,9 @@ const shouldNotifyStatusChange = (oldStatus, newStatus) => {
     { from: "pending", to: "needs_resubmission" },
     { from: "needs_resubmission", to: "pending" },
     { from: "needs_resubmission", to: "verified" },
+    // Also notify when status goes backwards (e.g., reset or new requirements added)
+    { from: "verified", to: "needs_resubmission" },
+    { from: "verified", to: "pending" },
   ];
   
   return validTransitions.some(
