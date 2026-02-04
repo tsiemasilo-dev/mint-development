@@ -77,6 +77,12 @@ A React authentication application using Vite as the build tool with Tailwind CS
   - Password reset via magic link
   - Environment variables: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
 - **iOS-Style UI**: Glassmorphism design with smooth animations
+- **Swipe-Back Navigation (Android)**:
+  - Swipe from left edge of screen to go back to previous page
+  - Works on all non-main-tab pages (Settings, Notifications, Profile, etc.)
+  - Visual feedback with slide animation and back arrow indicator
+  - Navigation history maintained for proper back navigation
+  - Files: `src/hooks/useSwipeBack.js`, `src/hooks/useNavigationHistory.js`, `src/components/SwipeBackWrapper.jsx`
 - **Biometric Authentication (Face ID/Touch ID)**:
   - Uses `capacitor-face-id` plugin for native iOS/Android biometrics
   - Prompts users to enable biometrics after successful signup (OTP verification)
