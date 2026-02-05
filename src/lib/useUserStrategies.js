@@ -263,7 +263,6 @@ function formatChartData(priceHistory, timeFilter) {
         const ampm = hour >= 12 ? "pm" : "am";
         const displayHour = hour % 12 || 12;
         return {
-          time: new Date(p.ts).toISOString().split('T')[0],
           day: `${displayHour}${ampm}`,
           value: p.nav,
           highlighted: idx === Math.floor(last24.length / 2),
@@ -276,7 +275,6 @@ function formatChartData(priceHistory, timeFilter) {
       return last7.map((p, idx) => {
         const date = new Date(p.ts);
         return {
-          time: new Date(p.ts).toISOString().split('T')[0],
           day: dayNames[date.getDay()],
           value: p.nav,
           highlighted: idx === Math.floor(last7.length / 2),
@@ -288,7 +286,6 @@ function formatChartData(priceHistory, timeFilter) {
       return last30.map((p, idx) => {
         const date = new Date(p.ts);
         return {
-          time: new Date(p.ts).toISOString().split('T')[0],
           day: date.getDate().toString(),
           value: p.nav,
           highlighted: idx === Math.floor(last30.length / 2),
@@ -298,18 +295,15 @@ function formatChartData(priceHistory, timeFilter) {
     case "ALL": {
       const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
       const grouped = {};
-      const groupedTs = {};
 
       priceHistory.forEach((p) => {
         const date = new Date(p.ts);
         const key = `${monthNames[date.getMonth()]} '${date.getFullYear().toString().slice(-2)}`;
         grouped[key] = p.nav;
-        groupedTs[key] = p.ts;
       });
 
       const entries = Object.entries(grouped);
       return entries.map(([day, value], idx) => ({
-        time: new Date(groupedTs[day]).toISOString().split('T')[0],
         day,
         value,
         highlighted: idx === entries.length - 1,
@@ -317,7 +311,6 @@ function formatChartData(priceHistory, timeFilter) {
     }
     default:
       return priceHistory.map((p) => ({
-        time: new Date(p.ts).toISOString().split('T')[0],
         day: new Date(p.ts).toLocaleDateString(),
         value: p.nav,
       }));

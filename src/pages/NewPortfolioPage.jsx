@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Bell, Eye, EyeOff, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, TrendingUp, TrendingDown, Plus } from "lucide-react";
-import { ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import TradingViewChart from '../components/TradingViewChart';
+import { Area, ComposedChart, Line, XAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell } from 'recharts';
 import { useFinancialData } from "../lib/useFinancialData";
 import { useProfile } from "../lib/useProfile";
 import { useUserStrategies, useStrategyChartData } from "../lib/useUserStrategies";
@@ -358,6 +357,8 @@ const NewPortfolioPage = () => {
   const [stockTimeFilter, setStockTimeFilter] = useState("W");
   const [myStocksPage, setMyStocksPage] = useState(0);
   const [otherStocksPage, setOtherStocksPage] = useState(0);
+  const chartScrollRef = useRef(null);
+  const stockChartScrollRef = useRef(null);
   const { securities: allSecurities, quotes: liveQuotes, loading: quotesLoading } = useStockQuotes();
   const stocksList = useMemo(() => {
     if (!allSecurities || allSecurities.length === 0) return MOCK_STOCKS;
@@ -394,6 +395,21 @@ const NewPortfolioPage = () => {
     previousMonthChange: 0,
   };
 
+  const getChartWidth = (dataLength) => {
+    const minWidth = 100;
+    const pointSpacing = timeFilter === "W" ? 70 : 50;
+    return Math.max(minWidth, dataLength * pointSpacing);
+  };
+
+  useEffect(() => {
+    if (chartScrollRef.current) {
+      const scrollContainer = chartScrollRef.current;
+      const chartWidth = scrollContainer.scrollWidth;
+      const containerWidth = scrollContainer.clientWidth;
+      const scrollTo = (chartWidth - containerWidth) * 0.6;
+      scrollContainer.scrollTo({ left: scrollTo, behavior: 'smooth' });
+    }
+  }, [timeFilter]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -425,6 +441,15 @@ const NewPortfolioPage = () => {
     }
   }, [stocksList, selectedStock]);
 
+  useEffect(() => {
+    if (stockChartScrollRef.current) {
+      const scrollContainer = stockChartScrollRef.current;
+      const chartWidth = scrollContainer.scrollWidth;
+      const containerWidth = scrollContainer.clientWidth;
+      const scrollTo = (chartWidth - containerWidth) * 0.6;
+      scrollContainer.scrollTo({ left: scrollTo, behavior: 'smooth' });
+    }
+  }, [stockTimeFilter, selectedStock]);
 
   const handleStrategySelect = (strategy) => {
     selectStrategy(strategy);
@@ -476,6 +501,11 @@ const NewPortfolioPage = () => {
     }
   };
 
+  const getStockChartWidth = (dataLength) => {
+    const minWidth = 100;
+    const pointSpacing = stockTimeFilter === "W" ? 70 : 50;
+    return Math.max(minWidth, dataLength * pointSpacing);
+  };
 
   const getChartData = () => {
     if (realChartData && realChartData.length > 0) {
@@ -775,18 +805,178 @@ const NewPortfolioPage = () => {
             </p>
           </div>
 
-          <TradingViewChart
-            data={currentChartData}
-            height={220}
-            lineColor="#7c3aed"
-            areaTopColor="rgba(139, 92, 246, 0.25)"
-            areaBottomColor="rgba(139, 92, 246, 0)"
-            showGrid={false}
-            showTimeScale={true}
-            showPriceScale={false}
-            showCrosshair={true}
-            lineWidth={2.5}
-          />
+          <div 
+            ref={chartScrollRef}
+            className="overflow-x-auto scrollbar-hide"
+            style={{ 
+              width: '100%', 
+              height: 220, 
+              marginBottom: 8,
+              WebkitOverflowScrolling: 'touch',
+              msOverflowStyle: 'none',
+              scrollbarWidth: 'none',
+              overflowY: 'hidden',
+            }}
+            onTouchStart={(e) => e.currentTarget.style.cursor = 'grabbing'}
+            onTouchEnd={(e) => e.currentTarget.style.cursor = 'grab'}
+          >
+            <div style={{ width: getChartWidth(currentChartData.length), height: 220, minWidth: '100%', outline: 'none' }}>
+              <ComposedChart
+                width={getChartWidth(currentChartData.length)}
+                height={220}
+                data={currentChartData}
+                margin={{ top: 20, right: 30, left: 30, bottom: 40 }}
+                style={{ outline: 'none' }}
+              >
+                <defs>
+                  <linearGradient id="purpleLineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#a78bfa" stopOpacity="0" />
+                    <stop offset="3%" stopColor="#a78bfa" stopOpacity="0.3" />
+                    <stop offset="8%" stopColor="#8b5cf6" stopOpacity="0.7" />
+                    <stop offset="15%" stopColor="#7c3aed" stopOpacity="0.9" />
+                    <stop offset="25%" stopColor="#7c3aed" stopOpacity="1" />
+                    <stop offset="75%" stopColor="#7c3aed" stopOpacity="1" />
+                    <stop offset="85%" stopColor="#7c3aed" stopOpacity="0.9" />
+                    <stop offset="92%" stopColor="#8b5cf6" stopOpacity="0.7" />
+                    <stop offset="97%" stopColor="#a78bfa" stopOpacity="0.3" />
+                    <stop offset="100%" stopColor="#a78bfa" stopOpacity="0" />
+                  </linearGradient>
+                  
+                  <linearGradient id="glowGradientVertical" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.25" />
+                    <stop offset="20%" stopColor="#8b5cf6" stopOpacity="0.15" />
+                    <stop offset="50%" stopColor="#a78bfa" stopOpacity="0.08" />
+                    <stop offset="80%" stopColor="#c4b5fd" stopOpacity="0.03" />
+                    <stop offset="100%" stopColor="#c4b5fd" stopOpacity="0" />
+                  </linearGradient>
+                  
+                  <linearGradient id="glowOpacityMask" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="white" stopOpacity="0" />
+                    <stop offset="5%" stopColor="white" stopOpacity="0.2" />
+                    <stop offset="15%" stopColor="white" stopOpacity="0.5" />
+                    <stop offset="35%" stopColor="white" stopOpacity="0.9" />
+                    <stop offset="50%" stopColor="white" stopOpacity="1" />
+                    <stop offset="65%" stopColor="white" stopOpacity="0.9" />
+                    <stop offset="85%" stopColor="white" stopOpacity="0.5" />
+                    <stop offset="95%" stopColor="white" stopOpacity="0.2" />
+                    <stop offset="100%" stopColor="white" stopOpacity="0" />
+                  </linearGradient>
+                  
+                  <mask id="glowMask">
+                    <rect x="0" y="0" width="100%" height="100%" fill="url(#glowOpacityMask)" />
+                  </mask>
+                  
+                  <filter id="lineGlow" x="-20%" y="-20%" width="140%" height="140%" filterUnits="objectBoundingBox">
+                    <feDropShadow dx="0" dy="0" stdDeviation="2.5" floodColor="#8b5cf6" floodOpacity="0.5" />
+                  </filter>
+                  
+                  <filter id="areaBlur" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur in="SourceGraphic" stdDeviation="8" />
+                  </filter>
+                </defs>
+                
+                <XAxis 
+                  dataKey="day" 
+                  axisLine={false}
+                  tickLine={false}
+                  tickMargin={20}
+                  tick={({ x, y, payload, index }) => {
+                    const isHighlighted = currentChartData[index]?.highlighted;
+                    const totalItems = currentChartData.length;
+                    const isEdge = index === 0 || index === totalItems - 1;
+                    const opacity = isEdge ? 0.6 : 1;
+                    
+                    return (
+                      <g transform={`translate(${x},${y})`} style={{ opacity }}>
+                        {isHighlighted ? (
+                          <>
+                            <rect
+                              x={-24}
+                              y={-12}
+                              width={48}
+                              height={30}
+                              rx={15}
+                              fill="rgba(71, 85, 105, 0.75)"
+                              style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.15))' }}
+                            />
+                            <rect
+                              x={-24}
+                              y={-12}
+                              width={48}
+                              height={30}
+                              rx={15}
+                              fill="none"
+                              stroke="rgba(255,255,255,0.2)"
+                              strokeWidth={1}
+                            />
+                          </>
+                        ) : null}
+                        <text
+                          x={0}
+                          y={8}
+                          textAnchor="middle"
+                          fill={isHighlighted ? '#ffffff' : '#64748b'}
+                          fontSize={14}
+                          fontWeight={isHighlighted ? 700 : 600}
+                        >
+                          {payload.value}
+                        </text>
+                      </g>
+                    );
+                  }}
+                />
+                
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      return (
+                        <div className="rounded-xl px-4 py-2 shadow-2xl border border-purple-400/30"
+                          style={{
+                            background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.9) 0%, rgba(124, 58, 237, 0.95) 100%)',
+                            backdropFilter: 'blur(12px)',
+                          }}
+                        >
+                          <div className="text-sm font-bold text-white">
+                            R{payload[0].value.toLocaleString()}
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                  cursor={false}
+                  wrapperStyle={{ outline: 'none' }}
+                />
+
+                <Area
+                  type="monotone"
+                  dataKey="value"
+                  stroke="transparent"
+                  fill="url(#glowGradientVertical)"
+                  fillOpacity={1}
+                  mask="url(#glowMask)"
+                  style={{ filter: 'url(#areaBlur)' }}
+                />
+
+                <Line
+                  type="monotone"
+                  dataKey="value"
+                  stroke="url(#purpleLineGradient)"
+                  strokeWidth={3.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  dot={false}
+                  activeDot={{
+                    r: 7,
+                    fill: '#a78bfa',
+                    stroke: '#c4b5fd',
+                    strokeWidth: 2,
+                  }}
+                  style={{ filter: 'url(#lineGlow)' }}
+                />
+              </ComposedChart>
+            </div>
+          </div>
         </section>
       </div>
 
@@ -996,18 +1186,148 @@ const NewPortfolioPage = () => {
                   })()}
                 </div>
 
-                <TradingViewChart
-                  data={stockChartData}
-                  height={220}
-                  lineColor="#7c3aed"
-                  areaTopColor="rgba(139, 92, 246, 0.25)"
-                  areaBottomColor="rgba(139, 92, 246, 0)"
-                  showGrid={false}
-                  showTimeScale={true}
-                  showPriceScale={false}
-                  showCrosshair={true}
-                  lineWidth={2.5}
-                />
+                <div
+                  ref={stockChartScrollRef}
+                  className="overflow-x-auto scrollbar-hide"
+                  style={{
+                    width: '100%',
+                    height: 220,
+                    marginBottom: 8,
+                    WebkitOverflowScrolling: 'touch',
+                    msOverflowStyle: 'none',
+                    scrollbarWidth: 'none',
+                    overflowY: 'hidden',
+                  }}
+                  onTouchStart={(e) => e.currentTarget.style.cursor = 'grabbing'}
+                  onTouchEnd={(e) => e.currentTarget.style.cursor = 'grab'}
+                >
+                  <div style={{ width: getStockChartWidth(stockChartData.length), height: 220, minWidth: '100%', outline: 'none' }}>
+                    <ComposedChart
+                      width={getStockChartWidth(stockChartData.length)}
+                      height={220}
+                      data={stockChartData}
+                      margin={{ top: 20, right: 30, left: 30, bottom: 40 }}
+                      style={{ outline: 'none' }}
+                    >
+                      <defs>
+                        <linearGradient id="stockPurpleLineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                          <stop offset="0%" stopColor="#a78bfa" stopOpacity="0" />
+                          <stop offset="3%" stopColor="#a78bfa" stopOpacity="0.3" />
+                          <stop offset="8%" stopColor="#8b5cf6" stopOpacity="0.7" />
+                          <stop offset="15%" stopColor="#7c3aed" stopOpacity="0.9" />
+                          <stop offset="25%" stopColor="#7c3aed" stopOpacity="1" />
+                          <stop offset="75%" stopColor="#7c3aed" stopOpacity="1" />
+                          <stop offset="85%" stopColor="#7c3aed" stopOpacity="0.9" />
+                          <stop offset="92%" stopColor="#8b5cf6" stopOpacity="0.7" />
+                          <stop offset="97%" stopColor="#a78bfa" stopOpacity="0.3" />
+                          <stop offset="100%" stopColor="#a78bfa" stopOpacity="0" />
+                        </linearGradient>
+                        <linearGradient id="stockGlowGradientVertical" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.25" />
+                          <stop offset="20%" stopColor="#8b5cf6" stopOpacity="0.15" />
+                          <stop offset="50%" stopColor="#a78bfa" stopOpacity="0.08" />
+                          <stop offset="80%" stopColor="#c4b5fd" stopOpacity="0.03" />
+                          <stop offset="100%" stopColor="#c4b5fd" stopOpacity="0" />
+                        </linearGradient>
+                        <linearGradient id="stockGlowOpacityMask" x1="0%" y1="0%" x2="100%" y2="0%">
+                          <stop offset="0%" stopColor="white" stopOpacity="0" />
+                          <stop offset="5%" stopColor="white" stopOpacity="0.2" />
+                          <stop offset="15%" stopColor="white" stopOpacity="0.5" />
+                          <stop offset="35%" stopColor="white" stopOpacity="0.9" />
+                          <stop offset="50%" stopColor="white" stopOpacity="1" />
+                          <stop offset="65%" stopColor="white" stopOpacity="0.9" />
+                          <stop offset="85%" stopColor="white" stopOpacity="0.5" />
+                          <stop offset="95%" stopColor="white" stopOpacity="0.2" />
+                          <stop offset="100%" stopColor="white" stopOpacity="0" />
+                        </linearGradient>
+                        <mask id="stockGlowMask">
+                          <rect x="0" y="0" width="100%" height="100%" fill="url(#stockGlowOpacityMask)" />
+                        </mask>
+                        <filter id="stockLineGlow" x="-20%" y="-20%" width="140%" height="140%" filterUnits="objectBoundingBox">
+                          <feDropShadow dx="0" dy="0" stdDeviation="2.5" floodColor="#8b5cf6" floodOpacity="0.5" />
+                        </filter>
+                        <filter id="stockAreaBlur" x="-50%" y="-50%" width="200%" height="200%">
+                          <feGaussianBlur in="SourceGraphic" stdDeviation="8" />
+                        </filter>
+                      </defs>
+
+                      <XAxis
+                        dataKey="day"
+                        axisLine={false}
+                        tickLine={false}
+                        tickMargin={20}
+                        tick={({ x, y, payload, index }) => {
+                          const isHighlighted = stockChartData[index]?.highlighted;
+                          const totalItems = stockChartData.length;
+                          const isEdge = index === 0 || index === totalItems - 1;
+                          const opacity = isEdge ? 0.6 : 1;
+                          return (
+                            <g transform={`translate(${x},${y})`} style={{ opacity }}>
+                              {isHighlighted ? (
+                                <>
+                                  <rect x={-24} y={-12} width={48} height={30} rx={15} fill="rgba(71, 85, 105, 0.75)" style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.15))' }} />
+                                  <rect x={-24} y={-12} width={48} height={30} rx={15} fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth={1} />
+                                </>
+                              ) : null}
+                              <text x={0} y={8} textAnchor="middle" fill={isHighlighted ? '#ffffff' : '#64748b'} fontSize={14} fontWeight={isHighlighted ? 700 : 600}>
+                                {payload.value}
+                              </text>
+                            </g>
+                          );
+                        }}
+                      />
+
+                      <Tooltip
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            return (
+                              <div className="rounded-xl px-4 py-2 shadow-2xl border border-purple-400/30"
+                                style={{
+                                  background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.9) 0%, rgba(124, 58, 237, 0.95) 100%)',
+                                  backdropFilter: 'blur(12px)',
+                                }}
+                              >
+                                <div className="text-sm font-bold text-white">
+                                  R{payload[0].value.toLocaleString()}
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                        cursor={false}
+                        wrapperStyle={{ outline: 'none' }}
+                      />
+
+                      <Area
+                        type="monotone"
+                        dataKey="value"
+                        stroke="transparent"
+                        fill="url(#stockGlowGradientVertical)"
+                        fillOpacity={1}
+                        mask="url(#stockGlowMask)"
+                        style={{ filter: 'url(#stockAreaBlur)' }}
+                      />
+
+                      <Line
+                        type="monotone"
+                        dataKey="value"
+                        stroke="url(#stockPurpleLineGradient)"
+                        strokeWidth={3.5}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        dot={false}
+                        activeDot={{
+                          r: 7,
+                          fill: '#a78bfa',
+                          stroke: '#c4b5fd',
+                          strokeWidth: 2,
+                        }}
+                        style={{ filter: 'url(#stockLineGlow)' }}
+                      />
+                    </ComposedChart>
+                  </div>
+                </div>
               </section>
             </div>
 

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { ArrowLeft, TrendingUp, TrendingDown } from "lucide-react";
 import { getSecurityBySymbol, getSecurityPrices, normalizePriceSeries } from "../lib/marketData.js";
-import TradingViewChart from '../components/TradingViewChart';
 
 const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy }) => {
   const [selectedPeriod, setSelectedPeriod] = useState("1M");
@@ -107,6 +106,21 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy }) => {
   };
   const selectedPeriodReturn = getSelectedPeriodReturn();
   
+  // Calculate Y-axis domain with 5% padding (TradingView style)
+  const dataMin = chartData.length > 0 ? Math.min(...chartData) : 0;
+  const dataMax = chartData.length > 0 ? Math.max(...chartData) : 0;
+  let range = dataMax - dataMin;
+  
+  // If range is 0 (flat line), use small percentage of max value
+  if (range === 0) {
+    range = dataMax * 0.001 || 1;
+  }
+  
+  // Apply 5% padding on top and bottom for breathing room
+  const minValue = dataMin - (range * 0.05);
+  const maxValue = dataMax + (range * 0.05);
+  const paddedRange = maxValue - minValue;
+  const hasValidRange = paddedRange > 0 && chartData.length > 1;
 
   const formatTimestamp = () => {
     if (!security.asOfDate) {
@@ -116,6 +130,19 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy }) => {
     return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
   };
 
+  // Helper function to calculate Y position with proper domain
+  const getYPosition = (value) => {
+    if (!hasValidRange) return 50;
+    // Map value to SVG Y coordinate: maxValue -> 0% (top), minValue -> 100% (bottom)
+    return ((maxValue - value) / paddedRange) * 100;
+  };
+
+  // Format date for X-axis labels (short format: "Jan 29")
+  const formatXAxisDate = (index) => {
+    if (priceHistory.length === 0 || index >= priceHistory.length) return '';
+    const date = new Date(priceHistory[index].ts);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
 
   return (
     <div className="min-h-screen bg-white pb-[env(safe-area-inset-bottom)] text-slate-900">
@@ -258,18 +285,67 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy }) => {
                 </div>
               </div>
             ) : (
-              <TradingViewChart
-                data={priceHistory}
-                height={256}
-                lineColor={isChartPositive ? '#10b981' : '#ef4444'}
-                areaTopColor={isChartPositive ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}
-                areaBottomColor={isChartPositive ? 'rgba(16, 185, 129, 0)' : 'rgba(239, 68, 68, 0)'}
-                showGrid={true}
-                showTimeScale={true}
-                showPriceScale={true}
-                showCrosshair={true}
-                lineWidth={2}
-              />
+              <svg 
+                width="100%" 
+                height="100%" 
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+                className="overflow-visible"
+              >
+                {/* Grid lines (horizontal only) */}
+                {[0, 0.25, 0.5, 0.75, 1].map((y) => (
+                  <line
+                    key={y}
+                    x1="0"
+                    y1={y * 100}
+                    x2="100"
+                    y2={y * 100}
+                    stroke="#e2e8f0"
+                    strokeWidth="0.3"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                ))}
+
+                {/* Area fill */}
+                <defs>
+                  <linearGradient id="areaGradient" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stopColor={isChartPositive ? "#10b981" : "#ef4444"} stopOpacity="0.3" />
+                    <stop offset="100%" stopColor={isChartPositive ? "#10b981" : "#ef4444"} stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+
+                {/* Chart line and area */}
+                <g>
+                  {/* Area path */}
+                  <path
+                    d={`M 0 ${getYPosition(chartData[0])} ${chartData
+                      .map((value, i) => {
+                        const x = (i / Math.max(1, chartData.length - 1)) * 100;
+                        const y = getYPosition(value);
+                        return `L ${x} ${y}`;
+                      })
+                      .join(' ')} L 100 100 L 0 100 Z`}
+                    fill="url(#areaGradient)"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  {/* Line path */}
+                  <path
+                    d={`M 0 ${getYPosition(chartData[0])} ${chartData
+                      .map((value, i) => {
+                        const x = (i / Math.max(1, chartData.length - 1)) * 100;
+                        const y = getYPosition(value);
+                        return `L ${x} ${y}`;
+                      })
+                      .join(' ')}`}
+                    fill="none"
+                    stroke={isChartPositive ? "#10b981" : "#ef4444"}
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </g>
+              </svg>
             )}
           </div>
         </section>
