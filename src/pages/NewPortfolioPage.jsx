@@ -465,28 +465,50 @@ const NewPortfolioPage = () => {
               <span className="text-xl font-bold">Invest</span>
               <ChevronDown className="h-5 w-5" />
             </button>
-            <div className="flex gap-1">
+            <div className="flex items-center gap-2">
               {[
                 { id: "D", label: "D" },
                 { id: "W", label: "W" },
                 { id: "M", label: "M" },
                 { id: "ALL", label: "All" },
-              ].map((filter) => (
-                <button
-                  key={filter.id}
-                  onClick={() => setTimeFilter(filter.id)}
-                  className={`px-3 h-9 rounded-full text-sm font-bold transition-all ${
-                    timeFilter === filter.id
-                      ? "bg-slate-700/80 text-white shadow-lg backdrop-blur-md border border-white/20"
-                      : "text-slate-400 hover:text-slate-600 hover:bg-slate-200/30"
-                  }`}
-                  style={timeFilter === filter.id ? {
-                    boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.1), 0 4px 12px rgba(0,0,0,0.15)'
-                  } : {}}
-                >
-                  {filter.label}
-                </button>
-              ))}
+              ].map((filter, index, arr) => {
+                const isSelected = timeFilter === filter.id;
+                const selectedIndex = arr.findIndex(f => f.id === timeFilter);
+                const distance = Math.abs(index - selectedIndex);
+                
+                return (
+                  <button
+                    key={filter.id}
+                    onClick={() => setTimeFilter(filter.id)}
+                    className="rounded-2xl backdrop-blur-md border transition-all duration-300 ease-out"
+                    style={{
+                      padding: isSelected ? '10px 20px' : '8px 14px',
+                      background: isSelected 
+                        ? 'rgba(100, 100, 120, 0.25)' 
+                        : 'rgba(180, 180, 190, 0.15)',
+                      borderColor: isSelected 
+                        ? 'rgba(255, 255, 255, 0.3)' 
+                        : 'rgba(200, 200, 210, 0.2)',
+                      boxShadow: isSelected 
+                        ? 'inset 0 1px 2px rgba(255,255,255,0.15), 0 4px 16px rgba(0,0,0,0.12)' 
+                        : 'inset 0 1px 1px rgba(255,255,255,0.08)',
+                      transform: isSelected ? 'scale(1.1)' : `scale(${1 - distance * 0.05})`,
+                      opacity: isSelected ? 1 : (1 - distance * 0.2),
+                      filter: isSelected ? 'none' : `blur(${distance * 0.3}px)`,
+                    }}
+                  >
+                    <span 
+                      className="font-bold transition-all duration-300"
+                      style={{
+                        fontSize: isSelected ? '18px' : '15px',
+                        color: isSelected ? 'rgba(30, 30, 40, 0.9)' : 'rgba(80, 80, 100, 0.6)',
+                      }}
+                    >
+                      {filter.label}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
