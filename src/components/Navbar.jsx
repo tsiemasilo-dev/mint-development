@@ -201,8 +201,9 @@ const Navbar = ({ activeTab, setActiveTab, onWithdraw, onShowComingSoon }) => {
       {/* 3. Plus Button - separate portal above blur overlay */}
       {createPortal(
         <div 
-          className="fixed left-1/2 -translate-x-1/2 z-[10001] isolate"
+          className="fixed z-[10001] isolate"
           style={{
+            left: "calc(50% - 4px)",
             bottom: "calc(env(safe-area-inset-bottom, 0px) + 36px)",
             transform: "translateX(-50%) translateZ(0)",
             willChange: "transform"
