@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
-import { Bell, Eye, EyeOff, ChevronDown, ChevronRight, ArrowLeft, TrendingUp, TrendingDown, Plus } from "lucide-react";
+import { Bell, Eye, EyeOff, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, TrendingUp, TrendingDown, Plus } from "lucide-react";
 import { Area, ComposedChart, Line, XAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell } from 'recharts';
 import { useFinancialData } from "../lib/useFinancialData";
 import { useProfile } from "../lib/useProfile";
@@ -355,6 +355,8 @@ const NewPortfolioPage = () => {
   const [selectedStock, setSelectedStock] = useState(null);
   const [showStockDropdown, setShowStockDropdown] = useState(false);
   const [stockTimeFilter, setStockTimeFilter] = useState("W");
+  const [myStocksPage, setMyStocksPage] = useState(0);
+  const [otherStocksPage, setOtherStocksPage] = useState(0);
   const chartScrollRef = useRef(null);
   const stockChartScrollRef = useRef(null);
   const { securities: allSecurities, quotes: liveQuotes, loading: quotesLoading } = useStockQuotes();
@@ -1330,14 +1332,39 @@ const NewPortfolioPage = () => {
             </div>
 
             <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
-              {myStocks.length > 0 && (
+              {myStocks.length > 0 && (() => {
+                const STOCKS_PER_PAGE = 6;
+                const myTotalPages = Math.ceil(myStocks.length / STOCKS_PER_PAGE);
+                const myPagedStocks = myStocks.slice(myStocksPage * STOCKS_PER_PAGE, (myStocksPage + 1) * STOCKS_PER_PAGE);
+                return (
                 <section
                   className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50"
                   style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
                 >
-                  <p className="text-sm font-semibold text-slate-900 mb-4">My Stocks</p>
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="text-sm font-semibold text-slate-900">My Stocks</p>
+                    {myTotalPages > 1 && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setMyStocksPage(p => Math.max(0, p - 1))}
+                          disabled={myStocksPage === 0}
+                          className={`h-7 w-7 rounded-full flex items-center justify-center transition ${myStocksPage === 0 ? 'text-slate-300' : 'text-slate-600 hover:bg-slate-100 active:bg-slate-200'}`}
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </button>
+                        <span className="text-xs font-medium text-slate-400 tabular-nums">{myStocksPage + 1}/{myTotalPages}</span>
+                        <button
+                          onClick={() => setMyStocksPage(p => Math.min(myTotalPages - 1, p + 1))}
+                          disabled={myStocksPage >= myTotalPages - 1}
+                          className={`h-7 w-7 rounded-full flex items-center justify-center transition ${myStocksPage >= myTotalPages - 1 ? 'text-slate-300' : 'text-slate-600 hover:bg-slate-100 active:bg-slate-200'}`}
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   <div className="space-y-3">
-                    {myStocks.map((stock) => {
+                    {myPagedStocks.map((stock) => {
                       const livePrice = liveQuotes[stock.ticker]?.price || stock.price;
                       const liveChange = liveQuotes[stock.ticker]?.changePercent ?? stock.dailyChange;
                       const isPositive = liveChange >= 0;
@@ -1376,15 +1403,42 @@ const NewPortfolioPage = () => {
                     })}
                   </div>
                 </section>
-              )}
+                );
+              })()}
 
+              {(() => {
+                const STOCKS_PER_PAGE = 6;
+                const otherTotalPages = Math.ceil(otherStocks.length / STOCKS_PER_PAGE);
+                const otherPagedStocks = otherStocks.slice(otherStocksPage * STOCKS_PER_PAGE, (otherStocksPage + 1) * STOCKS_PER_PAGE);
+                return (
               <section
                 className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50"
                 style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
               >
-                <p className="text-sm font-semibold text-slate-900 mb-4">Other Stocks</p>
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-sm font-semibold text-slate-900">Other Stocks</p>
+                  {otherTotalPages > 1 && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setOtherStocksPage(p => Math.max(0, p - 1))}
+                        disabled={otherStocksPage === 0}
+                        className={`h-7 w-7 rounded-full flex items-center justify-center transition ${otherStocksPage === 0 ? 'text-slate-300' : 'text-slate-600 hover:bg-slate-100 active:bg-slate-200'}`}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </button>
+                      <span className="text-xs font-medium text-slate-400 tabular-nums">{otherStocksPage + 1}/{otherTotalPages}</span>
+                      <button
+                        onClick={() => setOtherStocksPage(p => Math.min(otherTotalPages - 1, p + 1))}
+                        disabled={otherStocksPage >= otherTotalPages - 1}
+                        className={`h-7 w-7 rounded-full flex items-center justify-center transition ${otherStocksPage >= otherTotalPages - 1 ? 'text-slate-300' : 'text-slate-600 hover:bg-slate-100 active:bg-slate-200'}`}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <div className="space-y-3">
-                  {otherStocks.map((stock) => {
+                  {otherPagedStocks.map((stock) => {
                     const livePrice = liveQuotes[stock.ticker]?.price || stock.price;
                     const liveChange = liveQuotes[stock.ticker]?.changePercent ?? stock.dailyChange;
                     const isPositive = liveChange >= 0;
@@ -1423,6 +1477,8 @@ const NewPortfolioPage = () => {
                   })}
                 </div>
               </section>
+                );
+              })()}
 
               <button
                 className="w-full py-3.5 rounded-full bg-gradient-to-r from-slate-800 to-slate-900 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg shadow-slate-900/30 transition hover:-translate-y-0.5 hover:shadow-xl flex items-center justify-center gap-2"
