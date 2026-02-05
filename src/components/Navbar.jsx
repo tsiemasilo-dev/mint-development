@@ -209,8 +209,8 @@ const Navbar = ({ activeTab, setActiveTab, onWithdraw, onShowComingSoon }) => {
             willChange: "transform"
           }}
         >
-          {/* Plus button - positioned absolutely within navbar */}
-          <div className="absolute left-1/2 -translate-x-1/2 -top-5 z-[1001]">
+          {/* Plus button - positioned absolutely within navbar, above the blur overlay */}
+          <div className="absolute left-1/2 -translate-x-1/2 -top-5 z-[10001] isolate">
             <button
               onClick={() => {
                 updateLayout();
@@ -218,9 +218,10 @@ const Navbar = ({ activeTab, setActiveTab, onWithdraw, onShowComingSoon }) => {
                 setIsOpen(newOpenState);
                 triggerHaptic(newOpenState ? ImpactStyle.Heavy : ImpactStyle.Light);
               }}
-              className={`flex h-16 w-16 items-center justify-center rounded-full shadow-2xl active:scale-90 ${
+              className={`flex h-16 w-16 items-center justify-center rounded-full shadow-2xl active:scale-90 isolate ${
                 isOpen ? "bg-white text-[#31005e]" : "bg-black text-white"
               }`}
+              style={{ backdropFilter: "none", WebkitBackdropFilter: "none" }}
             >
               <div className="relative h-10 w-10 flex items-center justify-center overflow-hidden">
                 <AnimatePresence mode="wait">
