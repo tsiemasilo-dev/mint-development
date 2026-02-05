@@ -481,10 +481,10 @@ const NewPortfolioPage = () => {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2.5 rounded-full text-sm font-medium transition-all ${
+                className={`px-4 py-2.5 rounded-full text-sm font-semibold transition-all ${
                   activeTab === tab.id
                     ? "bg-violet-500 text-white shadow-lg shadow-violet-500/30"
-                    : "border border-white/20 text-white/70 backdrop-blur-sm hover:bg-white/10"
+                    : "border border-white/40 text-white/90 backdrop-blur-sm hover:bg-white/15"
                 }`}
               >
                 {tab.label}
