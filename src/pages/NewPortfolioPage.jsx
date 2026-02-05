@@ -394,9 +394,9 @@ const NewPortfolioPage = () => {
           {/* Account balance */}
           <section className="relative">
             <div className="absolute -inset-8 bg-gradient-radial from-[#7c3aed]/20 via-transparent to-transparent rounded-full blur-2xl -z-10" />
-            <div className="flex items-center gap-2">
-              <p className="text-3xl font-bold tracking-tight">
-                $ {balanceVisible ? accountValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "••,•••.••"}
+            <div className="flex items-center gap-3">
+              <p className="text-3xl font-bold tracking-tight" style={{ minWidth: '180px' }}>
+                $ {balanceVisible ? accountValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "••••••••"}
               </p>
               <button
                 onClick={() => setBalanceVisible(!balanceVisible)}
