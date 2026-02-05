@@ -220,7 +220,7 @@ export const useStrategyChartData = (strategyId, timeFilter = "W") => {
         "D": "1D",
         "W": "1W",
         "M": "1M",
-        "ALL": "ALL",
+        "ALL": "1Y",
       };
 
       const timeframe = timeframeMap[timeFilter] || "1W";
@@ -254,42 +254,46 @@ export const useStrategyChartData = (strategyId, timeFilter = "W") => {
 function formatChartData(priceHistory, timeFilter) {
   if (!priceHistory || priceHistory.length === 0) return [];
 
-  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
   switch (timeFilter) {
     case "D": {
-      const data = priceHistory.slice(-7);
-      return data.map((p, idx) => {
+      const last24 = priceHistory.slice(-24);
+      return last24.map((p, idx) => {
         const date = new Date(p.ts);
+        const hour = date.getHours();
+        const ampm = hour >= 12 ? "pm" : "am";
+        const displayHour = hour % 12 || 12;
         return {
-          day: dayNames[date.getDay()],
+          day: `${displayHour}${ampm}`,
           value: p.nav,
-          highlighted: idx === Math.floor(data.length / 2),
+          highlighted: idx === Math.floor(last24.length / 2),
         };
       });
     }
     case "W": {
-      return priceHistory.map((p, idx) => {
+      const last7 = priceHistory.slice(-7);
+      const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      return last7.map((p, idx) => {
         const date = new Date(p.ts);
         return {
-          day: `${dayNames[date.getDay()]} ${date.getDate()}`,
+          day: dayNames[date.getDay()],
           value: p.nav,
-          highlighted: idx === Math.floor(priceHistory.length / 2),
+          highlighted: idx === Math.floor(last7.length / 2),
         };
       });
     }
     case "M": {
-      return priceHistory.map((p, idx) => {
+      const last30 = priceHistory.slice(-30);
+      return last30.map((p, idx) => {
         const date = new Date(p.ts);
         return {
-          day: `${date.getDate()} ${monthNames[date.getMonth()]}`,
+          day: date.getDate().toString(),
           value: p.nav,
-          highlighted: idx === Math.floor(priceHistory.length / 2),
+          highlighted: idx === Math.floor(last30.length / 2),
         };
       });
     }
     case "ALL": {
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
       const grouped = {};
 
       priceHistory.forEach((p) => {
@@ -302,7 +306,7 @@ function formatChartData(priceHistory, timeFilter) {
       return entries.map(([day, value], idx) => ({
         day,
         value,
-        highlighted: idx === Math.floor(entries.length / 2),
+        highlighted: idx === entries.length - 1,
       }));
     }
     default:

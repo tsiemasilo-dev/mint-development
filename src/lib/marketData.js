@@ -206,32 +206,31 @@ export const getSecurityPrices = async (securityId, timeframe = "1M") => {
     
     switch (timeframe) {
       case "1D":
-        daysToFetch = 7;
+        // Since we don't have intraday data yet, fetch last 30 days and display as "1M" style
+        daysToFetch = 30;
         break;
       case "1W":
-        daysToFetch = 14;
+        daysToFetch = 10; // ~2 weeks of trading days to get 7-10 days
         break;
       case "1M":
-        daysToFetch = 45;
+        daysToFetch = 45; // ~30 trading days
         break;
       case "3M":
-        daysToFetch = 110;
+        daysToFetch = 110; // ~90 trading days
         break;
       case "6M":
-        daysToFetch = 220;
+        daysToFetch = 220; // ~180 trading days
         break;
       case "YTD":
+        // Get from Jan 1 of current year
         const currentYear = new Date().getFullYear();
         dateFilter = new Date(currentYear, 0, 1).toISOString();
         break;
       case "1Y":
-        daysToFetch = 420;
+        daysToFetch = 420; // ~365 trading days
         break;
       case "5Y":
-        daysToFetch = 1825;
-        break;
-      case "ALL":
-        daysToFetch = null;
+        daysToFetch = 1825; // ~5 years
         break;
       default:
         daysToFetch = 45;
@@ -244,8 +243,10 @@ export const getSecurityPrices = async (securityId, timeframe = "1M") => {
       .order("ts", { ascending: true });
 
     if (dateFilter) {
+      // YTD filter
       query = query.gte("ts", dateFilter);
-    } else if (daysToFetch !== null) {
+    } else {
+      // Fetch last N days
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - daysToFetch);
       query = query.gte("ts", cutoffDate.toISOString());

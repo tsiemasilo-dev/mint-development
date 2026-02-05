@@ -52,10 +52,10 @@ export function useStockChart(securityId, timeFilter) {
 
   const getTimeframe = (filter) => {
     switch (filter) {
-      case 'D': return '1D';
+      case 'D': return '1W';
       case 'W': return '1W';
       case 'M': return '1M';
-      case 'ALL': return 'ALL';
+      case 'ALL': return '1Y';
       default: return '1M';
     }
   };
@@ -72,28 +72,23 @@ export function useStockChart(securityId, timeFilter) {
         setLoading(true);
         const timeframe = getTimeframe(timeFilter);
         const prices = await getSecurityPrices(securityId, timeframe);
-        const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-        const formatted = (prices || []).map((p, idx) => {
+        const formatted = (prices || []).map(p => {
           const date = new Date(p.ts);
           let label;
 
-          if (timeFilter === 'D') {
-            label = dayNames[date.getDay()];
-          } else if (timeFilter === 'W') {
-            label = `${dayNames[date.getDay()]} ${date.getDate()}`;
+          if (timeFilter === 'D' || timeFilter === 'W') {
+            label = date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
           } else if (timeFilter === 'M') {
-            label = `${date.getDate()} ${monthNames[date.getMonth()]}`;
+            label = date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
           } else {
-            label = `${monthNames[date.getMonth()]} '${date.getFullYear().toString().slice(-2)}`;
+            label = date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
           }
 
           return {
             day: label,
             value: Number(p.close.toFixed(2)),
             timestamp: new Date(p.ts).getTime(),
-            highlighted: idx === Math.floor((prices || []).length / 2),
           };
         });
 
