@@ -974,7 +974,7 @@ const NewPortfolioPage = () => {
               </div>
               
               {/* Right: Pie Chart */}
-              <div className="relative h-36 w-36">
+              <div className="relative h-44 w-44">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <defs>
@@ -990,7 +990,7 @@ const NewPortfolioPage = () => {
                       data={pieData}
                       cx="50%"
                       cy="50%"
-                      outerRadius={60}
+                      outerRadius={80}
                       paddingAngle={2}
                       dataKey="value"
                       stroke="rgba(255,255,255,0.9)"
@@ -1018,7 +1018,7 @@ const NewPortfolioPage = () => {
                     </Pie>
                     <Tooltip 
                       wrapperStyle={{ outline: 'none', zIndex: 100 }}
-                      position={{ x: 150, y: 20 }}
+                      position={{ x: 180, y: 10 }}
                       content={({ active, payload }) => {
                         if (active && payload && payload.length) {
                           const data = payload[0].payload;
