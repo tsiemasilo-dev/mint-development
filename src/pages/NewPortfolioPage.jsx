@@ -70,9 +70,9 @@ const NewPortfolioPage = () => {
   const goalProgress = (goal.current / goal.target) * 100;
 
   return (
-    <div className="min-h-screen pb-[env(safe-area-inset-bottom)] text-white relative overflow-hidden">
-      {/* Multi-layer gradient background */}
-      <div className="fixed inset-0 -z-10">
+    <div className="min-h-screen pb-[env(safe-area-inset-bottom)] text-white relative">
+      {/* Fixed gradient background - stays in place when scrolling */}
+      <div className="fixed inset-0 -z-10" style={{ position: 'fixed' }}>
         {/* Base gradient: seamless purple to lavender to white transition - white starts at pill buttons */}
         <div 
           className="absolute inset-0"
@@ -154,16 +154,19 @@ const NewPortfolioPage = () => {
               <span className="text-base font-bold">{selectedStrategy.name}</span>
               <ChevronDown className="h-5 w-5" />
             </button>
-            <div className="flex gap-1">
+            <div className="flex gap-2">
               {["D", "W", "M", "A"].map((filter) => (
                 <button
                   key={filter}
                   onClick={() => setTimeFilter(filter)}
-                  className={`w-9 h-9 rounded-full text-sm font-semibold transition-all ${
+                  className={`w-10 h-10 rounded-full text-base font-bold transition-all ${
                     timeFilter === filter
-                      ? "bg-slate-800 text-white shadow-md"
-                      : "text-slate-400 hover:text-slate-600"
+                      ? "bg-slate-700/80 text-white shadow-lg backdrop-blur-md border border-white/20"
+                      : "text-slate-400 hover:text-slate-600 hover:bg-slate-200/30"
                   }`}
+                  style={timeFilter === filter ? {
+                    boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.1), 0 4px 12px rgba(0,0,0,0.15)'
+                  } : {}}
                 >
                   {filter}
                 </button>
@@ -235,33 +238,45 @@ const NewPortfolioPage = () => {
                   dataKey="day" 
                   axisLine={false}
                   tickLine={false}
-                  tickMargin={16}
+                  tickMargin={20}
                   tick={({ x, y, payload, index }) => {
                     const isHighlighted = currentChartData[index]?.highlighted;
                     const totalItems = currentChartData.length;
                     const isEdge = index === 0 || index === totalItems - 1;
-                    const opacity = isEdge ? 0.5 : 1;
+                    const opacity = isEdge ? 0.6 : 1;
                     
                     return (
                       <g transform={`translate(${x},${y})`} style={{ opacity }}>
-                        {isHighlighted && (
-                          <rect
-                            x={-20}
-                            y={-8}
-                            width={40}
-                            height={24}
-                            rx={12}
-                            fill="#1e293b"
-                            style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.1))' }}
-                          />
-                        )}
+                        {isHighlighted ? (
+                          <>
+                            <rect
+                              x={-24}
+                              y={-12}
+                              width={48}
+                              height={30}
+                              rx={15}
+                              fill="rgba(71, 85, 105, 0.75)"
+                              style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.15))' }}
+                            />
+                            <rect
+                              x={-24}
+                              y={-12}
+                              width={48}
+                              height={30}
+                              rx={15}
+                              fill="none"
+                              stroke="rgba(255,255,255,0.2)"
+                              strokeWidth={1}
+                            />
+                          </>
+                        ) : null}
                         <text
                           x={0}
-                          y={6}
+                          y={8}
                           textAnchor="middle"
-                          fill={isHighlighted ? '#ffffff' : '#94a3b8'}
-                          fontSize={12}
-                          fontWeight={isHighlighted ? 600 : 500}
+                          fill={isHighlighted ? '#ffffff' : '#64748b'}
+                          fontSize={14}
+                          fontWeight={isHighlighted ? 700 : 600}
                         >
                           {payload.value}
                         </text>
