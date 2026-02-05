@@ -210,7 +210,7 @@ const Navbar = ({ activeTab, setActiveTab, onWithdraw, onShowComingSoon }) => {
           }}
         >
           {/* Plus button - positioned absolutely within navbar */}
-          <div className="absolute left-1/2 -translate-x-1/2 -top-5 z-10">
+          <div className="absolute left-1/2 -translate-x-1/2 -top-5 z-[1001]">
             <button
               onClick={() => {
                 updateLayout();
