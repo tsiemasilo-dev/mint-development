@@ -557,7 +557,7 @@ const NewPortfolioPage = () => {
           View All Allocations
         </button>
 
-        <section className="rounded-3xl bg-white/90 backdrop-blur-xl p-5 shadow-xl shadow-purple-900/10 border border-white/50">
+        <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50">
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm font-semibold text-slate-900">Linked Goals</p>
             <button className="flex items-center gap-1 text-xs font-medium text-violet-600 hover:text-violet-700 transition">
@@ -585,7 +585,7 @@ const NewPortfolioPage = () => {
           </div>
         </section>
 
-        <section className="rounded-3xl bg-white/90 backdrop-blur-xl p-5 shadow-xl shadow-purple-900/10 border border-white/50">
+        <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50">
           <div className="flex items-center justify-between mb-1">
             <p className="text-sm font-semibold text-slate-900">Portfolio Holdings</p>
           </div>
@@ -628,7 +628,7 @@ const NewPortfolioPage = () => {
         </section>
 
         {/* Calendar Returns */}
-        <section className="rounded-3xl bg-white/90 backdrop-blur-xl p-5 shadow-xl shadow-purple-900/10 border border-white/50">
+        <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50">
           <div className="flex items-center justify-between gap-4 mb-4">
             <p className="text-sm font-semibold text-slate-900">Calendar Returns</p>
             {availableCalendarYears.length > 1 && (
