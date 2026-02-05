@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Bell, Eye, EyeOff, ChevronDown, ChevronRight } from "lucide-react";
+import { Area, ComposedChart, Line, XAxis, ResponsiveContainer, Tooltip } from 'recharts';
 
 const MOCK_DATA = {
   accountValue: 24897.43,
@@ -60,8 +61,6 @@ const NewPortfolioPage = () => {
   };
 
   const currentChartData = getChartData();
-  const maxValue = Math.max(...currentChartData.map(d => d.value));
-  const highlightedPoint = currentChartData.find(d => d.highlighted);
 
   const formatCurrency = (value) => {
     return `R${value.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -205,86 +204,70 @@ const NewPortfolioPage = () => {
             </p>
           </div>
 
-          <div className="relative h-32 mb-2">
-            <svg className="w-full h-full" viewBox="0 0 300 100" preserveAspectRatio="none">
-              <defs>
-                <linearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="rgba(139, 92, 246, 0.6)" />
-                  <stop offset="50%" stopColor="rgba(124, 58, 237, 1)" />
-                  <stop offset="100%" stopColor="rgba(139, 92, 246, 0.6)" />
-                </linearGradient>
-                <linearGradient id="highlightGradient" x1="0%" y1="100%" x2="0%" y2="0%">
-                  <stop offset="0%" stopColor="rgba(250, 204, 21, 0)" />
-                  <stop offset="50%" stopColor="rgba(250, 204, 21, 0.6)" />
-                  <stop offset="100%" stopColor="rgba(250, 204, 21, 1)" />
-                </linearGradient>
-                <filter id="glow">
-                  <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
-                  <feMerge>
-                    <feMergeNode in="coloredBlur"/>
-                    <feMergeNode in="SourceGraphic"/>
-                  </feMerge>
-                </filter>
-              </defs>
-              
-              <path
-                d={`M ${currentChartData.map((d, i) => {
-                  const x = (i / (currentChartData.length - 1)) * 300;
-                  const y = 100 - (d.value / maxValue) * 80;
-                  return `${i === 0 ? '' : 'L '}${x} ${y}`;
-                }).join(' ')}`}
-                fill="none"
-                stroke="url(#lineGradient)"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                filter="url(#glow)"
-              />
-
-              {currentChartData.map((d, i) => {
-                if (!d.highlighted) return null;
-                const x = (i / (currentChartData.length - 1)) * 300;
-                const y = 100 - (d.value / maxValue) * 80;
-                return (
-                  <g key={i}>
-                    <rect
-                      x={x - 8}
-                      y={y}
-                      width="16"
-                      height={100 - y}
-                      fill="url(#highlightGradient)"
-                      rx="4"
-                    />
-                    <circle cx={x} cy={y} r="6" fill="#facc15" filter="url(#glow)" />
-                    <circle cx={x} cy={y} r="3" fill="white" />
-                  </g>
-                );
-              })}
-            </svg>
-            
-            {highlightedPoint && (
-              <div 
-                className="absolute bg-slate-900 text-yellow-400 text-xs font-bold px-2 py-1 rounded-lg shadow-lg"
-                style={{ 
-                  left: `${(currentChartData.findIndex(d => d.highlighted) / (currentChartData.length - 1)) * 100}%`,
-                  top: '0',
-                  transform: 'translateX(-50%)'
-                }}
+          <div style={{ width: '100%', height: 140 }}>
+            <ResponsiveContainer width="100%" height={140}>
+              <ComposedChart
+                data={currentChartData}
+                margin={{ top: 20, right: 10, left: 10, bottom: 5 }}
               >
-                R{highlightedPoint.value.toLocaleString()}
-              </div>
-            )}
-          </div>
+                <defs>
+                  <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#7c3aed" stopOpacity={0.3} />
+                    <stop offset="100%" stopColor="#7c3aed" stopOpacity={0} />
+                  </linearGradient>
+                  <filter id="lineShadow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#7c3aed" floodOpacity="0.4" />
+                  </filter>
+                </defs>
+                
+                <XAxis 
+                  dataKey="day" 
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 11, fill: '#94a3b8' }}
+                  tickMargin={8}
+                />
+                
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      return (
+                        <div className="rounded-lg bg-slate-900 px-3 py-2 text-white shadow-xl">
+                          <div className="text-sm font-semibold text-amber-400">
+                            R{payload[0].value.toLocaleString()}
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                  cursor={{ stroke: '#7c3aed', strokeWidth: 1, strokeDasharray: '4 4' }}
+                />
 
-          <div className="flex justify-between text-xs text-slate-400 px-1">
-            {currentChartData.map((d, i) => (
-              <span 
-                key={i} 
-                className={d.highlighted ? "text-amber-500 font-semibold" : ""}
-              >
-                {d.day || d.label}
-              </span>
-            ))}
+                <Area
+                  type="monotone"
+                  dataKey="value"
+                  stroke="transparent"
+                  fill="url(#areaGradient)"
+                  strokeWidth={0}
+                />
+
+                <Line
+                  type="monotone"
+                  dataKey="value"
+                  stroke="#7c3aed"
+                  strokeWidth={3}
+                  dot={false}
+                  activeDot={{
+                    r: 6,
+                    fill: '#facc15',
+                    stroke: 'white',
+                    strokeWidth: 2,
+                  }}
+                  style={{ filter: 'url(#lineShadow)' }}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
           </div>
         </section>
 
