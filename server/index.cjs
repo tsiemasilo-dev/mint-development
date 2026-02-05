@@ -192,6 +192,31 @@ app.post("/api/sumsub/access-token", async (req, res) => {
   }
 });
 
+async function getSumsubApplicantById(applicantId) {
+  const ts = Math.floor(Date.now() / 1000).toString();
+  const path = `/resources/applicants/${applicantId}/one`;
+  const method = "GET";
+  
+  const signature = createSumsubSignature(ts, method, path);
+  
+  const response = await fetch(`${SUMSUB_BASE_URL}${path}`, {
+    method,
+    headers: {
+      "Accept": "application/json",
+      "X-App-Token": SUMSUB_APP_TOKEN,
+      "X-App-Access-Ts": ts,
+      "X-App-Access-Sig": signature,
+    },
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Sumsub API error: ${response.status} - ${errorText}`);
+  }
+  
+  return response.json();
+}
+
 app.get("/api/sumsub/status/:applicantId", async (req, res) => {
   try {
     if (!SUMSUB_APP_TOKEN || !SUMSUB_SECRET_KEY) {
@@ -202,11 +227,54 @@ app.get("/api/sumsub/status/:applicantId", async (req, res) => {
     }
 
     const { applicantId } = req.params;
-    const status = await getSumsubApplicantStatus(applicantId);
+    
+    // Get both the applicant info and required docs status
+    const [applicant, requiredDocsStatus] = await Promise.all([
+      getSumsubApplicantById(applicantId),
+      getSumsubApplicantStatus(applicantId)
+    ]);
+    
+    // Calculate normalized status
+    let hasAnySubmittedSteps = false;
+    let hasRejectedSteps = false;
+    
+    if (requiredDocsStatus) {
+      for (const [stepName, stepData] of Object.entries(requiredDocsStatus)) {
+        if (stepData !== null) {
+          hasAnySubmittedSteps = true;
+          if (stepData?.reviewResult?.reviewAnswer === "RED") {
+            hasRejectedSteps = true;
+          }
+        }
+      }
+    }
+    
+    const reviewStatus = applicant?.review?.reviewStatus;
+    const reviewAnswer = applicant?.review?.reviewResult?.reviewAnswer;
+    
+    let normalizedStatus = "not_verified";
+    if (reviewAnswer === "GREEN") {
+      normalizedStatus = "verified";
+    } else if (hasRejectedSteps || reviewAnswer === "RED") {
+      normalizedStatus = "needs_resubmission";
+    } else if (reviewStatus === "onHold") {
+      normalizedStatus = "needs_resubmission";
+    } else if (reviewStatus === "pending" || reviewStatus === "queued") {
+      normalizedStatus = "pending";
+    } else if (hasAnySubmittedSteps) {
+      normalizedStatus = "pending";
+    } else {
+      normalizedStatus = "not_verified";
+    }
     
     res.json({
       success: true,
-      status
+      normalizedStatus,
+      requiredDocsStatus,
+      hasAnySubmittedSteps,
+      hasRejectedSteps,
+      review: applicant?.review || null,
+      createdAt: applicant?.createdAt
     });
   } catch (error) {
     console.error("Sumsub status error:", error);
@@ -299,25 +367,30 @@ app.post("/api/sumsub/status", async (req, res) => {
     // Get the required docs status to check for incomplete steps
     const requiredDocsStatus = await getSumsubRequiredDocsStatus(applicant.id);
     
-    // Check if any required documents are incomplete (null or missing reviewResult)
+    // Check document status - distinguish between "never started" and "started but incomplete"
     let hasIncompleteSteps = false;
     let hasRejectedSteps = false;
     let allStepsGreen = true;
+    let hasAnySubmittedSteps = false; // Track if user ever submitted anything
     
     if (requiredDocsStatus) {
       for (const [stepName, stepData] of Object.entries(requiredDocsStatus)) {
         if (stepData === null) {
-          // Step not started yet - documents required
+          // Step not started yet
           hasIncompleteSteps = true;
           allStepsGreen = false;
-          console.log(`Step ${stepName} is incomplete (null)`);
-        } else if (stepData?.reviewResult?.reviewAnswer === "RED") {
-          hasRejectedSteps = true;
-          allStepsGreen = false;
-          console.log(`Step ${stepName} is rejected`);
-        } else if (stepData?.reviewResult?.reviewAnswer !== "GREEN") {
-          allStepsGreen = false;
-          console.log(`Step ${stepName} is not GREEN:`, stepData?.reviewResult?.reviewAnswer);
+          console.log(`Step ${stepName} is not started (null)`);
+        } else {
+          // Step has some data - user submitted something
+          hasAnySubmittedSteps = true;
+          if (stepData?.reviewResult?.reviewAnswer === "RED") {
+            hasRejectedSteps = true;
+            allStepsGreen = false;
+            console.log(`Step ${stepName} is rejected`);
+          } else if (stepData?.reviewResult?.reviewAnswer !== "GREEN") {
+            allStepsGreen = false;
+            console.log(`Step ${stepName} is not GREEN:`, stepData?.reviewResult?.reviewAnswer);
+          }
         }
       }
     }
@@ -336,41 +409,38 @@ app.post("/api/sumsub/status", async (req, res) => {
     console.log(`Reject Labels: ${JSON.stringify(rejectLabels)}`);
     console.log(`Has Incomplete Steps: ${hasIncompleteSteps}`);
     console.log(`Has Rejected Steps: ${hasRejectedSteps}`);
+    console.log(`Has Any Submitted Steps: ${hasAnySubmittedSteps}`);
     console.log(`All Steps Green: ${allStepsGreen}`);
     
     let status = "not_verified";
     
-    // Priority: Check for incomplete steps first (this is the "documents required" state)
-    if (hasIncompleteSteps) {
-      status = "needs_resubmission";
-      console.log(`Status: needs_resubmission (incomplete steps)`);
-    } else if (hasRejectedSteps) {
-      status = "needs_resubmission";
-      console.log(`Status: needs_resubmission (rejected steps)`);
-    } else if (allStepsGreen && reviewAnswer === "GREEN") {
+    // Priority order for status determination:
+    // 1. If all steps are GREEN and review is GREEN → verified
+    // 2. If any steps are rejected → needs_resubmission
+    // 3. If user submitted something but incomplete → pending (in progress)
+    // 4. If user never submitted anything → not_verified
+    
+    if (allStepsGreen && reviewAnswer === "GREEN") {
       status = "verified";
       console.log(`Status: verified (all steps GREEN)`);
-    } else if (reviewAnswer === "RED") {
-      status = rejectLabels.length > 0 ? "needs_resubmission" : "not_verified";
-      console.log(`Status: ${status} (review RED)`);
-    } else if (reviewStatus === "pending" || reviewStatus === "queued") {
-      status = "pending";
-      console.log(`Status: pending (review pending/queued)`);
+    } else if (hasRejectedSteps || reviewAnswer === "RED") {
+      // User submitted documents but they were rejected
+      status = "needs_resubmission";
+      console.log(`Status: needs_resubmission (rejected)`);
     } else if (reviewStatus === "onHold") {
       status = "needs_resubmission";
       console.log(`Status: needs_resubmission (on hold)`);
-    } else if (reviewStatus === "init" || !reviewStatus) {
-      // Check if we have any completed steps
-      if (requiredDocsStatus && Object.values(requiredDocsStatus).some(s => s !== null)) {
-        status = "pending";
-        console.log(`Status: pending (has some completed steps)`);
-      } else {
-        status = "not_verified";
-        console.log(`Status: not_verified (init)`);
-      }
-    } else {
+    } else if (reviewStatus === "pending" || reviewStatus === "queued") {
       status = "pending";
-      console.log(`Status: pending (fallback)`);
+      console.log(`Status: pending (review pending/queued)`);
+    } else if (hasAnySubmittedSteps) {
+      // User has started verification but not complete yet
+      status = "pending";
+      console.log(`Status: pending (verification in progress)`);
+    } else {
+      // User has never submitted any documents
+      status = "not_verified";
+      console.log(`Status: not_verified (no documents submitted)`);
     }
 
     res.json({
