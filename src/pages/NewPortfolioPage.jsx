@@ -104,12 +104,145 @@ const MOCK_ALLOCATIONS = [
 ];
 
 const MOCK_STOCKS = [
-  { id: 1, name: "Apple Inc.", ticker: "AAPL", shares: 15, price: 185.42, dailyChange: 2.35 },
-  { id: 2, name: "Microsoft Corp.", ticker: "MSFT", shares: 8, price: 378.91, dailyChange: -0.87 },
-  { id: 3, name: "Amazon.com Inc.", ticker: "AMZN", shares: 12, price: 178.25, dailyChange: 1.52 },
-  { id: 4, name: "Tesla Inc.", ticker: "TSLA", shares: 20, price: 248.50, dailyChange: -2.14 },
-  { id: 5, name: "Alphabet Inc.", ticker: "GOOGL", shares: 10, price: 141.80, dailyChange: 0.95 },
+  { id: 1, name: "Apple Inc.", ticker: "AAPL", shares: 15, price: 185.42, dailyChange: 2.35, logo: "https://logo.clearbit.com/apple.com" },
+  { id: 2, name: "Microsoft Corp.", ticker: "MSFT", shares: 8, price: 378.91, dailyChange: -0.87, logo: "https://logo.clearbit.com/microsoft.com" },
+  { id: 3, name: "Amazon.com Inc.", ticker: "AMZN", shares: 12, price: 178.25, dailyChange: 1.52, logo: "https://logo.clearbit.com/amazon.com" },
+  { id: 4, name: "Tesla Inc.", ticker: "TSLA", shares: 20, price: 248.50, dailyChange: -2.14, logo: "https://logo.clearbit.com/tesla.com" },
+  { id: 5, name: "Alphabet Inc.", ticker: "GOOGL", shares: 10, price: 141.80, dailyChange: 0.95, logo: "https://logo.clearbit.com/google.com" },
 ];
+
+const MOCK_STOCK_CHART_DATA = {
+  AAPL: {
+    daily: [
+      { day: "12am", value: 182.10 }, { day: "1am", value: 182.05 }, { day: "2am", value: 182.20 },
+      { day: "3am", value: 182.35 }, { day: "4am", value: 182.50 }, { day: "5am", value: 182.80 },
+      { day: "6am", value: 183.10 }, { day: "7am", value: 183.50 }, { day: "8am", value: 183.80 },
+      { day: "9am", value: 184.20 }, { day: "10am", value: 184.60 }, { day: "11am", value: 184.90 },
+      { day: "12pm", value: 185.20, highlighted: true }, { day: "1pm", value: 185.10 },
+      { day: "2pm", value: 185.30 }, { day: "3pm", value: 185.25 }, { day: "4pm", value: 185.42 },
+    ],
+    weekly: [
+      { day: "Mon", value: 181.20 }, { day: "Tue", value: 182.50 },
+      { day: "Wed", value: 183.80, highlighted: true }, { day: "Thu", value: 184.10 },
+      { day: "Fri", value: 185.42 },
+    ],
+    monthly: [
+      { day: "1", value: 175.50 }, { day: "5", value: 176.80 }, { day: "8", value: 178.20 },
+      { day: "12", value: 179.90 }, { day: "15", value: 180.50, highlighted: true },
+      { day: "18", value: 181.30 }, { day: "22", value: 182.70 }, { day: "25", value: 184.10 },
+      { day: "28", value: 185.00 }, { day: "30", value: 185.42 },
+    ],
+    allTime: [
+      { day: "Jan '24", value: 155.00 }, { day: "Mar '24", value: 160.20 }, { day: "May '24", value: 165.50 },
+      { day: "Jul '24", value: 170.80 }, { day: "Sep '24", value: 174.30 }, { day: "Nov '24", value: 178.60 },
+      { day: "Jan '25", value: 182.90, highlighted: true }, { day: "Feb '25", value: 185.42 },
+    ],
+  },
+  MSFT: {
+    daily: [
+      { day: "12am", value: 376.50 }, { day: "1am", value: 376.40 }, { day: "2am", value: 376.60 },
+      { day: "3am", value: 376.80 }, { day: "4am", value: 377.00 }, { day: "5am", value: 377.30 },
+      { day: "6am", value: 377.60 }, { day: "7am", value: 377.90 }, { day: "8am", value: 378.20 },
+      { day: "9am", value: 378.50 }, { day: "10am", value: 378.80 }, { day: "11am", value: 379.10 },
+      { day: "12pm", value: 379.50, highlighted: true }, { day: "1pm", value: 379.30 },
+      { day: "2pm", value: 379.10 }, { day: "3pm", value: 378.95 }, { day: "4pm", value: 378.91 },
+    ],
+    weekly: [
+      { day: "Mon", value: 380.20 }, { day: "Tue", value: 381.50 },
+      { day: "Wed", value: 380.10, highlighted: true }, { day: "Thu", value: 379.50 },
+      { day: "Fri", value: 378.91 },
+    ],
+    monthly: [
+      { day: "1", value: 372.00 }, { day: "5", value: 373.50 }, { day: "8", value: 375.20 },
+      { day: "12", value: 376.80 }, { day: "15", value: 378.00, highlighted: true },
+      { day: "18", value: 379.10 }, { day: "22", value: 380.50 }, { day: "25", value: 379.80 },
+      { day: "28", value: 379.20 }, { day: "30", value: 378.91 },
+    ],
+    allTime: [
+      { day: "Jan '24", value: 340.00 }, { day: "Mar '24", value: 348.50 }, { day: "May '24", value: 355.20 },
+      { day: "Jul '24", value: 362.80 }, { day: "Sep '24", value: 368.40 }, { day: "Nov '24", value: 374.90 },
+      { day: "Jan '25", value: 380.20, highlighted: true }, { day: "Feb '25", value: 378.91 },
+    ],
+  },
+  AMZN: {
+    daily: [
+      { day: "12am", value: 175.80 }, { day: "1am", value: 175.90 }, { day: "2am", value: 176.10 },
+      { day: "3am", value: 176.30 }, { day: "4am", value: 176.50 }, { day: "5am", value: 176.80 },
+      { day: "6am", value: 177.00 }, { day: "7am", value: 177.20 }, { day: "8am", value: 177.50 },
+      { day: "9am", value: 177.80 }, { day: "10am", value: 178.00 }, { day: "11am", value: 178.10 },
+      { day: "12pm", value: 178.30, highlighted: true }, { day: "1pm", value: 178.20 },
+      { day: "2pm", value: 178.15 }, { day: "3pm", value: 178.20 }, { day: "4pm", value: 178.25 },
+    ],
+    weekly: [
+      { day: "Mon", value: 174.50 }, { day: "Tue", value: 175.80 },
+      { day: "Wed", value: 176.90, highlighted: true }, { day: "Thu", value: 177.50 },
+      { day: "Fri", value: 178.25 },
+    ],
+    monthly: [
+      { day: "1", value: 168.00 }, { day: "5", value: 169.50 }, { day: "8", value: 171.20 },
+      { day: "12", value: 173.00 }, { day: "15", value: 174.50, highlighted: true },
+      { day: "18", value: 175.80 }, { day: "22", value: 176.90 }, { day: "25", value: 177.50 },
+      { day: "28", value: 178.00 }, { day: "30", value: 178.25 },
+    ],
+    allTime: [
+      { day: "Jan '24", value: 145.00 }, { day: "Mar '24", value: 150.80 }, { day: "May '24", value: 155.50 },
+      { day: "Jul '24", value: 160.20 }, { day: "Sep '24", value: 165.80 }, { day: "Nov '24", value: 171.40 },
+      { day: "Jan '25", value: 175.90, highlighted: true }, { day: "Feb '25", value: 178.25 },
+    ],
+  },
+  TSLA: {
+    daily: [
+      { day: "12am", value: 252.80 }, { day: "1am", value: 252.50 }, { day: "2am", value: 252.20 },
+      { day: "3am", value: 251.80 }, { day: "4am", value: 251.50 }, { day: "5am", value: 251.00 },
+      { day: "6am", value: 250.80 }, { day: "7am", value: 250.50 }, { day: "8am", value: 250.20 },
+      { day: "9am", value: 249.80 }, { day: "10am", value: 249.50 }, { day: "11am", value: 249.20 },
+      { day: "12pm", value: 249.00, highlighted: true }, { day: "1pm", value: 248.90 },
+      { day: "2pm", value: 248.70 }, { day: "3pm", value: 248.60 }, { day: "4pm", value: 248.50 },
+    ],
+    weekly: [
+      { day: "Mon", value: 255.80 }, { day: "Tue", value: 253.50 },
+      { day: "Wed", value: 251.20, highlighted: true }, { day: "Thu", value: 250.00 },
+      { day: "Fri", value: 248.50 },
+    ],
+    monthly: [
+      { day: "1", value: 262.00 }, { day: "5", value: 260.50 }, { day: "8", value: 258.80 },
+      { day: "12", value: 256.50 }, { day: "15", value: 254.20, highlighted: true },
+      { day: "18", value: 252.80 }, { day: "22", value: 251.00 }, { day: "25", value: 249.80 },
+      { day: "28", value: 249.00 }, { day: "30", value: 248.50 },
+    ],
+    allTime: [
+      { day: "Jan '24", value: 220.00 }, { day: "Mar '24", value: 235.50 }, { day: "May '24", value: 245.80 },
+      { day: "Jul '24", value: 260.20 }, { day: "Sep '24", value: 268.40 }, { day: "Nov '24", value: 258.90 },
+      { day: "Jan '25", value: 252.80, highlighted: true }, { day: "Feb '25", value: 248.50 },
+    ],
+  },
+  GOOGL: {
+    daily: [
+      { day: "12am", value: 140.20 }, { day: "1am", value: 140.25 }, { day: "2am", value: 140.30 },
+      { day: "3am", value: 140.40 }, { day: "4am", value: 140.50 }, { day: "5am", value: 140.65 },
+      { day: "6am", value: 140.80 }, { day: "7am", value: 140.95 }, { day: "8am", value: 141.10 },
+      { day: "9am", value: 141.25 }, { day: "10am", value: 141.40 }, { day: "11am", value: 141.55 },
+      { day: "12pm", value: 141.70, highlighted: true }, { day: "1pm", value: 141.65 },
+      { day: "2pm", value: 141.72 }, { day: "3pm", value: 141.75 }, { day: "4pm", value: 141.80 },
+    ],
+    weekly: [
+      { day: "Mon", value: 139.50 }, { day: "Tue", value: 140.20 },
+      { day: "Wed", value: 140.80, highlighted: true }, { day: "Thu", value: 141.30 },
+      { day: "Fri", value: 141.80 },
+    ],
+    monthly: [
+      { day: "1", value: 135.00 }, { day: "5", value: 136.20 }, { day: "8", value: 137.50 },
+      { day: "12", value: 138.40 }, { day: "15", value: 139.20, highlighted: true },
+      { day: "18", value: 140.00 }, { day: "22", value: 140.80 }, { day: "25", value: 141.20 },
+      { day: "28", value: 141.50 }, { day: "30", value: 141.80 },
+    ],
+    allTime: [
+      { day: "Jan '24", value: 120.00 }, { day: "Mar '24", value: 124.50 }, { day: "May '24", value: 128.80 },
+      { day: "Jul '24", value: 132.20 }, { day: "Sep '24", value: 135.40 }, { day: "Nov '24", value: 138.60 },
+      { day: "Jan '25", value: 140.90, highlighted: true }, { day: "Feb '25", value: 141.80 },
+    ],
+  },
+};
 
 
 const MOCK_DATA = {
@@ -218,8 +351,13 @@ const NewPortfolioPage = () => {
   const [currentView, setCurrentView] = useState("portfolio");
   const [showStrategyDropdown, setShowStrategyDropdown] = useState(false);
   const [activePieIndex, setActivePieIndex] = useState(-1);
+  const [selectedStock, setSelectedStock] = useState(MOCK_STOCKS[0]);
+  const [showStockDropdown, setShowStockDropdown] = useState(false);
+  const [stockTimeFilter, setStockTimeFilter] = useState("W");
   const chartScrollRef = useRef(null);
+  const stockChartScrollRef = useRef(null);
   const dropdownRef = useRef(null);
+  const stockDropdownRef = useRef(null);
   const { profile } = useProfile();
   const { strategies, selectedStrategy: userSelectedStrategy, loading: strategiesLoading, selectStrategy } = useUserStrategies();
   const { chartData: realChartData, loading: chartLoading } = useStrategyChartData(userSelectedStrategy?.strategyId, timeFilter);
@@ -261,6 +399,28 @@ const NewPortfolioPage = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showStrategyDropdown]);
 
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (stockDropdownRef.current && !stockDropdownRef.current.contains(event.target)) {
+        setShowStockDropdown(false);
+      }
+    };
+    if (showStockDropdown) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showStockDropdown]);
+
+  useEffect(() => {
+    if (stockChartScrollRef.current) {
+      const scrollContainer = stockChartScrollRef.current;
+      const chartWidth = scrollContainer.scrollWidth;
+      const containerWidth = scrollContainer.clientWidth;
+      const scrollTo = (chartWidth - containerWidth) * 0.6;
+      scrollContainer.scrollTo({ left: scrollTo, behavior: 'smooth' });
+    }
+  }, [stockTimeFilter, selectedStock]);
+
   const handleStrategySelect = (strategy) => {
     selectStrategy(strategy);
     setShowStrategyDropdown(false);
@@ -298,6 +458,24 @@ const NewPortfolioPage = () => {
         { symbol: "EXP.JO", name: "Exemplar REITail Ltd.", weight: 19.0, logo: "/logos/exemplar-reit.jpg" },
         { symbol: "SBK.JO", name: "Standard Bank Group", weight: 12.5, logo: "/logos/standard-bank.jpg" },
       ];
+
+  const getStockChartData = () => {
+    const stockData = MOCK_STOCK_CHART_DATA[selectedStock.ticker];
+    if (!stockData) return [];
+    switch (stockTimeFilter) {
+      case "D": return stockData.daily;
+      case "W": return stockData.weekly;
+      case "M": return stockData.monthly;
+      case "ALL": return stockData.allTime;
+      default: return stockData.weekly;
+    }
+  };
+
+  const getStockChartWidth = (dataLength) => {
+    const minWidth = 100;
+    const pointSpacing = stockTimeFilter === "W" ? 70 : 50;
+    return Math.max(minWidth, dataLength * pointSpacing);
+  };
 
   const getChartData = () => {
     if (realChartData && realChartData.length > 0) {
@@ -882,62 +1060,278 @@ const NewPortfolioPage = () => {
       )}
 
       {/* Individual Stocks Tab Content */}
-      {activeTab === "stocks" && (
-        <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
-          <div 
-            className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50"
-            style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
-          >
-            <h3 className="text-lg font-bold text-slate-900 mb-4">Your Holdings</h3>
-            <div className="space-y-4">
-              {MOCK_STOCKS.map((stock) => {
-                const totalValue = stock.shares * stock.price;
-                const isPositive = stock.dailyChange >= 0;
-                return (
-                  <div 
-                    key={stock.id}
-                    className="flex items-center justify-between py-3 border-b border-slate-100 last:border-b-0"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-violet-100 to-purple-100">
-                        <span className="text-sm font-bold text-violet-700">
-                          {stock.ticker.slice(0, 2)}
-                        </span>
+      {activeTab === "stocks" && (() => {
+        const stockChartData = getStockChartData();
+        const otherStocks = MOCK_STOCKS.filter(s => s.id !== selectedStock.id);
+        return (
+          <>
+            <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 md:max-w-md md:px-8">
+              <section className="py-2">
+                <div className="flex items-center justify-between mb-3 px-1">
+                  <div className="relative" ref={stockDropdownRef}>
+                    <button
+                      onClick={() => setShowStockDropdown(!showStockDropdown)}
+                      className="flex items-center gap-2 text-slate-900 hover:text-slate-700 transition"
+                    >
+                      <span className="text-lg font-semibold tracking-tight" style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}>
+                        {selectedStock.name}
+                      </span>
+                      <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${showStockDropdown ? 'rotate-180' : ''}`} />
+                    </button>
+                    {showStockDropdown && (
+                      <div
+                        className="absolute top-full left-0 mt-2 min-w-[200px] bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200/50 z-50 overflow-hidden"
+                        style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
+                      >
+                        {MOCK_STOCKS.map((stock) => (
+                          <button
+                            key={stock.id}
+                            onClick={() => { setSelectedStock(stock); setShowStockDropdown(false); }}
+                            className={`w-full px-4 py-3.5 text-left hover:bg-purple-50/50 transition-colors duration-150 border-b border-slate-100/50 last:border-b-0 ${
+                              selectedStock.id === stock.id ? 'bg-purple-50' : ''
+                            }`}
+                          >
+                            <p className="font-medium text-slate-800 text-sm tracking-tight">{stock.name}</p>
+                            <p className="text-xs text-slate-400 mt-0.5 font-medium tabular-nums">
+                              {formatCurrency(stock.price)}
+                            </p>
+                          </button>
+                        ))}
                       </div>
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">{stock.name}</p>
-                        <p className="text-xs text-slate-500">{stock.ticker} · {stock.shares} shares</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-bold text-slate-900">
-                        {formatCurrency(totalValue)}
-                      </p>
-                      <div className="flex items-center justify-end gap-1">
-                        {isPositive ? (
-                          <TrendingUp className="h-3 w-3 text-emerald-600" />
-                        ) : (
-                          <TrendingDown className="h-3 w-3 text-rose-600" />
-                        )}
-                        <p className={`text-xs font-medium ${isPositive ? 'text-emerald-600' : 'text-rose-600'}`}>
-                          {isPositive ? '+' : ''}{stock.dailyChange.toFixed(2)}%
-                        </p>
-                      </div>
-                    </div>
+                    )}
                   </div>
-                );
-              })}
-            </div>
-          </div>
+                  <div className="flex gap-1">
+                    {[
+                      { id: "D", label: "D" },
+                      { id: "W", label: "W" },
+                      { id: "M", label: "M" },
+                      { id: "ALL", label: "All" },
+                    ].map((filter) => (
+                      <button
+                        key={filter.id}
+                        onClick={() => setStockTimeFilter(filter.id)}
+                        className={`px-3 h-9 rounded-full text-sm font-bold transition-all ${
+                          stockTimeFilter === filter.id
+                            ? "bg-slate-700/80 text-white shadow-lg backdrop-blur-md border border-white/20"
+                            : "text-slate-400 hover:text-slate-600 hover:bg-slate-200/30"
+                        }`}
+                        style={stockTimeFilter === filter.id ? {
+                          boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.1), 0 4px 12px rgba(0,0,0,0.15)'
+                        } : {}}
+                      >
+                        {filter.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-          <button 
-            className="w-full py-3.5 rounded-full bg-gradient-to-r from-slate-800 to-slate-900 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg shadow-slate-900/30 transition hover:-translate-y-0.5 hover:shadow-xl flex items-center justify-center gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Buy Stocks
-          </button>
-        </div>
-      )}
+                <div className="mb-3 px-1">
+                  <p className="text-3xl font-bold text-slate-900">{formatCurrency(selectedStock.price)}</p>
+                  <p className={`text-sm ${selectedStock.dailyChange >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                    ({selectedStock.dailyChange >= 0 ? '+' : ''}{selectedStock.dailyChange.toFixed(2)}% Today)
+                  </p>
+                </div>
+
+                <div
+                  ref={stockChartScrollRef}
+                  className="overflow-x-auto scrollbar-hide"
+                  style={{
+                    width: '100%',
+                    height: 220,
+                    marginBottom: 8,
+                    WebkitOverflowScrolling: 'touch',
+                    msOverflowStyle: 'none',
+                    scrollbarWidth: 'none',
+                    overflowY: 'hidden',
+                  }}
+                  onTouchStart={(e) => e.currentTarget.style.cursor = 'grabbing'}
+                  onTouchEnd={(e) => e.currentTarget.style.cursor = 'grab'}
+                >
+                  <div style={{ width: getStockChartWidth(stockChartData.length), height: 220, minWidth: '100%', outline: 'none' }}>
+                    <ComposedChart
+                      width={getStockChartWidth(stockChartData.length)}
+                      height={220}
+                      data={stockChartData}
+                      margin={{ top: 20, right: 30, left: 30, bottom: 40 }}
+                      style={{ outline: 'none' }}
+                    >
+                      <defs>
+                        <linearGradient id="stockPurpleLineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                          <stop offset="0%" stopColor="#a78bfa" stopOpacity="0" />
+                          <stop offset="3%" stopColor="#a78bfa" stopOpacity="0.3" />
+                          <stop offset="8%" stopColor="#8b5cf6" stopOpacity="0.7" />
+                          <stop offset="15%" stopColor="#7c3aed" stopOpacity="0.9" />
+                          <stop offset="25%" stopColor="#7c3aed" stopOpacity="1" />
+                          <stop offset="75%" stopColor="#7c3aed" stopOpacity="1" />
+                          <stop offset="85%" stopColor="#7c3aed" stopOpacity="0.9" />
+                          <stop offset="92%" stopColor="#8b5cf6" stopOpacity="0.7" />
+                          <stop offset="97%" stopColor="#a78bfa" stopOpacity="0.3" />
+                          <stop offset="100%" stopColor="#a78bfa" stopOpacity="0" />
+                        </linearGradient>
+                        <linearGradient id="stockGlowGradientVertical" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.25" />
+                          <stop offset="20%" stopColor="#8b5cf6" stopOpacity="0.15" />
+                          <stop offset="50%" stopColor="#a78bfa" stopOpacity="0.08" />
+                          <stop offset="80%" stopColor="#c4b5fd" stopOpacity="0.03" />
+                          <stop offset="100%" stopColor="#c4b5fd" stopOpacity="0" />
+                        </linearGradient>
+                        <linearGradient id="stockGlowOpacityMask" x1="0%" y1="0%" x2="100%" y2="0%">
+                          <stop offset="0%" stopColor="white" stopOpacity="0" />
+                          <stop offset="5%" stopColor="white" stopOpacity="0.2" />
+                          <stop offset="15%" stopColor="white" stopOpacity="0.5" />
+                          <stop offset="35%" stopColor="white" stopOpacity="0.9" />
+                          <stop offset="50%" stopColor="white" stopOpacity="1" />
+                          <stop offset="65%" stopColor="white" stopOpacity="0.9" />
+                          <stop offset="85%" stopColor="white" stopOpacity="0.5" />
+                          <stop offset="95%" stopColor="white" stopOpacity="0.2" />
+                          <stop offset="100%" stopColor="white" stopOpacity="0" />
+                        </linearGradient>
+                        <mask id="stockGlowMask">
+                          <rect x="0" y="0" width="100%" height="100%" fill="url(#stockGlowOpacityMask)" />
+                        </mask>
+                        <filter id="stockLineGlow" x="-20%" y="-20%" width="140%" height="140%" filterUnits="objectBoundingBox">
+                          <feDropShadow dx="0" dy="0" stdDeviation="2.5" floodColor="#8b5cf6" floodOpacity="0.5" />
+                        </filter>
+                        <filter id="stockAreaBlur" x="-50%" y="-50%" width="200%" height="200%">
+                          <feGaussianBlur in="SourceGraphic" stdDeviation="8" />
+                        </filter>
+                      </defs>
+
+                      <XAxis
+                        dataKey="day"
+                        axisLine={false}
+                        tickLine={false}
+                        tickMargin={20}
+                        tick={({ x, y, payload, index }) => {
+                          const isHighlighted = stockChartData[index]?.highlighted;
+                          const totalItems = stockChartData.length;
+                          const isEdge = index === 0 || index === totalItems - 1;
+                          const opacity = isEdge ? 0.6 : 1;
+                          return (
+                            <g transform={`translate(${x},${y})`} style={{ opacity }}>
+                              {isHighlighted ? (
+                                <>
+                                  <rect x={-24} y={-12} width={48} height={30} rx={15} fill="rgba(71, 85, 105, 0.75)" style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.15))' }} />
+                                  <rect x={-24} y={-12} width={48} height={30} rx={15} fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth={1} />
+                                </>
+                              ) : null}
+                              <text x={0} y={8} textAnchor="middle" fill={isHighlighted ? '#ffffff' : '#64748b'} fontSize={14} fontWeight={isHighlighted ? 700 : 600}>
+                                {payload.value}
+                              </text>
+                            </g>
+                          );
+                        }}
+                      />
+
+                      <Tooltip
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            return (
+                              <div className="rounded-xl px-4 py-2 shadow-2xl border border-purple-400/30"
+                                style={{
+                                  background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.9) 0%, rgba(124, 58, 237, 0.95) 100%)',
+                                  backdropFilter: 'blur(12px)',
+                                }}
+                              >
+                                <div className="text-sm font-bold text-white">
+                                  R{payload[0].value.toLocaleString()}
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                        cursor={false}
+                        wrapperStyle={{ outline: 'none' }}
+                      />
+
+                      <Area
+                        type="monotone"
+                        dataKey="value"
+                        stroke="transparent"
+                        fill="url(#stockGlowGradientVertical)"
+                        fillOpacity={1}
+                        mask="url(#stockGlowMask)"
+                        style={{ filter: 'url(#stockAreaBlur)' }}
+                      />
+
+                      <Line
+                        type="monotone"
+                        dataKey="value"
+                        stroke="url(#stockPurpleLineGradient)"
+                        strokeWidth={3.5}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        dot={false}
+                        activeDot={{
+                          r: 7,
+                          fill: '#a78bfa',
+                          stroke: '#c4b5fd',
+                          strokeWidth: 2,
+                        }}
+                        style={{ filter: 'url(#stockLineGlow)' }}
+                      />
+                    </ComposedChart>
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
+              <section
+                className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50"
+                style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
+              >
+                <p className="text-sm font-semibold text-slate-900 mb-4">Other Stocks</p>
+                <div className="space-y-3">
+                  {otherStocks.map((stock) => {
+                    const isPositive = stock.dailyChange >= 0;
+                    return (
+                      <button
+                        key={stock.id}
+                        onClick={() => setSelectedStock(stock)}
+                        className="w-full flex items-center gap-3 rounded-2xl bg-white/70 backdrop-blur-xl p-3 shadow-sm border border-slate-100/50 transition hover:bg-white/90 text-left"
+                      >
+                        <div className="h-11 w-11 rounded-full bg-white border border-slate-200 shadow-sm overflow-hidden flex-shrink-0">
+                          {failedLogos[stock.ticker] ? (
+                            <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-100 to-purple-100 text-xs font-bold text-violet-700">
+                              {stock.ticker.slice(0, 2)}
+                            </div>
+                          ) : (
+                            <img
+                              src={stock.logo}
+                              alt={stock.name}
+                              className="h-full w-full object-cover"
+                              onError={() => setFailedLogos(prev => ({ ...prev, [stock.ticker]: true }))}
+                            />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-slate-900 truncate">{stock.name}</p>
+                          <p className="text-xs text-slate-500 font-medium">{stock.ticker}</p>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-sm font-bold text-slate-900">{formatCurrency(stock.price)}</p>
+                          <p className={`text-xs font-medium ${isPositive ? 'text-emerald-500' : 'text-rose-500'}`}>
+                            {isPositive ? '+' : ''}{stock.dailyChange.toFixed(2)}%
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+
+              <button
+                className="w-full py-3.5 rounded-full bg-gradient-to-r from-slate-800 to-slate-900 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg shadow-slate-900/30 transition hover:-translate-y-0.5 hover:shadow-xl flex items-center justify-center gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                + Buy More Stocks
+              </button>
+            </div>
+          </>
+        );
+      })()}
 
       {/* Holdings Tab Content */}
       {activeTab === "holdings" && (() => {
