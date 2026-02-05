@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { Bell, Eye, EyeOff, ChevronDown, ChevronRight, ArrowLeft } from "lucide-react";
+import { Bell, Eye, EyeOff, ChevronDown, ChevronRight, ArrowLeft, Plus, Minus, Send, MoreHorizontal } from "lucide-react";
 import { Area, ComposedChart, Line, XAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { useFinancialData } from "../lib/useFinancialData";
 
@@ -119,7 +119,7 @@ const MOCK_DATA = {
 
 const NewPortfolioPage = () => {
   const [balanceVisible, setBalanceVisible] = useState(true);
-  const [activeTab, setActiveTab] = useState("strategy");
+  const [activeTab, setActiveTab] = useState("investment");
   const [timeFilter, setTimeFilter] = useState("W");
   const [failedLogos, setFailedLogos] = useState({});
   const [calendarYear, setCalendarYear] = useState(2025);
@@ -292,46 +292,53 @@ const NewPortfolioPage = () => {
       </div>
 
       {/* Header section */}
-      <div className="relative px-5 pb-8 pt-12 md:px-8">
-        <div className="mx-auto flex w-full max-w-sm flex-col gap-5 md:max-w-md">
-          <header className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-amber-200 to-amber-400 text-sm font-semibold text-amber-900 shadow-lg shadow-amber-500/20">
-                JD
+      <div className="relative px-5 pb-6 pt-10 md:px-8">
+        <div className="mx-auto flex w-full max-w-sm flex-col gap-4 md:max-w-md">
+          {/* Top row: Avatar stacked with greeting, notification on right */}
+          <header className="flex items-start justify-between">
+            <div className="flex flex-col gap-1">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full overflow-hidden bg-gradient-to-br from-amber-200 to-amber-400 text-sm font-semibold text-amber-900 shadow-lg shadow-amber-500/20">
+                <img 
+                  src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&h=80&fit=crop&crop=face" 
+                  alt="Profile"
+                  className="h-full w-full object-cover"
+                  onError={(e) => { e.target.style.display = 'none'; e.target.parentNode.innerText = 'JD'; }}
+                />
               </div>
-              <p className="text-base font-medium text-white">Hello, Johnson</p>
+              <p className="text-lg font-medium text-white/90 mt-1">Hello, Johnson</p>
             </div>
             <button className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 backdrop-blur-sm transition hover:bg-white/10">
               <Bell className="h-5 w-5 text-white/90" />
             </button>
           </header>
 
-          {/* Account balance with ambient glow */}
-          <section className="mt-2 relative">
+          {/* Account balance */}
+          <section className="relative">
             <div className="absolute -inset-8 bg-gradient-radial from-[#7c3aed]/20 via-transparent to-transparent rounded-full blur-2xl -z-10" />
-            <div className="flex items-center gap-3">
-              <p className="text-3xl font-semibold tracking-tight">
-                {balanceVisible ? formatCurrency(accountValue) : "R•••••••"}
+            <div className="flex items-center gap-2">
+              <p className="text-3xl font-bold tracking-tight">
+                $ {balanceVisible ? accountValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "••,•••.••"}
               </p>
               <button
                 onClick={() => setBalanceVisible(!balanceVisible)}
                 className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm transition hover:bg-white/20"
               >
                 {balanceVisible ? (
-                  <Eye className="h-4 w-4 text-white/60" />
+                  <Eye className="h-4 w-4 text-white/50" />
                 ) : (
-                  <EyeOff className="h-4 w-4 text-white/60" />
+                  <EyeOff className="h-4 w-4 text-white/50" />
                 )}
               </button>
             </div>
-            <p className="mt-1 text-sm text-white/50">Account Value</p>
+            <p className="mt-1 text-sm text-white/40">Account Value</p>
           </section>
 
+          {/* Tabs: Investment, Banking, Sales */}
           <section className="flex gap-2 mt-1">
             {[
-              { id: "strategy", label: "Strategy" },
-              { id: "stocks", label: "Stocks" },
-              { id: "goals", label: "Goals" },
+              { id: "investment", label: "Investment" },
+              { id: "banking", label: "Banking" },
+              { id: "sales", label: "Sales" },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -339,7 +346,7 @@ const NewPortfolioPage = () => {
                 className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all ${
                   activeTab === tab.id
                     ? "bg-amber-400 text-slate-900 shadow-lg shadow-amber-500/30"
-                    : "bg-white/10 text-white/70 backdrop-blur-sm hover:bg-white/20"
+                    : "border border-white/20 text-white/70 backdrop-blur-sm hover:bg-white/10"
                 }`}
               >
                 {tab.label}
@@ -352,13 +359,13 @@ const NewPortfolioPage = () => {
       {/* Chart section */}
       <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 md:max-w-md md:px-8">
         <section className="py-2">
-          <div className="flex items-center justify-between mb-4 px-1">
-            <button className="flex items-center gap-2 text-slate-900 hover:text-slate-700 transition">
-              <span className="text-base font-bold">{selectedStrategy.name}</span>
+          <div className="flex items-center justify-between mb-3 px-1">
+            <button className="flex items-center gap-1 text-slate-900 hover:text-slate-700 transition">
+              <span className="text-xl font-bold">Invest</span>
               <ChevronDown className="h-5 w-5" />
             </button>
             <div className="flex gap-2">
-              {["D", "W", "M", "A"].map((filter) => (
+              {["W", "M"].map((filter) => (
                 <button
                   key={filter}
                   onClick={() => setTimeFilter(filter)}
@@ -377,10 +384,10 @@ const NewPortfolioPage = () => {
             </div>
           </div>
 
-          <div className="mb-4 px-1">
-            <p className="text-3xl font-bold text-slate-900">{formatCurrency(selectedStrategy.currentValue)}</p>
-            <p className="text-sm text-emerald-600 font-semibold">
-              +{selectedStrategy.previousMonthChange}% Previous Month
+          <div className="mb-3 px-1">
+            <p className="text-3xl font-bold text-slate-900">${selectedStrategy.currentValue.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
+            <p className="text-sm text-slate-500">
+              ({selectedStrategy.previousMonthChange}% Previous Month)
             </p>
           </div>
 
@@ -545,10 +552,30 @@ const NewPortfolioPage = () => {
       <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
         <button 
           onClick={() => setCurrentView("allocations")}
-          className="w-full py-3.5 rounded-full bg-gradient-to-r from-slate-800 to-slate-900 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg shadow-slate-900/30 transition hover:-translate-y-0.5 hover:shadow-xl"
+          className="w-full py-4 rounded-full bg-slate-100 text-sm font-semibold text-slate-800 shadow-sm border border-slate-200 transition hover:bg-slate-200"
         >
-          View All Allocations
+          View All Investment
         </button>
+
+        {/* Bottom Action Buttons */}
+        <div className="flex justify-between px-4 mt-2">
+          {[
+            { icon: Plus, label: "Buy" },
+            { icon: Minus, label: "Sell" },
+            { icon: Send, label: "Send" },
+            { icon: MoreHorizontal, label: "More" },
+          ].map((action) => (
+            <button 
+              key={action.label}
+              className="flex flex-col items-center gap-2 group"
+            >
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-white shadow-lg shadow-slate-900/20 transition group-hover:bg-slate-800 group-hover:-translate-y-0.5">
+                <action.icon className="h-5 w-5" />
+              </div>
+              <span className="text-xs font-medium text-slate-600">{action.label}</span>
+            </button>
+          ))}
+        </div>
 
         <section className="rounded-3xl bg-white/90 backdrop-blur-xl p-5 shadow-xl shadow-purple-900/10 border border-white/50">
           <div className="flex items-center justify-between mb-4">
