@@ -1,7 +1,47 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Bell, Eye, EyeOff, ChevronDown, ChevronRight } from "lucide-react";
 import { Area, ComposedChart, Line, XAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { useFinancialData } from "../lib/useFinancialData";
+
+const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+const MOCK_CALENDAR_RETURNS = {
+  "2025": {
+    "01": 0.032,
+    "02": -0.018,
+    "03": 0.045,
+    "04": 0.021,
+    "05": -0.008,
+    "06": 0.038,
+    "07": 0.015,
+    "08": -0.025,
+    "09": 0.042,
+    "10": 0.028,
+    "11": 0.019,
+    "12": 0.035,
+  },
+  "2024": {
+    "01": 0.028,
+    "02": 0.015,
+    "03": -0.012,
+    "04": 0.033,
+    "05": 0.041,
+    "06": -0.005,
+    "07": 0.022,
+    "08": 0.018,
+    "09": -0.015,
+    "10": 0.038,
+    "11": 0.025,
+    "12": 0.045,
+  },
+};
+
+const getReturnColor = (value) => {
+  if (value == null) return "bg-slate-50 text-slate-600";
+  if (value > 0) return "bg-emerald-50 text-emerald-600";
+  if (value < 0) return "bg-rose-50 text-rose-600";
+  return "bg-slate-50 text-slate-600";
+};
 
 const MOCK_DATA = {
   accountValue: 24897.43,
@@ -43,6 +83,10 @@ const NewPortfolioPage = () => {
   const [activeTab, setActiveTab] = useState("strategy");
   const [timeFilter, setTimeFilter] = useState("W");
   const [failedLogos, setFailedLogos] = useState({});
+  const [calendarYear, setCalendarYear] = useState(2025);
+
+  const availableCalendarYears = useMemo(() => Object.keys(MOCK_CALENDAR_RETURNS).sort(), []);
+  const calendarData = MOCK_CALENDAR_RETURNS;
 
   const { holdings: rawHoldings, loading: holdingsLoading } = useFinancialData();
   const { accountValue, selectedStrategy, chartData, goals } = MOCK_DATA;
@@ -426,6 +470,49 @@ const NewPortfolioPage = () => {
                 </p>
               </div>
             ))}
+          </div>
+        </section>
+
+        {/* Calendar Returns */}
+        <section className="rounded-3xl bg-white/90 backdrop-blur-xl p-5 shadow-xl shadow-purple-900/10 border border-white/50">
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <p className="text-sm font-semibold text-slate-900">Calendar Returns</p>
+            {availableCalendarYears.length > 1 && (
+              <div className="flex flex-wrap gap-2">
+                {availableCalendarYears.map((year) => (
+                  <button
+                    key={year}
+                    type="button"
+                    onClick={() => setCalendarYear(Number(year))}
+                    className={`rounded-full px-3 py-1 text-xs font-semibold transition-all ${
+                      Number(year) === Number(calendarYear)
+                        ? "bg-slate-900 text-white"
+                        : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    {year}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <p className="mb-3 text-xs font-semibold text-slate-500">{calendarYear}</p>
+          <div className="grid grid-cols-3 gap-2">
+            {monthNames.map((label, index) => {
+              const monthKey = String(index + 1).padStart(2, "0");
+              const value = calendarData[String(calendarYear)]?.[monthKey];
+              return (
+                <div
+                  key={`${calendarYear}-${label}`}
+                  className={`rounded-xl px-3 py-2.5 text-center ${getReturnColor(value)}`}
+                >
+                  <p className="text-[10px] font-semibold text-slate-500">{label}</p>
+                  <p className="mt-0.5 text-sm font-bold">
+                    {value == null ? "—" : `${(Number(value) * 100).toFixed(2)}%`}
+                  </p>
+                </div>
+              );
+            })}
           </div>
         </section>
       </div>
