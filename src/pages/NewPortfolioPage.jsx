@@ -477,7 +477,7 @@ const NewPortfolioPage = () => {
 
           <div 
             ref={chartScrollRef}
-            className="overflow-x-auto scrollbar-hide"
+            className="overflow-x-auto scrollbar-hide select-none"
             style={{ 
               width: '100%', 
               height: 220, 
@@ -486,6 +486,10 @@ const NewPortfolioPage = () => {
               WebkitOverflowScrolling: 'touch',
               msOverflowStyle: 'none',
               scrollbarWidth: 'none',
+              userSelect: 'none',
+              WebkitUserSelect: 'none',
+              touchAction: 'pan-x',
+              cursor: 'grab',
             }}
           >
             <div style={{ width: getChartWidth(currentChartData.length), height: 220, minWidth: '100%' }}>
