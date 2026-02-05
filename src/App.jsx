@@ -1,5 +1,8 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "./lib/supabase.js";
+import { App as CapacitorApp } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
+import SwipeBackWrapper from "./components/SwipeBackWrapper.jsx";
 
 import AuthPage from "./pages/AuthPage.jsx";
 import HomePage from "./pages/HomePage.jsx";
@@ -63,6 +66,8 @@ const getTokensFromHash = (hash) => {
 
 const recoveryTokens = isRecoveryMode ? getTokensFromHash(initialHash) : null;
 
+const mainTabs = ['home', 'credit', 'transact', 'investments', 'more', 'welcome', 'auth'];
+
 const App = () => {
   const [currentPage, setCurrentPage] = useState(hasError ? "linkExpired" : (isRecoveryMode ? "auth" : "welcome"));
   const [authStep, setAuthStep] = useState(isRecoveryMode ? "newPassword" : "email");
@@ -77,6 +82,69 @@ const App = () => {
   const [stockCheckout, setStockCheckout] = useState({ security: null, amount: 0 });
   const recoveryHandled = useRef(false);
   const { refetch: refetchNotifications } = useNotificationsContext();
+  
+  const navigationHistory = useRef([]);
+  
+  const navigateTo = useCallback((page) => {
+    if (page === currentPage) return;
+    
+    if (!mainTabs.includes(page)) {
+      navigationHistory.current.push(currentPage);
+      if (navigationHistory.current.length > 20) {
+        navigationHistory.current = navigationHistory.current.slice(-20);
+      }
+    } else {
+      navigationHistory.current = [];
+    }
+    
+    setCurrentPage(page);
+  }, [currentPage]);
+
+  const goBack = useCallback(() => {
+    if (navigationHistory.current.length > 0) {
+      const previousPage = navigationHistory.current.pop();
+      setCurrentPage(previousPage);
+      return true;
+    }
+    
+    if (!mainTabs.includes(currentPage)) {
+      setCurrentPage('home');
+      return true;
+    }
+    
+    return false;
+  }, [currentPage]);
+
+  const canSwipeBack = !mainTabs.includes(currentPage);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') {
+      return;
+    }
+
+    const handleBackButton = ({ canGoBack }) => {
+      console.log('🔙 Global back button pressed');
+      console.log('📍 Current page:', currentPage);
+      console.log('📚 Navigation history:', [...navigationHistory.current]);
+      console.log('🔓 Can swipe back:', canSwipeBack);
+
+      if (canSwipeBack && navigationHistory.current.length > 0) {
+        const previousPage = navigationHistory.current.pop();
+        console.log('✅ Going back to:', previousPage);
+        setCurrentPage(previousPage);
+      } else if (canSwipeBack) {
+        console.log('⚠️ No history, staying on page');
+      } else {
+        console.log('📱 On main tab, doing nothing');
+      }
+    };
+
+    const listener = CapacitorApp.addListener('backButton', handleBackButton);
+
+    return () => {
+      listener.then(l => l.remove());
+    };
+  }, [currentPage, canSwipeBack, goBack]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -226,18 +294,18 @@ const App = () => {
         <HomePage
           onOpenNotifications={() => {
             setNotificationReturnPage("home");
-            setCurrentPage("notifications");
+            navigateTo("notifications");
           }}
-          onOpenMintBalance={() => setCurrentPage("mintBalance")}
-          onOpenActivity={() => setCurrentPage("activity")}
-          onOpenActions={() => setCurrentPage("actions")}
+          onOpenMintBalance={() => navigateTo("mintBalance")}
+          onOpenActivity={() => navigateTo("activity")}
+          onOpenActions={() => navigateTo("actions")}
           onOpenInvestments={() => setCurrentPage("investments")}
           onOpenCredit={() => setCurrentPage("credit")}
-          onOpenCreditApply={() => setCurrentPage("creditApply")}
-          onOpenCreditRepay={() => setCurrentPage("creditRepay")}
-          onOpenInvest={() => setCurrentPage("markets")}
+          onOpenCreditApply={() => navigateTo("creditApply")}
+          onOpenCreditRepay={() => navigateTo("creditRepay")}
+          onOpenInvest={() => navigateTo("markets")}
           onOpenWithdraw={handleWithdrawRequest}
-          onOpenSettings={() => setCurrentPage("settings")}
+          onOpenSettings={() => navigateTo("settings")}
         />
       </AppLayout>
     );
@@ -255,9 +323,9 @@ const App = () => {
         <CreditPage
           onOpenNotifications={() => {
             setNotificationReturnPage("credit");
-            setCurrentPage("notifications");
+            navigateTo("notifications");
           }}
-          onOpenCreditApply={() => setCurrentPage("creditApply")}
+          onOpenCreditApply={() => navigateTo("creditApply")}
         />
       </AppLayout>
     );
@@ -323,67 +391,75 @@ const App = () => {
 
   if (currentPage === "invest") {
     return (
-      <AppLayout
-        activeTab="home"
-        onTabChange={setCurrentPage}
-        onWithdraw={handleWithdrawRequest}
-        onShowComingSoon={handleShowComingSoon}
-        modal={modal}
-        onCloseModal={closeModal}
-      >
-        <InvestPage
-          onBack={() => setCurrentPage("home")}
-          onOpenOpenStrategies={() => setCurrentPage("openStrategies")}
-          onOpenMarkets={() => setCurrentPage("markets")}
-        />
-      </AppLayout>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+        <AppLayout
+          activeTab="home"
+          onTabChange={setCurrentPage}
+          onWithdraw={handleWithdrawRequest}
+          onShowComingSoon={handleShowComingSoon}
+          modal={modal}
+          onCloseModal={closeModal}
+        >
+          <InvestPage
+            onBack={goBack}
+            onOpenOpenStrategies={() => navigateTo("openStrategies")}
+            onOpenMarkets={() => navigateTo("markets")}
+          />
+        </AppLayout>
+      </SwipeBackWrapper>
     );
   }
 
   if (currentPage === "markets") {
     return (
-      <MarketsPage
-        onBack={() => setCurrentPage("home")}
-        onOpenNotifications={() => {
-          setNotificationReturnPage("markets");
-          setCurrentPage("notifications");
-        }}
-        onOpenStockDetail={(security) => {
-          setSelectedSecurity(security);
-          setCurrentPage("stockDetail");
-        }}
-        onOpenNewsArticle={(articleId) => {
-          setSelectedArticleId(articleId);
-          setCurrentPage("newsArticle");
-        }}
-        onOpenFactsheet={(strategy) => {
-          setSelectedStrategy(strategy);
-          setCurrentPage("factsheet");
-        }}
-      />
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+        <MarketsPage
+          onBack={goBack}
+          onOpenNotifications={() => {
+            setNotificationReturnPage("markets");
+            navigateTo("notifications");
+          }}
+          onOpenStockDetail={(security) => {
+            setSelectedSecurity(security);
+            navigateTo("stockDetail");
+          }}
+          onOpenNewsArticle={(articleId) => {
+            setSelectedArticleId(articleId);
+            navigateTo("newsArticle");
+          }}
+          onOpenFactsheet={(strategy) => {
+            setSelectedStrategy(strategy);
+            navigateTo("factsheet");
+          }}
+        />
+      </SwipeBackWrapper>
     );
   }
 
   if (currentPage === "stockDetail") {
     return (
-      <StockDetailPage
-        security={selectedSecurity}
-        onBack={() => setCurrentPage("markets")}
-        onOpenBuy={() => setCurrentPage("stockBuy")}
-      />
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+        <StockDetailPage
+          security={selectedSecurity}
+          onBack={goBack}
+          onOpenBuy={() => navigateTo("stockBuy")}
+        />
+      </SwipeBackWrapper>
     );
   }
 
   if (currentPage === "stockBuy") {
     return (
-      <StockBuyPage
-        security={selectedSecurity}
-        onBack={() => setCurrentPage("stockDetail")}
-        onContinue={(amount, security) => {
-          setStockCheckout({ security, amount });
-          setCurrentPage("stockPayment");
-        }}
-      />
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+        <StockBuyPage
+          security={selectedSecurity}
+          onBack={goBack}
+          onContinue={(amount, security) => {
+            setStockCheckout({ security, amount });
+            navigateTo("stockPayment");
+          }}
+        />
+      </SwipeBackWrapper>
     );
   }
 
@@ -394,83 +470,92 @@ const App = () => {
       ? { ...stockCheckout.security, name: stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock", currency: normalizedCurrency }
       : null;
     return (
-      <PaymentPage
-        onBack={() => setCurrentPage("stockBuy")}
-        strategy={paymentItem}
-        amount={stockCheckout.amount}
-        onSuccess={(response) => {
-          console.log("Payment successful:", response);
-          setCurrentPage("paymentSuccess");
-        }}
-        onCancel={() => {
-          setCurrentPage("stockBuy");
-        }}
-      />
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+        <PaymentPage
+          onBack={goBack}
+          strategy={paymentItem}
+          amount={stockCheckout.amount}
+          onSuccess={(response) => {
+            console.log("Payment successful:", response);
+            navigationHistory.current = [];
+            setCurrentPage("paymentSuccess");
+          }}
+          onCancel={goBack}
+        />
+      </SwipeBackWrapper>
     );
   }
 
   if (currentPage === "newsArticle") {
     return (
-      <NewsArticlePage
-        articleId={selectedArticleId}
-        onBack={() => setCurrentPage("markets")}
-      />
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+        <NewsArticlePage
+          articleId={selectedArticleId}
+          onBack={goBack}
+        />
+      </SwipeBackWrapper>
     );
   }
 
   if (currentPage === "openStrategies") {
     return (
-      <OpenStrategiesPage
-        onBack={() => setCurrentPage("invest")}
-        onOpenFactsheet={(strategy) => {
-          setSelectedStrategy(strategy);
-          setCurrentPage("factsheet");
-        }}
-      />
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+        <OpenStrategiesPage
+          onBack={goBack}
+          onOpenFactsheet={(strategy) => {
+            setSelectedStrategy(strategy);
+            navigateTo("factsheet");
+          }}
+        />
+      </SwipeBackWrapper>
     );
   }
 
   if (currentPage === "factsheet") {
     return (
-      <FactsheetPage 
-        onBack={() => setCurrentPage("markets")} 
-        strategy={selectedStrategy}
-        onOpenInvest={(strategy) => {
-          setSelectedStrategy(strategy);
-          setCurrentPage("investAmount");
-        }}
-      />
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+        <FactsheetPage 
+          onBack={goBack} 
+          strategy={selectedStrategy}
+          onOpenInvest={(strategy) => {
+            setSelectedStrategy(strategy);
+            navigateTo("investAmount");
+          }}
+        />
+      </SwipeBackWrapper>
     );
   }
 
   if (currentPage === "investAmount") {
     return (
-      <InvestAmountPage
-        onBack={() => setCurrentPage("factsheet")}
-        strategy={selectedStrategy}
-        onContinue={(amount) => {
-          setInvestmentAmount(amount);
-          setCurrentPage("payment");
-        }}
-      />
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+        <InvestAmountPage
+          onBack={goBack}
+          strategy={selectedStrategy}
+          onContinue={(amount) => {
+            setInvestmentAmount(amount);
+            navigateTo("payment");
+          }}
+        />
+      </SwipeBackWrapper>
     );
   }
 
   if (currentPage === "payment") {
     return (
-      <PaymentPage
-        onBack={() => setCurrentPage("investAmount")}
-        strategy={selectedStrategy}
-        amount={investmentAmount}
-        onSuccess={(response) => {
-          console.log("Payment successful:", response);
-          // TODO: Record transaction in database
-          setCurrentPage("paymentSuccess");
-        }}
-        onCancel={() => {
-          setCurrentPage("investAmount");
-        }}
-      />
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+        <PaymentPage
+          onBack={goBack}
+          strategy={selectedStrategy}
+          amount={investmentAmount}
+          onSuccess={(response) => {
+            console.log("Payment successful:", response);
+            navigationHistory.current = [];
+            setCurrentPage("paymentSuccess");
+          }}
+          onCancel={goBack}
+        />
+      </SwipeBackWrapper>
     );
   }
 
@@ -488,145 +573,193 @@ const App = () => {
         modal={modal}
         onCloseModal={closeModal}
       >
-        <MorePage onNavigate={setCurrentPage} />
+        <MorePage onNavigate={navigateTo} />
       </AppLayout>
     );
   }
 
   if (currentPage === "settings") {
     return (
-      <AppLayout
-        activeTab="more"
-        onTabChange={setCurrentPage}
-        onWithdraw={handleWithdrawRequest}
-        onShowComingSoon={handleShowComingSoon}
-        modal={modal}
-        onCloseModal={closeModal}
-      >
-        <SettingsPage onNavigate={setCurrentPage} />
-      </AppLayout>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+        <AppLayout
+          activeTab="more"
+          onTabChange={setCurrentPage}
+          onWithdraw={handleWithdrawRequest}
+          onShowComingSoon={handleShowComingSoon}
+          modal={modal}
+          onCloseModal={closeModal}
+        >
+          <SettingsPage onNavigate={navigateTo} onBack={goBack} />
+        </AppLayout>
+      </SwipeBackWrapper>
     );
   }
 
   if (currentPage === "biometricsDebug") {
     return (
-      <AppLayout
-        activeTab="more"
-        onTabChange={setCurrentPage}
-        onWithdraw={handleWithdrawRequest}
-        onShowComingSoon={handleShowComingSoon}
-        modal={modal}
-        onCloseModal={closeModal}
-      >
-        <BiometricsDebugPage onNavigate={setCurrentPage} />
-      </AppLayout>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+        <AppLayout
+          activeTab="more"
+          onTabChange={setCurrentPage}
+          onWithdraw={handleWithdrawRequest}
+          onShowComingSoon={handleShowComingSoon}
+          modal={modal}
+          onCloseModal={closeModal}
+        >
+          <BiometricsDebugPage onNavigate={navigateTo} onBack={goBack} />
+        </AppLayout>
+      </SwipeBackWrapper>
     );
   }
 
   if (currentPage === "editProfile") {
-    return <EditProfilePage onNavigate={setCurrentPage} />;
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+        <EditProfilePage onNavigate={navigateTo} onBack={goBack} />
+      </SwipeBackWrapper>
+    );
   }
 
   if (currentPage === "profileDetails") {
-    return <ProfileDetailsPage onNavigate={setCurrentPage} />;
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+        <ProfileDetailsPage onNavigate={navigateTo} onBack={goBack} />
+      </SwipeBackWrapper>
+    );
   }
 
   if (currentPage === "notifications") {
     return (
-      <NotificationsPage
-        onBack={() => setCurrentPage(notificationReturnPage)}
-        onOpenSettings={() => setCurrentPage("notificationSettings")}
-      />
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+        <NotificationsPage
+          onBack={goBack}
+          onOpenSettings={() => navigateTo("notificationSettings")}
+        />
+      </SwipeBackWrapper>
     );
   }
 
   if (currentPage === "notificationSettings") {
-    return <NotificationSettingsPage onBack={() => setCurrentPage("notifications")} />;
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+        <NotificationSettingsPage onBack={goBack} />
+      </SwipeBackWrapper>
+    );
   }
 
   if (currentPage === "mintBalance") {
     return (
-      <AppLayout
-        activeTab="home"
-        onTabChange={setCurrentPage}
-        onWithdraw={handleWithdrawRequest}
-        onShowComingSoon={handleShowComingSoon}
-        modal={modal}
-        onCloseModal={closeModal}
-      >
-        <MintBalancePage
-          onBack={() => setCurrentPage("home")}
-          onOpenInvestments={() => setCurrentPage("investments")}
-          onOpenCredit={() => setCurrentPage("credit")}
-          onOpenActivity={() => setCurrentPage("activity")}
-          onOpenSettings={() => setCurrentPage("settings")}
-          onOpenInvest={() => setCurrentPage("markets")}
-          onOpenCreditApply={() => setCurrentPage("creditApply")}
-        />
-      </AppLayout>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+        <AppLayout
+          activeTab="home"
+          onTabChange={setCurrentPage}
+          onWithdraw={handleWithdrawRequest}
+          onShowComingSoon={handleShowComingSoon}
+          modal={modal}
+          onCloseModal={closeModal}
+        >
+          <MintBalancePage
+            onBack={goBack}
+            onOpenInvestments={() => setCurrentPage("investments")}
+            onOpenCredit={() => setCurrentPage("credit")}
+            onOpenActivity={() => navigateTo("activity")}
+            onOpenSettings={() => navigateTo("settings")}
+            onOpenInvest={() => navigateTo("markets")}
+            onOpenCreditApply={() => navigateTo("creditApply")}
+          />
+        </AppLayout>
+      </SwipeBackWrapper>
     );
   }
 
   if (currentPage === "activity") {
     return (
-      <AppLayout
-        activeTab="home"
-        onTabChange={setCurrentPage}
-        onWithdraw={handleWithdrawRequest}
-        onShowComingSoon={handleShowComingSoon}
-        modal={modal}
-        onCloseModal={closeModal}
-      >
-        <ActivityPage onBack={() => setCurrentPage("mintBalance")} />
-      </AppLayout>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+        <AppLayout
+          activeTab="home"
+          onTabChange={setCurrentPage}
+          onWithdraw={handleWithdrawRequest}
+          onShowComingSoon={handleShowComingSoon}
+          modal={modal}
+          onCloseModal={closeModal}
+        >
+          <ActivityPage onBack={goBack} />
+        </AppLayout>
+      </SwipeBackWrapper>
     );
   }
 
   if (currentPage === "actions") {
     return (
-      <ActionsPage
-        onBack={() => setCurrentPage("home")}
-        onNavigate={setCurrentPage}
-      />
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+        <ActionsPage
+          onBack={goBack}
+          onNavigate={navigateTo}
+        />
+      </SwipeBackWrapper>
     );
   }
 
   if (currentPage === "identityCheck") {
     return (
-      <IdentityCheckPage 
-        onBack={() => setCurrentPage("actions")} 
-        onComplete={() => setCurrentPage("actions")}
-      />
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+        <IdentityCheckPage 
+          onBack={goBack} 
+          onComplete={() => setCurrentPage("actions")}
+        />
+      </SwipeBackWrapper>
     );
   }
 
   if (currentPage === "bankLink") {
     return (
-      <BankLinkPage
-        onBack={() => setCurrentPage("actions")}
-        onComplete={() => setCurrentPage("home")}
-      />
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+        <BankLinkPage
+          onBack={goBack}
+          onComplete={() => setCurrentPage("home")}
+        />
+      </SwipeBackWrapper>
     );
   }
 
   if (currentPage === "invite") {
-    return <InvitePage onBack={() => setCurrentPage("actions")} />;
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+        <InvitePage onBack={goBack} />
+      </SwipeBackWrapper>
+    );
   }
 
   if (currentPage === "creditApply") {
-    return <CreditApplyPage onBack={() => setCurrentPage("credit")} />;
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+        <CreditApplyPage onBack={goBack} />
+      </SwipeBackWrapper>
+    );
   }
 
   if (currentPage === "creditRepay") {
-    return <CreditRepayPage />;
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+        <CreditRepayPage onBack={goBack} />
+      </SwipeBackWrapper>
+    );
   }
 
   if (currentPage === "changePassword") {
-    return <ChangePasswordPage onNavigate={setCurrentPage} />;
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+        <ChangePasswordPage onNavigate={navigateTo} onBack={goBack} />
+      </SwipeBackWrapper>
+    );
   }
 
   if (currentPage === "legal") {
-    return <LegalDocumentationPage onNavigate={setCurrentPage} />;
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+        <LegalDocumentationPage onNavigate={navigateTo} onBack={goBack} />
+      </SwipeBackWrapper>
+    );
   }
 
   if (currentPage === "userOnboarding") {

@@ -8,7 +8,7 @@ import DateOfBirthPicker from "../components/DateOfBirthPicker";
 import AddressAutocomplete from "../components/AddressAutocomplete";
 import PhoneInput from "../components/PhoneInput";
 
-const EditProfilePage = ({ onNavigate }) => {
+const EditProfilePage = ({ onNavigate, onBack }) => {
   const { profile, setProfile, loading } = useProfile();
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -171,7 +171,7 @@ const EditProfilePage = ({ onNavigate }) => {
       <header className="relative mb-8 flex items-center justify-center">
         <button
           type="button"
-          onClick={() => onNavigate?.("more")}
+          onClick={() => onBack ? onBack() : onNavigate?.("more")}
           className="absolute left-0 flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-700 transition active:scale-95"
           aria-label="Back"
         >

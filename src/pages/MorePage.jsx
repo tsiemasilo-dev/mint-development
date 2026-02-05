@@ -21,7 +21,7 @@ const MorePage = ({ onNavigate }) => {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
   const [error, setError] = useState("");
-  const { kycVerified, bankLinked } = useRequiredActions();
+  const { kycVerified, kycPending, kycNeedsResubmission, bankLinked } = useRequiredActions();
 
   const displayName = [profile?.first_name, profile?.last_name]
     .filter(Boolean)
@@ -162,15 +162,30 @@ const MorePage = ({ onNavigate }) => {
 
       <div className="flex flex-col items-center text-center">
         <span
-          className={`mt-2 inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${kycVerified
-            ? "bg-green-100 text-green-700"
-            : "bg-amber-100 text-amber-700"
-            }`}
+          className={`mt-2 inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${
+            kycVerified
+              ? "bg-green-100 text-green-700"
+              : kycNeedsResubmission
+              ? "bg-amber-100 text-amber-700"
+              : kycPending
+              ? "bg-blue-100 text-blue-700"
+              : "bg-slate-100 text-slate-600"
+          }`}
         >
           {kycVerified ? (
             <>
               <ShieldCheck className="h-3 w-3" />
               KYC Verified
+            </>
+          ) : kycNeedsResubmission ? (
+            <>
+              <AlertCircle className="h-3 w-3" />
+              KYC Needs Attention
+            </>
+          ) : kycPending ? (
+            <>
+              <ShieldCheck className="h-3 w-3" />
+              KYC Under Review
             </>
           ) : (
             <>
@@ -212,12 +227,17 @@ const MorePage = ({ onNavigate }) => {
                 <span className="text-sm font-medium text-slate-700">KYC Verification</span>
               </div>
               <span
-                className={`rounded-full px-2 py-0.5 text-xs font-semibold ${kycVerified
-                  ? "bg-green-100 text-green-700"
-                  : "bg-amber-100 text-amber-700"
-                  }`}
+                className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                  kycVerified
+                    ? "bg-green-100 text-green-700"
+                    : kycNeedsResubmission
+                    ? "bg-amber-100 text-amber-700"
+                    : kycPending
+                    ? "bg-blue-100 text-blue-700"
+                    : "bg-slate-100 text-slate-600"
+                }`}
               >
-                {kycVerified ? "Verified" : "Not Verified"}
+                {kycVerified ? "Verified" : kycNeedsResubmission ? "Needs Attention" : kycPending ? "Pending" : "Not Verified"}
               </span>
             </button>
             <button

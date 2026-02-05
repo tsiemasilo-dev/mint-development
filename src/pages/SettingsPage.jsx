@@ -11,7 +11,7 @@ import {
 } from "../lib/biometrics";
 import { supabase } from "../lib/supabase";
 
-const SettingsPage = ({ onNavigate }) => {
+const SettingsPage = ({ onNavigate, onBack }) => {
   const [biometricsOn, setBiometricsOn] = useState(false);
   const [biometryType, setBiometryType] = useState(null);
   const [isAvailable, setIsAvailable] = useState(false);
@@ -73,7 +73,7 @@ const SettingsPage = ({ onNavigate }) => {
       <header className="mb-8 flex items-center gap-3">
         <button
           type="button"
-          onClick={() => onNavigate?.("more")}
+          onClick={() => onBack ? onBack() : onNavigate?.("more")}
           className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm transition active:scale-95"
           aria-label="Back"
         >
@@ -157,6 +157,7 @@ const SettingsPage = ({ onNavigate }) => {
             <p className="text-sm text-slate-500">Test Face ID and view diagnostic logs</p>
           </div>
         </button>
+
       </div>
     </div>
   );
