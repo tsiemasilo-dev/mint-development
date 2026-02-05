@@ -973,31 +973,44 @@ const NewPortfolioPage = () => {
               </div>
               
               {/* Right: Pie Chart */}
-              <div className="relative h-28 w-28">
+              <div className="relative h-36 w-36">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={pieData}
                       cx="50%"
                       cy="50%"
-                      innerRadius={28}
-                      outerRadius={48}
-                      paddingAngle={2}
+                      outerRadius={65}
+                      paddingAngle={1}
                       dataKey="value"
-                      stroke="none"
+                      stroke="rgba(255,255,255,0.8)"
+                      strokeWidth={2}
                     >
                       {pieData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
+                        <Cell 
+                          key={`cell-${index}`} 
+                          fill={entry.color}
+                          style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))' }}
+                        />
                       ))}
                     </Pie>
+                    <Tooltip 
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload;
+                          const percent = ((data.value / totalValue) * 100).toFixed(1);
+                          return (
+                            <div className="bg-slate-900 text-white px-3 py-2 rounded-lg shadow-xl text-sm">
+                              <p className="font-semibold">{data.name}</p>
+                              <p className="text-violet-300">{percent}%</p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
-                {/* Center label */}
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="text-center">
-                    <p className="text-[10px] text-slate-500">Weight</p>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
