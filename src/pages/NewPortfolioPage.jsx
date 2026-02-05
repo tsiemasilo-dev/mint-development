@@ -90,6 +90,14 @@ const MOCK_DATA = {
     previousMonthChange: 21,
   },
   chartData: {
+    daily: [
+      { day: "6am", value: 4380 },
+      { day: "9am", value: 4420 },
+      { day: "12pm", value: 4510, highlighted: true },
+      { day: "3pm", value: 4480 },
+      { day: "6pm", value: 4449 },
+      { day: "9pm", value: 4460 },
+    ],
     weekly: [
       { day: "Sat", value: 3200 },
       { day: "Sun", value: 3800 },
@@ -100,17 +108,18 @@ const MOCK_DATA = {
       { day: "Fri", value: 4600 },
     ],
     monthly: [
-      { label: "Week 1", value: 3500 },
-      { label: "Week 2", value: 4200 },
-      { label: "Week 3", value: 5800 },
-      { label: "Week 4", value: 4449 },
+      { day: "Week 1", value: 3500 },
+      { day: "Week 2", value: 4200 },
+      { day: "Week 3", value: 5800, highlighted: true },
+      { day: "Week 4", value: 4449 },
     ],
     allTime: [
-      { label: "Jan", value: 2800 },
-      { label: "Feb", value: 3200 },
-      { label: "Mar", value: 3800 },
-      { label: "Apr", value: 4100 },
-      { label: "May", value: 4449 },
+      { day: "Jan", value: 2800 },
+      { day: "Feb", value: 3200 },
+      { day: "Mar", value: 3800 },
+      { day: "Apr", value: 4100 },
+      { day: "May", value: 4449, highlighted: true },
+      { day: "Jun", value: 4600 },
     ],
   },
   goals: [
@@ -157,10 +166,10 @@ const NewPortfolioPage = () => {
 
   const getChartData = () => {
     switch (timeFilter) {
-      case "D": return chartData.weekly.slice(0, 3);
+      case "D": return chartData.daily;
       case "W": return chartData.weekly;
       case "M": return chartData.monthly;
-      case "A": return chartData.allTime;
+      case "ALL": return chartData.allTime;
       default: return chartData.weekly;
     }
   };
@@ -365,21 +374,26 @@ const NewPortfolioPage = () => {
               <span className="text-xl font-bold">Invest</span>
               <ChevronDown className="h-5 w-5" />
             </button>
-            <div className="flex gap-2">
-              {["W", "M"].map((filter) => (
+            <div className="flex gap-1">
+              {[
+                { id: "D", label: "D" },
+                { id: "W", label: "W" },
+                { id: "M", label: "M" },
+                { id: "ALL", label: "All" },
+              ].map((filter) => (
                 <button
-                  key={filter}
-                  onClick={() => setTimeFilter(filter)}
-                  className={`w-10 h-10 rounded-full text-base font-bold transition-all ${
-                    timeFilter === filter
+                  key={filter.id}
+                  onClick={() => setTimeFilter(filter.id)}
+                  className={`px-3 h-9 rounded-full text-sm font-bold transition-all ${
+                    timeFilter === filter.id
                       ? "bg-slate-700/80 text-white shadow-lg backdrop-blur-md border border-white/20"
                       : "text-slate-400 hover:text-slate-600 hover:bg-slate-200/30"
                   }`}
-                  style={timeFilter === filter ? {
+                  style={timeFilter === filter.id ? {
                     boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.1), 0 4px 12px rgba(0,0,0,0.15)'
                   } : {}}
                 >
-                  {filter}
+                  {filter.label}
                 </button>
               ))}
             </div>
