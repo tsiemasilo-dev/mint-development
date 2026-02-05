@@ -1006,12 +1006,12 @@ const NewPortfolioPage = () => {
                           opacity={activePieIndex >= 0 && activePieIndex !== index ? 0.4 : 1}
                           style={{ 
                             transform: activePieIndex === index 
-                              ? 'scale(1.12)' 
+                              ? 'scale(1.1)' 
                               : activePieIndex >= 0 
-                                ? 'scale(0.92)' 
+                                ? 'scale(0.94)' 
                                 : 'scale(1)',
                             transformOrigin: 'center',
-                            transition: 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease',
+                            transition: 'transform 0.6s cubic-bezier(0.25, 0.1, 0.25, 1), opacity 0.5s ease-out, filter 0.5s ease-out',
                             cursor: 'pointer',
                             filter: activePieIndex === index ? 'url(#glow)' : 'none'
                           }}
