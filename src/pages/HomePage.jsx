@@ -22,6 +22,7 @@ import {
   Plus,
   Calendar,
   ChevronRight,
+  ExternalLink,
 } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
 import { useRequiredActions } from "../lib/useRequiredActions";
@@ -43,13 +44,13 @@ const HomePage = ({
   onOpenCredit,
   onOpenCreditApply,
   onOpenCreditRepay,
-  onOpenInvest, // Keeping this for backward compatibility if needed
+  onOpenInvest, 
   onOpenWithdraw,
   onOpenSettings,
-  // New specific navigation props
   onOpenStrategies,
   onOpenMarkets,
   onOpenNews,
+  onOpenNewsArticle, // Prop to open specific article detail
 }) => {
   const { profile, loading } = useProfile();
   const { bankLinked, loading: actionsLoading } = useRequiredActions();
@@ -57,11 +58,11 @@ const HomePage = ({
   const { balance, investments, transactions, bestAssets, loading: financialLoading } = useFinancialData();
   const { monthlyChangePercent } = useInvestments();
   const [bestStrategies, setBestStrategies] = useState([]);
+  const [latestArticle, setLatestArticle] = useState(null); // State for news
   const [failedLogos, setFailedLogos] = useState({});
   const [showPayModal, setShowPayModal] = useState(false);
   const [showReceiveModal, setShowReceiveModal] = useState(false);
   
-  // Goals State
   const [showGoalsModal, setShowGoalsModal] = useState(false);
   const [goals, setGoals] = useState([]);
   const [loadingGoals, setLoadingGoals] = useState(false);
@@ -93,6 +94,26 @@ const HomePage = ({
     fetchStrategies();
   }, []);
 
+  // Fetch Latest News Article
+  useEffect(() => {
+    const fetchLatestNews = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("News_articles")
+          .select("id, title, source, published_at")
+          .order("published_at", { ascending: false })
+          .limit(1);
+
+        if (!error && data?.[0]) {
+          setLatestArticle(data[0]);
+        }
+      } catch (error) {
+        console.error("Error fetching latest news:", error);
+      }
+    };
+    fetchLatestNews();
+  }, []);
+
   // Fetch Goals when modal opens
   useEffect(() => {
     if (showGoalsModal && profile?.id) {
@@ -112,7 +133,6 @@ const HomePage = ({
 
       if (error) throw error;
       setGoals(data || []);
-      // If no goals, automatically switch to create mode
       if (!data || data.length === 0) {
         setIsCreatingGoal(true);
       }
@@ -140,7 +160,6 @@ const HomePage = ({
 
       if (error) throw error;
       
-      // Reset and reload
       setNewGoal({ name: "", target_amount: "", target_date: "" });
       setIsCreatingGoal(false);
       fetchGoals();
@@ -325,16 +344,16 @@ const HomePage = ({
       <div className="mx-auto -mt-10 flex w-full max-w-sm flex-col gap-6 px-4 pb-10 md:max-w-md md:px-8">
         <section className="grid grid-cols-4 gap-3 text-[11px] font-medium">
           {[
-            { label: <>Open<br />Strategies</>, icon: LayoutGrid, onClick: onOpenStrategies || onOpenInvest },
-            { label: "Markets", icon: TrendingUp, onClick: onOpenMarkets || onOpenInvest },
-            { label: "News", icon: Newspaper, onClick: onOpenNews || onOpenInvest },
+            { label: <>Open<br />Strategies</>, icon: LayoutGrid, onClick: onOpenStrategies },
+            { label: "Markets", icon: TrendingUp, onClick: onOpenMarkets },
+            { label: "News", icon: Newspaper, onClick: onOpenNews },
             { label: "Goals", icon: Target, onClick: () => setShowGoalsModal(true) },
           ].map((item, index) => {
             const Icon = item.icon;
             return (
               <button
                 key={index}
-                className="flex flex-col items-center gap-2 rounded-2xl bg-white px-2 py-3 text-slate-700 shadow-md"
+                className="flex flex-col items-center gap-2 rounded-2xl bg-white px-2 py-3 text-slate-700 shadow-md transition-all active:scale-95"
                 type="button"
                 onClick={item.onClick}
               >
@@ -371,7 +390,7 @@ const HomePage = ({
             </div>
             {hasInvestments && (
               <button 
-                onClick={onOpenInvest} 
+                onClick={onOpenMarkets} 
                 className="mb-1 text-xs font-semibold text-violet-600 active:opacity-70"
               >
                 View all
@@ -428,7 +447,7 @@ const HomePage = ({
               <p className="text-xs text-slate-500 mb-4">Start investing to see your best performing assets here</p>
               <button
                 type="button"
-                onClick={onOpenInvest}
+                onClick={onOpenMarkets}
                 className="inline-flex items-center justify-center rounded-full bg-slate-900 px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.15em] text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5"
               >
                 Make your first investment
@@ -453,7 +472,7 @@ const HomePage = ({
             </div>
             {hasStrategies && (
               <button 
-                onClick={onOpenInvest} 
+                onClick={onOpenStrategies} 
                 className="mb-1 text-xs font-semibold text-violet-600 active:opacity-70"
               >
                 View all
@@ -497,11 +516,55 @@ const HomePage = ({
               <p className="text-xs text-slate-500 mb-4">Explore our curated investment portfolios</p>
               <button
                 type="button"
-                onClick={onOpenInvest}
+                onClick={onOpenStrategies}
                 className="inline-flex items-center justify-center rounded-full bg-slate-900 px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.15em] text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5"
               >
                 Browse Strategies
               </button>
+            </div>
+          )}
+        </section>
+
+        {/* Latest News Section */}
+        <section>
+          <div className="flex items-end justify-between px-5 mb-3">
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-slate-900">Latest News</p>
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 text-slate-500">
+                  <Newspaper className="h-3 w-3" />
+                </span>
+                <span>Market insights and updates</span>
+              </div>
+            </div>
+            <button 
+              onClick={onOpenNews} 
+              className="mb-1 text-xs font-semibold text-violet-600 active:opacity-70"
+            >
+              View all
+            </button>
+          </div>
+
+          {latestArticle ? (
+            <button
+              onClick={() => onOpenNewsArticle?.(latestArticle.id)}
+              className="w-full rounded-[32px] bg-white p-5 shadow-md text-left transition-all active:scale-[0.98]"
+            >
+              <h3 className="text-sm font-semibold text-slate-900 line-clamp-2">
+                {latestArticle.title}
+              </h3>
+              <div className="mt-3 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <span className="font-medium text-violet-600">{latestArticle.source}</span>
+                  <span>•</span>
+                  <span>{formatDate(latestArticle.published_at)}</span>
+                </div>
+                <ChevronRight className="h-4 w-4 text-slate-300" />
+              </div>
+            </button>
+          ) : (
+            <div className="rounded-3xl bg-white p-6 shadow-md text-center">
+              <p className="text-xs text-slate-400">No news articles available</p>
             </div>
           )}
         </section>
