@@ -188,7 +188,9 @@ const NewPortfolioPage = () => {
   const [failedLogos, setFailedLogos] = useState({});
   const [calendarYear, setCalendarYear] = useState(2025);
   const [currentView, setCurrentView] = useState("portfolio");
+  const [showStrategyDropdown, setShowStrategyDropdown] = useState(false);
   const chartScrollRef = useRef(null);
+  const dropdownRef = useRef(null);
   const { profile } = useProfile();
   const { strategies, selectedStrategy: userSelectedStrategy, loading: strategiesLoading, selectStrategy } = useUserStrategies();
   const { chartData: realChartData, loading: chartLoading } = useStrategyChartData(userSelectedStrategy?.strategyId, timeFilter);
@@ -217,6 +219,23 @@ const NewPortfolioPage = () => {
       scrollContainer.scrollTo({ left: scrollTo, behavior: 'smooth' });
     }
   }, [timeFilter]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowStrategyDropdown(false);
+      }
+    };
+    if (showStrategyDropdown) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showStrategyDropdown]);
+
+  const handleStrategySelect = (strategy) => {
+    selectStrategy(strategy.strategyId);
+    setShowStrategyDropdown(false);
+  };
 
   const availableCalendarYears = useMemo(() => Object.keys(MOCK_CALENDAR_RETURNS).sort(), []);
   const calendarData = MOCK_CALENDAR_RETURNS;
@@ -479,10 +498,33 @@ const NewPortfolioPage = () => {
       <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 md:max-w-md md:px-8">
         <section className="py-2">
           <div className="flex items-center justify-between mb-3 px-1">
-            <button className="flex items-center gap-1 text-slate-900 hover:text-slate-700 transition">
-              <span className="text-xl font-bold">{currentStrategy.name || "Strategy"}</span>
-              <ChevronDown className="h-5 w-5" />
-            </button>
+            <div className="relative" ref={dropdownRef}>
+              <button 
+                onClick={() => setShowStrategyDropdown(!showStrategyDropdown)}
+                className="flex items-center gap-1 text-slate-900 hover:text-slate-700 transition"
+              >
+                <span className="text-xl font-bold">{currentStrategy.name || "Strategy"}</span>
+                <ChevronDown className={`h-5 w-5 transition-transform ${showStrategyDropdown ? 'rotate-180' : ''}`} />
+              </button>
+              {showStrategyDropdown && strategies.length > 0 && (
+                <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden">
+                  {strategies.map((strategy) => (
+                    <button
+                      key={strategy.strategyId}
+                      onClick={() => handleStrategySelect(strategy)}
+                      className={`w-full px-4 py-3 text-left hover:bg-slate-50 transition border-b border-slate-100 last:border-b-0 ${
+                        userSelectedStrategy?.strategyId === strategy.strategyId ? 'bg-purple-50' : ''
+                      }`}
+                    >
+                      <p className="font-semibold text-slate-900">{strategy.name}</p>
+                      <p className="text-sm text-slate-500">
+                        R{(strategy.currentValue || 0).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="flex gap-1">
               {[
                 { id: "D", label: "D" },
