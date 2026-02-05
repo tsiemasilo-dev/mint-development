@@ -71,29 +71,75 @@ const NewPortfolioPage = () => {
   const goalProgress = (goal.current / goal.target) * 100;
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)] text-slate-900">
-      <div className="rounded-b-[36px] bg-gradient-to-b from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-5 pb-8 pt-12 text-white md:px-8">
+    <div className="min-h-screen pb-[env(safe-area-inset-bottom)] text-white relative overflow-hidden">
+      {/* Multi-layer gradient background */}
+      <div className="fixed inset-0 -z-10">
+        {/* Base gradient: deep purple to soft lavender with smooth multi-stop transition */}
+        <div 
+          className="absolute inset-0"
+          style={{ 
+            background: 'linear-gradient(180deg, #0d0d12 0%, #130d20 8%, #1a1035 18%, #251548 28%, #2d1b4e 38%, #3b2066 48%, #4a2878 55%, #5b3490 60%, #7c5aad 68%, #a88bc7 75%, #c9b5dc 82%, #e2d5ec 88%, #f0eaf5 94%, #f8f5fb 100%)'
+          }} 
+        />
+        
+        {/* Mid-section indigo/royal purple glow */}
+        <div 
+          className="absolute top-[15%] left-1/2 -translate-x-1/2 w-[140%] h-[50%] rounded-full blur-3xl"
+          style={{ background: 'radial-gradient(ellipse at center, rgba(91,33,182,0.35) 0%, rgba(76,29,149,0.15) 40%, transparent 70%)' }}
+        />
+        
+        {/* Large radial ambient glow behind account balance */}
+        <div 
+          className="absolute top-[5%] left-1/2 -translate-x-1/2 w-[350px] h-[250px] rounded-full"
+          style={{ background: 'radial-gradient(ellipse at center, rgba(124,58,237,0.25) 0%, rgba(109,40,217,0.12) 35%, transparent 65%)', filter: 'blur(50px)' }}
+        />
+        
+        {/* Vertical light beam behind graph peak area */}
+        <div 
+          className="absolute top-[32%] left-[58%] w-[100px] h-[350px] -translate-x-1/2"
+          style={{ background: 'linear-gradient(180deg, transparent 0%, rgba(139,92,246,0.2) 30%, rgba(167,139,250,0.35) 50%, rgba(139,92,246,0.2) 70%, transparent 100%)', filter: 'blur(25px)' }}
+        />
+        <div 
+          className="absolute top-[38%] left-[58%] w-[50px] h-[220px] -translate-x-1/2"
+          style={{ background: 'linear-gradient(180deg, transparent 0%, rgba(196,181,253,0.35) 40%, rgba(221,214,254,0.4) 50%, rgba(196,181,253,0.35) 60%, transparent 100%)', filter: 'blur(18px)' }}
+        />
+        
+        {/* Subtle surface reflection/gloss near bottom */}
+        <div 
+          className="absolute bottom-0 left-0 right-0 h-[35%]"
+          style={{ background: 'linear-gradient(0deg, rgba(248,245,251,0.98) 0%, rgba(237,233,254,0.85) 25%, rgba(221,214,254,0.5) 50%, rgba(196,181,253,0.2) 75%, transparent 100%)' }}
+        />
+        <div 
+          className="absolute bottom-[8%] left-1/2 -translate-x-1/2 w-[130%] h-[80px] rounded-full"
+          style={{ background: 'radial-gradient(ellipse at center, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.05) 50%, transparent 80%)', filter: 'blur(20px)' }}
+        />
+      </div>
+
+      {/* Header section */}
+      <div className="relative px-5 pb-8 pt-12 md:px-8">
         <div className="mx-auto flex w-full max-w-sm flex-col gap-5 md:max-w-md">
           <header className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-amber-200 to-amber-400 text-sm font-semibold text-amber-900 shadow-lg">
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-amber-200 to-amber-400 text-sm font-semibold text-amber-900 shadow-lg shadow-amber-500/20">
                 JD
               </div>
               <p className="text-base font-medium text-white">Hello, Johnson</p>
             </div>
-            <button className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 transition hover:bg-white/10">
+            <button className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 backdrop-blur-sm transition hover:bg-white/10">
               <Bell className="h-5 w-5 text-white/90" />
             </button>
           </header>
 
-          <section className="mt-2">
+          {/* Account balance with ambient glow */}
+          <section className="mt-2 relative">
+            <div className="absolute -inset-8 bg-gradient-radial from-[#7c3aed]/20 via-transparent to-transparent rounded-full blur-2xl -z-10" />
             <div className="flex items-center gap-3">
               <p className="text-3xl font-semibold tracking-tight">
                 {balanceVisible ? formatCurrency(accountValue) : "R•••••••"}
               </p>
               <button
                 onClick={() => setBalanceVisible(!balanceVisible)}
-                className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 transition hover:bg-white/20"
+                className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm transition hover:bg-white/20"
               >
                 {balanceVisible ? (
                   <Eye className="h-4 w-4 text-white/60" />
@@ -116,8 +162,8 @@ const NewPortfolioPage = () => {
                 onClick={() => setActiveTab(tab.id)}
                 className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all ${
                   activeTab === tab.id
-                    ? "bg-amber-400 text-slate-900 shadow-lg"
-                    : "bg-white/10 text-white/70 hover:bg-white/20"
+                    ? "bg-amber-400 text-slate-900 shadow-lg shadow-amber-500/30"
+                    : "bg-white/10 text-white/70 backdrop-blur-sm hover:bg-white/20"
                 }`}
               >
                 {tab.label}
@@ -127,8 +173,9 @@ const NewPortfolioPage = () => {
         </div>
       </div>
 
-      <div className="mx-auto -mt-4 flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
-        <section className="rounded-3xl bg-white p-5 shadow-md">
+      {/* Content section */}
+      <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
+        <section className="rounded-3xl bg-white/90 backdrop-blur-xl p-5 shadow-xl shadow-purple-900/10 border border-white/50">
           <div className="flex items-center justify-between mb-4">
             <button className="flex items-center gap-2 text-slate-700 hover:text-slate-900 transition">
               <span className="text-sm font-semibold">{selectedStrategy.name}</span>
@@ -141,7 +188,7 @@ const NewPortfolioPage = () => {
                   onClick={() => setTimeFilter(filter)}
                   className={`w-8 h-8 rounded-full text-xs font-medium transition-all ${
                     timeFilter === filter
-                      ? "bg-slate-900 text-white"
+                      ? "bg-slate-900 text-white shadow-md"
                       : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
                   }`}
                 >
@@ -153,7 +200,7 @@ const NewPortfolioPage = () => {
 
           <div className="mb-4">
             <p className="text-2xl font-bold text-slate-900">{formatCurrency(selectedStrategy.currentValue)}</p>
-            <p className="text-sm text-emerald-600">
+            <p className="text-sm text-emerald-600 font-medium">
               +{selectedStrategy.previousMonthChange}% Previous Month
             </p>
           </div>
@@ -241,11 +288,11 @@ const NewPortfolioPage = () => {
           </div>
         </section>
 
-        <button className="w-full py-3.5 rounded-full bg-slate-900 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5">
+        <button className="w-full py-3.5 rounded-full bg-gradient-to-r from-slate-800 to-slate-900 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg shadow-slate-900/30 transition hover:-translate-y-0.5 hover:shadow-xl">
           View All Allocations
         </button>
 
-        <section className="rounded-3xl bg-white p-5 shadow-md">
+        <section className="rounded-3xl bg-white/90 backdrop-blur-xl p-5 shadow-xl shadow-purple-900/10 border border-white/50">
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm font-semibold text-slate-900">Linked Goals</p>
             <button className="flex items-center gap-1 text-xs font-medium text-violet-600 hover:text-violet-700 transition">
@@ -273,7 +320,7 @@ const NewPortfolioPage = () => {
           </div>
         </section>
 
-        <section className="rounded-3xl bg-white p-5 shadow-md">
+        <section className="rounded-3xl bg-white/90 backdrop-blur-xl p-5 shadow-xl shadow-purple-900/10 border border-white/50">
           <div className="flex items-center justify-between mb-1">
             <p className="text-sm font-semibold text-slate-900">Portfolio Holdings</p>
           </div>
