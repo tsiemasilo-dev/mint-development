@@ -1017,7 +1017,8 @@ const NewPortfolioPage = () => {
                       ))}
                     </Pie>
                     <Tooltip 
-                      wrapperStyle={{ outline: 'none' }}
+                      wrapperStyle={{ outline: 'none', zIndex: 100 }}
+                      position={{ x: 150, y: 20 }}
                       content={({ active, payload }) => {
                         if (active && payload && payload.length) {
                           const data = payload[0].payload;
