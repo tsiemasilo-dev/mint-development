@@ -477,20 +477,18 @@ const NewPortfolioPage = () => {
 
           <div 
             ref={chartScrollRef}
-            className="overflow-x-auto scrollbar-hide select-none"
+            className="overflow-x-auto scrollbar-hide"
             style={{ 
               width: '100%', 
               height: 220, 
               marginBottom: 8,
-              scrollBehavior: 'smooth',
               WebkitOverflowScrolling: 'touch',
               msOverflowStyle: 'none',
               scrollbarWidth: 'none',
-              userSelect: 'none',
-              WebkitUserSelect: 'none',
-              touchAction: 'pan-x',
-              cursor: 'grab',
+              overflowY: 'hidden',
             }}
+            onTouchStart={(e) => e.currentTarget.style.cursor = 'grabbing'}
+            onTouchEnd={(e) => e.currentTarget.style.cursor = 'grab'}
           >
             <div style={{ width: getChartWidth(currentChartData.length), height: 220, minWidth: '100%' }}>
               <ComposedChart
