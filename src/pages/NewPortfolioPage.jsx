@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Bell, Eye, EyeOff, ChevronDown, ChevronRight, ArrowLeft, TrendingUp, TrendingDown, Plus } from "lucide-react";
-import { Area, ComposedChart, Line, XAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell, Sector } from 'recharts';
+import { Area, ComposedChart, Line, XAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell } from 'recharts';
 import { useFinancialData } from "../lib/useFinancialData";
 import { useProfile } from "../lib/useProfile";
 import { useUserStrategies, useStrategyChartData } from "../lib/useUserStrategies";
@@ -953,24 +953,6 @@ const NewPortfolioPage = () => {
         const totalDistinct = holdingsData.length;
         const pieData = holdingsData.map(h => ({ name: h.ticker, value: h.currentValue, color: h.color }));
 
-        const renderActiveShape = (props) => {
-          const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload, percent } = props;
-          return (
-            <g>
-              <Sector
-                cx={cx}
-                cy={cy}
-                innerRadius={innerRadius}
-                outerRadius={outerRadius + 8}
-                startAngle={startAngle}
-                endAngle={endAngle}
-                fill={fill}
-                style={{ filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.25))', transition: 'all 0.3s ease' }}
-              />
-            </g>
-          );
-        };
-
         return (
         <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
           {/* Summary Card with Pie Chart */}
@@ -995,43 +977,64 @@ const NewPortfolioPage = () => {
               <div className="relative h-36 w-36">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
+                    <defs>
+                      <filter id="glow">
+                        <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+                        <feMerge>
+                          <feMergeNode in="coloredBlur"/>
+                          <feMergeNode in="SourceGraphic"/>
+                        </feMerge>
+                      </filter>
+                    </defs>
                     <Pie
                       data={pieData}
                       cx="50%"
                       cy="50%"
-                      outerRadius={activePieIndex >= 0 ? 58 : 65}
-                      paddingAngle={1}
+                      outerRadius={60}
+                      paddingAngle={2}
                       dataKey="value"
-                      stroke="rgba(255,255,255,0.8)"
-                      strokeWidth={2}
-                      activeIndex={activePieIndex}
-                      activeShape={renderActiveShape}
-                      onMouseEnter={(_, index) => setActivePieIndex(index)}
-                      onMouseLeave={() => setActivePieIndex(-1)}
-                      style={{ cursor: 'pointer' }}
+                      stroke="rgba(255,255,255,0.9)"
+                      strokeWidth={1.5}
+                      animationBegin={0}
+                      animationDuration={800}
+                      animationEasing="ease-out"
                     >
                       {pieData.map((entry, index) => (
                         <Cell 
                           key={`cell-${index}`} 
                           fill={entry.color}
+                          opacity={activePieIndex >= 0 && activePieIndex !== index ? 0.5 : 1}
                           style={{ 
-                            filter: activePieIndex >= 0 && activePieIndex !== index 
-                              ? 'opacity(0.6)' 
-                              : 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))',
-                            transition: 'all 0.3s ease'
+                            transform: activePieIndex === index ? 'scale(1.08)' : 'scale(1)',
+                            transformOrigin: 'center',
+                            transition: 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease',
+                            cursor: 'pointer',
+                            filter: activePieIndex === index ? 'url(#glow)' : 'none'
                           }}
+                          onMouseEnter={() => setActivePieIndex(index)}
+                          onMouseLeave={() => setActivePieIndex(-1)}
                         />
                       ))}
                     </Pie>
                     <Tooltip 
+                      wrapperStyle={{ outline: 'none' }}
                       content={({ active, payload }) => {
                         if (active && payload && payload.length) {
                           const data = payload[0].payload;
                           const percent = ((data.value / totalValue) * 100).toFixed(1);
                           return (
-                            <div className="bg-slate-900 text-white px-3 py-2 rounded-lg shadow-xl text-sm">
-                              <p className="font-semibold">{data.name}</p>
-                              <p className="text-violet-300">{percent}%</p>
+                            <div 
+                              className="px-4 py-3 rounded-2xl shadow-2xl border border-white/20"
+                              style={{ 
+                                background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(248,250,252,0.9) 100%)',
+                                backdropFilter: 'blur(20px)',
+                                WebkitBackdropFilter: 'blur(20px)'
+                              }}
+                            >
+                              <p className="text-sm font-bold text-slate-800">{data.name}</p>
+                              <p className="text-lg font-bold bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text text-transparent">
+                                {percent}%
+                              </p>
                             </div>
                           );
                         }
