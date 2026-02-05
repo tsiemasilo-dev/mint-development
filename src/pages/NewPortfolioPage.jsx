@@ -154,15 +154,15 @@ const NewPortfolioPage = () => {
               <span className="text-base font-bold">{selectedStrategy.name}</span>
               <ChevronDown className="h-5 w-5" />
             </button>
-            <div className="flex gap-1.5">
+            <div className="flex gap-1">
               {["D", "W", "M", "A"].map((filter) => (
                 <button
                   key={filter}
                   onClick={() => setTimeFilter(filter)}
                   className={`w-9 h-9 rounded-full text-sm font-semibold transition-all ${
                     timeFilter === filter
-                      ? "bg-slate-900 text-white shadow-lg"
-                      : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
+                      ? "bg-slate-800 text-white shadow-md"
+                      : "text-slate-400 hover:text-slate-600"
                   }`}
                 >
                   {filter}
@@ -235,8 +235,39 @@ const NewPortfolioPage = () => {
                   dataKey="day" 
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 12, fill: 'rgba(255,255,255,0.7)', fontWeight: 500 }}
-                  tickMargin={12}
+                  tickMargin={16}
+                  tick={({ x, y, payload, index }) => {
+                    const isHighlighted = currentChartData[index]?.highlighted;
+                    const totalItems = currentChartData.length;
+                    const isEdge = index === 0 || index === totalItems - 1;
+                    const opacity = isEdge ? 0.5 : 1;
+                    
+                    return (
+                      <g transform={`translate(${x},${y})`} style={{ opacity }}>
+                        {isHighlighted && (
+                          <rect
+                            x={-20}
+                            y={-8}
+                            width={40}
+                            height={24}
+                            rx={12}
+                            fill="#1e293b"
+                            style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.1))' }}
+                          />
+                        )}
+                        <text
+                          x={0}
+                          y={6}
+                          textAnchor="middle"
+                          fill={isHighlighted ? '#ffffff' : '#94a3b8'}
+                          fontSize={12}
+                          fontWeight={isHighlighted ? 600 : 500}
+                        >
+                          {payload.value}
+                        </text>
+                      </g>
+                    );
+                  }}
                 />
                 
                 <Tooltip
