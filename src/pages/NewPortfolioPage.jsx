@@ -233,7 +233,7 @@ const NewPortfolioPage = () => {
   }, [showStrategyDropdown]);
 
   const handleStrategySelect = (strategy) => {
-    selectStrategy(strategy.strategyId);
+    selectStrategy(strategy);
     setShowStrategyDropdown(false);
   };
 
