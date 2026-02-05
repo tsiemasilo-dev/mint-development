@@ -76,10 +76,15 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy }) => {
     const priceChange = displaySecurity?.change_price != null 
       ? (displaySecurity.change_price >= 0 ? '+' : '') + (Number(displaySecurity.change_price) / 100).toFixed(2)
     : "—";
-  const percentChange = displaySecurity?.changePct != null 
-    ? (displaySecurity.changePct >= 0 ? '+' : '') + Number(displaySecurity.changePct).toFixed(2) + '%'
+  const rawPercentChange = displaySecurity?.change_percentage != null
+    ? Number(displaySecurity.change_percentage)
+    : displaySecurity?.changePct != null
+      ? Number(displaySecurity.changePct)
+      : null;
+  const percentChange = rawPercentChange != null
+    ? (rawPercentChange >= 0 ? '+' : '') + rawPercentChange.toFixed(2) + '%'
     : "—";
-  const isPositive = displaySecurity?.changePct != null && displaySecurity.changePct >= 0;
+  const isPositive = rawPercentChange != null && rawPercentChange >= 0;
 
   // Generate chart data from price history - filter out nulls
   const chartData = priceHistory.length > 0 
