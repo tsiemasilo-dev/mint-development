@@ -20,7 +20,7 @@ const generateSparkline = (changePct) => {
   });
 };
 
-const sortOptions = ["Market Cap", "Dividend Yield", "P/E Ratio", "Beta"];
+const sortOptions = ["Market Cap", "Dividend Yield", "P/E Ratio"];
 
 const strategySortOptions = [
   "Recommended",
@@ -1260,17 +1260,6 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                               P/E {Number(security.pe).toFixed(2)}
                             </span>
                           )}
-                          {security.beta && (
-                            <span
-                              className={`rounded-full px-2 py-1 text-[10px] font-medium ${
-                                security.beta > 1
-                                  ? "bg-orange-50 text-orange-700"
-                                  : "bg-green-50 text-green-700"
-                              }`}
-                            >
-                              β {Number(security.beta).toFixed(2)}
-                            </span>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -1354,17 +1343,6 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                               {security.pe && (
                                 <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-medium text-blue-700">
                                   P/E {Number(security.pe).toFixed(2)}
-                                </span>
-                              )}
-                              {security.beta && (
-                                <span
-                                  className={`rounded-full px-2 py-1 text-[10px] font-medium ${
-                                    security.beta > 1
-                                      ? "bg-orange-50 text-orange-700"
-                                      : "bg-green-50 text-green-700"
-                                  }`}
-                                >
-                                  β {Number(security.beta).toFixed(2)}
                                 </span>
                               )}
                             </div>
