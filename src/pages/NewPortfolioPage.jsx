@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
-import { Bell, Eye, EyeOff, ChevronDown, ChevronRight, ArrowLeft, TrendingUp, TrendingDown, Target, Home, Wallet, PiggyBank, Plus } from "lucide-react";
+import { Bell, Eye, EyeOff, ChevronDown, ChevronRight, ArrowLeft, TrendingUp, TrendingDown, Plus } from "lucide-react";
 import { Area, ComposedChart, Line, XAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { useFinancialData } from "../lib/useFinancialData";
 import { useProfile } from "../lib/useProfile";
@@ -111,11 +111,6 @@ const MOCK_STOCKS = [
   { id: 5, name: "Alphabet Inc.", ticker: "GOOGL", shares: 10, price: 141.80, dailyChange: 0.95 },
 ];
 
-const MOCK_GOALS = [
-  { id: 1, name: "Emergency Fund", target: 50000, current: 35000, icon: "wallet" },
-  { id: 2, name: "First Home", target: 500000, current: 150000, icon: "home" },
-  { id: 3, name: "Retirement", target: 2000000, current: 245000, icon: "piggybank" },
-];
 
 const MOCK_DATA = {
   accountValue: 24897.43,
@@ -497,7 +492,6 @@ const NewPortfolioPage = () => {
               { id: "strategy", label: "Strategies" },
               { id: "stocks", label: "Individual Stocks" },
               { id: "holdings", label: "Holdings" },
-              { id: "goals", label: "Goals" },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -1002,74 +996,6 @@ const NewPortfolioPage = () => {
         </div>
       )}
 
-      {/* Goals Tab Content */}
-      {activeTab === "goals" && (
-        <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
-          <div 
-            className="space-y-4"
-            style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
-          >
-            {MOCK_GOALS.map((goalItem) => {
-              const progress = (goalItem.current / goalItem.target) * 100;
-              const GoalIcon = goalItem.icon === "wallet" ? Wallet : goalItem.icon === "home" ? Home : PiggyBank;
-              return (
-                <div 
-                  key={goalItem.id}
-                  className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50"
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-600">
-                        <GoalIcon className="h-6 w-6 text-white" />
-                      </div>
-                      <div>
-                        <p className="text-base font-semibold text-slate-900">{goalItem.name}</p>
-                        <p className="text-xs text-slate-500">
-                          {progress.toFixed(0)}% complete
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Target className="h-4 w-4 text-violet-500" />
-                    </div>
-                  </div>
-
-                  <div className="mb-3">
-                    <div className="h-3 w-full rounded-full bg-slate-200 overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-600 transition-all"
-                        style={{ width: `${progress}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs text-slate-500">Saved</p>
-                      <p className="text-lg font-bold text-slate-900">
-                        {formatCurrency(goalItem.current)}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-slate-500">Target</p>
-                      <p className="text-lg font-bold text-slate-900">
-                        {formatCurrency(goalItem.target)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <button 
-            className="w-full py-3.5 rounded-full bg-gradient-to-r from-slate-800 to-slate-900 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg shadow-slate-900/30 transition hover:-translate-y-0.5 hover:shadow-xl flex items-center justify-center gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Create Goal
-          </button>
-        </div>
-      )}
     </div>
   );
 };
