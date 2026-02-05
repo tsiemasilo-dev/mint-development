@@ -195,19 +195,14 @@ const Navbar = ({ activeTab, setActiveTab, onWithdraw, onShowComingSoon }) => {
           </AnimatePresence>
 
           <div
+            className="fixed left-0 right-0 flex justify-center pointer-events-none"
             style={{
-              position: "fixed",
-              left: 0,
-              width: "100vw",
-              display: "flex",
-              justifyContent: "center",
-              bottom: "calc(1rem + env(safe-area-inset-bottom) + 29px)",
-              height: 0,
-              pointerEvents: "none",
-              zIndex: 10001
+              bottom: "calc(env(safe-area-inset-bottom, 0px) + 56px)",
+              zIndex: 10001,
+              transform: "translateZ(0)",
+              willChange: "transform"
             }}
           >
-            <div style={{ pointerEvents: "auto" }}>
             <button
               onClick={() => {
                 updateLayout();
@@ -215,10 +210,9 @@ const Navbar = ({ activeTab, setActiveTab, onWithdraw, onShowComingSoon }) => {
                 setIsOpen(newOpenState);
                 triggerHaptic(newOpenState ? ImpactStyle.Heavy : ImpactStyle.Light);
               }}
-              className={`pointer-events-auto flex h-16 w-16 -translate-y-1/2 items-center justify-center rounded-full shadow-2xl transition-all active:scale-90 ${
+              className={`pointer-events-auto flex h-16 w-16 items-center justify-center rounded-full shadow-2xl active:scale-90 ${
                 isOpen ? "bg-white text-[#31005e]" : "bg-black text-white"
               }`}
-              style={{ marginTop: "-29px" }}
             >
               <div className="relative h-10 w-10 flex items-center justify-center overflow-hidden">
                 <AnimatePresence mode="wait">
@@ -246,7 +240,6 @@ const Navbar = ({ activeTab, setActiveTab, onWithdraw, onShowComingSoon }) => {
                 </AnimatePresence>
               </div>
             </button>
-            </div>
           </div>
         </div>,
         document.body
@@ -256,7 +249,12 @@ const Navbar = ({ activeTab, setActiveTab, onWithdraw, onShowComingSoon }) => {
       {createPortal(
         <nav
           ref={navRef}
-          className="fixed bottom-0 left-0 right-0 z-[1000] border-t border-white/10 bg-white/70 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur-2xl"
+          className="fixed bottom-0 left-0 right-0 z-[1000] border-t border-white/10 bg-white/70 pt-3 backdrop-blur-2xl"
+          style={{
+            paddingBottom: "calc(1rem + env(safe-area-inset-bottom, 0px))",
+            transform: "translateZ(0)",
+            willChange: "transform"
+          }}
         >
           <div className="relative mx-auto grid w-full max-w-lg grid-cols-5 items-center px-4">
             {tabs.slice(0, 2).map((tab) => (
