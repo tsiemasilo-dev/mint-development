@@ -73,17 +73,17 @@ const NewPortfolioPage = () => {
     <div className="min-h-screen pb-[env(safe-area-inset-bottom)] text-white relative overflow-hidden">
       {/* Multi-layer gradient background */}
       <div className="fixed inset-0 -z-10">
-        {/* Base gradient: deep purple ends at pill buttons, indigo starts at chart, lavender in middle */}
+        {/* Base gradient: deep purple extends further down */}
         <div 
           className="absolute inset-0"
           style={{ 
-            background: 'linear-gradient(180deg, #0d0d12 0%, #0f0a18 4%, #120c1f 8%, #1a1035 14%, #251548 20%, #2d1860 24%, #3b2066 28%, #5b3490 34%, #7c5aad 40%, #a88bc7 46%, #c9b5dc 52%, #ddd0e8 58%, #ebe4f2 64%, #f3eff8 72%, #f8f5fb 80%, #faf8fc 100%)'
+            background: 'linear-gradient(180deg, #0d0d12 0%, #0f0a18 5%, #120c1f 10%, #1a1035 16%, #251548 22%, #2d1860 28%, #3b2066 34%, #5b3490 42%, #7c5aad 50%, #a88bc7 56%, #c9b5dc 62%, #ddd0e8 68%, #ebe4f2 74%, #f3eff8 80%, #f8f5fb 88%, #faf8fc 100%)'
           }} 
         />
         
         {/* Mid-section indigo/royal purple glow - positioned around chart start */}
         <div 
-          className="absolute top-[22%] left-1/2 -translate-x-1/2 w-[150%] h-[32%] rounded-full blur-3xl"
+          className="absolute top-[28%] left-1/2 -translate-x-1/2 w-[150%] h-[36%] rounded-full blur-3xl"
           style={{ background: 'radial-gradient(ellipse at center, rgba(91,33,182,0.4) 0%, rgba(76,29,149,0.2) 35%, transparent 65%)' }}
         />
         
@@ -96,7 +96,7 @@ const NewPortfolioPage = () => {
         
         {/* Subtle surface reflection/gloss in the middle-lower area */}
         <div 
-          className="absolute top-[42%] left-0 right-0 h-[58%]"
+          className="absolute top-[52%] left-0 right-0 h-[48%]"
           style={{ background: 'linear-gradient(180deg, transparent 0%, rgba(237,233,254,0.3) 12%, rgba(248,245,251,0.6) 30%, rgba(250,248,252,0.85) 50%, rgba(252,250,253,0.95) 70%, #fcfafd 100%)' }}
         />
         <div 
@@ -195,22 +195,32 @@ const NewPortfolioPage = () => {
             </p>
           </div>
 
-          <div style={{ width: '100%', height: 160 }}>
-            <ResponsiveContainer width="100%" height={160}>
+          <div className="relative -mx-4 md:-mx-8" style={{ height: 220 }}>
+            <div 
+              className="absolute left-0 top-0 bottom-0 w-16 z-10 pointer-events-none"
+              style={{ background: 'linear-gradient(90deg, rgba(124,90,173,1) 0%, rgba(124,90,173,0.8) 30%, rgba(124,90,173,0.3) 60%, transparent 100%)' }}
+            />
+            <div 
+              className="absolute right-0 top-0 bottom-0 w-16 z-10 pointer-events-none"
+              style={{ background: 'linear-gradient(270deg, rgba(124,90,173,1) 0%, rgba(124,90,173,0.8) 30%, rgba(124,90,173,0.3) 60%, transparent 100%)' }}
+            />
+            <ResponsiveContainer width="100%" height={220}>
               <ComposedChart
                 data={currentChartData}
-                margin={{ top: 30, right: 10, left: 10, bottom: 5 }}
+                margin={{ top: 40, right: 0, left: 0, bottom: 10 }}
               >
                 <defs>
                   <linearGradient id="purpleLineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#a78bfa" />
+                    <stop offset="0%" stopColor="transparent" />
+                    <stop offset="8%" stopColor="#a78bfa" />
                     <stop offset="25%" stopColor="#8b5cf6" />
                     <stop offset="50%" stopColor="#7c3aed" />
                     <stop offset="75%" stopColor="#8b5cf6" />
-                    <stop offset="100%" stopColor="#a78bfa" />
+                    <stop offset="92%" stopColor="#a78bfa" />
+                    <stop offset="100%" stopColor="transparent" />
                   </linearGradient>
                   <filter id="lineGlow" x="-20%" y="-20%" width="140%" height="140%" filterUnits="objectBoundingBox">
-                    <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor="#8b5cf6" floodOpacity="0.6" />
+                    <feDropShadow dx="0" dy="0" stdDeviation="4" floodColor="#8b5cf6" floodOpacity="0.7" />
                   </filter>
                 </defs>
                 
@@ -247,15 +257,15 @@ const NewPortfolioPage = () => {
                   type="monotone"
                   dataKey="value"
                   stroke="url(#purpleLineGradient)"
-                  strokeWidth={3.5}
+                  strokeWidth={4}
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   dot={false}
                   activeDot={{
-                    r: 7,
+                    r: 8,
                     fill: '#a78bfa',
                     stroke: '#c4b5fd',
-                    strokeWidth: 2,
+                    strokeWidth: 3,
                   }}
                   style={{ filter: 'url(#lineGlow)' }}
                 />
