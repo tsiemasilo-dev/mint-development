@@ -281,29 +281,7 @@ const NewPortfolioPage = () => {
         {/* White continuation for rest of page with subtle purple tint */}
         <div 
           className="absolute inset-x-0 top-[100vh] bottom-0"
-          style={{ background: 'linear-gradient(180deg, #fdfaff 0%, #faf8fc 20%, #f9f7fb 50%, #fdfaff 100%)' }} 
-        />
-        
-        {/* Subtle purple blemishes in the white area */}
-        <div 
-          className="absolute top-[70vh] left-[10%] w-[200px] h-[200px] rounded-full"
-          style={{ background: 'radial-gradient(ellipse at center, rgba(139,92,246,0.06) 0%, transparent 70%)', filter: 'blur(40px)' }}
-        />
-        <div 
-          className="absolute top-[90vh] right-[5%] w-[180px] h-[180px] rounded-full"
-          style={{ background: 'radial-gradient(ellipse at center, rgba(167,139,250,0.05) 0%, transparent 70%)', filter: 'blur(50px)' }}
-        />
-        <div 
-          className="absolute top-[120vh] left-[20%] w-[250px] h-[150px] rounded-full"
-          style={{ background: 'radial-gradient(ellipse at center, rgba(139,92,246,0.04) 0%, transparent 70%)', filter: 'blur(60px)' }}
-        />
-        <div 
-          className="absolute top-[140vh] right-[15%] w-[200px] h-[200px] rounded-full"
-          style={{ background: 'radial-gradient(ellipse at center, rgba(124,58,237,0.04) 0%, transparent 70%)', filter: 'blur(45px)' }}
-        />
-        <div 
-          className="absolute top-[180vh] left-[5%] w-[160px] h-[160px] rounded-full"
-          style={{ background: 'radial-gradient(ellipse at center, rgba(167,139,250,0.05) 0%, transparent 70%)', filter: 'blur(50px)' }}
+          style={{ background: 'linear-gradient(180deg, #faf8fc 0%, #f8f6fa 30%, #faf8fc 60%, #fcfafd 100%)' }} 
         />
         
         {/* Subtle ambient glow behind account balance */}
