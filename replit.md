@@ -21,6 +21,8 @@ A React authentication application using Vite as the build tool with Tailwind CS
     - `supabase.js` - Supabase client initialization
     - `biometrics.js` - Biometric authentication utilities (Face ID/Touch ID)
     - `NotificationsContext.jsx` - Centralized notifications state management with real-time updates
+    - `useSumsubStatus.js` - Hook for fetching KYC status directly from Sumsub API (single source of truth)
+    - `useRequiredActions.js` - Hook for bank linking status only (no KYC - that's in useSumsubStatus)
   - `pages/` - Page components
     - `AuthPage.jsx` - Authentication page
     - `OnboardingPage.jsx` - Welcome/landing page (before login)
@@ -77,6 +79,18 @@ A React authentication application using Vite as the build tool with Tailwind CS
   - Password reset via magic link
   - Environment variables: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
 - **iOS-Style UI**: Glassmorphism design with smooth animations
+- **Swipe-Back Navigation (iOS-Style)**:
+  - Swipe from left edge of screen to go back to previous page
+  - Works on all non-main-tab pages (Settings, Notifications, Profile, etc.)
+  - **Previous page preview**: Shows the previous page underneath while swiping
+  - **Drop shadow**: Left edge shadow on current page during swipe
+  - **Scaling effect**: Previous page scales from 95% to 100%
+  - **Dim/brightness transition**: Previous page fades in from 60% to 100% opacity
+  - **Velocity detection**: Fast swipes trigger navigation even with less than 50% progress
+  - **Spring animation**: Bouncy spring effect using CSS cubic-bezier
+  - **Haptic feedback**: Vibration when crossing navigation threshold (via Capacitor)
+  - Navigation history and page state cached for smooth transitions
+  - Files: `src/hooks/useSwipeBack.js`, `src/hooks/useNavigationHistory.js`, `src/components/SwipeBackWrapper.jsx`
 - **Biometric Authentication (Face ID/Touch ID)**:
   - Uses `capacitor-face-id` plugin for native iOS/Android biometrics
   - Prompts users to enable biometrics after successful signup (OTP verification)
@@ -115,7 +129,18 @@ A React authentication application using Vite as the build tool with Tailwind CS
   - TruID integration for KYC verification with status checking
   - Backend API server on port 3001 for TruID API calls
   - Glassmorphism UI with smooth animations
-- **TruID Integration**:
+- **Sumsub KYC Integration** (Primary):
+  - **Architecture**: Sumsub is the single source of truth for KYC status - no local database storage
+  - Backend: `server/index.cjs` - Express server with Sumsub API endpoints
+  - Frontend Hook: `src/lib/useSumsubStatus.js` - Fetches KYC status directly from Sumsub API
+  - Verification Widget: `src/components/SumsubVerification.jsx` - Sumsub WebSDK integration
+  - Main Endpoint: POST `/api/sumsub/status` - Returns normalized KYC status from Sumsub
+  - Access Token: POST `/api/sumsub/access-token` - Generates Sumsub SDK access token
+  - Environment variables: SUMSUB_APP_TOKEN, SUMSUB_SECRET_KEY, SUMSUB_BASE_URL, SUMSUB_LEVEL_NAME
+  - **KYC Status Values**: verified, pending, needs_resubmission, not_verified
+  - **Notification Triggers**: Based on Sumsub status changes, stored in localStorage to prevent duplicates
+  - **30-second cache**: Prevents excessive API calls while keeping status fresh
+- **TruID Integration** (Legacy):
   - Backend: `server/index.cjs` - Express server with TruID API endpoints
   - Client: `server/truidClient.cjs` - TruID API client with authentication
   - Frontend: `src/components/TruidConnector.jsx` - Verification UI component

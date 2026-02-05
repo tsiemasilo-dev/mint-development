@@ -75,6 +75,62 @@ async function getSumsubApplicantStatus(applicantId) {
   return response.json();
 }
 
+// Get applicant by external user ID
+async function getSumsubApplicantByExternalId(externalUserId) {
+  const ts = Math.floor(Date.now() / 1000).toString();
+  const path = `/resources/applicants/-;externalUserId=${encodeURIComponent(externalUserId)}/one`;
+  const method = "GET";
+  
+  const signature = createSumsubSignature(ts, method, path);
+  
+  const response = await fetch(`${SUMSUB_BASE_URL}${path}`, {
+    method,
+    headers: {
+      "Accept": "application/json",
+      "X-App-Token": SUMSUB_APP_TOKEN,
+      "X-App-Access-Ts": ts,
+      "X-App-Access-Sig": signature,
+    },
+  });
+  
+  if (!response.ok) {
+    if (response.status === 404) {
+      return null;
+    }
+    const errorText = await response.text();
+    throw new Error(`Sumsub API error: ${response.status} - ${errorText}`);
+  }
+  
+  return response.json();
+}
+
+// Get required docs status for an applicant (checks which steps are complete/incomplete)
+async function getSumsubRequiredDocsStatus(applicantId) {
+  const ts = Math.floor(Date.now() / 1000).toString();
+  const path = `/resources/applicants/${applicantId}/requiredIdDocsStatus`;
+  const method = "GET";
+  
+  const signature = createSumsubSignature(ts, method, path);
+  
+  const response = await fetch(`${SUMSUB_BASE_URL}${path}`, {
+    method,
+    headers: {
+      "Accept": "application/json",
+      "X-App-Token": SUMSUB_APP_TOKEN,
+      "X-App-Access-Ts": ts,
+      "X-App-Access-Sig": signature,
+    },
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Failed to get required docs status:", errorText);
+    return null;
+  }
+  
+  return response.json();
+}
+
 const readEnv = (key) => process.env[key] || process.env[`VITE_${key}`];
 
 const SUPABASE_URL = readEnv('SUPABASE_URL') || readEnv('VITE_SUPABASE_URL');
@@ -136,6 +192,31 @@ app.post("/api/sumsub/access-token", async (req, res) => {
   }
 });
 
+async function getSumsubApplicantById(applicantId) {
+  const ts = Math.floor(Date.now() / 1000).toString();
+  const path = `/resources/applicants/${applicantId}/one`;
+  const method = "GET";
+  
+  const signature = createSumsubSignature(ts, method, path);
+  
+  const response = await fetch(`${SUMSUB_BASE_URL}${path}`, {
+    method,
+    headers: {
+      "Accept": "application/json",
+      "X-App-Token": SUMSUB_APP_TOKEN,
+      "X-App-Access-Ts": ts,
+      "X-App-Access-Sig": signature,
+    },
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Sumsub API error: ${response.status} - ${errorText}`);
+  }
+  
+  return response.json();
+}
+
 app.get("/api/sumsub/status/:applicantId", async (req, res) => {
   try {
     if (!SUMSUB_APP_TOKEN || !SUMSUB_SECRET_KEY) {
@@ -146,11 +227,54 @@ app.get("/api/sumsub/status/:applicantId", async (req, res) => {
     }
 
     const { applicantId } = req.params;
-    const status = await getSumsubApplicantStatus(applicantId);
+    
+    // Get both the applicant info and required docs status
+    const [applicant, requiredDocsStatus] = await Promise.all([
+      getSumsubApplicantById(applicantId),
+      getSumsubApplicantStatus(applicantId)
+    ]);
+    
+    // Calculate normalized status
+    let hasAnySubmittedSteps = false;
+    let hasRejectedSteps = false;
+    
+    if (requiredDocsStatus) {
+      for (const [stepName, stepData] of Object.entries(requiredDocsStatus)) {
+        if (stepData !== null) {
+          hasAnySubmittedSteps = true;
+          if (stepData?.reviewResult?.reviewAnswer === "RED") {
+            hasRejectedSteps = true;
+          }
+        }
+      }
+    }
+    
+    const reviewStatus = applicant?.review?.reviewStatus;
+    const reviewAnswer = applicant?.review?.reviewResult?.reviewAnswer;
+    
+    let normalizedStatus = "not_verified";
+    if (reviewAnswer === "GREEN") {
+      normalizedStatus = "verified";
+    } else if (hasRejectedSteps || reviewAnswer === "RED") {
+      normalizedStatus = "needs_resubmission";
+    } else if (reviewStatus === "onHold") {
+      normalizedStatus = "needs_resubmission";
+    } else if (reviewStatus === "pending" || reviewStatus === "queued") {
+      normalizedStatus = "pending";
+    } else if (hasAnySubmittedSteps) {
+      normalizedStatus = "pending";
+    } else {
+      normalizedStatus = "not_verified";
+    }
     
     res.json({
       success: true,
-      status
+      normalizedStatus,
+      requiredDocsStatus,
+      hasAnySubmittedSteps,
+      hasRejectedSteps,
+      review: applicant?.review || null,
+      createdAt: applicant?.createdAt
     });
   } catch (error) {
     console.error("Sumsub status error:", error);
@@ -161,39 +285,356 @@ app.get("/api/sumsub/status/:applicantId", async (req, res) => {
   }
 });
 
+app.post("/api/sumsub/check-status", async (req, res) => {
+  try {
+    if (!SUMSUB_APP_TOKEN || !SUMSUB_SECRET_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: { message: "Sumsub credentials not configured" }
+      });
+    }
+
+    const { userId } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: { message: "userId is required" }
+      });
+    }
+
+    const applicant = await getSumsubApplicantByExternalId(userId);
+    
+    if (!applicant) {
+      return res.json({
+        success: true,
+        status: null,
+        message: "No applicant found for this user"
+      });
+    }
+
+    res.json({
+      success: true,
+      status: {
+        applicantId: applicant.id,
+        reviewStatus: applicant.review?.reviewStatus,
+        reviewResult: applicant.review?.reviewResult,
+        createdAt: applicant.createdAt,
+        inspectionId: applicant.inspectionId
+      }
+    });
+  } catch (error) {
+    console.error("Sumsub check-status error:", error);
+    res.status(500).json({
+      success: false,
+      error: { message: error.message || "Failed to check status" }
+    });
+  }
+});
+
+app.post("/api/sumsub/status", async (req, res) => {
+  try {
+    if (!SUMSUB_APP_TOKEN || !SUMSUB_SECRET_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: { message: "Sumsub credentials not configured" }
+      });
+    }
+
+    const { userId } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: { message: "userId is required" }
+      });
+    }
+
+    const applicant = await getSumsubApplicantByExternalId(userId);
+    
+    if (!applicant) {
+      return res.json({
+        success: true,
+        status: "not_verified",
+        applicantId: null,
+        reviewStatus: null,
+        reviewAnswer: null,
+        rejectLabels: [],
+        createdAt: null
+      });
+    }
+
+    // Get the required docs status to check for incomplete steps
+    const requiredDocsStatus = await getSumsubRequiredDocsStatus(applicant.id);
+    
+    // Check document status - distinguish between "never started" and "started but incomplete"
+    let hasIncompleteSteps = false;
+    let hasRejectedSteps = false;
+    let allStepsGreen = true;
+    let hasAnySubmittedSteps = false; // Track if user ever submitted anything
+    
+    if (requiredDocsStatus) {
+      for (const [stepName, stepData] of Object.entries(requiredDocsStatus)) {
+        if (stepData === null) {
+          // Step not started yet
+          hasIncompleteSteps = true;
+          allStepsGreen = false;
+          console.log(`Step ${stepName} is not started (null)`);
+        } else {
+          // Step has some data - user submitted something
+          hasAnySubmittedSteps = true;
+          if (stepData?.reviewResult?.reviewAnswer === "RED") {
+            hasRejectedSteps = true;
+            allStepsGreen = false;
+            console.log(`Step ${stepName} is rejected`);
+          } else if (stepData?.reviewResult?.reviewAnswer !== "GREEN") {
+            allStepsGreen = false;
+            console.log(`Step ${stepName} is not GREEN:`, stepData?.reviewResult?.reviewAnswer);
+          }
+        }
+      }
+    }
+
+    const reviewStatus = applicant.review?.reviewStatus;
+    const reviewAnswer = applicant.review?.reviewResult?.reviewAnswer;
+    const rejectLabels = applicant.review?.reviewResult?.rejectLabels || [];
+    const reviewRejectType = applicant.review?.reviewResult?.reviewRejectType;
+    
+    // Log detailed Sumsub status for debugging
+    console.log(`=== Sumsub Status for ${userId} ===`);
+    console.log(`Applicant ID: ${applicant.id}`);
+    console.log(`Review Status: ${reviewStatus}`);
+    console.log(`Review Answer: ${reviewAnswer}`);
+    console.log(`Review Reject Type: ${reviewRejectType}`);
+    console.log(`Reject Labels: ${JSON.stringify(rejectLabels)}`);
+    console.log(`Has Incomplete Steps: ${hasIncompleteSteps}`);
+    console.log(`Has Rejected Steps: ${hasRejectedSteps}`);
+    console.log(`Has Any Submitted Steps: ${hasAnySubmittedSteps}`);
+    console.log(`All Steps Green: ${allStepsGreen}`);
+    
+    let status = "not_verified";
+    
+    // Priority order for status determination:
+    // 1. If all steps are GREEN and review is GREEN → verified
+    // 2. If any steps are rejected → needs_resubmission
+    // 3. If user submitted something but incomplete → pending (in progress)
+    // 4. If user never submitted anything → not_verified
+    
+    if (allStepsGreen && reviewAnswer === "GREEN") {
+      status = "verified";
+      console.log(`Status: verified (all steps GREEN)`);
+    } else if (hasRejectedSteps || reviewAnswer === "RED") {
+      // User submitted documents but they were rejected
+      status = "needs_resubmission";
+      console.log(`Status: needs_resubmission (rejected)`);
+    } else if (reviewStatus === "onHold") {
+      status = "needs_resubmission";
+      console.log(`Status: needs_resubmission (on hold)`);
+    } else if (reviewStatus === "pending" || reviewStatus === "queued") {
+      status = "pending";
+      console.log(`Status: pending (review pending/queued)`);
+    } else if (hasAnySubmittedSteps) {
+      // User has started verification but not complete yet
+      status = "pending";
+      console.log(`Status: pending (verification in progress)`);
+    } else {
+      // User has never submitted any documents
+      status = "not_verified";
+      console.log(`Status: not_verified (no documents submitted)`);
+    }
+
+    res.json({
+      success: true,
+      status,
+      applicantId: applicant.id,
+      reviewStatus: reviewStatus || null,
+      reviewAnswer: reviewAnswer || null,
+      reviewRejectType: reviewRejectType || null,
+      rejectLabels,
+      hasIncompleteSteps,
+      hasRejectedSteps,
+      allStepsGreen,
+      createdAt: applicant.createdAt || null
+    });
+  } catch (error) {
+    console.error("Sumsub status error:", error);
+    res.status(500).json({
+      success: false,
+      error: { message: error.message || "Failed to get status" }
+    });
+  }
+});
+
+// Legacy endpoint - redirects to /api/sumsub/status (no database writes)
+app.post("/api/sumsub/sync-status", async (req, res) => {
+  try {
+    if (!SUMSUB_APP_TOKEN || !SUMSUB_SECRET_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: { message: "Sumsub credentials not configured" }
+      });
+    }
+
+    const { userId } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: { message: "userId is required" }
+      });
+    }
+
+    const applicant = await getSumsubApplicantByExternalId(userId);
+    
+    if (!applicant) {
+      return res.json({
+        success: true,
+        status: "not_verified",
+        applicantId: null,
+        reviewStatus: null,
+        reviewAnswer: null,
+        rejectLabels: [],
+        createdAt: null
+      });
+    }
+
+    const reviewStatus = applicant.review?.reviewStatus;
+    const reviewAnswer = applicant.review?.reviewResult?.reviewAnswer;
+    const rejectLabels = applicant.review?.reviewResult?.rejectLabels || [];
+    
+    let status = "not_verified";
+    
+    if (reviewAnswer === "GREEN") {
+      status = "verified";
+    } else if (reviewAnswer === "RED") {
+      status = rejectLabels.length > 0 ? "needs_resubmission" : "not_verified";
+    } else if (reviewStatus === "pending" || reviewStatus === "queued") {
+      status = "pending";
+    } else if (reviewStatus === "onHold" || applicant.requiredIdDocs?.length > 0) {
+      status = "needs_resubmission";
+    } else if (reviewStatus === "init" || !reviewStatus) {
+      status = "not_verified";
+    } else {
+      status = "pending";
+    }
+
+    res.json({
+      success: true,
+      status,
+      applicantId: applicant.id,
+      reviewStatus,
+      reviewAnswer: reviewAnswer || null,
+      rejectLabels,
+      createdAt: applicant.createdAt || null,
+      applicant: {
+        id: applicant.id,
+        reviewStatus,
+        reviewAnswer: reviewAnswer || null,
+        rejectLabels
+      }
+    });
+  } catch (error) {
+    console.error("Sumsub sync-status error:", error);
+    res.status(500).json({
+      success: false,
+      error: { message: error.message || "Failed to sync status" }
+    });
+  }
+});
+
 app.post("/api/sumsub/webhook", async (req, res) => {
   console.log("Sumsub webhook received:", JSON.stringify(req.body, null, 2));
   
   const { type, applicantId, reviewResult, reviewStatus, externalUserId } = req.body;
   
-  // Handle verification completion
-  if (type === "applicantReviewed" && reviewResult?.reviewAnswer === "GREEN") {
-    console.log(`User ${externalUserId} KYC verified successfully`);
-    
-    // Update user KYC status in database if Supabase is available
-    if (supabase && externalUserId) {
-      try {
-        const { data: existingAction } = await supabase
-          .from("required_actions")
-          .select("id")
-          .eq("user_id", externalUserId)
-          .maybeSingle();
+  if (!supabase || !externalUserId) {
+    console.log("No Supabase or externalUserId, skipping database update");
+    return res.status(200).json({ received: true });
+  }
 
-        if (existingAction) {
-          await supabase
-            .from("required_actions")
-            .update({ kyc_verified: true })
-            .eq("user_id", externalUserId);
+  try {
+    let kycUpdate = null;
+    
+    // Determine status based on webhook type and review result
+    if (type === "applicantReviewed") {
+      const reviewAnswer = reviewResult?.reviewAnswer;
+      const rejectLabels = reviewResult?.rejectLabels || [];
+      
+      if (reviewAnswer === "GREEN") {
+        console.log(`User ${externalUserId} KYC verified successfully`);
+        kycUpdate = { 
+          kyc_verified: true, 
+          kyc_pending: false, 
+          kyc_needs_resubmission: false 
+        };
+      } else if (reviewAnswer === "RED") {
+        // Check if it's a temporary rejection (can resubmit) or permanent
+        const canResubmit = rejectLabels.some(label => 
+          ["DOCUMENT_PAGE_MISSING", "INCOMPLETE_DOCUMENT", "UNSATISFACTORY_PHOTOS", 
+           "DOCUMENT_DAMAGED", "SCREENSHOTS", "SPAM", "NOT_DOCUMENT", "SELFIE_MISMATCH",
+           "FORGERY", "GRAPHIC_EDITOR", "DOCUMENT_DEPRIVED"].includes(label)
+        );
+        
+        if (canResubmit) {
+          console.log(`User ${externalUserId} KYC needs resubmission: ${rejectLabels.join(", ")}`);
+          kycUpdate = { 
+            kyc_verified: false, 
+            kyc_pending: false, 
+            kyc_needs_resubmission: true 
+          };
         } else {
-          await supabase
-            .from("required_actions")
-            .insert({ user_id: externalUserId, kyc_verified: true });
+          console.log(`User ${externalUserId} KYC rejected permanently: ${rejectLabels.join(", ")}`);
+          kycUpdate = { 
+            kyc_verified: false, 
+            kyc_pending: false, 
+            kyc_needs_resubmission: false 
+          };
         }
-        console.log(`Updated KYC status for user ${externalUserId}`);
-      } catch (err) {
-        console.error("Failed to update KYC status:", err);
       }
+    } else if (type === "applicantPending" || type === "applicantCreated") {
+      console.log(`User ${externalUserId} KYC is pending review`);
+      kycUpdate = { 
+        kyc_verified: false, 
+        kyc_pending: true, 
+        kyc_needs_resubmission: false 
+      };
+    } else if (type === "applicantOnHold") {
+      console.log(`User ${externalUserId} KYC on hold - action required`);
+      kycUpdate = { 
+        kyc_verified: false, 
+        kyc_pending: false, 
+        kyc_needs_resubmission: true 
+      };
+    } else if (type === "applicantActionPending") {
+      console.log(`User ${externalUserId} KYC action pending - resubmission needed`);
+      kycUpdate = { 
+        kyc_verified: false, 
+        kyc_pending: false, 
+        kyc_needs_resubmission: true 
+      };
     }
+    
+    if (kycUpdate) {
+      const { data: existingAction } = await supabase
+        .from("required_actions")
+        .select("id")
+        .eq("user_id", externalUserId)
+        .maybeSingle();
+
+      if (existingAction) {
+        await supabase
+          .from("required_actions")
+          .update(kycUpdate)
+          .eq("user_id", externalUserId);
+      } else {
+        await supabase
+          .from("required_actions")
+          .insert({ user_id: externalUserId, ...kycUpdate });
+      }
+      console.log(`Updated KYC status for user ${externalUserId}:`, kycUpdate);
+    }
+  } catch (err) {
+    console.error("Failed to update KYC status:", err);
   }
   
   res.status(200).json({ received: true });

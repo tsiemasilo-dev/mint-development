@@ -16,7 +16,7 @@ const formatErrorDetails = (error) => {
   return details.join("\n");
 };
 
-export default function BiometricsDebugPage({ onNavigate }) {
+export default function BiometricsDebugPage({ onNavigate, onBack }) {
   const [logs, setLogs] = useState([]);
   const [isTesting, setIsTesting] = useState(false);
 
@@ -67,7 +67,7 @@ export default function BiometricsDebugPage({ onNavigate }) {
     <div className="min-h-screen bg-slate-50 px-6 pt-12 pb-24">
       <div className="mb-8 flex items-center gap-3">
         <button
-          onClick={() => onNavigate?.("settings")}
+          onClick={() => onBack ? onBack() : onNavigate?.("settings")}
           className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition active:scale-95"
         >
           Back

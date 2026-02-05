@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import SumsubWebSdk from "@sumsub/websdk-react";
 import { supabase } from "../lib/supabase";
+import { pauseSumsubPolling, resumeSumsubPolling } from "../lib/useSumsubStatus";
 
 const ShieldCheckIcon = (props) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" {...props}>
@@ -29,16 +30,35 @@ const SumsubVerification = ({ onVerified }) => {
   const [userId, setUserId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [errorType, setErrorType] = useState(null); // 'config' | 'resubmit' | 'rejected' | 'generic'
   const [verificationComplete, setVerificationComplete] = useState(false);
   const [verificationStatus, setVerificationStatus] = useState(null);
+  const initializedRef = useRef(false);
+  const sdkKeyRef = useRef(`sumsub-${Date.now()}`);
+
+  // Pause polling while widget is active to prevent camera interference
+  useEffect(() => {
+    pauseSumsubPolling();
+    console.log("Sumsub widget mounted - polling paused");
+    
+    return () => {
+      resumeSumsubPolling();
+      console.log("Sumsub widget unmounted - polling resumed");
+    };
+  }, []);
 
   useEffect(() => {
+    // Prevent double initialization in React StrictMode
+    if (initializedRef.current) {
+      return;
+    }
+    initializedRef.current = true;
+
     const initializeSumsub = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        // Get current user from Supabase
         let currentUserId = null;
         if (supabase) {
           const { data: userData } = await supabase.auth.getUser();
@@ -46,13 +66,11 @@ const SumsubVerification = ({ onVerified }) => {
         }
         
         if (!currentUserId) {
-          // Generate a temporary ID for demo purposes
           currentUserId = `user_${Date.now()}`;
         }
         
         setUserId(currentUserId);
 
-        // Request access token from backend
         const response = await fetch("/api/sumsub/access-token", {
           method: "POST",
           headers: {
@@ -73,6 +91,7 @@ const SumsubVerification = ({ onVerified }) => {
       } catch (err) {
         console.error("Sumsub initialization error:", err);
         setError(err.message || "Failed to initialize identity verification");
+        setErrorType("config");
       } finally {
         setLoading(false);
       }
@@ -81,7 +100,6 @@ const SumsubVerification = ({ onVerified }) => {
     initializeSumsub();
   }, []);
 
-  // Handler for token expiration - request a new token
   const accessTokenExpirationHandler = useCallback(async () => {
     try {
       const response = await fetch("/api/sumsub/access-token", {
@@ -105,7 +123,6 @@ const SumsubVerification = ({ onVerified }) => {
     }
   }, [userId]);
 
-  // Handle SDK messages
   const messageHandler = useCallback((type, payload) => {
     console.log("Sumsub SDK message:", type, payload);
 
@@ -123,21 +140,33 @@ const SumsubVerification = ({ onVerified }) => {
         console.log("Applicant resubmitted");
         break;
         
-      case "idCheck.applicantStatus":
+      case "idCheck.onApplicantStatusChanged":
+      case "idCheck.applicantStatus": {
         console.log("Applicant status:", payload);
-        if (payload?.reviewStatus === "completed") {
-          if (payload?.reviewResult?.reviewAnswer === "GREEN") {
-            setVerificationComplete(true);
-            setVerificationStatus("approved");
-            if (onVerified) {
-              onVerified();
-            }
-          } else if (payload?.reviewResult?.reviewAnswer === "RED") {
-            setVerificationStatus("rejected");
-            setError("Verification was not successful. Please try again or contact support.");
+        const reviewStatus = payload?.reviewStatus;
+        const reviewAnswer = payload?.reviewResult?.reviewAnswer;
+        const rejectType = payload?.reviewResult?.reviewRejectType;
+        
+        if ((reviewStatus === "completed" || reviewStatus === "onHold") && reviewAnswer === "GREEN") {
+          setVerificationComplete(true);
+          setVerificationStatus("approved");
+          if (onVerified) {
+            onVerified();
           }
+        } else if (reviewAnswer === "RED") {
+          setVerificationStatus("rejected");
+          if (rejectType === "RETRY") {
+            setError("Some documents need to be resubmitted. Please try again with clearer images.");
+            setErrorType("resubmit");
+          } else {
+            setError("Verification was not successful. Please contact support for assistance.");
+            setErrorType("rejected");
+          }
+        } else if (reviewStatus === "pending" || reviewStatus === "queued" || reviewStatus === "onHold") {
+          setVerificationStatus("pending");
         }
         break;
+      }
 
       case "idCheck.onStepCompleted":
         console.log("Step completed:", payload);
@@ -152,19 +181,48 @@ const SumsubVerification = ({ onVerified }) => {
     }
   }, [onVerified]);
 
-  // Handle SDK errors
   const errorHandler = useCallback((error) => {
     console.error("Sumsub SDK error:", error);
     setError("An error occurred during verification. Please try again.");
+    setErrorType("generic");
   }, []);
 
-  // SDK configuration
+  const handleRetry = () => {
+    setError(null);
+    setErrorType(null);
+    setVerificationStatus(null);
+    setLoading(true);
+    setAccessToken(null);
+    
+    // Re-initialize Sumsub
+    const reinitialize = async () => {
+      try {
+        const response = await fetch("/api/sumsub/access-token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId }),
+        });
+        const data = await response.json();
+        if (data.success) {
+          setAccessToken(data.token);
+        } else {
+          throw new Error(data.error?.message || "Failed to reinitialize");
+        }
+      } catch (err) {
+        setError(err.message);
+        setErrorType("config");
+      } finally {
+        setLoading(false);
+      }
+    };
+    reinitialize();
+  };
+
   const config = {
     lang: "en",
     theme: "light",
   };
 
-  // SDK options
   const options = {
     addViewportTag: false,
     adaptIframeHeight: true,
@@ -183,6 +241,48 @@ const SumsubVerification = ({ onVerified }) => {
   }
 
   if (error) {
+    // Resubmission needed - show retry button
+    if (errorType === "resubmit") {
+      return (
+        <div className="w-full max-w-md mx-auto text-center py-8">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
+            <AlertCircleIcon className="w-8 h-8 text-white" />
+          </div>
+          <h3 className="text-lg font-medium text-slate-800 mb-2">Resubmit Documents</h3>
+          <p className="text-sm text-slate-500 mb-6">{error}</p>
+          <button
+            type="button"
+            onClick={handleRetry}
+            className="px-6 py-2.5 rounded-xl font-medium text-white transition-all duration-200"
+            style={{ background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)' }}
+          >
+            Try Again
+          </button>
+        </div>
+      );
+    }
+
+    // Permanently rejected - show support contact
+    if (errorType === "rejected") {
+      return (
+        <div className="w-full max-w-md mx-auto text-center py-8">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center">
+            <AlertCircleIcon className="w-8 h-8 text-white" />
+          </div>
+          <h3 className="text-lg font-medium text-slate-800 mb-2">Verification Unsuccessful</h3>
+          <p className="text-sm text-slate-500 mb-6">{error}</p>
+          <button
+            type="button"
+            onClick={() => window.open('mailto:support@example.com', '_blank')}
+            className="px-6 py-2.5 rounded-xl font-medium text-white transition-all duration-200 bg-slate-600 hover:bg-slate-700"
+          >
+            Contact Support
+          </button>
+        </div>
+      );
+    }
+
+    // Configuration error - show setup instructions
     return (
       <div className="w-full max-w-md mx-auto text-center py-8">
         <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
@@ -273,6 +373,7 @@ const SumsubVerification = ({ onVerified }) => {
       </div>
       <div className="rounded-2xl overflow-hidden border border-slate-200 bg-white" style={{ minHeight: "500px" }}>
         <SumsubWebSdk
+          key={sdkKeyRef.current}
           accessToken={accessToken}
           expirationHandler={accessTokenExpirationHandler}
           config={config}
