@@ -488,8 +488,9 @@ const NewPortfolioPage = () => {
           {/* Tabs: Strategy, Individual Stocks, Goals */}
           <section className="flex gap-2 mt-1">
             {[
-              { id: "strategy", label: "Strategy" },
+              { id: "strategy", label: "Strategies" },
               { id: "stocks", label: "Individual Stocks" },
+              { id: "holdings", label: "Holdings" },
               { id: "goals", label: "Goals" },
             ].map((tab) => (
               <button
@@ -933,6 +934,49 @@ const NewPortfolioPage = () => {
           >
             <Plus className="h-4 w-4" />
             Buy Stocks
+          </button>
+        </div>
+      )}
+
+      {/* Holdings Tab Content */}
+      {activeTab === "holdings" && (
+        <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
+          <div 
+            className="space-y-3"
+            style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
+          >
+            {[
+              { id: 1, name: "SA Equity Fund", units: 125.43, price: 45.20, value: 5669.44, change: 2.3 },
+              { id: 2, name: "Global Bond ETF", units: 89.12, price: 32.50, value: 2896.40, change: -0.8 },
+              { id: 3, name: "Money Market", units: 1000.00, price: 1.02, value: 1020.00, change: 0.2 },
+              { id: 4, name: "Property Fund", units: 56.78, price: 28.90, value: 1640.94, change: 1.5 },
+              { id: 5, name: "Balanced Fund", units: 234.56, price: 18.75, value: 4398.00, change: 0.9 },
+            ].map((holding) => (
+              <div 
+                key={holding.id}
+                className="rounded-2xl bg-white/70 backdrop-blur-xl p-4 shadow-sm border border-slate-100/50"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">{holding.name}</p>
+                    <p className="text-xs text-slate-500">{holding.units.toFixed(2)} units @ R{holding.price.toFixed(2)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-slate-900">R{holding.value.toLocaleString("en-ZA", { minimumFractionDigits: 2 })}</p>
+                    <p className={`text-xs font-medium ${holding.change >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                      {holding.change >= 0 ? '+' : ''}{holding.change}%
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <button 
+            className="w-full py-3.5 rounded-full bg-gradient-to-r from-slate-800 to-slate-900 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg shadow-slate-900/30 transition hover:-translate-y-0.5 hover:shadow-xl flex items-center justify-center gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Add Holding
           </button>
         </div>
       )}
