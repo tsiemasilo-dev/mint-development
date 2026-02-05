@@ -3,6 +3,7 @@ import { Bell, Eye, EyeOff, ChevronDown, ChevronRight, ArrowLeft } from "lucide-
 import { Area, ComposedChart, Line, XAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { useFinancialData } from "../lib/useFinancialData";
 import { useProfile } from "../lib/useProfile";
+import { useUserStrategies, useStrategyChartData } from "../lib/useUserStrategies";
 
 const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -189,8 +190,17 @@ const NewPortfolioPage = () => {
   const [currentView, setCurrentView] = useState("portfolio");
   const chartScrollRef = useRef(null);
   const { profile } = useProfile();
+  const { strategies, selectedStrategy: userSelectedStrategy, loading: strategiesLoading, selectStrategy } = useUserStrategies();
+  const { chartData: realChartData, loading: chartLoading } = useStrategyChartData(userSelectedStrategy?.strategyId, timeFilter);
   
   const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(" ") || "User";
+  
+  const isStrategyReady = !strategiesLoading && userSelectedStrategy;
+  const currentStrategy = userSelectedStrategy || {
+    name: strategiesLoading ? "Loading..." : "No Strategy",
+    currentValue: 0,
+    previousMonthChange: 0,
+  };
 
   const getChartWidth = (dataLength) => {
     const minWidth = 100;
@@ -216,8 +226,12 @@ const NewPortfolioPage = () => {
     return date.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
   };
 
-  const { holdings: rawHoldings, loading: holdingsLoading } = useFinancialData();
-  const { accountValue, selectedStrategy, chartData, goals } = MOCK_DATA;
+  const { holdings: rawHoldings, loading: holdingsLoading, investments } = useFinancialData();
+  const { accountValue, chartData, goals } = MOCK_DATA;
+  
+  const displayAccountValue = strategies.length > 0 
+    ? strategies.reduce((sum, s) => sum + (s.currentValue || 0), 0) 
+    : accountValue;
 
   const holdings = rawHoldings.length > 0 
     ? rawHoldings.map(h => {
@@ -238,6 +252,9 @@ const NewPortfolioPage = () => {
       ];
 
   const getChartData = () => {
+    if (realChartData && realChartData.length > 0) {
+      return realChartData;
+    }
     switch (timeFilter) {
       case "D": return chartData.daily;
       case "W": return chartData.weekly;
@@ -248,6 +265,7 @@ const NewPortfolioPage = () => {
   };
 
   const currentChartData = getChartData();
+  const isLoadingData = strategiesLoading || chartLoading;
 
   const formatCurrency = (value) => {
     return `R${value.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -418,7 +436,7 @@ const NewPortfolioPage = () => {
             <div className="absolute -inset-8 bg-gradient-radial from-[#7c3aed]/20 via-transparent to-transparent rounded-full blur-2xl -z-10" />
             <div className="flex items-center gap-3">
               <p className="text-3xl font-bold tracking-tight" style={{ minWidth: '180px' }}>
-                $ {balanceVisible ? accountValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "••••••••"}
+                R{balanceVisible ? displayAccountValue.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "••••••••"}
               </p>
               <button
                 onClick={() => setBalanceVisible(!balanceVisible)}
@@ -462,7 +480,7 @@ const NewPortfolioPage = () => {
         <section className="py-2">
           <div className="flex items-center justify-between mb-3 px-1">
             <button className="flex items-center gap-1 text-slate-900 hover:text-slate-700 transition">
-              <span className="text-xl font-bold">Invest</span>
+              <span className="text-xl font-bold">{currentStrategy.name || "Strategy"}</span>
               <ChevronDown className="h-5 w-5" />
             </button>
             <div className="flex gap-1">
@@ -491,9 +509,9 @@ const NewPortfolioPage = () => {
           </div>
 
           <div className="mb-3 px-1">
-            <p className="text-3xl font-bold text-slate-900">${selectedStrategy.currentValue.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
+            <p className="text-3xl font-bold text-slate-900">R{(currentStrategy.currentValue || 0).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}</p>
             <p className="text-sm text-emerald-500">
-              ({selectedStrategy.previousMonthChange}% Previous Month)
+              ({currentStrategy.previousMonthChange || 0}% Previous Month)
             </p>
           </div>
 
