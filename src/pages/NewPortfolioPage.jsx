@@ -48,38 +48,57 @@ const getReturnColor = (value) => {
 const MOCK_ALLOCATIONS = [
   {
     id: 1,
-    name: "Balanced Growth",
-    amount: 4449.30,
-    returnPercent: 21.5,
-    date: "2024-06-15",
-    holdings: [
-      { symbol: "NED", logo: "/logos/nedbank.jpg" },
-      { symbol: "SUN", logo: "/logos/sun-international.jpg" },
-      { symbol: "SBK", logo: "/logos/standard-bank.jpg" },
-      { symbol: "EXP", logo: "/logos/exemplar-reit.jpg" },
+    amount: 2500.00,
+    returnPercent: 8.2,
+    date: "2025-02-01",
+    topPerformers: [
+      { symbol: "NED", logo: "/logos/nedbank.jpg", return: 12.5 },
+      { symbol: "SBK", logo: "/logos/standard-bank.jpg", return: 9.8 },
+      { symbol: "SUN", logo: "/logos/sun-international.jpg", return: 7.2 },
     ],
   },
   {
     id: 2,
-    name: "High Growth",
-    amount: 12500.00,
-    returnPercent: 35.2,
-    date: "2024-03-22",
-    holdings: [
-      { symbol: "SBK", logo: "/logos/standard-bank.jpg" },
-      { symbol: "NED", logo: "/logos/nedbank.jpg" },
-      { symbol: "SUN", logo: "/logos/sun-international.jpg" },
+    amount: 1500.00,
+    returnPercent: 15.4,
+    date: "2025-01-15",
+    topPerformers: [
+      { symbol: "SBK", logo: "/logos/standard-bank.jpg", return: 18.3 },
+      { symbol: "EXP", logo: "/logos/exemplar-reit.jpg", return: 14.1 },
+      { symbol: "NED", logo: "/logos/nedbank.jpg", return: 11.9 },
     ],
   },
   {
     id: 3,
-    name: "Conservative Income",
-    amount: 7948.13,
-    returnPercent: 8.3,
-    date: "2024-01-10",
-    holdings: [
-      { symbol: "EXP", logo: "/logos/exemplar-reit.jpg" },
-      { symbol: "NED", logo: "/logos/nedbank.jpg" },
+    amount: 3000.00,
+    returnPercent: 21.5,
+    date: "2024-12-20",
+    topPerformers: [
+      { symbol: "SUN", logo: "/logos/sun-international.jpg", return: 25.6 },
+      { symbol: "NED", logo: "/logos/nedbank.jpg", return: 19.4 },
+      { symbol: "SBK", logo: "/logos/standard-bank.jpg", return: 16.8 },
+    ],
+  },
+  {
+    id: 4,
+    amount: 5000.00,
+    returnPercent: 12.8,
+    date: "2024-11-05",
+    topPerformers: [
+      { symbol: "EXP", logo: "/logos/exemplar-reit.jpg", return: 15.2 },
+      { symbol: "SBK", logo: "/logos/standard-bank.jpg", return: 13.1 },
+      { symbol: "SUN", logo: "/logos/sun-international.jpg", return: 10.5 },
+    ],
+  },
+  {
+    id: 5,
+    amount: 2000.00,
+    returnPercent: 5.3,
+    date: "2024-09-18",
+    topPerformers: [
+      { symbol: "NED", logo: "/logos/nedbank.jpg", return: 8.4 },
+      { symbol: "EXP", logo: "/logos/exemplar-reit.jpg", return: 6.2 },
+      { symbol: "SBK", logo: "/logos/standard-bank.jpg", return: 4.1 },
     ],
   },
 ];
@@ -335,13 +354,13 @@ const NewPortfolioPage = () => {
             >
               <ArrowLeft className="h-5 w-5 text-white" />
             </button>
-            <h1 className="text-xl font-bold text-white">All Allocations</h1>
+            <h1 className="text-xl font-bold text-white">{currentStrategy.name || "Strategy"} Allocations</h1>
           </header>
         </div>
 
-        {/* Strategy Cards */}
+        {/* Allocation History Cards - sorted most recent first */}
         <div className="mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-6">
-          {MOCK_ALLOCATIONS.map((allocation) => (
+          {[...MOCK_ALLOCATIONS].sort((a, b) => new Date(b.date) - new Date(a.date)).map((allocation) => (
             <div 
               key={allocation.id}
               className="rounded-3xl p-5 backdrop-blur-xl shadow-sm border border-slate-100/50"
@@ -349,15 +368,16 @@ const NewPortfolioPage = () => {
                 background: 'rgba(255,255,255,0.7)',
               }}
             >
-              {/* Strategy Name */}
+              {/* Date Header */}
+              <p className="text-xs text-slate-500 mb-1">Invested on</p>
               <h3 className="text-lg font-bold text-slate-900 mb-4">
-                {allocation.name}
+                {formatDate(allocation.date)}
               </h3>
 
               {/* Amount and Return */}
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <p className="text-xs text-slate-500 mb-1">Amount</p>
+                  <p className="text-xs text-slate-500 mb-1">Amount Invested</p>
                   <p className="text-xl font-bold text-slate-900">
                     {formatCurrency(allocation.amount)}
                   </p>
@@ -370,45 +390,30 @@ const NewPortfolioPage = () => {
                 </div>
               </div>
 
-              {/* Date and Holdings Logos */}
-              <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-                <div>
-                  <p className="text-xs text-slate-500 mb-1">Date</p>
-                  <p className="text-sm font-medium text-slate-700">
-                    {formatDate(allocation.date)}
-                  </p>
-                </div>
-                
-                {/* Overlapping Holdings Logos */}
+              {/* Top 3 Performing Assets */}
+              <div className="pt-4 border-t border-slate-100">
+                <p className="text-xs text-slate-500 mb-3">Top Performing Assets</p>
                 <div className="flex items-center -space-x-2">
-                  {allocation.holdings.slice(0, 4).map((holding, index) => (
+                  {allocation.topPerformers.slice(0, 3).map((asset, index) => (
                     <div 
-                      key={holding.symbol}
-                      className="h-9 w-9 rounded-full bg-white border-2 border-white shadow-md overflow-hidden"
-                      style={{ zIndex: allocation.holdings.length - index }}
+                      key={asset.symbol}
+                      className="h-10 w-10 rounded-full bg-white border-2 border-white shadow-md overflow-hidden"
+                      style={{ zIndex: 3 - index }}
                     >
-                      {failedLogos[holding.symbol] ? (
+                      {failedLogos[asset.symbol] ? (
                         <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-100 to-purple-100 text-[10px] font-bold text-violet-700">
-                          {holding.symbol.slice(0, 2)}
+                          {asset.symbol.slice(0, 2)}
                         </div>
                       ) : (
                         <img
-                          src={holding.logo}
-                          alt={holding.symbol}
+                          src={asset.logo}
+                          alt={asset.symbol}
                           className="h-full w-full object-cover"
-                          onError={() => setFailedLogos(prev => ({ ...prev, [holding.symbol]: true }))}
+                          onError={() => setFailedLogos(prev => ({ ...prev, [asset.symbol]: true }))}
                         />
                       )}
                     </div>
                   ))}
-                  {allocation.holdings.length > 4 && (
-                    <div 
-                      className="h-9 w-9 rounded-full bg-slate-100 border-2 border-white shadow-md flex items-center justify-center text-[10px] font-bold text-slate-600"
-                      style={{ zIndex: 0 }}
-                    >
-                      +{allocation.holdings.length - 4}
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
