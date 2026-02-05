@@ -77,7 +77,7 @@ const NewPortfolioPage = () => {
         <div 
           className="absolute inset-0"
           style={{ 
-            background: 'linear-gradient(180deg, #0d0d12 0%, #0e0a14 1%, #100b18 2%, #120c1c 3%, #150e22 4%, #181028 5%, #1c122f 6%, #201436 7%, #25173e 8%, #2a1a46 9%, #301d4f 10%, #362158 11%, #3d2561 12%, #44296b 13%, #4c2e75 14%, #54337f 15%, #5d3889 16%, #663e93 17%, #70449d 18%, #7a4aa7 19%, #8451b0 20%, #8e58b9 21%, #9860c1 22%, #a268c8 23%, #ac71ce 24%, #b57ad3 25%, #be84d8 26%, #c68edc 27%, #cd98e0 28%, #d4a2e3 29%, #daace6 30%, #dfb6e9 31%, #e4c0eb 32%, #e8c9ed 33%, #ecd2ef 34%, #efdaf1 35%, #f2e1f3 36%, #f4e7f5 38%, #f6ecf7 40%, #f8f0f9 42%, #f9f3fa 45%, #faf5fb 48%, #fbf7fc 52%, #fcf9fd 58%, #fdfafd 65%, #fefbfe 75%, #ffffff 90%, #ffffff 100%)'
+            background: 'linear-gradient(180deg, #0d0d12 0%, #0e0a14 0.5%, #100b18 1%, #120c1c 1.5%, #150e22 2%, #181028 2.5%, #1c122f 3%, #201436 3.5%, #25173e 4%, #2a1a46 5%, #301d4f 6%, #362158 7%, #3d2561 8%, #44296b 9%, #4c2e75 10%, #54337f 11%, #5d3889 12%, #663e93 13%, #70449d 14%, #7a4aa7 15%, #8451b0 16%, #8e58b9 17%, #9860c1 18%, #a268c8 19%, #ac71ce 20%, #b57ad3 21%, #be84d8 22%, #c68edc 23%, #cd98e0 24%, #d4a2e3 25%, #daace6 26%, #dfb6e9 27%, #e4c0eb 28%, #e8c9ed 29%, #ecd2ef 30%, #efdaf1 31%, #f2e1f3 32%, #f4e7f5 34%, #f6ecf7 36%, #f8f0f9 38%, #f9f3fa 40%, #faf5fb 43%, #fbf7fc 46%, #fcf9fd 50%, #fdfafd 55%, #fefcfe 60%, #ffffff 70%, #ffffff 100%)'
           }} 
         />
         
