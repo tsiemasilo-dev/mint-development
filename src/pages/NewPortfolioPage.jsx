@@ -1022,22 +1022,24 @@ const NewPortfolioPage = () => {
                     </Pie>
                     <Tooltip 
                       wrapperStyle={{ outline: 'none', zIndex: 100 }}
-                      position={{ x: 180, y: 10 }}
+                      position={{ x: -80, y: -10 }}
                       content={({ active, payload }) => {
                         if (active && payload && payload.length) {
                           const data = payload[0].payload;
                           const percent = ((data.value / totalValue) * 100).toFixed(1);
                           return (
                             <div 
-                              className="px-4 py-3 rounded-2xl shadow-2xl border border-white/20"
+                              className="px-3 py-2 rounded-xl shadow-2xl border border-white/20"
                               style={{ 
                                 background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(248,250,252,0.9) 100%)',
                                 backdropFilter: 'blur(20px)',
-                                WebkitBackdropFilter: 'blur(20px)'
+                                WebkitBackdropFilter: 'blur(20px)',
+                                minWidth: '70px',
+                                textAlign: 'center'
                               }}
                             >
-                              <p className="text-sm font-bold text-slate-800">{data.name}</p>
-                              <p className="text-lg font-bold bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text text-transparent">
+                              <p className="text-xs font-bold text-slate-800">{data.name}</p>
+                              <p className="text-base font-bold bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text text-transparent">
                                 {percent}%
                               </p>
                             </div>
