@@ -299,48 +299,6 @@ export const useCreditInfo = () => {
   return data;
 };
 
-const PREVIEW_MOCK_DATA = {
-  totalInvestments: 125750,
-  monthlyChange: 3420,
-  monthlyChangePercent: 2.8,
-  portfolioMix: [
-    { label: "Equities", value: "45%" },
-    { label: "Fixed Income", value: "25%" },
-    { label: "Crypto", value: "15%" },
-    { label: "Cash", value: "15%" },
-  ],
-  goals: [
-    {
-      label: "Emergency Fund",
-      value: "R50,000",
-      progress: "72%",
-      currentAmount: 36000,
-      targetAmount: 50000,
-    },
-    {
-      label: "First Home",
-      value: "R500,000",
-      progress: "18%",
-      currentAmount: 90000,
-      targetAmount: 500000,
-    },
-  ],
-  holdings: [
-    { id: 1, symbol: "NPN", name: "Naspers", cost_basis: 35000, current_value: 38500 },
-    { id: 2, symbol: "SOL", name: "Sasol", cost_basis: 22000, current_value: 21200 },
-    { id: 3, symbol: "BTC", name: "Bitcoin", cost_basis: 18750, current_value: 22100 },
-    { id: 4, symbol: "SBK", name: "Standard Bank", cost_basis: 15000, current_value: 16200 },
-  ],
-  loading: false,
-  hasInvestments: true,
-};
-
-const isPreviewMode = () => {
-  if (typeof window === "undefined") return false;
-  const params = new URLSearchParams(window.location.search);
-  return params.get("preview") === "true";
-};
-
 export const useInvestments = () => {
   const [data, setData] = useState({
     totalInvestments: 0,
@@ -354,11 +312,6 @@ export const useInvestments = () => {
   });
 
   useEffect(() => {
-    if (isPreviewMode()) {
-      setData(PREVIEW_MOCK_DATA);
-      return;
-    }
-
     const fetchInvestments = async () => {
       if (!supabase) {
         setData((prev) => ({ ...prev, loading: false }));

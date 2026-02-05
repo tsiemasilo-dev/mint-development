@@ -43,7 +43,6 @@ import InvitePage from "./pages/InvitePage.jsx";
 
 const initialHash = window.location.hash;
 const isRecoveryMode = initialHash.includes('type=recovery');
-const isDevPreviewMode = new URLSearchParams(window.location.search).get('preview') === 'true';
 
 const getHashParams = (hash) => {
   if (!hash) return {};
@@ -69,15 +68,8 @@ const recoveryTokens = isRecoveryMode ? getTokensFromHash(initialHash) : null;
 
 const mainTabs = ['home', 'credit', 'transact', 'investments', 'more', 'welcome', 'auth'];
 
-const getInitialPage = () => {
-  if (hasError) return "linkExpired";
-  if (isDevPreviewMode) return "investments";
-  if (isRecoveryMode) return "auth";
-  return "welcome";
-};
-
 const App = () => {
-  const [currentPage, setCurrentPage] = useState(getInitialPage());
+  const [currentPage, setCurrentPage] = useState(hasError ? "linkExpired" : (isRecoveryMode ? "auth" : "welcome"));
   const [previousPageName, setPreviousPageName] = useState(null);
   const [authStep, setAuthStep] = useState(isRecoveryMode ? "newPassword" : "email");
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
