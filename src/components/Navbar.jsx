@@ -194,15 +194,23 @@ const Navbar = ({ activeTab, setActiveTab, onWithdraw, onShowComingSoon }) => {
             )}
           </AnimatePresence>
 
-          <div
-            className="fixed left-0 right-0 flex justify-center pointer-events-none"
-            style={{
-              bottom: "calc(env(safe-area-inset-bottom, 0px) + 36px)",
-              zIndex: 10001,
-              transform: "translateZ(0)",
-              willChange: "transform"
-            }}
-          >
+        </div>,
+        document.body
+      )}
+ 
+      {/* 3. Bottom Navbar */}
+      {createPortal(
+        <nav
+          ref={navRef}
+          className="fixed bottom-0 left-0 right-0 z-[1000] border-t border-white/10 bg-white/70 pt-3 backdrop-blur-2xl"
+          style={{
+            paddingBottom: "calc(1rem + env(safe-area-inset-bottom, 0px))",
+            transform: "translateZ(0)",
+            willChange: "transform"
+          }}
+        >
+          {/* Plus button - positioned absolutely within navbar */}
+          <div className="absolute left-1/2 -translate-x-1/2 -top-8 z-10">
             <button
               onClick={() => {
                 updateLayout();
@@ -210,7 +218,7 @@ const Navbar = ({ activeTab, setActiveTab, onWithdraw, onShowComingSoon }) => {
                 setIsOpen(newOpenState);
                 triggerHaptic(newOpenState ? ImpactStyle.Heavy : ImpactStyle.Light);
               }}
-              className={`pointer-events-auto flex h-16 w-16 items-center justify-center rounded-full shadow-2xl active:scale-90 ${
+              className={`flex h-16 w-16 items-center justify-center rounded-full shadow-2xl active:scale-90 ${
                 isOpen ? "bg-white text-[#31005e]" : "bg-black text-white"
               }`}
             >
@@ -241,21 +249,7 @@ const Navbar = ({ activeTab, setActiveTab, onWithdraw, onShowComingSoon }) => {
               </div>
             </button>
           </div>
-        </div>,
-        document.body
-      )}
- 
-      {/* 3. Bottom Navbar */}
-      {createPortal(
-        <nav
-          ref={navRef}
-          className="fixed bottom-0 left-0 right-0 z-[1000] border-t border-white/10 bg-white/70 pt-3 backdrop-blur-2xl"
-          style={{
-            paddingBottom: "calc(1rem + env(safe-area-inset-bottom, 0px))",
-            transform: "translateZ(0)",
-            willChange: "transform"
-          }}
-        >
+
           <div className="relative mx-auto grid w-full max-w-lg grid-cols-5 items-center px-4">
             {tabs.slice(0, 2).map((tab) => (
               <button
