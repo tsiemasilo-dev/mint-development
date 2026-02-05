@@ -197,7 +197,7 @@ const Navbar = ({ activeTab, setActiveTab, onWithdraw, onShowComingSoon }) => {
           <div
             className="fixed left-0 right-0 flex justify-center pointer-events-none"
             style={{
-              bottom: "calc(env(safe-area-inset-bottom, 0px) + 28px)",
+              bottom: "calc(env(safe-area-inset-bottom, 0px) + 36px)",
               zIndex: 10001,
               transform: "translateZ(0)",
               willChange: "transform"
