@@ -261,16 +261,16 @@ const NewPortfolioPage = () => {
           <div 
             className="absolute inset-x-0 top-0"
             style={{
-              height: '280px',
-              background: 'linear-gradient(180deg, #1a0a2e 0%, #2d1b4e 20%, #4c2889 45%, #7c3aed 70%, #a78bfa 85%, #c4b5fd 95%, #f8f6fa 100%)',
+              height: '350px',
+              background: 'linear-gradient(180deg, #1a0a2e 0%, #2d1b4e 12%, #4c2889 28%, #7c3aed 45%, #a78bfa 60%, #c4b5fd 75%, #ddd6fe 85%, #ede9fe 92%, #f5f3ff 100%)',
             }}
           />
           <div 
             className="absolute inset-x-0"
             style={{
-              top: '280px',
+              top: '350px',
               bottom: 0,
-              background: '#f8f6fa',
+              background: 'linear-gradient(180deg, #f5f3ff 0%, #f8f6fa 100%)',
             }}
           />
         </div>
