@@ -929,7 +929,8 @@ const NewPortfolioPage = () => {
                 <YAxis
                   hide={true}
                   domain={([dataMin, dataMax]) => {
-                    const padding = (dataMax - dataMin) * 0.15 || 1;
+                    const range = dataMax - dataMin;
+                    const padding = range > 0 ? range * 0.05 : 1;
                     return [dataMin - padding, dataMax + padding];
                   }}
                 />
@@ -1288,7 +1289,8 @@ const NewPortfolioPage = () => {
                       <YAxis
                         hide={true}
                         domain={([dataMin, dataMax]) => {
-                          const padding = (dataMax - dataMin) * 0.15 || 1;
+                          const range = dataMax - dataMin;
+                          const padding = range > 0 ? range * 0.05 : 1;
                           return [dataMin - padding, dataMax + padding];
                         }}
                       />
