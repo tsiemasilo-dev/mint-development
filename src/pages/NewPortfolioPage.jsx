@@ -352,14 +352,32 @@ const NewPortfolioPage = () => {
   const [currentView, setCurrentView] = useState("portfolio");
   const [showStrategyDropdown, setShowStrategyDropdown] = useState(false);
   const [activePieIndex, setActivePieIndex] = useState(-1);
-  const [selectedStock, setSelectedStock] = useState(MOCK_STOCKS[0]);
+  const [selectedStock, setSelectedStock] = useState(null);
   const [showStockDropdown, setShowStockDropdown] = useState(false);
   const [stockTimeFilter, setStockTimeFilter] = useState("W");
   const chartScrollRef = useRef(null);
   const stockChartScrollRef = useRef(null);
-  const stockSymbols = useMemo(() => MOCK_STOCKS.map(s => s.ticker), []);
-  const { quotes: liveQuotes, loading: quotesLoading } = useStockQuotes(stockSymbols);
-  const { chartData: liveStockChartData, loading: stockChartLoading } = useStockChart(selectedStock?.ticker, stockTimeFilter);
+  const { securities: allSecurities, quotes: liveQuotes, loading: quotesLoading } = useStockQuotes();
+  const stocksList = useMemo(() => {
+    if (!allSecurities || allSecurities.length === 0) return MOCK_STOCKS;
+    return allSecurities
+      .filter(s => s.currentPrice != null)
+      .map(s => ({
+        id: s.id,
+        name: s.name,
+        ticker: s.symbol,
+        shares: 0,
+        price: s.currentPrice || 0,
+        dailyChange: s.changePct || 0,
+        logo: s.logo_url || `https://logo.clearbit.com/${s.name?.toLowerCase().replace(/[^a-z]/g, '')}.com`,
+      }));
+  }, [allSecurities]);
+  const selectedSecurityId = useMemo(() => {
+    if (!selectedStock?.ticker) return null;
+    const match = liveQuotes[selectedStock.ticker];
+    return match?.id || null;
+  }, [selectedStock?.ticker, liveQuotes]);
+  const { chartData: liveStockChartData, loading: stockChartLoading } = useStockChart(selectedSecurityId, stockTimeFilter);
   const dropdownRef = useRef(null);
   const stockDropdownRef = useRef(null);
   const { profile } = useProfile();
@@ -414,6 +432,12 @@ const NewPortfolioPage = () => {
     }
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showStockDropdown]);
+
+  useEffect(() => {
+    if (!selectedStock && stocksList.length > 0) {
+      setSelectedStock(stocksList[0]);
+    }
+  }, [stocksList, selectedStock]);
 
   useEffect(() => {
     if (stockChartScrollRef.current) {
@@ -1066,7 +1090,10 @@ const NewPortfolioPage = () => {
       {/* Individual Stocks Tab Content */}
       {activeTab === "stocks" && (() => {
         const stockChartData = liveStockChartData.length > 0 ? liveStockChartData : getStockChartData();
-        const otherStocks = MOCK_STOCKS.filter(s => s.id !== selectedStock.id);
+        if (!selectedStock) {
+          return <div className="text-center py-10 text-slate-500">Loading stocks...</div>;
+        }
+        const otherStocks = stocksList.filter(s => s.id !== selectedStock?.id);
         return (
           <>
             <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 md:max-w-md md:px-8">
@@ -1087,7 +1114,7 @@ const NewPortfolioPage = () => {
                         className="absolute top-full left-0 mt-2 min-w-[200px] bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200/50 z-50 overflow-hidden"
                         style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
                       >
-                        {MOCK_STOCKS.map((stock) => (
+                        {stocksList.map((stock) => (
                           <button
                             key={stock.id}
                             onClick={() => { setSelectedStock(stock); setShowStockDropdown(false); }}

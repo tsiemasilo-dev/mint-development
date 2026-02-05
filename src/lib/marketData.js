@@ -238,7 +238,7 @@ export const getSecurityPrices = async (securityId, timeframe = "1M") => {
 
     let query = supabase
       .from("security_prices")
-      .select("ts, close")
+      .select("ts, close_price")
       .eq("security_id", securityId)
       .order("ts", { ascending: true });
 
@@ -261,7 +261,7 @@ export const getSecurityPrices = async (securityId, timeframe = "1M") => {
 
     const prices = (data || []).map(row => ({
       ts: row.ts,
-      close: Number(row.close),
+      close: Number(row.close_price),
     }));
 
     console.log(`✅ Fetched ${prices.length} price points for ${timeframe}`);

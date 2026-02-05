@@ -1,74 +1,68 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { getMarketsSecuritiesWithMetrics, getSecurityPrices } from './marketData';
 
-const CACHE_DURATION = 60 * 1000;
-const quoteCache = {};
-const chartCache = {};
-
-export function useStockQuotes(symbols) {
-  const [quotes, setQuotes] = useState({});
+export function useStockQuotes() {
+  const [securities, setSecurities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const symbolsKey = symbols.join(',');
 
-  const fetchQuotes = useCallback(async () => {
-    if (!symbols.length) return;
-    
-    const cacheKey = symbolsKey;
-    const cached = quoteCache[cacheKey];
-    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-      setQuotes(cached.data);
-      setLoading(false);
-      return;
-    }
-
+  const fetchSecurities = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/stocks/quote?symbols=${symbolsKey}`);
-      if (!response.ok) throw new Error('Failed to fetch quotes');
-      const data = await response.json();
-      
-      quoteCache[cacheKey] = { data, timestamp: Date.now() };
-      setQuotes(data);
+      const allSecurities = await getMarketsSecuritiesWithMetrics();
+      setSecurities(allSecurities);
       setError(null);
     } catch (err) {
-      console.error('Error fetching stock quotes:', err);
+      console.error('Error fetching securities:', err);
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [symbolsKey]);
+  }, []);
 
   useEffect(() => {
-    fetchQuotes();
-    const interval = setInterval(fetchQuotes, 60000);
-    return () => clearInterval(interval);
-  }, [fetchQuotes]);
+    fetchSecurities();
+  }, [fetchSecurities]);
 
-  return { quotes, loading, error, refetch: fetchQuotes };
+  const quotes = useMemo(() => {
+    const map = {};
+    securities.forEach(sec => {
+      map[sec.symbol] = {
+        symbol: sec.symbol,
+        name: sec.name,
+        price: sec.currentPrice,
+        previousClose: sec.prevClose,
+        change: sec.changeAbs,
+        changePercent: sec.changePct,
+        logo: sec.logo_url,
+        id: sec.id,
+        returns: sec.returns,
+      };
+    });
+    return map;
+  }, [securities]);
+
+  return { quotes, securities, loading, error, refetch: fetchSecurities };
 }
 
-export function useStockChart(symbol, timeFilter) {
+export function useStockChart(securityId, timeFilter) {
   const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const getParams = (filter) => {
+  const getTimeframe = (filter) => {
     switch (filter) {
-      case 'D': return { range: '1d', interval: '5m' };
-      case 'W': return { range: '5d', interval: '15m' };
-      case 'M': return { range: '1mo', interval: '1h' };
-      case 'ALL': return { range: '1y', interval: '1d' };
-      default: return { range: '5d', interval: '15m' };
+      case 'D': return '1W';
+      case 'W': return '1W';
+      case 'M': return '1M';
+      case 'ALL': return '1Y';
+      default: return '1M';
     }
   };
 
   useEffect(() => {
-    if (!symbol) return;
-
-    const cacheKey = `${symbol}_${timeFilter}`;
-    const cached = chartCache[cacheKey];
-    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-      setChartData(cached.data);
+    if (!securityId) {
+      setChartData([]);
       setLoading(false);
       return;
     }
@@ -76,45 +70,29 @@ export function useStockChart(symbol, timeFilter) {
     const fetchChart = async () => {
       try {
         setLoading(true);
-        const { range, interval } = getParams(timeFilter);
-        const response = await fetch(`/api/stocks/chart?symbol=${symbol}&range=${range}&interval=${interval}`);
-        if (!response.ok) throw new Error('Failed to fetch chart');
-        const data = await response.json();
-        
-        let points = data.chartPoints || [];
-        
-        if (timeFilter === 'W') {
-          const dayMap = {};
-          points.forEach(p => {
-            const key = p.day;
-            if (!dayMap[key] || p.timestamp > dayMap[key].timestamp) {
-              dayMap[key] = p;
-            }
-          });
-          const uniqueDays = Object.values(dayMap).sort((a, b) => a.timestamp - b.timestamp);
-          if (points.length > 30) {
-            const step = Math.ceil(points.length / 25);
-            points = points.filter((_, i) => i % step === 0 || i === points.length - 1);
+        const timeframe = getTimeframe(timeFilter);
+        const prices = await getSecurityPrices(securityId, timeframe);
+
+        const formatted = (prices || []).map(p => {
+          const date = new Date(p.ts);
+          let label;
+
+          if (timeFilter === 'D' || timeFilter === 'W') {
+            label = date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
+          } else if (timeFilter === 'M') {
+            label = date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+          } else {
+            label = date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
           }
-        }
-        
-        if (timeFilter === 'D' && points.length > 40) {
-          const step = Math.ceil(points.length / 30);
-          points = points.filter((_, i) => i % step === 0 || i === points.length - 1);
-        }
 
-        if (timeFilter === 'M' && points.length > 30) {
-          const step = Math.ceil(points.length / 25);
-          points = points.filter((_, i) => i % step === 0 || i === points.length - 1);
-        }
+          return {
+            day: label,
+            value: Number(p.close.toFixed(2)),
+            timestamp: new Date(p.ts).getTime(),
+          };
+        });
 
-        if (timeFilter === 'ALL' && points.length > 50) {
-          const step = Math.ceil(points.length / 40);
-          points = points.filter((_, i) => i % step === 0 || i === points.length - 1);
-        }
-        
-        chartCache[cacheKey] = { data: points, timestamp: Date.now() };
-        setChartData(points);
+        setChartData(formatted);
         setError(null);
       } catch (err) {
         console.error('Error fetching stock chart:', err);
@@ -125,7 +103,7 @@ export function useStockChart(symbol, timeFilter) {
     };
 
     fetchChart();
-  }, [symbol, timeFilter]);
+  }, [securityId, timeFilter]);
 
   return { chartData, loading, error };
 }
