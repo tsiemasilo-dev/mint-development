@@ -73,31 +73,18 @@ const NewPortfolioPage = () => {
     <div className="min-h-screen pb-[env(safe-area-inset-bottom)] text-white relative overflow-hidden">
       {/* Multi-layer gradient background */}
       <div className="fixed inset-0 -z-10">
-        {/* Base gradient: deep purple ends at pill buttons, white/lavender starts at pill buttons */}
+        {/* Base gradient: seamless purple to lavender to white transition */}
         <div 
           className="absolute inset-0"
           style={{ 
-            background: 'linear-gradient(180deg, #0d0d12 0%, #0f0a18 3%, #120c1f 6%, #1a1035 10%, #251548 14%, #2d1860 18%, #3b2066 22%, #5b3490 26%, #7c5aad 30%, #a88bc7 34%, #c9b5dc 38%, #ddd0e8 42%, #ebe4f2 48%, #f3eff8 55%, #f8f5fb 65%, #faf8fc 100%)'
+            background: 'linear-gradient(180deg, #0d0d12 0%, #0e0a15 2%, #100b19 4%, #130d1e 6%, #160f24 8%, #1a1130 10%, #1e1439 12%, #231742 14%, #291a4d 16%, #301e58 18%, #382263 20%, #41276e 22%, #4b2d79 24%, #563484 26%, #623b8f 28%, #6f4399 30%, #7c4ba3 32%, #8954ad 34%, #965db6 36%, #a367be 38%, #af72c5 40%, #ba7ecb 42%, #c48ad0 44%, #cd97d5 46%, #d5a4da 48%, #dcb1de 50%, #e2bee2 52%, #e7cae6 54%, #ebd5ea 56%, #efdfed 58%, #f2e7f1 60%, #f5edf4 63%, #f7f2f7 66%, #f9f5f9 70%, #faf7fb 75%, #fbf9fc 82%, #fcfafd 100%)'
           }} 
         />
         
-        {/* Mid-section indigo/royal purple glow - positioned around chart start */}
-        <div 
-          className="absolute top-[22%] left-1/2 -translate-x-1/2 w-[150%] h-[32%] rounded-full blur-3xl"
-          style={{ background: 'radial-gradient(ellipse at center, rgba(91,33,182,0.4) 0%, rgba(76,29,149,0.2) 35%, transparent 65%)' }}
-        />
-        
-        {/* Large radial ambient glow behind account balance */}
+        {/* Subtle ambient glow behind account balance */}
         <div 
           className="absolute top-[6%] left-1/2 -translate-x-1/2 w-[300px] h-[160px] rounded-full"
-          style={{ background: 'radial-gradient(ellipse at center, rgba(91,33,182,0.2) 0%, rgba(76,29,149,0.1) 40%, transparent 70%)', filter: 'blur(40px)' }}
-        />
-        
-        
-        {/* Subtle surface reflection/gloss starting at pill buttons area */}
-        <div 
-          className="absolute top-[30%] left-0 right-0 h-[70%]"
-          style={{ background: 'linear-gradient(180deg, transparent 0%, rgba(237,233,254,0.2) 8%, rgba(248,245,251,0.5) 20%, rgba(250,248,252,0.8) 35%, rgba(252,250,253,0.95) 55%, #fcfafd 100%)' }}
+          style={{ background: 'radial-gradient(ellipse at center, rgba(91,33,182,0.15) 0%, rgba(76,29,149,0.08) 40%, transparent 70%)', filter: 'blur(50px)' }}
         />
       </div>
 
