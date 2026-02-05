@@ -178,11 +178,11 @@ const NewPortfolioPage = () => {
             </p>
           </div>
 
-          <div style={{ width: '100%', height: 160 }}>
-            <ResponsiveContainer width="100%" height={160}>
+          <div style={{ width: '100%', height: 220, marginBottom: 8 }}>
+            <ResponsiveContainer width="100%" height={220}>
               <ComposedChart
                 data={currentChartData}
-                margin={{ top: 30, right: 10, left: 10, bottom: 5 }}
+                margin={{ top: 20, right: 15, left: 15, bottom: 40 }}
               >
                 <defs>
                   <linearGradient id="purpleLineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
