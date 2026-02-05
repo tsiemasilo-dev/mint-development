@@ -59,10 +59,10 @@ const NewPortfolioPage = () => {
         };
       }).sort((a, b) => b.weight - a.weight).slice(0, 5)
     : [
-        { symbol: "NED.JO", name: "Nedbank Group", weight: 13.9, logo: "https://logo.clearbit.com/nedbank.co.za" },
-        { symbol: "SUI.JO", name: "Sun International", weight: 16.8, logo: "https://logo.clearbit.com/suninternational.com" },
+        { symbol: "NED.JO", name: "Nedbank Group", weight: 13.9, logo: null },
+        { symbol: "SUI.JO", name: "Sun International", weight: 16.8, logo: null },
         { symbol: "EXP.JO", name: "Exemplar REITail Ltd.", weight: 19.0, logo: null },
-        { symbol: "SBK.JO", name: "Standard Bank Group", weight: 12.5, logo: "https://logo.clearbit.com/standardbank.co.za" },
+        { symbol: "SBK.JO", name: "Standard Bank Group", weight: 12.5, logo: null },
       ];
 
   const getChartData = () => {
