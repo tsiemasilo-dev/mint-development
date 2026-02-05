@@ -204,15 +204,14 @@ const NewPortfolioPage = () => {
                 <defs>
                   <linearGradient id="purpleLineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
                     <stop offset="0%" stopColor="#a78bfa" stopOpacity="0" />
-                    <stop offset="8%" stopColor="#a78bfa" stopOpacity="0.15" />
-                    <stop offset="15%" stopColor="#a78bfa" stopOpacity="0.4" />
-                    <stop offset="25%" stopColor="#8b5cf6" stopOpacity="0.7" />
-                    <stop offset="40%" stopColor="#7c3aed" stopOpacity="0.9" />
-                    <stop offset="50%" stopColor="#7c3aed" stopOpacity="1" />
-                    <stop offset="60%" stopColor="#7c3aed" stopOpacity="0.9" />
-                    <stop offset="75%" stopColor="#8b5cf6" stopOpacity="0.7" />
-                    <stop offset="85%" stopColor="#a78bfa" stopOpacity="0.4" />
-                    <stop offset="92%" stopColor="#a78bfa" stopOpacity="0.15" />
+                    <stop offset="3%" stopColor="#a78bfa" stopOpacity="0.3" />
+                    <stop offset="8%" stopColor="#8b5cf6" stopOpacity="0.7" />
+                    <stop offset="15%" stopColor="#7c3aed" stopOpacity="0.9" />
+                    <stop offset="25%" stopColor="#7c3aed" stopOpacity="1" />
+                    <stop offset="75%" stopColor="#7c3aed" stopOpacity="1" />
+                    <stop offset="85%" stopColor="#7c3aed" stopOpacity="0.9" />
+                    <stop offset="92%" stopColor="#8b5cf6" stopOpacity="0.7" />
+                    <stop offset="97%" stopColor="#a78bfa" stopOpacity="0.3" />
                     <stop offset="100%" stopColor="#a78bfa" stopOpacity="0" />
                   </linearGradient>
                   <filter id="lineGlow" x="-20%" y="-20%" width="140%" height="140%" filterUnits="objectBoundingBox">
