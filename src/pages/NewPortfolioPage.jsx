@@ -150,19 +150,19 @@ const NewPortfolioPage = () => {
       <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
         <section className="py-2">
           <div className="flex items-center justify-between mb-4 px-1">
-            <button className="flex items-center gap-2 text-white/90 hover:text-white transition">
-              <span className="text-sm font-semibold">{selectedStrategy.name}</span>
-              <ChevronDown className="h-4 w-4" />
+            <button className="flex items-center gap-2 text-slate-900 hover:text-slate-700 transition">
+              <span className="text-base font-bold">{selectedStrategy.name}</span>
+              <ChevronDown className="h-5 w-5" />
             </button>
-            <div className="flex gap-1">
+            <div className="flex gap-1.5">
               {["D", "W", "M", "A"].map((filter) => (
                 <button
                   key={filter}
                   onClick={() => setTimeFilter(filter)}
-                  className={`w-8 h-8 rounded-full text-xs font-medium transition-all ${
+                  className={`w-9 h-9 rounded-full text-sm font-semibold transition-all ${
                     timeFilter === filter
-                      ? "bg-white/20 text-white shadow-lg shadow-purple-500/20 backdrop-blur-sm"
-                      : "text-white/50 hover:text-white/80 hover:bg-white/10"
+                      ? "bg-slate-900 text-white shadow-lg"
+                      : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
                   }`}
                 >
                   {filter}
@@ -172,8 +172,8 @@ const NewPortfolioPage = () => {
           </div>
 
           <div className="mb-4 px-1">
-            <p className="text-2xl font-bold text-white">{formatCurrency(selectedStrategy.currentValue)}</p>
-            <p className="text-sm text-emerald-400 font-medium">
+            <p className="text-3xl font-bold text-slate-900">{formatCurrency(selectedStrategy.currentValue)}</p>
+            <p className="text-sm text-emerald-600 font-semibold">
               +{selectedStrategy.previousMonthChange}% Previous Month
             </p>
           </div>
