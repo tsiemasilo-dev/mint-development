@@ -198,7 +198,58 @@ const Navbar = ({ activeTab, setActiveTab, onWithdraw, onShowComingSoon }) => {
         document.body
       )}
  
-      {/* 3. Bottom Navbar */}
+      {/* 3. Plus Button - separate portal above blur overlay */}
+      {createPortal(
+        <div 
+          className="fixed left-1/2 -translate-x-1/2 z-[10001] isolate"
+          style={{
+            bottom: "calc(env(safe-area-inset-bottom, 0px) + 36px)",
+            transform: "translateX(-50%) translateZ(0)",
+            willChange: "transform"
+          }}
+        >
+          <button
+            onClick={() => {
+              updateLayout();
+              const newOpenState = !isOpen;
+              setIsOpen(newOpenState);
+              triggerHaptic(newOpenState ? ImpactStyle.Heavy : ImpactStyle.Light);
+            }}
+            className={`flex h-16 w-16 items-center justify-center rounded-full shadow-2xl active:scale-90 ${
+              isOpen ? "bg-white text-[#31005e]" : "bg-black text-white"
+            }`}
+          >
+            <div className="relative h-10 w-10 flex items-center justify-center overflow-hidden">
+              <AnimatePresence mode="wait">
+                {!isOpen ? (
+                  <motion.div
+                    key="plus-icon"
+                    initial={{ opacity: 0, scale: 0.5 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.5 }}
+                    className="flex h-full w-full items-center justify-center"
+                  >
+                    <Plus size={32} strokeWidth={2.5} />
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="close"
+                    initial={{ rotate: -90, opacity: 0 }}
+                    animate={{ rotate: 0, opacity: 1 }}
+                    exit={{ rotate: 90, opacity: 0 }}
+                    className="flex h-full w-full items-center justify-center"
+                  >
+                    <X size={32} strokeWidth={3} className="text-[#31005e]" />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </button>
+        </div>,
+        document.body
+      )}
+
+      {/* 4. Bottom Navbar */}
       {createPortal(
         <nav
           ref={navRef}
@@ -209,48 +260,6 @@ const Navbar = ({ activeTab, setActiveTab, onWithdraw, onShowComingSoon }) => {
             willChange: "transform"
           }}
         >
-          {/* Plus button - positioned absolutely within navbar, above the blur overlay */}
-          <div className="absolute left-1/2 -translate-x-1/2 -top-5 z-[10001] isolate">
-            <button
-              onClick={() => {
-                updateLayout();
-                const newOpenState = !isOpen;
-                setIsOpen(newOpenState);
-                triggerHaptic(newOpenState ? ImpactStyle.Heavy : ImpactStyle.Light);
-              }}
-              className={`flex h-16 w-16 items-center justify-center rounded-full shadow-2xl active:scale-90 isolate ${
-                isOpen ? "bg-white text-[#31005e]" : "bg-black text-white"
-              }`}
-              style={{ backdropFilter: "none", WebkitBackdropFilter: "none" }}
-            >
-              <div className="relative h-10 w-10 flex items-center justify-center overflow-hidden">
-                <AnimatePresence mode="wait">
-                  {!isOpen ? (
-                    <motion.div
-                      key="plus-icon"
-                      initial={{ opacity: 0, scale: 0.5 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.5 }}
-                      className="flex h-full w-full items-center justify-center"
-                    >
-                      <Plus size={32} strokeWidth={2.5} />
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      key="close"
-                      initial={{ rotate: -90, opacity: 0 }}
-                      animate={{ rotate: 0, opacity: 1 }}
-                      exit={{ rotate: 90, opacity: 0 }}
-                      className="flex h-full w-full items-center justify-center"
-                    >
-                      <X size={32} strokeWidth={3} className="text-[#31005e]" />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            </button>
-          </div>
-
           <div className="relative mx-auto grid w-full max-w-lg grid-cols-5 items-center px-4">
             {tabs.slice(0, 2).map((tab) => (
               <button
