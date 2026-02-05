@@ -501,23 +501,28 @@ const NewPortfolioPage = () => {
             <div className="relative" ref={dropdownRef}>
               <button 
                 onClick={() => setShowStrategyDropdown(!showStrategyDropdown)}
-                className="flex items-center gap-1 text-slate-900 hover:text-slate-700 transition"
+                className="flex items-center gap-2 text-slate-900 hover:text-slate-700 transition"
               >
-                <span className="text-xl font-bold">{currentStrategy.name || "Strategy"}</span>
-                <ChevronDown className={`h-5 w-5 transition-transform ${showStrategyDropdown ? 'rotate-180' : ''}`} />
+                <span className="text-lg font-semibold tracking-tight" style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}>
+                  {currentStrategy.name || "Strategy"}
+                </span>
+                <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${showStrategyDropdown ? 'rotate-180' : ''}`} />
               </button>
               {showStrategyDropdown && strategies.length > 0 && (
-                <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden">
+                <div 
+                  className="absolute top-full left-0 mt-2 min-w-[200px] bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200/50 z-50 overflow-hidden"
+                  style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
+                >
                   {strategies.map((strategy) => (
                     <button
                       key={strategy.strategyId}
                       onClick={() => handleStrategySelect(strategy)}
-                      className={`w-full px-4 py-3 text-left hover:bg-slate-50 transition border-b border-slate-100 last:border-b-0 ${
+                      className={`w-full px-4 py-3.5 text-left hover:bg-purple-50/50 transition-colors duration-150 border-b border-slate-100/50 last:border-b-0 ${
                         userSelectedStrategy?.strategyId === strategy.strategyId ? 'bg-purple-50' : ''
                       }`}
                     >
-                      <p className="font-semibold text-slate-900">{strategy.name}</p>
-                      <p className="text-sm text-slate-500">
+                      <p className="font-medium text-slate-800 text-sm tracking-tight">{strategy.name}</p>
+                      <p className="text-xs text-slate-400 mt-0.5 font-medium tabular-nums">
                         R{(strategy.currentValue || 0).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}
                       </p>
                     </button>
