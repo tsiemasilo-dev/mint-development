@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Bell, Eye, EyeOff, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, TrendingUp, TrendingDown, Plus } from "lucide-react";
-import { Area, ComposedChart, Line, XAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell } from 'recharts';
+import { Area, ComposedChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell } from 'recharts';
 import { useFinancialData } from "../lib/useFinancialData";
 import { useProfile } from "../lib/useProfile";
 import { useUserStrategies, useStrategyChartData } from "../lib/useUserStrategies";
@@ -925,6 +925,14 @@ const NewPortfolioPage = () => {
                     );
                   }}
                 />
+
+                <YAxis
+                  hide={true}
+                  domain={([dataMin, dataMax]) => {
+                    const padding = (dataMax - dataMin) * 0.15 || 1;
+                    return [dataMin - padding, dataMax + padding];
+                  }}
+                />
                 
                 <Tooltip
                   content={({ active, payload }) => {
@@ -1274,6 +1282,14 @@ const NewPortfolioPage = () => {
                               </text>
                             </g>
                           );
+                        }}
+                      />
+
+                      <YAxis
+                        hide={true}
+                        domain={([dataMin, dataMax]) => {
+                          const padding = (dataMax - dataMin) * 0.15 || 1;
+                          return [dataMin - padding, dataMax + padding];
                         }}
                       />
 
