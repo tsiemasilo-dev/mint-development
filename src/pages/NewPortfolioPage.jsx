@@ -255,20 +255,20 @@ const NewPortfolioPage = () => {
   // All Allocations View
   if (currentView === "allocations") {
     return (
-      <div className="min-h-screen pb-[env(safe-area-inset-bottom)] text-white relative overflow-x-hidden">
-        {/* Gradient background */}
+      <div className="min-h-screen pb-[env(safe-area-inset-bottom)] relative overflow-x-hidden">
+        {/* Gradient background - matching portfolio page */}
         <div className="absolute inset-x-0 top-0 -z-10 h-full">
           <div 
             className="absolute inset-x-0 top-0"
             style={{
-              height: '100vh',
-              background: 'linear-gradient(180deg, #1a0a2e 0%, #2d1b4e 15%, #4c2889 35%, #7c3aed 55%, #a78bfa 75%, #c4b5fd 88%, #ede9fe 95%, #f8f6fa 100%)',
+              height: '280px',
+              background: 'linear-gradient(180deg, #1a0a2e 0%, #2d1b4e 20%, #4c2889 45%, #7c3aed 70%, #a78bfa 85%, #c4b5fd 95%, #f8f6fa 100%)',
             }}
           />
           <div 
             className="absolute inset-x-0"
             style={{
-              top: '100vh',
+              top: '280px',
               bottom: 0,
               background: '#f8f6fa',
             }}
@@ -293,37 +293,37 @@ const NewPortfolioPage = () => {
           {MOCK_ALLOCATIONS.map((allocation) => (
             <div 
               key={allocation.id}
-              className="rounded-3xl p-5 backdrop-blur-xl shadow-lg border border-white/20"
+              className="rounded-3xl p-5 backdrop-blur-xl shadow-sm border border-slate-100/50"
               style={{
-                background: 'linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.08) 100%)',
+                background: 'rgba(255,255,255,0.7)',
               }}
             >
               {/* Strategy Name */}
-              <h3 className="text-lg font-bold text-white mb-4">
+              <h3 className="text-lg font-bold text-slate-900 mb-4">
                 {allocation.name}
               </h3>
 
               {/* Amount and Return */}
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <p className="text-xs text-white/50 mb-1">Amount</p>
-                  <p className="text-xl font-bold text-white">
+                  <p className="text-xs text-slate-500 mb-1">Amount</p>
+                  <p className="text-xl font-bold text-slate-900">
                     {formatCurrency(allocation.amount)}
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs text-white/50 mb-1">Return</p>
-                  <p className={`text-xl font-bold ${allocation.returnPercent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  <p className="text-xs text-slate-500 mb-1">Return</p>
+                  <p className={`text-xl font-bold ${allocation.returnPercent >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                     {allocation.returnPercent >= 0 ? '+' : ''}{allocation.returnPercent.toFixed(1)}%
                   </p>
                 </div>
               </div>
 
               {/* Date and Holdings Logos */}
-              <div className="flex items-center justify-between pt-4 border-t border-white/10">
+              <div className="flex items-center justify-between pt-4 border-t border-slate-100">
                 <div>
-                  <p className="text-xs text-white/50 mb-1">Date</p>
-                  <p className="text-sm font-medium text-white/80">
+                  <p className="text-xs text-slate-500 mb-1">Date</p>
+                  <p className="text-sm font-medium text-slate-700">
                     {formatDate(allocation.date)}
                   </p>
                 </div>
@@ -333,11 +333,11 @@ const NewPortfolioPage = () => {
                   {allocation.holdings.slice(0, 4).map((holding, index) => (
                     <div 
                       key={holding.symbol}
-                      className="h-9 w-9 rounded-full bg-white/20 border-2 border-white/30 shadow-lg overflow-hidden backdrop-blur-sm"
+                      className="h-9 w-9 rounded-full bg-white border-2 border-white shadow-md overflow-hidden"
                       style={{ zIndex: allocation.holdings.length - index }}
                     >
                       {failedLogos[holding.symbol] ? (
-                        <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-400/30 to-purple-400/30 text-[10px] font-bold text-white">
+                        <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-100 to-purple-100 text-[10px] font-bold text-violet-700">
                           {holding.symbol.slice(0, 2)}
                         </div>
                       ) : (
@@ -352,7 +352,7 @@ const NewPortfolioPage = () => {
                   ))}
                   {allocation.holdings.length > 4 && (
                     <div 
-                      className="h-9 w-9 rounded-full bg-white/20 border-2 border-white/30 shadow-lg flex items-center justify-center text-[10px] font-bold text-white backdrop-blur-sm"
+                      className="h-9 w-9 rounded-full bg-slate-100 border-2 border-white shadow-md flex items-center justify-center text-[10px] font-bold text-slate-600"
                       style={{ zIndex: 0 }}
                     >
                       +{allocation.holdings.length - 4}
