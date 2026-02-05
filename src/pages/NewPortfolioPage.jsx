@@ -998,8 +998,6 @@ const NewPortfolioPage = () => {
                       animationBegin={0}
                       animationDuration={800}
                       animationEasing="ease-out"
-                      label={false}
-                      labelLine={false}
                     >
                       {pieData.map((entry, index) => (
                         <Cell 
