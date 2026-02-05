@@ -210,8 +210,37 @@ const NewPortfolioPage = () => {
                     <stop offset="97%" stopColor="#a78bfa" stopOpacity="0.3" />
                     <stop offset="100%" stopColor="#a78bfa" stopOpacity="0" />
                   </linearGradient>
+                  
+                  <linearGradient id="glowGradientVertical" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.25" />
+                    <stop offset="20%" stopColor="#8b5cf6" stopOpacity="0.15" />
+                    <stop offset="50%" stopColor="#a78bfa" stopOpacity="0.08" />
+                    <stop offset="80%" stopColor="#c4b5fd" stopOpacity="0.03" />
+                    <stop offset="100%" stopColor="#c4b5fd" stopOpacity="0" />
+                  </linearGradient>
+                  
+                  <linearGradient id="glowOpacityMask" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="white" stopOpacity="0" />
+                    <stop offset="5%" stopColor="white" stopOpacity="0.2" />
+                    <stop offset="15%" stopColor="white" stopOpacity="0.5" />
+                    <stop offset="35%" stopColor="white" stopOpacity="0.9" />
+                    <stop offset="50%" stopColor="white" stopOpacity="1" />
+                    <stop offset="65%" stopColor="white" stopOpacity="0.9" />
+                    <stop offset="85%" stopColor="white" stopOpacity="0.5" />
+                    <stop offset="95%" stopColor="white" stopOpacity="0.2" />
+                    <stop offset="100%" stopColor="white" stopOpacity="0" />
+                  </linearGradient>
+                  
+                  <mask id="glowMask">
+                    <rect x="0" y="0" width="100%" height="100%" fill="url(#glowOpacityMask)" />
+                  </mask>
+                  
                   <filter id="lineGlow" x="-20%" y="-20%" width="140%" height="140%" filterUnits="objectBoundingBox">
                     <feDropShadow dx="0" dy="0" stdDeviation="2.5" floodColor="#8b5cf6" floodOpacity="0.5" />
+                  </filter>
+                  
+                  <filter id="areaBlur" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur in="SourceGraphic" stdDeviation="8" />
                   </filter>
                 </defs>
                 
@@ -242,6 +271,16 @@ const NewPortfolioPage = () => {
                     return null;
                   }}
                   cursor={false}
+                />
+
+                <Area
+                  type="monotone"
+                  dataKey="value"
+                  stroke="transparent"
+                  fill="url(#glowGradientVertical)"
+                  fillOpacity={1}
+                  mask="url(#glowMask)"
+                  style={{ filter: 'url(#areaBlur)' }}
                 />
 
                 <Line
