@@ -108,9 +108,15 @@ const App = () => {
         navigationHistory.current = navigationHistory.current.slice(-20);
       }
       setPreviousPageName(currentPage);
+      if (!Capacitor.isNativePlatform()) {
+        window.history.pushState({ page, index: navigationHistory.current.length }, '', window.location.pathname);
+      }
     } else {
       navigationHistory.current = [];
       setPreviousPageName(null);
+      if (!Capacitor.isNativePlatform()) {
+        window.history.replaceState({ page, index: 0 }, '', window.location.pathname);
+      }
     }
     
     setCurrentPage(page);
@@ -174,6 +180,34 @@ const App = () => {
 
     return () => {
       listener.then(l => l.remove());
+    };
+  }, [currentPage]);
+
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+      return;
+    }
+
+    const handlePopState = (event) => {
+      if (navigationHistory.current.length > 0) {
+        const prevPage = navigationHistory.current.pop();
+        const newPreviousPage = navigationHistory.current.length > 0 
+          ? navigationHistory.current[navigationHistory.current.length - 1] 
+          : null;
+        setPreviousPageName(newPreviousPage);
+        setCurrentPage(prevPage);
+      } else if (!mainTabs.includes(currentPage)) {
+        setPreviousPageName(null);
+        setCurrentPage('home');
+      } else {
+        window.history.pushState({ page: currentPage, index: 0 }, '', window.location.pathname);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
     };
   }, [currentPage]);
 
