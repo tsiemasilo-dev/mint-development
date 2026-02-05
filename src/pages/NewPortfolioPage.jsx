@@ -490,12 +490,13 @@ const NewPortfolioPage = () => {
             onTouchStart={(e) => e.currentTarget.style.cursor = 'grabbing'}
             onTouchEnd={(e) => e.currentTarget.style.cursor = 'grab'}
           >
-            <div style={{ width: getChartWidth(currentChartData.length), height: 220, minWidth: '100%' }}>
+            <div style={{ width: getChartWidth(currentChartData.length), height: 220, minWidth: '100%', outline: 'none' }}>
               <ComposedChart
                 width={getChartWidth(currentChartData.length)}
                 height={220}
                 data={currentChartData}
                 margin={{ top: 20, right: 30, left: 30, bottom: 40 }}
+                style={{ outline: 'none' }}
               >
                 <defs>
                   <linearGradient id="purpleLineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -614,6 +615,7 @@ const NewPortfolioPage = () => {
                     return null;
                   }}
                   cursor={false}
+                  wrapperStyle={{ outline: 'none' }}
                 />
 
                 <Area

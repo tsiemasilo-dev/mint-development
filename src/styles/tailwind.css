@@ -52,3 +52,17 @@
   }
 }
 
+.recharts-wrapper,
+.recharts-wrapper svg,
+.recharts-surface,
+.recharts-wrapper *:focus,
+.recharts-wrapper *:active {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.recharts-tooltip-cursor {
+  display: none !important;
+}
+
