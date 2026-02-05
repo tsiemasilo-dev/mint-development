@@ -255,91 +255,113 @@ const NewPortfolioPage = () => {
   // All Allocations View
   if (currentView === "allocations") {
     return (
-      <div className="min-h-screen bg-slate-50 text-slate-900 pb-[env(safe-area-inset-bottom)]">
-        <div className="mx-auto flex w-full max-w-sm flex-col px-4 pb-10 pt-12 md:max-w-md md:px-6">
-          {/* Header */}
+      <div className="min-h-screen pb-[env(safe-area-inset-bottom)] text-white relative overflow-x-hidden">
+        {/* Gradient background */}
+        <div className="absolute inset-x-0 top-0 -z-10 h-full">
+          <div 
+            className="absolute inset-x-0 top-0"
+            style={{
+              height: '100vh',
+              background: 'linear-gradient(180deg, #1a0a2e 0%, #2d1b4e 15%, #4c2889 35%, #7c3aed 55%, #a78bfa 75%, #c4b5fd 88%, #ede9fe 95%, #f8f6fa 100%)',
+            }}
+          />
+          <div 
+            className="absolute inset-x-0"
+            style={{
+              top: '100vh',
+              bottom: 0,
+              background: '#f8f6fa',
+            }}
+          />
+        </div>
+
+        {/* Header */}
+        <div className="mx-auto flex w-full max-w-sm flex-col px-4 pt-12 md:max-w-md md:px-6">
           <header className="flex items-center gap-3 mb-6">
             <button 
               onClick={() => setCurrentView("portfolio")}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-white border border-slate-200 shadow-sm transition hover:bg-slate-50"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm border border-white/20 shadow-lg transition hover:bg-white/20"
             >
-              <ArrowLeft className="h-5 w-5 text-slate-700" />
+              <ArrowLeft className="h-5 w-5 text-white" />
             </button>
-            <h1 className="text-xl font-bold text-slate-900">All Allocations</h1>
+            <h1 className="text-xl font-bold text-white">All Allocations</h1>
           </header>
+        </div>
 
-          {/* Strategy Cards */}
-          <div className="flex flex-col gap-4">
-            {MOCK_ALLOCATIONS.map((allocation) => (
-              <div 
-                key={allocation.id}
-                className="rounded-2xl bg-white p-5 shadow-sm border border-slate-100"
-              >
-                {/* Strategy Name */}
-                <h3 className="text-base font-semibold text-slate-900 mb-3">
-                  {allocation.name}
-                </h3>
+        {/* Strategy Cards */}
+        <div className="mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-6">
+          {MOCK_ALLOCATIONS.map((allocation) => (
+            <div 
+              key={allocation.id}
+              className="rounded-3xl p-5 backdrop-blur-xl shadow-lg border border-white/20"
+              style={{
+                background: 'linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.08) 100%)',
+              }}
+            >
+              {/* Strategy Name */}
+              <h3 className="text-lg font-bold text-white mb-4">
+                {allocation.name}
+              </h3>
 
-                {/* Amount and Return */}
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <p className="text-xs text-slate-500 mb-0.5">Amount</p>
-                    <p className="text-lg font-bold text-slate-900">
-                      {formatCurrency(allocation.amount)}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-slate-500 mb-0.5">Return</p>
-                    <p className={`text-lg font-bold ${allocation.returnPercent >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                      {allocation.returnPercent >= 0 ? '+' : ''}{allocation.returnPercent.toFixed(1)}%
-                    </p>
-                  </div>
+              {/* Amount and Return */}
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <p className="text-xs text-white/50 mb-1">Amount</p>
+                  <p className="text-xl font-bold text-white">
+                    {formatCurrency(allocation.amount)}
+                  </p>
                 </div>
-
-                {/* Date and Holdings Logos */}
-                <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                  <div>
-                    <p className="text-xs text-slate-500 mb-0.5">Date</p>
-                    <p className="text-sm font-medium text-slate-700">
-                      {formatDate(allocation.date)}
-                    </p>
-                  </div>
-                  
-                  {/* Overlapping Holdings Logos */}
-                  <div className="flex items-center -space-x-2">
-                    {allocation.holdings.slice(0, 4).map((holding, index) => (
-                      <div 
-                        key={holding.symbol}
-                        className="h-8 w-8 rounded-full bg-white border-2 border-white shadow-sm overflow-hidden"
-                        style={{ zIndex: allocation.holdings.length - index }}
-                      >
-                        {failedLogos[holding.symbol] ? (
-                          <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-100 to-purple-100 text-[10px] font-bold text-violet-700">
-                            {holding.symbol.slice(0, 2)}
-                          </div>
-                        ) : (
-                          <img
-                            src={holding.logo}
-                            alt={holding.symbol}
-                            className="h-full w-full object-cover"
-                            onError={() => setFailedLogos(prev => ({ ...prev, [holding.symbol]: true }))}
-                          />
-                        )}
-                      </div>
-                    ))}
-                    {allocation.holdings.length > 4 && (
-                      <div 
-                        className="h-8 w-8 rounded-full bg-slate-100 border-2 border-white shadow-sm flex items-center justify-center text-[10px] font-bold text-slate-600"
-                        style={{ zIndex: 0 }}
-                      >
-                        +{allocation.holdings.length - 4}
-                      </div>
-                    )}
-                  </div>
+                <div className="text-right">
+                  <p className="text-xs text-white/50 mb-1">Return</p>
+                  <p className={`text-xl font-bold ${allocation.returnPercent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {allocation.returnPercent >= 0 ? '+' : ''}{allocation.returnPercent.toFixed(1)}%
+                  </p>
                 </div>
               </div>
-            ))}
-          </div>
+
+              {/* Date and Holdings Logos */}
+              <div className="flex items-center justify-between pt-4 border-t border-white/10">
+                <div>
+                  <p className="text-xs text-white/50 mb-1">Date</p>
+                  <p className="text-sm font-medium text-white/80">
+                    {formatDate(allocation.date)}
+                  </p>
+                </div>
+                
+                {/* Overlapping Holdings Logos */}
+                <div className="flex items-center -space-x-2">
+                  {allocation.holdings.slice(0, 4).map((holding, index) => (
+                    <div 
+                      key={holding.symbol}
+                      className="h-9 w-9 rounded-full bg-white/20 border-2 border-white/30 shadow-lg overflow-hidden backdrop-blur-sm"
+                      style={{ zIndex: allocation.holdings.length - index }}
+                    >
+                      {failedLogos[holding.symbol] ? (
+                        <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-400/30 to-purple-400/30 text-[10px] font-bold text-white">
+                          {holding.symbol.slice(0, 2)}
+                        </div>
+                      ) : (
+                        <img
+                          src={holding.logo}
+                          alt={holding.symbol}
+                          className="h-full w-full object-cover"
+                          onError={() => setFailedLogos(prev => ({ ...prev, [holding.symbol]: true }))}
+                        />
+                      )}
+                    </div>
+                  ))}
+                  {allocation.holdings.length > 4 && (
+                    <div 
+                      className="h-9 w-9 rounded-full bg-white/20 border-2 border-white/30 shadow-lg flex items-center justify-center text-[10px] font-bold text-white backdrop-blur-sm"
+                      style={{ zIndex: 0 }}
+                    >
+                      +{allocation.holdings.length - 4}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     );
