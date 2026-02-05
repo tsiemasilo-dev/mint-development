@@ -397,7 +397,7 @@ const NewPortfolioPage = () => {
 
   const getChartWidth = (dataLength) => {
     const minWidth = 100;
-    const pointSpacing = 55;
+    const pointSpacing = 38;
     return Math.max(minWidth, dataLength * pointSpacing);
   };
 
@@ -503,7 +503,7 @@ const NewPortfolioPage = () => {
 
   const getStockChartWidth = (dataLength) => {
     const minWidth = 100;
-    const pointSpacing = 55;
+    const pointSpacing = 38;
     return Math.max(minWidth, dataLength * pointSpacing);
   };
 
@@ -825,7 +825,7 @@ const NewPortfolioPage = () => {
                 width={getChartWidth(currentChartData.length)}
                 height={220}
                 data={currentChartData}
-                margin={{ top: 20, right: 30, left: 30, bottom: 40 }}
+                margin={{ top: 10, right: 15, left: 15, bottom: 25 }}
                 style={{ outline: 'none' }}
               >
                 <defs>
@@ -879,7 +879,7 @@ const NewPortfolioPage = () => {
                   dataKey="day" 
                   axisLine={false}
                   tickLine={false}
-                  tickMargin={20}
+                  tickMargin={10}
                   tick={({ x, y, payload, index }) => {
                     const isHighlighted = currentChartData[index]?.highlighted;
                     const totalItems = currentChartData.length;
@@ -1217,7 +1217,7 @@ const NewPortfolioPage = () => {
                       width={getStockChartWidth(stockChartData.length)}
                       height={220}
                       data={stockChartData}
-                      margin={{ top: 20, right: 30, left: 30, bottom: 40 }}
+                      margin={{ top: 10, right: 15, left: 15, bottom: 25 }}
                       style={{ outline: 'none' }}
                     >
                       <defs>
@@ -1266,7 +1266,7 @@ const NewPortfolioPage = () => {
                         dataKey="day"
                         axisLine={false}
                         tickLine={false}
-                        tickMargin={20}
+                        tickMargin={10}
                         tick={({ x, y, payload, index }) => {
                           const isHighlighted = stockChartData[index]?.highlighted;
                           const totalItems = stockChartData.length;
