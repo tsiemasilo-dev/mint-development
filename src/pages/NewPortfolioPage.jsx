@@ -72,21 +72,23 @@ const NewPortfolioPage = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)] text-slate-900">
-      <div className="rounded-b-[36px] bg-gradient-to-b from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-4 pb-8 pt-12 text-white md:px-8">
-        <div className="mx-auto flex w-full max-w-sm flex-col gap-6 md:max-w-md">
+      <div className="rounded-b-[36px] bg-gradient-to-b from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-5 pb-8 pt-12 text-white md:px-8">
+        <div className="mx-auto flex w-full max-w-sm flex-col gap-5 md:max-w-md">
           <header className="flex items-center justify-between">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-xs font-semibold text-slate-700">
-              JD
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-amber-200 to-amber-400 text-sm font-semibold text-amber-900 shadow-lg">
+                JD
+              </div>
+              <p className="text-base font-medium text-white">Hello, Johnson</p>
             </div>
-            <button className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm transition hover:bg-white/20">
+            <button className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 transition hover:bg-white/10">
               <Bell className="h-5 w-5 text-white/90" />
             </button>
           </header>
 
-          <section className="glass-card p-5 text-white">
-            <p className="text-xs uppercase tracking-[0.2em] text-white/70">Account Value</p>
-            <div className="mt-3 flex items-center gap-3">
-              <p className="text-3xl font-semibold">
+          <section className="mt-2">
+            <div className="flex items-center gap-3">
+              <p className="text-3xl font-semibold tracking-tight">
                 {balanceVisible ? formatCurrency(accountValue) : "R•••••••"}
               </p>
               <button
@@ -94,15 +96,16 @@ const NewPortfolioPage = () => {
                 className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 transition hover:bg-white/20"
               >
                 {balanceVisible ? (
-                  <Eye className="h-4 w-4 text-white/70" />
+                  <Eye className="h-4 w-4 text-white/60" />
                 ) : (
-                  <EyeOff className="h-4 w-4 text-white/70" />
+                  <EyeOff className="h-4 w-4 text-white/60" />
                 )}
               </button>
             </div>
+            <p className="mt-1 text-sm text-white/50">Account Value</p>
           </section>
 
-          <section className="flex gap-2">
+          <section className="flex gap-2 mt-1">
             {[
               { id: "strategy", label: "Strategy" },
               { id: "stocks", label: "Stocks" },
@@ -111,9 +114,9 @@ const NewPortfolioPage = () => {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all ${
                   activeTab === tab.id
-                    ? "bg-white text-slate-900 shadow-lg"
+                    ? "bg-amber-400 text-slate-900 shadow-lg"
                     : "bg-white/10 text-white/70 hover:bg-white/20"
                 }`}
               >
