@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Bell, Eye, EyeOff, ChevronDown, ChevronRight, ArrowLeft, TrendingUp, TrendingDown, Plus } from "lucide-react";
-import { Area, ComposedChart, Line, XAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell } from 'recharts';
+import { Area, ComposedChart, Line, XAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell, Sector } from 'recharts';
 import { useFinancialData } from "../lib/useFinancialData";
 import { useProfile } from "../lib/useProfile";
 import { useUserStrategies, useStrategyChartData } from "../lib/useUserStrategies";
@@ -217,6 +217,7 @@ const NewPortfolioPage = () => {
   const [calendarYear, setCalendarYear] = useState(2025);
   const [currentView, setCurrentView] = useState("portfolio");
   const [showStrategyDropdown, setShowStrategyDropdown] = useState(false);
+  const [activePieIndex, setActivePieIndex] = useState(-1);
   const chartScrollRef = useRef(null);
   const dropdownRef = useRef(null);
   const { profile } = useProfile();
@@ -952,6 +953,24 @@ const NewPortfolioPage = () => {
         const totalDistinct = holdingsData.length;
         const pieData = holdingsData.map(h => ({ name: h.ticker, value: h.currentValue, color: h.color }));
 
+        const renderActiveShape = (props) => {
+          const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload, percent } = props;
+          return (
+            <g>
+              <Sector
+                cx={cx}
+                cy={cy}
+                innerRadius={innerRadius}
+                outerRadius={outerRadius + 8}
+                startAngle={startAngle}
+                endAngle={endAngle}
+                fill={fill}
+                style={{ filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.25))', transition: 'all 0.3s ease' }}
+              />
+            </g>
+          );
+        };
+
         return (
         <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
           {/* Summary Card with Pie Chart */}
@@ -980,17 +999,27 @@ const NewPortfolioPage = () => {
                       data={pieData}
                       cx="50%"
                       cy="50%"
-                      outerRadius={65}
+                      outerRadius={activePieIndex >= 0 ? 58 : 65}
                       paddingAngle={1}
                       dataKey="value"
                       stroke="rgba(255,255,255,0.8)"
                       strokeWidth={2}
+                      activeIndex={activePieIndex}
+                      activeShape={renderActiveShape}
+                      onMouseEnter={(_, index) => setActivePieIndex(index)}
+                      onMouseLeave={() => setActivePieIndex(-1)}
+                      style={{ cursor: 'pointer' }}
                     >
                       {pieData.map((entry, index) => (
                         <Cell 
                           key={`cell-${index}`} 
                           fill={entry.color}
-                          style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))' }}
+                          style={{ 
+                            filter: activePieIndex >= 0 && activePieIndex !== index 
+                              ? 'opacity(0.6)' 
+                              : 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))',
+                            transition: 'all 0.3s ease'
+                          }}
                         />
                       ))}
                     </Pie>
