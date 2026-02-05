@@ -97,6 +97,7 @@ const MOCK_DATA = {
       { day: "Tue", value: 8720, highlighted: true },
       { day: "Wed", value: 4200 },
       { day: "Thu", value: 4449 },
+      { day: "Fri", value: 4600 },
     ],
     monthly: [
       { label: "Week 1", value: 3500 },
