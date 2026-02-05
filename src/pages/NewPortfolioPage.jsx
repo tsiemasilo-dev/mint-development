@@ -4,6 +4,7 @@ import { Area, ComposedChart, Line, XAxis, ResponsiveContainer, Tooltip, PieChar
 import { useFinancialData } from "../lib/useFinancialData";
 import { useProfile } from "../lib/useProfile";
 import { useUserStrategies, useStrategyChartData } from "../lib/useUserStrategies";
+import { useStockQuotes, useStockChart } from "../lib/useStockData";
 
 const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -356,6 +357,9 @@ const NewPortfolioPage = () => {
   const [stockTimeFilter, setStockTimeFilter] = useState("W");
   const chartScrollRef = useRef(null);
   const stockChartScrollRef = useRef(null);
+  const stockSymbols = useMemo(() => MOCK_STOCKS.map(s => s.ticker), []);
+  const { quotes: liveQuotes, loading: quotesLoading } = useStockQuotes(stockSymbols);
+  const { chartData: liveStockChartData, loading: stockChartLoading } = useStockChart(selectedStock?.ticker, stockTimeFilter);
   const dropdownRef = useRef(null);
   const stockDropdownRef = useRef(null);
   const { profile } = useProfile();
@@ -1061,7 +1065,7 @@ const NewPortfolioPage = () => {
 
       {/* Individual Stocks Tab Content */}
       {activeTab === "stocks" && (() => {
-        const stockChartData = getStockChartData();
+        const stockChartData = liveStockChartData.length > 0 ? liveStockChartData : getStockChartData();
         const otherStocks = MOCK_STOCKS.filter(s => s.id !== selectedStock.id);
         return (
           <>
@@ -1093,7 +1097,7 @@ const NewPortfolioPage = () => {
                           >
                             <p className="font-medium text-slate-800 text-sm tracking-tight">{stock.name}</p>
                             <p className="text-xs text-slate-400 mt-0.5 font-medium tabular-nums">
-                              {formatCurrency(stock.price)}
+                              {formatCurrency(liveQuotes[stock.ticker]?.price || stock.price)}
                             </p>
                           </button>
                         ))}
@@ -1126,10 +1130,15 @@ const NewPortfolioPage = () => {
                 </div>
 
                 <div className="mb-3 px-1">
-                  <p className="text-3xl font-bold text-slate-900">{formatCurrency(selectedStock.price)}</p>
-                  <p className={`text-sm ${selectedStock.dailyChange >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                    ({selectedStock.dailyChange >= 0 ? '+' : ''}{selectedStock.dailyChange.toFixed(2)}% Today)
-                  </p>
+                  <p className="text-3xl font-bold text-slate-900">{formatCurrency(liveQuotes[selectedStock.ticker]?.price || selectedStock.price)}</p>
+                  {(() => {
+                    const change = liveQuotes[selectedStock.ticker]?.changePercent ?? selectedStock.dailyChange;
+                    return (
+                      <p className={`text-sm ${change >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                        ({change >= 0 ? '+' : ''}{change.toFixed(2)}% Today)
+                      </p>
+                    );
+                  })()}
                 </div>
 
                 <div
@@ -1285,7 +1294,9 @@ const NewPortfolioPage = () => {
                 <p className="text-sm font-semibold text-slate-900 mb-4">Other Stocks</p>
                 <div className="space-y-3">
                   {otherStocks.map((stock) => {
-                    const isPositive = stock.dailyChange >= 0;
+                    const livePrice = liveQuotes[stock.ticker]?.price || stock.price;
+                    const liveChange = liveQuotes[stock.ticker]?.changePercent ?? stock.dailyChange;
+                    const isPositive = liveChange >= 0;
                     return (
                       <button
                         key={stock.id}
@@ -1311,9 +1322,9 @@ const NewPortfolioPage = () => {
                           <p className="text-xs text-slate-500 font-medium">{stock.ticker}</p>
                         </div>
                         <div className="text-right flex-shrink-0">
-                          <p className="text-sm font-bold text-slate-900">{formatCurrency(stock.price)}</p>
+                          <p className="text-sm font-bold text-slate-900">{formatCurrency(livePrice)}</p>
                           <p className={`text-xs font-medium ${isPositive ? 'text-emerald-500' : 'text-rose-500'}`}>
-                            {isPositive ? '+' : ''}{stock.dailyChange.toFixed(2)}%
+                            {isPositive ? '+' : ''}{liveChange.toFixed(2)}%
                           </p>
                         </div>
                       </button>
