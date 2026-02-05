@@ -103,25 +103,17 @@ const NewsArticlePage = ({ onBack, articleId }) => {
         </header>
 
         <article className="rounded-3xl bg-white p-6 shadow-md md:p-8">
-          {/* Author */}
-          {article.author && (
-            <div className="mb-6 flex items-center gap-3 border-b border-slate-100 pb-6">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-purple-600 text-sm font-semibold text-white">
-                {article.author
-                  .split(" ")
-                  .map((word) => word[0])
-                  .slice(0, 2)
-                  .join("")
-                  .toUpperCase()}
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-900">{article.author}</p>
-                <p className="text-xs text-slate-500">
-                  {formattedDate} • {formattedTime}
-                </p>
-              </div>
+          <div className="mb-6 flex items-center gap-3 border-b border-slate-100 pb-6">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100">
+              <img src="/assets/mint-logo.svg" alt="Mint" className="h-6 w-6" />
             </div>
-          )}
+            <div>
+              <p className="text-sm font-semibold text-slate-900">Mint News</p>
+              <p className="text-xs text-slate-500">
+                {formattedDate} • {formattedTime}
+              </p>
+            </div>
+          </div>
 
           {/* Title */}
           <h2 className="mb-4 text-2xl font-bold text-slate-900 md:text-3xl">
