@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Bell, Eye, EyeOff, ChevronDown, ChevronRight, ArrowLeft, TrendingUp, TrendingDown, Plus } from "lucide-react";
-import { Area, ComposedChart, Line, XAxis, ResponsiveContainer, Tooltip } from 'recharts';
+import { Area, ComposedChart, Line, XAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell } from 'recharts';
 import { useFinancialData } from "../lib/useFinancialData";
 import { useProfile } from "../lib/useProfile";
 import { useUserStrategies, useStrategyChartData } from "../lib/useUserStrategies";
@@ -939,20 +939,75 @@ const NewPortfolioPage = () => {
       )}
 
       {/* Holdings Tab Content */}
-      {activeTab === "holdings" && (
+      {activeTab === "holdings" && (() => {
+        const holdingsData = [
+          { id: 1, name: "Apple Inc.", ticker: "AAPL", logo: "https://logo.clearbit.com/apple.com", currentValue: 12450.80, change: 8.4, color: "#8B5CF6" },
+          { id: 2, name: "Tesla Inc.", ticker: "TSLA", logo: "https://logo.clearbit.com/tesla.com", currentValue: 8920.50, change: -2.1, color: "#A78BFA" },
+          { id: 3, name: "Microsoft Corp.", ticker: "MSFT", logo: "https://logo.clearbit.com/microsoft.com", currentValue: 6780.25, change: 5.7, color: "#C4B5FD" },
+          { id: 4, name: "Amazon.com Inc.", ticker: "AMZN", logo: "https://logo.clearbit.com/amazon.com", currentValue: 4350.90, change: 3.2, color: "#DDD6FE" },
+          { id: 5, name: "Alphabet Inc.", ticker: "GOOGL", logo: "https://logo.clearbit.com/google.com", currentValue: 3200.15, change: -0.8, color: "#EDE9FE" },
+          { id: 6, name: "NVIDIA Corp.", ticker: "NVDA", logo: "https://logo.clearbit.com/nvidia.com", currentValue: 5680.40, change: 12.5, color: "#7C3AED" },
+        ];
+        const totalValue = holdingsData.reduce((sum, h) => sum + h.currentValue, 0);
+        const totalDistinct = holdingsData.length;
+        const pieData = holdingsData.map(h => ({ name: h.ticker, value: h.currentValue, color: h.color }));
+
+        return (
         <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
+          {/* Summary Card with Pie Chart */}
+          <div 
+            className="rounded-3xl p-5 backdrop-blur-xl shadow-sm border border-slate-100/50"
+            style={{ background: 'rgba(255,255,255,0.7)', fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
+          >
+            <div className="flex items-center justify-between">
+              {/* Left: Total Value and Distinct Count */}
+              <div className="flex flex-col gap-3">
+                <div>
+                  <p className="text-xs text-slate-500 mb-0.5">Total Portfolio Value</p>
+                  <p className="text-2xl font-bold text-slate-900">{formatCurrency(totalValue)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 mb-0.5">Total Holdings</p>
+                  <p className="text-xl font-bold text-slate-900">{totalDistinct} <span className="text-sm font-normal text-slate-500">assets</span></p>
+                </div>
+              </div>
+              
+              {/* Right: Pie Chart */}
+              <div className="relative h-28 w-28">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={28}
+                      outerRadius={48}
+                      paddingAngle={2}
+                      dataKey="value"
+                      stroke="none"
+                    >
+                      {pieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+                {/* Center label */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="text-center">
+                    <p className="text-[10px] text-slate-500">Weight</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Holdings List */}
           <div 
             className="space-y-3"
             style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
           >
-            {[
-              { id: 1, name: "Apple Inc.", ticker: "AAPL", logo: "https://logo.clearbit.com/apple.com", currentValue: 12450.80, change: 8.4 },
-              { id: 2, name: "Tesla Inc.", ticker: "TSLA", logo: "https://logo.clearbit.com/tesla.com", currentValue: 8920.50, change: -2.1 },
-              { id: 3, name: "Microsoft Corp.", ticker: "MSFT", logo: "https://logo.clearbit.com/microsoft.com", currentValue: 6780.25, change: 5.7 },
-              { id: 4, name: "Amazon.com Inc.", ticker: "AMZN", logo: "https://logo.clearbit.com/amazon.com", currentValue: 4350.90, change: 3.2 },
-              { id: 5, name: "Alphabet Inc.", ticker: "GOOGL", logo: "https://logo.clearbit.com/google.com", currentValue: 3200.15, change: -0.8 },
-              { id: 6, name: "NVIDIA Corp.", ticker: "NVDA", logo: "https://logo.clearbit.com/nvidia.com", currentValue: 5680.40, change: 12.5 },
-            ].map((stock) => (
+            {holdingsData.map((stock) => (
               <div 
                 key={stock.id}
                 className="rounded-2xl bg-white/70 backdrop-blur-xl p-4 shadow-sm border border-slate-100/50"
@@ -994,7 +1049,8 @@ const NewPortfolioPage = () => {
             ))}
           </div>
         </div>
-      )}
+        );
+      })()}
 
     </div>
   );
