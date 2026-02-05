@@ -59,10 +59,10 @@ const NewPortfolioPage = () => {
         };
       }).sort((a, b) => b.weight - a.weight).slice(0, 5)
     : [
-        { symbol: "NED.JO", name: "Nedbank Group", weight: 13.9, logo: null },
-        { symbol: "SUI.JO", name: "Sun International", weight: 16.8, logo: null },
-        { symbol: "EXP.JO", name: "Exemplar REITail Ltd.", weight: 19.0, logo: null },
-        { symbol: "SBK.JO", name: "Standard Bank Group", weight: 12.5, logo: null },
+        { symbol: "NED.JO", name: "Nedbank Group", weight: 13.9, logo: "/logos/nedbank.jpg" },
+        { symbol: "SUI.JO", name: "Sun International", weight: 16.8, logo: "/logos/sun-international.jpg" },
+        { symbol: "EXP.JO", name: "Exemplar REITail Ltd.", weight: 19.0, logo: "/logos/exemplar-reit.jpg" },
+        { symbol: "SBK.JO", name: "Standard Bank Group", weight: 12.5, logo: "/logos/standard-bank.jpg" },
       ];
 
   const getChartData = () => {
