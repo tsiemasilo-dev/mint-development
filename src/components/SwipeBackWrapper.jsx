@@ -1,18 +1,47 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
+import { Capacitor } from '@capacitor/core';
 
-const SwipeBackWrapper = ({ children, onBack, enabled = true }) => {
+let Haptics = null;
+if (Capacitor.isNativePlatform()) {
+  import('@capacitor/haptics').then(module => {
+    Haptics = module.Haptics;
+  }).catch(() => {});
+}
+
+const triggerHaptic = async () => {
+  if (Haptics && Capacitor.isNativePlatform()) {
+    try {
+      await Haptics.impact({ style: 'medium' });
+    } catch {}
+  }
+};
+
+const SwipeBackWrapper = ({ 
+  children, 
+  onBack, 
+  enabled = true,
+  previousPage = null 
+}) => {
   const containerRef = useRef(null);
   const [swipeProgress, setSwipeProgress] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [animationType, setAnimationType] = useState(null);
   
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
+  const touchStartTime = useRef(0);
+  const lastTouchX = useRef(0);
+  const lastTouchTime = useRef(0);
   const isSwiping = useRef(false);
   const startedFromEdge = useRef(false);
+  const hasPassedThreshold = useRef(false);
+  const velocityRef = useRef(0);
 
   const edgeThreshold = 25;
-  const minSwipeDistance = 100;
+  const screenWidth = typeof window !== 'undefined' ? window.innerWidth : 375;
   const maxVerticalDistance = 80;
+  const velocityThreshold = 0.5;
+  const progressThreshold = 0.5;
 
   const handleTouchStart = useCallback((e) => {
     if (!enabled || isAnimating) return;
@@ -20,6 +49,11 @@ const SwipeBackWrapper = ({ children, onBack, enabled = true }) => {
     const touch = e.touches[0];
     touchStartX.current = touch.clientX;
     touchStartY.current = touch.clientY;
+    touchStartTime.current = Date.now();
+    lastTouchX.current = touch.clientX;
+    lastTouchTime.current = Date.now();
+    velocityRef.current = 0;
+    hasPassedThreshold.current = false;
     
     startedFromEdge.current = touch.clientX <= edgeThreshold;
     isSwiping.current = startedFromEdge.current;
@@ -43,11 +77,29 @@ const SwipeBackWrapper = ({ children, onBack, enabled = true }) => {
       return;
     }
     
-    if (deltaX > 0) {
-      const progress = Math.min(deltaX / minSwipeDistance, 1);
-      setSwipeProgress(progress);
+    const currentTime = Date.now();
+    const timeDelta = currentTime - lastTouchTime.current;
+    if (timeDelta > 0) {
+      const positionDelta = touch.clientX - lastTouchX.current;
+      velocityRef.current = positionDelta / timeDelta;
     }
-  }, [enabled, isAnimating]);
+    
+    lastTouchX.current = touch.clientX;
+    lastTouchTime.current = currentTime;
+    
+    if (deltaX > 0) {
+      const progress = Math.min(deltaX / screenWidth, 1);
+      setSwipeProgress(progress);
+      
+      if (progress >= progressThreshold && !hasPassedThreshold.current) {
+        hasPassedThreshold.current = true;
+        triggerHaptic();
+      } else if (progress < progressThreshold && hasPassedThreshold.current) {
+        hasPassedThreshold.current = false;
+        triggerHaptic();
+      }
+    }
+  }, [enabled, isAnimating, screenWidth]);
 
   const handleTouchEnd = useCallback(() => {
     if (!enabled || !startedFromEdge.current || isAnimating) {
@@ -55,21 +107,36 @@ const SwipeBackWrapper = ({ children, onBack, enabled = true }) => {
       return;
     }
     
-    if (swipeProgress >= 0.5 && onBack) {
+    const shouldNavigateBack = 
+      swipeProgress >= progressThreshold || 
+      (velocityRef.current > velocityThreshold && swipeProgress > 0.1);
+    
+    if (shouldNavigateBack && onBack) {
       setIsAnimating(true);
+      setAnimationType('complete');
       setSwipeProgress(1);
       
       setTimeout(() => {
         onBack();
         setSwipeProgress(0);
         setIsAnimating(false);
-      }, 200);
+        setAnimationType(null);
+      }, 350);
     } else {
+      setIsAnimating(true);
+      setAnimationType('snapback');
       setSwipeProgress(0);
+      
+      setTimeout(() => {
+        setIsAnimating(false);
+        setAnimationType(null);
+      }, 400);
     }
     
     isSwiping.current = false;
     startedFromEdge.current = false;
+    velocityRef.current = 0;
+    hasPassedThreshold.current = false;
   }, [enabled, swipeProgress, onBack, isAnimating]);
 
   useEffect(() => {
@@ -87,48 +154,65 @@ const SwipeBackWrapper = ({ children, onBack, enabled = true }) => {
     };
   }, [handleTouchStart, handleTouchMove, handleTouchEnd]);
 
-  const translateX = swipeProgress * 100;
-  const opacity = 1 - (swipeProgress * 0.3);
+  const translateX = swipeProgress * screenWidth;
+  const previousScale = 0.95 + (swipeProgress * 0.05);
+  const previousOpacity = 0.6 + (swipeProgress * 0.4);
+  const shadowOpacity = swipeProgress * 0.3;
+
+  const getTransition = () => {
+    if (!isAnimating) return 'none';
+    if (animationType === 'complete') {
+      return 'transform 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.1)';
+    }
+    return 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+  };
+
+  const showPreviousPage = (swipeProgress > 0 || isAnimating) && previousPage;
 
   return (
     <div 
       ref={containerRef}
-      className="swipe-back-container relative w-full h-full"
-      style={{
-        transform: swipeProgress > 0 ? `translateX(${translateX}px)` : 'none',
-        opacity: opacity,
-        transition: isAnimating ? 'transform 0.2s ease-out, opacity 0.2s ease-out' : 'none',
-      }}
+      className="swipe-back-container relative w-full h-full overflow-hidden"
+      style={{ position: 'relative' }}
     >
-      {swipeProgress > 0 && (
-        <div 
-          className="fixed left-0 top-0 bottom-0 w-1 pointer-events-none z-50"
+      {showPreviousPage && (
+        <div
+          className="absolute inset-0 w-full h-full"
           style={{
-            background: `linear-gradient(to right, rgba(0,0,0,${swipeProgress * 0.15}), transparent)`,
-            width: `${swipeProgress * 20}px`,
+            transform: `scale(${previousScale})`,
+            opacity: previousOpacity,
+            transition: isAnimating ? getTransition() : 'none',
+            zIndex: 1,
+            transformOrigin: 'center center',
           }}
-        />
-      )}
-      
-      {swipeProgress > 0.2 && (
-        <div 
-          className="fixed left-2 top-1/2 -translate-y-1/2 pointer-events-none z-50 transition-opacity"
-          style={{ opacity: Math.min((swipeProgress - 0.2) * 2, 1) }}
         >
-          <div className="w-8 h-8 rounded-full bg-slate-200/80 flex items-center justify-center">
-            <svg 
-              className="w-4 h-4 text-slate-600" 
-              fill="none" 
-              viewBox="0 0 24 24" 
-              stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </div>
+          {previousPage}
         </div>
       )}
       
-      {children}
+      <div
+        className="relative w-full h-full"
+        style={{
+          transform: swipeProgress > 0 || isAnimating ? `translateX(${translateX}px)` : 'none',
+          transition: getTransition(),
+          zIndex: 2,
+          backgroundColor: 'inherit',
+        }}
+      >
+        {(swipeProgress > 0 || isAnimating) && (
+          <div 
+            className="absolute left-0 top-0 bottom-0 pointer-events-none"
+            style={{
+              width: '20px',
+              transform: 'translateX(-100%)',
+              background: `linear-gradient(to left, rgba(0,0,0,${shadowOpacity}), transparent)`,
+              transition: isAnimating ? getTransition() : 'none',
+            }}
+          />
+        )}
+        
+        {children}
+      </div>
     </div>
   );
 };

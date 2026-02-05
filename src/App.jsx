@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { supabase } from "./lib/supabase.js";
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
@@ -70,6 +70,7 @@ const mainTabs = ['home', 'credit', 'transact', 'investments', 'more', 'welcome'
 
 const App = () => {
   const [currentPage, setCurrentPage] = useState(hasError ? "linkExpired" : (isRecoveryMode ? "auth" : "welcome"));
+  const [previousPageName, setPreviousPageName] = useState(null);
   const [authStep, setAuthStep] = useState(isRecoveryMode ? "newPassword" : "email");
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [sessionReady, setSessionReady] = useState(false);
@@ -84,30 +85,50 @@ const App = () => {
   const { refetch: refetchNotifications } = useNotificationsContext();
   
   const navigationHistory = useRef([]);
+  const pageStateCache = useRef({});
   
+  const cacheCurrentPageState = useCallback(() => {
+    pageStateCache.current[currentPage] = {
+      selectedSecurity,
+      selectedStrategy,
+      selectedArticleId,
+      investmentAmount,
+      stockCheckout,
+      notificationReturnPage,
+    };
+  }, [currentPage, selectedSecurity, selectedStrategy, selectedArticleId, investmentAmount, stockCheckout, notificationReturnPage]);
+
   const navigateTo = useCallback((page) => {
     if (page === currentPage) return;
     
     if (!mainTabs.includes(page)) {
+      cacheCurrentPageState();
       navigationHistory.current.push(currentPage);
       if (navigationHistory.current.length > 20) {
         navigationHistory.current = navigationHistory.current.slice(-20);
       }
+      setPreviousPageName(currentPage);
     } else {
       navigationHistory.current = [];
+      setPreviousPageName(null);
     }
     
     setCurrentPage(page);
-  }, [currentPage]);
+  }, [currentPage, cacheCurrentPageState]);
 
   const goBack = useCallback(() => {
     if (navigationHistory.current.length > 0) {
-      const previousPage = navigationHistory.current.pop();
-      setCurrentPage(previousPage);
+      const prevPage = navigationHistory.current.pop();
+      const newPreviousPage = navigationHistory.current.length > 0 
+        ? navigationHistory.current[navigationHistory.current.length - 1] 
+        : null;
+      setPreviousPageName(newPreviousPage);
+      setCurrentPage(prevPage);
       return true;
     }
     
     if (!mainTabs.includes(currentPage)) {
+      setPreviousPageName(null);
       setCurrentPage('home');
       return true;
     }
@@ -123,19 +144,13 @@ const App = () => {
     }
 
     const handleBackButton = ({ canGoBack }) => {
-      console.log('🔙 Global back button pressed');
-      console.log('📍 Current page:', currentPage);
-      console.log('📚 Navigation history:', [...navigationHistory.current]);
-      console.log('🔓 Can swipe back:', canSwipeBack);
-
       if (canSwipeBack && navigationHistory.current.length > 0) {
-        const previousPage = navigationHistory.current.pop();
-        console.log('✅ Going back to:', previousPage);
-        setCurrentPage(previousPage);
-      } else if (canSwipeBack) {
-        console.log('⚠️ No history, staying on page');
-      } else {
-        console.log('📱 On main tab, doing nothing');
+        const prevPage = navigationHistory.current.pop();
+        const newPreviousPage = navigationHistory.current.length > 0 
+          ? navigationHistory.current[navigationHistory.current.length - 1] 
+          : null;
+        setPreviousPageName(newPreviousPage);
+        setCurrentPage(prevPage);
       }
     };
 
@@ -144,7 +159,7 @@ const App = () => {
     return () => {
       listener.then(l => l.remove());
     };
-  }, [currentPage, canSwipeBack, goBack]);
+  }, [currentPage, canSwipeBack]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -220,25 +235,6 @@ const App = () => {
     setCurrentPage("auth");
   };
 
-  if (currentPage === "linkExpired") {
-    return (
-      <div className="min-h-screen bg-white flex items-center justify-center px-6">
-        <div className="text-center max-w-md">
-          <h1 className="text-2xl font-semibold text-slate-900 mb-3">Link Expired</h1>
-          <p className="text-slate-600 mb-6">
-            This password reset link has expired or is no longer valid. Please request a new one.
-          </p>
-          <button
-            onClick={() => openAuthFlow("forgotPassword")}
-            className="inline-flex items-center justify-center rounded-full bg-slate-900 px-6 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5"
-          >
-            Request New Link
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   const openModal = (title, message) => {
     setModal({ title, message });
   };
@@ -280,6 +276,334 @@ const App = () => {
   const handleShowComingSoon = (label) => {
     openModal(label, "Coming soon.");
   };
+
+  const renderPageContent = useCallback((pageName, isPreview = false) => {
+    const cachedState = pageStateCache.current[pageName] || {};
+    const previewSecurity = isPreview ? (cachedState.selectedSecurity || selectedSecurity) : selectedSecurity;
+    const previewStrategy = isPreview ? (cachedState.selectedStrategy || selectedStrategy) : selectedStrategy;
+    const previewArticleId = isPreview ? (cachedState.selectedArticleId || selectedArticleId) : selectedArticleId;
+    
+    const noOp = () => {};
+
+    switch (pageName) {
+      case 'home':
+        return (
+          <AppLayout
+            activeTab="home"
+            onTabChange={noOp}
+            onWithdraw={noOp}
+            onShowComingSoon={noOp}
+            modal={null}
+            onCloseModal={noOp}
+          >
+            <HomePage
+              onOpenNotifications={noOp}
+              onOpenMintBalance={noOp}
+              onOpenActivity={noOp}
+              onOpenActions={noOp}
+              onOpenInvestments={noOp}
+              onOpenCredit={noOp}
+              onOpenCreditApply={noOp}
+              onOpenCreditRepay={noOp}
+              onOpenInvest={noOp}
+              onOpenWithdraw={noOp}
+              onOpenSettings={noOp}
+            />
+          </AppLayout>
+        );
+      case 'credit':
+        return (
+          <AppLayout
+            activeTab="credit"
+            onTabChange={noOp}
+            onWithdraw={noOp}
+            onShowComingSoon={noOp}
+            modal={null}
+            onCloseModal={noOp}
+          >
+            <CreditPage
+              onOpenNotifications={noOp}
+              onOpenCreditApply={noOp}
+            />
+          </AppLayout>
+        );
+      case 'investments':
+        return (
+          <AppLayout
+            activeTab="investments"
+            onTabChange={noOp}
+            onWithdraw={noOp}
+            onShowComingSoon={noOp}
+            modal={null}
+            onCloseModal={noOp}
+          >
+            <InvestmentsPage
+              onOpenNotifications={noOp}
+              onOpenInvest={noOp}
+            />
+          </AppLayout>
+        );
+      case 'more':
+        return (
+          <AppLayout
+            activeTab="more"
+            onTabChange={noOp}
+            onWithdraw={noOp}
+            onShowComingSoon={noOp}
+            modal={null}
+            onCloseModal={noOp}
+          >
+            <MorePage onNavigate={noOp} />
+          </AppLayout>
+        );
+      case 'markets':
+        return (
+          <MarketsPage
+            onBack={noOp}
+            onOpenNotifications={noOp}
+            onOpenStockDetail={noOp}
+            onOpenNewsArticle={noOp}
+            onOpenFactsheet={noOp}
+          />
+        );
+      case 'stockDetail':
+        return (
+          <StockDetailPage
+            security={previewSecurity}
+            onBack={noOp}
+            onOpenBuy={noOp}
+          />
+        );
+      case 'stockBuy':
+        return (
+          <StockBuyPage
+            security={previewSecurity}
+            onBack={noOp}
+            onContinue={noOp}
+          />
+        );
+      case 'factsheet':
+        return (
+          <FactsheetPage 
+            onBack={noOp} 
+            strategy={previewStrategy}
+            onOpenInvest={noOp}
+          />
+        );
+      case 'investAmount':
+        return (
+          <InvestAmountPage
+            onBack={noOp}
+            strategy={previewStrategy}
+            onContinue={noOp}
+          />
+        );
+      case 'notifications':
+        return (
+          <NotificationsPage
+            onBack={noOp}
+            onOpenSettings={noOp}
+          />
+        );
+      case 'notificationSettings':
+        return <NotificationSettingsPage onBack={noOp} />;
+      case 'settings':
+        return (
+          <AppLayout
+            activeTab="more"
+            onTabChange={noOp}
+            onWithdraw={noOp}
+            onShowComingSoon={noOp}
+            modal={null}
+            onCloseModal={noOp}
+          >
+            <SettingsPage onNavigate={noOp} onBack={noOp} />
+          </AppLayout>
+        );
+      case 'mintBalance':
+        return (
+          <AppLayout
+            activeTab="home"
+            onTabChange={noOp}
+            onWithdraw={noOp}
+            onShowComingSoon={noOp}
+            modal={null}
+            onCloseModal={noOp}
+          >
+            <MintBalancePage
+              onBack={noOp}
+              onOpenInvestments={noOp}
+              onOpenCredit={noOp}
+              onOpenActivity={noOp}
+              onOpenSettings={noOp}
+              onOpenInvest={noOp}
+              onOpenCreditApply={noOp}
+            />
+          </AppLayout>
+        );
+      case 'activity':
+        return (
+          <AppLayout
+            activeTab="home"
+            onTabChange={noOp}
+            onWithdraw={noOp}
+            onShowComingSoon={noOp}
+            modal={null}
+            onCloseModal={noOp}
+          >
+            <ActivityPage onBack={noOp} />
+          </AppLayout>
+        );
+      case 'actions':
+        return (
+          <ActionsPage
+            onBack={noOp}
+            onNavigate={noOp}
+          />
+        );
+      case 'editProfile':
+        return <EditProfilePage onNavigate={noOp} onBack={noOp} />;
+      case 'profileDetails':
+        return <ProfileDetailsPage onNavigate={noOp} onBack={noOp} />;
+      case 'creditApply':
+        return <CreditApplyPage onBack={noOp} />;
+      case 'creditRepay':
+        return <CreditRepayPage onBack={noOp} />;
+      case 'identityCheck':
+        return <IdentityCheckPage onBack={noOp} onComplete={noOp} />;
+      case 'bankLink':
+        return <BankLinkPage onBack={noOp} onComplete={noOp} />;
+      case 'invite':
+        return <InvitePage onBack={noOp} />;
+      case 'newsArticle':
+        return <NewsArticlePage articleId={previewArticleId} onBack={noOp} />;
+      case 'openStrategies':
+        return <OpenStrategiesPage onBack={noOp} onOpenFactsheet={noOp} />;
+      case 'changePassword':
+        return <ChangePasswordPage onNavigate={noOp} onBack={noOp} />;
+      case 'legal':
+        return <LegalDocumentationPage onNavigate={noOp} onBack={noOp} />;
+      case 'invest':
+        return (
+          <AppLayout
+            activeTab="home"
+            onTabChange={noOp}
+            onWithdraw={noOp}
+            onShowComingSoon={noOp}
+            modal={null}
+            onCloseModal={noOp}
+          >
+            <InvestPage
+              onBack={noOp}
+              onOpenOpenStrategies={noOp}
+              onOpenMarkets={noOp}
+            />
+          </AppLayout>
+        );
+      case 'biometricsDebug':
+        return (
+          <AppLayout
+            activeTab="more"
+            onTabChange={noOp}
+            onWithdraw={noOp}
+            onShowComingSoon={noOp}
+            modal={null}
+            onCloseModal={noOp}
+          >
+            <BiometricsDebugPage onNavigate={noOp} onBack={noOp} />
+          </AppLayout>
+        );
+      case 'transact':
+        return (
+          <AppLayout
+            activeTab="transact"
+            onTabChange={noOp}
+            onWithdraw={noOp}
+            onShowComingSoon={noOp}
+            modal={null}
+            onCloseModal={noOp}
+          >
+            <TransactPage />
+          </AppLayout>
+        );
+      case 'creditScore':
+        return (
+          <AppLayout
+            activeTab="credit"
+            onTabChange={noOp}
+            onWithdraw={noOp}
+            onShowComingSoon={noOp}
+            modal={null}
+            onCloseModal={noOp}
+          >
+            <CreditPage
+              initialView="score"
+              onOpenNotifications={noOp}
+              onOpenCreditApply={noOp}
+            />
+          </AppLayout>
+        );
+      case 'stockPayment': {
+        const previewStockCheckout = isPreview ? (cachedState.stockCheckout || stockCheckout) : stockCheckout;
+        const currency = previewStockCheckout.security?.currency || "R";
+        const normalizedCurrency = currency.toUpperCase() === "ZAC" ? "R" : currency;
+        const paymentItem = previewStockCheckout.security
+          ? { ...previewStockCheckout.security, name: previewStockCheckout.security?.name || previewStockCheckout.security?.symbol || "Stock", currency: normalizedCurrency }
+          : null;
+        return (
+          <PaymentPage
+            onBack={noOp}
+            strategy={paymentItem}
+            amount={previewStockCheckout.amount}
+            onSuccess={noOp}
+            onCancel={noOp}
+          />
+        );
+      }
+      case 'payment': {
+        const previewAmount = isPreview ? (cachedState.investmentAmount || investmentAmount) : investmentAmount;
+        return (
+          <PaymentPage
+            onBack={noOp}
+            strategy={previewStrategy}
+            amount={previewAmount}
+            onSuccess={noOp}
+            onCancel={noOp}
+          />
+        );
+      }
+      case 'paymentSuccess':
+        return <PaymentSuccessPage onDone={noOp} />;
+      case 'userOnboarding':
+        return <UserOnboardingPage onComplete={noOp} />;
+      default:
+        return null;
+    }
+  }, [selectedSecurity, selectedStrategy, selectedArticleId, stockCheckout, investmentAmount]);
+
+  const previousPageComponent = useMemo(() => {
+    if (!previousPageName || mainTabs.includes(currentPage)) return null;
+    return renderPageContent(previousPageName, true);
+  }, [previousPageName, currentPage, renderPageContent]);
+
+  if (currentPage === "linkExpired") {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center px-6">
+        <div className="text-center max-w-md">
+          <h1 className="text-2xl font-semibold text-slate-900 mb-3">Link Expired</h1>
+          <p className="text-slate-600 mb-6">
+            This password reset link has expired or is no longer valid. Please request a new one.
+          </p>
+          <button
+            onClick={() => openAuthFlow("forgotPassword")}
+            className="inline-flex items-center justify-center rounded-full bg-slate-900 px-6 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5"
+          >
+            Request New Link
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (currentPage === "home") {
     return (
@@ -345,9 +669,9 @@ const App = () => {
           initialView="score"
           onOpenNotifications={() => {
             setNotificationReturnPage("credit");
-            setCurrentPage("notifications");
+            navigateTo("notifications");
           }}
-          onOpenCreditApply={() => setCurrentPage("creditApply")}
+          onOpenCreditApply={() => navigateTo("creditApply")}
         />
       </AppLayout>
     );
@@ -381,9 +705,9 @@ const App = () => {
         <InvestmentsPage
           onOpenNotifications={() => {
             setNotificationReturnPage("investments");
-            setCurrentPage("notifications");
+            navigateTo("notifications");
           }}
-          onOpenInvest={() => setCurrentPage("markets")}
+          onOpenInvest={() => navigateTo("markets")}
         />
       </AppLayout>
     );
@@ -391,7 +715,7 @@ const App = () => {
 
   if (currentPage === "invest") {
     return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <AppLayout
           activeTab="home"
           onTabChange={setCurrentPage}
@@ -412,7 +736,7 @@ const App = () => {
 
   if (currentPage === "markets") {
     return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <MarketsPage
           onBack={goBack}
           onOpenNotifications={() => {
@@ -438,7 +762,7 @@ const App = () => {
 
   if (currentPage === "stockDetail") {
     return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <StockDetailPage
           security={selectedSecurity}
           onBack={goBack}
@@ -450,7 +774,7 @@ const App = () => {
 
   if (currentPage === "stockBuy") {
     return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <StockBuyPage
           security={selectedSecurity}
           onBack={goBack}
@@ -470,7 +794,7 @@ const App = () => {
       ? { ...stockCheckout.security, name: stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock", currency: normalizedCurrency }
       : null;
     return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <PaymentPage
           onBack={goBack}
           strategy={paymentItem}
@@ -478,6 +802,7 @@ const App = () => {
           onSuccess={(response) => {
             console.log("Payment successful:", response);
             navigationHistory.current = [];
+            setPreviousPageName(null);
             setCurrentPage("paymentSuccess");
           }}
           onCancel={goBack}
@@ -488,7 +813,7 @@ const App = () => {
 
   if (currentPage === "newsArticle") {
     return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <NewsArticlePage
           articleId={selectedArticleId}
           onBack={goBack}
@@ -499,7 +824,7 @@ const App = () => {
 
   if (currentPage === "openStrategies") {
     return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <OpenStrategiesPage
           onBack={goBack}
           onOpenFactsheet={(strategy) => {
@@ -513,7 +838,7 @@ const App = () => {
 
   if (currentPage === "factsheet") {
     return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <FactsheetPage 
           onBack={goBack} 
           strategy={selectedStrategy}
@@ -528,7 +853,7 @@ const App = () => {
 
   if (currentPage === "investAmount") {
     return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <InvestAmountPage
           onBack={goBack}
           strategy={selectedStrategy}
@@ -543,7 +868,7 @@ const App = () => {
 
   if (currentPage === "payment") {
     return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <PaymentPage
           onBack={goBack}
           strategy={selectedStrategy}
@@ -551,6 +876,7 @@ const App = () => {
           onSuccess={(response) => {
             console.log("Payment successful:", response);
             navigationHistory.current = [];
+            setPreviousPageName(null);
             setCurrentPage("paymentSuccess");
           }}
           onCancel={goBack}
@@ -580,7 +906,7 @@ const App = () => {
 
   if (currentPage === "settings") {
     return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <AppLayout
           activeTab="more"
           onTabChange={setCurrentPage}
@@ -597,7 +923,7 @@ const App = () => {
 
   if (currentPage === "biometricsDebug") {
     return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <AppLayout
           activeTab="more"
           onTabChange={setCurrentPage}
@@ -614,7 +940,7 @@ const App = () => {
 
   if (currentPage === "editProfile") {
     return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <EditProfilePage onNavigate={navigateTo} onBack={goBack} />
       </SwipeBackWrapper>
     );
@@ -622,7 +948,7 @@ const App = () => {
 
   if (currentPage === "profileDetails") {
     return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <ProfileDetailsPage onNavigate={navigateTo} onBack={goBack} />
       </SwipeBackWrapper>
     );
@@ -630,7 +956,7 @@ const App = () => {
 
   if (currentPage === "notifications") {
     return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <NotificationsPage
           onBack={goBack}
           onOpenSettings={() => navigateTo("notificationSettings")}
@@ -641,7 +967,7 @@ const App = () => {
 
   if (currentPage === "notificationSettings") {
     return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <NotificationSettingsPage onBack={goBack} />
       </SwipeBackWrapper>
     );
@@ -649,7 +975,7 @@ const App = () => {
 
   if (currentPage === "mintBalance") {
     return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <AppLayout
           activeTab="home"
           onTabChange={setCurrentPage}
@@ -674,7 +1000,7 @@ const App = () => {
 
   if (currentPage === "activity") {
     return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <AppLayout
           activeTab="home"
           onTabChange={setCurrentPage}
@@ -691,7 +1017,7 @@ const App = () => {
 
   if (currentPage === "actions") {
     return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <ActionsPage
           onBack={goBack}
           onNavigate={navigateTo}
@@ -702,10 +1028,10 @@ const App = () => {
 
   if (currentPage === "identityCheck") {
     return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <IdentityCheckPage 
           onBack={goBack} 
-          onComplete={() => setCurrentPage("actions")}
+          onComplete={() => navigateTo("actions")}
         />
       </SwipeBackWrapper>
     );
@@ -713,7 +1039,7 @@ const App = () => {
 
   if (currentPage === "bankLink") {
     return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <BankLinkPage
           onBack={goBack}
           onComplete={() => setCurrentPage("home")}
@@ -724,7 +1050,7 @@ const App = () => {
 
   if (currentPage === "invite") {
     return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <InvitePage onBack={goBack} />
       </SwipeBackWrapper>
     );
@@ -732,7 +1058,7 @@ const App = () => {
 
   if (currentPage === "creditApply") {
     return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <CreditApplyPage onBack={goBack} />
       </SwipeBackWrapper>
     );
@@ -740,7 +1066,7 @@ const App = () => {
 
   if (currentPage === "creditRepay") {
     return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <CreditRepayPage onBack={goBack} />
       </SwipeBackWrapper>
     );
@@ -748,7 +1074,7 @@ const App = () => {
 
   if (currentPage === "changePassword") {
     return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <ChangePasswordPage onNavigate={navigateTo} onBack={goBack} />
       </SwipeBackWrapper>
     );
@@ -756,7 +1082,7 @@ const App = () => {
 
   if (currentPage === "legal") {
     return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack}>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <LegalDocumentationPage onNavigate={navigateTo} onBack={goBack} />
       </SwipeBackWrapper>
     );
