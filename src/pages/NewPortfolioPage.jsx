@@ -974,7 +974,7 @@ const NewPortfolioPage = () => {
               </div>
               
               {/* Right: Pie Chart */}
-              <div className="relative h-44 w-44">
+              <div className="relative h-44 w-44 -mr-2 md:mr-0">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <defs>
@@ -1003,9 +1003,13 @@ const NewPortfolioPage = () => {
                         <Cell 
                           key={`cell-${index}`} 
                           fill={entry.color}
-                          opacity={activePieIndex >= 0 && activePieIndex !== index ? 0.5 : 1}
+                          opacity={activePieIndex >= 0 && activePieIndex !== index ? 0.4 : 1}
                           style={{ 
-                            transform: activePieIndex === index ? 'scale(1.08)' : 'scale(1)',
+                            transform: activePieIndex === index 
+                              ? 'scale(1.12)' 
+                              : activePieIndex >= 0 
+                                ? 'scale(0.92)' 
+                                : 'scale(1)',
                             transformOrigin: 'center',
                             transition: 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease',
                             cursor: 'pointer',
