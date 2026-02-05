@@ -492,7 +492,7 @@ const NewPortfolioPage = () => {
 
           <div className="mb-3 px-1">
             <p className="text-3xl font-bold text-slate-900">${selectedStrategy.currentValue.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-emerald-500">
               ({selectedStrategy.previousMonthChange}% Previous Month)
             </p>
           </div>
