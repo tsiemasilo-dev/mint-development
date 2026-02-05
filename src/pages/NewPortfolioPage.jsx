@@ -73,11 +73,11 @@ const NewPortfolioPage = () => {
     <div className="min-h-screen pb-[env(safe-area-inset-bottom)] text-white relative overflow-hidden">
       {/* Multi-layer gradient background */}
       <div className="fixed inset-0 -z-10">
-        {/* Base gradient: deep purple ends at pill buttons, indigo starts at chart, lavender in middle */}
+        {/* Base gradient: deep purple ends at pill buttons, white/lavender starts at pill buttons */}
         <div 
           className="absolute inset-0"
           style={{ 
-            background: 'linear-gradient(180deg, #0d0d12 0%, #0f0a18 4%, #120c1f 8%, #1a1035 14%, #251548 20%, #2d1860 24%, #3b2066 28%, #5b3490 34%, #7c5aad 40%, #a88bc7 46%, #c9b5dc 52%, #ddd0e8 58%, #ebe4f2 64%, #f3eff8 72%, #f8f5fb 80%, #faf8fc 100%)'
+            background: 'linear-gradient(180deg, #0d0d12 0%, #0f0a18 3%, #120c1f 6%, #1a1035 10%, #251548 14%, #2d1860 18%, #3b2066 22%, #5b3490 26%, #7c5aad 30%, #a88bc7 34%, #c9b5dc 38%, #ddd0e8 42%, #ebe4f2 48%, #f3eff8 55%, #f8f5fb 65%, #faf8fc 100%)'
           }} 
         />
         
@@ -94,14 +94,10 @@ const NewPortfolioPage = () => {
         />
         
         
-        {/* Subtle surface reflection/gloss in the middle-lower area */}
+        {/* Subtle surface reflection/gloss starting at pill buttons area */}
         <div 
-          className="absolute top-[42%] left-0 right-0 h-[58%]"
-          style={{ background: 'linear-gradient(180deg, transparent 0%, rgba(237,233,254,0.3) 12%, rgba(248,245,251,0.6) 30%, rgba(250,248,252,0.85) 50%, rgba(252,250,253,0.95) 70%, #fcfafd 100%)' }}
-        />
-        <div 
-          className="absolute top-[48%] left-1/2 -translate-x-1/2 w-[130%] h-[60px] rounded-full"
-          style={{ background: 'radial-gradient(ellipse at center, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.08) 50%, transparent 80%)', filter: 'blur(15px)' }}
+          className="absolute top-[30%] left-0 right-0 h-[70%]"
+          style={{ background: 'linear-gradient(180deg, transparent 0%, rgba(237,233,254,0.2) 8%, rgba(248,245,251,0.5) 20%, rgba(250,248,252,0.8) 35%, rgba(252,250,253,0.95) 55%, #fcfafd 100%)' }}
         />
       </div>
 
