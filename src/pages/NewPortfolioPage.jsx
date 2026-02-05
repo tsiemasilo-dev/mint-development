@@ -73,11 +73,11 @@ const NewPortfolioPage = () => {
     <div className="min-h-screen pb-[env(safe-area-inset-bottom)] text-white relative overflow-hidden">
       {/* Multi-layer gradient background */}
       <div className="fixed inset-0 -z-10">
-        {/* Base gradient: seamless purple to lavender to white transition */}
+        {/* Base gradient: seamless purple to lavender to white transition - white starts at pill buttons */}
         <div 
           className="absolute inset-0"
           style={{ 
-            background: 'linear-gradient(180deg, #0d0d12 0%, #0e0a15 2%, #100b19 4%, #130d1e 6%, #160f24 8%, #1a1130 10%, #1e1439 12%, #231742 14%, #291a4d 16%, #301e58 18%, #382263 20%, #41276e 22%, #4b2d79 24%, #563484 26%, #623b8f 28%, #6f4399 30%, #7c4ba3 32%, #8954ad 34%, #965db6 36%, #a367be 38%, #af72c5 40%, #ba7ecb 42%, #c48ad0 44%, #cd97d5 46%, #d5a4da 48%, #dcb1de 50%, #e2bee2 52%, #e7cae6 54%, #ebd5ea 56%, #efdfed 58%, #f2e7f1 60%, #f5edf4 63%, #f7f2f7 66%, #f9f5f9 70%, #faf7fb 75%, #fbf9fc 82%, #fcfafd 100%)'
+            background: 'linear-gradient(180deg, #0d0d12 0%, #0e0a14 1%, #100b18 2%, #120c1c 3%, #150e22 4%, #181028 5%, #1c122f 6%, #201436 7%, #25173e 8%, #2a1a46 9%, #301d4f 10%, #362158 11%, #3d2561 12%, #44296b 13%, #4c2e75 14%, #54337f 15%, #5d3889 16%, #663e93 17%, #70449d 18%, #7a4aa7 19%, #8451b0 20%, #8e58b9 21%, #9860c1 22%, #a268c8 23%, #ac71ce 24%, #b57ad3 25%, #be84d8 26%, #c68edc 27%, #cd98e0 28%, #d4a2e3 29%, #daace6 30%, #dfb6e9 31%, #e4c0eb 32%, #e8c9ed 33%, #ecd2ef 34%, #efdaf1 35%, #f2e1f3 36%, #f4e7f5 38%, #f6ecf7 40%, #f8f0f9 42%, #f9f3fa 45%, #faf5fb 48%, #fbf7fc 52%, #fcf9fd 58%, #fcfafd 100%)'
           }} 
         />
         
