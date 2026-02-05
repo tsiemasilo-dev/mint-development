@@ -44,6 +44,7 @@ export const useUserStrategies = () => {
             sector,
             icon_url,
             image_url,
+            holdings,
             strategy_metrics (
               as_of_date,
               last_close,
@@ -90,6 +91,7 @@ export const useUserStrategies = () => {
           sector: strategy?.sector || "",
           iconUrl: strategy?.icon_url,
           imageUrl: strategy?.image_url,
+          holdings: strategy?.holdings || [],
           investedAmount: us.invested_amount || 0,
           currentValue: us.current_value || 0,
           unitsHeld: us.units_held || 0,
@@ -130,6 +132,7 @@ export const useUserStrategies = () => {
           sector,
           icon_url,
           image_url,
+          holdings,
           strategy_metrics (
             as_of_date,
             last_close,
@@ -165,6 +168,7 @@ export const useUserStrategies = () => {
           sector: strategy.sector || "",
           iconUrl: strategy.icon_url,
           imageUrl: strategy.image_url,
+          holdings: strategy?.holdings || [],
           investedAmount: 0,
           currentValue: latestMetric?.last_close || 0,
           unitsHeld: 0,

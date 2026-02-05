@@ -525,6 +525,22 @@ const NewPortfolioPage = () => {
     return `R${value.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
+  const myStocks = useMemo(() => {
+    if (!strategies || strategies.length === 0 || !stocksList || stocksList.length === 0) return [];
+    const holdingSymbols = new Set();
+    strategies.forEach(s => {
+      if (Array.isArray(s.holdings)) {
+        s.holdings.forEach(h => {
+          if (h.symbol) holdingSymbols.add(h.symbol);
+        });
+      }
+    });
+    if (holdingSymbols.size === 0) return [];
+    return stocksList.filter(stock => holdingSymbols.has(stock.ticker));
+  }, [strategies, stocksList]);
+
+  const myStockIds = useMemo(() => new Set(myStocks.map(s => s.id)), [myStocks]);
+
   const goal = goals[0];
   const goalProgress = (goal.current / goal.target) * 100;
 
@@ -1093,7 +1109,7 @@ const NewPortfolioPage = () => {
         if (!selectedStock) {
           return <div className="text-center py-10 text-slate-500">Loading stocks...</div>;
         }
-        const otherStocks = stocksList.filter(s => s.id !== selectedStock?.id);
+        const otherStocks = stocksList.filter(s => s.id !== selectedStock?.id && !myStockIds.has(s.id));
         return (
           <>
             <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 md:max-w-md md:px-8">
@@ -1314,6 +1330,54 @@ const NewPortfolioPage = () => {
             </div>
 
             <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
+              {myStocks.length > 0 && (
+                <section
+                  className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50"
+                  style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
+                >
+                  <p className="text-sm font-semibold text-slate-900 mb-4">My Stocks</p>
+                  <div className="space-y-3">
+                    {myStocks.map((stock) => {
+                      const livePrice = liveQuotes[stock.ticker]?.price || stock.price;
+                      const liveChange = liveQuotes[stock.ticker]?.changePercent ?? stock.dailyChange;
+                      const isPositive = liveChange >= 0;
+                      return (
+                        <button
+                          key={stock.id}
+                          onClick={() => setSelectedStock(stock)}
+                          className="w-full flex items-center gap-3 rounded-2xl bg-white/70 backdrop-blur-xl p-3 shadow-sm border border-slate-100/50 transition hover:bg-white/90 text-left"
+                        >
+                          <div className="h-11 w-11 rounded-full bg-white border border-slate-200 shadow-sm overflow-hidden flex-shrink-0">
+                            {failedLogos[stock.ticker] ? (
+                              <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-100 to-purple-100 text-xs font-bold text-violet-700">
+                                {stock.ticker.slice(0, 2)}
+                              </div>
+                            ) : (
+                              <img
+                                src={stock.logo}
+                                alt={stock.name}
+                                className="h-full w-full object-cover"
+                                onError={() => setFailedLogos(prev => ({ ...prev, [stock.ticker]: true }))}
+                              />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-slate-900 truncate">{stock.name}</p>
+                            <p className="text-xs text-slate-500 font-medium">{stock.ticker}</p>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <p className="text-sm font-bold text-slate-900">{formatCurrency(livePrice)}</p>
+                            <p className={`text-xs font-medium ${isPositive ? 'text-emerald-500' : 'text-rose-500'}`}>
+                              {isPositive ? '+' : ''}{liveChange.toFixed(2)}%
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
+
               <section
                 className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50"
                 style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
