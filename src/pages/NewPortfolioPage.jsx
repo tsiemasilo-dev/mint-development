@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { Bell, Eye, EyeOff, ChevronDown, ChevronRight, ArrowLeft, Plus, Minus, Send, MoreHorizontal } from "lucide-react";
+import { Bell, Eye, EyeOff, ChevronDown, ChevronRight, ArrowLeft } from "lucide-react";
 import { Area, ComposedChart, Line, XAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { useFinancialData } from "../lib/useFinancialData";
 
@@ -552,30 +552,10 @@ const NewPortfolioPage = () => {
       <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
         <button 
           onClick={() => setCurrentView("allocations")}
-          className="w-full py-4 rounded-full bg-slate-100 text-sm font-semibold text-slate-800 shadow-sm border border-slate-200 transition hover:bg-slate-200"
+          className="w-full py-3.5 rounded-full bg-gradient-to-r from-slate-800 to-slate-900 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg shadow-slate-900/30 transition hover:-translate-y-0.5 hover:shadow-xl"
         >
-          View All Investment
+          View All Allocations
         </button>
-
-        {/* Bottom Action Buttons */}
-        <div className="flex justify-between px-4 mt-2">
-          {[
-            { icon: Plus, label: "Buy" },
-            { icon: Minus, label: "Sell" },
-            { icon: Send, label: "Send" },
-            { icon: MoreHorizontal, label: "More" },
-          ].map((action) => (
-            <button 
-              key={action.label}
-              className="flex flex-col items-center gap-2 group"
-            >
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-white shadow-lg shadow-slate-900/20 transition group-hover:bg-slate-800 group-hover:-translate-y-0.5">
-                <action.icon className="h-5 w-5" />
-              </div>
-              <span className="text-xs font-medium text-slate-600">{action.label}</span>
-            </button>
-          ))}
-        </div>
 
         <section className="rounded-3xl bg-white/90 backdrop-blur-xl p-5 shadow-xl shadow-purple-900/10 border border-white/50">
           <div className="flex items-center justify-between mb-4">
