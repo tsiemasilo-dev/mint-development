@@ -105,6 +105,8 @@ export const getSecurityBySymbol = async (symbol) => {
       ...security,
       // Convert last_price from cents to Rands by dividing by 100
       currentPrice: security.last_price ? Number(security.last_price) / 100 : null,
+        // change_price is already in cents, keep it as is for flexibility
+        change_price: security.change_price != null ? Number(security.change_price) : null,
       // Use change_percentage directly without division
       changePct: security.change_percentage != null ? Number(security.change_percentage) : null,
     };
@@ -180,7 +182,7 @@ export const getSecurityPrices = async (securityId, timeframe = "1M") => {
 
     let query = supabase
       .from("security_prices")
-      .select("ts, close")
+        .select("ts, close_price")
       .eq("security_id", securityId)
       .order("ts", { ascending: true });
 
@@ -203,7 +205,8 @@ export const getSecurityPrices = async (securityId, timeframe = "1M") => {
 
     const prices = (data || []).map(row => ({
       ts: row.ts,
-      close: Number(row.close),
+        // close_price is in cents, convert to Rands
+        close: row.close_price ? Number(row.close_price) / 100 : null,
     }));
 
     console.log(`✅ Fetched ${prices.length} price points for ${timeframe}`);
