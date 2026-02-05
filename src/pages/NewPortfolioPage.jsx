@@ -174,9 +174,9 @@ const NewPortfolioPage = () => {
 
       {/* Content section */}
       <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
-        <section className="rounded-3xl bg-white/90 backdrop-blur-xl p-5 shadow-xl shadow-purple-900/10 border border-white/50">
-          <div className="flex items-center justify-between mb-4">
-            <button className="flex items-center gap-2 text-slate-700 hover:text-slate-900 transition">
+        <section className="py-2">
+          <div className="flex items-center justify-between mb-4 px-1">
+            <button className="flex items-center gap-2 text-white/90 hover:text-white transition">
               <span className="text-sm font-semibold">{selectedStrategy.name}</span>
               <ChevronDown className="h-4 w-4" />
             </button>
@@ -187,8 +187,8 @@ const NewPortfolioPage = () => {
                   onClick={() => setTimeFilter(filter)}
                   className={`w-8 h-8 rounded-full text-xs font-medium transition-all ${
                     timeFilter === filter
-                      ? "bg-slate-900 text-white shadow-md"
-                      : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                      ? "bg-white/20 text-white shadow-lg shadow-purple-500/20 backdrop-blur-sm"
+                      : "text-white/50 hover:text-white/80 hover:bg-white/10"
                   }`}
                 >
                   {filter}
@@ -197,43 +197,62 @@ const NewPortfolioPage = () => {
             </div>
           </div>
 
-          <div className="mb-4">
-            <p className="text-2xl font-bold text-slate-900">{formatCurrency(selectedStrategy.currentValue)}</p>
-            <p className="text-sm text-emerald-600 font-medium">
+          <div className="mb-4 px-1">
+            <p className="text-2xl font-bold text-white">{formatCurrency(selectedStrategy.currentValue)}</p>
+            <p className="text-sm text-emerald-400 font-medium">
               +{selectedStrategy.previousMonthChange}% Previous Month
             </p>
           </div>
 
-          <div style={{ width: '100%', height: 140 }}>
-            <ResponsiveContainer width="100%" height={140}>
+          <div style={{ width: '100%', height: 160 }}>
+            <ResponsiveContainer width="100%" height={160}>
               <ComposedChart
                 data={currentChartData}
-                margin={{ top: 20, right: 10, left: 10, bottom: 5 }}
+                margin={{ top: 30, right: 10, left: 10, bottom: 5 }}
               >
                 <defs>
-                  <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#7c3aed" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="#7c3aed" stopOpacity={0} />
+                  <linearGradient id="purpleLineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#a78bfa" />
+                    <stop offset="30%" stopColor="#8b5cf6" />
+                    <stop offset="50%" stopColor="#7c3aed" />
+                    <stop offset="70%" stopColor="#8b5cf6" />
+                    <stop offset="100%" stopColor="#a78bfa" />
                   </linearGradient>
-                  <filter id="lineShadow" x="-20%" y="-20%" width="140%" height="140%">
-                    <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#7c3aed" floodOpacity="0.4" />
+                  <filter id="purpleGlow" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur1" />
+                    <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur2" />
+                    <feMerge>
+                      <feMergeNode in="blur2" />
+                      <feMergeNode in="blur1" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
                   </filter>
+                  <radialGradient id="dotGlow" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stopColor="#c4b5fd" />
+                    <stop offset="50%" stopColor="#8b5cf6" />
+                    <stop offset="100%" stopColor="#7c3aed" />
+                  </radialGradient>
                 </defs>
                 
                 <XAxis 
                   dataKey="day" 
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 11, fill: '#94a3b8' }}
-                  tickMargin={8}
+                  tick={{ fontSize: 12, fill: 'rgba(255,255,255,0.7)', fontWeight: 500 }}
+                  tickMargin={12}
                 />
                 
                 <Tooltip
                   content={({ active, payload }) => {
                     if (active && payload && payload.length) {
                       return (
-                        <div className="rounded-lg bg-slate-900 px-3 py-2 text-white shadow-xl">
-                          <div className="text-sm font-semibold text-amber-400">
+                        <div className="rounded-xl px-4 py-2 shadow-2xl border border-purple-400/30"
+                          style={{
+                            background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.9) 0%, rgba(124, 58, 237, 0.95) 100%)',
+                            backdropFilter: 'blur(12px)',
+                          }}
+                        >
+                          <div className="text-sm font-bold text-white">
                             R{payload[0].value.toLocaleString()}
                           </div>
                         </div>
@@ -241,30 +260,23 @@ const NewPortfolioPage = () => {
                     }
                     return null;
                   }}
-                  cursor={{ stroke: '#7c3aed', strokeWidth: 1, strokeDasharray: '4 4' }}
-                />
-
-                <Area
-                  type="monotone"
-                  dataKey="value"
-                  stroke="transparent"
-                  fill="url(#areaGradient)"
-                  strokeWidth={0}
+                  cursor={false}
                 />
 
                 <Line
                   type="monotone"
                   dataKey="value"
-                  stroke="#7c3aed"
+                  stroke="url(#purpleLineGradient)"
                   strokeWidth={3}
                   dot={false}
                   activeDot={{
-                    r: 6,
-                    fill: '#facc15',
-                    stroke: 'white',
-                    strokeWidth: 2,
+                    r: 8,
+                    fill: 'url(#dotGlow)',
+                    stroke: '#c4b5fd',
+                    strokeWidth: 3,
+                    style: { filter: 'drop-shadow(0 0 8px rgba(139, 92, 246, 0.8))' }
                   }}
-                  style={{ filter: 'url(#lineShadow)' }}
+                  style={{ filter: 'url(#purpleGlow)' }}
                 />
               </ComposedChart>
             </ResponsiveContainer>
