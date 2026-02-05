@@ -71,41 +71,46 @@ const NewPortfolioPage = () => {
 
   return (
     <div className="min-h-screen pb-[env(safe-area-inset-bottom)] text-white relative overflow-hidden">
-      {/* Seamless purple gradient background - dark purple to soft lavender */}
+      {/* Multi-layer gradient background */}
       <div className="fixed inset-0 -z-10">
-        {/* Base gradient: continuous dark purple → royal purple → soft lavender */}
+        {/* Base gradient: deep purple ends at pill buttons, indigo starts at chart, lavender in middle */}
         <div 
           className="absolute inset-0"
           style={{ 
-            background: 'linear-gradient(180deg, #0d0a14 0%, #12101c 5%, #1a1230 12%, #251845 20%, #2f1d58 28%, #3d256a 36%, #4c2e7c 44%, #5a378d 52%, #6b429e 60%, #7d4faf 68%, #8f5ebf 76%, #a070cc 84%, #b085d8 92%, #c09de3 100%)'
+            background: 'linear-gradient(180deg, #0d0d12 0%, #0f0a18 4%, #120c1f 8%, #1a1035 14%, #251548 20%, #2d1860 24%, #3b2066 28%, #5b3490 34%, #7c5aad 40%, #a88bc7 46%, #c9b5dc 52%, #ddd0e8 58%, #ebe4f2 64%, #f3eff8 72%, #f8f5fb 80%, #faf8fc 100%)'
           }} 
         />
         
-        {/* Soft purple ambient glow behind chart peak area */}
+        {/* Mid-section indigo/royal purple glow - positioned around chart start */}
         <div 
-          className="absolute top-[52%] left-[55%] w-[280px] h-[320px] -translate-x-1/2 -translate-y-1/2"
-          style={{ 
-            background: 'radial-gradient(ellipse at center, rgba(167,139,250,0.5) 0%, rgba(139,92,246,0.35) 25%, rgba(124,58,237,0.2) 50%, transparent 75%)', 
-            filter: 'blur(50px)' 
-          }}
+          className="absolute top-[22%] left-1/2 -translate-x-1/2 w-[150%] h-[32%] rounded-full blur-3xl"
+          style={{ background: 'radial-gradient(ellipse at center, rgba(91,33,182,0.4) 0%, rgba(76,29,149,0.2) 35%, transparent 65%)' }}
         />
         
-        {/* Secondary purple bloom - wider and softer */}
+        {/* Large radial ambient glow behind account balance */}
         <div 
-          className="absolute top-[48%] left-1/2 w-[400px] h-[280px] -translate-x-1/2 -translate-y-1/2"
-          style={{ 
-            background: 'radial-gradient(ellipse at center, rgba(196,181,253,0.35) 0%, rgba(167,139,250,0.2) 35%, transparent 70%)', 
-            filter: 'blur(60px)' 
-          }}
+          className="absolute top-[6%] left-1/2 -translate-x-1/2 w-[300px] h-[160px] rounded-full"
+          style={{ background: 'radial-gradient(ellipse at center, rgba(91,33,182,0.2) 0%, rgba(76,29,149,0.1) 40%, transparent 70%)', filter: 'blur(40px)' }}
         />
         
-        {/* Vertical light beam effect behind chart peak */}
+        {/* Vertical light beam behind graph peak area */}
         <div 
-          className="absolute top-[40%] left-[55%] w-[80px] h-[200px] -translate-x-1/2"
-          style={{ 
-            background: 'linear-gradient(180deg, transparent 0%, rgba(196,181,253,0.4) 30%, rgba(221,214,254,0.5) 50%, rgba(196,181,253,0.4) 70%, transparent 100%)', 
-            filter: 'blur(30px)' 
-          }}
+          className="absolute top-[28%] left-[58%] w-[100px] h-[250px] -translate-x-1/2"
+          style={{ background: 'linear-gradient(180deg, transparent 0%, rgba(139,92,246,0.25) 25%, rgba(167,139,250,0.4) 50%, rgba(139,92,246,0.25) 75%, transparent 100%)', filter: 'blur(25px)' }}
+        />
+        <div 
+          className="absolute top-[32%] left-[58%] w-[50px] h-[160px] -translate-x-1/2"
+          style={{ background: 'linear-gradient(180deg, transparent 0%, rgba(196,181,253,0.4) 35%, rgba(221,214,254,0.5) 50%, rgba(196,181,253,0.4) 65%, transparent 100%)', filter: 'blur(15px)' }}
+        />
+        
+        {/* Subtle surface reflection/gloss in the middle-lower area */}
+        <div 
+          className="absolute top-[42%] left-0 right-0 h-[58%]"
+          style={{ background: 'linear-gradient(180deg, transparent 0%, rgba(237,233,254,0.3) 12%, rgba(248,245,251,0.6) 30%, rgba(250,248,252,0.85) 50%, rgba(252,250,253,0.95) 70%, #fcfafd 100%)' }}
+        />
+        <div 
+          className="absolute top-[48%] left-1/2 -translate-x-1/2 w-[130%] h-[60px] rounded-full"
+          style={{ background: 'radial-gradient(ellipse at center, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.08) 50%, transparent 80%)', filter: 'blur(15px)' }}
         />
       </div>
 
@@ -278,43 +283,43 @@ const NewPortfolioPage = () => {
           </div>
         </section>
 
-        <button className="w-full py-3.5 rounded-full bg-white/10 backdrop-blur-sm text-sm font-semibold uppercase tracking-[0.1em] text-white border border-white/20 shadow-lg shadow-purple-900/20 transition hover:-translate-y-0.5 hover:bg-white/15 hover:shadow-xl">
+        <button className="w-full py-3.5 rounded-full bg-gradient-to-r from-slate-800 to-slate-900 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg shadow-slate-900/30 transition hover:-translate-y-0.5 hover:shadow-xl">
           View All Allocations
         </button>
 
-        <section className="rounded-3xl bg-white/10 backdrop-blur-md p-5 border border-white/20">
+        <section className="rounded-3xl bg-white/90 backdrop-blur-xl p-5 shadow-xl shadow-purple-900/10 border border-white/50">
           <div className="flex items-center justify-between mb-4">
-            <p className="text-sm font-semibold text-white">Linked Goals</p>
-            <button className="flex items-center gap-1 text-xs font-medium text-purple-200 hover:text-white transition">
+            <p className="text-sm font-semibold text-slate-900">Linked Goals</p>
+            <button className="flex items-center gap-1 text-xs font-medium text-violet-600 hover:text-violet-700 transition">
               View All
               <ChevronRight className="h-3.5 w-3.5" />
             </button>
           </div>
           
-          <div className="rounded-2xl bg-white/10 p-4">
+          <div className="rounded-2xl bg-slate-50 p-4">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-semibold text-white">{goal.name}</p>
-              <p className="text-sm font-semibold text-white/90">
+              <p className="text-sm font-semibold text-slate-900">{goal.name}</p>
+              <p className="text-sm font-semibold text-slate-900">
                 {formatCurrency(goal.current)} / {formatCurrency(goal.target)}
               </p>
             </div>
-            <div className="h-2.5 w-full rounded-full bg-white/20 overflow-hidden">
+            <div className="h-2.5 w-full rounded-full bg-slate-200 overflow-hidden">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-violet-400 to-purple-300 transition-all"
+                className="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-600 transition-all"
                 style={{ width: `${goalProgress}%` }}
               />
             </div>
-            <p className="mt-2 text-xs text-white/60">
+            <p className="mt-2 text-xs text-slate-500">
               {goalProgress.toFixed(0)}% of your goal achieved
             </p>
           </div>
         </section>
 
-        <section className="rounded-3xl bg-white/10 backdrop-blur-md p-5 border border-white/20">
+        <section className="rounded-3xl bg-white/90 backdrop-blur-xl p-5 shadow-xl shadow-purple-900/10 border border-white/50">
           <div className="flex items-center justify-between mb-1">
-            <p className="text-sm font-semibold text-white">Portfolio Holdings</p>
+            <p className="text-sm font-semibold text-slate-900">Portfolio Holdings</p>
           </div>
-          <p className="text-xs text-white/50 mb-4">Top holdings by weight</p>
+          <p className="text-xs text-slate-400 mb-4">Top holdings by weight</p>
           
           <div className="space-y-3">
             {holdings.map((holding) => (
@@ -323,7 +328,7 @@ const NewPortfolioPage = () => {
                 className="flex items-center justify-between"
               >
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 overflow-hidden">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 overflow-hidden">
                     {holding.logo ? (
                       <img 
                         src={holding.logo} 
@@ -336,17 +341,17 @@ const NewPortfolioPage = () => {
                       />
                     ) : null}
                     <span 
-                      className={`text-xs font-bold text-white/70 ${holding.logo ? 'hidden' : 'flex'}`}
+                      className={`text-xs font-bold text-slate-600 ${holding.logo ? 'hidden' : 'flex'}`}
                     >
                       {holding.symbol.slice(0, 3)}
                     </span>
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-white">{holding.symbol}</p>
-                    <p className="text-xs text-white/60">{holding.name}</p>
+                    <p className="text-sm font-semibold text-slate-900">{holding.symbol}</p>
+                    <p className="text-xs text-slate-500">{holding.name}</p>
                   </div>
                 </div>
-                <p className="text-sm font-semibold text-white/90">
+                <p className="text-sm font-semibold text-slate-700">
                   {holding.weight.toFixed(1)}%
                 </p>
               </div>
