@@ -93,15 +93,6 @@ const NewPortfolioPage = () => {
           style={{ background: 'radial-gradient(ellipse at center, rgba(91,33,182,0.2) 0%, rgba(76,29,149,0.1) 40%, transparent 70%)', filter: 'blur(40px)' }}
         />
         
-        {/* Vertical light beam behind graph peak area */}
-        <div 
-          className="absolute top-[28%] left-[58%] w-[100px] h-[250px] -translate-x-1/2"
-          style={{ background: 'linear-gradient(180deg, transparent 0%, rgba(139,92,246,0.25) 25%, rgba(167,139,250,0.4) 50%, rgba(139,92,246,0.25) 75%, transparent 100%)', filter: 'blur(25px)' }}
-        />
-        <div 
-          className="absolute top-[32%] left-[58%] w-[50px] h-[160px] -translate-x-1/2"
-          style={{ background: 'linear-gradient(180deg, transparent 0%, rgba(196,181,253,0.4) 35%, rgba(221,214,254,0.5) 50%, rgba(196,181,253,0.4) 65%, transparent 100%)', filter: 'blur(15px)' }}
-        />
         
         {/* Subtle surface reflection/gloss in the middle-lower area */}
         <div 
@@ -213,25 +204,14 @@ const NewPortfolioPage = () => {
                 <defs>
                   <linearGradient id="purpleLineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
                     <stop offset="0%" stopColor="#a78bfa" />
-                    <stop offset="30%" stopColor="#8b5cf6" />
+                    <stop offset="25%" stopColor="#8b5cf6" />
                     <stop offset="50%" stopColor="#7c3aed" />
-                    <stop offset="70%" stopColor="#8b5cf6" />
+                    <stop offset="75%" stopColor="#8b5cf6" />
                     <stop offset="100%" stopColor="#a78bfa" />
                   </linearGradient>
-                  <filter id="purpleGlow" x="-50%" y="-50%" width="200%" height="200%">
-                    <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur1" />
-                    <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur2" />
-                    <feMerge>
-                      <feMergeNode in="blur2" />
-                      <feMergeNode in="blur1" />
-                      <feMergeNode in="SourceGraphic" />
-                    </feMerge>
+                  <filter id="lineGlow" x="-20%" y="-20%" width="140%" height="140%" filterUnits="objectBoundingBox">
+                    <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor="#8b5cf6" floodOpacity="0.6" />
                   </filter>
-                  <radialGradient id="dotGlow" cx="50%" cy="50%" r="50%">
-                    <stop offset="0%" stopColor="#c4b5fd" />
-                    <stop offset="50%" stopColor="#8b5cf6" />
-                    <stop offset="100%" stopColor="#7c3aed" />
-                  </radialGradient>
                 </defs>
                 
                 <XAxis 
@@ -267,16 +247,17 @@ const NewPortfolioPage = () => {
                   type="monotone"
                   dataKey="value"
                   stroke="url(#purpleLineGradient)"
-                  strokeWidth={3}
+                  strokeWidth={3.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                   dot={false}
                   activeDot={{
-                    r: 8,
-                    fill: 'url(#dotGlow)',
+                    r: 7,
+                    fill: '#a78bfa',
                     stroke: '#c4b5fd',
-                    strokeWidth: 3,
-                    style: { filter: 'drop-shadow(0 0 8px rgba(139, 92, 246, 0.8))' }
+                    strokeWidth: 2,
                   }}
-                  style={{ filter: 'url(#purpleGlow)' }}
+                  style={{ filter: 'url(#lineGlow)' }}
                 />
               </ComposedChart>
             </ResponsiveContainer>
