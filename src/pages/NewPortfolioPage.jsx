@@ -42,6 +42,7 @@ const NewPortfolioPage = () => {
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [activeTab, setActiveTab] = useState("strategy");
   const [timeFilter, setTimeFilter] = useState("W");
+  const [failedLogos, setFailedLogos] = useState({});
 
   const { holdings: rawHoldings, loading: holdingsLoading } = useFinancialData();
   const { accountValue, selectedStrategy, chartData, goals } = MOCK_DATA;
@@ -400,22 +401,20 @@ const NewPortfolioPage = () => {
               >
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 overflow-hidden">
-                    {holding.logo ? (
+                    {failedLogos[holding.symbol] || !holding.logo ? (
+                      <span className="text-xs font-bold text-slate-600">
+                        {holding.symbol.slice(0, 3)}
+                      </span>
+                    ) : (
                       <img 
                         src={holding.logo} 
                         alt={holding.name}
                         className="h-8 w-8 object-contain"
-                        onError={(e) => {
-                          e.target.style.display = 'none';
-                          e.target.nextSibling.style.display = 'flex';
-                        }}
+                        referrerPolicy="no-referrer"
+                        crossOrigin="anonymous"
+                        onError={() => setFailedLogos(prev => ({ ...prev, [holding.symbol]: true }))}
                       />
-                    ) : null}
-                    <span 
-                      className={`text-xs font-bold text-slate-600 ${holding.logo ? 'hidden' : 'flex'}`}
-                    >
-                      {holding.symbol.slice(0, 3)}
-                    </span>
+                    )}
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-slate-900">{holding.symbol}</p>
