@@ -190,7 +190,7 @@ const NewPortfolioPage = () => {
   const chartScrollRef = useRef(null);
   const { profile } = useProfile();
   
-  const userName = profile.firstName || "there";
+  const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(" ") || "User";
 
   const getChartWidth = (dataLength) => {
     const minWidth = 100;
@@ -406,7 +406,7 @@ const NewPortfolioPage = () => {
                   onError={(e) => { e.target.style.display = 'none'; e.target.parentNode.innerText = 'JD'; }}
                 />
               </div>
-              <p className="text-lg font-medium text-white/90 mt-1">Hello, {userName}</p>
+              <p className="text-lg font-medium text-white/90 mt-1">{fullName}</p>
             </div>
             <button className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 backdrop-blur-sm transition hover:bg-white/10">
               <Bell className="h-5 w-5 text-white/90" />
