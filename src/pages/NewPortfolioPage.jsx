@@ -397,7 +397,7 @@ const NewPortfolioPage = () => {
 
   const getChartWidth = (dataLength) => {
     const minWidth = 100;
-    const pointSpacing = timeFilter === "W" ? 70 : 50;
+    const pointSpacing = 55;
     return Math.max(minWidth, dataLength * pointSpacing);
   };
 
@@ -503,7 +503,7 @@ const NewPortfolioPage = () => {
 
   const getStockChartWidth = (dataLength) => {
     const minWidth = 100;
-    const pointSpacing = stockTimeFilter === "W" ? 70 : 50;
+    const pointSpacing = 55;
     return Math.max(minWidth, dataLength * pointSpacing);
   };
 
@@ -884,6 +884,8 @@ const NewPortfolioPage = () => {
                     const isHighlighted = currentChartData[index]?.highlighted;
                     const totalItems = currentChartData.length;
                     const isEdge = index === 0 || index === totalItems - 1;
+                    const showLabel = totalItems <= 8 || index % Math.ceil(totalItems / 7) === 0 || index === totalItems - 1;
+                    if (!showLabel) return <g />;
                     const opacity = isEdge ? 0.6 : 1;
                     
                     return (
@@ -1269,6 +1271,8 @@ const NewPortfolioPage = () => {
                           const isHighlighted = stockChartData[index]?.highlighted;
                           const totalItems = stockChartData.length;
                           const isEdge = index === 0 || index === totalItems - 1;
+                          const showLabel = totalItems <= 8 || index % Math.ceil(totalItems / 7) === 0 || index === totalItems - 1;
+                          if (!showLabel) return <g />;
                           const opacity = isEdge ? 0.6 : 1;
                           return (
                             <g transform={`translate(${x},${y})`} style={{ opacity }}>
