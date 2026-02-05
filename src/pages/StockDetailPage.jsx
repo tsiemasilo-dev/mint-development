@@ -78,9 +78,11 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy }) => {
     : "—";
   const rawPercentChange = displaySecurity?.change_percentage != null
     ? Number(displaySecurity.change_percentage)
-    : displaySecurity?.changePct != null
-      ? Number(displaySecurity.changePct)
-      : null;
+    : displaySecurity?.change_percent != null
+      ? Number(displaySecurity.change_percent)
+      : displaySecurity?.changePct != null
+        ? Number(displaySecurity.changePct)
+        : null;
   const percentChange = rawPercentChange != null
     ? (rawPercentChange >= 0 ? '+' : '') + rawPercentChange.toFixed(2) + '%'
     : "—";
@@ -205,7 +207,7 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy }) => {
         <div className="mt-6">
           <div className="flex items-baseline gap-2">
             <p className="text-4xl font-bold text-slate-900">{currentPrice}</p>
-            <span className="text-sm text-slate-500">{security.currency || "ZAC"}</span>
+            <span className="text-sm text-slate-500">{security.currency || "ZAR"}</span>
           </div>
           <div className="mt-2 flex items-center gap-2">
             <span className={`text-lg font-semibold ${isPositive ? "text-emerald-600" : "text-red-600"}`}>

@@ -50,7 +50,11 @@ export const getMarketsSecuritiesWithMetrics = async () => {
         // Convert last_price from cents to Rands by dividing by 100
         currentPrice: security.last_price ? Number(security.last_price) / 100 : null,
         // Use change_percentage directly without division
-        changePct: security.change_percentage != null ? Number(security.change_percentage) : null,
+        changePct: security.change_percentage != null
+          ? Number(security.change_percentage)
+          : security.change_percent != null
+            ? Number(security.change_percent)
+            : null,
       };
     });
 
@@ -107,8 +111,12 @@ export const getSecurityBySymbol = async (symbol) => {
       currentPrice: security.last_price ? Number(security.last_price) / 100 : null,
         // change_price is already in cents, keep it as is for flexibility
         change_price: security.change_price != null ? Number(security.change_price) : null,
-      // Use change_percentage directly without division
-      changePct: security.change_percentage != null ? Number(security.change_percentage) : null,
+      // Use change_percentage or change_percent directly without division
+      changePct: security.change_percentage != null
+        ? Number(security.change_percentage)
+        : security.change_percent != null
+          ? Number(security.change_percent)
+          : null,
     };
 
     console.log(`✅ Processed ${symbol} with currentPrice: ${processedSecurity.currentPrice}, changeAbs: ${processedSecurity.changeAbs}`);
