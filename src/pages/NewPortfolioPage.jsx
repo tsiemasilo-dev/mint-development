@@ -78,39 +78,39 @@ const NewPortfolioPage = () => {
         <div 
           className="absolute inset-0"
           style={{ 
-            background: 'linear-gradient(180deg, #0d0d12 0%, #0f0a18 5%, #120c1f 10%, #1a1035 18%, #251548 24%, #2d1860 28%, #3b2066 32%, #5b3490 38%, #7c5aad 45%, #a88bc7 52%, #c9b5dc 58%, #ddd0e8 64%, #ebe4f2 70%, #f3eff8 78%, #f8f5fb 85%, #faf8fc 100%)'
+            background: 'linear-gradient(180deg, #0d0d12 0%, #0f0a18 4%, #120c1f 8%, #1a1035 14%, #251548 20%, #2d1860 24%, #3b2066 28%, #5b3490 34%, #7c5aad 40%, #a88bc7 46%, #c9b5dc 52%, #ddd0e8 58%, #ebe4f2 64%, #f3eff8 72%, #f8f5fb 80%, #faf8fc 100%)'
           }} 
         />
         
         {/* Mid-section indigo/royal purple glow - positioned around chart start */}
         <div 
-          className="absolute top-[28%] left-1/2 -translate-x-1/2 w-[150%] h-[35%] rounded-full blur-3xl"
+          className="absolute top-[22%] left-1/2 -translate-x-1/2 w-[150%] h-[32%] rounded-full blur-3xl"
           style={{ background: 'radial-gradient(ellipse at center, rgba(91,33,182,0.4) 0%, rgba(76,29,149,0.2) 35%, transparent 65%)' }}
         />
         
         {/* Large radial ambient glow behind account balance */}
         <div 
-          className="absolute top-[8%] left-1/2 -translate-x-1/2 w-[300px] h-[180px] rounded-full"
+          className="absolute top-[6%] left-1/2 -translate-x-1/2 w-[300px] h-[160px] rounded-full"
           style={{ background: 'radial-gradient(ellipse at center, rgba(91,33,182,0.2) 0%, rgba(76,29,149,0.1) 40%, transparent 70%)', filter: 'blur(40px)' }}
         />
         
         {/* Vertical light beam behind graph peak area */}
         <div 
-          className="absolute top-[32%] left-[58%] w-[100px] h-[280px] -translate-x-1/2"
+          className="absolute top-[28%] left-[58%] w-[100px] h-[250px] -translate-x-1/2"
           style={{ background: 'linear-gradient(180deg, transparent 0%, rgba(139,92,246,0.25) 25%, rgba(167,139,250,0.4) 50%, rgba(139,92,246,0.25) 75%, transparent 100%)', filter: 'blur(25px)' }}
         />
         <div 
-          className="absolute top-[36%] left-[58%] w-[50px] h-[180px] -translate-x-1/2"
+          className="absolute top-[32%] left-[58%] w-[50px] h-[160px] -translate-x-1/2"
           style={{ background: 'linear-gradient(180deg, transparent 0%, rgba(196,181,253,0.4) 35%, rgba(221,214,254,0.5) 50%, rgba(196,181,253,0.4) 65%, transparent 100%)', filter: 'blur(15px)' }}
         />
         
         {/* Subtle surface reflection/gloss in the middle-lower area */}
         <div 
-          className="absolute top-[48%] left-0 right-0 h-[52%]"
-          style={{ background: 'linear-gradient(180deg, transparent 0%, rgba(237,233,254,0.3) 15%, rgba(248,245,251,0.6) 35%, rgba(250,248,252,0.85) 55%, rgba(252,250,253,0.95) 75%, #fcfafd 100%)' }}
+          className="absolute top-[42%] left-0 right-0 h-[58%]"
+          style={{ background: 'linear-gradient(180deg, transparent 0%, rgba(237,233,254,0.3) 12%, rgba(248,245,251,0.6) 30%, rgba(250,248,252,0.85) 50%, rgba(252,250,253,0.95) 70%, #fcfafd 100%)' }}
         />
         <div 
-          className="absolute top-[55%] left-1/2 -translate-x-1/2 w-[130%] h-[60px] rounded-full"
+          className="absolute top-[48%] left-1/2 -translate-x-1/2 w-[130%] h-[60px] rounded-full"
           style={{ background: 'radial-gradient(ellipse at center, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.08) 50%, transparent 80%)', filter: 'blur(15px)' }}
         />
       </div>
