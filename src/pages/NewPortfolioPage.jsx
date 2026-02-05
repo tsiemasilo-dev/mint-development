@@ -368,16 +368,10 @@ const NewPortfolioPage = () => {
                 background: 'rgba(255,255,255,0.7)',
               }}
             >
-              {/* Date Header */}
-              <p className="text-xs text-slate-500 mb-1">Invested on</p>
-              <h3 className="text-lg font-bold text-slate-900 mb-4">
-                {formatDate(allocation.date)}
-              </h3>
-
               {/* Amount and Return */}
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <p className="text-xs text-slate-500 mb-1">Amount Invested</p>
+                  <p className="text-xs text-slate-500 mb-1">Amount</p>
                   <p className="text-xl font-bold text-slate-900">
                     {formatCurrency(allocation.amount)}
                   </p>
@@ -390,14 +384,21 @@ const NewPortfolioPage = () => {
                 </div>
               </div>
 
-              {/* Top 3 Performing Assets */}
-              <div className="pt-4 border-t border-slate-100">
-                <p className="text-xs text-slate-500 mb-3">Top Performing Assets</p>
+              {/* Date and Top Performers Logos */}
+              <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Date</p>
+                  <p className="text-sm font-medium text-slate-700">
+                    {formatDate(allocation.date)}
+                  </p>
+                </div>
+                
+                {/* Overlapping Top Performers Logos */}
                 <div className="flex items-center -space-x-2">
                   {allocation.topPerformers.slice(0, 3).map((asset, index) => (
                     <div 
                       key={asset.symbol}
-                      className="h-10 w-10 rounded-full bg-white border-2 border-white shadow-md overflow-hidden"
+                      className="h-9 w-9 rounded-full bg-white border-2 border-white shadow-md overflow-hidden"
                       style={{ zIndex: 3 - index }}
                     >
                       {failedLogos[asset.symbol] ? (
