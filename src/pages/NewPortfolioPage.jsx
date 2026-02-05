@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Bell, Eye, EyeOff, ChevronDown, ChevronRight, ArrowLeft } from "lucide-react";
 import { Area, ComposedChart, Line, XAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { useFinancialData } from "../lib/useFinancialData";
@@ -92,37 +92,84 @@ const MOCK_DATA = {
   chartData: {
     daily: [
       { day: "12am", value: 4320 },
+      { day: "1am", value: 4310 },
+      { day: "2am", value: 4330 },
       { day: "3am", value: 4350 },
+      { day: "4am", value: 4360 },
+      { day: "5am", value: 4370 },
       { day: "6am", value: 4380 },
+      { day: "7am", value: 4400 },
+      { day: "8am", value: 4410 },
       { day: "9am", value: 4420 },
+      { day: "10am", value: 4450 },
+      { day: "11am", value: 4480 },
       { day: "12pm", value: 4510, highlighted: true },
+      { day: "1pm", value: 4520 },
+      { day: "2pm", value: 4500 },
       { day: "3pm", value: 4480 },
+      { day: "4pm", value: 4460 },
+      { day: "5pm", value: 4450 },
       { day: "6pm", value: 4449 },
+      { day: "7pm", value: 4455 },
+      { day: "8pm", value: 4458 },
       { day: "9pm", value: 4460 },
+      { day: "10pm", value: 4465 },
+      { day: "11pm", value: 4470 },
     ],
     weekly: [
       { day: "Sat", value: 3200 },
       { day: "Sun", value: 3800 },
       { day: "Mon", value: 4100 },
-      { day: "Tue", value: 8720, highlighted: true },
+      { day: "Tue", value: 4720, highlighted: true },
       { day: "Wed", value: 4200 },
       { day: "Thu", value: 4449 },
       { day: "Fri", value: 4600 },
     ],
     monthly: [
       { day: "1", value: 3500 },
+      { day: "2", value: 3520 },
+      { day: "3", value: 3550 },
+      { day: "4", value: 3580 },
       { day: "5", value: 3650 },
+      { day: "6", value: 3700 },
+      { day: "7", value: 3750 },
+      { day: "8", value: 3800 },
+      { day: "9", value: 3850 },
       { day: "10", value: 3900 },
+      { day: "11", value: 3950 },
+      { day: "12", value: 4000 },
+      { day: "13", value: 4050 },
+      { day: "14", value: 4100 },
       { day: "15", value: 4200, highlighted: true },
-      { day: "20", value: 4100 },
+      { day: "16", value: 4180 },
+      { day: "17", value: 4150 },
+      { day: "18", value: 4120 },
+      { day: "19", value: 4100 },
+      { day: "20", value: 4150 },
+      { day: "21", value: 4200 },
+      { day: "22", value: 4250 },
+      { day: "23", value: 4280 },
+      { day: "24", value: 4300 },
       { day: "25", value: 4350 },
+      { day: "26", value: 4380 },
+      { day: "27", value: 4400 },
+      { day: "28", value: 4420 },
+      { day: "29", value: 4435 },
       { day: "30", value: 4449 },
     ],
     allTime: [
       { day: "Jan '24", value: 2800 },
+      { day: "Feb '24", value: 2900 },
+      { day: "Mar '24", value: 3050 },
       { day: "Apr '24", value: 3200 },
+      { day: "May '24", value: 3400 },
+      { day: "Jun '24", value: 3550 },
       { day: "Jul '24", value: 3800 },
+      { day: "Aug '24", value: 3900 },
+      { day: "Sep '24", value: 3950 },
       { day: "Oct '24", value: 4100 },
+      { day: "Nov '24", value: 4200 },
+      { day: "Dec '24", value: 4300 },
       { day: "Jan '25", value: 4449, highlighted: true },
       { day: "Feb '25", value: 4600 },
     ],
@@ -139,6 +186,23 @@ const NewPortfolioPage = () => {
   const [failedLogos, setFailedLogos] = useState({});
   const [calendarYear, setCalendarYear] = useState(2025);
   const [currentView, setCurrentView] = useState("portfolio");
+  const chartScrollRef = useRef(null);
+
+  const getChartWidth = (dataLength) => {
+    const minWidth = 100;
+    const pointSpacing = timeFilter === "W" ? 70 : 50;
+    return Math.max(minWidth, dataLength * pointSpacing);
+  };
+
+  useEffect(() => {
+    if (chartScrollRef.current) {
+      const scrollContainer = chartScrollRef.current;
+      const chartWidth = scrollContainer.scrollWidth;
+      const containerWidth = scrollContainer.clientWidth;
+      const scrollTo = (chartWidth - containerWidth) * 0.6;
+      scrollContainer.scrollTo({ left: scrollTo, behavior: 'smooth' });
+    }
+  }, [timeFilter]);
 
   const availableCalendarYears = useMemo(() => Object.keys(MOCK_CALENDAR_RETURNS).sort(), []);
   const calendarData = MOCK_CALENDAR_RETURNS;
@@ -411,11 +475,25 @@ const NewPortfolioPage = () => {
             </p>
           </div>
 
-          <div style={{ width: '100%', height: 220, marginBottom: 8 }}>
-            <ResponsiveContainer width="100%" height={220}>
+          <div 
+            ref={chartScrollRef}
+            className="overflow-x-auto scrollbar-hide"
+            style={{ 
+              width: '100%', 
+              height: 220, 
+              marginBottom: 8,
+              scrollBehavior: 'smooth',
+              WebkitOverflowScrolling: 'touch',
+              msOverflowStyle: 'none',
+              scrollbarWidth: 'none',
+            }}
+          >
+            <div style={{ width: getChartWidth(currentChartData.length), height: 220, minWidth: '100%' }}>
               <ComposedChart
+                width={getChartWidth(currentChartData.length)}
+                height={220}
                 data={currentChartData}
-                margin={{ top: 20, right: 15, left: 15, bottom: 40 }}
+                margin={{ top: 20, right: 30, left: 30, bottom: 40 }}
               >
                 <defs>
                   <linearGradient id="purpleLineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -563,7 +641,7 @@ const NewPortfolioPage = () => {
                   style={{ filter: 'url(#lineGlow)' }}
                 />
               </ComposedChart>
-            </ResponsiveContainer>
+            </div>
           </div>
         </section>
       </div>
