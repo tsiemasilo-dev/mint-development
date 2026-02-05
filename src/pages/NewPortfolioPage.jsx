@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Bell, Eye, EyeOff, ChevronDown, ChevronRight } from "lucide-react";
 import { Area, ComposedChart, Line, XAxis, ResponsiveContainer, Tooltip } from 'recharts';
+import { useFinancialData } from "../lib/useFinancialData";
 
 const MOCK_DATA = {
   accountValue: 24897.43,
@@ -35,12 +36,6 @@ const MOCK_DATA = {
   goals: [
     { name: "First Home", current: 150000, target: 500000 },
   ],
-  holdings: [
-    { symbol: "NED.JO", name: "Nedbank Group", weight: 13.9, logo: "https://logo.clearbit.com/nedbank.co.za" },
-    { symbol: "SUI.JO", name: "Sun International", weight: 16.8, logo: "https://logo.clearbit.com/suninternational.com" },
-    { symbol: "EXP.JO", name: "Exemplar REITail Ltd.", weight: 19.0, logo: null },
-    { symbol: "SBK.JO", name: "Standard Bank Group", weight: 12.5, logo: "https://logo.clearbit.com/standardbank.co.za" },
-  ],
 };
 
 const NewPortfolioPage = () => {
@@ -48,7 +43,26 @@ const NewPortfolioPage = () => {
   const [activeTab, setActiveTab] = useState("strategy");
   const [timeFilter, setTimeFilter] = useState("W");
 
-  const { accountValue, selectedStrategy, chartData, goals, holdings } = MOCK_DATA;
+  const { holdings: rawHoldings, loading: holdingsLoading } = useFinancialData();
+  const { accountValue, selectedStrategy, chartData, goals } = MOCK_DATA;
+
+  const holdings = rawHoldings.length > 0 
+    ? rawHoldings.map(h => {
+        const totalValue = rawHoldings.reduce((sum, holding) => sum + (holding.current_value || 0), 0);
+        const weight = totalValue > 0 ? ((h.current_value || 0) / totalValue) * 100 : 0;
+        return {
+          symbol: h.securities?.symbol || h.symbol || "N/A",
+          name: h.securities?.name || h.name || "Unknown",
+          weight: weight,
+          logo: h.securities?.logo_url || null,
+        };
+      }).sort((a, b) => b.weight - a.weight).slice(0, 5)
+    : [
+        { symbol: "NED.JO", name: "Nedbank Group", weight: 13.9, logo: "https://logo.clearbit.com/nedbank.co.za" },
+        { symbol: "SUI.JO", name: "Sun International", weight: 16.8, logo: "https://logo.clearbit.com/suninternational.com" },
+        { symbol: "EXP.JO", name: "Exemplar REITail Ltd.", weight: 19.0, logo: null },
+        { symbol: "SBK.JO", name: "Standard Bank Group", weight: 12.5, logo: "https://logo.clearbit.com/standardbank.co.za" },
+      ];
 
   const getChartData = () => {
     switch (timeFilter) {
