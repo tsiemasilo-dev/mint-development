@@ -70,9 +70,9 @@ const NewPortfolioPage = () => {
   const goalProgress = (goal.current / goal.target) * 100;
 
   return (
-    <div className="min-h-screen pb-[env(safe-area-inset-bottom)] text-white relative">
+    <div className="min-h-screen pb-[env(safe-area-inset-bottom)] text-white relative overflow-x-hidden">
       {/* Fixed gradient background - stays in place when scrolling */}
-      <div className="fixed inset-0 -z-10" style={{ position: 'fixed' }}>
+      <div className="fixed inset-0 -z-10">
         {/* Base gradient: seamless purple to lavender to white transition - white starts at pill buttons */}
         <div 
           className="absolute inset-0"
@@ -88,8 +88,8 @@ const NewPortfolioPage = () => {
         />
       </div>
 
-      {/* Header section */}
-      <div className="relative px-5 pb-8 pt-12 md:px-8">
+      {/* Header section - sticky to prevent content scrolling into dark area */}
+      <div className="sticky top-0 z-20 px-5 pb-8 pt-12 md:px-8">
         <div className="mx-auto flex w-full max-w-sm flex-col gap-5 md:max-w-md">
           <header className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -146,8 +146,8 @@ const NewPortfolioPage = () => {
         </div>
       </div>
 
-      {/* Content section */}
-      <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
+      {/* Chart section - also sticky to prevent scrolling into dark area */}
+      <div className="sticky top-[200px] z-10 relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 md:max-w-md md:px-8">
         <section className="py-2">
           <div className="flex items-center justify-between mb-4 px-1">
             <button className="flex items-center gap-2 text-slate-900 hover:text-slate-700 transition">
@@ -336,7 +336,10 @@ const NewPortfolioPage = () => {
             </ResponsiveContainer>
           </div>
         </section>
+      </div>
 
+      {/* Scrollable content section - starts after chart */}
+      <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
         <button className="w-full py-3.5 rounded-full bg-gradient-to-r from-slate-800 to-slate-900 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg shadow-slate-900/30 transition hover:-translate-y-0.5 hover:shadow-xl">
           View All Allocations
         </button>
