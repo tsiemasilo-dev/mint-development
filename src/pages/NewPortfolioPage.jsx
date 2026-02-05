@@ -119,7 +119,7 @@ const MOCK_DATA = {
 
 const NewPortfolioPage = () => {
   const [balanceVisible, setBalanceVisible] = useState(true);
-  const [activeTab, setActiveTab] = useState("investment");
+  const [activeTab, setActiveTab] = useState("strategy");
   const [timeFilter, setTimeFilter] = useState("W");
   const [failedLogos, setFailedLogos] = useState({});
   const [calendarYear, setCalendarYear] = useState(2025);
@@ -333,19 +333,19 @@ const NewPortfolioPage = () => {
             <p className="mt-1 text-sm text-white/40">Account Value</p>
           </section>
 
-          {/* Tabs: Investment, Banking, Sales */}
+          {/* Tabs: Strategy, Individual Stocks, Goals */}
           <section className="flex gap-2 mt-1">
             {[
-              { id: "investment", label: "Investment" },
-              { id: "banking", label: "Banking" },
-              { id: "sales", label: "Sales" },
+              { id: "strategy", label: "Strategy" },
+              { id: "stocks", label: "Individual Stocks" },
+              { id: "goals", label: "Goals" },
             ].map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all ${
+                className={`px-4 py-2.5 rounded-full text-sm font-medium transition-all ${
                   activeTab === tab.id
-                    ? "bg-amber-400 text-slate-900 shadow-lg shadow-amber-500/30"
+                    ? "bg-violet-500 text-white shadow-lg shadow-violet-500/30"
                     : "border border-white/20 text-white/70 backdrop-blur-sm hover:bg-white/10"
                 }`}
               >
