@@ -158,8 +158,19 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onBack }) => {
   }, [currentStrategy?.strategyId]);
 
   const availableCalendarYears = useMemo(() => {
-    return Object.keys(calendarData).sort().reverse();
-  }, [calendarData]);
+    const currentYear = new Date().getFullYear();
+    const dataYears = Object.keys(calendarData).map(Number);
+    const earliestDataYear = dataYears.length > 0 ? Math.min(...dataYears) : currentYear;
+    const entryYear = currentStrategy?.entryDate
+      ? new Date(currentStrategy.entryDate).getFullYear()
+      : earliestDataYear;
+    const startYear = Math.min(entryYear, earliestDataYear);
+    const years = [];
+    for (let y = currentYear; y >= startYear; y--) {
+      years.push(String(y));
+    }
+    return years;
+  }, [calendarData, currentStrategy]);
   const yearDropdownRef = useRef(null);
 
   const formatDate = (dateString) => {
