@@ -471,9 +471,8 @@ const HomePage = ({
                           {displayName || "MINT MEMBER"}
                         </p>
                       </div>
-                      <div className="text-right">
-                        <p className="text-[22px] md:text-[26px] font-light text-white/90 tracking-wider" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif", fontStyle: "italic", letterSpacing: "0.08em" }}>MINT</p>
-                        <p className="text-[10px] text-white/40 tracking-[0.3em] font-light uppercase" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>Balance</p>
+                      <div className="text-right flex items-end">
+                        <p className="text-[22px] md:text-[26px] font-light text-white/90 tracking-wider mb-[-2px]" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif", fontStyle: "italic", letterSpacing: "0.08em" }}>MINT</p>
                       </div>
                     </div>
                   </div>
@@ -488,17 +487,15 @@ const HomePage = ({
                   </div>
                 </CardContent>
 
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); toggleCardVisibility(); }}
-                  className="absolute top-4 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20"
-                  style={{
-                    backfaceVisibility: 'hidden',
-                    transform: 'rotateY(0deg)',
-                  }}
-                >
-                  {isCardVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                </button>
+                {cardNormalizedIndex === 0 && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); toggleCardVisibility(); }}
+                    className="absolute top-4 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20"
+                  >
+                    {isCardVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                  </button>
+                )}
               </div>
 
               <div className="flex justify-center gap-2 mt-3">
