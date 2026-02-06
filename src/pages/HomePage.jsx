@@ -518,7 +518,7 @@ const HomePage = ({
       </div>
 
       <div className="mx-auto -mt-10 flex w-full max-w-sm flex-col gap-6 px-4 pb-10 md:max-w-md md:px-8">
-        <section className="grid grid-cols-4 gap-2.5 pt-6">
+        <section className="grid grid-cols-4 gap-3 text-[11px] font-medium">
           {[
             { label: <>Open<br />Strategies</>, icon: LayoutGrid, onClick: onOpenStrategies || onOpenInvest },
             { label: "Markets", icon: TrendingUp, onClick: onOpenMarkets || onOpenInvest },
@@ -529,21 +529,14 @@ const HomePage = ({
             return (
               <button
                 key={index}
-                className="group relative flex flex-col items-center overflow-visible"
+                className="flex flex-col items-center gap-2 rounded-2xl bg-white px-2 py-3 text-slate-700 shadow-md"
                 type="button"
                 onClick={item.onClick}
               >
-                <div className="relative w-full rounded-2xl bg-white/90 backdrop-blur-sm pt-8 pb-2.5 px-1 shadow-[0_2px_12px_rgba(0,0,0,0.08)] border border-white/60 transition-all duration-200 active:scale-95">
-                  <span className="block text-center text-[10.5px] font-medium leading-tight text-slate-600">{item.label}</span>
-                </div>
-                <span
-                  className="absolute -top-4 flex h-11 w-11 items-center justify-center rounded-2xl shadow-[0_4px_14px_rgba(124,58,237,0.35)] transition-transform duration-200 group-active:scale-90"
-                  style={{
-                    background: "linear-gradient(145deg, #8b5cf6 0%, #6d28d9 100%)",
-                  }}
-                >
-                  <Icon className="h-[22px] w-[22px] text-white" strokeWidth={1.8} />
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-50 text-violet-700">
+                  <Icon className="h-4 w-4" />
                 </span>
+                <span className="text-center leading-tight">{item.label}</span>
               </button>
             );
           })}
