@@ -850,29 +850,64 @@ const HomePage = ({
             <div className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {bestStrategies.slice(0, 5).map((strategy) => {
                 const holdingsSnapshot = getStrategyHoldingsSnapshot(strategy, holdingsBySymbol);
+                const pct = strategy.change_pct || 0;
                 return (
-                  <div key={strategy.id} className="flex flex-col min-w-[200px] snap-start rounded-3xl p-4 shadow-lg bg-gradient-to-br from-violet-600 to-purple-800 text-white">
-                    <div className="flex items-center gap-2 mb-2">
-                      <BadgeCheck className="h-4 w-4 text-emerald-300 shrink-0" />
-                      <p className="text-sm font-semibold line-clamp-1">{strategy.name}</p>
+                  <button
+                    key={strategy.id}
+                    type="button"
+                    onClick={() => onOpenStrategies && onOpenStrategies(strategy)}
+                    className="flex-shrink-0 w-[280px] snap-start rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all active:scale-[0.97]"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex-1 flex items-start justify-between gap-4">
+                        <div className="text-left space-y-1 min-w-0">
+                          <p className="truncate text-sm font-semibold text-slate-900">{strategy.name}</p>
+                          <p className="text-xs text-slate-600 line-clamp-1">
+                            {strategy.risk_level || 'Balanced'}{strategy.objective ? ` • ${strategy.objective}` : ''}
+                          </p>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-sm font-semibold text-slate-900">
+                            {strategy.last_close ? `R${strategy.last_close.toFixed(2)}` : '—'}
+                          </p>
+                          <p className={`text-xs font-semibold ${pct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                            {pct >= 0 ? '+' : ''}{pct.toFixed(2)}%
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                    <p className="text-xs text-white/60 mb-3 line-clamp-1">{strategy.risk_level || strategy.provider_name || 'Balanced'}</p>
-                    <div className="flex items-center justify-between mt-auto">
-                      <div className="flex -space-x-2">
-                        {holdingsSnapshot.slice(0, 3).map((h) => (
-                          <div key={h.symbol} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-violet-600 bg-white shadow-sm">
-                            {h.logo_url ? <img src={h.logo_url} alt={h.symbol} className="h-full w-full object-cover" /> : <span className="text-[8px] font-bold text-slate-600">{h.symbol?.substring(0, 2)}</span>}
+                    <div className="mt-3 flex items-center justify-between">
+                      {strategy.risk_level && (
+                        <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">{strategy.risk_level}</span>
+                      )}
+                      {holdingsSnapshot.length > 0 && (
+                        <div className="flex items-center gap-2">
+                          <div className="flex -space-x-2">
+                            {holdingsSnapshot.slice(0, 3).map((h) => (
+                              <div
+                                key={`${strategy.id}-${h.id || h.symbol}-snap`}
+                                className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-sm"
+                              >
+                                {h.logo_url ? (
+                                  <img src={h.logo_url} alt={h.name} className="h-full w-full object-cover" />
+                                ) : (
+                                  <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">
+                                    {h.symbol?.substring(0, 2)}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                            {holdingsSnapshot.length > 3 && (
+                              <div className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500">
+                                +{holdingsSnapshot.length - 3}
+                              </div>
+                            )}
                           </div>
-                        ))}
-                        {holdingsSnapshot.length > 3 && <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-violet-600 bg-white/20 text-[10px] font-semibold text-white">+{holdingsSnapshot.length - 3}</div>}
-                      </div>
-                      <div className="text-right">
-                        <p className={`text-sm font-bold ${(strategy.change_pct || 0) >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
-                          {(strategy.change_pct || 0) >= 0 ? '+' : ''}{((strategy.change_pct || 0)).toFixed(2)}%
-                        </p>
-                      </div>
+                          <span className="text-[11px] text-slate-400">Holdings</span>
+                        </div>
+                      )}
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
