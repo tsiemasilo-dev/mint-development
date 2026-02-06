@@ -20,6 +20,7 @@ A React authentication application using Vite as the build tool with Tailwind CS
   - `lib/` - Utility libraries
     - `supabase.js` - Supabase client initialization
     - `biometrics.js` - Biometric authentication utilities (Face ID/Touch ID)
+    - `strategyUtils.js` - Shared strategy utilities (normalizeSymbol, getHoldingsArray, buildHoldingsBySymbol, etc.)
     - `NotificationsContext.jsx` - Centralized notifications state management with real-time updates
     - `useSumsubStatus.js` - Hook for fetching KYC status directly from Sumsub API (single source of truth)
     - `useRequiredActions.js` - Hook for bank linking status only (no KYC - that's in useSumsubStatus)
