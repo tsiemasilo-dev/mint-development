@@ -64,9 +64,9 @@ const Navbar = ({ activeTab, setActiveTab }) => {
       {createPortal(
         <nav
           ref={navRef}
-          className="fixed bottom-0 left-0 right-0 z-[1000] border-t border-white/10 bg-white/70 pt-3 backdrop-blur-2xl"
+          className="fixed bottom-0 left-0 right-0 z-[1000] border-t border-white/10 bg-white/70 pb-1 pt-3 backdrop-blur-2xl"
           style={{
-            paddingBottom: "calc(1rem + env(safe-area-inset-bottom, 0px))",
+            paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom, 0px))",
             transform: "translateZ(0)",
             willChange: "transform"
           }}
@@ -79,12 +79,12 @@ const Navbar = ({ activeTab, setActiveTab }) => {
                   triggerHaptic(ImpactStyle.Light);
                   setActiveTab(tab.id);
                 }}
-                className={`flex flex-col items-center justify-center gap-1 transition-all ${
+                className={`flex flex-col items-center justify-center gap-1.5 py-1 transition-all ${
                   activeTab === tab.id ? "text-[#31005e] scale-110" : "text-slate-400 opacity-60"
                 }`}
               >
-                <tab.icon size={22} strokeWidth={activeTab === tab.id ? 2.5 : 1.5} />
-                <span className="text-[8px] font-black uppercase tracking-[0.1em]">{tab.label}</span>
+                <tab.icon size={24} strokeWidth={activeTab === tab.id ? 2.5 : 1.5} />
+                <span className="text-[9px] font-black uppercase tracking-[0.1em]">{tab.label}</span>
               </button>
             ))}
           </div>
