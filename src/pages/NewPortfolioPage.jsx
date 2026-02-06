@@ -488,18 +488,26 @@ const NewPortfolioPage = () => {
   };
 
   const myStocks = useMemo(() => {
-    if (!strategies || strategies.length === 0 || !stocksList || stocksList.length === 0) return [];
+    if (!stocksList || stocksList.length === 0) return [];
     const holdingSymbols = new Set();
-    strategies.forEach(s => {
-      if (Array.isArray(s.holdings)) {
-        s.holdings.forEach(h => {
-          if (h.symbol) holdingSymbols.add(h.symbol);
-        });
-      }
-    });
+    if (rawHoldings && rawHoldings.length > 0) {
+      rawHoldings.forEach(h => {
+        const sym = h.securities?.symbol || h.symbol;
+        if (sym) holdingSymbols.add(sym);
+      });
+    }
+    if (holdingSymbols.size === 0 && strategies && strategies.length > 0) {
+      strategies.forEach(s => {
+        if (Array.isArray(s.holdings)) {
+          s.holdings.forEach(h => {
+            if (h.symbol) holdingSymbols.add(h.symbol);
+          });
+        }
+      });
+    }
     if (holdingSymbols.size === 0) return [];
     return stocksList.filter(stock => holdingSymbols.has(stock.ticker));
-  }, [strategies, stocksList]);
+  }, [rawHoldings, strategies, stocksList]);
 
   const myStockIds = useMemo(() => new Set(myStocks.map(s => s.id)), [myStocks]);
 
@@ -1335,37 +1343,60 @@ const NewPortfolioPage = () => {
 
       {/* Holdings Tab Content */}
       {activeTab === "holdings" && (() => {
-        const pieColors = ["#8B5CF6", "#A78BFA", "#C4B5FD", "#DDD6FE", "#EDE9FE", "#7C3AED", "#6D28D9", "#5B21B6"];
-        const holdingsData = myStocks.length > 0
-          ? myStocks.map((s, idx) => {
-              const liveChange = liveQuotes[s.ticker]?.changePercent ?? s.dailyChange ?? 0;
-              const livePrice = liveQuotes[s.ticker]?.price || s.price || 0;
-              return {
-                id: s.id,
-                name: s.name,
-                ticker: s.ticker,
-                logo: s.logo,
-                currentValue: livePrice * (s.shares || 1),
-                change: liveChange,
-                color: pieColors[idx % pieColors.length],
-              };
-            })
-          : stocksList.slice(0, 6).map((s, idx) => {
-              const liveChange = liveQuotes[s.ticker]?.changePercent ?? s.dailyChange ?? 0;
-              const livePrice = liveQuotes[s.ticker]?.price || s.price || 0;
-              return {
-                id: s.id,
-                name: s.name,
-                ticker: s.ticker,
-                logo: s.logo,
-                currentValue: livePrice * (s.shares || 1),
-                change: liveChange,
-                color: pieColors[idx % pieColors.length],
-              };
-            });
+        if (holdingsLoading) {
+          return (
+            <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
+              <div className="text-center py-10 text-slate-500">Loading holdings...</div>
+            </div>
+          );
+        }
+        if (!rawHoldings || rawHoldings.length === 0) {
+          return (
+            <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
+              <div 
+                className="rounded-3xl p-8 backdrop-blur-xl shadow-sm border border-slate-100/50 text-center"
+                style={{ background: 'rgba(255,255,255,0.7)', fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
+              >
+                <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-gradient-to-br from-violet-100 to-purple-100 flex items-center justify-center">
+                  <TrendingUp className="h-7 w-7 text-violet-500" />
+                </div>
+                <p className="text-lg font-semibold text-slate-900 mb-1">No holdings yet</p>
+                <p className="text-sm text-slate-500">Your investment holdings will appear here once you start investing.</p>
+              </div>
+            </div>
+          );
+        }
+
+        const pieColors = ["#8B5CF6", "#A78BFA", "#C4B5FD", "#DDD6FE", "#EDE9FE", "#7C3AED", "#6D28D9", "#5B21B6", "#4C1D95", "#7E22CE"];
+        const holdingsData = rawHoldings.map((h) => {
+          const ticker = h.securities?.symbol || h.symbol || "N/A";
+          const name = h.securities?.name || h.name || "Unknown";
+          const logoFromSecurities = h.securities?.logo_url || null;
+          const logoFromStocksList = !logoFromSecurities ? (stocksList.find(s => s.ticker === ticker)?.logo || null) : null;
+          const logo = logoFromSecurities || logoFromStocksList;
+          const change = h.change_percent ?? liveQuotes[ticker]?.changePercent ?? 0;
+          return {
+            id: h.id || ticker,
+            name,
+            ticker,
+            logo,
+            currentValue: h.current_value || 0,
+            change,
+          };
+        }).sort((a, b) => b.currentValue - a.currentValue);
+
         const totalValue = holdingsData.reduce((sum, h) => sum + h.currentValue, 0);
         const totalDistinct = holdingsData.length;
-        const pieData = holdingsData.map(h => ({ name: h.ticker, value: h.currentValue, color: h.color }));
+
+        const top10 = holdingsData.slice(0, 10).map((h, idx) => ({
+          name: h.ticker,
+          value: h.currentValue,
+          color: pieColors[idx % pieColors.length],
+        }));
+        const othersValue = holdingsData.slice(10).reduce((sum, h) => sum + h.currentValue, 0);
+        const pieData = othersValue > 0
+          ? [...top10, { name: "Others", value: othersValue, color: "#94A3B8" }]
+          : top10;
 
         return (
         <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
