@@ -1481,7 +1481,7 @@ const NewPortfolioPage = () => {
               </div>
               
               {/* Right: Pie Chart */}
-              <div className="relative h-44 w-44 -mr-2 md:mr-0">
+              <div className="relative h-44 w-44 -mr-4 md:mr-0">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <defs>
