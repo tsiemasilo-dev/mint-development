@@ -717,11 +717,11 @@ const NewPortfolioPage = () => {
           {/* Chart section */}
           <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 md:max-w-md md:px-8">
         <section className="py-2">
-          <div className="flex items-center justify-between mb-3 px-0">
+          <div className="flex items-center justify-between mb-3 -ml-4">
             <div className="relative" ref={dropdownRef}>
               <button 
                 onClick={() => setShowStrategyDropdown(!showStrategyDropdown)}
-                className="flex items-center gap-1 text-slate-900 hover:text-slate-700 transition"
+                className="flex items-center gap-0.5 text-slate-900 hover:text-slate-700 transition"
               >
                 <span className="text-lg font-semibold tracking-tight" style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}>
                   {currentStrategy.name || "Strategy"}
