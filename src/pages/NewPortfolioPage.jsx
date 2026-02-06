@@ -1222,7 +1222,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onBack }) => {
         }));
         const othersValue = holdingsData.slice(10).reduce((sum, h) => sum + h.currentValue, 0);
         const pieData = othersValue > 0
-          ? [...top10, { name: "Others", value: othersValue, color: "#94A3B8" }]
+          ? [...top10, { name: "Others", value: othersValue, color: "#E9D5FF" }]
           : top10;
 
         return (
@@ -1391,8 +1391,8 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onBack }) => {
                         <p className="text-sm font-bold text-slate-900">
                           {formatCurrency(stock.currentValue)}
                         </p>
-                        <p className={`text-xs font-medium ${stock.change >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                          {stock.change >= 0 ? '+' : ''}{stock.change.toFixed(1)}%
+                        <p className="text-xs font-medium text-slate-400">
+                          {totalValue > 0 ? ((stock.currentValue / totalValue) * 100).toFixed(1) : '0.0'}%
                         </p>
                       </div>
                     </div>
