@@ -1413,11 +1413,11 @@ const NewPortfolioPage = () => {
                   <p className="text-xs text-slate-500 mb-0.5">Total Portfolio Value</p>
                   <p className="text-2xl font-bold text-slate-900">{formatCurrency(totalValue)}</p>
                 </div>
-                <div>
-                  <p className="text-xs text-slate-500 mb-0.5">Total Holdings</p>
-                  <div className="flex items-center gap-2">
-                    <p className="text-3xl font-bold text-slate-900">{totalDistinct}</p>
-                    <span className="text-sm font-normal text-slate-500">assets</span>
+                <div className="flex items-center gap-2">
+                  <p className="text-3xl font-bold text-slate-900">{totalDistinct}</p>
+                  <div className="flex flex-col justify-center">
+                    <p className="text-xs text-slate-500 leading-tight">Total Holdings</p>
+                    <p className="text-xs text-slate-500 leading-tight">assets</p>
                   </div>
                 </div>
               </div>
