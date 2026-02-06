@@ -270,25 +270,24 @@ function formatChartData(priceHistory, timeFilter) {
       });
     }
     case "W": {
-      const last7 = priceHistory.slice(-7);
       const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-      return last7.map((p, idx) => {
+      return priceHistory.map((p, idx) => {
         const date = new Date(p.ts);
         return {
-          day: dayNames[date.getDay()],
+          day: dayNames[date.getDay()] + ' ' + date.getDate(),
           value: p.nav,
-          highlighted: idx === Math.floor(last7.length / 2),
+          highlighted: idx === Math.floor(priceHistory.length / 2),
         };
       });
     }
     case "M": {
-      const last30 = priceHistory.slice(-30);
-      return last30.map((p, idx) => {
+      const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      return priceHistory.map((p, idx) => {
         const date = new Date(p.ts);
         return {
-          day: date.getDate().toString(),
+          day: date.getDate() + ' ' + monthNames[date.getMonth()],
           value: p.nav,
-          highlighted: idx === Math.floor(last30.length / 2),
+          highlighted: idx === Math.floor(priceHistory.length / 2),
         };
       });
     }

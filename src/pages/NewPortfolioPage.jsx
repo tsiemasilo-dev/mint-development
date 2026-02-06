@@ -397,15 +397,9 @@ const NewPortfolioPage = () => {
 
   const getChartWidth = (dataLength) => {
     const minWidth = 100;
-    const pointSpacing = timeFilter === "W" ? 70 : 50;
+    const pointSpacing = timeFilter === "W" ? 40 : 30;
     return Math.max(minWidth, dataLength * pointSpacing);
   };
-
-  useEffect(() => {
-    if (chartScrollRef.current) {
-      chartScrollRef.current.scrollTo({ left: 0, behavior: 'smooth' });
-    }
-  }, [timeFilter]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -438,10 +432,12 @@ const NewPortfolioPage = () => {
   }, [stocksList, selectedStock]);
 
   useEffect(() => {
-    if (stockChartScrollRef.current) {
-      stockChartScrollRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+    if (stockChartScrollRef.current && liveStockChartData.length > 0) {
+      setTimeout(() => {
+        stockChartScrollRef.current.scrollLeft = stockChartScrollRef.current.scrollWidth;
+      }, 100);
     }
-  }, [stockTimeFilter, selectedStock]);
+  }, [liveStockChartData, stockTimeFilter, selectedStock]);
 
   const handleStrategySelect = (strategy) => {
     selectStrategy(strategy);
@@ -495,7 +491,7 @@ const NewPortfolioPage = () => {
 
   const getStockChartWidth = (dataLength) => {
     const minWidth = 100;
-    const pointSpacing = stockTimeFilter === "W" ? 70 : 50;
+    const pointSpacing = stockTimeFilter === "W" ? 40 : 30;
     return Math.max(minWidth, dataLength * pointSpacing);
   };
 
@@ -508,6 +504,14 @@ const NewPortfolioPage = () => {
 
   const currentChartData = getChartData();
   const isLoadingData = strategiesLoading || chartLoading;
+
+  useEffect(() => {
+    if (chartScrollRef.current && currentChartData.length > 0) {
+      setTimeout(() => {
+        chartScrollRef.current.scrollLeft = chartScrollRef.current.scrollWidth;
+      }, 100);
+    }
+  }, [currentChartData, timeFilter]);
 
   const formatCurrency = (value) => {
     return `R${value.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -871,6 +875,7 @@ const NewPortfolioPage = () => {
                   axisLine={false}
                   tickLine={false}
                   tickMargin={20}
+                  interval={Math.max(0, Math.ceil(currentChartData.length / 6) - 1)}
                   tick={({ x, y, payload, index }) => {
                     const isHighlighted = currentChartData[index]?.highlighted;
                     const totalItems = currentChartData.length;
@@ -937,7 +942,7 @@ const NewPortfolioPage = () => {
                 />
                 
                 <Tooltip
-                  content={({ active, payload }) => {
+                  content={({ active, payload, label }) => {
                     if (active && payload && payload.length) {
                       return (
                         <div className="rounded-xl px-4 py-2 shadow-2xl border border-purple-400/30"
@@ -946,6 +951,7 @@ const NewPortfolioPage = () => {
                             backdropFilter: 'blur(12px)',
                           }}
                         >
+                          <div className="text-xs text-purple-200 mb-0.5">{label}</div>
                           <div className="text-sm font-bold text-white">
                             R{payload[0].value.toLocaleString()}
                           </div>
@@ -1272,6 +1278,7 @@ const NewPortfolioPage = () => {
                         axisLine={false}
                         tickLine={false}
                         tickMargin={20}
+                        interval={Math.max(0, Math.ceil(stockChartData.length / 6) - 1)}
                         tick={({ x, y, payload, index }) => {
                           const isHighlighted = stockChartData[index]?.highlighted;
                           const totalItems = stockChartData.length;
@@ -1313,7 +1320,7 @@ const NewPortfolioPage = () => {
                       />
 
                       <Tooltip
-                        content={({ active, payload }) => {
+                        content={({ active, payload, label }) => {
                           if (active && payload && payload.length) {
                             return (
                               <div className="rounded-xl px-4 py-2 shadow-2xl border border-purple-400/30"
@@ -1322,6 +1329,7 @@ const NewPortfolioPage = () => {
                                   backdropFilter: 'blur(12px)',
                                 }}
                               >
+                                <div className="text-xs text-purple-200 mb-0.5">{label}</div>
                                 <div className="text-sm font-bold text-white">
                                   R{payload[0].value.toLocaleString()}
                                 </div>
