@@ -105,11 +105,11 @@ const MOCK_ALLOCATIONS = [
 ];
 
 const MOCK_STOCKS = [
-  { id: 1, name: "Apple Inc.", ticker: "AAPL", shares: 15, price: 185.42, dailyChange: 2.35, logo: null },
-  { id: 2, name: "Microsoft Corp.", ticker: "MSFT", shares: 8, price: 378.91, dailyChange: -0.87, logo: null },
-  { id: 3, name: "Amazon.com Inc.", ticker: "AMZN", shares: 12, price: 178.25, dailyChange: 1.52, logo: null },
-  { id: 4, name: "Tesla Inc.", ticker: "TSLA", shares: 20, price: 248.50, dailyChange: -2.14, logo: null },
-  { id: 5, name: "Alphabet Inc.", ticker: "GOOGL", shares: 10, price: 141.80, dailyChange: 0.95, logo: null },
+  { id: 1, name: "Apple Inc.", ticker: "AAPL", shares: 15, price: 185.42, dailyChange: 2.35, logo: "https://s3-symbol-logo.tradingview.com/apple--big.svg" },
+  { id: 2, name: "Microsoft Corp.", ticker: "MSFT", shares: 8, price: 378.91, dailyChange: -0.87, logo: "https://s3-symbol-logo.tradingview.com/microsoft--big.svg" },
+  { id: 3, name: "Amazon.com Inc.", ticker: "AMZN", shares: 12, price: 178.25, dailyChange: 1.52, logo: "https://s3-symbol-logo.tradingview.com/amazon--big.svg" },
+  { id: 4, name: "Tesla Inc.", ticker: "TSLA", shares: 20, price: 248.50, dailyChange: -2.14, logo: "https://s3-symbol-logo.tradingview.com/tesla--big.svg" },
+  { id: 5, name: "Alphabet Inc.", ticker: "GOOGL", shares: 10, price: 141.80, dailyChange: 0.95, logo: "https://s3-symbol-logo.tradingview.com/alphabet--big.svg" },
 ];
 
 const MOCK_STOCK_CHART_DATA = {
