@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import {
   ArrowDownToLine,
@@ -22,19 +22,65 @@ import {
   Plus,
   Calendar,
   ChevronRight,
-  RefreshCw,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
 import { useRequiredActions } from "../lib/useRequiredActions";
 import { useSumsubStatus } from "../lib/useSumsubStatus";
 import { useFinancialData, useInvestments } from "../lib/useFinancialData";
 import { getStrategiesWithMetrics } from "../lib/strategyData";
+import { formatZar } from "../lib/formatCurrency";
 import HomeSkeleton from "../components/HomeSkeleton";
 import SwipeableBalanceCard from "../components/SwipeableBalanceCard";
-import MintBalanceCard from "../components/MintBalanceCard";
 import OutstandingActionsSection from "../components/OutstandingActionsSection";
 import TransactionHistorySection from "../components/TransactionHistorySection";
 import NotificationBell from "../components/NotificationBell";
+
+const CARD_VISIBILITY_KEY = "mintBalanceVisible";
+
+const MintLogoWhite = ({ className = "" }) => (
+  <svg viewBox="0 0 1826.64 722.72" className={className}>
+    <g>
+      <path fill="#FFFFFF" d="M1089.47,265.13c25.29,12.34,16.69,50.37-11.45,50.63h0s-512.36,0-512.36,0c-14.73,0-26.67,11.94-26.67,26.67v227.94c0,14.73-11.94,26.67-26.67,26.67H26.67c-14.73,0-26.67-11.94-26.67-26.67v-248.55c0-9.54,5.1-18.36,13.38-23.12L526.75,3.55c7.67-4.41,17.03-4.73,24.99-.85l537.73,262.43Z"/>
+      <path fill="#FFFFFF" d="M737.17,457.58c-25.29-12.34-16.69-50.37,11.45-50.63h0s512.36,0,512.36,0c14.73,0,26.67-11.94,26.67-26.67v-227.94c0-14.73,11.94-26.67,26.67-26.67h485.66c14.73,0,26.67,11.94,26.67,26.67v248.55c0,9.54-5.1,18.36-13.38,23.12l-513.38,295.15c-7.67,4.41-17.03,4.73-24.99.85l-537.73-262.43Z"/>
+    </g>
+  </svg>
+);
+
+const MintLogoSilver = ({ className = "" }) => (
+  <svg viewBox="0 0 1826.64 722.72" className={className}>
+    <g opacity="0.12">
+      <path fill="#C0C0C0" d="M1089.47,265.13c25.29,12.34,16.69,50.37-11.45,50.63h0s-512.36,0-512.36,0c-14.73,0-26.67,11.94-26.67,26.67v227.94c0,14.73-11.94,26.67-26.67,26.67H26.67c-14.73,0-26.67-11.94-26.67-26.67v-248.55c0-9.54,5.1-18.36,13.38-23.12L526.75,3.55c7.67-4.41,17.03-4.73,24.99-.85l537.73,262.43Z"/>
+      <path fill="#C0C0C0" d="M737.17,457.58c-25.29-12.34-16.69-50.37,11.45-50.63h0s512.36,0,512.36,0c14.73,0,26.67-11.94,26.67-26.67v-227.94c0-14.73,11.94-26.67,26.67-26.67h485.66c14.73,0,26.67,11.94,26.67,26.67v248.55c0,9.54-5.1,18.36-13.38,23.12l-513.38,295.15c-7.67,4.41-17.03,4.73-24.99.85l-537.73-262.43Z"/>
+    </g>
+  </svg>
+);
+
+const CardContent = ({ children, style }) => (
+  <div
+    className="absolute inset-0 rounded-[24px] overflow-hidden"
+    style={{
+      background: "linear-gradient(135deg, #2d1052 0%, #4a1d7a 25%, #6b2fa0 50%, #5a2391 75%, #3d1a6d 100%)",
+      boxShadow: "0 25px 50px -12px rgba(91, 33, 182, 0.5)",
+      backfaceVisibility: "hidden",
+      ...style,
+    }}
+  >
+    <div className="absolute inset-0" style={{
+      backgroundImage: `
+        repeating-linear-gradient(45deg, transparent, transparent 8px, rgba(255,255,255,0.02) 8px, rgba(255,255,255,0.02) 9px),
+        repeating-linear-gradient(-45deg, transparent, transparent 8px, rgba(255,255,255,0.02) 8px, rgba(255,255,255,0.02) 9px),
+        repeating-linear-gradient(60deg, transparent, transparent 15px, rgba(255,255,255,0.015) 15px, rgba(255,255,255,0.015) 16px),
+        repeating-linear-gradient(-60deg, transparent, transparent 15px, rgba(255,255,255,0.015) 15px, rgba(255,255,255,0.015) 16px)
+      `,
+    }} />
+    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+      <MintLogoSilver className="w-52 h-auto" />
+    </div>
+    {children}
+  </div>
+);
 
 const HomePage = ({
   onOpenNotifications,
@@ -65,60 +111,53 @@ const HomePage = ({
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [loadingNews, setLoadingNews] = useState(false);
   const [homeTab, setHomeTab] = useState("balance");
-  const [isFlipped, setIsFlipped] = useState(false);
   const [userId, setUserId] = useState(null);
 
-  const cardContainerRef = useRef(null);
-  const touchStartRef = useRef({ x: 0, y: 0 });
-  const [isSwiping, setIsSwiping] = useState(false);
-  const [swipeDelta, setSwipeDelta] = useState(0);
-  const swipeLocked = useRef(false);
-
-  const handleTouchStart = useCallback((e) => {
-    const touch = e.touches[0];
-    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
-    swipeLocked.current = false;
-    setSwipeDelta(0);
-  }, []);
-
-  const handleTouchMove = useCallback((e) => {
-    const touch = e.touches[0];
-    const dx = touch.clientX - touchStartRef.current.x;
-    const dy = touch.clientY - touchStartRef.current.y;
-
-    if (!swipeLocked.current && !isSwiping) {
-      if (Math.abs(dy) > Math.abs(dx)) {
-        swipeLocked.current = true;
-        return;
-      }
-      if (Math.abs(dx) > 10) {
-        setIsSwiping(true);
-      }
-      return;
+  const [cardRotation, setCardRotation] = useState(0);
+  const [isCardAnimating, setIsCardAnimating] = useState(false);
+  const dragStartXRef = useRef(0);
+  const [isCardVisible, setIsCardVisible] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.localStorage.getItem(CARD_VISIBILITY_KEY) !== "false";
     }
+    return true;
+  });
 
-    if (swipeLocked.current) return;
+  const cardNormalizedIndex = Math.abs(Math.round(cardRotation / 180) % 2);
 
-    setSwipeDelta(dx);
-  }, [isSwiping]);
+  const toggleCardVisibility = () => {
+    setIsCardVisible((prev) => {
+      const next = !prev;
+      window.localStorage.setItem(CARD_VISIBILITY_KEY, String(next));
+      return next;
+    });
+  };
 
-  const handleTouchEnd = useCallback(() => {
-    if (!isSwiping) {
-      setSwipeDelta(0);
-      return;
+  const handleCardDragStart = (e) => {
+    if (isCardAnimating) return;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    dragStartXRef.current = clientX;
+  };
+
+  const handleCardDragEnd = (e) => {
+    if (isCardAnimating) return;
+    const clientX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
+    const diff = dragStartXRef.current - clientX;
+    if (Math.abs(diff) > 50) {
+      setIsCardAnimating(true);
+      setCardRotation(prev => diff > 0 ? prev - 180 : prev + 180);
+      setTimeout(() => setIsCardAnimating(false), 700);
     }
+  };
 
-    const threshold = 50;
-    if (swipeDelta < -threshold && !isFlipped) {
-      setIsFlipped(true);
-    } else if (swipeDelta > threshold && isFlipped) {
-      setIsFlipped(false);
+  const handleDotClick = (idx) => {
+    if (isCardAnimating) return;
+    if (idx !== cardNormalizedIndex) {
+      setIsCardAnimating(true);
+      setCardRotation(prev => idx > cardNormalizedIndex ? prev - 180 : prev + 180);
+      setTimeout(() => setIsCardAnimating(false), 700);
     }
-
-    setIsSwiping(false);
-    setSwipeDelta(0);
-    swipeLocked.current = false;
-  }, [isSwiping, swipeDelta, isFlipped]);
+  };
 
   // Goals State
   const [showGoalsModal, setShowGoalsModal] = useState(false);
@@ -371,7 +410,7 @@ const HomePage = ({
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
               <div className="flex items-center rounded-full bg-white/10 p-1 backdrop-blur-md">
                 {[
-                  { id: "balance", label: "Balance", action: () => { setHomeTab("balance"); setIsFlipped(false); } },
+                  { id: "balance", label: "Balance", action: () => { setHomeTab("balance"); setCardRotation(0); } },
                   { id: "invest", label: "Invest", action: () => { if (onOpenInvest) onOpenInvest(); } },
                   { id: "credit", label: "Credit", action: () => { if (onOpenCredit) onOpenCredit(); } },
                   { id: "transact", label: "Transact", action: () => { setHomeTab("transact"); } },
@@ -396,50 +435,70 @@ const HomePage = ({
           </header>
 
           {homeTab === "balance" ? (
-            <div style={{ perspective: "1000px" }}>
+            <div className="relative select-none">
               <div
-                ref={cardContainerRef}
-                onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
-                style={{
-                  transition: isSwiping ? "none" : "transform 0.6s cubic-bezier(0.4, 0.2, 0.2, 1)",
-                  transformStyle: "preserve-3d",
-                  transform: isSwiping
-                    ? `rotateY(${Math.max(-180, Math.min(180, (isFlipped ? 180 : 0) + (swipeDelta / (window.innerWidth || 400)) * -90))}deg)`
-                    : isFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
-                  position: "relative",
-                  touchAction: "pan-y",
-                }}
+                className="relative w-full touch-pan-y"
+                style={{ aspectRatio: "1.7 / 1", perspective: "1000px" }}
+                onTouchStart={handleCardDragStart}
+                onTouchEnd={handleCardDragEnd}
+                onMouseDown={handleCardDragStart}
+                onMouseUp={handleCardDragEnd}
               >
-                <div style={{ backfaceVisibility: "hidden" }}>
-                  <MintBalanceCard
-                    amount={balance}
-                    changeText={monthlyChangePercent ? `${monthlyChangePercent >= 0 ? '+' : ''}${monthlyChangePercent.toFixed(1)}% this month` : null}
-                    onPressMintBalance={handleMintBalancePress}
-                  />
-                </div>
-                <div
-                  style={{
-                    backfaceVisibility: "hidden",
-                    transform: "rotateY(180deg)",
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: "100%",
-                  }}
+                <CardContent style={{
+                  transform: `rotateY(${cardRotation}deg)`,
+                  transition: "transform 0.7s ease-out",
+                }}>
+                  <div className="relative h-full p-5 flex flex-col">
+                    <div className="flex items-start justify-between">
+                      <MintLogoWhite className="h-8 w-auto" />
+                    </div>
+                    <div className="flex-1 flex items-center justify-center">
+                      <p className="text-3xl md:text-4xl font-bold text-white tracking-wider" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+                        {isCardVisible ? formatZar(balance) : "••••••••"}
+                      </p>
+                    </div>
+                    <div className="flex items-end justify-between">
+                      <p className="text-base md:text-lg uppercase tracking-[0.2em] text-white font-semibold" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", letterSpacing: "0.15em" }}>
+                        {displayName || "MINT MEMBER"}
+                      </p>
+                      <div className="text-right">
+                        <p className="text-2xl md:text-3xl font-bold text-white tracking-wider" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", fontStyle: "italic" }}>VISA</p>
+                        <p className="text-sm md:text-base text-white/90 tracking-widest font-medium" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>Mint</p>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+
+                <CardContent style={{
+                  transform: `rotateY(${cardRotation + 180}deg)`,
+                  transition: "transform 0.7s ease-out",
+                }}>
+                  <div className="relative h-full overflow-hidden">
+                    <SwipeableBalanceCard userId={userId} />
+                  </div>
+                </CardContent>
+
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); toggleCardVisibility(); }}
+                  className="absolute top-4 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20"
                 >
-                  <SwipeableBalanceCard userId={userId} />
-                </div>
+                  {isCardVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsFlipped((prev) => !prev)}
-                className="flex items-center justify-center gap-1.5 mt-2 mx-auto text-white/50 active:text-white/80 transition-colors"
-              >
-                <RefreshCw className="h-3 w-3" />
-                <span className="text-[10px] font-medium">{isFlipped ? "Show card" : "Show portfolio"}</span>
-              </button>
+
+              <div className="flex justify-center gap-2 mt-3">
+                {[0, 1].map((idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => handleDotClick(idx)}
+                    className={`h-2 rounded-full transition-all duration-300 ${
+                      cardNormalizedIndex === idx ? "w-6 bg-white" : "w-2 bg-white/40 hover:bg-white/60"
+                    }`}
+                  />
+                ))}
+              </div>
             </div>
           ) : (
             <SwipeableBalanceCard userId={userId} />
