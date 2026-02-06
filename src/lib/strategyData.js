@@ -312,7 +312,7 @@ export const getStrategyPriceHistory = async (strategyId, timeframe = "6M") => {
 
     switch (timeframe) {
       case "1D":
-        startDate = new Date(currentDate.getTime() - 24 * 60 * 60 * 1000);
+        startDate = new Date(currentDate.getTime() - 3 * 24 * 60 * 60 * 1000);
         break;
       case "1W":
         startDate = new Date(currentDate.getTime() - 10 * 24 * 60 * 60 * 1000);
