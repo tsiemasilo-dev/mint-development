@@ -418,30 +418,27 @@ const HomePage = ({
                 {[
                   { id: "balance", label: "Balance", action: () => { setHomeTab("balance"); if (cardNormalizedIndex !== 0) { setIsCardAnimating(true); setCardRotation(0); setTimeout(() => setIsCardAnimating(false), 700); } } },
                   { id: "invest", label: "Invest", action: () => { setHomeTab("invest"); if (cardNormalizedIndex !== 1) { setIsCardAnimating(true); setCardRotation(-180); setTimeout(() => setIsCardAnimating(false), 700); } } },
-                  { id: "credit", label: "Credit", disabled: true },
-                  { id: "transact", label: "Transact", disabled: true },
                 ].map((tab) => (
-                  <div key={tab.id} className="relative">
-                    <button
-                      type="button"
-                      onClick={tab.disabled ? undefined : tab.action}
-                      className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
-                        tab.disabled
-                          ? "text-white/30 cursor-default"
-                          : homeTab === tab.id
-                            ? "bg-white text-slate-900 shadow-sm"
-                            : "text-white/70 hover:bg-white/10 hover:text-white"
-                      }`}
-                    >
-                      {tab.label}
-                    </button>
-                    {tab.disabled && (
-                      <span className="absolute -bottom-3.5 left-1/2 -translate-x-1/2 text-[7px] text-white/35 font-medium whitespace-nowrap tracking-wider uppercase">
-                        Coming Soon
-                      </span>
-                    )}
-                  </div>
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={tab.action}
+                    className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
+                      homeTab === tab.id
+                        ? "bg-white text-slate-900 shadow-sm"
+                        : "text-white/70 hover:bg-white/10 hover:text-white"
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
                 ))}
+                <div className="relative flex items-center">
+                  <span className="rounded-full px-3 py-1.5 text-xs font-semibold text-white/30 cursor-default">Credit</span>
+                  <span className="rounded-full px-3 py-1.5 text-xs font-semibold text-white/30 cursor-default">Transact</span>
+                  <span className="absolute -bottom-3.5 left-1/2 -translate-x-1/2 text-[7px] text-white/35 font-medium whitespace-nowrap tracking-wider uppercase">
+                    Coming Soon
+                  </span>
+                </div>
               </div>
             </div>
 
