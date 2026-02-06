@@ -2,43 +2,12 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion";
 import { Bell, Eye, EyeOff, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, TrendingUp, TrendingDown, Plus } from "lucide-react";
 import { Area, ComposedChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell } from 'recharts';
-import { useFinancialData } from "../lib/useFinancialData";
+import { useFinancialData, useInvestments } from "../lib/useFinancialData";
 import { useProfile } from "../lib/useProfile";
 import { useUserStrategies, useStrategyChartData } from "../lib/useUserStrategies";
 import { useStockQuotes, useStockChart } from "../lib/useStockData";
 
 const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-const MOCK_CALENDAR_RETURNS = {
-  "2025": {
-    "01": 0.032,
-    "02": -0.018,
-    "03": 0.045,
-    "04": 0.021,
-    "05": -0.008,
-    "06": 0.038,
-    "07": 0.015,
-    "08": -0.025,
-    "09": 0.042,
-    "10": 0.028,
-    "11": 0.019,
-    "12": 0.035,
-  },
-  "2024": {
-    "01": 0.028,
-    "02": 0.015,
-    "03": -0.012,
-    "04": 0.033,
-    "05": 0.041,
-    "06": -0.005,
-    "07": 0.022,
-    "08": 0.018,
-    "09": -0.015,
-    "10": 0.038,
-    "11": 0.025,
-    "12": 0.045,
-  },
-};
 
 const getReturnColor = (value) => {
   if (value == null) return "bg-slate-50 text-slate-600";
@@ -47,302 +16,6 @@ const getReturnColor = (value) => {
   return "bg-slate-50 text-slate-600";
 };
 
-const MOCK_ALLOCATIONS = [
-  {
-    id: 1,
-    amount: 2500.00,
-    returnPercent: 8.2,
-    date: "2025-02-01",
-    topPerformers: [
-      { symbol: "NED", logo: "/logos/nedbank.jpg", return: 12.5 },
-      { symbol: "SBK", logo: "/logos/standard-bank.jpg", return: 9.8 },
-      { symbol: "SUN", logo: "/logos/sun-international.jpg", return: 7.2 },
-    ],
-  },
-  {
-    id: 2,
-    amount: 1500.00,
-    returnPercent: 15.4,
-    date: "2025-01-15",
-    topPerformers: [
-      { symbol: "SBK", logo: "/logos/standard-bank.jpg", return: 18.3 },
-      { symbol: "EXP", logo: "/logos/exemplar-reit.jpg", return: 14.1 },
-      { symbol: "NED", logo: "/logos/nedbank.jpg", return: 11.9 },
-    ],
-  },
-  {
-    id: 3,
-    amount: 3000.00,
-    returnPercent: 21.5,
-    date: "2024-12-20",
-    topPerformers: [
-      { symbol: "SUN", logo: "/logos/sun-international.jpg", return: 25.6 },
-      { symbol: "NED", logo: "/logos/nedbank.jpg", return: 19.4 },
-      { symbol: "SBK", logo: "/logos/standard-bank.jpg", return: 16.8 },
-    ],
-  },
-  {
-    id: 4,
-    amount: 5000.00,
-    returnPercent: 12.8,
-    date: "2024-11-05",
-    topPerformers: [
-      { symbol: "EXP", logo: "/logos/exemplar-reit.jpg", return: 15.2 },
-      { symbol: "SBK", logo: "/logos/standard-bank.jpg", return: 13.1 },
-      { symbol: "SUN", logo: "/logos/sun-international.jpg", return: 10.5 },
-    ],
-  },
-  {
-    id: 5,
-    amount: 2000.00,
-    returnPercent: 5.3,
-    date: "2024-09-18",
-    topPerformers: [
-      { symbol: "NED", logo: "/logos/nedbank.jpg", return: 8.4 },
-      { symbol: "EXP", logo: "/logos/exemplar-reit.jpg", return: 6.2 },
-      { symbol: "SBK", logo: "/logos/standard-bank.jpg", return: 4.1 },
-    ],
-  },
-];
-
-const MOCK_STOCKS = [
-  { id: 1, name: "Apple Inc.", ticker: "AAPL", shares: 15, price: 185.42, dailyChange: 2.35, logo: "https://s3-symbol-logo.tradingview.com/apple--big.svg" },
-  { id: 2, name: "Microsoft Corp.", ticker: "MSFT", shares: 8, price: 378.91, dailyChange: -0.87, logo: "https://s3-symbol-logo.tradingview.com/microsoft--big.svg" },
-  { id: 3, name: "Amazon.com Inc.", ticker: "AMZN", shares: 12, price: 178.25, dailyChange: 1.52, logo: "https://s3-symbol-logo.tradingview.com/amazon--big.svg" },
-  { id: 4, name: "Tesla Inc.", ticker: "TSLA", shares: 20, price: 248.50, dailyChange: -2.14, logo: "https://s3-symbol-logo.tradingview.com/tesla--big.svg" },
-  { id: 5, name: "Alphabet Inc.", ticker: "GOOGL", shares: 10, price: 141.80, dailyChange: 0.95, logo: "https://s3-symbol-logo.tradingview.com/alphabet--big.svg" },
-];
-
-const MOCK_STOCK_CHART_DATA = {
-  AAPL: {
-    daily: [
-      { day: "12am", value: 182.10 }, { day: "1am", value: 182.05 }, { day: "2am", value: 182.20 },
-      { day: "3am", value: 182.35 }, { day: "4am", value: 182.50 }, { day: "5am", value: 182.80 },
-      { day: "6am", value: 183.10 }, { day: "7am", value: 183.50 }, { day: "8am", value: 183.80 },
-      { day: "9am", value: 184.20 }, { day: "10am", value: 184.60 }, { day: "11am", value: 184.90 },
-      { day: "12pm", value: 185.20, highlighted: true }, { day: "1pm", value: 185.10 },
-      { day: "2pm", value: 185.30 }, { day: "3pm", value: 185.25 }, { day: "4pm", value: 185.42 },
-    ],
-    weekly: [
-      { day: "Mon", value: 181.20 }, { day: "Tue", value: 182.50 },
-      { day: "Wed", value: 183.80, highlighted: true }, { day: "Thu", value: 184.10 },
-      { day: "Fri", value: 185.42 },
-    ],
-    monthly: [
-      { day: "1", value: 175.50 }, { day: "5", value: 176.80 }, { day: "8", value: 178.20 },
-      { day: "12", value: 179.90 }, { day: "15", value: 180.50, highlighted: true },
-      { day: "18", value: 181.30 }, { day: "22", value: 182.70 }, { day: "25", value: 184.10 },
-      { day: "28", value: 185.00 }, { day: "30", value: 185.42 },
-    ],
-    allTime: [
-      { day: "Jan '24", value: 155.00 }, { day: "Mar '24", value: 160.20 }, { day: "May '24", value: 165.50 },
-      { day: "Jul '24", value: 170.80 }, { day: "Sep '24", value: 174.30 }, { day: "Nov '24", value: 178.60 },
-      { day: "Jan '25", value: 182.90, highlighted: true }, { day: "Feb '25", value: 185.42 },
-    ],
-  },
-  MSFT: {
-    daily: [
-      { day: "12am", value: 376.50 }, { day: "1am", value: 376.40 }, { day: "2am", value: 376.60 },
-      { day: "3am", value: 376.80 }, { day: "4am", value: 377.00 }, { day: "5am", value: 377.30 },
-      { day: "6am", value: 377.60 }, { day: "7am", value: 377.90 }, { day: "8am", value: 378.20 },
-      { day: "9am", value: 378.50 }, { day: "10am", value: 378.80 }, { day: "11am", value: 379.10 },
-      { day: "12pm", value: 379.50, highlighted: true }, { day: "1pm", value: 379.30 },
-      { day: "2pm", value: 379.10 }, { day: "3pm", value: 378.95 }, { day: "4pm", value: 378.91 },
-    ],
-    weekly: [
-      { day: "Mon", value: 380.20 }, { day: "Tue", value: 381.50 },
-      { day: "Wed", value: 380.10, highlighted: true }, { day: "Thu", value: 379.50 },
-      { day: "Fri", value: 378.91 },
-    ],
-    monthly: [
-      { day: "1", value: 372.00 }, { day: "5", value: 373.50 }, { day: "8", value: 375.20 },
-      { day: "12", value: 376.80 }, { day: "15", value: 378.00, highlighted: true },
-      { day: "18", value: 379.10 }, { day: "22", value: 380.50 }, { day: "25", value: 379.80 },
-      { day: "28", value: 379.20 }, { day: "30", value: 378.91 },
-    ],
-    allTime: [
-      { day: "Jan '24", value: 340.00 }, { day: "Mar '24", value: 348.50 }, { day: "May '24", value: 355.20 },
-      { day: "Jul '24", value: 362.80 }, { day: "Sep '24", value: 368.40 }, { day: "Nov '24", value: 374.90 },
-      { day: "Jan '25", value: 380.20, highlighted: true }, { day: "Feb '25", value: 378.91 },
-    ],
-  },
-  AMZN: {
-    daily: [
-      { day: "12am", value: 175.80 }, { day: "1am", value: 175.90 }, { day: "2am", value: 176.10 },
-      { day: "3am", value: 176.30 }, { day: "4am", value: 176.50 }, { day: "5am", value: 176.80 },
-      { day: "6am", value: 177.00 }, { day: "7am", value: 177.20 }, { day: "8am", value: 177.50 },
-      { day: "9am", value: 177.80 }, { day: "10am", value: 178.00 }, { day: "11am", value: 178.10 },
-      { day: "12pm", value: 178.30, highlighted: true }, { day: "1pm", value: 178.20 },
-      { day: "2pm", value: 178.15 }, { day: "3pm", value: 178.20 }, { day: "4pm", value: 178.25 },
-    ],
-    weekly: [
-      { day: "Mon", value: 174.50 }, { day: "Tue", value: 175.80 },
-      { day: "Wed", value: 176.90, highlighted: true }, { day: "Thu", value: 177.50 },
-      { day: "Fri", value: 178.25 },
-    ],
-    monthly: [
-      { day: "1", value: 168.00 }, { day: "5", value: 169.50 }, { day: "8", value: 171.20 },
-      { day: "12", value: 173.00 }, { day: "15", value: 174.50, highlighted: true },
-      { day: "18", value: 175.80 }, { day: "22", value: 176.90 }, { day: "25", value: 177.50 },
-      { day: "28", value: 178.00 }, { day: "30", value: 178.25 },
-    ],
-    allTime: [
-      { day: "Jan '24", value: 145.00 }, { day: "Mar '24", value: 150.80 }, { day: "May '24", value: 155.50 },
-      { day: "Jul '24", value: 160.20 }, { day: "Sep '24", value: 165.80 }, { day: "Nov '24", value: 171.40 },
-      { day: "Jan '25", value: 175.90, highlighted: true }, { day: "Feb '25", value: 178.25 },
-    ],
-  },
-  TSLA: {
-    daily: [
-      { day: "12am", value: 252.80 }, { day: "1am", value: 252.50 }, { day: "2am", value: 252.20 },
-      { day: "3am", value: 251.80 }, { day: "4am", value: 251.50 }, { day: "5am", value: 251.00 },
-      { day: "6am", value: 250.80 }, { day: "7am", value: 250.50 }, { day: "8am", value: 250.20 },
-      { day: "9am", value: 249.80 }, { day: "10am", value: 249.50 }, { day: "11am", value: 249.20 },
-      { day: "12pm", value: 249.00, highlighted: true }, { day: "1pm", value: 248.90 },
-      { day: "2pm", value: 248.70 }, { day: "3pm", value: 248.60 }, { day: "4pm", value: 248.50 },
-    ],
-    weekly: [
-      { day: "Mon", value: 255.80 }, { day: "Tue", value: 253.50 },
-      { day: "Wed", value: 251.20, highlighted: true }, { day: "Thu", value: 250.00 },
-      { day: "Fri", value: 248.50 },
-    ],
-    monthly: [
-      { day: "1", value: 262.00 }, { day: "5", value: 260.50 }, { day: "8", value: 258.80 },
-      { day: "12", value: 256.50 }, { day: "15", value: 254.20, highlighted: true },
-      { day: "18", value: 252.80 }, { day: "22", value: 251.00 }, { day: "25", value: 249.80 },
-      { day: "28", value: 249.00 }, { day: "30", value: 248.50 },
-    ],
-    allTime: [
-      { day: "Jan '24", value: 220.00 }, { day: "Mar '24", value: 235.50 }, { day: "May '24", value: 245.80 },
-      { day: "Jul '24", value: 260.20 }, { day: "Sep '24", value: 268.40 }, { day: "Nov '24", value: 258.90 },
-      { day: "Jan '25", value: 252.80, highlighted: true }, { day: "Feb '25", value: 248.50 },
-    ],
-  },
-  GOOGL: {
-    daily: [
-      { day: "12am", value: 140.20 }, { day: "1am", value: 140.25 }, { day: "2am", value: 140.30 },
-      { day: "3am", value: 140.40 }, { day: "4am", value: 140.50 }, { day: "5am", value: 140.65 },
-      { day: "6am", value: 140.80 }, { day: "7am", value: 140.95 }, { day: "8am", value: 141.10 },
-      { day: "9am", value: 141.25 }, { day: "10am", value: 141.40 }, { day: "11am", value: 141.55 },
-      { day: "12pm", value: 141.70, highlighted: true }, { day: "1pm", value: 141.65 },
-      { day: "2pm", value: 141.72 }, { day: "3pm", value: 141.75 }, { day: "4pm", value: 141.80 },
-    ],
-    weekly: [
-      { day: "Mon", value: 139.50 }, { day: "Tue", value: 140.20 },
-      { day: "Wed", value: 140.80, highlighted: true }, { day: "Thu", value: 141.30 },
-      { day: "Fri", value: 141.80 },
-    ],
-    monthly: [
-      { day: "1", value: 135.00 }, { day: "5", value: 136.20 }, { day: "8", value: 137.50 },
-      { day: "12", value: 138.40 }, { day: "15", value: 139.20, highlighted: true },
-      { day: "18", value: 140.00 }, { day: "22", value: 140.80 }, { day: "25", value: 141.20 },
-      { day: "28", value: 141.50 }, { day: "30", value: 141.80 },
-    ],
-    allTime: [
-      { day: "Jan '24", value: 120.00 }, { day: "Mar '24", value: 124.50 }, { day: "May '24", value: 128.80 },
-      { day: "Jul '24", value: 132.20 }, { day: "Sep '24", value: 135.40 }, { day: "Nov '24", value: 138.60 },
-      { day: "Jan '25", value: 140.90, highlighted: true }, { day: "Feb '25", value: 141.80 },
-    ],
-  },
-};
-
-
-const MOCK_DATA = {
-  accountValue: 24897.43,
-  selectedStrategy: {
-    name: "Balanced Growth",
-    currentValue: 4449.30,
-    previousMonthChange: 21,
-  },
-  chartData: {
-    daily: [
-      { day: "12am", value: 4320 },
-      { day: "1am", value: 4310 },
-      { day: "2am", value: 4330 },
-      { day: "3am", value: 4350 },
-      { day: "4am", value: 4360 },
-      { day: "5am", value: 4370 },
-      { day: "6am", value: 4380 },
-      { day: "7am", value: 4400 },
-      { day: "8am", value: 4410 },
-      { day: "9am", value: 4420 },
-      { day: "10am", value: 4450 },
-      { day: "11am", value: 4480 },
-      { day: "12pm", value: 4510, highlighted: true },
-      { day: "1pm", value: 4520 },
-      { day: "2pm", value: 4500 },
-      { day: "3pm", value: 4480 },
-      { day: "4pm", value: 4460 },
-      { day: "5pm", value: 4450 },
-      { day: "6pm", value: 4449 },
-      { day: "7pm", value: 4455 },
-      { day: "8pm", value: 4458 },
-      { day: "9pm", value: 4460 },
-      { day: "10pm", value: 4465 },
-      { day: "11pm", value: 4470 },
-    ],
-    weekly: [
-      { day: "Sat", value: 3200 },
-      { day: "Sun", value: 3800 },
-      { day: "Mon", value: 4100 },
-      { day: "Tue", value: 4720, highlighted: true },
-      { day: "Wed", value: 4200 },
-      { day: "Thu", value: 4449 },
-      { day: "Fri", value: 4600 },
-    ],
-    monthly: [
-      { day: "1", value: 3500 },
-      { day: "2", value: 3520 },
-      { day: "3", value: 3550 },
-      { day: "4", value: 3580 },
-      { day: "5", value: 3650 },
-      { day: "6", value: 3700 },
-      { day: "7", value: 3750 },
-      { day: "8", value: 3800 },
-      { day: "9", value: 3850 },
-      { day: "10", value: 3900 },
-      { day: "11", value: 3950 },
-      { day: "12", value: 4000 },
-      { day: "13", value: 4050 },
-      { day: "14", value: 4100 },
-      { day: "15", value: 4200, highlighted: true },
-      { day: "16", value: 4180 },
-      { day: "17", value: 4150 },
-      { day: "18", value: 4120 },
-      { day: "19", value: 4100 },
-      { day: "20", value: 4150 },
-      { day: "21", value: 4200 },
-      { day: "22", value: 4250 },
-      { day: "23", value: 4280 },
-      { day: "24", value: 4300 },
-      { day: "25", value: 4350 },
-      { day: "26", value: 4380 },
-      { day: "27", value: 4400 },
-      { day: "28", value: 4420 },
-      { day: "29", value: 4435 },
-      { day: "30", value: 4449 },
-    ],
-    allTime: [
-      { day: "Jan '24", value: 2800 },
-      { day: "Feb '24", value: 2900 },
-      { day: "Mar '24", value: 3050 },
-      { day: "Apr '24", value: 3200 },
-      { day: "May '24", value: 3400 },
-      { day: "Jun '24", value: 3550 },
-      { day: "Jul '24", value: 3800 },
-      { day: "Aug '24", value: 3900 },
-      { day: "Sep '24", value: 3950 },
-      { day: "Oct '24", value: 4100 },
-      { day: "Nov '24", value: 4200 },
-      { day: "Dec '24", value: 4300 },
-      { day: "Jan '25", value: 4449, highlighted: true },
-      { day: "Feb '25", value: 4600 },
-    ],
-  },
-  goals: [
-    { name: "First Home", current: 150000, target: 500000 },
-  ],
-};
 
 const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest }) => {
   const [balanceVisible, setBalanceVisible] = useState(true);
@@ -364,7 +37,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest }) => {
   const tabOrder = ["strategy", "stocks", "holdings"];
   const { securities: allSecurities, quotes: liveQuotes, loading: quotesLoading } = useStockQuotes();
   const stocksList = useMemo(() => {
-    if (!allSecurities || allSecurities.length === 0) return MOCK_STOCKS;
+    if (!allSecurities || allSecurities.length === 0) return [];
     return allSecurities
       .filter(s => s.currentPrice != null)
       .map(s => ({
@@ -433,8 +106,26 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest }) => {
     setShowStrategyDropdown(false);
   };
 
-  const availableCalendarYears = useMemo(() => Object.keys(MOCK_CALENDAR_RETURNS).sort(), []);
-  const calendarData = MOCK_CALENDAR_RETURNS;
+  const calendarData = useMemo(() => {
+    if (!strategies || strategies.length === 0) return {};
+    const data = {};
+    strategies.forEach(s => {
+      if (s.metrics) {
+        const now = new Date();
+        const year = String(now.getFullYear());
+        if (!data[year]) data[year] = {};
+        if (s.metrics.r_1m != null) {
+          const month = String(now.getMonth() + 1).padStart(2, "0");
+          data[year][month] = s.metrics.r_1m;
+        }
+      }
+    });
+    return data;
+  }, [strategies]);
+  const availableCalendarYears = useMemo(() => {
+    const keys = Object.keys(calendarData);
+    return keys.length > 0 ? keys.sort() : [];
+  }, [calendarData]);
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
@@ -442,11 +133,11 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest }) => {
   };
 
   const { holdings: rawHoldings, loading: holdingsLoading, investments } = useFinancialData();
-  const { accountValue, chartData, goals } = MOCK_DATA;
+  const { goals: investmentGoals } = useInvestments();
   
   const displayAccountValue = strategies.length > 0 
     ? strategies.reduce((sum, s) => sum + (s.currentValue || 0), 0) 
-    : accountValue;
+    : 0;
 
   const allStrategyHoldings = useMemo(() => {
     const holdingsMap = new Map();
@@ -490,18 +181,6 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest }) => {
 
   const holdings = allStrategyHoldings.slice(0, 5);
 
-  const getStockChartData = () => {
-    const stockData = MOCK_STOCK_CHART_DATA[selectedStock.ticker];
-    if (!stockData) return [];
-    switch (stockTimeFilter) {
-      case "D": return stockData.daily;
-      case "W": return stockData.weekly;
-      case "M": return stockData.monthly;
-      case "ALL": return stockData.allTime;
-      default: return stockData.weekly;
-    }
-  };
-
   const getChartData = () => {
     if (realChartData && realChartData.length > 0) {
       return realChartData;
@@ -524,8 +203,8 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest }) => {
 
   const myStockIds = useMemo(() => new Set(myStocks.map(s => s.id)), [myStocks]);
 
-  const goal = goals[0];
-  const goalProgress = (goal.current / goal.target) * 100;
+  const goal = investmentGoals && investmentGoals.length > 0 ? investmentGoals[0] : null;
+  const goalProgress = goal && goal.targetAmount > 0 ? (goal.currentAmount / goal.targetAmount) * 100 : 0;
 
   // All Allocations View
   if (currentView === "allocations") {
@@ -561,65 +240,78 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest }) => {
 
         {/* Allocation History Cards - sorted most recent first */}
         <div className="mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-6">
-          {[...MOCK_ALLOCATIONS].sort((a, b) => new Date(b.date) - new Date(a.date)).map((allocation) => (
-            <div 
-              key={allocation.id}
-              className="rounded-3xl p-5 backdrop-blur-xl shadow-sm border border-slate-100/50"
-              style={{
-                background: 'rgba(255,255,255,0.7)',
-              }}
-            >
-              {/* Amount and Return */}
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <p className="text-xs text-slate-500 mb-1">Amount</p>
-                  <p className="text-xl font-bold text-slate-900">
-                    {formatCurrency(allocation.amount)}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-slate-500 mb-1">Return</p>
-                  <p className={`text-xl font-bold ${allocation.returnPercent >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                    {allocation.returnPercent >= 0 ? '+' : ''}{allocation.returnPercent.toFixed(1)}%
-                  </p>
-                </div>
-              </div>
-
-              {/* Date and Top Performers Logos */}
-              <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-                <div>
-                  <p className="text-xs text-slate-500 mb-1">Date</p>
-                  <p className="text-sm font-medium text-slate-700">
-                    {formatDate(allocation.date)}
-                  </p>
-                </div>
-                
-                {/* Overlapping Top Performers Logos */}
-                <div className="flex items-center -space-x-2">
-                  {allocation.topPerformers.slice(0, 3).map((asset, index) => (
-                    <div 
-                      key={asset.symbol}
-                      className="h-9 w-9 rounded-full bg-white border-2 border-white shadow-md overflow-hidden"
-                      style={{ zIndex: 3 - index }}
-                    >
-                      {failedLogos[asset.symbol] ? (
-                        <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-100 to-purple-100 text-[10px] font-bold text-violet-700">
-                          {asset.symbol.slice(0, 2)}
-                        </div>
-                      ) : (
-                        <img
-                          src={asset.logo}
-                          alt={asset.symbol}
-                          className="h-full w-full object-cover"
-                          onError={() => setFailedLogos(prev => ({ ...prev, [asset.symbol]: true }))}
-                        />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
+          {strategies.length === 0 ? (
+            <div className="rounded-3xl p-8 backdrop-blur-xl shadow-sm border border-slate-100/50 text-center" style={{ background: 'rgba(255,255,255,0.7)' }}>
+              <p className="text-sm font-semibold text-slate-900 mb-1">No allocations yet</p>
+              <p className="text-xs text-slate-500">Your strategy allocations will appear here once you start investing.</p>
             </div>
-          ))}
+          ) : (
+            [...strategies].sort((a, b) => new Date(b.entryDate || 0) - new Date(a.entryDate || 0)).map((allocation) => {
+              const topPerformers = Array.isArray(allocation.holdings) ? allocation.holdings.slice(0, 3) : [];
+              return (
+                <div 
+                  key={allocation.id}
+                  className="rounded-3xl p-5 backdrop-blur-xl shadow-sm border border-slate-100/50"
+                  style={{
+                    background: 'rgba(255,255,255,0.7)',
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <p className="text-xs text-slate-500 mb-1">Amount</p>
+                      <p className="text-xl font-bold text-slate-900">
+                        {formatCurrency(allocation.investedAmount || 0)}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-slate-500 mb-1">Return</p>
+                      <p className={`text-xl font-bold ${(allocation.previousMonthChange || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        {(allocation.previousMonthChange || 0) >= 0 ? '+' : ''}{(allocation.previousMonthChange || 0).toFixed(1)}%
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+                    <div>
+                      <p className="text-xs text-slate-500 mb-1">{allocation.entryDate ? 'Date' : 'Strategy'}</p>
+                      <p className="text-sm font-medium text-slate-700">
+                        {allocation.entryDate ? formatDate(allocation.entryDate) : allocation.name}
+                      </p>
+                    </div>
+                    
+                    {topPerformers.length > 0 && (
+                      <div className="flex items-center -space-x-2">
+                        {topPerformers.map((asset, index) => {
+                          const matchedStock = stocksList.find(st => st.ticker === asset.symbol);
+                          const logo = matchedStock?.logo || null;
+                          return (
+                            <div 
+                              key={asset.symbol}
+                              className="h-9 w-9 rounded-full bg-white border-2 border-white shadow-md overflow-hidden"
+                              style={{ zIndex: 3 - index }}
+                            >
+                              {failedLogos[asset.symbol] || !logo ? (
+                                <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-100 to-purple-100 text-[10px] font-bold text-violet-700">
+                                  {asset.symbol.slice(0, 2)}
+                                </div>
+                              ) : (
+                                <img
+                                  src={logo}
+                                  alt={asset.symbol}
+                                  className="h-full w-full object-cover"
+                                  onError={() => setFailedLogos(prev => ({ ...prev, [asset.symbol]: true }))}
+                                />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
     );
@@ -943,23 +635,30 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest }) => {
             </button>
           </div>
           
-          <div className="rounded-2xl bg-slate-50 p-4">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-semibold text-slate-900">{goal.name}</p>
-              <p className="text-sm font-semibold text-slate-900">
-                {formatCurrency(goal.current)} / {formatCurrency(goal.target)}
+          {goal ? (
+            <div className="rounded-2xl bg-slate-50 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-semibold text-slate-900">{goal.label}</p>
+                <p className="text-sm font-semibold text-slate-900">
+                  {formatCurrency(goal.currentAmount)} / {formatCurrency(goal.targetAmount)}
+                </p>
+              </div>
+              <div className="h-2.5 w-full rounded-full bg-slate-200 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-600 transition-all"
+                  style={{ width: `${goalProgress}%` }}
+                />
+              </div>
+              <p className="mt-2 text-xs text-slate-500">
+                {goalProgress.toFixed(0)}% of your goal achieved
               </p>
             </div>
-            <div className="h-2.5 w-full rounded-full bg-slate-200 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-600 transition-all"
-                style={{ width: `${goalProgress}%` }}
-              />
+          ) : (
+            <div className="rounded-2xl bg-slate-50 p-4 text-center">
+              <p className="text-sm font-semibold text-slate-900 mb-1">No linked goals yet</p>
+              <p className="text-xs text-slate-500">Set up investment goals to track your progress.</p>
             </div>
-            <p className="mt-2 text-xs text-slate-500">
-              {goalProgress.toFixed(0)}% of your goal achieved
-            </p>
-          </div>
+          )}
         </section>
 
         <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50">
@@ -1027,24 +726,32 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest }) => {
               </div>
             )}
           </div>
-          <p className="mb-3 text-xs font-semibold text-slate-500">{calendarYear}</p>
-          <div className="grid grid-cols-3 gap-2">
-            {monthNames.map((label, index) => {
-              const monthKey = String(index + 1).padStart(2, "0");
-              const value = calendarData[String(calendarYear)]?.[monthKey];
-              return (
-                <div
-                  key={`${calendarYear}-${label}`}
-                  className={`rounded-xl px-3 py-2.5 text-center ${getReturnColor(value)}`}
-                >
-                  <p className="text-[10px] font-semibold text-slate-500">{label}</p>
-                  <p className="mt-0.5 text-sm font-bold">
-                    {value == null ? "—" : `${(Number(value) * 100).toFixed(2)}%`}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
+          {availableCalendarYears.length === 0 ? (
+            <div className="text-center py-4">
+              <p className="text-sm text-slate-500">Calendar return data will be available once you have investment history.</p>
+            </div>
+          ) : (
+            <>
+              <p className="mb-3 text-xs font-semibold text-slate-500">{calendarYear}</p>
+              <div className="grid grid-cols-3 gap-2">
+                {monthNames.map((label, index) => {
+                  const monthKey = String(index + 1).padStart(2, "0");
+                  const value = calendarData[String(calendarYear)]?.[monthKey];
+                  return (
+                    <div
+                      key={`${calendarYear}-${label}`}
+                      className={`rounded-xl px-3 py-2.5 text-center ${getReturnColor(value)}`}
+                    >
+                      <p className="text-[10px] font-semibold text-slate-500">{label}</p>
+                      <p className="mt-0.5 text-sm font-bold">
+                        {value == null ? "—" : `${(Number(value) * 100).toFixed(2)}%`}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </section>
       </div>
         </>

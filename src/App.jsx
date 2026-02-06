@@ -217,10 +217,24 @@ const App = () => {
       setIsCheckingAuth(false);
     };
     
+    const checkExistingSession = async () => {
+      if (supabase && !isRecoveryMode && !hasError) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            setCurrentPage("home");
+          }
+        } catch (err) {
+          console.error("Session check error:", err);
+        }
+      }
+      setIsCheckingAuth(false);
+    };
+
     if (isRecoveryMode) {
       setupRecoverySession();
     } else {
-      setIsCheckingAuth(false);
+      checkExistingSession();
     }
   }, []);
 
@@ -1108,6 +1122,14 @@ const App = () => {
 
   if (currentPage === "userOnboarding") {
     return <UserOnboardingPage onComplete={() => setCurrentPage("home")} />;
+  }
+
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0d0d12]">
+        <div className="w-8 h-8 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
   }
 
   if (currentPage === "welcome") {
