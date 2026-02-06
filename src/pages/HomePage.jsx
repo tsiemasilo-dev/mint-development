@@ -512,61 +512,11 @@ const HomePage = ({
       dueAt: "2025-01-20T12:00:00Z",
       createdAt: "2025-01-18T09:00:00Z",
     },
-    {
-      id: "bank-link",
-      title: "Link your bank account",
-      description: "Connect to enable instant transfers",
-      priority: 2,
-      status: bankLinked ? "Linked" : "Not Linked",
-      icon: Landmark,
-      routeName: "actions",
-      isComplete: bankLinked,
-      dueAt: "2025-01-22T12:00:00Z",
-      createdAt: "2025-01-19T09:00:00Z",
-    },
-    {
-      id: "investments",
-      title: "Review investment allocation",
-      description: "Confirm your latest risk profile",
-      priority: 3,
-      status: "Optional",
-      icon: TrendingUp,
-      routeName: "investments",
-      isComplete: false,
-      dueAt: "2025-01-28T12:00:00Z",
-      createdAt: "2025-01-21T09:00:00Z",
-    },
-    {
-      id: "invite",
-      title: "Invite a friend",
-      description: "Share Mint and earn bonus rewards",
-      priority: 4,
-      status: "Optional",
-      icon: UserPlus,
-      routeName: "actions",
-      isComplete: false,
-      dueAt: "2025-02-05T12:00:00Z",
-      createdAt: "2025-01-23T09:00:00Z",
-    },
   ];
 
-  const isActionsAvailable = true;
-  const outstandingActions = isActionsAvailable
-    ? actionsData
-        .filter((action) => !action.isComplete && action.status !== "Optional")
-        .sort((a, b) => {
-          if (a.priority !== b.priority) {
-            return a.priority - b.priority;
-          }
-          const dueA = a.dueAt ? new Date(a.dueAt).getTime() : Number.POSITIVE_INFINITY;
-          const dueB = b.dueAt ? new Date(b.dueAt).getTime() : Number.POSITIVE_INFINITY;
-          if (dueA !== dueB) {
-            return dueA - dueB;
-          }
-          const createdA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const createdB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-          return createdA - createdB;
-        })
+  const showOutstandingActions = !kycVerified || kycNeedsResubmission;
+  const outstandingActions = showOutstandingActions
+    ? actionsData.filter((action) => !action.isComplete)
     : [];
 
   const transactionHistory = transactions.slice(0, 3).map((t) => ({
