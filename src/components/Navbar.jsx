@@ -1,13 +1,25 @@
-import React, { useRef, useLayoutEffect } from "react";
+import React, { useState, useRef, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Home,
+  CreditCard,
+  Plus,
   PieChart,
   MoreHorizontal,
-  FileText
+  ArrowUpCircle,
+  Wallet,
+  TrendingUp,
+  HandCoins,
+  Gift,
+  X
 } from "lucide-react";
  
-const Navbar = ({ activeTab, setActiveTab }) => {
+const Navbar = ({ activeTab, setActiveTab, onWithdraw, onShowComingSoon }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [wheelCenter, setWheelCenter] = useState({ x: 0, y: 0 });
+  const [dynamicRadius, setDynamicRadius] = useState(145);
+  const plusButtonRef = useRef(null);
   const navRef = useRef(null);
   const ImpactStyle = {
     Light: "LIGHT",
@@ -17,9 +29,17 @@ const Navbar = ({ activeTab, setActiveTab }) => {
  
   const tabs = [
     { id: "home", label: "Home", icon: Home },
-    { id: "portfolio", label: "Portfolio", icon: PieChart },
-    { id: "statements", label: "Statements", icon: FileText },
+    { id: "credit", label: "Credit", icon: CreditCard },
+    { id: "investments", label: "Portfolio", icon: PieChart },
     { id: "more", label: "More", icon: MoreHorizontal },
+  ];
+ 
+  const transactActions = [
+    { id: "withdraw", label: "Withdraw", icon: ArrowUpCircle, angle: -180 },
+    { id: "payLoan", label: "Pay", icon: Wallet, angle: -135 },
+    { id: "markets", label: "Markets", icon: TrendingUp, angle: -90 },
+    { id: "credit", label: "Borrow", icon: HandCoins, angle: -45 },
+    { id: "rewards", label: "Rewards", icon: Gift, angle: 0 },
   ];
  
   const triggerHaptic = async (style) => {
@@ -34,6 +54,18 @@ const Navbar = ({ activeTab, setActiveTab }) => {
     }
   };
 
+  const updateLayout = () => {
+    if (plusButtonRef.current) {
+      const rect = plusButtonRef.current.getBoundingClientRect();
+      setWheelCenter({
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2 - 10,
+      });
+      const calculatedRadius = Math.min(145, (window.innerWidth - 110) / 2);
+      setDynamicRadius(calculatedRadius);
+    }
+  };
+
   const updateNavbarHeight = () => {
     if (navRef.current) {
       const { offsetHeight } = navRef.current;
@@ -42,10 +74,9 @@ const Navbar = ({ activeTab, setActiveTab }) => {
   };
 
   useLayoutEffect(() => {
-    // Update immediately on mount
     updateNavbarHeight();
+    updateLayout();
     
-    // Ensure navbar height is set before any painting
     if (navRef.current) {
       const height = navRef.current.offsetHeight;
       document.documentElement.style.setProperty("--navbar-height", `${height}px`);
@@ -53,14 +84,19 @@ const Navbar = ({ activeTab, setActiveTab }) => {
     
     window.addEventListener("resize", updateNavbarHeight);
     window.addEventListener("orientationchange", updateNavbarHeight);
+    window.addEventListener("resize", updateLayout);
     
     return () => {
       window.removeEventListener("resize", updateNavbarHeight);
       window.removeEventListener("orientationchange", updateNavbarHeight);
+      window.removeEventListener("resize", updateLayout);
     };
   }, []);
+
+  useLayoutEffect(() => {
+    updateNavbarHeight();
+  }, [isOpen]);
   
-  // Ensure navbar height persists after app reopen
   useLayoutEffect(() => {
     const interval = setTimeout(() => {
       if (navRef.current) {
