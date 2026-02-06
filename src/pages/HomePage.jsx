@@ -22,6 +22,7 @@ import {
   Plus,
   Calendar,
   ChevronRight,
+  RefreshCw,
 } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
 import { useRequiredActions } from "../lib/useRequiredActions";
@@ -30,6 +31,7 @@ import { useFinancialData, useInvestments } from "../lib/useFinancialData";
 import { getStrategiesWithMetrics } from "../lib/strategyData";
 import HomeSkeleton from "../components/HomeSkeleton";
 import SwipeableBalanceCard from "../components/SwipeableBalanceCard";
+import MintBalanceCard from "../components/MintBalanceCard";
 import OutstandingActionsSection from "../components/OutstandingActionsSection";
 import TransactionHistorySection from "../components/TransactionHistorySection";
 import NotificationBell from "../components/NotificationBell";
@@ -62,6 +64,9 @@ const HomePage = ({
   const [news, setNews] = useState([]);
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [loadingNews, setLoadingNews] = useState(false);
+  const [homeTab, setHomeTab] = useState("balance");
+  const [isFlipped, setIsFlipped] = useState(false);
+  const [userId, setUserId] = useState(null);
   
   // Goals State
   const [showGoalsModal, setShowGoalsModal] = useState(false);
@@ -78,6 +83,14 @@ const HomePage = ({
     .map((part) => part[0])
     .join("")
     .toUpperCase();
+
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) setUserId(session.user.id);
+    };
+    getUser();
+  }, []);
 
   // Fetch best performing strategies
   useEffect(() => {
@@ -305,40 +318,73 @@ const HomePage = ({
 
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
               <div className="flex items-center rounded-full bg-white/10 p-1 backdrop-blur-md">
-                <button
-                  type="button"
-                  onClick={onOpenInvest}
-                  className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-900 shadow-sm"
-                >
-                  Invest
-                </button>
-                <button
-                  type="button"
-                  onClick={onOpenCredit}
-                  className="rounded-full px-3 py-1.5 text-xs font-semibold text-white/70 transition-all hover:bg-white/10 hover:text-white"
-                >
-                  Credit
-                </button>
-                <button
-                  type="button"
-                  className="rounded-full px-3 py-1.5 text-xs font-semibold text-white/70 transition-all hover:bg-white/10 hover:text-white"
-                >
-                  Transact
-                </button>
+                {[
+                  { id: "balance", label: "Balance", action: () => { setHomeTab("balance"); setIsFlipped(false); } },
+                  { id: "invest", label: "Invest", action: () => { if (onOpenInvest) onOpenInvest(); } },
+                  { id: "credit", label: "Credit", action: () => { if (onOpenCredit) onOpenCredit(); } },
+                  { id: "transact", label: "Transact", action: () => { setHomeTab("transact"); } },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={tab.action}
+                    className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
+                      homeTab === tab.id
+                        ? "bg-white text-slate-900 shadow-sm"
+                        : "text-white/70 hover:bg-white/10 hover:text-white"
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
               </div>
             </div>
 
             <NotificationBell onClick={onOpenNotifications} />
           </header>
 
-          <SwipeableBalanceCard
-            amount={balance}
-            totalInvestments={investments}
-            investmentChange={monthlyChangePercent || 0}
-            bestPerformingAssets={bestAssets}
-            userName={displayName}
-            onPressMintBalance={handleMintBalancePress}
-          />
+          {homeTab === "balance" ? (
+            <div style={{ perspective: "1000px" }}>
+              <div
+                style={{
+                  transition: "transform 0.6s cubic-bezier(0.4, 0.2, 0.2, 1)",
+                  transformStyle: "preserve-3d",
+                  transform: isFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
+                  position: "relative",
+                }}
+              >
+                <div style={{ backfaceVisibility: "hidden" }}>
+                  <MintBalanceCard
+                    amount={balance}
+                    changeText={monthlyChangePercent ? `${monthlyChangePercent >= 0 ? '+' : ''}${monthlyChangePercent.toFixed(1)}% this month` : null}
+                    onPressMintBalance={handleMintBalancePress}
+                  />
+                </div>
+                <div
+                  style={{
+                    backfaceVisibility: "hidden",
+                    transform: "rotateY(180deg)",
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                  }}
+                >
+                  <SwipeableBalanceCard userId={userId} />
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsFlipped((prev) => !prev)}
+                className="flex items-center justify-center gap-1.5 mt-2 mx-auto text-white/50 active:text-white/80 transition-colors"
+              >
+                <RefreshCw className="h-3 w-3" />
+                <span className="text-[10px] font-medium">{isFlipped ? "Show card" : "Show portfolio"}</span>
+              </button>
+            </div>
+          ) : (
+            <SwipeableBalanceCard userId={userId} />
+          )}
         </div>
       </div>
 
