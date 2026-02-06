@@ -145,7 +145,12 @@ const HomePage = ({
     const diff = dragStartXRef.current - clientX;
     if (Math.abs(diff) > 50) {
       setIsCardAnimating(true);
-      setCardRotation(prev => diff > 0 ? prev - 180 : prev + 180);
+      const currentIndex = cardNormalizedIndex;
+      const newIndex = diff > 0 ? 1 : 0;
+      if (newIndex !== currentIndex) {
+        setCardRotation(newIndex === 1 ? -180 : 0);
+        setHomeTab(newIndex === 1 ? "invest" : "balance");
+      }
       setTimeout(() => setIsCardAnimating(false), 700);
     }
   };
@@ -154,7 +159,8 @@ const HomePage = ({
     if (isCardAnimating) return;
     if (idx !== cardNormalizedIndex) {
       setIsCardAnimating(true);
-      setCardRotation(prev => idx > cardNormalizedIndex ? prev - 180 : prev + 180);
+      setCardRotation(idx === 1 ? -180 : 0);
+      setHomeTab(idx === 1 ? "invest" : "balance");
       setTimeout(() => setIsCardAnimating(false), 700);
     }
   };
@@ -410,8 +416,8 @@ const HomePage = ({
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
               <div className="flex items-center rounded-full bg-white/10 p-1 backdrop-blur-md">
                 {[
-                  { id: "balance", label: "Balance", action: () => { setHomeTab("balance"); setCardRotation(0); } },
-                  { id: "invest", label: "Invest", action: () => { if (onOpenInvest) onOpenInvest(); } },
+                  { id: "balance", label: "Balance", action: () => { setHomeTab("balance"); if (cardNormalizedIndex !== 0) { setIsCardAnimating(true); setCardRotation(0); setTimeout(() => setIsCardAnimating(false), 700); } } },
+                  { id: "invest", label: "Invest", action: () => { setHomeTab("invest"); if (cardNormalizedIndex !== 1) { setIsCardAnimating(true); setCardRotation(-180); setTimeout(() => setIsCardAnimating(false), 700); } } },
                   { id: "credit", label: "Credit", action: () => { if (onOpenCredit) onOpenCredit(); } },
                   { id: "transact", label: "Transact", action: () => { setHomeTab("transact"); } },
                 ].map((tab) => (
@@ -434,7 +440,7 @@ const HomePage = ({
             <NotificationBell onClick={onOpenNotifications} />
           </header>
 
-          {homeTab === "balance" ? (
+          {homeTab === "balance" || homeTab === "invest" ? (
             <div className="relative select-none">
               <div
                 className="relative w-full touch-pan-y"
