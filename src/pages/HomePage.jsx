@@ -635,7 +635,7 @@ const HomePage = ({
             <div className="relative select-none">
               <div
                 className="relative w-full touch-pan-y"
-                style={{ aspectRatio: "1.7 / 1", perspective: "1000px" }}
+                style={{ aspectRatio: "1.7 / 1", perspective: "1000px", transformStyle: "preserve-3d" }}
                 onTouchStart={handleCardDragStart}
                 onTouchEnd={handleCardDragEnd}
                 onMouseDown={handleCardDragStart}
