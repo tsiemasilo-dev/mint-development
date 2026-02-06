@@ -443,23 +443,47 @@ const NewPortfolioPage = () => {
     ? strategies.reduce((sum, s) => sum + (s.currentValue || 0), 0) 
     : accountValue;
 
-  const holdings = rawHoldings.length > 0 
-    ? rawHoldings.map(h => {
-        const totalValue = rawHoldings.reduce((sum, holding) => sum + (holding.current_value || 0), 0);
+  const allStrategyHoldings = useMemo(() => {
+    const holdingsMap = new Map();
+    if (rawHoldings && rawHoldings.length > 0) {
+      const totalValue = rawHoldings.reduce((sum, h) => sum + (h.current_value || 0), 0);
+      rawHoldings.forEach(h => {
+        const sym = h.securities?.symbol || h.symbol || "N/A";
         const weight = totalValue > 0 ? ((h.current_value || 0) / totalValue) * 100 : 0;
-        return {
-          symbol: h.securities?.symbol || h.symbol || "N/A",
+        holdingsMap.set(sym, {
+          symbol: sym,
           name: h.securities?.name || h.name || "Unknown",
-          weight: weight,
+          weight,
           logo: h.securities?.logo_url || null,
-        };
-      }).sort((a, b) => b.weight - a.weight).slice(0, 5)
-    : [
-        { symbol: "NED.JO", name: "Nedbank Group", weight: 13.9, logo: "/logos/nedbank.jpg" },
-        { symbol: "SUI.JO", name: "Sun International", weight: 16.8, logo: "/logos/sun-international.jpg" },
-        { symbol: "EXP.JO", name: "Exemplar REITail Ltd.", weight: 19.0, logo: "/logos/exemplar-reit.jpg" },
-        { symbol: "SBK.JO", name: "Standard Bank Group", weight: 12.5, logo: "/logos/standard-bank.jpg" },
-      ];
+          currentValue: h.current_value || 0,
+          change: h.change_percent || 0,
+        });
+      });
+    } else if (strategies && strategies.length > 0) {
+      strategies.forEach(s => {
+        if (Array.isArray(s.holdings)) {
+          s.holdings.forEach(h => {
+            if (h.symbol && !holdingsMap.has(h.symbol)) {
+              const matchedStock = stocksList.find(st => st.ticker === h.symbol);
+              const livePrice = liveQuotes[h.symbol]?.price || matchedStock?.price || 0;
+              const liveChange = liveQuotes[h.symbol]?.changePercent ?? matchedStock?.dailyChange ?? 0;
+              holdingsMap.set(h.symbol, {
+                symbol: h.symbol,
+                name: h.name || matchedStock?.name || h.symbol,
+                weight: h.weight || 0,
+                logo: matchedStock?.logo || null,
+                currentValue: livePrice * (h.shares || 1),
+                change: liveChange,
+              });
+            }
+          });
+        }
+      });
+    }
+    return Array.from(holdingsMap.values()).sort((a, b) => b.weight - a.weight);
+  }, [rawHoldings, strategies, stocksList, liveQuotes]);
+
+  const holdings = allStrategyHoldings.slice(0, 5);
 
   const getStockChartData = () => {
     const stockData = MOCK_STOCK_CHART_DATA[selectedStock.ticker];
@@ -488,26 +512,10 @@ const NewPortfolioPage = () => {
   };
 
   const myStocks = useMemo(() => {
-    if (!stocksList || stocksList.length === 0) return [];
-    const holdingSymbols = new Set();
-    if (rawHoldings && rawHoldings.length > 0) {
-      rawHoldings.forEach(h => {
-        const sym = h.securities?.symbol || h.symbol;
-        if (sym) holdingSymbols.add(sym);
-      });
-    }
-    if (holdingSymbols.size === 0 && strategies && strategies.length > 0) {
-      strategies.forEach(s => {
-        if (Array.isArray(s.holdings)) {
-          s.holdings.forEach(h => {
-            if (h.symbol) holdingSymbols.add(h.symbol);
-          });
-        }
-      });
-    }
-    if (holdingSymbols.size === 0) return [];
+    if (!stocksList || stocksList.length === 0 || allStrategyHoldings.length === 0) return [];
+    const holdingSymbols = new Set(allStrategyHoldings.map(h => h.symbol));
     return stocksList.filter(stock => holdingSymbols.has(stock.ticker));
-  }, [rawHoldings, strategies, stocksList]);
+  }, [allStrategyHoldings, stocksList]);
 
   const myStockIds = useMemo(() => new Set(myStocks.map(s => s.id)), [myStocks]);
 
@@ -1343,14 +1351,25 @@ const NewPortfolioPage = () => {
 
       {/* Holdings Tab Content */}
       {activeTab === "holdings" && (() => {
-        if (holdingsLoading) {
+        if (holdingsLoading || strategiesLoading) {
           return (
             <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
               <div className="text-center py-10 text-slate-500">Loading holdings...</div>
             </div>
           );
         }
-        if (!rawHoldings || rawHoldings.length === 0) {
+        const pieColors = ["#8B5CF6", "#A78BFA", "#C4B5FD", "#DDD6FE", "#EDE9FE", "#7C3AED", "#6D28D9", "#5B21B6", "#4C1D95", "#7E22CE"];
+
+        const holdingsData = allStrategyHoldings.map(h => ({
+          id: h.symbol,
+          name: h.name,
+          ticker: h.symbol,
+          logo: h.logo,
+          currentValue: h.currentValue || 0,
+          change: h.change || 0,
+        })).sort((a, b) => b.currentValue - a.currentValue);
+
+        if (holdingsData.length === 0) {
           return (
             <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
               <div 
@@ -1366,24 +1385,6 @@ const NewPortfolioPage = () => {
             </div>
           );
         }
-
-        const pieColors = ["#8B5CF6", "#A78BFA", "#C4B5FD", "#DDD6FE", "#EDE9FE", "#7C3AED", "#6D28D9", "#5B21B6", "#4C1D95", "#7E22CE"];
-        const holdingsData = rawHoldings.map((h) => {
-          const ticker = h.securities?.symbol || h.symbol || "N/A";
-          const name = h.securities?.name || h.name || "Unknown";
-          const logoFromSecurities = h.securities?.logo_url || null;
-          const logoFromStocksList = !logoFromSecurities ? (stocksList.find(s => s.ticker === ticker)?.logo || null) : null;
-          const logo = logoFromSecurities || logoFromStocksList;
-          const change = h.change_percent ?? liveQuotes[ticker]?.changePercent ?? 0;
-          return {
-            id: h.id || ticker,
-            name,
-            ticker,
-            logo,
-            currentValue: h.current_value || 0,
-            change,
-          };
-        }).sort((a, b) => b.currentValue - a.currentValue);
 
         const totalValue = holdingsData.reduce((sum, h) => sum + h.currentValue, 0);
         const totalDistinct = holdingsData.length;
