@@ -35,7 +35,7 @@ const StatementsPage = ({ onOpenNotifications }) => {
     const calculatePerPage = () => {
       const viewportHeight = window.innerHeight;
       const availableHeight = viewportHeight - 380;
-      const cardHeight = 50;
+      const cardHeight = 80;
       const calculatedPerPage = Math.max(4, Math.floor(availableHeight / cardHeight));
       setPerPage(calculatedPerPage);
     };
@@ -75,14 +75,21 @@ const StatementsPage = ({ onOpenNotifications }) => {
               : strategy.description
             : "—";
 
+          const changePct = latestMetric?.change_pct != null ? Number(latestMetric.change_pct) : null;
+
           return {
             type: "Strategy",
             icon: "📊",
-            title: strategy.name || "—",
+            title: strategy.short_name || strategy.name || "—",
+            shortName: strategy.short_name || null,
+            fullName: strategy.name || "—",
             desc,
             date: dateLabel,
             amount: formatCurrency(latestMetric?.last_close || 0),
             meta: strategy.risk_level || "—",
+            riskLevel: strategy.risk_level || null,
+            changePct,
+            tags: strategy.tags || [],
             time: "—",
             flow: "out",
             strategyName: strategy.name || "—",
@@ -703,10 +710,10 @@ const StatementsPage = ({ onOpenNotifications }) => {
       </div>
 
       <div className="mx-auto -mt-6 w-full max-w-md px-4 pb-16">
-        <div className="rounded-2xl bg-white p-4 shadow-md">
+        <div className="rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)]">
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold text-slate-700">Recent items</p>
-            <p className="text-xs text-slate-400">Showing {pageRows.length} of {searchFiltered.length}</p>
+            <p className="text-xs text-slate-500">Showing {pageRows.length} of {searchFiltered.length}</p>
           </div>
 
           {isLoading ? (
@@ -715,99 +722,142 @@ const StatementsPage = ({ onOpenNotifications }) => {
               <p className="mt-3 text-sm text-slate-400">Loading...</p>
             </div>
           ) : pageRows.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <p className="text-sm text-slate-400">No data available</p>
+            <div className="rounded-3xl bg-white px-6 py-12 text-center shadow-md">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-slate-100">
+                <MoreHorizontal className="h-7 w-7 text-slate-400" />
+              </div>
+              <p className="mt-4 text-sm font-semibold text-slate-700">No data available</p>
+              <p className="mt-1 text-xs text-slate-400">There are no items to display for this view.</p>
             </div>
           ) : (
-            <div className="mt-4 space-y-2">
+            <div className="mt-4 space-y-3">
               {pageRows.map((row, idx) => {
-                const holdingStatus = row.status;
-                const isHoldingsTab = activeTab === "holdings";
-                const isIncoming = row.flow === "in";
-                const indicator = isHoldingsTab
-                  ? holdingStatus === "Liquidated"
-                    ? { icon: <ArrowDownRight className="h-3.5 w-3.5" />, color: "text-rose-500" }
-                    : holdingStatus === "Filled"
-                      ? { icon: <ArrowUpRight className="h-3.5 w-3.5" />, color: "text-emerald-600" }
-                      : { icon: "—", color: "text-slate-400" }
-                  : isIncoming
-                    ? { icon: <ArrowUpRight className="h-3.5 w-3.5" />, color: "text-emerald-600" }
-                    : { icon: <ArrowDownRight className="h-3.5 w-3.5" />, color: "text-rose-500" };
-                return (
-                  <div
-                    key={idx}
-                    className="group relative overflow-hidden rounded-xl bg-white px-3 py-2.5 transition-all hover:bg-slate-50"
-                  >
-                    <div className="flex items-center gap-3">
-                      {activeTab === "holdings" ? (
-                        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white">
-                          {row.logoUrl ? (
-                            <img
-                              src={row.logoUrl}
-                              alt={row.title}
-                              className="h-full w-full object-contain"
-                            />
-                          ) : (
-                            <span className="text-lg text-slate-500">—</span>
-                          )}
+                if (row.type === "Strategy") {
+                  const pct = row.changePct;
+                  const hasPct = pct != null && Number.isFinite(pct);
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setSelectedCard(row)}
+                      className="w-full rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="flex-1 flex items-start justify-between gap-4">
+                          <div className="text-left space-y-1 min-w-0">
+                            <p className="truncate text-sm font-semibold text-slate-900">{row.title}</p>
+                            <p className="text-xs text-slate-600 line-clamp-1">{row.riskLevel || row.meta} • {row.desc}</p>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <p className="text-sm font-semibold text-slate-900">{row.amount}</p>
+                            {hasPct && (
+                              <p className={`text-xs font-semibold ${pct >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                                {pct >= 0 ? "+" : ""}{pct.toFixed(2)}%
+                              </p>
+                            )}
+                          </div>
                         </div>
-                      ) : (
-                        <div className="h-9 w-9 flex-shrink-0" />
+                      </div>
+                      {row.riskLevel && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">{row.riskLevel}</span>
+                        </div>
                       )}
+                    </button>
+                  );
+                }
 
-                      <div className="min-w-0 flex-1">
-                        <h3 className="text-[13px] leading-tight text-slate-900">{row.title}</h3>
-                        <p className="text-[11px] leading-tight text-slate-500">{row.desc}</p>
-                      </div>
-
-                      <div className="flex-shrink-0 text-right">
-                        <div className="flex items-center justify-end gap-1 text-sm text-slate-900">
-                          <span className={indicator.color}>{indicator.icon}</span>
-                          <span>{row.amount}</span>
+                if (row.type === "Holdings") {
+                  const pnlText = row.unrealizedPL || "—";
+                  const isPositive = pnlText.startsWith("+");
+                  const isNegative = pnlText.startsWith("-");
+                  const pnlColor = isPositive ? "text-emerald-600" : isNegative ? "text-red-600" : "text-slate-400";
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setSelectedCard(row)}
+                      className="w-full rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
+                    >
+                      <div className="flex items-start gap-3">
+                        {row.logoUrl ? (
+                          <img src={row.logoUrl} alt={row.ticker} className="h-10 w-10 rounded-full border border-slate-100 object-cover" />
+                        ) : (
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-purple-600 text-sm font-bold text-white">
+                            {row.ticker?.substring(0, 2) || "—"}
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="truncate text-sm font-semibold text-slate-900">{row.title}</p>
+                              <p className="text-xs text-slate-500">{row.desc}</p>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <p className="text-sm font-semibold text-slate-900">{row.amount}</p>
+                              <p className={`text-xs font-semibold ${pnlColor}`}>{pnlText}</p>
+                            </div>
+                          </div>
                         </div>
-                        <div className="text-[10px] text-slate-400">
-                          {row.date} · {row.time}
+                      </div>
+                    </button>
+                  );
+                }
+
+                const isIncoming = row.flow === "in";
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setSelectedCard(row)}
+                    className="w-full rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100">
+                        {isIncoming ? (
+                          <ArrowUpRight className="h-5 w-5 text-emerald-600" />
+                        ) : (
+                          <ArrowDownRight className="h-5 w-5 text-rose-500" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="truncate text-sm font-semibold text-slate-900">{row.title}</p>
+                            <p className="text-xs text-slate-500">{row.desc}</p>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <p className="text-sm font-semibold text-slate-900">{row.amount}</p>
+                            <p className={`text-xs font-semibold ${isIncoming ? "text-emerald-600" : "text-red-600"}`}>
+                              {row.date}
+                            </p>
+                          </div>
                         </div>
                       </div>
-
-                      <button
-                        onClick={() => setSelectedCard(row)}
-                        className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
-                      >
-                        <MoreHorizontal className="h-3.5 w-3.5" />
-                      </button>
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
           )}
 
-          <div className="mt-6 flex items-center justify-center gap-2">
+          <div className="flex items-center justify-center gap-2 pt-4">
             <button
-              className={`rounded px-3 py-2 ${page === 1 ? "cursor-not-allowed opacity-40" : "bg-slate-100 hover:bg-slate-200"}`}
               onClick={() => setPage((prev) => Math.max(1, prev - 1))}
               disabled={page === 1}
+              className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              ‹
+              Previous
             </button>
-            {Array.from({ length: pages }).map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setPage(i + 1)}
-                className={`rounded px-3 py-2 ${
-                  page === i + 1 ? "bg-violet-600 text-white" : "bg-transparent text-slate-600 hover:bg-slate-100"
-                }`}
-              >
-                {i + 1}
-              </button>
-            ))}
+            <span className="text-sm text-slate-600">
+              Page {page} of {pages}
+            </span>
             <button
-              className={`rounded px-3 py-2 ${page === pages ? "cursor-not-allowed opacity-40" : "bg-slate-100 hover:bg-slate-200"}`}
               onClick={() => setPage((prev) => Math.min(pages, prev + 1))}
               disabled={page === pages}
+              className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              ›
+              Next
             </button>
           </div>
         </div>
