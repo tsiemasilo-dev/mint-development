@@ -67,7 +67,7 @@ const getTokensFromHash = (hash) => {
 
 const recoveryTokens = isRecoveryMode ? getTokensFromHash(initialHash) : null;
 
-const mainTabs = ['home', 'credit', 'statements', 'transact', 'investments', 'more', 'welcome', 'auth'];
+const mainTabs = ['home', 'credit', 'transact', 'investments', 'more', 'welcome', 'auth'];
 
 const App = () => {
   const [currentPage, setCurrentPage] = useState(hasError ? "linkExpired" : (isRecoveryMode ? "auth" : "welcome"));
@@ -117,6 +117,16 @@ const App = () => {
     
     setCurrentPage(page);
   }, [currentPage, cacheCurrentPageState]);
+
+  const handleTabChange = useCallback((tab) => {
+    if (tab === 'statements') {
+      navigateTo(tab);
+    } else {
+      navigationHistory.current = [];
+      setPreviousPageName(null);
+      setCurrentPage(tab);
+    }
+  }, [navigateTo]);
 
   const goBack = useCallback(() => {
     if (navigationHistory.current.length > 0) {
@@ -664,7 +674,7 @@ const App = () => {
     return (
       <AppLayout
         activeTab="home"
-        onTabChange={setCurrentPage}
+        onTabChange={handleTabChange}
         onWithdraw={handleWithdrawRequest}
         onShowComingSoon={handleShowComingSoon}
         modal={modal}
@@ -696,7 +706,7 @@ const App = () => {
     return (
       <AppLayout
         activeTab="credit"
-        onTabChange={setCurrentPage}
+        onTabChange={handleTabChange}
         onWithdraw={handleWithdrawRequest}
         onShowComingSoon={handleShowComingSoon}
         modal={modal}
@@ -717,7 +727,7 @@ const App = () => {
     return (
       <AppLayout
         activeTab="credit"
-        onTabChange={setCurrentPage}
+        onTabChange={handleTabChange}
         onWithdraw={handleWithdrawRequest}
         onShowComingSoon={handleShowComingSoon}
         modal={modal}
@@ -737,16 +747,18 @@ const App = () => {
 
   if (currentPage === "statements") {
     return (
-      <AppLayout
-        activeTab="statements"
-        onTabChange={setCurrentPage}
-        onWithdraw={handleWithdrawRequest}
-        onShowComingSoon={handleShowComingSoon}
-        modal={modal}
-        onCloseModal={closeModal}
-      >
-        <ActivityPage onBack={goBack} />
-      </AppLayout>
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <AppLayout
+          activeTab="statements"
+          onTabChange={handleTabChange}
+          onWithdraw={handleWithdrawRequest}
+          onShowComingSoon={handleShowComingSoon}
+          modal={modal}
+          onCloseModal={closeModal}
+        >
+          <ActivityPage onBack={goBack} />
+        </AppLayout>
+      </SwipeBackWrapper>
     );
   }
 
@@ -754,7 +766,7 @@ const App = () => {
     return (
       <AppLayout
         activeTab="transact"
-        onTabChange={setCurrentPage}
+        onTabChange={handleTabChange}
         onWithdraw={handleWithdrawRequest}
         onShowComingSoon={handleShowComingSoon}
         modal={modal}
@@ -769,7 +781,7 @@ const App = () => {
     return (
       <AppLayout
         activeTab="investments"
-        onTabChange={setCurrentPage}
+        onTabChange={handleTabChange}
         onWithdraw={handleWithdrawRequest}
         onShowComingSoon={handleShowComingSoon}
         modal={modal}
@@ -792,7 +804,7 @@ const App = () => {
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <AppLayout
           activeTab="home"
-          onTabChange={setCurrentPage}
+          onTabChange={handleTabChange}
           onWithdraw={handleWithdrawRequest}
           onShowComingSoon={handleShowComingSoon}
           modal={modal}
@@ -968,7 +980,7 @@ const App = () => {
     return (
       <AppLayout
         activeTab="more"
-        onTabChange={setCurrentPage}
+        onTabChange={handleTabChange}
         onWithdraw={handleWithdrawRequest}
         onShowComingSoon={handleShowComingSoon}
         modal={modal}
@@ -984,7 +996,7 @@ const App = () => {
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <AppLayout
           activeTab="more"
-          onTabChange={setCurrentPage}
+          onTabChange={handleTabChange}
           onWithdraw={handleWithdrawRequest}
           onShowComingSoon={handleShowComingSoon}
           modal={modal}
@@ -1001,7 +1013,7 @@ const App = () => {
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <AppLayout
           activeTab="more"
-          onTabChange={setCurrentPage}
+          onTabChange={handleTabChange}
           onWithdraw={handleWithdrawRequest}
           onShowComingSoon={handleShowComingSoon}
           modal={modal}
@@ -1053,7 +1065,7 @@ const App = () => {
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <AppLayout
           activeTab="home"
-          onTabChange={setCurrentPage}
+          onTabChange={handleTabChange}
           onWithdraw={handleWithdrawRequest}
           onShowComingSoon={handleShowComingSoon}
           modal={modal}
@@ -1078,7 +1090,7 @@ const App = () => {
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <AppLayout
           activeTab="home"
-          onTabChange={setCurrentPage}
+          onTabChange={handleTabChange}
           onWithdraw={handleWithdrawRequest}
           onShowComingSoon={handleShowComingSoon}
           modal={modal}
