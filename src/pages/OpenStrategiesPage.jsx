@@ -6,7 +6,7 @@ import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer } from "r
 import { supabase } from "../lib/supabase";
 import { getStrategiesWithMetrics, formatChangePct, formatChangeAbs, getChangeColor } from "../lib/strategyData.js";
 import { formatCurrency } from "../lib/formatCurrency";
-import { normalizeSymbol, getHoldingsArray, getHoldingSymbol, buildHoldingsBySymbol } from "../lib/strategyUtils";
+import { normalizeSymbol, getHoldingsArray, getHoldingSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot } from "../lib/strategyUtils";
 
 const sortOptions = [
   "Recommended",
@@ -632,34 +632,39 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
                     ))}
                   </div>
 
-                  {holdings.length > 0 && (
-                  <div className="mt-3 flex items-center gap-3">
-                    <div className="flex -space-x-2">
-                      {holdingsSecurities.slice(0, 3).map((company) => (
-                        <div
-                          key={`${strategy.name}-${company.name}`}
-                          className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-sm"
-                        >
-                          {company.logo_url ? (
-                            <img
-                              src={company.logo_url}
-                              alt={company.name}
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">
-                              {company.symbol?.substring(0, 2)}
-                            </div>
-                          )}
+                  {holdings.length > 0 && (() => {
+                    const snapshot = getStrategyHoldingsSnapshot(strategy, holdingsBySymbol).slice(0, 3);
+                    return (
+                    <div className="mt-3 flex items-center gap-3">
+                      <div className="flex -space-x-2">
+                        {snapshot.map((company) => (
+                          <div
+                            key={`${strategy.name}-${company.symbol}`}
+                            className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-sm"
+                          >
+                            {company.logo_url ? (
+                              <img
+                                src={company.logo_url}
+                                alt={company.name}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">
+                                {company.symbol?.substring(0, 2)}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                        {holdings.length > 3 && (
+                        <div className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500">
+                          +{holdings.length - 3}
                         </div>
-                      ))}
-                      <div className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500">
-                        +{Math.max(0, holdings.length - 3)}
+                        )}
                       </div>
+                      <span className="text-xs font-semibold text-slate-500">Holdings snapshot</span>
                     </div>
-                    <span className="text-xs font-semibold text-slate-500">Holdings snapshot</span>
-                  </div>
-                  )}
+                    );
+                  })()}
                 </button>
                 );
               })}
