@@ -701,7 +701,7 @@ const NewPortfolioPage = () => {
                 className={`px-4 py-2.5 rounded-full text-sm font-semibold transition-all ${
                   activeTab === tab.id
                     ? "bg-violet-500 text-white shadow-lg shadow-violet-500/30"
-                    : "border border-white/40 text-white/90 backdrop-blur-sm hover:bg-white/15"
+                    : "bg-white/10 border border-white/50 text-white backdrop-blur-md hover:bg-white/20"
                 }`}
               >
                 {tab.label}
