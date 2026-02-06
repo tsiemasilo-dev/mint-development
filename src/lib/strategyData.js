@@ -127,7 +127,7 @@ export const getPublicStrategies = async () => {
     // Fetch only active and public strategies
     const { data: strategies, error } = await supabase
       .from("strategies")
-      .select("id, slug, name, short_name, description, risk_level, objective, sector, tags, base_currency, min_investment, provider_name, benchmark_symbol, benchmark_name, fee_type, management_fee_bps, performance_fee_pct, high_water_mark, status, is_public, is_featured, icon_url, image_url, created_at, updated_at")
+      .select("id, slug, name, short_name, description, risk_level, objective, sector, tags, base_currency, min_investment, provider_name, benchmark_symbol, benchmark_name, fee_type, management_fee_bps, performance_fee_pct, high_water_mark, status, is_public, is_featured, icon_url, image_url, holdings, created_at, updated_at")
       .eq("status", "active")
       .eq("is_public", true)
       .order("is_featured", { ascending: false })
