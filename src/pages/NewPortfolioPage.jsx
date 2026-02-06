@@ -7,6 +7,7 @@ import { useProfile } from "../lib/useProfile";
 import { useUserStrategies, useStrategyChartData } from "../lib/useUserStrategies";
 import { useStockQuotes, useStockChart } from "../lib/useStockData";
 import SwipeBackWrapper from "../components/SwipeBackWrapper.jsx";
+import PortfolioSkeleton from "../components/PortfolioSkeleton";
 
 const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -222,6 +223,10 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onBack }) => {
 
   const goal = investmentGoals && investmentGoals.length > 0 ? investmentGoals[0] : null;
   const goalProgress = goal && goal.targetAmount > 0 ? (goal.currentAmount / goal.targetAmount) * 100 : 0;
+
+  if (strategiesLoading && !strategies.length) {
+    return <PortfolioSkeleton />;
+  }
 
   // All Allocations View
   if (currentView === "allocations") {

@@ -17,7 +17,8 @@ export const useUserStrategies = () => {
     }
 
     try {
-      const { data: userData } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const userData = session ? { user: session.user } : { user: null };
 
       const { data: strategies, error } = await supabase
         .from("strategies")
