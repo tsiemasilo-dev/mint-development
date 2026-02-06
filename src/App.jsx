@@ -692,7 +692,7 @@ const App = () => {
           onOpenCredit={() => setCurrentPage("credit")}
           onOpenCreditApply={() => navigateTo("creditApply")}
           onOpenCreditRepay={() => navigateTo("creditRepay")}
-          onOpenInvest={() => navigateTo("markets")}
+          onOpenInvest={() => { setMarketsInitialView(null); navigateTo("markets"); }}
           onOpenWithdraw={handleWithdrawRequest}
           onOpenSettings={() => navigateTo("settings")}
           onOpenStrategies={() => { setMarketsInitialView("openstrategies"); navigateTo("markets"); }}
