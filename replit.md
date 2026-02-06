@@ -35,7 +35,7 @@ A React authentication application using Vite as the build tool with Tailwind CS
     - `OnboardingPage.jsx` - Welcome/landing page (before login)
     - `UserOnboardingPage.jsx` - User identification onboarding flow (3-step process)
     - `IdentityCheckPage.jsx` - Identity verification page (wraps UserOnboardingPage)
-    - `HomePage.jsx` - Home page after login
+    - `HomePage.jsx` - Home page with real-time subscriptions, investment goals CRUD, market insights, best assets from allocations
     - `MorePage.jsx` - Profile and menu page with KYC badge and Required Actions
     - `EditProfilePage.jsx` - Edit profile with phone, DOB, gender, country, city fields
     - `ProfileDetailsPage.jsx` - View-only profile details page

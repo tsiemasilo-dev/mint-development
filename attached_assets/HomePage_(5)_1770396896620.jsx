@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import {
   ArrowDownToLine,
@@ -22,65 +22,18 @@ import {
   Plus,
   Calendar,
   ChevronRight,
-  Eye,
-  EyeOff,
 } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
 import { useRequiredActions } from "../lib/useRequiredActions";
 import { useSumsubStatus } from "../lib/useSumsubStatus";
 import { useFinancialData, useInvestments } from "../lib/useFinancialData";
 import { getStrategiesWithMetrics } from "../lib/strategyData";
-import { formatZar } from "../lib/formatCurrency";
 import HomeSkeleton from "../components/HomeSkeleton";
 import SwipeableBalanceCard from "../components/SwipeableBalanceCard";
 import OutstandingActionsSection from "../components/OutstandingActionsSection";
 import TransactionHistorySection from "../components/TransactionHistorySection";
 import NotificationBell from "../components/NotificationBell";
-
-const CARD_VISIBILITY_KEY = "mintBalanceVisible";
-
-const MintLogoWhite = ({ className = "" }) => (
-  <svg viewBox="0 0 1826.64 722.72" className={className}>
-    <g>
-      <path fill="#FFFFFF" d="M1089.47,265.13c25.29,12.34,16.69,50.37-11.45,50.63h0s-512.36,0-512.36,0c-14.73,0-26.67,11.94-26.67,26.67v227.94c0,14.73-11.94,26.67-26.67,26.67H26.67c-14.73,0-26.67-11.94-26.67-26.67v-248.55c0-9.54,5.1-18.36,13.38-23.12L526.75,3.55c7.67-4.41,17.03-4.73,24.99-.85l537.73,262.43Z"/>
-      <path fill="#FFFFFF" d="M737.17,457.58c-25.29-12.34-16.69-50.37,11.45-50.63h0s512.36,0,512.36,0c14.73,0,26.67-11.94,26.67-26.67v-227.94c0-14.73,11.94-26.67,26.67-26.67h485.66c14.73,0,26.67,11.94,26.67,26.67v248.55c0,9.54-5.1,18.36-13.38,23.12l-513.38,295.15c-7.67,4.41-17.03,4.73-24.99.85l-537.73-262.43Z"/>
-    </g>
-  </svg>
-);
-
-const MintLogoSilver = ({ className = "" }) => (
-  <svg viewBox="0 0 1826.64 722.72" className={className}>
-    <g opacity="0.12">
-      <path fill="#C0C0C0" d="M1089.47,265.13c25.29,12.34,16.69,50.37-11.45,50.63h0s-512.36,0-512.36,0c-14.73,0-26.67,11.94-26.67,26.67v227.94c0,14.73-11.94,26.67-26.67,26.67H26.67c-14.73,0-26.67-11.94-26.67-26.67v-248.55c0-9.54,5.1-18.36,13.38-23.12L526.75,3.55c7.67-4.41,17.03-4.73,24.99-.85l537.73,262.43Z"/>
-      <path fill="#C0C0C0" d="M737.17,457.58c-25.29-12.34-16.69-50.37,11.45-50.63h0s512.36,0,512.36,0c14.73,0,26.67-11.94,26.67-26.67v-227.94c0-14.73,11.94-26.67,26.67-26.67h485.66c14.73,0,26.67,11.94,26.67,26.67v248.55c0,9.54-5.1,18.36-13.38,23.12l-513.38,295.15c-7.67,4.41-17.03,4.73-24.99.85l-537.73-262.43Z"/>
-    </g>
-  </svg>
-);
-
-const CardContent = ({ children, style }) => (
-  <div
-    className="absolute inset-0 rounded-[24px] overflow-hidden"
-    style={{
-      background: "linear-gradient(135deg, #2d1052 0%, #4a1d7a 25%, #6b2fa0 50%, #5a2391 75%, #3d1a6d 100%)",
-      boxShadow: "0 25px 50px -12px rgba(91, 33, 182, 0.5)",
-      backfaceVisibility: "hidden",
-      ...style,
-    }}
-  >
-    <div className="absolute inset-0" style={{
-      backgroundImage: `
-        repeating-linear-gradient(45deg, transparent, transparent 8px, rgba(255,255,255,0.02) 8px, rgba(255,255,255,0.02) 9px),
-        repeating-linear-gradient(-45deg, transparent, transparent 8px, rgba(255,255,255,0.02) 8px, rgba(255,255,255,0.02) 9px),
-        repeating-linear-gradient(60deg, transparent, transparent 15px, rgba(255,255,255,0.015) 15px, rgba(255,255,255,0.015) 16px),
-        repeating-linear-gradient(-60deg, transparent, transparent 15px, rgba(255,255,255,0.015) 15px, rgba(255,255,255,0.015) 16px)
-      `,
-    }} />
-    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-      <MintLogoSilver className="w-52 h-auto" />
-    </div>
-    {children}
-  </div>
-);
+import { createPortal } from "react-dom";
 
 const HomePage = ({
   onOpenNotifications,
@@ -89,20 +42,35 @@ const HomePage = ({
   onOpenActions,
   onOpenInvestments,
   onOpenCredit,
-  onOpenCreditApply,
-  onOpenCreditRepay,
   onOpenInvest,
-  onOpenWithdraw,
   onOpenSettings,
   onOpenStrategies,
   onOpenMarkets,
   onOpenNews,
 }) => {
+  // --- 1. HOOKS & STATE (Must come first) ---
   const { profile, loading } = useProfile();
-  const { bankLinked, loading: actionsLoading, refetch: fetchRequiredActions } = useRequiredActions();
+  
+  // Note: We destructure 'refetch' as fetchFinancialData/fetchRequiredActions
+  // so the real-time listeners actually have a function to call.
+  const { 
+    balance, 
+    investments, 
+    transactions, 
+    bestAssets, 
+    loading: financialLoading, 
+    refetch: fetchFinancialData 
+  } = useFinancialData();
+
+  const { 
+    bankLinked, 
+    loading: actionsLoading, 
+    refetch: fetchRequiredActions 
+  } = useRequiredActions();
+
   const { kycVerified, kycPending, kycNeedsResubmission } = useSumsubStatus();
-  const { balance, investments, transactions, bestAssets, loading: financialLoading, refetch: fetchFinancialData } = useFinancialData();
   const { monthlyChangePercent } = useInvestments();
+
   const [bestStrategies, setBestStrategies] = useState([]);
   const [failedLogos, setFailedLogos] = useState({});
   const [showPayModal, setShowPayModal] = useState(false);
@@ -110,71 +78,17 @@ const HomePage = ({
   const [news, setNews] = useState([]);
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [loadingNews, setLoadingNews] = useState(false);
-  const [homeTab, setHomeTab] = useState("invest");
-  const [userId, setUserId] = useState(null);
   const [localBestAssets, setLocalBestAssets] = useState([]);
-
-  const [cardRotation, setCardRotation] = useState(-180);
-  const [isCardAnimating, setIsCardAnimating] = useState(false);
-  const dragStartXRef = useRef(0);
-  const [isCardVisible, setIsCardVisible] = useState(() => {
-    if (typeof window !== "undefined") {
-      return window.localStorage.getItem(CARD_VISIBILITY_KEY) !== "false";
-    }
-    return true;
-  });
-
-  const cardNormalizedIndex = Math.abs(Math.round(cardRotation / 180) % 2);
-
-  const toggleCardVisibility = () => {
-    setIsCardVisible((prev) => {
-      const next = !prev;
-      window.localStorage.setItem(CARD_VISIBILITY_KEY, String(next));
-      return next;
-    });
-  };
-
-  const handleCardDragStart = (e) => {
-    if (isCardAnimating) return;
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    dragStartXRef.current = clientX;
-  };
-
-  const handleCardDragEnd = (e) => {
-    if (isCardAnimating) return;
-    const clientX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
-    const diff = dragStartXRef.current - clientX;
-    if (Math.abs(diff) > 50) {
-      setIsCardAnimating(true);
-      const currentIndex = cardNormalizedIndex;
-      const newIndex = diff > 0 ? 1 : 0;
-      if (newIndex !== currentIndex) {
-        setCardRotation(newIndex === 1 ? -180 : 0);
-        setHomeTab(newIndex === 1 ? "invest" : "balance");
-      }
-      setTimeout(() => setIsCardAnimating(false), 700);
-    }
-  };
-
-  const handleDotClick = (idx) => {
-    if (isCardAnimating) return;
-    if (idx !== cardNormalizedIndex) {
-      setIsCardAnimating(true);
-      setCardRotation(idx === 1 ? -180 : 0);
-      setHomeTab(idx === 1 ? "invest" : "balance");
-      setTimeout(() => setIsCardAnimating(false), 700);
-    }
-  };
-
   const [showGoalsModal, setShowGoalsModal] = useState(false);
   const [goals, setGoals] = useState([]);
   const [loadingGoals, setLoadingGoals] = useState(false);
   const [isCreatingGoal, setIsCreatingGoal] = useState(false);
   const [newGoal, setNewGoal] = useState({ name: "", target_amount: "", target_date: "" });
   const [editingGoalId, setEditingGoalId] = useState(null);
-  
+
+  // Derived Values
   const assetsToDisplay = localBestAssets.length > 0 ? localBestAssets : (bestAssets || []);
-  const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(" ");
+  const displayName = [profile?.firstName, profile?.lastName].filter(Boolean).join(" ");
   const initials = displayName
     .split(" ")
     .filter(Boolean)
@@ -183,6 +97,7 @@ const HomePage = ({
     .join("")
     .toUpperCase();
 
+  // --- 2. CALLBACKS (Logic definitions) ---
   const fetchBestAssets = React.useCallback(async () => {
     if (!profile?.id) return;
     try {
@@ -190,8 +105,8 @@ const HomePage = ({
         .from('allocations')
         .select(`
           value,
-          security_id,
-          securities!inner ( symbol, name, logo_url )
+          securities!inner ( symbol, name, logo_url ),
+          security_metrics!inner ( change_pct )
         `)
         .eq('user_id', profile.id)
         .order('value', { ascending: false })
@@ -199,24 +114,12 @@ const HomePage = ({
 
       if (error) throw error;
 
-      const securityIds = data.map(item => item.security_id).filter(Boolean);
-      let metricsMap = {};
-      if (securityIds.length > 0) {
-        const { data: metricsData } = await supabase
-          .from('security_metrics')
-          .select('security_id, change_pct')
-          .in('security_id', securityIds);
-        if (metricsData) {
-          metricsData.forEach(m => { metricsMap[m.security_id] = m.change_pct || 0; });
-        }
-      }
-
       const formatted = data.map(item => ({
         symbol: item.securities.symbol,
         name: item.securities.name,
         logo: item.securities.logo_url,
         value: item.value,
-        change: metricsMap[item.security_id] || 0
+        change: item.security_metrics?.change_pct || 0
       }));
 
       setLocalBestAssets(formatted); 
@@ -231,7 +134,7 @@ const HomePage = ({
     try {
       const { data, error } = await supabase
         .from('investment_goals')
-        .select('id, name, target_amount, current_amount, progress_percent')
+        .select('id, name, target_amount, current_amount, progress_percent') 
         .eq('user_id', profile.id)
         .eq('is_active', true)
         .order('created_at', { ascending: false });
@@ -245,14 +148,9 @@ const HomePage = ({
     }
   }, [profile?.id]);
 
-  useEffect(() => {
-    const getUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) setUserId(session.user.id);
-    };
-    getUser();
-  }, []);
-
+  // --- 3. EFFECTS (Side effects using the callbacks above) ---
+  
+  // Unified Real-time Subscription
   useEffect(() => {
     if (!profile?.id) return;
 
@@ -283,6 +181,7 @@ const HomePage = ({
       })
       .subscribe();
 
+    // Initial loads
     fetchBestAssets();
     fetchGoals();
 
@@ -291,23 +190,20 @@ const HomePage = ({
     };
   }, [profile?.id, fetchBestAssets, fetchGoals, fetchFinancialData, fetchRequiredActions]);
 
+  // Specific check when Goals Modal opens
   useEffect(() => {
     if (showGoalsModal && profile?.id) {
       fetchGoals();
     }
   }, [showGoalsModal, profile?.id, fetchGoals]);
 
+  // Strategies & News
   useEffect(() => {
     const fetchStrategies = async () => {
       try {
         const data = await getStrategiesWithMetrics();
-        const sorted = data
-          .sort((a, b) => (b.change_pct || 0) - (a.change_pct || 0))
-          .slice(0, 5);
-        setBestStrategies(sorted);
-      } catch (error) {
-        console.error("Failed to load strategies", error);
-      }
+        setBestStrategies(data.sort((a, b) => (b.change_pct || 0) - (a.change_pct || 0)).slice(0, 5));
+      } catch (e) { console.error("Strategies error:", e); }
     };
     fetchStrategies();
   }, []);
@@ -317,21 +213,19 @@ const HomePage = ({
       setLoadingNews(true);
       try {
         const { data, error } = await supabase
-          .from('News_articles')
+          .from('News_articles') 
           .select('id, title, source, published_at, body_text')
           .order('published_at', { ascending: false })
           .limit(3);
         if (error) throw error;
         setNews(data || []);
-      } catch (err) {
-        console.error("News error:", err.message);
-      } finally {
-        setLoadingNews(false);
-      }
+      } catch (err) { console.error("News error:", err.message); }
+      finally { setLoadingNews(false); }
     };
     fetchNews();
   }, []);
 
+  // --- 4. ACTION HANDLERS ---
   const handleEditClick = (goal) => {
     setNewGoal({ 
       name: goal.name, 
@@ -344,24 +238,18 @@ const HomePage = ({
 
   const handleUpdateGoal = async (e) => {
     e.preventDefault();
-    if (!editingGoalId) return;
     setLoadingGoals(true);
     try {
-      const updatePayload = {
-        name: newGoal.name,
-        target_amount: parseFloat(newGoal.target_amount),
-      };
-      if (newGoal.target_date) {
-        updatePayload.target_date = newGoal.target_date;
-      }
       const { error } = await supabase
         .from('investment_goals')
-        .update(updatePayload)
+        .update({
+          name: newGoal.name,
+          target_amount: parseFloat(newGoal.target_amount),
+        })
         .eq('id', editingGoalId);
       if (error) throw error;
       setEditingGoalId(null);
       setIsCreatingGoal(false);
-      setNewGoal({ name: "", target_amount: "", target_date: "" });
       fetchGoals();
     } catch (error) { console.error("Update error:", error.message); }
     finally { setLoadingGoals(false); }
@@ -370,28 +258,21 @@ const HomePage = ({
   const handleCreateGoal = async (e) => {
     e.preventDefault();
     if (!newGoal.name || !newGoal.target_amount) return;
-
     setLoadingGoals(true);
     try {
       const { error } = await supabase.from('investment_goals').insert({
         user_id: profile.id,
         name: newGoal.name,
         target_amount: parseFloat(newGoal.target_amount),
-        target_date: newGoal.target_date || null,
         current_amount: 0,
         progress_percent: 0
       });
-
       if (error) throw error;
-      
       setNewGoal({ name: "", target_amount: "", target_date: "" });
       setIsCreatingGoal(false);
       fetchGoals();
-    } catch (error) {
-      console.error("Error creating goal:", error);
-    } finally {
-      setLoadingGoals(false);
-    }
+    } catch (error) { console.error("Create error:", error); }
+    finally { setLoadingGoals(false); }
   };
 
   const handleDeleteGoal = async (goalId) => {
@@ -408,24 +289,15 @@ const HomePage = ({
     finally { setLoadingGoals(false); }
   };
 
-  if (loading || financialLoading) {
-    return <HomeSkeleton />;
-  }
+  // --- 5. DATA FORMATTING FOR RENDER ---
+  if (loading || financialLoading) return <HomeSkeleton />;
 
-  const handleMintBalancePress = () => {
-    if (onOpenMintBalance) {
-      onOpenMintBalance();
-    }
-  };
-
-  const getKycStatus = () => {
+  const kycStatus = (() => {
     if (kycVerified) return { text: "Verified", style: "bg-green-100 text-green-600" };
     if (kycNeedsResubmission) return { text: "Needs Attention", style: "bg-amber-100 text-amber-700" };
     if (kycPending) return { text: "Pending", style: "bg-blue-100 text-blue-600" };
     return { text: "Not Verified", style: "bg-slate-100 text-slate-500" };
-  };
-
-  const kycStatus = getKycStatus();
+  })();
 
   const actionsData = [
     {
@@ -438,8 +310,7 @@ const HomePage = ({
       icon: ShieldCheck,
       routeName: "actions",
       isComplete: kycVerified,
-      dueAt: "2025-01-20T12:00:00Z",
-      createdAt: "2025-01-18T09:00:00Z",
+      isRequired: true,
     },
     {
       id: "bank-link",
@@ -450,8 +321,7 @@ const HomePage = ({
       icon: Landmark,
       routeName: "actions",
       isComplete: bankLinked,
-      dueAt: "2025-01-22T12:00:00Z",
-      createdAt: "2025-01-19T09:00:00Z",
+      isRequired: false,
     },
     {
       id: "investments",
@@ -462,8 +332,6 @@ const HomePage = ({
       icon: TrendingUp,
       routeName: "investments",
       isComplete: false,
-      dueAt: "2025-01-28T12:00:00Z",
-      createdAt: "2025-01-21T09:00:00Z",
     },
     {
       id: "invite",
@@ -474,29 +342,10 @@ const HomePage = ({
       icon: UserPlus,
       routeName: "actions",
       isComplete: false,
-      dueAt: "2025-02-05T12:00:00Z",
-      createdAt: "2025-01-23T09:00:00Z",
     },
   ];
 
-  const isActionsAvailable = true;
-  const outstandingActions = isActionsAvailable
-    ? actionsData
-        .filter((action) => !action.isComplete && action.status !== "Optional")
-        .sort((a, b) => {
-          if (a.priority !== b.priority) {
-            return a.priority - b.priority;
-          }
-          const dueA = a.dueAt ? new Date(a.dueAt).getTime() : Number.POSITIVE_INFINITY;
-          const dueB = b.dueAt ? new Date(b.dueAt).getTime() : Number.POSITIVE_INFINITY;
-          if (dueA !== dueB) {
-            return dueA - dueB;
-          }
-          const createdA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const createdB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-          return createdA - createdB;
-        })
-    : [];
+  const outstandingActions = actionsData.filter(action => action.id === "identity" && !action.isComplete);
 
   const transactionHistory = transactions.slice(0, 3).map((t) => ({
     title: t.title || t.description || "Transaction",
@@ -511,12 +360,11 @@ const HomePage = ({
       settings: onOpenSettings,
       actions: onOpenActions,
     };
-
     const handler = routes[action.routeName];
-    if (handler) {
-      handler();
-    }
+    if (handler) handler();
   };
+
+  const handleMintBalancePress = () => onOpenMintBalance?.();
 
   const hasInvestments = assetsToDisplay.length > 0;
   const hasStrategies = bestStrategies && bestStrategies.length > 0;
@@ -542,120 +390,67 @@ const HomePage = ({
 
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
               <div className="flex items-center rounded-full bg-white/10 p-1 backdrop-blur-md">
-                {[
-                  { id: "balance", label: "Balance", disabled: true, action: () => {} },
-                  { id: "invest", label: "Invest", disabled: false, action: () => { setHomeTab("invest"); if (cardNormalizedIndex !== 1) { setIsCardAnimating(true); setCardRotation(-180); setTimeout(() => setIsCardAnimating(false), 700); } } },
-                ].map((tab) => (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={tab.action}
-                    disabled={tab.disabled}
-                    className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
-                      tab.disabled
-                        ? "text-white/20 cursor-not-allowed"
-                        : homeTab === tab.id
-                          ? "bg-white text-slate-900 shadow-sm"
-                          : "text-white/70 hover:bg-white/10 hover:text-white"
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-                <div className="relative flex items-center">
-                  <span className="rounded-full px-3 py-1.5 text-xs font-semibold text-white/30 cursor-default">Credit</span>
-                  <span className="rounded-full px-3 py-1.5 text-xs font-semibold text-white/30 cursor-default">Transact</span>
-                </div>
+                <button
+                  type="button"
+                  onClick={onOpenInvest}
+                  className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-900 shadow-sm"
+                >
+                  Invest
+                </button>
+                <button
+                  type="button"
+                  onClick={onOpenCredit} 
+                  className="rounded-full px-3 py-1.5 text-xs font-semibold text-white/70 transition-all hover:bg-white/10 hover:text-white"
+                >
+                  Credit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onOpenInvest("transact")}
+                  className="rounded-full px-3 py-1.5 text-xs font-semibold text-white/70 transition-all hover:bg-white/10 hover:text-white"
+                >
+                  Transact
+                </button>
               </div>
             </div>
 
             <NotificationBell onClick={onOpenNotifications} />
           </header>
 
-          {homeTab === "balance" || homeTab === "invest" ? (
-            <div className="relative select-none">
-              <div
-                className="relative w-full touch-pan-y"
-                style={{ aspectRatio: "1.7 / 1", perspective: "1000px" }}
-                onTouchStart={handleCardDragStart}
-                onTouchEnd={handleCardDragEnd}
-                onMouseDown={handleCardDragStart}
-                onMouseUp={handleCardDragEnd}
-              >
-                <CardContent style={{
-                  transform: `rotateY(${cardRotation}deg)`,
-                  transition: "transform 0.7s ease-out",
-                }}>
-                  <div className="relative h-full p-6 flex flex-col">
-                    <div className="flex items-start justify-between">
-                      <MintLogoWhite className="h-7 w-auto opacity-90" />
-                    </div>
-                    <div className="flex-1 flex flex-col items-center justify-center gap-1">
-                      <p className="text-[10px] uppercase tracking-[0.25em] text-white/40 font-medium" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>Available Balance</p>
-                      <p className="text-[28px] md:text-[34px] font-extralight text-white tracking-wide" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", letterSpacing: "0.04em" }}>
-                        {isCardVisible ? formatZar(balance) : "••••••••"}
-                      </p>
-                    </div>
-                    <div className="flex items-end justify-between">
-                      <div>
-                        <p className="text-[9px] uppercase tracking-[0.2em] text-white/35 font-normal mb-1" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>Card Holder</p>
-                        <p className="text-[13px] uppercase tracking-[0.18em] text-white/90 font-light" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif", letterSpacing: "0.18em" }}>
-                          {displayName || "MINT MEMBER"}
-                        </p>
-                      </div>
-                      <div className="text-right flex items-end">
-                        <p className="text-[22px] md:text-[26px] font-light text-white/90 tracking-wider mb-[-2px]" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif", fontStyle: "italic", letterSpacing: "0.08em" }}>MINT</p>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-
-                <CardContent style={{
-                  transform: `rotateY(${cardRotation + 180}deg)`,
-                  transition: "transform 0.7s ease-out",
-                }}>
-                  <div className="relative h-full overflow-hidden">
-                    <SwipeableBalanceCard userId={userId} isBackFacing={cardNormalizedIndex === 1} />
-                  </div>
-                </CardContent>
-
-                {cardNormalizedIndex === 0 && (
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); toggleCardVisibility(); }}
-                    className="absolute top-4 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20"
-                  >
-                    {isCardVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                  </button>
-                )}
-              </div>
-
-              <div className="flex justify-center gap-2 mt-3">
-                {[0, 1].map((idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => handleDotClick(idx)}
-                    className={`h-2 rounded-full transition-all duration-300 ${
-                      cardNormalizedIndex === idx ? "w-6 bg-white" : "w-2 bg-white/40 hover:bg-white/60"
-                    }`}
-                  />
-                ))}
-              </div>
-            </div>
-          ) : (
-            <SwipeableBalanceCard userId={userId} />
-          )}
+          <SwipeableBalanceCard
+            amount={balance}
+            totalInvestments={investments}
+            investmentChange={monthlyChangePercent || 0}
+            bestPerformingAssets={bestAssets}
+            userName={displayName}
+            onPressMintBalance={handleMintBalancePress}
+          />
         </div>
       </div>
 
       <div className="mx-auto -mt-10 flex w-full max-w-sm flex-col gap-6 px-4 pb-10 md:max-w-md md:px-8">
         <section className="grid grid-cols-4 gap-3 text-[11px] font-medium">
           {[
-            { label: <>Open<br />Strategies</>, icon: LayoutGrid, onClick: onOpenStrategies || onOpenInvest },
-            { label: "Markets", icon: TrendingUp, onClick: onOpenMarkets || onOpenInvest },
-            { label: "News", icon: Newspaper, onClick: () => (onOpenNews ? onOpenNews("news") : (onOpenInvest && onOpenInvest("news"))) },
-            { label: "Goals", icon: Target, onClick: () => setShowGoalsModal(true) },
+            { 
+              label: <>Open<br />Strategies</>, 
+              icon: LayoutGrid, 
+              onClick: () => (onOpenStrategies ? onOpenStrategies("openstrategies") : onOpenInvest("openstrategies")) 
+            },
+            { 
+              label: "Markets", 
+              icon: TrendingUp, 
+              onClick: () => (onOpenMarkets ? onOpenMarkets("invest") : onOpenInvest("invest")) 
+            },
+            { 
+              label: "News", 
+              icon: Newspaper, 
+              onClick: () => (onOpenNews ? onOpenNews("news") : onOpenInvest("news")) 
+            },
+            { 
+              label: "Goals", 
+              icon: Target, 
+              onClick: () => setShowGoalsModal(true) 
+            },
           ].map((item, index) => {
             const Icon = item.icon;
             return (
@@ -673,6 +468,7 @@ const HomePage = ({
             );
           })}
         </section>
+        
 
         {outstandingActions.length > 0 ? (
           <OutstandingActionsSection
@@ -683,86 +479,86 @@ const HomePage = ({
         ) : null}
 
         {/* Best Performing Assets */}
-        <section>
-          <div className="flex items-end justify-between px-5 mb-3">
-            <div className="space-y-1">
-              <p className="text-sm font-semibold text-slate-900">
-                Your best performing assets
-              </p>
-              <div className="flex items-center gap-2 text-xs text-slate-500">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 text-slate-500">
-                  <Info className="h-3 w-3" />
-                </span>
-                <span>Based on your investment portfolio</span>
-              </div>
-            </div>
-            {hasInvestments && (
-              <button 
-                onClick={onOpenInvest} 
-                className="mb-1 text-xs font-semibold text-violet-600 active:opacity-70"
-              >
-                View all
-              </button>
-            )}
-          </div>
-          
-          {hasInvestments ? (
-            <div className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {assetsToDisplay.slice(0, 5).map((asset) => (
-                <div
-                  key={asset.symbol}
-                  className="flex min-w-[260px] flex-1 snap-start items-center gap-4 rounded-3xl bg-white p-4 shadow-md"
-                >
-                  <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">
-                    {failedLogos[asset.symbol] || !asset.logo ? (
-                      <span className="text-sm font-semibold text-slate-600">
-                        {asset.symbol}
-                      </span>
-                    ) : (
-                      <img
-                        src={asset.logo}
-                        alt={asset.name}
-                        className="h-10 w-10 object-contain"
-                        referrerPolicy="no-referrer"
-                        crossOrigin="anonymous"
-                        onError={() =>
-                          setFailedLogos((prev) => ({ ...prev, [asset.symbol]: true }))
-                        }
-                      />
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-slate-900">{asset.symbol}</p>
-                    <p className="text-xs text-slate-500 line-clamp-1">{asset.name}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-slate-900">
-                      R{typeof asset.value === 'number' ? asset.value.toLocaleString() : (asset.value || 0)}
-                    </p>
-                    <p className={`text-xs font-semibold ${asset.change >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                      {asset.change >= 0 ? '+' : ''}{typeof asset.change === 'number' ? asset.change.toFixed(2) : (asset.change || '0.00')}%
-                    </p>
-                  </div>
+          <section>
+            <div className="flex items-end justify-between px-5 mb-3">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-slate-900">
+                  Your best performing assets
+                </p>
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 text-slate-500">
+                    <Info className="h-3 w-3" />
+                  </span>
+                  <span>Based on your investment portfolio</span>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-3xl bg-white p-6 shadow-md text-center">
-              <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-full bg-violet-50 text-violet-600 mb-4">
-                <TrendingUp className="h-8 w-8" />
               </div>
-              <p className="text-sm font-semibold text-slate-900 mb-1">No investments yet</p>
-              <p className="text-xs text-slate-500 mb-4">Start investing to see your best performing assets here</p>
-              <button
-                type="button"
-                onClick={() => onOpenInvest && onOpenInvest("invest")}
-                className="inline-flex items-center justify-center rounded-full bg-slate-900 px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.15em] text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5"
-              >
-                Make your first investment
-              </button>
+              {assetsToDisplay.length > 0 && (
+                <button 
+                  onClick={() => onOpenInvest("invest")}
+                  className="mb-1 text-xs font-semibold text-violet-600 active:opacity-70"
+                >
+                  View all
+                </button>
+              )}
             </div>
-          )}
-        </section>
+            
+            {assetsToDisplay.length > 0 ? (
+              <div className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {assetsToDisplay.slice(0, 5).map((asset) => (
+                  <div
+                    key={asset.symbol}
+                    className="flex min-w-[260px] flex-1 snap-start items-center gap-4 rounded-3xl bg-white p-4 shadow-md"
+                  >
+                    <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">
+                      {failedLogos[asset.symbol] || !asset.logo ? (
+                        <span className="text-sm font-semibold text-slate-600">
+                          {asset.symbol}
+                        </span>
+                      ) : (
+                        <img
+                          src={asset.logo}
+                          alt={asset.name}
+                          className="h-10 w-10 object-contain"
+                          referrerPolicy="no-referrer"
+                          crossOrigin="anonymous"
+                          onError={() =>
+                            setFailedLogos((prev) => ({ ...prev, [asset.symbol]: true }))
+                          }
+                        />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-slate-900">{asset.symbol}</p>
+                      <p className="text-xs text-slate-500 line-clamp-1">{asset.name}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-slate-900">
+                        R{typeof asset.value === 'number' ? asset.value.toLocaleString() : (asset.value || 0)}
+                      </p>
+                      <p className={`text-xs font-semibold ${asset.change >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                        {asset.change >= 0 ? '+' : ''}{typeof asset.change === 'number' ? asset.change.toFixed(2) : (asset.change || '0.00')}%
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-3xl bg-white p-6 shadow-md text-center">
+                <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-full bg-violet-50 text-violet-600 mb-4">
+                  <TrendingUp className="h-8 w-8" />
+                </div>
+                <p className="text-sm font-semibold text-slate-900 mb-1">No investments yet</p>
+                <p className="text-xs text-slate-500 mb-4">Start investing to see your best performing assets here</p>
+                <button
+                  type="button"
+                  onClick={() => onOpenInvest("invest")}
+                  className="inline-flex items-center justify-center rounded-full bg-slate-900 px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.15em] text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5"
+                >
+                  Make your first investment
+                </button>
+              </div>
+            )}
+          </section>
 
         {/* Best Performing Strategies */}
         <section>
@@ -780,7 +576,7 @@ const HomePage = ({
             </div>
             {hasStrategies && (
               <button 
-                onClick={onOpenInvest} 
+              onClick={() => onOpenStrategies("openstrategies")}  
                 className="mb-1 text-xs font-semibold text-violet-600 active:opacity-70"
               >
                 View all
@@ -824,7 +620,7 @@ const HomePage = ({
               <p className="text-xs text-slate-500 mb-4">Explore our curated investment portfolios</p>
               <button
                 type="button"
-                onClick={onOpenInvest}
+                onClick={() => onOpenStrategies("openstrategies")}
                 className="inline-flex items-center justify-center rounded-full bg-slate-900 px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.15em] text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5"
               >
                 Browse Strategies
@@ -832,8 +628,7 @@ const HomePage = ({
             </div>
           )}
         </section>
-
-        {/* Market Insights */}
+        {/* Market Insights Section */}
         <section>
           <div className="flex items-end justify-between px-5 mb-3">
             <div className="space-y-1">
@@ -848,7 +643,7 @@ const HomePage = ({
               </div>
             </div>
             <button 
-              onClick={() => onOpenNews && onOpenNews("news")}
+              onClick={() => onOpenNews("news")}
               className="mb-1 text-xs font-semibold text-violet-600 active:opacity-70"
             >
               View all
@@ -860,18 +655,21 @@ const HomePage = ({
               news.map((item) => (
                 <button
                   key={item.id}
-                  onClick={() => onOpenNews && onOpenNews(item)}
+                  onClick={() => onOpenNews(item)} // This will now pass the real news object
                   className="flex w-full items-center gap-4 rounded-3xl bg-white p-3 shadow-md transition-active active:scale-[0.98]"
                 >
                   <div className="flex-1 text-left">
                     <div className="flex items-center gap-2 mb-1">
+                      {/* Using 'source' from News_articles table schema */}
                       <span className="text-[10px] font-bold uppercase tracking-wider text-violet-600 bg-violet-50 px-2 py-0.5 rounded-md">
                         {item.source || 'Market'}
                       </span>
+                      {/* Using 'published_at' from News_articles table schema */}
                       <span className="text-[10px] text-slate-400">
                         {formatDate(item.published_at)}
                       </span>
                     </div>
+                    {/* Using 'title' from News_articles table schema */}
                     <p className="text-sm font-semibold text-slate-900 line-clamp-2 leading-snug">
                       {item.title}
                     </p>
@@ -892,7 +690,7 @@ const HomePage = ({
             )}
           </div>
         </section>
-        
+
         {transactionHistory.length > 0 ? (
           <TransactionHistorySection items={transactionHistory} onViewAll={onOpenActivity} />
         ) : (
@@ -1027,12 +825,12 @@ const HomePage = ({
         </div>
       )}
 
+      {/* --- GOALS MODAL --- */}
       {showGoalsModal && (
         <div className="fixed inset-0 z-[950] flex items-end justify-center bg-slate-900/60 px-4 pb-20 sm:items-center sm:pb-0">
           <button
             type="button"
             className="absolute inset-0 h-full w-full cursor-default backdrop-blur-sm"
-            aria-label="Close modal"
             onClick={() => {
               setShowGoalsModal(false);
               setIsCreatingGoal(false);
@@ -1051,14 +849,12 @@ const HomePage = ({
                   {editingGoalId ? "Edit Goal" : isCreatingGoal ? "New Goal" : "Your Goals"}
                 </h2>
                 <button
-                  type="button"
                   onClick={() => {
                     setShowGoalsModal(false);
                     setIsCreatingGoal(false);
                     setEditingGoalId(null);
                   }}
                   className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-50 text-slate-400"
-                  aria-label="Close"
                 >
                   <X size={20} />
                 </button>
@@ -1070,14 +866,14 @@ const HomePage = ({
                     <div className="h-8 w-8 animate-spin rounded-full border-4 border-violet-100 border-t-violet-600" />
                   </div>
                 ) : isCreatingGoal || editingGoalId ? (
+                  /* --- SHARED FORM FOR CREATE & EDIT --- */
                   <form onSubmit={editingGoalId ? handleUpdateGoal : handleCreateGoal} className="space-y-4">
                     <div>
                       <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">Goal Name</label>
                       <input
-                        type="text"
-                        placeholder="e.g. New Car, Holiday"
+                        placeholder="e.g. Porsche 911"
                         value={newGoal.name}
-                        onChange={(e) => setNewGoal(prev => ({ ...prev, name: e.target.value }))}
+                        onChange={(e) => setNewGoal({...newGoal, name: e.target.value})}
                         className="w-full rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/20"
                         required
                       />
@@ -1086,27 +882,16 @@ const HomePage = ({
                       <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">Target Amount (R)</label>
                       <input
                         type="number"
-                        placeholder="0.00"
                         value={newGoal.target_amount}
-                        onChange={(e) => setNewGoal(prev => ({ ...prev, target_amount: e.target.value }))}
+                        onChange={(e) => setNewGoal({...newGoal, target_amount: e.target.value})}
                         className="w-full rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/20"
                         required
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">Target Date (Optional)</label>
-                      <input
-                        type="date"
-                        value={newGoal.target_date}
-                        onChange={(e) => setNewGoal(prev => ({ ...prev, target_date: e.target.value }))}
-                        className="w-full rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/20"
                       />
                     </div>
                     
                     <div className="flex flex-col gap-3 pt-2">
                       <button
                         type="submit"
-                        disabled={loadingGoals}
                         className="w-full rounded-2xl bg-[#31005e] py-4 font-bold uppercase tracking-widest text-white shadow-lg transition-active active:scale-95"
                       >
                         {editingGoalId ? "Update Goal" : "Save Goal"}
@@ -1115,28 +900,16 @@ const HomePage = ({
                       {editingGoalId && (
                         <button
                           type="button"
-                          onClick={() => handleDeleteGoal(editingGoalId)}
+                          onClick={() => handleDeleteGoal(editingGoalId)} // FIX: Link the function here
                           className="w-full rounded-2xl bg-rose-50 py-4 text-xs font-bold uppercase tracking-widest text-rose-600 transition-active active:scale-95"
                         >
                           Delete Goal
                         </button>
                       )}
-
-                      {goals.length > 0 && !editingGoalId && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsCreatingGoal(false);
-                            setNewGoal({ name: "", target_amount: "", target_date: "" });
-                          }}
-                          className="w-full rounded-2xl border border-slate-200 py-3 text-sm font-semibold text-slate-600"
-                        >
-                          Cancel
-                        </button>
-                      )}
                     </div>
                   </form>
                 ) : (
+                  /* --- GOALS LIST --- */
                   <div className="space-y-4">
                     {goals.map((goal) => (
                       <div key={goal.id} className="group relative rounded-3xl border border-slate-100 bg-white p-5 shadow-sm transition-all hover:shadow-md">
@@ -1169,7 +942,7 @@ const HomePage = ({
                         </div>
                       </div>
                     ))}
-                    
+
                     <button
                       onClick={() => setIsCreatingGoal(true)}
                       className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-200 py-4 text-sm font-bold text-slate-400 transition-all hover:border-violet-300 hover:bg-violet-50 active:scale-95"
@@ -1187,6 +960,8 @@ const HomePage = ({
     </div>
   );
 };
+
+/* --- HELPER FUNCTIONS --- */
 
 function formatDate(dateString) {
   if (!dateString) return "";
