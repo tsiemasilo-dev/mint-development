@@ -82,6 +82,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onBack }) => {
   const { chartData: realChartData, loading: chartLoading } = useStrategyChartData(userSelectedStrategy?.strategyId, timeFilter);
   
   const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(" ") || "User";
+  const initials = fullName.split(" ").filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase() || "U";
   
   const isStrategyReady = !strategiesLoading && userSelectedStrategy;
   const currentStrategy = userSelectedStrategy || {
@@ -373,12 +374,16 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onBack }) => {
           <header className="flex items-start justify-between">
             <div className="flex flex-col gap-1">
               <div className="flex h-10 w-10 items-center justify-center rounded-full overflow-hidden bg-gradient-to-br from-amber-200 to-amber-400 text-sm font-semibold text-amber-900 shadow-lg shadow-amber-500/20">
-                <img 
-                  src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&h=80&fit=crop&crop=face" 
-                  alt="Profile"
-                  className="h-full w-full object-cover"
-                  onError={(e) => { e.target.style.display = 'none'; e.target.parentNode.innerText = 'JD'; }}
-                />
+                {profile.avatarUrl ? (
+                  <img 
+                    src={profile.avatarUrl}
+                    alt={fullName}
+                    className="h-full w-full object-cover"
+                    onError={(e) => { e.target.style.display = 'none'; e.target.parentNode.innerText = initials; }}
+                  />
+                ) : (
+                  <span>{initials}</span>
+                )}
               </div>
               <p className="text-lg font-medium text-white/90 mt-1">{fullName}</p>
             </div>
