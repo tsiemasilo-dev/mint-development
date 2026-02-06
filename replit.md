@@ -27,7 +27,9 @@ A React authentication application using Vite as the build tool with Tailwind CS
     - `useUserStrategies.js` - Hook for fetching user's investment strategies from Supabase
     - `useFinancialData.js` - Hook for financial data utilities
     - `strategyData.js` - Strategy price history fetching utilities
+    - `useProfile.js` - Profile hook with id, email, name, avatarUrl, phoneNumber, dateOfBirth, gender, address, idNumber, watchlist
   - `pages/` - Page components
+    - `StatementsPage.jsx` - Statements page with Strategy/Holdings/Financials tabs, real data from Supabase, PDF download
     - `NewPortfolioPage.jsx` - Portfolio dashboard with strategy selector dropdown and performance charts
     - `AuthPage.jsx` - Authentication page
     - `OnboardingPage.jsx` - Welcome/landing page (before login)
