@@ -403,11 +403,7 @@ const NewPortfolioPage = () => {
 
   useEffect(() => {
     if (chartScrollRef.current) {
-      const scrollContainer = chartScrollRef.current;
-      const chartWidth = scrollContainer.scrollWidth;
-      const containerWidth = scrollContainer.clientWidth;
-      const scrollTo = (chartWidth - containerWidth) * 0.6;
-      scrollContainer.scrollTo({ left: scrollTo, behavior: 'smooth' });
+      chartScrollRef.current.scrollTo({ left: 0, behavior: 'smooth' });
     }
   }, [timeFilter]);
 
@@ -443,11 +439,7 @@ const NewPortfolioPage = () => {
 
   useEffect(() => {
     if (stockChartScrollRef.current) {
-      const scrollContainer = stockChartScrollRef.current;
-      const chartWidth = scrollContainer.scrollWidth;
-      const containerWidth = scrollContainer.clientWidth;
-      const scrollTo = (chartWidth - containerWidth) * 0.6;
-      scrollContainer.scrollTo({ left: scrollTo, behavior: 'smooth' });
+      stockChartScrollRef.current.scrollTo({ left: 0, behavior: 'smooth' });
     }
   }, [stockTimeFilter, selectedStock]);
 
@@ -825,7 +817,7 @@ const NewPortfolioPage = () => {
                 width={getChartWidth(currentChartData.length)}
                 height={220}
                 data={currentChartData}
-                margin={{ top: 20, right: 30, left: 30, bottom: 40 }}
+                margin={{ top: 20, right: 20, left: 0, bottom: 40 }}
                 style={{ outline: 'none' }}
               >
                 <defs>
@@ -929,9 +921,13 @@ const NewPortfolioPage = () => {
                 <YAxis
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 500 }}
-                  tickFormatter={(val) => `R${val.toLocaleString()}`}
-                  width={65}
+                  tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 500 }}
+                  tickFormatter={(val) => {
+                    if (val >= 1000) return `R${(val / 1000).toFixed(1)}k`;
+                    return `R${val.toFixed(0)}`;
+                  }}
+                  width={50}
+                  tickCount={5}
                   domain={([dataMin, dataMax]) => {
                     const range = dataMax - dataMin;
                     const padding = range > 0 ? range * 0.05 : 1;
@@ -1219,7 +1215,7 @@ const NewPortfolioPage = () => {
                       width={getStockChartWidth(stockChartData.length)}
                       height={220}
                       data={stockChartData}
-                      margin={{ top: 20, right: 30, left: 30, bottom: 40 }}
+                      margin={{ top: 20, right: 20, left: 0, bottom: 40 }}
                       style={{ outline: 'none' }}
                     >
                       <defs>
@@ -1293,9 +1289,13 @@ const NewPortfolioPage = () => {
                       <YAxis
                         axisLine={false}
                         tickLine={false}
-                        tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 500 }}
-                        tickFormatter={(val) => `R${val.toLocaleString()}`}
-                        width={65}
+                        tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 500 }}
+                        tickFormatter={(val) => {
+                          if (val >= 1000) return `R${(val / 1000).toFixed(1)}k`;
+                          return `R${val.toFixed(0)}`;
+                        }}
+                        width={50}
+                        tickCount={5}
                         domain={([dataMin, dataMax]) => {
                           const range = dataMax - dataMin;
                           const padding = range > 0 ? range * 0.05 : 1;
