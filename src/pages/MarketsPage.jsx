@@ -1088,32 +1088,28 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                         <p className="mt-0.5 text-xs text-slate-500">{security.symbol}</p>
                         <div className="mt-2">
                           {security.currentPrice != null ? (
-                            <>
+                            <div className="flex items-baseline gap-2">
                               <p className="text-lg font-bold text-slate-900">
                                 <span className="text-xs text-slate-400 font-normal">{getDisplayCurrency(security)}</span>{' '}
                                 {formatPrice(security)}
                               </p>
                               {security.changePct != null && (
-                                <p className={`mt-1 text-xs font-semibold ${
+                                <span className={`text-xs font-semibold ${
                                   security.changePct >= 0 ? 'text-emerald-600' : 'text-red-600'
                                 }`}>
                                   {security.changePct >= 0 ? '+' : ''}{security.changePct.toFixed(2)}%
-                                </p>
+                                </span>
                               )}
-                            </>
+                            </div>
                           ) : (
                             <p className="text-sm text-slate-400">—</p>
                           )}
                         </div>
-                        <div className="mt-2 flex items-baseline gap-2">
-                          <p className="text-lg font-bold text-emerald-600">
-                            {Number(security.dividend_yield).toFixed(2)}%
-                          </p>
-                          <span className="text-xs text-slate-400">yield</span>
+                        <div className="mt-2 flex items-center gap-2">
+                          <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-700">
+                            {Number(security.dividend_yield).toFixed(2)}% yield
+                          </span>
                         </div>
-                        <p className="mt-1 text-xs text-slate-500">
-                          Market cap: {formatMarketCap(security.market_cap)}
-                        </p>
                       </div>
                     </div>
                   </button>
