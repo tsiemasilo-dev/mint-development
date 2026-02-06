@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "./supabase";
 
 const emptyProfile = {
-  id: null,
+  id: "",
   email: "",
   firstName: "",
   lastName: "",
@@ -12,7 +12,6 @@ const emptyProfile = {
   gender: "",
   address: "",
   idNumber: "",
-  watchlist: [],
 };
 
 const buildProfile = ({ user, row }) => {
@@ -28,7 +27,6 @@ const buildProfile = ({ user, row }) => {
     gender: row?.gender || metadata.gender || "",
     address: row?.address || metadata.address || "",
     idNumber: row?.id_number || metadata.id_number || "",
-    watchlist: row?.watchlist || [],
   };
 };
 
@@ -59,9 +57,7 @@ export const useProfile = () => {
         const user = userData.user;
         const { data: rowData, error: rowError } = await supabase
           .from("profiles")
-          .select(
-            "id, first_name, last_name, email, avatar_url, phone_number, date_of_birth, gender, address, id_number, watchlist"
-          )
+          .select("id, first_name, last_name, email, avatar_url, phone_number, date_of_birth, gender, address, id_number")
           .eq("id", user.id)
           .maybeSingle();
 
