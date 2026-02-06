@@ -272,16 +272,19 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy }) => {
                 </button>
               ))}
             </div>
-            {selectedPeriodReturn != null && (
-              <div className="mt-3">
-                <div className={`text-lg font-semibold ${
-                  selectedPeriodReturn >= 0 ? 'text-emerald-600' : 'text-red-600'
-                }`}>
-                  {selectedPeriodReturn >= 0 ? '+' : ''}{selectedPeriodReturn.toFixed(2)}%
+            {(() => {
+              const periodReturnValue = selectedPeriodReturn != null ? selectedPeriodReturn : (!loading && chartData.length >= 2 ? chartReturn : null);
+              if (periodReturnValue == null) return null;
+              const isPeriodPositive = periodReturnValue >= 0;
+              return (
+                <div className="mt-3 flex items-baseline gap-1.5">
+                  <span className={`text-lg font-bold ${isPeriodPositive ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {isPeriodPositive ? '+' : ''}{periodReturnValue.toFixed(2)}%
+                  </span>
+                  <span className="text-xs text-slate-400">{selectedPeriod} return</span>
                 </div>
-                <p className="mt-0.5 text-xs text-slate-400">in the last {selectedPeriod}</p>
-              </div>
-            )}
+              );
+            })()}
           </div>
 
           {/* Chart */}

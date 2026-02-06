@@ -1248,7 +1248,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onBack }) => {
               </div>
               
               {/* Right: Pie Chart */}
-              <div className="relative h-44 w-44 -mr-4 md:mr-0">
+              <div className="relative h-44 w-44 -mr-4 md:mr-0" style={{ pointerEvents: isLoadingData ? 'none' : 'auto', opacity: isLoadingData ? 0.5 : 1, transition: 'opacity 0.3s ease' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <defs>
@@ -1289,8 +1289,9 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onBack }) => {
                             cursor: 'pointer',
                             filter: activePieIndex === index ? 'url(#glow)' : 'none'
                           }}
-                          onMouseEnter={() => setActivePieIndex(index)}
-                          onMouseLeave={() => setActivePieIndex(-1)}
+                          onMouseEnter={() => !isLoadingData && setActivePieIndex(index)}
+                          onMouseLeave={() => !isLoadingData && setActivePieIndex(-1)}
+                          onClick={() => !isLoadingData && setActivePieIndex(activePieIndex === index ? -1 : index)}
                         />
                       ))}
                     </Pie>
