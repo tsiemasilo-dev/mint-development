@@ -202,7 +202,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onBack }) => {
                 symbol: h.symbol,
                 name: h.name || matchedStock?.name || h.symbol,
                 weight: h.weight || 0,
-                logo: matchedStock?.logo || null,
+                logo: h.logo_url || matchedStock?.logo || null,
                 currentValue: livePrice * (h.shares || 1),
                 change: liveChange,
               });
@@ -323,7 +323,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onBack }) => {
                       <div className="flex items-center -space-x-2">
                         {topPerformers.map((asset, index) => {
                           const matchedStock = stocksList.find(st => st.ticker === asset.symbol);
-                          const logo = matchedStock?.logo || null;
+                          const logo = asset.logo_url || asset.logo || matchedStock?.logo || null;
                           return (
                             <div 
                               key={asset.symbol}
