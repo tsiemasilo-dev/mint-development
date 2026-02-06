@@ -20,7 +20,6 @@ const formatKMB = (value) => {
 const SwipeableBalanceCard = ({ userId }) => {
   const [activeTab, setActiveTab] = useState("1m");
   const [isOpen, setIsOpen] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [loading, setLoading] = useState(true);
   
@@ -108,10 +107,6 @@ const SwipeableBalanceCard = ({ userId }) => {
   const strategyIsLoss = strategyReturn < 0;
   const chartColor = portfolioIsLoss ? "#FB7185" : "#10B981"; 
 
-  const itemsPerPage = 8;
-  const totalPages = Math.ceil(dbData.holdings.length / itemsPerPage);
-  const paginatedItems = dbData.holdings.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-
   const masked = "••••";
 
   if (loading && userId) return <div className="w-full aspect-[1.7/1] animate-pulse bg-white/5 rounded-[28px]" />;
@@ -158,7 +153,7 @@ const SwipeableBalanceCard = ({ userId }) => {
           <div className="flex justify-end mb-2">
             <div className="flex bg-black/20 p-0.5 rounded-lg border border-white/5">
               {["1m", "3m", "6m"].map((tab) => (
-                <button key={tab} onClick={() => setActiveTab(tab)} className={`px-2 py-0.5 text-[9px] font-medium rounded-md ${activeTab === tab ? "bg-white text-slate-900" : "text-white/50"}`}>{tab.toUpperCase()}</button>
+                <button key={tab} onClick={() => setActiveTab(tab)} className={`px-3 py-1 text-[10px] font-semibold rounded-md ${activeTab === tab ? "bg-white text-slate-900" : "text-white/50"}`}>{tab.toUpperCase()}</button>
               ))}
             </div>
           </div>
@@ -181,33 +176,19 @@ const SwipeableBalanceCard = ({ userId }) => {
         </div>
       </div>
 
-      {/* Light Mode Dropdown */}
       {isOpen && (
-        <div className="absolute inset-0 bg-white/95 backdrop-blur-sm rounded-[24px] z-[120] overflow-hidden animate-in fade-in">
-          <div className="p-3 space-y-1 h-full overflow-y-auto">
-            <button onClick={() => { setSelectedAsset(null); setIsOpen(false); }} className="w-full flex items-center p-3 rounded-2xl hover:bg-slate-50 text-left">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center"><LayoutGrid size={14} className="text-slate-400" /></div>
-                <p className="text-[11px] font-normal text-slate-900">All Investments</p>
-              </div>
+        <div className="absolute bottom-0 right-0 w-[55%] max-h-[70%] bg-black/80 backdrop-blur-md rounded-xl z-[120] overflow-hidden border border-white/10">
+          <div className="py-1 overflow-y-auto max-h-[140px]">
+            <button onClick={() => { setSelectedAsset(null); setIsOpen(false); }} className={`w-full flex items-center gap-2 px-3 py-1.5 text-left ${!selectedAsset ? 'bg-white/10' : 'hover:bg-white/5'}`}>
+              <LayoutGrid size={10} className="text-violet-400 shrink-0" />
+              <span className="text-[9px] font-medium text-white/90 truncate">All Investments</span>
             </button>
-            {paginatedItems.map((item, idx) => (
-              <button key={idx} onClick={() => { setSelectedAsset(item); setIsOpen(false); }} className="w-full flex items-center justify-between p-3 rounded-2xl hover:bg-slate-50 text-left">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full overflow-hidden border border-slate-100 bg-slate-50">
-                    {item.securities?.logo_url ? <img src={item.securities.logo_url} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400">{item.securities?.symbol?.substring(0, 2)}</div>}
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-normal text-slate-900">{item.securities?.name}</p>
-                    <p className="text-[9px] text-slate-400 font-normal uppercase">{item.securities?.symbol}</p>
-                  </div>
+            {dbData.holdings.map((item, idx) => (
+              <button key={idx} onClick={() => { setSelectedAsset(item); setIsOpen(false); }} className={`w-full flex items-center gap-2 px-3 py-1.5 text-left ${selectedAsset === item ? 'bg-white/10' : 'hover:bg-white/5'}`}>
+                <div className="w-4 h-4 rounded-full overflow-hidden bg-white/10 shrink-0">
+                  {item.securities?.logo_url ? <img src={item.securities.logo_url} className="w-full h-full object-cover" /> : <span className="flex items-center justify-center w-full h-full text-[6px] text-white/60">{item.securities?.symbol?.substring(0, 2)}</span>}
                 </div>
-                <div className="text-right">
-                  <p className="text-[11px] font-normal text-slate-900">{formatKMB(item.market_value)}</p>
-                  <p className={`text-[9px] font-normal ${item.unrealized_pnl < 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
-                    {((item.unrealized_pnl / (item.avg_cost * item.quantity)) * 100).toFixed(1)}%
-                  </p>
-                </div>
+                <span className="text-[9px] font-medium text-white/90 truncate">{item.securities?.symbol}</span>
               </button>
             ))}
           </div>
