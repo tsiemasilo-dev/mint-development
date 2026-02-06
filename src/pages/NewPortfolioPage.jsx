@@ -1408,16 +1408,12 @@ const NewPortfolioPage = () => {
             style={{ background: 'rgba(255,255,255,0.7)', fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
           >
             <div className="flex items-center justify-between">
-              {/* Left: Total Value and Distinct Count */}
-              <div className="flex flex-col gap-3">
-                <div>
-                  <p className="text-xs text-slate-500 mb-0.5">Total Portfolio Value</p>
-                  <p className="text-2xl font-bold text-slate-900">{formatCurrency(totalValue)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500 mb-0.5">Total Holdings</p>
-                  <p className="text-xl font-bold text-slate-900">{totalDistinct} <span className="text-sm font-normal text-slate-500">assets</span></p>
-                </div>
+              <div className="flex flex-col gap-1">
+                <p className="text-4xl font-bold text-slate-900">{totalDistinct}</p>
+              </div>
+              <div className="flex flex-col items-center gap-0.5">
+                <p className="text-xs text-slate-500">Total Holdings</p>
+                <p className="text-sm font-medium text-slate-500">assets</p>
               </div>
               
               {/* Right: Pie Chart */}
