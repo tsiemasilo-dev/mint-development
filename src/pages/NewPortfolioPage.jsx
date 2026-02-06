@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useRef, useEffect } from "react";
+import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Bell, Eye, EyeOff, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, TrendingUp, TrendingDown, Plus } from "lucide-react";
 import { Area, ComposedChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell } from 'recharts';
 import { useFinancialData } from "../lib/useFinancialData";
@@ -358,6 +359,9 @@ const NewPortfolioPage = () => {
   const [myStocksPage, setMyStocksPage] = useState(0);
   const [otherStocksPage, setOtherStocksPage] = useState(0);
   const [holdingsPage, setHoldingsPage] = useState(0);
+  const [tabRipple, setTabRipple] = useState(null);
+  const [tabDirection, setTabDirection] = useState(0);
+  const tabOrder = ["strategy", "stocks", "holdings"];
   const { securities: allSecurities, quotes: liveQuotes, loading: quotesLoading } = useStockQuotes();
   const stocksList = useMemo(() => {
     if (!allSecurities || allSecurities.length === 0) return MOCK_STOCKS;
@@ -697,23 +701,57 @@ const NewPortfolioPage = () => {
             ].map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2.5 rounded-full text-sm font-semibold transition-all ${
+                onClick={(e) => {
+                  if (tab.id === activeTab) return;
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const x = e.clientX - rect.left;
+                  const y = e.clientY - rect.top;
+                  setTabRipple({ id: tab.id, x, y, key: Date.now() });
+                  const oldIdx = tabOrder.indexOf(activeTab);
+                  const newIdx = tabOrder.indexOf(tab.id);
+                  setTabDirection(newIdx > oldIdx ? 1 : -1);
+                  setActiveTab(tab.id);
+                }}
+                className={`relative overflow-hidden px-4 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 ${
                   activeTab === tab.id
                     ? "bg-violet-500 text-white shadow-lg shadow-violet-500/30"
                     : "border border-white/60 text-white backdrop-blur-xl hover:bg-white/20"
                 }`}
                 style={activeTab !== tab.id ? { background: 'rgba(255,255,255,0.15)', textShadow: '0 0 8px rgba(0,0,0,0.5), 0 1px 4px rgba(0,0,0,0.3)' } : {}}
               >
-                {tab.label}
+                {tabRipple && tabRipple.id === tab.id && (
+                  <motion.span
+                    key={tabRipple.key}
+                    className="absolute rounded-full pointer-events-none"
+                    style={{
+                      left: tabRipple.x,
+                      top: tabRipple.y,
+                      background: 'radial-gradient(circle, rgba(255,255,255,0.5) 0%, rgba(139,92,246,0.3) 50%, transparent 70%)',
+                      transform: 'translate(-50%, -50%)',
+                    }}
+                    initial={{ width: 0, height: 0, opacity: 0.8 }}
+                    animate={{ width: 300, height: 300, opacity: 0 }}
+                    transition={{ duration: 0.6, ease: "easeOut" }}
+                    onAnimationComplete={() => setTabRipple(null)}
+                  />
+                )}
+                <span className="relative z-10">{tab.label}</span>
               </button>
             ))}
           </section>
         </div>
       </div>
 
+      <AnimatePresence mode="wait" initial={false}>
       {/* Strategy Tab Content */}
       {activeTab === "strategy" && (
+        <motion.div
+          key="strategy"
+          initial={{ opacity: 0, x: tabDirection * 40, filter: 'blur(6px)' }}
+          animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+          exit={{ opacity: 0, x: tabDirection * -40, filter: 'blur(6px)' }}
+          transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
+        >
         <>
           {/* Chart section */}
           <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 md:max-w-md md:px-8">
@@ -1007,10 +1045,19 @@ const NewPortfolioPage = () => {
         </section>
       </div>
         </>
+        </motion.div>
       )}
 
       {/* Individual Stocks Tab Content */}
-      {activeTab === "stocks" && (() => {
+      {activeTab === "stocks" && (
+        <motion.div
+          key="stocks"
+          initial={{ opacity: 0, x: tabDirection * 40, filter: 'blur(6px)' }}
+          animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+          exit={{ opacity: 0, x: tabDirection * -40, filter: 'blur(6px)' }}
+          transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
+        >
+      {(() => {
         const stockChartData = liveStockChartData.length > 0 ? liveStockChartData : [];
         if (!selectedStock) {
           return <div className="text-center py-10 text-slate-500">Loading stocks...</div>;
@@ -1350,9 +1397,19 @@ const NewPortfolioPage = () => {
           </>
         );
       })()}
+        </motion.div>
+      )}
 
       {/* Holdings Tab Content */}
-      {activeTab === "holdings" && (() => {
+      {activeTab === "holdings" && (
+        <motion.div
+          key="holdings"
+          initial={{ opacity: 0, x: tabDirection * 40, filter: 'blur(6px)' }}
+          animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+          exit={{ opacity: 0, x: tabDirection * -40, filter: 'blur(6px)' }}
+          transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
+        >
+      {(() => {
         if (holdingsLoading || strategiesLoading) {
           return (
             <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
@@ -1581,6 +1638,9 @@ const NewPortfolioPage = () => {
         </div>
         );
       })()}
+        </motion.div>
+      )}
+      </AnimatePresence>
 
     </div>
   );
