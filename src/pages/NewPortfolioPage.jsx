@@ -675,21 +675,21 @@ const NewPortfolioPage = () => {
           <section className="relative">
             <div className="absolute -inset-8 bg-gradient-radial from-[#7c3aed]/20 via-transparent to-transparent rounded-full blur-2xl -z-10" />
             <div className="flex items-center gap-3">
-              <p className="text-3xl font-bold tracking-tight" style={{ minWidth: '180px' }}>
+              <p className="text-4xl font-bold tracking-tight" style={{ minWidth: '180px' }}>
                 R{balanceVisible ? displayAccountValue.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "••••••••"}
               </p>
               <button
                 onClick={() => setBalanceVisible(!balanceVisible)}
-                className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm transition hover:bg-white/20"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 backdrop-blur-sm transition hover:bg-white/25"
               >
                 {balanceVisible ? (
-                  <Eye className="h-4 w-4 text-white/50" />
+                  <Eye className="h-5 w-5 text-white/70" />
                 ) : (
-                  <EyeOff className="h-4 w-4 text-white/50" />
+                  <EyeOff className="h-5 w-5 text-white/70" />
                 )}
               </button>
             </div>
-            <p className="mt-1 text-sm text-white/40">Account Value</p>
+            <p className="mt-1 text-sm text-white/60">Account Value</p>
           </section>
 
           {/* Tabs: Strategy, Individual Stocks, Goals */}
