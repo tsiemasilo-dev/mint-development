@@ -58,30 +58,42 @@ const MintLogoSilver = ({ className = "" }) => (
   </svg>
 );
 
-const CardContent = ({ children, style }) => (
-  <div
-    className="absolute inset-0 rounded-[24px] overflow-hidden"
-    style={{
-      background: "linear-gradient(135deg, #2d1052 0%, #4a1d7a 25%, #6b2fa0 50%, #5a2391 75%, #3d1a6d 100%)",
-      boxShadow: "0 25px 50px -12px rgba(91, 33, 182, 0.5)",
-      backfaceVisibility: "hidden",
-      ...style,
-    }}
-  >
-    <div className="absolute inset-0" style={{
-      backgroundImage: `
-        repeating-linear-gradient(45deg, transparent, transparent 8px, rgba(255,255,255,0.02) 8px, rgba(255,255,255,0.02) 9px),
-        repeating-linear-gradient(-45deg, transparent, transparent 8px, rgba(255,255,255,0.02) 8px, rgba(255,255,255,0.02) 9px),
-        repeating-linear-gradient(60deg, transparent, transparent 15px, rgba(255,255,255,0.015) 15px, rgba(255,255,255,0.015) 16px),
-        repeating-linear-gradient(-60deg, transparent, transparent 15px, rgba(255,255,255,0.015) 15px, rgba(255,255,255,0.015) 16px)
-      `,
-    }} />
-    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-      <MintLogoSilver className="w-52 h-auto" />
+const CardContent = ({ children, style, variant = "default" }) => {
+  const bg = variant === "invest"
+    ? "linear-gradient(180deg, #111111 0%, #3b1b7a 50%, #5b21b6 100%)"
+    : "linear-gradient(135deg, #2d1052 0%, #4a1d7a 25%, #6b2fa0 50%, #5a2391 75%, #3d1a6d 100%)";
+
+  return (
+    <div
+      className="absolute inset-0 rounded-[24px] overflow-hidden"
+      style={{
+        background: bg,
+        boxShadow: variant === "invest"
+          ? "0 25px 50px -12px rgba(0, 0, 0, 0.6)"
+          : "0 25px 50px -12px rgba(91, 33, 182, 0.5)",
+        backfaceVisibility: "hidden",
+        ...style,
+      }}
+    >
+      {variant !== "invest" && (
+        <>
+          <div className="absolute inset-0" style={{
+            backgroundImage: `
+              repeating-linear-gradient(45deg, transparent, transparent 8px, rgba(255,255,255,0.02) 8px, rgba(255,255,255,0.02) 9px),
+              repeating-linear-gradient(-45deg, transparent, transparent 8px, rgba(255,255,255,0.02) 8px, rgba(255,255,255,0.02) 9px),
+              repeating-linear-gradient(60deg, transparent, transparent 15px, rgba(255,255,255,0.015) 15px, rgba(255,255,255,0.015) 16px),
+              repeating-linear-gradient(-60deg, transparent, transparent 15px, rgba(255,255,255,0.015) 15px, rgba(255,255,255,0.015) 16px)
+            `,
+          }} />
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <MintLogoSilver className="w-52 h-auto" />
+          </div>
+        </>
+      )}
+      {children}
     </div>
-    {children}
-  </div>
-);
+  );
+};
 
 const HomePage = ({
   onOpenNotifications,
@@ -669,7 +681,7 @@ const HomePage = ({
                   </div>
                 </CardContent>
 
-                <CardContent style={{
+                <CardContent variant="invest" style={{
                   transform: `rotateY(${cardRotation + 180}deg)`,
                   transition: "transform 0.7s ease-out",
                 }}>
