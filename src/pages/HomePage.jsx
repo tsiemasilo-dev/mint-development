@@ -110,10 +110,10 @@ const HomePage = ({
   const [news, setNews] = useState([]);
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [loadingNews, setLoadingNews] = useState(false);
-  const [homeTab, setHomeTab] = useState("balance");
+  const [homeTab, setHomeTab] = useState("invest");
   const [userId, setUserId] = useState(null);
 
-  const [cardRotation, setCardRotation] = useState(0);
+  const [cardRotation, setCardRotation] = useState(-180);
   const [isCardAnimating, setIsCardAnimating] = useState(false);
   const dragStartXRef = useRef(0);
   const [isCardVisible, setIsCardVisible] = useState(() => {
@@ -416,17 +416,20 @@ const HomePage = ({
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
               <div className="flex items-center rounded-full bg-white/10 p-1 backdrop-blur-md">
                 {[
-                  { id: "balance", label: "Balance", action: () => { setHomeTab("balance"); if (cardNormalizedIndex !== 0) { setIsCardAnimating(true); setCardRotation(0); setTimeout(() => setIsCardAnimating(false), 700); } } },
-                  { id: "invest", label: "Invest", action: () => { setHomeTab("invest"); if (cardNormalizedIndex !== 1) { setIsCardAnimating(true); setCardRotation(-180); setTimeout(() => setIsCardAnimating(false), 700); } } },
+                  { id: "balance", label: "Balance", disabled: true, action: () => {} },
+                  { id: "invest", label: "Invest", disabled: false, action: () => { setHomeTab("invest"); if (cardNormalizedIndex !== 1) { setIsCardAnimating(true); setCardRotation(-180); setTimeout(() => setIsCardAnimating(false), 700); } } },
                 ].map((tab) => (
                   <button
                     key={tab.id}
                     type="button"
                     onClick={tab.action}
+                    disabled={tab.disabled}
                     className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
-                      homeTab === tab.id
-                        ? "bg-white text-slate-900 shadow-sm"
-                        : "text-white/70 hover:bg-white/10 hover:text-white"
+                      tab.disabled
+                        ? "text-white/20 cursor-not-allowed"
+                        : homeTab === tab.id
+                          ? "bg-white text-slate-900 shadow-sm"
+                          : "text-white/70 hover:bg-white/10 hover:text-white"
                     }`}
                   >
                     {tab.label}
