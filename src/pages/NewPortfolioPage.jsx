@@ -1407,16 +1407,18 @@ const NewPortfolioPage = () => {
             className="rounded-3xl p-5 backdrop-blur-xl shadow-sm border border-slate-100/50"
             style={{ background: 'rgba(255,255,255,0.7)', fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
           >
-            <div className="mb-4">
-              <p className="text-xs text-slate-500 mb-0.5">Total Portfolio Value</p>
-              <p className="text-2xl font-bold text-slate-900">{formatCurrency(totalValue)}</p>
-            </div>
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <p className="text-4xl font-bold text-slate-900">{totalDistinct}</p>
-                <div className="flex flex-col gap-0.5">
-                  <p className="text-xs text-slate-500">Total Holdings</p>
-                  <p className="text-sm font-medium text-slate-500">assets</p>
+              <div className="flex flex-col gap-3">
+                <div>
+                  <p className="text-xs text-slate-500 mb-0.5">Total Portfolio Value</p>
+                  <p className="text-2xl font-bold text-slate-900">{formatCurrency(totalValue)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 mb-0.5">Total Holdings</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-3xl font-bold text-slate-900">{totalDistinct}</p>
+                    <span className="text-sm font-normal text-slate-500">assets</span>
+                  </div>
                 </div>
               </div>
               
