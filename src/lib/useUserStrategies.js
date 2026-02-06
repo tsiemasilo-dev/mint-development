@@ -265,7 +265,7 @@ function formatChartData(priceHistory, timeFilter) {
         return {
           day: `${displayHour}${ampm}`,
           value: p.nav,
-          highlighted: idx === Math.floor(last24.length / 2),
+          fullDate: date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' }),
         };
       });
     }
@@ -276,7 +276,7 @@ function formatChartData(priceHistory, timeFilter) {
         return {
           day: dayNames[date.getDay()] + ' ' + date.getDate(),
           value: p.nav,
-          highlighted: idx === Math.floor(priceHistory.length / 2),
+          fullDate: date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' }),
         };
       });
     }
@@ -287,31 +287,30 @@ function formatChartData(priceHistory, timeFilter) {
         return {
           day: date.getDate() + ' ' + monthNames[date.getMonth()],
           value: p.nav,
-          highlighted: idx === Math.floor(priceHistory.length / 2),
+          fullDate: date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }),
         };
       });
     }
     case "ALL": {
       const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
       const grouped = {};
-
       priceHistory.forEach((p) => {
         const date = new Date(p.ts);
         const key = `${monthNames[date.getMonth()]} '${date.getFullYear().toString().slice(-2)}`;
         grouped[key] = p.nav;
       });
-
       const entries = Object.entries(grouped);
       return entries.map(([day, value], idx) => ({
         day,
         value,
-        highlighted: idx === entries.length - 1,
+        fullDate: day,
       }));
     }
     default:
       return priceHistory.map((p) => ({
         day: new Date(p.ts).toLocaleDateString(),
         value: p.nav,
+        fullDate: new Date(p.ts).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }),
       }));
   }
 }

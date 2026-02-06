@@ -357,8 +357,6 @@ const NewPortfolioPage = () => {
   const [stockTimeFilter, setStockTimeFilter] = useState("W");
   const [myStocksPage, setMyStocksPage] = useState(0);
   const [otherStocksPage, setOtherStocksPage] = useState(0);
-  const chartScrollRef = useRef(null);
-  const stockChartScrollRef = useRef(null);
   const { securities: allSecurities, quotes: liveQuotes, loading: quotesLoading } = useStockQuotes();
   const stocksList = useMemo(() => {
     if (!allSecurities || allSecurities.length === 0) return MOCK_STOCKS;
@@ -395,12 +393,6 @@ const NewPortfolioPage = () => {
     previousMonthChange: 0,
   };
 
-  const getChartWidth = (dataLength) => {
-    const minWidth = 100;
-    const pointSpacing = timeFilter === "W" ? 40 : 30;
-    return Math.max(minWidth, dataLength * pointSpacing);
-  };
-
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -430,14 +422,6 @@ const NewPortfolioPage = () => {
       setSelectedStock(stocksList[0]);
     }
   }, [stocksList, selectedStock]);
-
-  useEffect(() => {
-    if (stockChartScrollRef.current && liveStockChartData.length > 0) {
-      setTimeout(() => {
-        stockChartScrollRef.current.scrollLeft = stockChartScrollRef.current.scrollWidth;
-      }, 100);
-    }
-  }, [liveStockChartData, stockTimeFilter, selectedStock]);
 
   const handleStrategySelect = (strategy) => {
     selectStrategy(strategy);
@@ -489,12 +473,6 @@ const NewPortfolioPage = () => {
     }
   };
 
-  const getStockChartWidth = (dataLength) => {
-    const minWidth = 100;
-    const pointSpacing = stockTimeFilter === "W" ? 40 : 30;
-    return Math.max(minWidth, dataLength * pointSpacing);
-  };
-
   const getChartData = () => {
     if (realChartData && realChartData.length > 0) {
       return realChartData;
@@ -504,14 +482,6 @@ const NewPortfolioPage = () => {
 
   const currentChartData = getChartData();
   const isLoadingData = strategiesLoading || chartLoading;
-
-  useEffect(() => {
-    if (chartScrollRef.current && currentChartData.length > 0) {
-      setTimeout(() => {
-        chartScrollRef.current.scrollLeft = chartScrollRef.current.scrollWidth;
-      }, 100);
-    }
-  }, [currentChartData, timeFilter]);
 
   const formatCurrency = (value) => {
     return `R${value.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -795,203 +765,102 @@ const NewPortfolioPage = () => {
             </p>
           </div>
 
-          <div 
-            ref={chartScrollRef}
-            className="overflow-x-auto scrollbar-hide"
-            style={{ 
-              width: '100%', 
-              height: 220, 
-              marginBottom: 8,
-              WebkitOverflowScrolling: 'touch',
-              msOverflowStyle: 'none',
-              scrollbarWidth: 'none',
-              overflowY: 'hidden',
-            }}
-            onTouchStart={(e) => e.currentTarget.style.cursor = 'grabbing'}
-            onTouchEnd={(e) => e.currentTarget.style.cursor = 'grab'}
-          >
+          <div style={{ width: '100%', height: 220, marginBottom: 8 }}>
             {currentChartData.length === 0 ? (
               <div style={{ width: '100%', height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <div className="text-slate-400 text-sm">{isLoadingData ? 'Loading chart...' : 'No data available'}</div>
               </div>
             ) : (
-            <div style={{ width: getChartWidth(currentChartData.length), height: 220, minWidth: '100%', outline: 'none' }}>
-              <ComposedChart
-                width={getChartWidth(currentChartData.length)}
-                height={220}
-                data={currentChartData}
-                margin={{ top: 20, right: 20, left: 0, bottom: 40 }}
-                style={{ outline: 'none' }}
-              >
-                <defs>
-                  <linearGradient id="purpleLineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#a78bfa" stopOpacity="0" />
-                    <stop offset="3%" stopColor="#a78bfa" stopOpacity="0.3" />
-                    <stop offset="8%" stopColor="#8b5cf6" stopOpacity="0.7" />
-                    <stop offset="15%" stopColor="#7c3aed" stopOpacity="0.9" />
-                    <stop offset="25%" stopColor="#7c3aed" stopOpacity="1" />
-                    <stop offset="75%" stopColor="#7c3aed" stopOpacity="1" />
-                    <stop offset="85%" stopColor="#7c3aed" stopOpacity="0.9" />
-                    <stop offset="92%" stopColor="#8b5cf6" stopOpacity="0.7" />
-                    <stop offset="97%" stopColor="#a78bfa" stopOpacity="0.3" />
-                    <stop offset="100%" stopColor="#a78bfa" stopOpacity="0" />
-                  </linearGradient>
+              <ResponsiveContainer width="100%" height={220}>
+                <ComposedChart
+                  data={currentChartData}
+                  margin={{ top: 10, right: 15, left: 5, bottom: 30 }}
+                >
+                  <defs>
+                    <linearGradient id="glowGradientVertical" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.4" />
+                      <stop offset="50%" stopColor="#a78bfa" stopOpacity="0.2" />
+                      <stop offset="100%" stopColor="#c4b5fd" stopOpacity="0.02" />
+                    </linearGradient>
+                  </defs>
                   
-                  <linearGradient id="glowGradientVertical" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.25" />
-                    <stop offset="20%" stopColor="#8b5cf6" stopOpacity="0.15" />
-                    <stop offset="50%" stopColor="#a78bfa" stopOpacity="0.08" />
-                    <stop offset="80%" stopColor="#c4b5fd" stopOpacity="0.03" />
-                    <stop offset="100%" stopColor="#c4b5fd" stopOpacity="0" />
-                  </linearGradient>
-                  
-                  <linearGradient id="glowOpacityMask" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="white" stopOpacity="0" />
-                    <stop offset="5%" stopColor="white" stopOpacity="0.2" />
-                    <stop offset="15%" stopColor="white" stopOpacity="0.5" />
-                    <stop offset="35%" stopColor="white" stopOpacity="0.9" />
-                    <stop offset="50%" stopColor="white" stopOpacity="1" />
-                    <stop offset="65%" stopColor="white" stopOpacity="0.9" />
-                    <stop offset="85%" stopColor="white" stopOpacity="0.5" />
-                    <stop offset="95%" stopColor="white" stopOpacity="0.2" />
-                    <stop offset="100%" stopColor="white" stopOpacity="0" />
-                  </linearGradient>
-                  
-                  <mask id="glowMask">
-                    <rect x="0" y="0" width="100%" height="100%" fill="url(#glowOpacityMask)" />
-                  </mask>
-                  
-                  <filter id="lineGlow" x="-20%" y="-20%" width="140%" height="140%" filterUnits="objectBoundingBox">
-                    <feDropShadow dx="0" dy="0" stdDeviation="2.5" floodColor="#8b5cf6" floodOpacity="0.5" />
-                  </filter>
-                  
-                  <filter id="areaBlur" x="-50%" y="-50%" width="200%" height="200%">
-                    <feGaussianBlur in="SourceGraphic" stdDeviation="8" />
-                  </filter>
-                </defs>
-                
-                <XAxis 
-                  dataKey="day" 
-                  axisLine={false}
-                  tickLine={false}
-                  tickMargin={20}
-                  interval={Math.max(0, Math.ceil(currentChartData.length / 6) - 1)}
-                  tick={({ x, y, payload, index }) => {
-                    const isHighlighted = currentChartData[index]?.highlighted;
-                    const totalItems = currentChartData.length;
-                    const isEdge = index === 0 || index === totalItems - 1;
-                    const opacity = isEdge ? 0.6 : 1;
-                    
-                    return (
-                      <g transform={`translate(${x},${y})`} style={{ opacity }}>
-                        {isHighlighted ? (
-                          <>
-                            <rect
-                              x={-24}
-                              y={-12}
-                              width={48}
-                              height={30}
-                              rx={15}
-                              fill="rgba(71, 85, 105, 0.75)"
-                              style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.15))' }}
-                            />
-                            <rect
-                              x={-24}
-                              y={-12}
-                              width={48}
-                              height={30}
-                              rx={15}
-                              fill="none"
-                              stroke="rgba(255,255,255,0.2)"
-                              strokeWidth={1}
-                            />
-                          </>
-                        ) : null}
-                        <text
-                          x={0}
-                          y={8}
-                          textAnchor="middle"
-                          fill={isHighlighted ? '#ffffff' : '#64748b'}
-                          fontSize={14}
-                          fontWeight={isHighlighted ? 700 : 600}
-                        >
-                          {payload.value}
-                        </text>
-                      </g>
-                    );
-                  }}
-                />
+                  <XAxis 
+                    dataKey="day" 
+                    axisLine={false}
+                    tickLine={false}
+                    tickMargin={8}
+                    interval={currentChartData.length <= 7 ? 0 : Math.max(0, Math.ceil(currentChartData.length / 6) - 1)}
+                    tick={{ fill: '#64748b', fontSize: 11, fontWeight: 500 }}
+                  />
 
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 500 }}
-                  tickFormatter={(val) => {
-                    if (val >= 10000) return `R${(val / 1000).toFixed(0)}k`;
-                    if (val >= 1000) return `R${(val / 1000).toFixed(1)}k`;
-                    if (val >= 100) return `R${val.toFixed(1)}`;
-                    return `R${val.toFixed(2)}`;
-                  }}
-                  width={55}
-                  tickCount={5}
-                  domain={([dataMin, dataMax]) => {
-                    const range = dataMax - dataMin;
-                    const padding = range > 0 ? Math.max(range * 0.15, 0.5) : 1;
-                    return [dataMin - padding, dataMax + padding];
-                  }}
-                />
-                
-                <Tooltip
-                  content={({ active, payload, label }) => {
-                    if (active && payload && payload.length) {
-                      return (
-                        <div className="rounded-xl px-4 py-2 shadow-2xl border border-purple-400/30"
-                          style={{
-                            background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.9) 0%, rgba(124, 58, 237, 0.95) 100%)',
-                            backdropFilter: 'blur(12px)',
-                          }}
-                        >
-                          <div className="text-xs text-purple-200 mb-0.5">{label}</div>
-                          <div className="text-sm font-bold text-white">
-                            R{payload[0].value.toLocaleString()}
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 500 }}
+                    tickFormatter={(val) => {
+                      if (val >= 10000) return `R${(val / 1000).toFixed(0)}k`;
+                      if (val >= 1000) return `R${(val / 1000).toFixed(1)}k`;
+                      if (val >= 100) return `R${val.toFixed(1)}`;
+                      return `R${val.toFixed(2)}`;
+                    }}
+                    width={55}
+                    tickCount={5}
+                    domain={([dataMin, dataMax]) => {
+                      const range = dataMax - dataMin;
+                      const padding = range > 0 ? Math.max(range * 0.15, 0.5) : 1;
+                      return [dataMin - padding, dataMax + padding];
+                    }}
+                  />
+                  
+                  <Tooltip
+                    content={({ active, payload, label }) => {
+                      if (active && payload && payload.length) {
+                        const fullDate = payload[0]?.payload?.fullDate || label;
+                        return (
+                          <div className="rounded-xl px-4 py-2 shadow-2xl border border-purple-400/30"
+                            style={{
+                              background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.9) 0%, rgba(124, 58, 237, 0.95) 100%)',
+                              backdropFilter: 'blur(12px)',
+                            }}
+                          >
+                            <div className="text-xs text-purple-200 mb-0.5">{fullDate}</div>
+                            <div className="text-sm font-bold text-white">
+                              R{payload[0].value.toLocaleString()}
+                            </div>
                           </div>
-                        </div>
-                      );
-                    }
-                    return null;
-                  }}
-                  cursor={false}
-                  wrapperStyle={{ outline: 'none' }}
-                />
+                        );
+                      }
+                      return null;
+                    }}
+                    cursor={false}
+                    wrapperStyle={{ outline: 'none' }}
+                  />
 
-                <Area
-                  type="monotone"
-                  dataKey="value"
-                  stroke="transparent"
-                  fill="url(#glowGradientVertical)"
-                  fillOpacity={1}
-                  mask="url(#glowMask)"
-                  style={{ filter: 'url(#areaBlur)' }}
-                />
+                  <Area
+                    type="monotone"
+                    dataKey="value"
+                    stroke="transparent"
+                    fill="url(#glowGradientVertical)"
+                    fillOpacity={1}
+                  />
 
-                <Line
-                  type="monotone"
-                  dataKey="value"
-                  stroke="url(#purpleLineGradient)"
-                  strokeWidth={3.5}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  dot={false}
-                  activeDot={{
-                    r: 7,
-                    fill: '#a78bfa',
-                    stroke: '#c4b5fd',
-                    strokeWidth: 2,
-                  }}
-                  style={{ filter: 'url(#lineGlow)' }}
-                />
-              </ComposedChart>
-            </div>
+                  <Line
+                    type="monotone"
+                    dataKey="value"
+                    stroke="#7c3aed"
+                    strokeWidth={2.5}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    dot={false}
+                    activeDot={{
+                      r: 6,
+                      fill: '#7c3aed',
+                      stroke: '#c4b5fd',
+                      strokeWidth: 2,
+                    }}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
             )}
           </div>
         </section>
@@ -1203,173 +1072,102 @@ const NewPortfolioPage = () => {
                   })()}
                 </div>
 
-                <div
-                  ref={stockChartScrollRef}
-                  className="overflow-x-auto scrollbar-hide"
-                  style={{
-                    width: '100%',
-                    height: 220,
-                    marginBottom: 8,
-                    WebkitOverflowScrolling: 'touch',
-                    msOverflowStyle: 'none',
-                    scrollbarWidth: 'none',
-                    overflowY: 'hidden',
-                  }}
-                  onTouchStart={(e) => e.currentTarget.style.cursor = 'grabbing'}
-                  onTouchEnd={(e) => e.currentTarget.style.cursor = 'grab'}
-                >
+                <div style={{ width: '100%', height: 220, marginBottom: 8 }}>
                   {stockChartData.length === 0 ? (
                     <div style={{ width: '100%', height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <div className="text-slate-400 text-sm">{stockChartLoading ? 'Loading chart...' : 'No data available'}</div>
                     </div>
                   ) : (
-                  <div style={{ width: getStockChartWidth(stockChartData.length), height: 220, minWidth: '100%', outline: 'none' }}>
-                    <ComposedChart
-                      width={getStockChartWidth(stockChartData.length)}
-                      height={220}
-                      data={stockChartData}
-                      margin={{ top: 20, right: 20, left: 0, bottom: 40 }}
-                      style={{ outline: 'none' }}
-                    >
-                      <defs>
-                        <linearGradient id="stockPurpleLineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                          <stop offset="0%" stopColor="#a78bfa" stopOpacity="0" />
-                          <stop offset="3%" stopColor="#a78bfa" stopOpacity="0.3" />
-                          <stop offset="8%" stopColor="#8b5cf6" stopOpacity="0.7" />
-                          <stop offset="15%" stopColor="#7c3aed" stopOpacity="0.9" />
-                          <stop offset="25%" stopColor="#7c3aed" stopOpacity="1" />
-                          <stop offset="75%" stopColor="#7c3aed" stopOpacity="1" />
-                          <stop offset="85%" stopColor="#7c3aed" stopOpacity="0.9" />
-                          <stop offset="92%" stopColor="#8b5cf6" stopOpacity="0.7" />
-                          <stop offset="97%" stopColor="#a78bfa" stopOpacity="0.3" />
-                          <stop offset="100%" stopColor="#a78bfa" stopOpacity="0" />
-                        </linearGradient>
-                        <linearGradient id="stockGlowGradientVertical" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.25" />
-                          <stop offset="20%" stopColor="#8b5cf6" stopOpacity="0.15" />
-                          <stop offset="50%" stopColor="#a78bfa" stopOpacity="0.08" />
-                          <stop offset="80%" stopColor="#c4b5fd" stopOpacity="0.03" />
-                          <stop offset="100%" stopColor="#c4b5fd" stopOpacity="0" />
-                        </linearGradient>
-                        <linearGradient id="stockGlowOpacityMask" x1="0%" y1="0%" x2="100%" y2="0%">
-                          <stop offset="0%" stopColor="white" stopOpacity="0" />
-                          <stop offset="5%" stopColor="white" stopOpacity="0.2" />
-                          <stop offset="15%" stopColor="white" stopOpacity="0.5" />
-                          <stop offset="35%" stopColor="white" stopOpacity="0.9" />
-                          <stop offset="50%" stopColor="white" stopOpacity="1" />
-                          <stop offset="65%" stopColor="white" stopOpacity="0.9" />
-                          <stop offset="85%" stopColor="white" stopOpacity="0.5" />
-                          <stop offset="95%" stopColor="white" stopOpacity="0.2" />
-                          <stop offset="100%" stopColor="white" stopOpacity="0" />
-                        </linearGradient>
-                        <mask id="stockGlowMask">
-                          <rect x="0" y="0" width="100%" height="100%" fill="url(#stockGlowOpacityMask)" />
-                        </mask>
-                        <filter id="stockLineGlow" x="-20%" y="-20%" width="140%" height="140%" filterUnits="objectBoundingBox">
-                          <feDropShadow dx="0" dy="0" stdDeviation="2.5" floodColor="#8b5cf6" floodOpacity="0.5" />
-                        </filter>
-                        <filter id="stockAreaBlur" x="-50%" y="-50%" width="200%" height="200%">
-                          <feGaussianBlur in="SourceGraphic" stdDeviation="8" />
-                        </filter>
-                      </defs>
+                    <ResponsiveContainer width="100%" height={220}>
+                      <ComposedChart
+                        data={stockChartData}
+                        margin={{ top: 10, right: 15, left: 5, bottom: 30 }}
+                      >
+                        <defs>
+                          <linearGradient id="stockGlowGradientVertical" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.4" />
+                            <stop offset="50%" stopColor="#a78bfa" stopOpacity="0.2" />
+                            <stop offset="100%" stopColor="#c4b5fd" stopOpacity="0.02" />
+                          </linearGradient>
+                        </defs>
 
-                      <XAxis
-                        dataKey="day"
-                        axisLine={false}
-                        tickLine={false}
-                        tickMargin={20}
-                        interval={Math.max(0, Math.ceil(stockChartData.length / 6) - 1)}
-                        tick={({ x, y, payload, index }) => {
-                          const isHighlighted = stockChartData[index]?.highlighted;
-                          const totalItems = stockChartData.length;
-                          const isEdge = index === 0 || index === totalItems - 1;
-                          const opacity = isEdge ? 0.6 : 1;
-                          return (
-                            <g transform={`translate(${x},${y})`} style={{ opacity }}>
-                              {isHighlighted ? (
-                                <>
-                                  <rect x={-24} y={-12} width={48} height={30} rx={15} fill="rgba(71, 85, 105, 0.75)" style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.15))' }} />
-                                  <rect x={-24} y={-12} width={48} height={30} rx={15} fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth={1} />
-                                </>
-                              ) : null}
-                              <text x={0} y={8} textAnchor="middle" fill={isHighlighted ? '#ffffff' : '#64748b'} fontSize={14} fontWeight={isHighlighted ? 700 : 600}>
-                                {payload.value}
-                              </text>
-                            </g>
-                          );
-                        }}
-                      />
+                        <XAxis
+                          dataKey="day"
+                          axisLine={false}
+                          tickLine={false}
+                          tickMargin={8}
+                          interval={stockChartData.length <= 7 ? 0 : Math.max(0, Math.ceil(stockChartData.length / 6) - 1)}
+                          tick={{ fill: '#64748b', fontSize: 11, fontWeight: 500 }}
+                        />
 
-                      <YAxis
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 500 }}
-                        tickFormatter={(val) => {
-                          if (val >= 10000) return `R${(val / 1000).toFixed(0)}k`;
-                          if (val >= 1000) return `R${(val / 1000).toFixed(1)}k`;
-                          if (val >= 100) return `R${val.toFixed(1)}`;
-                          return `R${val.toFixed(2)}`;
-                        }}
-                        width={55}
-                        tickCount={5}
-                        domain={([dataMin, dataMax]) => {
-                          const range = dataMax - dataMin;
-                          const padding = range > 0 ? Math.max(range * 0.15, 0.5) : 1;
-                          return [dataMin - padding, dataMax + padding];
-                        }}
-                      />
+                        <YAxis
+                          axisLine={false}
+                          tickLine={false}
+                          tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 500 }}
+                          tickFormatter={(val) => {
+                            if (val >= 10000) return `R${(val / 1000).toFixed(0)}k`;
+                            if (val >= 1000) return `R${(val / 1000).toFixed(1)}k`;
+                            if (val >= 100) return `R${val.toFixed(1)}`;
+                            return `R${val.toFixed(2)}`;
+                          }}
+                          width={55}
+                          tickCount={5}
+                          domain={([dataMin, dataMax]) => {
+                            const range = dataMax - dataMin;
+                            const padding = range > 0 ? Math.max(range * 0.15, 0.5) : 1;
+                            return [dataMin - padding, dataMax + padding];
+                          }}
+                        />
 
-                      <Tooltip
-                        content={({ active, payload, label }) => {
-                          if (active && payload && payload.length) {
-                            return (
-                              <div className="rounded-xl px-4 py-2 shadow-2xl border border-purple-400/30"
-                                style={{
-                                  background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.9) 0%, rgba(124, 58, 237, 0.95) 100%)',
-                                  backdropFilter: 'blur(12px)',
-                                }}
-                              >
-                                <div className="text-xs text-purple-200 mb-0.5">{label}</div>
-                                <div className="text-sm font-bold text-white">
-                                  R{payload[0].value.toLocaleString()}
+                        <Tooltip
+                          content={({ active, payload, label }) => {
+                            if (active && payload && payload.length) {
+                              const fullDate = payload[0]?.payload?.fullDate || label;
+                              return (
+                                <div className="rounded-xl px-4 py-2 shadow-2xl border border-purple-400/30"
+                                  style={{
+                                    background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.9) 0%, rgba(124, 58, 237, 0.95) 100%)',
+                                    backdropFilter: 'blur(12px)',
+                                  }}
+                                >
+                                  <div className="text-xs text-purple-200 mb-0.5">{fullDate}</div>
+                                  <div className="text-sm font-bold text-white">
+                                    R{payload[0].value.toLocaleString()}
+                                  </div>
                                 </div>
-                              </div>
-                            );
-                          }
-                          return null;
-                        }}
-                        cursor={false}
-                        wrapperStyle={{ outline: 'none' }}
-                      />
+                              );
+                            }
+                            return null;
+                          }}
+                          cursor={false}
+                          wrapperStyle={{ outline: 'none' }}
+                        />
 
-                      <Area
-                        type="monotone"
-                        dataKey="value"
-                        stroke="transparent"
-                        fill="url(#stockGlowGradientVertical)"
-                        fillOpacity={1}
-                        mask="url(#stockGlowMask)"
-                        style={{ filter: 'url(#stockAreaBlur)' }}
-                      />
+                        <Area
+                          type="monotone"
+                          dataKey="value"
+                          stroke="transparent"
+                          fill="url(#stockGlowGradientVertical)"
+                          fillOpacity={1}
+                        />
 
-                      <Line
-                        type="monotone"
-                        dataKey="value"
-                        stroke="url(#stockPurpleLineGradient)"
-                        strokeWidth={3.5}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        dot={false}
-                        activeDot={{
-                          r: 7,
-                          fill: '#a78bfa',
-                          stroke: '#c4b5fd',
-                          strokeWidth: 2,
-                        }}
-                        style={{ filter: 'url(#stockLineGlow)' }}
-                      />
-                    </ComposedChart>
-                  </div>
+                        <Line
+                          type="monotone"
+                          dataKey="value"
+                          stroke="#7c3aed"
+                          strokeWidth={2.5}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          dot={false}
+                          activeDot={{
+                            r: 6,
+                            fill: '#7c3aed',
+                            stroke: '#c4b5fd',
+                            strokeWidth: 2,
+                          }}
+                        />
+                      </ComposedChart>
+                    </ResponsiveContainer>
                   )}
                 </div>
               </section>
