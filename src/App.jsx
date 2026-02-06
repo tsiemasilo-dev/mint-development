@@ -10,6 +10,7 @@ import CreditPage from "./pages/CreditPage.jsx";
 import CreditApplyPage from "./pages/CreditApplyPage.jsx";
 import CreditRepayPage from "./pages/CreditRepayPage.jsx";
 import InvestmentsPage from "./pages/InvestmentsPage.jsx";
+import NewPortfolioPage from "./pages/NewPortfolioPage.jsx";
 import InvestPage from "./pages/InvestPage.jsx";
 import InvestAmountPage from "./pages/InvestAmountPage.jsx";
 import PaymentPage from "./pages/PaymentPage.jsx";
@@ -354,7 +355,7 @@ const App = () => {
             modal={null}
             onCloseModal={noOp}
           >
-            <InvestmentsPage
+            <NewPortfolioPage
               onOpenNotifications={noOp}
               onOpenInvest={noOp}
             />
@@ -719,7 +720,7 @@ const App = () => {
         modal={modal}
         onCloseModal={closeModal}
       >
-        <InvestmentsPage
+        <NewPortfolioPage
           onOpenNotifications={() => {
             setNotificationReturnPage("investments");
             navigateTo("notifications");

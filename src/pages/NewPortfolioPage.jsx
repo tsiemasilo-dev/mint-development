@@ -344,7 +344,7 @@ const MOCK_DATA = {
   ],
 };
 
-const NewPortfolioPage = () => {
+const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest }) => {
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [activeTab, setActiveTab] = useState("strategy");
   const [timeFilter, setTimeFilter] = useState("W");
@@ -666,7 +666,10 @@ const NewPortfolioPage = () => {
               </div>
               <p className="text-lg font-medium text-white/90 mt-1">{fullName}</p>
             </div>
-            <button className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 backdrop-blur-sm transition hover:bg-white/10">
+            <button 
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 backdrop-blur-sm transition hover:bg-white/10"
+              onClick={onOpenNotifications}
+            >
               <Bell className="h-5 w-5 text-white/90" />
             </button>
           </header>
