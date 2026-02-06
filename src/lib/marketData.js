@@ -210,7 +210,7 @@ export const getSecurityPrices = async (securityId, timeframe = "1M") => {
     
     switch (timeframe) {
       case "1D":
-        daysToFetch = 2;
+        daysToFetch = 3;
         break;
       case "1W":
         daysToFetch = 10;

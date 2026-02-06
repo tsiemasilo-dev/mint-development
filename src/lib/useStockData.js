@@ -81,7 +81,9 @@ export function useStockChart(securityId, timeFilter) {
           const date = new Date(p.ts);
           let label;
 
-          if (timeFilter === 'D' || timeFilter === 'W') {
+          if (timeFilter === 'D') {
+            label = date.toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit', hour12: true });
+          } else if (timeFilter === 'W') {
             label = date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
           } else if (timeFilter === 'M') {
             label = date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
