@@ -703,7 +703,7 @@ const NewPortfolioPage = () => {
                     ? "bg-violet-500 text-white shadow-lg shadow-violet-500/30"
                     : "border border-white/60 text-white backdrop-blur-xl hover:bg-white/20"
                 }`}
-                style={activeTab !== tab.id ? { background: 'rgba(255,255,255,0.15)', textShadow: '0 1px 3px rgba(0,0,0,0.2)' } : {}}
+                style={activeTab !== tab.id ? { background: 'rgba(255,255,255,0.15)', textShadow: '0 0 8px rgba(0,0,0,0.5), 0 1px 4px rgba(0,0,0,0.3)' } : {}}
               >
                 {tab.label}
               </button>
