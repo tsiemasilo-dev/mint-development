@@ -151,9 +151,9 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
   }, [strategyId, strategySlug]);
 
   const currentStrategy = strategyData || strategy || {
-    name: "AlgoHive Core",
-    tags: ["Balanced", "Low risk", "Automated"],
-    description: "AlgoHive Core targets steady, diversified growth using an automated allocation model that adapts to changing market regimes. It aims to smooth volatility while maintaining consistent participation in upside moves, making it suitable for investors seeking a balanced, long-term portfolio anchor.",
+    name: "",
+    tags: [],
+    description: "",
     holdings: [],
   };
 

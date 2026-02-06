@@ -289,11 +289,13 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
       const matchesRisk = selectedRisks.size
         ? selectedRisks.has(strategy.risk_level || strategy.risk)
         : true;
-      const minInvest = calculateMinInvestment(strategy, holdingsBySymbol) || strategy.min_investment || 0;
+      const minInvest = calculateMinInvestment(strategy, holdingsBySymbol);
       const matchesMinInvestment = selectedMinInvestment
-        ? (minInvest >= 10000 && selectedMinInvestment === "R10,000+") ||
+        ? minInvest != null && (
+          (minInvest >= 10000 && selectedMinInvestment === "R10,000+") ||
           (minInvest >= 2500 && minInvest < 10000 && selectedMinInvestment === "R2,500+") ||
           (minInvest < 2500 && selectedMinInvestment === "R500+")
+        )
         : true;
       const matchesExposure = selectedExposure.size
         ? selectedExposure.has(strategy.exposure)
@@ -331,7 +333,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
       sorted.sort((a, b) => a.volatilityScore - b.volatilityScore);
     }
     if (selectedSort === "Lowest minimum") {
-      sorted.sort((a, b) => (calculateMinInvestment(a, holdingsBySymbol) || a.min_investment || Infinity) - (calculateMinInvestment(b, holdingsBySymbol) || b.min_investment || Infinity));
+      sorted.sort((a, b) => (calculateMinInvestment(a, holdingsBySymbol) || Infinity) - (calculateMinInvestment(b, holdingsBySymbol) || Infinity));
     }
     if (selectedSort === "Most popular") {
       sorted.sort((a, b) => b.popularityScore - a.popularityScore);
@@ -588,8 +590,8 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
                 const holdings = getHoldingsArray(strategy);
                 
                 const calculatedMin = calculateMinInvestment(strategy, holdingsBySymbol);
-                const minInvestmentValue = calculatedMin || strategy.min_investment || 0;
-                const minInvestmentText = `Min. ${formatCurrency(minInvestmentValue, "R")}`;
+                const minInvestmentValue = calculatedMin || null;
+                const minInvestmentText = minInvestmentValue ? `Min. ${formatCurrency(minInvestmentValue, "R")}` : null;
 
                 const sparkline = strategy.sparkline || [20, 22, 21, 24, 26, 25, 28, 30, 29, 32];
                 
@@ -909,7 +911,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold text-slate-900">{selectedStrategy.name}</h3>
                   <p className="text-sm text-slate-500">
-                    Min. {formatCurrency(calculateMinInvestment(selectedStrategy, holdingsBySymbol) || selectedStrategy.min_investment || 0, "R")}
+                    {calculateMinInvestment(selectedStrategy, holdingsBySymbol) ? `Min. ${formatCurrency(calculateMinInvestment(selectedStrategy, holdingsBySymbol), "R")}` : "Calculating..."}
                   </p>
                 </div>
                 <button

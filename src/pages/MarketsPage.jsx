@@ -404,13 +404,16 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
         ? selectedRisks.has(strategy.risk_level)
         : true;
       
-      const minInvest = calculateMinInvestment(strategy, holdingsBySymbol) || strategy.min_investment || 0;
-      let investmentCategory = "R500+";
-      if (minInvest >= 10000) investmentCategory = "R10,000+";
-      else if (minInvest >= 2500) investmentCategory = "R2,500+";
+      const minInvest = calculateMinInvestment(strategy, holdingsBySymbol);
+      let investmentCategory = null;
+      if (minInvest != null) {
+        if (minInvest >= 10000) investmentCategory = "R10,000+";
+        else if (minInvest >= 2500) investmentCategory = "R2,500+";
+        else investmentCategory = "R500+";
+      }
       
       const matchesMinInvestment = selectedMinInvestment && selectedMinInvestment !== "Any"
-        ? investmentCategory === selectedMinInvestment
+        ? minInvest != null && investmentCategory === selectedMinInvestment
         : true;
       
       const matchesExposure = selectedExposure.size
@@ -443,7 +446,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       sorted.sort((a, b) => (b.performance_score || 0) - (a.performance_score || 0));
     }
     if (strategySort === "Lowest minimum") {
-      sorted.sort((a, b) => (calculateMinInvestment(a, holdingsBySymbol) || a.min_investment || 0) - (calculateMinInvestment(b, holdingsBySymbol) || b.min_investment || 0));
+      sorted.sort((a, b) => (calculateMinInvestment(a, holdingsBySymbol) || 0) - (calculateMinInvestment(b, holdingsBySymbol) || 0));
     }
 
     return sorted;
@@ -1367,7 +1370,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                           : strategy.description
                         : '';
                       
-                      const formattedMinInvestment = `Min. ${formatCurrency(calculateMinInvestment(strategy, holdingsBySymbol) || strategy.min_investment || 0, "R")}`;
+                      const calcMin = calculateMinInvestment(strategy, holdingsBySymbol);
+                      const formattedMinInvestment = calcMin ? `Min. ${formatCurrency(calcMin, "R")}` : null;
                       
                       const sparkline = [20, 22, 21, 24, 26, 25, 28, 30, 29, 32];
                       
@@ -1573,7 +1577,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 <div className="flex-1">
                   <h2 className="text-lg font-semibold text-slate-900">{selectedStrategy.name}</h2>
                   <p className="text-sm text-slate-500">
-                    Min. {formatCurrency(calculateMinInvestment(selectedStrategy, holdingsBySymbol) || selectedStrategy.min_investment || 0, "R")}
+                    {calculateMinInvestment(selectedStrategy, holdingsBySymbol) ? `Min. ${formatCurrency(calculateMinInvestment(selectedStrategy, holdingsBySymbol), "R")}` : "Calculating..."}
                   </p>
                 </div>
               </div>

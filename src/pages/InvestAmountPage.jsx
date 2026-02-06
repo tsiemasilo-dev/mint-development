@@ -4,29 +4,29 @@ import { formatCurrency } from "../lib/formatCurrency";
 
 const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
   const currentStrategy = strategy || {
-    name: "Strategy",
-    return: "+8.7%",
-    minimum: 2500,
+    name: "",
     tickers: [],
     description: "",
   };
 
-  const minimumInvestment = currentStrategy.calculatedMinInvestment || currentStrategy.min_investment || 2500;
+  const minimumInvestment = currentStrategy.calculatedMinInvestment || null;
   const currency = currentStrategy.currency || 'R';
   
-  const [amount, setAmount] = useState(minimumInvestment);
+  const [amount, setAmount] = useState(minimumInvestment || 0);
   const [agreementChecked, setAgreementChecked] = useState(false);
 
   const tickers = currentStrategy.tickers || currentStrategy.holdings?.map(h => h.ticker || h.symbol) || [];
   const extraHoldings = tickers.length > 3 ? tickers.length - 3 : 0;
 
+  const step = minimumInvestment || 0;
+
   const handleIncrement = () => {
-    setAmount(amount + minimumInvestment);
+    if (step > 0) setAmount(amount + step);
   };
 
   const handleDecrement = () => {
-    if (amount > minimumInvestment) {
-      setAmount(amount - minimumInvestment);
+    if (step > 0 && amount > step) {
+      setAmount(amount - step);
     }
   };
 
@@ -63,7 +63,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
                 {currentStrategy.description?.split('.')[0] || "Investment strategy"}
               </p>
               <p className="text-xs font-semibold text-slate-600 mt-1">
-                Min. {formatCurrency(minimumInvestment, currency)}
+                {minimumInvestment ? `Min. ${formatCurrency(minimumInvestment, currency)}` : "Calculating..."}
               </p>
             </div>
           </div>
@@ -104,7 +104,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
               <button
                 type="button"
                 onClick={handleDecrement}
-                disabled={amount <= minimumInvestment}
+                disabled={!minimumInvestment || amount <= minimumInvestment}
                 className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:enabled:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition"
               >
                 <Minus className="h-5 w-5" />
