@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion";
 import { Bell, Eye, EyeOff, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, TrendingUp, TrendingDown, Plus } from "lucide-react";
 import { Area, ComposedChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell } from 'recharts';
-import { useFinancialData, useInvestments } from "../lib/useFinancialData";
+import { useInvestments } from "../lib/useFinancialData";
 import { useProfile } from "../lib/useProfile";
 import { useUserStrategies, useStrategyChartData } from "../lib/useUserStrategies";
 import { useStockQuotes, useStockChart } from "../lib/useStockData";
@@ -52,7 +52,8 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onBack }) => {
     }
   }, [currentView]);
 
-  const { securities: allSecurities, quotes: liveQuotes, loading: quotesLoading } = useStockQuotes();
+  const shouldLoadStocks = activeTab === "stocks" || activeTab === "holdings";
+  const { securities: allSecurities, quotes: liveQuotes, loading: quotesLoading } = useStockQuotes(shouldLoadStocks);
   const stocksList = useMemo(() => {
     if (!allSecurities || allSecurities.length === 0) return [];
     return allSecurities
@@ -149,8 +150,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onBack }) => {
     return date.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
   };
 
-  const { holdings: rawHoldings, loading: holdingsLoading, investments } = useFinancialData();
-  const { goals: investmentGoals } = useInvestments();
+  const { holdings: rawHoldings, loading: holdingsLoading, goals: investmentGoals } = useInvestments();
   
   const displayAccountValue = strategies.length > 0 
     ? strategies.reduce((sum, s) => sum + (s.currentValue || 0), 0) 

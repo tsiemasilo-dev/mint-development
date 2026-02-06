@@ -1,12 +1,16 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getMarketsSecuritiesWithMetrics, getSecurityPrices } from './marketData';
 
-export function useStockQuotes() {
+export function useStockQuotes(enabled = true) {
   const [securities, setSecurities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const fetchSecurities = useCallback(async () => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       const allSecurities = await getMarketsSecuritiesWithMetrics();
@@ -18,7 +22,7 @@ export function useStockQuotes() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
     fetchSecurities();

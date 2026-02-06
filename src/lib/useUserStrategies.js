@@ -18,109 +18,7 @@ export const useUserStrategies = () => {
 
     try {
       const { data: userData } = await supabase.auth.getUser();
-      if (!userData?.user) {
-        await fetchFallbackStrategies(null);
-        return;
-      }
 
-      const userId = userData.user.id;
-
-      const { data: userStrategies, error: strategiesError } = await supabase
-        .from("user_strategy_investments")
-        .select(`
-          id,
-          strategy_id,
-          invested_amount,
-          current_value,
-          units_held,
-          entry_date,
-          last_updated,
-          strategies (
-            id,
-            name,
-            short_name,
-            description,
-            risk_level,
-            sector,
-            icon_url,
-            image_url,
-            holdings,
-            strategy_metrics (
-              as_of_date,
-              last_close,
-              change_pct,
-              r_1w,
-              r_1m,
-              r_3m,
-              r_ytd,
-              r_1y
-            )
-          )
-        `)
-        .eq("user_id", userId)
-        .order("current_value", { ascending: false });
-
-      if (strategiesError) {
-        const isMissingTableError = strategiesError.code === "PGRST205" || 
-          strategiesError.message?.includes("not found") ||
-          strategiesError.message?.includes("does not exist");
-        
-        if (isMissingTableError) {
-          console.warn("user_strategy_investments table may not exist, using fallback:", strategiesError);
-          await fetchFallbackStrategies(userId);
-        } else {
-          console.error("Error fetching user strategies:", strategiesError);
-          setData((prev) => ({ ...prev, loading: false, error: strategiesError.message }));
-        }
-        return;
-      }
-
-      const formattedStrategies = (userStrategies || []).map((us) => {
-        const strategy = us.strategies;
-        const metrics = strategy?.strategy_metrics;
-        const latestMetric = Array.isArray(metrics) ? metrics[0] : metrics;
-        const changePercent = latestMetric?.r_1m ? (latestMetric.r_1m * 100).toFixed(1) : 0;
-
-        return {
-          id: us.id,
-          strategyId: us.strategy_id,
-          name: strategy?.name || "Unknown Strategy",
-          shortName: strategy?.short_name || strategy?.name || "Strategy",
-          description: strategy?.description || "",
-          riskLevel: strategy?.risk_level || "Moderate",
-          sector: strategy?.sector || "",
-          iconUrl: strategy?.icon_url,
-          imageUrl: strategy?.image_url,
-          holdings: strategy?.holdings || [],
-          investedAmount: us.invested_amount || 0,
-          currentValue: us.current_value || 0,
-          unitsHeld: us.units_held || 0,
-          entryDate: us.entry_date,
-          lastUpdated: us.last_updated,
-          previousMonthChange: parseFloat(changePercent),
-          metrics: latestMetric,
-        };
-      });
-
-      setData({
-        strategies: formattedStrategies,
-        selectedStrategy: formattedStrategies[0] || null,
-        loading: false,
-        error: null,
-      });
-
-    } catch (err) {
-      console.error("Error fetching user strategies:", err);
-      setData((prev) => ({
-        ...prev,
-        loading: false,
-        error: err.message,
-      }));
-    }
-  }, []);
-
-  const fetchFallbackStrategies = async (userId) => {
-    try {
       const { data: strategies, error } = await supabase
         .from("strategies")
         .select(`
@@ -148,7 +46,7 @@ export const useUserStrategies = () => {
         .limit(5);
 
       if (error) {
-        console.error("Error fetching fallback strategies:", error);
+        console.error("Error fetching strategies:", error);
         setData((prev) => ({ ...prev, loading: false, error: error.message }));
         return;
       }
@@ -187,10 +85,14 @@ export const useUserStrategies = () => {
       });
 
     } catch (err) {
-      console.error("Error in fallback:", err);
-      setData((prev) => ({ ...prev, loading: false, error: err.message }));
+      console.error("Error fetching strategies:", err);
+      setData((prev) => ({
+        ...prev,
+        loading: false,
+        error: err.message,
+      }));
     }
-  };
+  }, []);
 
   const selectStrategy = useCallback((strategy) => {
     setData((prev) => ({ ...prev, selectedStrategy: strategy }));

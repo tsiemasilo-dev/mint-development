@@ -328,7 +328,7 @@ export const useInvestments = () => {
         const userId = userData.user.id;
 
         const [holdingsResult, goalsResult] = await Promise.all([
-          supabase.from("user_holdings").select("*, securities(symbol, name, asset_class)").eq("user_id", userId),
+          supabase.from("user_holdings").select("*, securities(symbol, name, asset_class, logo_url)").eq("user_id", userId),
           supabase.from("investment_goals").select("*").eq("user_id", userId),
         ]);
 

@@ -31,7 +31,7 @@ export const getMarketsSecuritiesWithMetrics = async () => {
     const { data: securities, error: securitiesError } = await supabase
       .from("securities")
       .select(`
-        *,
+        id, symbol, name, exchange, logo_url, sector, industry, market_cap, is_active,
         security_metrics(
           as_of_date,
           last_close,
