@@ -80,6 +80,7 @@ const App = () => {
   const [selectedSecurity, setSelectedSecurity] = useState(null);
   const [selectedStrategy, setSelectedStrategy] = useState(null);
   const [selectedArticleId, setSelectedArticleId] = useState(null);
+  const [marketsInitialView, setMarketsInitialView] = useState(null);
   const [investmentAmount, setInvestmentAmount] = useState(0);
   const [stockCheckout, setStockCheckout] = useState({ security: null, amount: 0 });
   const recoveryHandled = useRef(false);
@@ -684,6 +685,9 @@ const App = () => {
           onOpenInvest={() => navigateTo("markets")}
           onOpenWithdraw={handleWithdrawRequest}
           onOpenSettings={() => navigateTo("settings")}
+          onOpenStrategies={() => { setMarketsInitialView("openstrategies"); navigateTo("markets"); }}
+          onOpenMarkets={() => { setMarketsInitialView("invest"); navigateTo("markets"); }}
+          onOpenNews={() => { setMarketsInitialView("news"); navigateTo("markets"); }}
         />
       </AppLayout>
     );
@@ -809,6 +813,7 @@ const App = () => {
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <MarketsPage
           onBack={goBack}
+          initialViewMode={marketsInitialView}
           onOpenNotifications={() => {
             setNotificationReturnPage("markets");
             navigateTo("notifications");

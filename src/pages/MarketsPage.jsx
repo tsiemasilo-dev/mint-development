@@ -127,7 +127,7 @@ const StrategyMiniChart = ({ values }) => {
   );
 };
 
-const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNewsArticle, onOpenFactsheet }) => {
+const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNewsArticle, onOpenFactsheet, initialViewMode }) => {
   const { profile, loading: profileLoading } = useProfile();
   const [securities, setSecurities] = useState([]);
   const [strategies, setStrategies] = useState([]);
@@ -140,7 +140,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const [searchQuery, setSearchQuery] = useState("");
   const [strategiesSearchQuery, setStrategiesSearchQuery] = useState("");
   const [newsSearchQuery, setNewsSearchQuery] = useState("");
-  const [viewMode, setViewMode] = useState("invest"); // "openstrategies", "invest", "news"
+  const [viewMode, setViewMode] = useState(initialViewMode || "invest"); // "openstrategies", "invest", "news"
   const [selectedStrategy, setSelectedStrategy] = useState(null);
   const [selectedStrategyTimeframe, setSelectedStrategyTimeframe] = useState("1M");
   const [selectedStrategyActiveLabel, setSelectedStrategyActiveLabel] = useState(null);

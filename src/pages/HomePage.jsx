@@ -419,7 +419,7 @@ const HomePage = ({
                   { id: "balance", label: "Balance", action: () => { setHomeTab("balance"); if (cardNormalizedIndex !== 0) { setIsCardAnimating(true); setCardRotation(0); setTimeout(() => setIsCardAnimating(false), 700); } } },
                   { id: "invest", label: "Invest", action: () => { setHomeTab("invest"); if (cardNormalizedIndex !== 1) { setIsCardAnimating(true); setCardRotation(-180); setTimeout(() => setIsCardAnimating(false), 700); } } },
                   { id: "credit", label: "Credit", action: () => { if (onOpenCredit) onOpenCredit(); } },
-                  { id: "transact", label: "Transact", action: () => { setHomeTab("transact"); } },
+                  { id: "transact", label: "Transact", action: () => {} },
                 ].map((tab) => (
                   <button
                     key={tab.id}
