@@ -1108,7 +1108,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                     className="relative flex-shrink-0 w-64 snap-center rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-5 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
                   >
                     <div onClick={(e) => toggleWatchlist(e, security.symbol)} className="absolute top-3 right-3 z-10">
-                      <Star className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-200"}`} />
+                      <Star className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
                     </div>
                     <div className="flex items-start gap-3">
                       {security.logo_url ? (
@@ -1167,7 +1167,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                     className="relative flex-shrink-0 w-64 snap-center rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-5 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
                   >
                     <div onClick={(e) => toggleWatchlist(e, security.symbol)} className="absolute top-3 right-3 z-10">
-                      <Star className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-200"}`} />
+                      <Star className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
                     </div>
                     <div className="flex items-start gap-3">
                       {security.logo_url ? (
@@ -1231,7 +1231,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                     className="relative flex-shrink-0 w-64 snap-center rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-5 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
                   >
                     <div onClick={(e) => toggleWatchlist(e, security.symbol)} className="absolute top-3 right-3 z-10">
-                      <Star className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-200"}`} />
+                      <Star className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
                     </div>
                     <div className="flex items-start gap-3">
                       {security.logo_url ? (
@@ -1326,7 +1326,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                             )}
                           </div>
                           <div onClick={(e) => toggleWatchlist(e, security.symbol)} className="ml-2 flex-shrink-0">
-                            <Star className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-200"}`} />
+                            <Star className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
                           </div>
                         </div>
 
@@ -1414,7 +1414,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                                 )}
                               </div>
                               <div onClick={(e) => toggleWatchlist(e, security.symbol)} className="ml-2 flex-shrink-0">
-                                <Star className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-200"}`} />
+                                <Star className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
                               </div>
                             </div>
 
