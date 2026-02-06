@@ -17,7 +17,7 @@ const formatKMB = (value) => {
   return `${sign}R${formatted}`;
 };
 
-const SwipeableBalanceCard = ({ userId, isBackFacing = true }) => {
+const SwipeableBalanceCard = ({ userId, isBackFacing = true, forceVisible }) => {
   const [activeTab, setActiveTab] = useState("1m");
   const [isOpen, setIsOpen] = useState(false);
 
@@ -37,12 +37,14 @@ const SwipeableBalanceCard = ({ userId, isBackFacing = true }) => {
     strategyInvested: 0
   });
 
-  const [isVisible, setIsVisible] = useState(() => {
+  const [localVisible, setLocalVisible] = useState(() => {
     if (typeof window !== "undefined") {
       return window.localStorage.getItem(VISIBILITY_STORAGE_KEY) !== "false";
     }
     return true;
   });
+
+  const isVisible = forceVisible !== undefined ? forceVisible : localVisible;
 
   // Isolated Fetch Logic: Only affects this component
   useEffect(() => {

@@ -674,19 +674,17 @@ const HomePage = ({
                   transition: "transform 0.7s ease-out",
                 }}>
                   <div className="relative h-full overflow-hidden">
-                    <SwipeableBalanceCard userId={userId} isBackFacing={cardNormalizedIndex === 1} />
+                    <SwipeableBalanceCard userId={userId} isBackFacing={cardNormalizedIndex === 1} forceVisible={isCardVisible} />
                   </div>
                 </CardContent>
 
-                {cardNormalizedIndex === 0 && (
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); toggleCardVisibility(); }}
-                    className="absolute top-4 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20"
-                  >
-                    {isCardVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); toggleCardVisibility(); }}
+                  className="absolute top-4 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20"
+                >
+                  {isCardVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                </button>
               </div>
 
               {isBalanceEnabled && (
