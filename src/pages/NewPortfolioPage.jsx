@@ -105,11 +105,11 @@ const MOCK_ALLOCATIONS = [
 ];
 
 const MOCK_STOCKS = [
-  { id: 1, name: "Apple Inc.", ticker: "AAPL", shares: 15, price: 185.42, dailyChange: 2.35, logo: "https://logo.clearbit.com/apple.com" },
-  { id: 2, name: "Microsoft Corp.", ticker: "MSFT", shares: 8, price: 378.91, dailyChange: -0.87, logo: "https://logo.clearbit.com/microsoft.com" },
-  { id: 3, name: "Amazon.com Inc.", ticker: "AMZN", shares: 12, price: 178.25, dailyChange: 1.52, logo: "https://logo.clearbit.com/amazon.com" },
-  { id: 4, name: "Tesla Inc.", ticker: "TSLA", shares: 20, price: 248.50, dailyChange: -2.14, logo: "https://logo.clearbit.com/tesla.com" },
-  { id: 5, name: "Alphabet Inc.", ticker: "GOOGL", shares: 10, price: 141.80, dailyChange: 0.95, logo: "https://logo.clearbit.com/google.com" },
+  { id: 1, name: "Apple Inc.", ticker: "AAPL", shares: 15, price: 185.42, dailyChange: 2.35, logo: null },
+  { id: 2, name: "Microsoft Corp.", ticker: "MSFT", shares: 8, price: 378.91, dailyChange: -0.87, logo: null },
+  { id: 3, name: "Amazon.com Inc.", ticker: "AMZN", shares: 12, price: 178.25, dailyChange: 1.52, logo: null },
+  { id: 4, name: "Tesla Inc.", ticker: "TSLA", shares: 20, price: 248.50, dailyChange: -2.14, logo: null },
+  { id: 5, name: "Alphabet Inc.", ticker: "GOOGL", shares: 10, price: 141.80, dailyChange: 0.95, logo: null },
 ];
 
 const MOCK_STOCK_CHART_DATA = {
@@ -369,7 +369,7 @@ const NewPortfolioPage = () => {
         shares: 0,
         price: s.currentPrice || 0,
         dailyChange: s.changePct || 0,
-        logo: s.logo_url || `https://logo.clearbit.com/${s.name?.toLowerCase().replace(/[^a-z]/g, '')}.com`,
+        logo: s.logo_url || null,
       }));
   }, [allSecurities]);
   const selectedSecurityId = useMemo(() => {
@@ -1335,14 +1335,34 @@ const NewPortfolioPage = () => {
 
       {/* Holdings Tab Content */}
       {activeTab === "holdings" && (() => {
-        const holdingsData = [
-          { id: 1, name: "Apple Inc.", ticker: "AAPL", logo: "https://logo.clearbit.com/apple.com", currentValue: 12450.80, change: 8.4, color: "#8B5CF6" },
-          { id: 2, name: "Tesla Inc.", ticker: "TSLA", logo: "https://logo.clearbit.com/tesla.com", currentValue: 8920.50, change: -2.1, color: "#A78BFA" },
-          { id: 3, name: "Microsoft Corp.", ticker: "MSFT", logo: "https://logo.clearbit.com/microsoft.com", currentValue: 6780.25, change: 5.7, color: "#C4B5FD" },
-          { id: 4, name: "Amazon.com Inc.", ticker: "AMZN", logo: "https://logo.clearbit.com/amazon.com", currentValue: 4350.90, change: 3.2, color: "#DDD6FE" },
-          { id: 5, name: "Alphabet Inc.", ticker: "GOOGL", logo: "https://logo.clearbit.com/google.com", currentValue: 3200.15, change: -0.8, color: "#EDE9FE" },
-          { id: 6, name: "NVIDIA Corp.", ticker: "NVDA", logo: "https://logo.clearbit.com/nvidia.com", currentValue: 5680.40, change: 12.5, color: "#7C3AED" },
-        ];
+        const pieColors = ["#8B5CF6", "#A78BFA", "#C4B5FD", "#DDD6FE", "#EDE9FE", "#7C3AED", "#6D28D9", "#5B21B6"];
+        const holdingsData = myStocks.length > 0
+          ? myStocks.map((s, idx) => {
+              const liveChange = liveQuotes[s.ticker]?.changePercent ?? s.dailyChange ?? 0;
+              const livePrice = liveQuotes[s.ticker]?.price || s.price || 0;
+              return {
+                id: s.id,
+                name: s.name,
+                ticker: s.ticker,
+                logo: s.logo,
+                currentValue: livePrice * (s.shares || 1),
+                change: liveChange,
+                color: pieColors[idx % pieColors.length],
+              };
+            })
+          : stocksList.slice(0, 6).map((s, idx) => {
+              const liveChange = liveQuotes[s.ticker]?.changePercent ?? s.dailyChange ?? 0;
+              const livePrice = liveQuotes[s.ticker]?.price || s.price || 0;
+              return {
+                id: s.id,
+                name: s.name,
+                ticker: s.ticker,
+                logo: s.logo,
+                currentValue: livePrice * (s.shares || 1),
+                change: liveChange,
+                color: pieColors[idx % pieColors.length],
+              };
+            });
         const totalValue = holdingsData.reduce((sum, h) => sum + h.currentValue, 0);
         const totalDistinct = holdingsData.length;
         const pieData = holdingsData.map(h => ({ name: h.ticker, value: h.currentValue, color: h.color }));
@@ -1459,9 +1479,8 @@ const NewPortfolioPage = () => {
                 className="rounded-2xl bg-white/70 backdrop-blur-xl p-4 shadow-sm border border-slate-100/50"
               >
                 <div className="flex items-center gap-3">
-                  {/* Stock Logo */}
                   <div className="h-11 w-11 rounded-full bg-white border border-slate-200 shadow-sm overflow-hidden flex-shrink-0">
-                    {failedLogos[stock.ticker] ? (
+                    {!stock.logo || failedLogos[stock.ticker] ? (
                       <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-100 to-purple-100 text-xs font-bold text-violet-700">
                         {stock.ticker.slice(0, 2)}
                       </div>
@@ -1475,13 +1494,11 @@ const NewPortfolioPage = () => {
                     )}
                   </div>
                   
-                  {/* Stock Name and Ticker */}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-slate-900 truncate">{stock.name}</p>
                     <p className="text-xs text-slate-500 font-medium">{stock.ticker}</p>
                   </div>
                   
-                  {/* Value and Performance */}
                   <div className="text-right flex-shrink-0">
                     <p className="text-sm font-bold text-slate-900">
                       {formatCurrency(stock.currentValue)}
