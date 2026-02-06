@@ -6,6 +6,7 @@ import { useFinancialData, useInvestments } from "../lib/useFinancialData";
 import { useProfile } from "../lib/useProfile";
 import { useUserStrategies, useStrategyChartData } from "../lib/useUserStrategies";
 import { useStockQuotes, useStockChart } from "../lib/useStockData";
+import SwipeBackWrapper from "../components/SwipeBackWrapper.jsx";
 
 const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -17,7 +18,7 @@ const getReturnColor = (value) => {
 };
 
 
-const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest }) => {
+const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onBack }) => {
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [activeTab, setActiveTab] = useState("strategy");
   const [timeFilter, setTimeFilter] = useState("W");
@@ -35,6 +36,22 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest }) => {
   const [tabRipple, setTabRipple] = useState(null);
   const [tabDirection, setTabDirection] = useState(0);
   const tabOrder = ["strategy", "stocks", "holdings"];
+
+  useEffect(() => {
+    if (currentView === "allocations") {
+      window.history.pushState({ view: 'allocations' }, '');
+
+      const handlePopState = (e) => {
+        setCurrentView("portfolio");
+      };
+
+      window.addEventListener('popstate', handlePopState);
+      return () => {
+        window.removeEventListener('popstate', handlePopState);
+      };
+    }
+  }, [currentView]);
+
   const { securities: allSecurities, quotes: liveQuotes, loading: quotesLoading } = useStockQuotes();
   const stocksList = useMemo(() => {
     if (!allSecurities || allSecurities.length === 0) return [];
@@ -209,6 +226,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest }) => {
   // All Allocations View
   if (currentView === "allocations") {
     return (
+      <SwipeBackWrapper onBack={() => setCurrentView("portfolio")} enabled={true}>
       <div className="min-h-screen pb-[env(safe-area-inset-bottom)] text-white relative overflow-x-hidden">
         {/* Gradient background - same as portfolio page */}
         <div className="absolute inset-x-0 top-0 -z-10 h-full">
@@ -314,6 +332,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest }) => {
           )}
         </div>
       </div>
+      </SwipeBackWrapper>
     );
   }
 
