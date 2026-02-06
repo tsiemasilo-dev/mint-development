@@ -518,25 +518,26 @@ const HomePage = ({
       </div>
 
       <div className="mx-auto -mt-10 flex w-full max-w-sm flex-col gap-6 px-4 pb-10 md:max-w-md md:px-8">
-        <section className="grid grid-cols-4 gap-3 text-[11px] font-medium">
+        <section className="grid grid-cols-4 gap-2.5">
           {[
-            { label: <>Open<br />Strategies</>, icon: LayoutGrid, onClick: onOpenStrategies || onOpenInvest },
-            { label: "Markets", icon: TrendingUp, onClick: onOpenMarkets || onOpenInvest },
-            { label: "News", icon: Newspaper, onClick: onOpenNews || onOpenInvest },
-            { label: "Goals", icon: Target, onClick: () => setShowGoalsModal(true) },
+            { label: <>Open<br />Strategies</>, icon: LayoutGrid, gradient: "from-violet-600 to-purple-700", onClick: onOpenStrategies || onOpenInvest },
+            { label: "Markets", icon: TrendingUp, gradient: "from-indigo-500 to-violet-600", onClick: onOpenMarkets || onOpenInvest },
+            { label: "News", icon: Newspaper, gradient: "from-purple-500 to-fuchsia-600", onClick: onOpenNews || onOpenInvest },
+            { label: "Goals", icon: Target, gradient: "from-fuchsia-500 to-pink-600", onClick: () => setShowGoalsModal(true) },
           ].map((item, index) => {
             const Icon = item.icon;
             return (
               <button
                 key={index}
-                className="flex flex-col items-center gap-2 rounded-2xl bg-white px-2 py-3 text-slate-700 shadow-md"
+                className="group relative flex flex-col items-center gap-2 rounded-[20px] bg-white px-1 py-4 transition-all duration-200 active:scale-[0.95]"
                 type="button"
                 onClick={item.onClick}
+                style={{ boxShadow: "0 1px 3px 0 rgba(0,0,0,0.04), 0 4px 20px -4px rgba(124,58,237,0.12), inset 0 1px 0 0 rgba(255,255,255,0.9)" }}
               >
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-50 text-violet-700">
-                  <Icon className="h-4 w-4" />
+                <span className={`flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br ${item.gradient}`} style={{ boxShadow: "0 4px 14px -3px rgba(124,58,237,0.4)" }}>
+                  <Icon className="h-[18px] w-[18px] text-white" strokeWidth={1.8} />
                 </span>
-                <span className="text-center leading-tight">{item.label}</span>
+                <span className="text-center text-[10.5px] font-semibold leading-tight tracking-wide text-slate-600">{item.label}</span>
               </button>
             );
           })}
