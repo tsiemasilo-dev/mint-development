@@ -206,8 +206,7 @@ export const getSecurityPrices = async (securityId, timeframe = "1M") => {
     
     switch (timeframe) {
       case "1D":
-        // Since we don't have intraday data yet, fetch last 30 days and display as "1M" style
-        daysToFetch = 30;
+        daysToFetch = 2;
         break;
       case "1W":
         daysToFetch = 10; // ~2 weeks of trading days to get 7-10 days
