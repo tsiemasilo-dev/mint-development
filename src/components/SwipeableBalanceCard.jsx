@@ -44,7 +44,7 @@ const SwipeableBalanceCard = ({ userId, isBackFacing = true, forceVisible }) => 
     return true;
   });
 
-  const isVisible = forceVisible !== undefined ? forceVisible : localVisible;
+  const isVisible = true;
 
   // Isolated Fetch Logic: Only affects this component
   useEffect(() => {
