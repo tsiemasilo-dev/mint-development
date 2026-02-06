@@ -9,7 +9,7 @@ import { useStockQuotes, useStockChart } from "../lib/useStockData";
 import SwipeBackWrapper from "../components/SwipeBackWrapper.jsx";
 import PortfolioSkeleton from "../components/PortfolioSkeleton";
 
-const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
 
 const getReturnColor = (value) => {
   if (value == null) return "bg-slate-50 text-slate-600";
@@ -24,7 +24,6 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onBack }) => {
   const [activeTab, setActiveTab] = useState("strategy");
   const [timeFilter, setTimeFilter] = useState("W");
   const [failedLogos, setFailedLogos] = useState({});
-  const [calendarYear, setCalendarYear] = useState(2025);
   const [currentView, setCurrentView] = useState("portfolio");
   const [showStrategyDropdown, setShowStrategyDropdown] = useState(false);
   const [activePieIndex, setActivePieIndex] = useState(-1);
@@ -126,26 +125,18 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onBack }) => {
     setShowStrategyDropdown(false);
   };
 
-  const calendarData = useMemo(() => {
-    if (!strategies || strategies.length === 0) return {};
-    const data = {};
-    strategies.forEach(s => {
-      if (s.metrics) {
-        const now = new Date();
-        const year = String(now.getFullYear());
-        if (!data[year]) data[year] = {};
-        if (s.metrics.r_1m != null) {
-          const month = String(now.getMonth() + 1).padStart(2, "0");
-          data[year][month] = s.metrics.r_1m;
-        }
-      }
-    });
-    return data;
-  }, [strategies]);
-  const availableCalendarYears = useMemo(() => {
-    const keys = Object.keys(calendarData);
-    return keys.length > 0 ? keys.sort() : [];
-  }, [calendarData]);
+  const returnPeriods = useMemo(() => {
+    if (!currentStrategy?.metrics) return [];
+    const m = currentStrategy.metrics;
+    const periods = [
+      { label: "1W", value: m.r_1w },
+      { label: "1M", value: m.r_1m },
+      { label: "3M", value: m.r_3m },
+      { label: "YTD", value: m.r_ytd },
+      { label: "1Y", value: m.r_1y },
+    ];
+    return periods;
+  }, [currentStrategy]);
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
@@ -732,54 +723,27 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onBack }) => {
           </div>
         </section>
 
-        {/* Calendar Returns */}
+        {/* Period Returns */}
         <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50">
-          <div className="flex items-center justify-between gap-4 mb-4">
-            <p className="text-sm font-semibold text-slate-900">Calendar Returns</p>
-            {availableCalendarYears.length > 1 && (
-              <div className="flex flex-wrap gap-2">
-                {availableCalendarYears.map((year) => (
-                  <button
-                    key={year}
-                    type="button"
-                    onClick={() => setCalendarYear(Number(year))}
-                    className={`rounded-full px-3 py-1 text-xs font-semibold transition-all ${
-                      Number(year) === Number(calendarYear)
-                        ? "bg-slate-900 text-white"
-                        : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                    }`}
-                  >
-                    {year}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          {availableCalendarYears.length === 0 ? (
+          <p className="text-sm font-semibold text-slate-900 mb-4">Period Returns</p>
+          {returnPeriods.length === 0 || returnPeriods.every(p => p.value == null) ? (
             <div className="text-center py-4">
-              <p className="text-sm text-slate-500">Calendar return data will be available once you have investment history.</p>
+              <p className="text-sm text-slate-500">Return data will be available once you have investment history.</p>
             </div>
           ) : (
-            <>
-              <p className="mb-3 text-xs font-semibold text-slate-500">{calendarYear}</p>
-              <div className="grid grid-cols-3 gap-2">
-                {monthNames.map((label, index) => {
-                  const monthKey = String(index + 1).padStart(2, "0");
-                  const value = calendarData[String(calendarYear)]?.[monthKey];
-                  return (
-                    <div
-                      key={`${calendarYear}-${label}`}
-                      className={`rounded-xl px-3 py-2.5 text-center ${getReturnColor(value)}`}
-                    >
-                      <p className="text-[10px] font-semibold text-slate-500">{label}</p>
-                      <p className="mt-0.5 text-sm font-bold">
-                        {value == null ? "—" : `${(Number(value) * 100).toFixed(2)}%`}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
+            <div className="flex gap-2">
+              {returnPeriods.map((period) => (
+                <div
+                  key={period.label}
+                  className={`flex-1 rounded-2xl px-2 py-3 text-center ${getReturnColor(period.value)}`}
+                >
+                  <p className="text-[10px] font-semibold text-slate-500">{period.label}</p>
+                  <p className="mt-1 text-sm font-bold">
+                    {period.value == null ? "—" : `${(Number(period.value) * 100).toFixed(1)}%`}
+                  </p>
+                </div>
+              ))}
+            </div>
           )}
         </section>
       </div>
