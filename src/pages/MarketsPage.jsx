@@ -9,7 +9,7 @@ import Skeleton from "../components/Skeleton";
 import { ChartContainer } from "../components/ui/line-charts-2";
 import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatCurrency } from "../lib/formatCurrency";
-import { normalizeSymbol, getHoldingsArray, getHoldingSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot } from "../lib/strategyUtils";
+import { normalizeSymbol, getHoldingsArray, getHoldingSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot, calculateMinInvestment } from "../lib/strategyUtils";
 
 const sortOptions = ["Market Cap", "Dividend Yield", "P/E Ratio"];
 
@@ -404,8 +404,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
         ? selectedRisks.has(strategy.risk_level)
         : true;
       
-      // Convert min_investment to minInvestment categories for filtering
-      const minInvest = strategy.min_investment || 0;
+      const minInvest = calculateMinInvestment(strategy, holdingsBySymbol) || strategy.min_investment || 0;
       let investmentCategory = "R500+";
       if (minInvest >= 10000) investmentCategory = "R10,000+";
       else if (minInvest >= 2500) investmentCategory = "R2,500+";
@@ -444,7 +443,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       sorted.sort((a, b) => (b.performance_score || 0) - (a.performance_score || 0));
     }
     if (strategySort === "Lowest minimum") {
-      sorted.sort((a, b) => (a.min_investment || 0) - (b.min_investment || 0));
+      sorted.sort((a, b) => (calculateMinInvestment(a, holdingsBySymbol) || a.min_investment || 0) - (calculateMinInvestment(b, holdingsBySymbol) || b.min_investment || 0));
     }
 
     return sorted;
@@ -1368,7 +1367,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                           : strategy.description
                         : '';
                       
-                      const formattedMinInvestment = `Min. ${formatCurrency(strategy.min_investment || 0, "R")}`;
+                      const formattedMinInvestment = `Min. ${formatCurrency(calculateMinInvestment(strategy, holdingsBySymbol) || strategy.min_investment || 0, "R")}`;
                       
                       const sparkline = [20, 22, 21, 24, 26, 25, 28, 30, 29, 32];
                       
@@ -1574,7 +1573,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 <div className="flex-1">
                   <h2 className="text-lg font-semibold text-slate-900">{selectedStrategy.name}</h2>
                   <p className="text-sm text-slate-500">
-                    Min. {formatCurrency(selectedStrategy.min_investment || 0, "R")}
+                    Min. {formatCurrency(calculateMinInvestment(selectedStrategy, holdingsBySymbol) || selectedStrategy.min_investment || 0, "R")}
                   </p>
                 </div>
               </div>
@@ -1752,7 +1751,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
               <button
                 onClick={() => {
                   setSelectedStrategy(null);
-                  onOpenFactsheet(selectedStrategy);
+                  onOpenFactsheet({ ...selectedStrategy, calculatedMinInvestment: calculateMinInvestment(selectedStrategy, holdingsBySymbol) });
                 }}
                 className="mt-6 w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-4 font-semibold text-white shadow-lg transition-all active:scale-95"
               >

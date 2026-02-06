@@ -6,7 +6,7 @@ import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer } from "r
 import { supabase } from "../lib/supabase";
 import { getStrategiesWithMetrics, formatChangePct, formatChangeAbs, getChangeColor } from "../lib/strategyData.js";
 import { formatCurrency } from "../lib/formatCurrency";
-import { normalizeSymbol, getHoldingsArray, getHoldingSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot } from "../lib/strategyUtils";
+import { normalizeSymbol, getHoldingsArray, getHoldingSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot, calculateMinInvestment } from "../lib/strategyUtils";
 
 const sortOptions = [
   "Recommended",
@@ -289,7 +289,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
       const matchesRisk = selectedRisks.size
         ? selectedRisks.has(strategy.risk_level || strategy.risk)
         : true;
-      const minInvest = strategy.min_investment || 0;
+      const minInvest = calculateMinInvestment(strategy, holdingsBySymbol) || strategy.min_investment || 0;
       const matchesMinInvestment = selectedMinInvestment
         ? (minInvest >= 10000 && selectedMinInvestment === "R10,000+") ||
           (minInvest >= 2500 && minInvest < 10000 && selectedMinInvestment === "R2,500+") ||
@@ -331,7 +331,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
       sorted.sort((a, b) => a.volatilityScore - b.volatilityScore);
     }
     if (selectedSort === "Lowest minimum") {
-      sorted.sort((a, b) => (a.min_investment || Infinity) - (b.min_investment || Infinity));
+      sorted.sort((a, b) => (calculateMinInvestment(a, holdingsBySymbol) || a.min_investment || Infinity) - (calculateMinInvestment(b, holdingsBySymbol) || b.min_investment || Infinity));
     }
     if (selectedSort === "Most popular") {
       sorted.sort((a, b) => b.popularityScore - a.popularityScore);
@@ -587,7 +587,9 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
                 const hasMetrics = price !== null && price !== undefined;
                 const holdings = getHoldingsArray(strategy);
                 
-                const minInvestmentText = `Min. ${formatCurrency(strategy.min_investment || 0, "R")}`;
+                const calculatedMin = calculateMinInvestment(strategy, holdingsBySymbol);
+                const minInvestmentValue = calculatedMin || strategy.min_investment || 0;
+                const minInvestmentText = `Min. ${formatCurrency(minInvestmentValue, "R")}`;
 
                 const sparkline = strategy.sparkline || [20, 22, 21, 24, 26, 25, 28, 30, 29, 32];
                 
@@ -907,7 +909,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold text-slate-900">{selectedStrategy.name}</h3>
                   <p className="text-sm text-slate-500">
-                    Min. {formatCurrency(selectedStrategy.min_investment || 0, "R")}
+                    Min. {formatCurrency(calculateMinInvestment(selectedStrategy, holdingsBySymbol) || selectedStrategy.min_investment || 0, "R")}
                   </p>
                 </div>
                 <button
@@ -993,7 +995,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
                 type="button"
                 onClick={() => {
                   setSelectedStrategy(null);
-                  onOpenFactsheet(selectedStrategy);
+                  onOpenFactsheet({ ...selectedStrategy, calculatedMinInvestment: calculateMinInvestment(selectedStrategy, holdingsBySymbol) });
                 }}
                 className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-200/70"
               >

@@ -11,8 +11,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
     description: "",
   };
 
-  // Default minimum investment
-  const minimumInvestment = currentStrategy.min_investment || 2500;
+  const minimumInvestment = currentStrategy.calculatedMinInvestment || currentStrategy.min_investment || 2500;
   const currency = currentStrategy.currency || 'R';
   
   const [amount, setAmount] = useState(minimumInvestment);

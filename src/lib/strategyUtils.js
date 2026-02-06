@@ -37,6 +37,24 @@ export const buildHoldingsBySymbol = (holdingsSecurities) => {
   return map;
 };
 
+export const calculateMinInvestment = (strategy, holdingsBySymbol) => {
+  const holdings = getHoldingsArray(strategy);
+  if (!holdings.length) return null;
+  let total = 0;
+  let matched = 0;
+  for (const holding of holdings) {
+    const rawSymbol = holding.ticker || holding.symbol || holding;
+    const normalizedSym = normalizeSymbol(rawSymbol);
+    const security = holdingsBySymbol.get(rawSymbol) || holdingsBySymbol.get(normalizedSym);
+    if (security?.last_price != null) {
+      const shares = Number(holding.shares || holding.quantity || 1);
+      total += shares * (Number(security.last_price) / 100);
+      matched++;
+    }
+  }
+  return matched > 0 ? Math.round(total) : null;
+};
+
 export const getStrategyHoldingsSnapshot = (strategy, holdingsBySymbol) => {
   const holdings = getHoldingsArray(strategy);
   if (!holdings.length) return [];
