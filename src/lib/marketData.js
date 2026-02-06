@@ -31,7 +31,7 @@ export const getMarketsSecuritiesWithMetrics = async () => {
     const { data: securities, error: securitiesError } = await supabase
       .from("securities")
       .select(`
-        id, symbol, name, exchange, logo_url, sector, industry, market_cap, is_active,
+        id, symbol, name, exchange, logo_url, sector, industry, market_cap,
         security_metrics(
           as_of_date,
           last_close,
@@ -47,7 +47,6 @@ export const getMarketsSecuritiesWithMetrics = async () => {
           r_1y
         )
       `)
-      .eq("is_active", true)
       .order("market_cap", { ascending: false, nullsFirst: false });
 
     if (securitiesError) {
@@ -121,7 +120,6 @@ export const getSecurityBySymbol = async (symbol) => {
       .from("securities")
       .select("*")
       .eq("symbol", symbol)
-      .eq("is_active", true)
       .single();
 
     if (securityError) {
