@@ -1755,7 +1755,13 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
               <button
                 onClick={() => {
                   setSelectedStrategy(null);
-                  onOpenFactsheet({ ...selectedStrategy, calculatedMinInvestment: calculateMinInvestment(selectedStrategy, holdingsBySymbol) });
+                  const hArr = getHoldingsArray(selectedStrategy);
+                  const enrichedHoldings = hArr.map(h => {
+                    const sym = h.ticker || h.symbol || h;
+                    const sec = holdingsBySymbol.get(sym) || holdingsBySymbol.get(normalizeSymbol(sym));
+                    return { ...h, logo_url: sec?.logo_url || null };
+                  });
+                  onOpenFactsheet({ ...selectedStrategy, calculatedMinInvestment: calculateMinInvestment(selectedStrategy, holdingsBySymbol), holdingsWithLogos: enrichedHoldings });
                 }}
                 className="mt-6 w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-4 font-semibold text-white shadow-lg transition-all active:scale-95"
               >

@@ -15,8 +15,8 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
   const [amount, setAmount] = useState(minimumInvestment || 0);
   const [agreementChecked, setAgreementChecked] = useState(false);
 
-  const tickers = currentStrategy.tickers || currentStrategy.holdings?.map(h => h.ticker || h.symbol) || [];
-  const extraHoldings = tickers.length > 3 ? tickers.length - 3 : 0;
+  const holdingsData = currentStrategy.holdingsWithLogos || currentStrategy.holdings || [];
+  const extraHoldings = holdingsData.length > 3 ? holdingsData.length - 3 : 0;
 
   const step = minimumInvestment || 0;
 
@@ -71,22 +71,30 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
           {/* Holdings Snapshot with Logos */}
           <div className="flex items-center justify-between pt-3 border-t border-slate-100">
             <div className="flex items-center -space-x-2">
-              {tickers.slice(0, 3).map((ticker) => (
-                <div
-                  key={ticker}
-                  className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-slate-100 overflow-hidden flex-shrink-0"
-                >
-                  <img
-                    src={`https://s3-symbol-logo.tradingview.com/${ticker.toLowerCase()}--big.svg`}
-                    alt={ticker}
-                    className="h-full w-full object-cover"
-                    onError={(e) => {
-                      e.target.style.display = "none";
-                      e.target.parentElement.textContent = ticker.charAt(0);
-                    }}
-                  />
-                </div>
-              ))}
+              {holdingsData.slice(0, 3).map((holding) => {
+                const symbol = holding.ticker || holding.symbol || holding;
+                const logoUrl = holding.logo_url;
+                return (
+                  <div
+                    key={symbol}
+                    className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-slate-100 overflow-hidden flex-shrink-0"
+                  >
+                    {logoUrl ? (
+                      <img
+                        src={logoUrl}
+                        alt={symbol}
+                        className="h-full w-full object-cover"
+                        onError={(e) => {
+                          e.target.style.display = "none";
+                          e.target.parentElement.textContent = symbol.charAt(0);
+                        }}
+                      />
+                    ) : (
+                      <span className="text-[10px] font-bold text-slate-500">{symbol.charAt(0)}</span>
+                    )}
+                  </div>
+                );
+              })}
               {extraHoldings > 0 && (
                 <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-slate-300 text-white text-[10px] font-bold flex-shrink-0">
                   +{extraHoldings}

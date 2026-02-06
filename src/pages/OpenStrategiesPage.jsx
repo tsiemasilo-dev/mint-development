@@ -997,7 +997,13 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
                 type="button"
                 onClick={() => {
                   setSelectedStrategy(null);
-                  onOpenFactsheet({ ...selectedStrategy, calculatedMinInvestment: calculateMinInvestment(selectedStrategy, holdingsBySymbol) });
+                  const hArr = getHoldingsArray(selectedStrategy);
+                  const enrichedHoldings = hArr.map(h => {
+                    const sym = h.ticker || h.symbol || h;
+                    const sec = holdingsBySymbol.get(sym) || holdingsBySymbol.get(normalizeSymbol(sym));
+                    return { ...h, logo_url: sec?.logo_url || null };
+                  });
+                  onOpenFactsheet({ ...selectedStrategy, calculatedMinInvestment: calculateMinInvestment(selectedStrategy, holdingsBySymbol), holdingsWithLogos: enrichedHoldings });
                 }}
                 className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-200/70"
               >
