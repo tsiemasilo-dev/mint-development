@@ -41,6 +41,7 @@ import LegalDocumentationPage from "./pages/LegalDocumentationPage.jsx";
 import IdentityCheckPage from "./pages/IdentityCheckPage.jsx";
 import BankLinkPage from "./pages/BankLinkPage.jsx";
 import InvitePage from "./pages/InvitePage.jsx";
+import InvestTabPage from "./pages/InvestTabPage.jsx";
 
 const initialHash = window.location.hash;
 const isRecoveryMode = initialHash.includes('type=recovery');
@@ -67,7 +68,7 @@ const getTokensFromHash = (hash) => {
 
 const recoveryTokens = isRecoveryMode ? getTokensFromHash(initialHash) : null;
 
-const mainTabs = ['home', 'credit', 'statements', 'transact', 'investments', 'more', 'welcome', 'auth'];
+const mainTabs = ['home', 'credit', 'statements', 'transact', 'invest', 'investments', 'more', 'welcome', 'auth'];
 
 const App = () => {
   const [currentPage, setCurrentPage] = useState(hasError ? "linkExpired" : (isRecoveryMode ? "auth" : "welcome"));
@@ -532,17 +533,17 @@ const App = () => {
       case 'invest':
         return (
           <AppLayout
-            activeTab="home"
+            activeTab="invest"
             onTabChange={noOp}
             onWithdraw={noOp}
             onShowComingSoon={noOp}
             modal={null}
             onCloseModal={noOp}
           >
-            <InvestPage
-              onBack={noOp}
-              onOpenOpenStrategies={noOp}
+            <InvestTabPage
+              onOpenNotifications={noOp}
               onOpenMarkets={noOp}
+              onOpenOpenStrategies={noOp}
             />
           </AppLayout>
         );
@@ -731,6 +732,28 @@ const App = () => {
     );
   }
 
+  if (currentPage === "invest") {
+    return (
+      <AppLayout
+        activeTab="invest"
+        onTabChange={setCurrentPage}
+        onWithdraw={handleWithdrawRequest}
+        onShowComingSoon={handleShowComingSoon}
+        modal={modal}
+        onCloseModal={closeModal}
+      >
+        <InvestTabPage
+          onOpenNotifications={() => {
+            setNotificationReturnPage("invest");
+            navigateTo("notifications");
+          }}
+          onOpenMarkets={() => navigateTo("markets")}
+          onOpenOpenStrategies={() => navigateTo("openStrategies")}
+        />
+      </AppLayout>
+    );
+  }
+
   if (currentPage === "statements") {
     return (
       <AppLayout
@@ -780,27 +803,6 @@ const App = () => {
           onOpenInvest={() => navigateTo("markets")}
         />
       </AppLayout>
-    );
-  }
-
-  if (currentPage === "invest") {
-    return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
-        <AppLayout
-          activeTab="home"
-          onTabChange={setCurrentPage}
-          onWithdraw={handleWithdrawRequest}
-          onShowComingSoon={handleShowComingSoon}
-          modal={modal}
-          onCloseModal={closeModal}
-        >
-          <InvestPage
-            onBack={goBack}
-            onOpenOpenStrategies={() => navigateTo("openStrategies")}
-            onOpenMarkets={() => navigateTo("markets")}
-          />
-        </AppLayout>
-      </SwipeBackWrapper>
     );
   }
 

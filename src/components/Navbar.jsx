@@ -30,6 +30,7 @@ const Navbar = ({ activeTab, setActiveTab, onWithdraw, onShowComingSoon }) => {
   const tabs = [
     { id: "home", label: "Home", icon: Home },
     { id: "statements", label: "Statements", icon: FileText },
+    { id: "invest", label: "Invest", icon: TrendingUp },
     { id: "investments", label: "Portfolio", icon: PieChart },
     { id: "more", label: "More", icon: MoreHorizontal },
   ];
@@ -258,7 +259,7 @@ const Navbar = ({ activeTab, setActiveTab, onWithdraw, onShowComingSoon }) => {
             willChange: "transform"
           }}
         >
-          <div className="relative mx-auto grid w-full max-w-lg grid-cols-5 items-center px-4">
+          <div className="relative mx-auto grid w-full max-w-lg grid-cols-6 items-center px-4">
             {tabs.slice(0, 2).map((tab) => (
               <button
                 key={tab.id}
