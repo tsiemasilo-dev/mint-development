@@ -454,22 +454,27 @@ const HomePage = ({
                   transform: `rotateY(${cardRotation}deg)`,
                   transition: "transform 0.7s ease-out",
                 }}>
-                  <div className="relative h-full p-5 flex flex-col">
+                  <div className="relative h-full p-6 flex flex-col">
                     <div className="flex items-start justify-between">
-                      <MintLogoWhite className="h-8 w-auto" />
+                      <MintLogoWhite className="h-7 w-auto opacity-90" />
+                      <span className="text-[9px] uppercase tracking-[0.3em] text-white/30 font-medium mt-1" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>Premium</span>
                     </div>
-                    <div className="flex-1 flex items-center justify-center">
-                      <p className="text-3xl md:text-4xl font-bold text-white tracking-wider" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+                    <div className="flex-1 flex flex-col items-center justify-center gap-1">
+                      <p className="text-[10px] uppercase tracking-[0.25em] text-white/40 font-medium" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>Available Balance</p>
+                      <p className="text-[28px] md:text-[34px] font-extralight text-white tracking-wide" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", letterSpacing: "0.04em" }}>
                         {isCardVisible ? formatZar(balance) : "••••••••"}
                       </p>
                     </div>
                     <div className="flex items-end justify-between">
-                      <p className="text-base md:text-lg uppercase tracking-[0.2em] text-white font-semibold" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", letterSpacing: "0.15em" }}>
-                        {displayName || "MINT MEMBER"}
-                      </p>
+                      <div>
+                        <p className="text-[9px] uppercase tracking-[0.2em] text-white/35 font-normal mb-1" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>Card Holder</p>
+                        <p className="text-[13px] uppercase tracking-[0.18em] text-white/90 font-light" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif", letterSpacing: "0.18em" }}>
+                          {displayName || "MINT MEMBER"}
+                        </p>
+                      </div>
                       <div className="text-right">
-                        <p className="text-2xl md:text-3xl font-bold text-white tracking-wider" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", fontStyle: "italic" }}>VISA</p>
-                        <p className="text-sm md:text-base text-white/90 tracking-widest font-medium" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>Mint</p>
+                        <p className="text-[22px] md:text-[26px] font-light text-white/90 tracking-wider" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif", fontStyle: "italic", letterSpacing: "0.08em" }}>VISA</p>
+                        <p className="text-[10px] text-white/40 tracking-[0.3em] font-light uppercase" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>Platinum</p>
                       </div>
                     </div>
                   </div>
