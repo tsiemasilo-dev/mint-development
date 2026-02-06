@@ -127,6 +127,7 @@ const HomePage = ({
   });
 
   const cardNormalizedIndex = Math.abs(Math.round(cardRotation / 180) % 2);
+  const isBalanceEnabled = false;
 
   const toggleCardVisibility = () => {
     setIsCardVisible((prev) => {
@@ -137,13 +138,13 @@ const HomePage = ({
   };
 
   const handleCardDragStart = (e) => {
-    if (isCardAnimating) return;
+    if (isCardAnimating || !isBalanceEnabled) return;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     dragStartXRef.current = clientX;
   };
 
   const handleCardDragEnd = (e) => {
-    if (isCardAnimating) return;
+    if (isCardAnimating || !isBalanceEnabled) return;
     const clientX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
     const diff = dragStartXRef.current - clientX;
     if (Math.abs(diff) > 50) {
@@ -159,7 +160,7 @@ const HomePage = ({
   };
 
   const handleDotClick = (idx) => {
-    if (isCardAnimating) return;
+    if (isCardAnimating || !isBalanceEnabled) return;
     if (idx !== cardNormalizedIndex) {
       setIsCardAnimating(true);
       setCardRotation(idx === 1 ? -180 : 0);
@@ -601,8 +602,8 @@ const HomePage = ({
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
               <div className="flex items-center rounded-full bg-white/10 p-1 backdrop-blur-md">
                 {[
-                  { id: "balance", label: "Balance", disabled: true, action: () => {} },
-                  { id: "invest", label: "Invest", disabled: false, action: () => { setHomeTab("invest"); if (cardNormalizedIndex !== 1) { setIsCardAnimating(true); setCardRotation(-180); setTimeout(() => setIsCardAnimating(false), 700); } } },
+                  { id: "balance", label: "Balance", disabled: !isBalanceEnabled, action: () => { if (isBalanceEnabled) { setHomeTab("balance"); if (cardNormalizedIndex !== 0) { setIsCardAnimating(true); setCardRotation(0); setTimeout(() => setIsCardAnimating(false), 700); } } } },
+                  { id: "invest", label: "Invest", disabled: false, action: () => { setHomeTab("invest"); if (isBalanceEnabled && cardNormalizedIndex !== 1) { setIsCardAnimating(true); setCardRotation(-180); setTimeout(() => setIsCardAnimating(false), 700); } } },
                 ].map((tab) => (
                   <button
                     key={tab.id}
@@ -688,18 +689,20 @@ const HomePage = ({
                 )}
               </div>
 
-              <div className="flex justify-center gap-2 mt-3">
-                {[0, 1].map((idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => handleDotClick(idx)}
-                    className={`h-2 rounded-full transition-all duration-300 ${
-                      cardNormalizedIndex === idx ? "w-6 bg-white" : "w-2 bg-white/40 hover:bg-white/60"
-                    }`}
-                  />
-                ))}
-              </div>
+              {isBalanceEnabled && (
+                <div className="flex justify-center gap-2 mt-3">
+                  {[0, 1].map((idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => handleDotClick(idx)}
+                      className={`h-2 rounded-full transition-all duration-300 ${
+                        cardNormalizedIndex === idx ? "w-6 bg-white" : "w-2 bg-white/40 hover:bg-white/60"
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           ) : (
             <SwipeableBalanceCard userId={userId} />
