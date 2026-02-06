@@ -510,6 +510,63 @@ export const getChangeColor = (change) => {
   return change > 0 ? "text-emerald-500" : "text-red-500";
 };
 
+export const getMonthlyReturns = async (strategyId) => {
+  if (!supabase || !strategyId) return {};
+
+  const cacheKey = `monthly_returns_${strategyId}`;
+  const cached = cache.priceHistory.get(cacheKey);
+  if (cached && (Date.now() - cached.timestamp) < 300000) {
+    return cached.data;
+  }
+
+  try {
+    const { data: prices, error } = await supabase
+      .from("strategy_prices")
+      .select("ts, nav")
+      .eq("strategy_id", strategyId)
+      .order("ts", { ascending: true });
+
+    if (error || !prices || prices.length < 2) return {};
+
+    const byMonth = {};
+    prices.forEach(p => {
+      const d = new Date(p.ts);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      if (!byMonth[key]) byMonth[key] = [];
+      byMonth[key].push(p.nav);
+    });
+
+    const result = {};
+    const sortedKeys = Object.keys(byMonth).sort();
+
+    for (let i = 0; i < sortedKeys.length; i++) {
+      const key = sortedKeys[i];
+      const navs = byMonth[key];
+      const endNav = navs[navs.length - 1];
+
+      let startNav;
+      if (i > 0) {
+        const prevNavs = byMonth[sortedKeys[i - 1]];
+        startNav = prevNavs[prevNavs.length - 1];
+      } else {
+        startNav = navs[0];
+      }
+
+      if (startNav && startNav > 0) {
+        const [year, month] = key.split("-");
+        if (!result[year]) result[year] = {};
+        result[year][month] = (endNav - startNav) / startNav;
+      }
+    }
+
+    cache.priceHistory.set(cacheKey, { data: result, timestamp: Date.now() });
+    return result;
+  } catch (err) {
+    console.error("Error computing monthly returns:", err);
+    return {};
+  }
+};
+
 /**
  * Clear strategy data cache
  */

@@ -5,11 +5,14 @@ import { Area, ComposedChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, 
 import { useInvestments } from "../lib/useFinancialData";
 import { useProfile } from "../lib/useProfile";
 import { useUserStrategies, useStrategyChartData } from "../lib/useUserStrategies";
+import { getMonthlyReturns } from "../lib/strategyData";
 import { useStockQuotes, useStockChart } from "../lib/useStockData";
 import SwipeBackWrapper from "../components/SwipeBackWrapper.jsx";
 import PortfolioSkeleton from "../components/PortfolioSkeleton";
 
 
+
+const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const getReturnColor = (value) => {
   if (value == null) return "bg-slate-50 text-slate-600";
@@ -35,6 +38,9 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onBack }) => {
   const [holdingsPage, setHoldingsPage] = useState(0);
   const [tabRipple, setTabRipple] = useState(null);
   const [tabDirection, setTabDirection] = useState(0);
+  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
+  const [calendarData, setCalendarData] = useState({});
+  const [showYearDropdown, setShowYearDropdown] = useState(false);
   const tabOrder = ["strategy", "stocks", "holdings"];
 
   useEffect(() => {
@@ -115,6 +121,18 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onBack }) => {
   }, [showStockDropdown]);
 
   useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (yearDropdownRef.current && !yearDropdownRef.current.contains(event.target)) {
+        setShowYearDropdown(false);
+      }
+    };
+    if (showYearDropdown) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showYearDropdown]);
+
+  useEffect(() => {
     if (!selectedStock && stocksList.length > 0) {
       setSelectedStock(stocksList[0]);
     }
@@ -125,18 +143,25 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onBack }) => {
     setShowStrategyDropdown(false);
   };
 
-  const returnPeriods = useMemo(() => {
-    if (!currentStrategy?.metrics) return [];
-    const m = currentStrategy.metrics;
-    const periods = [
-      { label: "1W", value: m.r_1w },
-      { label: "1M", value: m.r_1m },
-      { label: "3M", value: m.r_3m },
-      { label: "YTD", value: m.r_ytd },
-      { label: "1Y", value: m.r_1y },
-    ];
-    return periods;
-  }, [currentStrategy]);
+  useEffect(() => {
+    if (!currentStrategy?.strategyId) return;
+    let cancelled = false;
+    getMonthlyReturns(currentStrategy.strategyId).then(data => {
+      if (!cancelled) {
+        setCalendarData(data);
+        const years = Object.keys(data).sort().reverse();
+        if (years.length > 0 && !years.includes(String(calendarYear))) {
+          setCalendarYear(Number(years[0]));
+        }
+      }
+    });
+    return () => { cancelled = true; };
+  }, [currentStrategy?.strategyId]);
+
+  const availableCalendarYears = useMemo(() => {
+    return Object.keys(calendarData).sort().reverse();
+  }, [calendarData]);
+  const yearDropdownRef = useRef(null);
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
@@ -723,26 +748,60 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onBack }) => {
           </div>
         </section>
 
-        {/* Period Returns */}
+        {/* Calendar Returns */}
         <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50">
-          <p className="text-sm font-semibold text-slate-900 mb-4">Period Returns</p>
-          {returnPeriods.length === 0 || returnPeriods.every(p => p.value == null) ? (
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <p className="text-sm font-semibold text-slate-900">Calendar Returns</p>
+            {availableCalendarYears.length > 0 && (
+              <div className="relative" ref={yearDropdownRef}>
+                <button
+                  onClick={() => setShowYearDropdown(!showYearDropdown)}
+                  className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-200"
+                >
+                  {calendarYear}
+                  <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${showYearDropdown ? 'rotate-180' : ''}`} />
+                </button>
+                {showYearDropdown && (
+                  <div className="absolute right-0 top-full mt-1 min-w-[80px] bg-white rounded-xl shadow-xl border border-slate-200/50 z-50 overflow-hidden">
+                    {availableCalendarYears.map((year) => (
+                      <button
+                        key={year}
+                        onClick={() => { setCalendarYear(Number(year)); setShowYearDropdown(false); }}
+                        className={`w-full px-4 py-2.5 text-left text-xs font-semibold transition-colors ${
+                          Number(year) === calendarYear
+                            ? "bg-violet-50 text-violet-700"
+                            : "text-slate-600 hover:bg-slate-50"
+                        }`}
+                      >
+                        {year}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          {availableCalendarYears.length === 0 ? (
             <div className="text-center py-4">
-              <p className="text-sm text-slate-500">Return data will be available once you have investment history.</p>
+              <p className="text-sm text-slate-500">Calendar return data will be available once you have investment history.</p>
             </div>
           ) : (
-            <div className="flex gap-2">
-              {returnPeriods.map((period) => (
-                <div
-                  key={period.label}
-                  className={`flex-1 rounded-2xl px-2 py-3 text-center ${getReturnColor(period.value)}`}
-                >
-                  <p className="text-[10px] font-semibold text-slate-500">{period.label}</p>
-                  <p className="mt-1 text-sm font-bold">
-                    {period.value == null ? "—" : `${(Number(period.value) * 100).toFixed(1)}%`}
-                  </p>
-                </div>
-              ))}
+            <div className="grid grid-cols-3 gap-2">
+              {monthNames.map((label, index) => {
+                const monthKey = String(index + 1).padStart(2, "0");
+                const value = calendarData[String(calendarYear)]?.[monthKey];
+                return (
+                  <div
+                    key={`${calendarYear}-${label}`}
+                    className={`rounded-xl px-3 py-2.5 text-center ${getReturnColor(value)}`}
+                  >
+                    <p className="text-[10px] font-semibold text-slate-500">{label}</p>
+                    <p className="mt-0.5 text-sm font-bold">
+                      {value == null ? "—" : `${(Number(value) * 100).toFixed(2)}%`}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
           )}
         </section>
