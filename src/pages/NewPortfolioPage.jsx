@@ -58,8 +58,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onBack }) => {
     }
   }, [currentView]);
 
-  const shouldLoadStocks = activeTab === "stocks" || activeTab === "holdings";
-  const { securities: allSecurities, quotes: liveQuotes, loading: quotesLoading } = useStockQuotes(shouldLoadStocks);
+  const { securities: allSecurities, quotes: liveQuotes, loading: quotesLoading } = useStockQuotes(true);
   const stocksList = useMemo(() => {
     if (!allSecurities || allSecurities.length === 0) return [];
     return allSecurities
