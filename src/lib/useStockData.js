@@ -56,7 +56,7 @@ export function useStockChart(securityId, timeFilter) {
 
   const getTimeframe = (filter) => {
     switch (filter) {
-      case 'D': return '1D';
+      case 'D': return '1W';
       case 'W': return '1W';
       case 'M': return '1M';
       case 'ALL': return '1Y';

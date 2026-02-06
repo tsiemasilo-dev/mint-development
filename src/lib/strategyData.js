@@ -48,6 +48,7 @@ export const getStrategiesWithMetrics = async () => {
           r_1y
         )
       `)
+      .eq("is_active", true)
       .order("name", { ascending: true });
 
     if (strategiesError) {
