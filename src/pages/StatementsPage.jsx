@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { ArrowDownRight, ArrowUpRight, MoreHorizontal, X } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -7,6 +7,7 @@ import NotificationBell from "../components/NotificationBell";
 import Skeleton from "../components/Skeleton";
 import { supabase } from "../lib/supabase";
 import { formatCurrency } from "../lib/formatCurrency";
+import { normalizeSymbol, getHoldingsArray, buildHoldingsBySymbol, getStrategyHoldingsSnapshot } from "../lib/strategyUtils";
 
 const StatementsPage = ({ onOpenNotifications }) => {
   const { profile } = useProfile();
@@ -19,6 +20,8 @@ const StatementsPage = ({ onOpenNotifications }) => {
   const [holdingsRaw, setHoldingsRaw] = useState([]);
   const [strategyRows, setStrategyRows] = useState([]);
   const [financialsRows, setFinancialsRows] = useState([]);
+  const [rawStrategies, setRawStrategies] = useState([]);
+  const [holdingsSecurities, setHoldingsSecurities] = useState([]);
   const [strategiesLoading, setStrategiesLoading] = useState(true);
   const [holdingsLoading, setHoldingsLoading] = useState(true);
   const [financialsLoading, setFinancialsLoading] = useState(true);
@@ -105,6 +108,7 @@ const StatementsPage = ({ onOpenNotifications }) => {
 
         if (isMounted) {
           setStrategyRows(mapped);
+          setRawStrategies(strategies || []);
           setStrategiesLoading(false);
         }
       } catch (error) {
@@ -119,6 +123,47 @@ const StatementsPage = ({ onOpenNotifications }) => {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!supabase || rawStrategies.length === 0) return;
+
+    const fetchHoldingsSecurities = async () => {
+      try {
+        const allTickers = [...new Set(
+          rawStrategies.flatMap((strategy) =>
+            getHoldingsArray(strategy).flatMap((h) => {
+              const rawSymbol = h.ticker || h.symbol || h;
+              const normalized = normalizeSymbol(rawSymbol);
+              return normalized && normalized !== rawSymbol ? [rawSymbol, normalized] : [rawSymbol];
+            })
+          )
+        )];
+
+        if (allTickers.length === 0) return;
+
+        const chunkSize = 50;
+        const results = await Promise.all(
+          Array.from({ length: Math.ceil(allTickers.length / chunkSize) }, (_, i) =>
+            supabase
+              .from("securities")
+              .select("id, symbol, logo_url, name, last_price")
+              .in("symbol", allTickers.slice(i * chunkSize, (i + 1) * chunkSize))
+          )
+        );
+
+        const merged = [];
+        results.forEach(({ data, error }) => {
+          if (!error && data?.length) merged.push(...data);
+        });
+
+        if (merged.length) setHoldingsSecurities(merged);
+      } catch (error) {
+        console.error("Failed to fetch holdings securities", error);
+      }
+    };
+
+    fetchHoldingsSecurities();
+  }, [rawStrategies]);
 
   useEffect(() => {
     let isMounted = true;
@@ -327,6 +372,17 @@ const StatementsPage = ({ onOpenNotifications }) => {
 
     updateMarketValues();
   }, [activeTab, holdingsRaw]);
+
+  const holdingsBySymbol = useMemo(() => buildHoldingsBySymbol(holdingsSecurities), [holdingsSecurities]);
+
+  const strategySnapshotsMap = useMemo(() => {
+    const map = new Map();
+    rawStrategies.forEach((strategy) => {
+      const snapshot = getStrategyHoldingsSnapshot(strategy, holdingsBySymbol);
+      map.set(strategy.short_name || strategy.name, snapshot);
+    });
+    return map;
+  }, [rawStrategies, holdingsBySymbol]);
 
   const combinedRows = [...strategyRows, ...holdingsRows, ...financialsRows];
 
@@ -752,8 +808,16 @@ const StatementsPage = ({ onOpenNotifications }) => {
                         <Skeleton className="h-3 w-14 ml-auto" />
                       </div>
                     </div>
-                    <div className="mt-3">
+                    <div className="mt-3 flex items-center justify-between">
                       <Skeleton className="h-6 w-20 rounded-full" />
+                      <div className="flex items-center gap-2">
+                        <div className="flex -space-x-2">
+                          <Skeleton className="h-7 w-7 rounded-full" />
+                          <Skeleton className="h-7 w-7 rounded-full" />
+                          <Skeleton className="h-7 w-7 rounded-full" />
+                        </div>
+                        <Skeleton className="h-3 w-12" />
+                      </div>
                     </div>
                   </div>
                 ))
@@ -793,6 +857,7 @@ const StatementsPage = ({ onOpenNotifications }) => {
                 if (row.type === "Strategy") {
                   const pct = row.changePct;
                   const hasPct = pct != null && Number.isFinite(pct);
+                  const snapshot = strategySnapshotsMap.get(row.title) || [];
                   return (
                     <button
                       key={idx}
@@ -816,11 +881,37 @@ const StatementsPage = ({ onOpenNotifications }) => {
                           </div>
                         </div>
                       </div>
-                      {row.riskLevel && (
-                        <div className="mt-3 flex flex-wrap gap-2">
+                      <div className="mt-3 flex items-center justify-between">
+                        {row.riskLevel && (
                           <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">{row.riskLevel}</span>
-                        </div>
-                      )}
+                        )}
+                        {snapshot.length > 0 && (
+                          <div className="flex items-center gap-2">
+                            <div className="flex -space-x-2">
+                              {snapshot.slice(0, 3).map((holding) => (
+                                <div
+                                  key={`${row.title}-${holding.id || holding.symbol}-snap`}
+                                  className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-sm"
+                                >
+                                  {holding.logo_url ? (
+                                    <img src={holding.logo_url} alt={holding.name} className="h-full w-full object-cover" />
+                                  ) : (
+                                    <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">
+                                      {holding.symbol?.substring(0, 2)}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                              {snapshot.length > 3 && (
+                                <div className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500">
+                                  +{snapshot.length - 3}
+                                </div>
+                              )}
+                            </div>
+                            <span className="text-[11px] text-slate-400">Holdings</span>
+                          </div>
+                        )}
+                      </div>
                     </button>
                   );
                 }
