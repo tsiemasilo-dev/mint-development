@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "../lib/supabase";
 import {
   ArrowDownToLine,
@@ -22,17 +22,78 @@ import {
   Plus,
   Calendar,
   ChevronRight,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
 import { useRequiredActions } from "../lib/useRequiredActions";
 import { useSumsubStatus } from "../lib/useSumsubStatus";
 import { useFinancialData, useInvestments } from "../lib/useFinancialData";
 import { getStrategiesWithMetrics } from "../lib/strategyData";
+import { getHoldingsArray, normalizeSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot } from "../lib/strategyUtils";
+import { formatZar } from "../lib/formatCurrency";
 import HomeSkeleton from "../components/HomeSkeleton";
 import SwipeableBalanceCard from "../components/SwipeableBalanceCard";
 import OutstandingActionsSection from "../components/OutstandingActionsSection";
 import TransactionHistorySection from "../components/TransactionHistorySection";
 import NotificationBell from "../components/NotificationBell";
+
+const CARD_VISIBILITY_KEY = "mintBalanceVisible";
+
+const MintLogoWhite = ({ className = "" }) => (
+  <svg viewBox="0 0 1826.64 722.72" className={className}>
+    <g>
+      <path fill="#FFFFFF" d="M1089.47,265.13c25.29,12.34,16.69,50.37-11.45,50.63h0s-512.36,0-512.36,0c-14.73,0-26.67,11.94-26.67,26.67v227.94c0,14.73-11.94,26.67-26.67,26.67H26.67c-14.73,0-26.67-11.94-26.67-26.67v-248.55c0-9.54,5.1-18.36,13.38-23.12L526.75,3.55c7.67-4.41,17.03-4.73,24.99-.85l537.73,262.43Z"/>
+      <path fill="#FFFFFF" d="M737.17,457.58c-25.29-12.34-16.69-50.37,11.45-50.63h0s512.36,0,512.36,0c14.73,0,26.67-11.94,26.67-26.67v-227.94c0-14.73,11.94-26.67,26.67-26.67h485.66c14.73,0,26.67,11.94,26.67,26.67v248.55c0,9.54-5.1,18.36-13.38,23.12l-513.38,295.15c-7.67,4.41-17.03,4.73-24.99.85l-537.73-262.43Z"/>
+    </g>
+  </svg>
+);
+
+const MintLogoSilver = ({ className = "" }) => (
+  <svg viewBox="0 0 1826.64 722.72" className={className}>
+    <g opacity="0.12">
+      <path fill="#C0C0C0" d="M1089.47,265.13c25.29,12.34,16.69,50.37-11.45,50.63h0s-512.36,0-512.36,0c-14.73,0-26.67,11.94-26.67,26.67v227.94c0,14.73-11.94,26.67-26.67,26.67H26.67c-14.73,0-26.67-11.94-26.67-26.67v-248.55c0-9.54,5.1-18.36,13.38-23.12L526.75,3.55c7.67-4.41,17.03-4.73,24.99-.85l537.73,262.43Z"/>
+      <path fill="#C0C0C0" d="M737.17,457.58c-25.29-12.34-16.69-50.37,11.45-50.63h0s512.36,0,512.36,0c14.73,0,26.67-11.94,26.67-26.67v-227.94c0-14.73,11.94-26.67,26.67-26.67h485.66c14.73,0,26.67,11.94,26.67,26.67v248.55c0,9.54-5.1,18.36-13.38,23.12l-513.38,295.15c-7.67,4.41-17.03,4.73-24.99.85l-537.73-262.43Z"/>
+    </g>
+  </svg>
+);
+
+const CardContent = ({ children, style, variant = "default" }) => {
+  const bg = variant === "invest"
+    ? "linear-gradient(180deg, #111111 0%, #3b1b7a 50%, #5b21b6 100%)"
+    : "linear-gradient(135deg, #2d1052 0%, #4a1d7a 25%, #6b2fa0 50%, #5a2391 75%, #3d1a6d 100%)";
+
+  return (
+    <div
+      className="absolute inset-0 rounded-[24px] overflow-hidden"
+      style={{
+        background: bg,
+        boxShadow: variant === "invest"
+          ? "0 25px 50px -12px rgba(0, 0, 0, 0.6)"
+          : "0 25px 50px -12px rgba(91, 33, 182, 0.5)",
+        backfaceVisibility: "hidden",
+        ...style,
+      }}
+    >
+      {variant !== "invest" && (
+        <>
+          <div className="absolute inset-0" style={{
+            backgroundImage: `
+              repeating-linear-gradient(45deg, transparent, transparent 8px, rgba(255,255,255,0.02) 8px, rgba(255,255,255,0.02) 9px),
+              repeating-linear-gradient(-45deg, transparent, transparent 8px, rgba(255,255,255,0.02) 8px, rgba(255,255,255,0.02) 9px),
+              repeating-linear-gradient(60deg, transparent, transparent 15px, rgba(255,255,255,0.015) 15px, rgba(255,255,255,0.015) 16px),
+              repeating-linear-gradient(-60deg, transparent, transparent 15px, rgba(255,255,255,0.015) 15px, rgba(255,255,255,0.015) 16px)
+            `,
+          }} />
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <MintLogoSilver className="w-52 h-auto" />
+          </div>
+        </>
+      )}
+      {children}
+    </div>
+  );
+};
 
 const HomePage = ({
   onOpenNotifications,
@@ -49,27 +110,86 @@ const HomePage = ({
   onOpenStrategies,
   onOpenMarkets,
   onOpenNews,
+  onOpenNewsArticle,
 }) => {
   const { profile, loading } = useProfile();
-  const { bankLinked, loading: actionsLoading } = useRequiredActions();
+  const { bankLinked, loading: actionsLoading, refetch: fetchRequiredActions } = useRequiredActions();
   const { kycVerified, kycPending, kycNeedsResubmission } = useSumsubStatus();
-  const { balance, investments, transactions, bestAssets, loading: financialLoading } = useFinancialData();
+  const { balance, investments, transactions, bestAssets, loading: financialLoading, refetch: fetchFinancialData } = useFinancialData();
   const { monthlyChangePercent } = useInvestments();
   const [bestStrategies, setBestStrategies] = useState([]);
+  const [holdingsSecurities, setHoldingsSecurities] = useState([]);
   const [failedLogos, setFailedLogos] = useState({});
   const [showPayModal, setShowPayModal] = useState(false);
   const [showReceiveModal, setShowReceiveModal] = useState(false);
   const [news, setNews] = useState([]);
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [loadingNews, setLoadingNews] = useState(false);
-  
-  // Goals State
+  const [homeTab, setHomeTab] = useState("invest");
+  const [userId, setUserId] = useState(null);
+  const [localBestAssets, setLocalBestAssets] = useState([]);
+
+  const [cardRotation, setCardRotation] = useState(-180);
+  const [isCardAnimating, setIsCardAnimating] = useState(false);
+  const dragStartXRef = useRef(0);
+  const [isCardVisible, setIsCardVisible] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.localStorage.getItem(CARD_VISIBILITY_KEY) !== "false";
+    }
+    return true;
+  });
+
+  const cardNormalizedIndex = Math.abs(Math.round(cardRotation / 180) % 2);
+  const isBalanceEnabled = false;
+
+  const toggleCardVisibility = () => {
+    setIsCardVisible((prev) => {
+      const next = !prev;
+      window.localStorage.setItem(CARD_VISIBILITY_KEY, String(next));
+      return next;
+    });
+  };
+
+  const handleCardDragStart = (e) => {
+    if (isCardAnimating || !isBalanceEnabled) return;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    dragStartXRef.current = clientX;
+  };
+
+  const handleCardDragEnd = (e) => {
+    if (isCardAnimating || !isBalanceEnabled) return;
+    const clientX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
+    const diff = dragStartXRef.current - clientX;
+    if (Math.abs(diff) > 50) {
+      setIsCardAnimating(true);
+      const currentIndex = cardNormalizedIndex;
+      const newIndex = diff > 0 ? 1 : 0;
+      if (newIndex !== currentIndex) {
+        setCardRotation(newIndex === 1 ? -180 : 0);
+        setHomeTab(newIndex === 1 ? "invest" : "balance");
+      }
+      setTimeout(() => setIsCardAnimating(false), 700);
+    }
+  };
+
+  const handleDotClick = (idx) => {
+    if (isCardAnimating || !isBalanceEnabled) return;
+    if (idx !== cardNormalizedIndex) {
+      setIsCardAnimating(true);
+      setCardRotation(idx === 1 ? -180 : 0);
+      setHomeTab(idx === 1 ? "invest" : "balance");
+      setTimeout(() => setIsCardAnimating(false), 700);
+    }
+  };
+
   const [showGoalsModal, setShowGoalsModal] = useState(false);
   const [goals, setGoals] = useState([]);
   const [loadingGoals, setLoadingGoals] = useState(false);
   const [isCreatingGoal, setIsCreatingGoal] = useState(false);
   const [newGoal, setNewGoal] = useState({ name: "", target_amount: "", target_date: "" });
+  const [editingGoalId, setEditingGoalId] = useState(null);
   
+  const assetsToDisplay = localBestAssets.length > 0 ? localBestAssets : (bestAssets || []);
   const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(" ");
   const initials = displayName
     .split(" ")
@@ -79,7 +199,120 @@ const HomePage = ({
     .join("")
     .toUpperCase();
 
-  // Fetch best performing strategies
+  const fetchBestAssets = React.useCallback(async () => {
+    if (!profile?.id) return;
+    try {
+      const { data, error } = await supabase
+        .from('allocations')
+        .select(`
+          value,
+          security_id,
+          securities!inner ( symbol, name, logo_url )
+        `)
+        .eq('user_id', profile.id)
+        .order('value', { ascending: false })
+        .limit(5);
+
+      if (error) throw error;
+
+      const securityIds = data.map(item => item.security_id).filter(Boolean);
+      let metricsMap = {};
+      if (securityIds.length > 0) {
+        const { data: metricsData } = await supabase
+          .from('security_metrics')
+          .select('security_id, change_pct')
+          .in('security_id', securityIds);
+        if (metricsData) {
+          metricsData.forEach(m => { metricsMap[m.security_id] = m.change_pct || 0; });
+        }
+      }
+
+      const formatted = data.map(item => ({
+        symbol: item.securities.symbol,
+        name: item.securities.name,
+        logo: item.securities.logo_url,
+        value: item.value,
+        change: metricsMap[item.security_id] || 0
+      }));
+
+      setLocalBestAssets(formatted); 
+    } catch (e) { 
+      console.error("Asset fetch error:", e.message); 
+    }
+  }, [profile?.id]);
+
+  const fetchGoals = React.useCallback(async () => {
+    if (!profile?.id) return;
+    setLoadingGoals(true);
+    try {
+      const { data, error } = await supabase
+        .from('investment_goals')
+        .select('id, name, target_amount, current_amount, progress_percent')
+        .eq('user_id', profile.id)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setGoals(data || []);
+    } catch (e) { 
+      console.error("Goal fetch error:", e.message); 
+    } finally { 
+      setLoadingGoals(false); 
+    }
+  }, [profile?.id]);
+
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) setUserId(session.user.id);
+    };
+    getUser();
+  }, []);
+
+  useEffect(() => {
+    if (!profile?.id) return;
+
+    const homeSubscription = supabase
+      .channel('home_realtime_updates')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'investment_goals', 
+        filter: `user_id=eq.${profile.id}` 
+      }, () => fetchGoals()) 
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'transactions', 
+        filter: `user_id=eq.${profile.id}` 
+      }, () => {
+        fetchBestAssets(); 
+        if (typeof fetchFinancialData === 'function') fetchFinancialData(); 
+      })
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'required_actions', 
+        filter: `user_id=eq.${profile.id}` 
+      }, () => {
+        if (typeof fetchRequiredActions === 'function') fetchRequiredActions();
+      })
+      .subscribe();
+
+    fetchBestAssets();
+    fetchGoals();
+
+    return () => {
+      supabase.removeChannel(homeSubscription);
+    };
+  }, [profile?.id, fetchBestAssets, fetchGoals, fetchFinancialData, fetchRequiredActions]);
+
+  useEffect(() => {
+    if (showGoalsModal && profile?.id) {
+      fetchGoals();
+    }
+  }, [showGoalsModal, profile?.id, fetchGoals]);
+
   useEffect(() => {
     const fetchStrategies = async () => {
       try {
@@ -95,18 +328,75 @@ const HomePage = ({
     fetchStrategies();
   }, []);
 
+  const holdingsBySymbol = useMemo(() => buildHoldingsBySymbol(holdingsSecurities), [holdingsSecurities]);
+
+  useEffect(() => {
+    const fetchHoldingsSecurities = async () => {
+      if (!supabase || bestStrategies.length === 0) return;
+
+      try {
+        const allTickers = [...new Set(
+          bestStrategies.flatMap((strategy) =>
+            getHoldingsArray(strategy).flatMap((h) => {
+              const rawSymbol = h.ticker || h.symbol || h;
+              const normalizedSym = normalizeSymbol(rawSymbol);
+              return normalizedSym && normalizedSym !== rawSymbol
+                ? [rawSymbol, normalizedSym]
+                : [rawSymbol];
+            })
+          )
+        )];
+
+        if (allTickers.length === 0) return;
+
+        const chunkSize = 50;
+        const chunks = [];
+        for (let i = 0; i < allTickers.length; i += chunkSize) {
+          chunks.push(allTickers.slice(i, i + chunkSize));
+        }
+
+        const results = await Promise.all(
+          chunks.map((symbols) =>
+            supabase
+              .from("securities")
+              .select("id, symbol, logo_url, name")
+              .in("symbol", symbols)
+          )
+        );
+
+        const merged = [];
+        results.forEach(({ data, error }) => {
+          if (error) {
+            console.error("Error fetching holdings securities chunk:", error);
+            return;
+          }
+          if (data?.length) merged.push(...data);
+        });
+
+        if (merged.length) {
+          setHoldingsSecurities(merged);
+        }
+      } catch (error) {
+        console.error("Error fetching holdings securities:", error);
+      }
+    };
+
+    fetchHoldingsSecurities();
+  }, [bestStrategies]);
+
   useEffect(() => {
     const fetchNews = async () => {
       setLoadingNews(true);
       try {
         const { data, error } = await supabase
-          .from('market_news') // Ensure this matches your table name
-          .select('*')
+          .from('News_articles')
+          .select('id, title, source, published_at, body_text')
           .order('published_at', { ascending: false })
           .limit(3);
-        if (!error) setNews(data || []);
+        if (error) throw error;
+        setNews(data || []);
       } catch (err) {
-        console.error("News load error", err);
+        console.error("News error:", err.message);
       } finally {
         setLoadingNews(false);
       }
@@ -114,34 +404,39 @@ const HomePage = ({
     fetchNews();
   }, []);
 
-  // Fetch Goals when modal opens
-  useEffect(() => {
-    if (showGoalsModal && profile?.id) {
-      fetchGoals();
-    }
-  }, [showGoalsModal, profile?.id]);
+  const handleEditClick = (goal) => {
+    setNewGoal({ 
+      name: goal.name, 
+      target_amount: goal.target_amount, 
+      target_date: goal.target_date || "" 
+    });
+    setEditingGoalId(goal.id);
+    setIsCreatingGoal(true);
+  };
 
-  const fetchGoals = async () => {
+  const handleUpdateGoal = async (e) => {
+    e.preventDefault();
+    if (!editingGoalId) return;
     setLoadingGoals(true);
     try {
-      const { data, error } = await supabase
-        .from('investment_goals')
-        .select('*')
-        .eq('user_id', profile.id)
-        .eq('is_active', true)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setGoals(data || []);
-      // If no goals, automatically switch to create mode
-      if (!data || data.length === 0) {
-        setIsCreatingGoal(true);
+      const updatePayload = {
+        name: newGoal.name,
+        target_amount: parseFloat(newGoal.target_amount),
+      };
+      if (newGoal.target_date) {
+        updatePayload.target_date = newGoal.target_date;
       }
-    } catch (error) {
-      console.error("Error fetching goals:", error);
-    } finally {
-      setLoadingGoals(false);
-    }
+      const { error } = await supabase
+        .from('investment_goals')
+        .update(updatePayload)
+        .eq('id', editingGoalId);
+      if (error) throw error;
+      setEditingGoalId(null);
+      setIsCreatingGoal(false);
+      setNewGoal({ name: "", target_amount: "", target_date: "" });
+      fetchGoals();
+    } catch (error) { console.error("Update error:", error.message); }
+    finally { setLoadingGoals(false); }
   };
 
   const handleCreateGoal = async (e) => {
@@ -161,7 +456,6 @@ const HomePage = ({
 
       if (error) throw error;
       
-      // Reset and reload
       setNewGoal({ name: "", target_amount: "", target_date: "" });
       setIsCreatingGoal(false);
       fetchGoals();
@@ -170,6 +464,20 @@ const HomePage = ({
     } finally {
       setLoadingGoals(false);
     }
+  };
+
+  const handleDeleteGoal = async (goalId) => {
+    if (!window.confirm("Are you sure you want to delete this goal?")) return;
+    setLoadingGoals(true);
+    try {
+      const { error } = await supabase.from('investment_goals').delete().eq('id', goalId);
+      if (error) throw error;
+      setEditingGoalId(null);
+      setIsCreatingGoal(false);
+      setNewGoal({ name: "", target_amount: "", target_date: "" });
+      fetchGoals();
+    } catch (error) { console.error("Delete error:", error.message); }
+    finally { setLoadingGoals(false); }
   };
 
   if (loading || financialLoading) {
@@ -205,61 +513,11 @@ const HomePage = ({
       dueAt: "2025-01-20T12:00:00Z",
       createdAt: "2025-01-18T09:00:00Z",
     },
-    {
-      id: "bank-link",
-      title: "Link your bank account",
-      description: "Connect to enable instant transfers",
-      priority: 2,
-      status: bankLinked ? "Linked" : "Not Linked",
-      icon: Landmark,
-      routeName: "actions",
-      isComplete: bankLinked,
-      dueAt: "2025-01-22T12:00:00Z",
-      createdAt: "2025-01-19T09:00:00Z",
-    },
-    {
-      id: "investments",
-      title: "Review investment allocation",
-      description: "Confirm your latest risk profile",
-      priority: 3,
-      status: "Optional",
-      icon: TrendingUp,
-      routeName: "investments",
-      isComplete: false,
-      dueAt: "2025-01-28T12:00:00Z",
-      createdAt: "2025-01-21T09:00:00Z",
-    },
-    {
-      id: "invite",
-      title: "Invite a friend",
-      description: "Share Mint and earn bonus rewards",
-      priority: 4,
-      status: "Optional",
-      icon: UserPlus,
-      routeName: "actions",
-      isComplete: false,
-      dueAt: "2025-02-05T12:00:00Z",
-      createdAt: "2025-01-23T09:00:00Z",
-    },
   ];
 
-  const isActionsAvailable = true;
-  const outstandingActions = isActionsAvailable
-    ? actionsData
-        .filter((action) => !action.isComplete && action.status !== "Optional")
-        .sort((a, b) => {
-          if (a.priority !== b.priority) {
-            return a.priority - b.priority;
-          }
-          const dueA = a.dueAt ? new Date(a.dueAt).getTime() : Number.POSITIVE_INFINITY;
-          const dueB = b.dueAt ? new Date(b.dueAt).getTime() : Number.POSITIVE_INFINITY;
-          if (dueA !== dueB) {
-            return dueA - dueB;
-          }
-          const createdA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const createdB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-          return createdA - createdB;
-        })
+  const showOutstandingActions = !kycVerified || kycNeedsResubmission;
+  const outstandingActions = showOutstandingActions
+    ? actionsData.filter((action) => !action.isComplete)
     : [];
 
   const transactionHistory = transactions.slice(0, 3).map((t) => ({
@@ -282,7 +540,7 @@ const HomePage = ({
     }
   };
 
-  const hasInvestments = bestAssets && bestAssets.length > 0;
+  const hasInvestments = assetsToDisplay.length > 0;
   const hasStrategies = bestStrategies && bestStrategies.length > 0;
 
   return (
@@ -306,40 +564,112 @@ const HomePage = ({
 
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
               <div className="flex items-center rounded-full bg-white/10 p-1 backdrop-blur-md">
-                <button
-                  type="button"
-                  onClick={onOpenInvest}
-                  className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-900 shadow-sm"
-                >
-                  Invest
-                </button>
-                <button
-                  type="button"
-                  onClick={onOpenCredit}
-                  className="rounded-full px-3 py-1.5 text-xs font-semibold text-white/70 transition-all hover:bg-white/10 hover:text-white"
-                >
-                  Credit
-                </button>
-                <button
-                  type="button"
-                  className="rounded-full px-3 py-1.5 text-xs font-semibold text-white/70 transition-all hover:bg-white/10 hover:text-white"
-                >
-                  Transact
-                </button>
+                {[
+                  { id: "balance", label: "Balance", disabled: !isBalanceEnabled, action: () => { if (isBalanceEnabled) { setHomeTab("balance"); if (cardNormalizedIndex !== 0) { setIsCardAnimating(true); setCardRotation(0); setTimeout(() => setIsCardAnimating(false), 700); } } } },
+                  { id: "invest", label: "Invest", disabled: false, action: () => { setHomeTab("invest"); if (isBalanceEnabled && cardNormalizedIndex !== 1) { setIsCardAnimating(true); setCardRotation(-180); setTimeout(() => setIsCardAnimating(false), 700); } } },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={tab.action}
+                    disabled={tab.disabled}
+                    className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
+                      tab.disabled
+                        ? "text-white/20 cursor-not-allowed"
+                        : homeTab === tab.id
+                          ? "bg-white text-slate-900 shadow-sm"
+                          : "text-white/70 hover:bg-white/10 hover:text-white"
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+                <div className="relative flex items-center">
+                  <span className="rounded-full px-3 py-1.5 text-xs font-semibold text-white/30 cursor-default">Credit</span>
+                  <span className="rounded-full px-3 py-1.5 text-xs font-semibold text-white/30 cursor-default">Transact</span>
+                </div>
               </div>
             </div>
 
             <NotificationBell onClick={onOpenNotifications} />
           </header>
 
-          <SwipeableBalanceCard
-            amount={balance}
-            totalInvestments={investments}
-            investmentChange={monthlyChangePercent || 0}
-            bestPerformingAssets={bestAssets}
-            userName={displayName}
-            onPressMintBalance={handleMintBalancePress}
-          />
+          {homeTab === "balance" || homeTab === "invest" ? (
+            <div className="relative select-none">
+              <div
+                className="relative w-full touch-pan-y"
+                style={{ aspectRatio: "1.7 / 1", perspective: "1000px", transformStyle: "preserve-3d" }}
+                onTouchStart={handleCardDragStart}
+                onTouchEnd={handleCardDragEnd}
+                onMouseDown={handleCardDragStart}
+                onMouseUp={handleCardDragEnd}
+              >
+                <CardContent style={{
+                  transform: `rotateY(${cardRotation}deg)`,
+                  transition: "transform 0.7s ease-out",
+                }}>
+                  <div className="relative h-full p-6 flex flex-col">
+                    <div className="flex items-start justify-between">
+                      <MintLogoWhite className="h-7 w-auto opacity-90" />
+                    </div>
+                    <div className="flex-1 flex flex-col items-center justify-center gap-1">
+                      <p className="text-[10px] uppercase tracking-[0.25em] text-white/40 font-medium" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>Available Balance</p>
+                      <p className="text-[28px] md:text-[34px] font-extralight text-white tracking-wide" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", letterSpacing: "0.04em" }}>
+                        {isCardVisible ? formatZar(balance) : "••••••••"}
+                      </p>
+                    </div>
+                    <div className="flex items-end justify-between">
+                      <div>
+                        <p className="text-[9px] uppercase tracking-[0.2em] text-white/35 font-normal mb-1" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>Card Holder</p>
+                        <p className="text-[13px] uppercase tracking-[0.18em] text-white/90 font-light" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif", letterSpacing: "0.18em" }}>
+                          {displayName || "MINT MEMBER"}
+                        </p>
+                      </div>
+                      <div className="text-right flex items-end">
+                        <p className="text-[22px] md:text-[26px] font-light text-white/90 tracking-wider mb-[-2px]" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif", fontStyle: "italic", letterSpacing: "0.08em" }}>MINT</p>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+
+                <CardContent variant="invest" style={{
+                  transform: `rotateY(${cardRotation + 180}deg)`,
+                  transition: "transform 0.7s ease-out",
+                }}>
+                  <div className="relative h-full overflow-hidden">
+                    <SwipeableBalanceCard userId={userId} isBackFacing={cardNormalizedIndex === 1} forceVisible={isCardVisible} />
+                  </div>
+                </CardContent>
+
+                {cardNormalizedIndex === 0 && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); toggleCardVisibility(); }}
+                    className="absolute top-4 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20"
+                  >
+                    {isCardVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                  </button>
+                )}
+              </div>
+
+              {isBalanceEnabled && (
+                <div className="flex justify-center gap-2 mt-3">
+                  {[0, 1].map((idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => handleDotClick(idx)}
+                      className={`h-2 rounded-full transition-all duration-300 ${
+                        cardNormalizedIndex === idx ? "w-6 bg-white" : "w-2 bg-white/40 hover:bg-white/60"
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <SwipeableBalanceCard userId={userId} />
+          )}
         </div>
       </div>
 
@@ -348,14 +678,14 @@ const HomePage = ({
           {[
             { label: <>Open<br />Strategies</>, icon: LayoutGrid, onClick: onOpenStrategies || onOpenInvest },
             { label: "Markets", icon: TrendingUp, onClick: onOpenMarkets || onOpenInvest },
-            { label: "News", icon: Newspaper, onClick: onOpenNews || onOpenInvest },
+            { label: "News", icon: Newspaper, onClick: () => (onOpenNews ? onOpenNews("news") : (onOpenInvest && onOpenInvest("news"))) },
             { label: "Goals", icon: Target, onClick: () => setShowGoalsModal(true) },
           ].map((item, index) => {
             const Icon = item.icon;
             return (
               <button
                 key={index}
-                className="flex flex-col items-center gap-2 rounded-2xl bg-white px-2 py-3 text-slate-700 shadow-md"
+                className="flex flex-col items-center gap-2 rounded-2xl bg-white px-2 py-3 text-slate-700 shadow-md transition-all active:scale-95 active:shadow-sm"
                 type="button"
                 onClick={item.onClick}
               >
@@ -402,7 +732,7 @@ const HomePage = ({
           
           {hasInvestments ? (
             <div className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {bestAssets.slice(0, 5).map((asset) => (
+              {assetsToDisplay.slice(0, 5).map((asset) => (
                 <div
                   key={asset.symbol}
                   className="flex min-w-[260px] flex-1 snap-start items-center gap-4 rounded-3xl bg-white p-4 shadow-md"
@@ -431,10 +761,10 @@ const HomePage = ({
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-semibold text-slate-900">
-                      R{typeof asset.value === 'number' ? asset.value.toLocaleString() : asset.value}
+                      R{typeof asset.value === 'number' ? asset.value.toLocaleString() : (asset.value || 0)}
                     </p>
                     <p className={`text-xs font-semibold ${asset.change >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                      {asset.change >= 0 ? '+' : ''}{typeof asset.change === 'number' ? asset.change.toFixed(2) : asset.change}%
+                      {asset.change >= 0 ? '+' : ''}{typeof asset.change === 'number' ? asset.change.toFixed(2) : (asset.change || '0.00')}%
                     </p>
                   </div>
                 </div>
@@ -449,7 +779,7 @@ const HomePage = ({
               <p className="text-xs text-slate-500 mb-4">Start investing to see your best performing assets here</p>
               <button
                 type="button"
-                onClick={onOpenInvest}
+                onClick={() => onOpenInvest && onOpenInvest("invest")}
                 className="inline-flex items-center justify-center rounded-full bg-slate-900 px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.15em] text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5"
               >
                 Make your first investment
@@ -484,30 +814,68 @@ const HomePage = ({
           
           {hasStrategies ? (
             <div className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {bestStrategies.slice(0, 5).map((strategy) => (
-                <div
-                  key={strategy.id}
-                  className="flex min-w-[260px] flex-1 snap-start items-center gap-4 rounded-3xl bg-white p-4 shadow-md"
-                >
-                  <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-slate-50 shadow-sm ring-1 ring-slate-100">
-                    <span className="text-xs font-bold text-slate-700">
-                      {strategy.name?.substring(0, 2).toUpperCase() || "ST"}
-                    </span>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-slate-900 line-clamp-1">{strategy.name}</p>
-                    <p className="text-xs text-slate-500 line-clamp-1">{strategy.provider_name || strategy.risk_level}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-slate-900">
-                      {strategy.last_close ? `R${strategy.last_close.toFixed(2)}` : "—"}
-                    </p>
-                    <p className={`text-xs font-semibold ${strategy.change_pct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                      {strategy.change_pct >= 0 ? '+' : ''}{strategy.change_pct ? strategy.change_pct.toFixed(2) : '0.00'}%
-                    </p>
-                  </div>
-                </div>
-              ))}
+              {bestStrategies.slice(0, 5).map((strategy) => {
+                const holdingsSnapshot = getStrategyHoldingsSnapshot(strategy, holdingsBySymbol);
+                const pct = strategy.change_pct || 0;
+                return (
+                  <button
+                    key={strategy.id}
+                    type="button"
+                    onClick={() => onOpenStrategies && onOpenStrategies(strategy)}
+                    className="flex-shrink-0 w-[280px] snap-start rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all active:scale-[0.97]"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex-1 flex items-start justify-between gap-4">
+                        <div className="text-left space-y-1 min-w-0">
+                          <p className="truncate text-sm font-semibold text-slate-900">{strategy.name}</p>
+                          <p className="text-xs text-slate-600 line-clamp-1">
+                            {strategy.risk_level || 'Balanced'}{strategy.objective ? ` • ${strategy.objective}` : ''}
+                          </p>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-sm font-semibold text-slate-900">
+                            {strategy.last_close ? `R${strategy.last_close.toFixed(2)}` : '—'}
+                          </p>
+                          <p className={`text-xs font-semibold ${pct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                            {pct >= 0 ? '+' : ''}{pct.toFixed(2)}%
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between">
+                      {strategy.risk_level && (
+                        <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">{strategy.risk_level}</span>
+                      )}
+                      {holdingsSnapshot.length > 0 && (
+                        <div className="flex items-center gap-2">
+                          <div className="flex -space-x-2">
+                            {holdingsSnapshot.slice(0, 3).map((h) => (
+                              <div
+                                key={`${strategy.id}-${h.id || h.symbol}-snap`}
+                                className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-sm"
+                              >
+                                {h.logo_url ? (
+                                  <img src={h.logo_url} alt={h.name} className="h-full w-full object-cover" />
+                                ) : (
+                                  <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">
+                                    {h.symbol?.substring(0, 2)}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                            {holdingsSnapshot.length > 3 && (
+                              <div className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500">
+                                +{holdingsSnapshot.length - 3}
+                              </div>
+                            )}
+                          </div>
+                          <span className="text-[11px] text-slate-400">Holdings</span>
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           ) : (
             <div className="rounded-3xl bg-white p-6 shadow-md text-center">
@@ -526,6 +894,8 @@ const HomePage = ({
             </div>
           )}
         </section>
+
+        {/* Market Insights */}
         <section>
           <div className="flex items-end justify-between px-5 mb-3">
             <div className="space-y-1">
@@ -540,47 +910,46 @@ const HomePage = ({
               </div>
             </div>
             <button 
-              onClick={() => onOpenNews()} // Opens the full list
+              onClick={() => onOpenNews && onOpenNews()}
               className="mb-1 text-xs font-semibold text-violet-600 active:opacity-70"
             >
               View all
             </button>
           </div>
 
-          <div className="space-y-3">
+          <div className="rounded-3xl bg-white shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] overflow-hidden divide-y divide-slate-100">
             {news.length > 0 ? (
-              news.map((item) => (
+              news.slice(0, 4).map((item) => (
                 <button
                   key={item.id}
-                  onClick={() => onOpenNews(item)} // Opens specific article
-                  className="flex w-full items-center gap-4 rounded-3xl bg-white p-3 shadow-md transition-active active:scale-[0.98]"
+                  onClick={() => onOpenNewsArticle && onOpenNewsArticle(item.id)}
+                  className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors active:bg-slate-50"
                 >
-                  {item.image_url && (
-                    <img 
-                      src={item.image_url} 
-                      alt="" 
-                      className="h-16 w-16 rounded-2xl object-cover bg-slate-100"
-                    />
-                  )}
-                  <div className="flex-1 text-left">
-                    <div className="flex items-center gap-2 mb-1">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1.5">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-violet-600 bg-violet-50 px-2 py-0.5 rounded-md">
-                        {item.category || 'Market'}
+                        {item.source || 'Market'}
                       </span>
                       <span className="text-[10px] text-slate-400">
                         {formatDate(item.published_at)}
                       </span>
                     </div>
-                    <p className="text-sm font-semibold text-slate-900 line-clamp-2 leading-snug">
+                    <p className="text-[13px] font-semibold text-slate-900 line-clamp-2 leading-snug">
                       {item.title}
                     </p>
                   </div>
-                  <ChevronRight className="h-4 w-4 text-slate-300" />
+                  <ChevronRight className="h-4 w-4 text-slate-300 flex-shrink-0" />
                 </button>
               ))
             ) : !loadingNews && (
-              <div className="rounded-3xl bg-white p-6 text-center shadow-md">
+              <div className="p-6 text-center">
                 <p className="text-xs text-slate-400">No recent insights available.</p>
+              </div>
+            )}
+            
+            {loadingNews && (
+              <div className="flex justify-center py-6">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-violet-100 border-t-violet-600" />
               </div>
             )}
           </div>
@@ -721,132 +1090,154 @@ const HomePage = ({
       )}
 
       {showGoalsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4">
+        <div className="fixed inset-0 z-[950] flex items-end justify-center bg-slate-900/60 px-4 pb-20 sm:items-center sm:pb-0">
           <button
             type="button"
-            className="absolute inset-0 h-full w-full cursor-default"
+            className="absolute inset-0 h-full w-full cursor-default backdrop-blur-sm"
             aria-label="Close modal"
-            onClick={() => setShowGoalsModal(false)}
+            onClick={() => {
+              setShowGoalsModal(false);
+              setIsCreatingGoal(false);
+              setEditingGoalId(null);
+            }}
           />
-          <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-[32px] bg-white shadow-2xl">
+          
+          <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-[32px] bg-white shadow-2xl animate-in slide-in-from-bottom duration-300">
             <div className="flex items-center justify-center pt-3">
               <div className="h-1.5 w-12 rounded-full bg-slate-200" />
             </div>
             
             <div className="p-6">
-              <div className="mb-6 flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-slate-900">
-                  {isCreatingGoal ? "Create Goal" : "Your Goals"}
+              <header className="mb-6 flex items-center justify-between">
+                <h2 className="text-xl font-bold text-slate-900">
+                  {editingGoalId ? "Edit Goal" : isCreatingGoal ? "New Goal" : "Your Goals"}
                 </h2>
                 <button
                   type="button"
-                  onClick={() => setShowGoalsModal(false)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  onClick={() => {
+                    setShowGoalsModal(false);
+                    setIsCreatingGoal(false);
+                    setEditingGoalId(null);
+                  }}
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-50 text-slate-400"
                   aria-label="Close"
                 >
-                  <X className="h-4 w-4" />
+                  <X size={20} />
                 </button>
-              </div>
+              </header>
 
-              <div className="min-h-[300px]">
+              <div className="max-h-[60vh] overflow-y-auto pr-1">
                 {loadingGoals ? (
-                  <div className="flex h-64 items-center justify-center">
+                  <div className="flex h-40 flex-col items-center justify-center">
                     <div className="h-8 w-8 animate-spin rounded-full border-4 border-violet-100 border-t-violet-600" />
                   </div>
-                ) : isCreatingGoal ? (
-                  <form onSubmit={handleCreateGoal} className="space-y-4">
+                ) : isCreatingGoal || editingGoalId ? (
+                  <form onSubmit={editingGoalId ? handleUpdateGoal : handleCreateGoal} className="space-y-4">
                     <div>
-                      <label className="mb-1.5 block text-sm font-semibold text-slate-700">Goal Name</label>
+                      <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">Goal Name</label>
                       <input
                         type="text"
                         placeholder="e.g. New Car, Holiday"
                         value={newGoal.name}
                         onChange={(e) => setNewGoal(prev => ({ ...prev, name: e.target.value }))}
-                        className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm focus:border-violet-500 focus:outline-none"
+                        className="w-full rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/20"
                         required
                       />
                     </div>
                     <div>
-                      <label className="mb-1.5 block text-sm font-semibold text-slate-700">Target Amount</label>
-                      <div className="relative">
-                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">R</span>
-                        <input
-                          type="number"
-                          placeholder="0.00"
-                          value={newGoal.target_amount}
-                          onChange={(e) => setNewGoal(prev => ({ ...prev, target_amount: e.target.value }))}
-                          className="w-full rounded-2xl border border-slate-200 pl-8 pr-4 py-3 text-sm focus:border-violet-500 focus:outline-none"
-                          required
-                        />
-                      </div>
+                      <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">Target Amount (R)</label>
+                      <input
+                        type="number"
+                        placeholder="0.00"
+                        value={newGoal.target_amount}
+                        onChange={(e) => setNewGoal(prev => ({ ...prev, target_amount: e.target.value }))}
+                        className="w-full rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+                        required
+                      />
                     </div>
                     <div>
-                      <label className="mb-1.5 block text-sm font-semibold text-slate-700">Target Date (Optional)</label>
+                      <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">Target Date (Optional)</label>
                       <input
                         type="date"
                         value={newGoal.target_date}
                         onChange={(e) => setNewGoal(prev => ({ ...prev, target_date: e.target.value }))}
-                        className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm focus:border-violet-500 focus:outline-none"
+                        className="w-full rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/20"
                       />
                     </div>
                     
-                    <div className="pt-4 flex gap-3">
-                      {goals.length > 0 && (
+                    <div className="flex flex-col gap-3 pt-2">
+                      <button
+                        type="submit"
+                        disabled={loadingGoals}
+                        className="w-full rounded-2xl bg-[#31005e] py-4 font-bold uppercase tracking-widest text-white shadow-lg transition-active active:scale-95"
+                      >
+                        {editingGoalId ? "Update Goal" : "Save Goal"}
+                      </button>
+                      
+                      {editingGoalId && (
                         <button
                           type="button"
-                          onClick={() => setIsCreatingGoal(false)}
-                          className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-semibold text-slate-600"
+                          onClick={() => handleDeleteGoal(editingGoalId)}
+                          className="w-full rounded-2xl bg-rose-50 py-4 text-xs font-bold uppercase tracking-widest text-rose-600 transition-active active:scale-95"
+                        >
+                          Delete Goal
+                        </button>
+                      )}
+
+                      {goals.length > 0 && !editingGoalId && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsCreatingGoal(false);
+                            setNewGoal({ name: "", target_amount: "", target_date: "" });
+                          }}
+                          className="w-full rounded-2xl border border-slate-200 py-3 text-sm font-semibold text-slate-600"
                         >
                           Cancel
                         </button>
                       )}
-                      <button
-                        type="submit"
-                        disabled={loadingGoals}
-                        className="flex-1 rounded-2xl bg-violet-600 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-200"
-                      >
-                        Create Goal
-                      </button>
                     </div>
                   </form>
                 ) : (
                   <div className="space-y-4">
                     {goals.map((goal) => (
-                      <div key={goal.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-                        <div className="mb-2 flex items-start justify-between">
+                      <div key={goal.id} className="group relative rounded-3xl border border-slate-100 bg-white p-5 shadow-sm transition-all hover:shadow-md">
+                        <div className="mb-3 flex items-start justify-between">
                           <div>
-                            <h3 className="font-semibold text-slate-900">{goal.name}</h3>
-                            <p className="text-xs text-slate-500">
+                            <h3 className="font-bold text-slate-900">{goal.name}</h3>
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                               Target: R{Number(goal.target_amount).toLocaleString()}
                             </p>
                           </div>
-                          <div className="rounded-full bg-white p-2 shadow-sm">
-                            <Target className="h-5 w-5 text-violet-600" />
+                          <button 
+                            onClick={() => handleEditClick(goal)}
+                            className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-50 text-slate-400 hover:bg-violet-50 hover:text-violet-600"
+                          >
+                            <FileSignature size={18} />
+                          </button>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
+                            <span className="text-violet-600">{Math.round(goal.progress_percent || 0)}% Complete</span>
+                            <span className="text-slate-300">R{(goal.target_amount - (goal.current_amount || 0)).toLocaleString()} Left</span>
                           </div>
-                        </div>
-                        <div className="mb-1 flex items-end justify-between text-xs">
-                          <span className="font-medium text-slate-700">
-                            {Number(goal.progress_percent || 0).toFixed(0)}%
-                          </span>
-                          <span className="text-slate-500">
-                            R{Number(goal.current_amount || 0).toLocaleString()} saved
-                          </span>
-                        </div>
-                        <div className="h-2 w-full overflow-hidden rounded-full bg-white">
-                          <div 
-                            className="h-full rounded-full bg-violet-500 transition-all duration-500"
-                            style={{ width: `${Math.min(100, goal.progress_percent || 0)}%` }}
-                          />
+                          <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-violet-600 to-purple-500 rounded-full transition-all duration-1000"
+                              style={{ width: `${goal.progress_percent || 0}%` }}
+                            />
+                          </div>
                         </div>
                       </div>
                     ))}
                     
                     <button
                       onClick={() => setIsCreatingGoal(true)}
-                      className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-300 py-4 text-sm font-semibold text-slate-500 transition-all hover:border-violet-300 hover:bg-violet-50 hover:text-violet-600"
+                      className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-200 py-4 text-sm font-bold text-slate-400 transition-all hover:border-violet-300 hover:bg-violet-50 active:scale-95"
                     >
-                      <Plus className="h-4 w-4" />
-                      Add New Goal
+                      <Plus size={18} />
+                      <span>Add New Goal</span>
                     </button>
                   </div>
                 )}

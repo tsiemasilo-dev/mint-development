@@ -10,6 +10,7 @@ import CreditPage from "./pages/CreditPage.jsx";
 import CreditApplyPage from "./pages/CreditApplyPage.jsx";
 import CreditRepayPage from "./pages/CreditRepayPage.jsx";
 import InvestmentsPage from "./pages/InvestmentsPage.jsx";
+import NewPortfolioPage from "./pages/NewPortfolioPage.jsx";
 import InvestPage from "./pages/InvestPage.jsx";
 import InvestAmountPage from "./pages/InvestAmountPage.jsx";
 import PaymentPage from "./pages/PaymentPage.jsx";
@@ -37,6 +38,7 @@ import ActionsPage from "./pages/ActionsPage.jsx";
 import ProfileDetailsPage from "./pages/ProfileDetailsPage.jsx";
 import ChangePasswordPage from "./pages/ChangePasswordPage.jsx";
 import LegalDocumentationPage from "./pages/LegalDocumentationPage.jsx";
+import StatementsPage from "./pages/StatementsPage.jsx";
 import IdentityCheckPage from "./pages/IdentityCheckPage.jsx";
 import BankLinkPage from "./pages/BankLinkPage.jsx";
 import InvitePage from "./pages/InvitePage.jsx";
@@ -66,7 +68,7 @@ const getTokensFromHash = (hash) => {
 
 const recoveryTokens = isRecoveryMode ? getTokensFromHash(initialHash) : null;
 
-const mainTabs = ['home', 'credit', 'transact', 'investments', 'more', 'welcome', 'auth'];
+const mainTabs = ['home', 'credit', 'transact', 'investments', 'statements', 'more', 'welcome', 'auth'];
 
 const App = () => {
   const [currentPage, setCurrentPage] = useState(hasError ? "linkExpired" : (isRecoveryMode ? "auth" : "welcome"));
@@ -79,6 +81,7 @@ const App = () => {
   const [selectedSecurity, setSelectedSecurity] = useState(null);
   const [selectedStrategy, setSelectedStrategy] = useState(null);
   const [selectedArticleId, setSelectedArticleId] = useState(null);
+  const [marketsInitialView, setMarketsInitialView] = useState(null);
   const [investmentAmount, setInvestmentAmount] = useState(0);
   const [stockCheckout, setStockCheckout] = useState({ security: null, amount: 0 });
   const recoveryHandled = useRef(false);
@@ -115,6 +118,16 @@ const App = () => {
     
     setCurrentPage(page);
   }, [currentPage, cacheCurrentPageState]);
+
+  const handleTabChange = useCallback((tab) => {
+    if (tab === 'statements') {
+      navigateTo(tab);
+    } else {
+      navigationHistory.current = [];
+      setPreviousPageName(null);
+      setCurrentPage(tab);
+    }
+  }, [navigateTo]);
 
   const goBack = useCallback(() => {
     if (navigationHistory.current.length > 0) {
@@ -216,10 +229,24 @@ const App = () => {
       setIsCheckingAuth(false);
     };
     
+    const checkExistingSession = async () => {
+      if (supabase && !isRecoveryMode && !hasError) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            setCurrentPage("home");
+          }
+        } catch (err) {
+          console.error("Session check error:", err);
+        }
+      }
+      setIsCheckingAuth(false);
+    };
+
     if (isRecoveryMode) {
       setupRecoverySession();
     } else {
-      setIsCheckingAuth(false);
+      checkExistingSession();
     }
   }, []);
 
@@ -344,6 +371,19 @@ const App = () => {
             />
           </AppLayout>
         );
+      case 'statements':
+        return (
+          <AppLayout
+            activeTab="statements"
+            onTabChange={noOp}
+            onWithdraw={noOp}
+            onShowComingSoon={noOp}
+            modal={null}
+            onCloseModal={noOp}
+          >
+            <StatementsPage onOpenNotifications={noOp} />
+          </AppLayout>
+        );
       case 'investments':
         return (
           <AppLayout
@@ -354,7 +394,8 @@ const App = () => {
             modal={null}
             onCloseModal={noOp}
           >
-            <InvestmentsPage
+            <NewPortfolioPage
+              onBack={noOp}
               onOpenNotifications={noOp}
               onOpenInvest={noOp}
             />
@@ -603,6 +644,14 @@ const App = () => {
     return renderPageContent(previousPageName, true);
   }, [previousPageName, currentPage, renderPageContent]);
 
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0d0d12]">
+        <div className="w-8 h-8 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   if (currentPage === "linkExpired") {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center px-6">
@@ -626,7 +675,7 @@ const App = () => {
     return (
       <AppLayout
         activeTab="home"
-        onTabChange={setCurrentPage}
+        onTabChange={handleTabChange}
         onWithdraw={handleWithdrawRequest}
         onShowComingSoon={handleShowComingSoon}
         modal={modal}
@@ -644,9 +693,13 @@ const App = () => {
           onOpenCredit={() => setCurrentPage("credit")}
           onOpenCreditApply={() => navigateTo("creditApply")}
           onOpenCreditRepay={() => navigateTo("creditRepay")}
-          onOpenInvest={() => navigateTo("markets")}
+          onOpenInvest={() => { setMarketsInitialView(null); navigateTo("markets"); }}
           onOpenWithdraw={handleWithdrawRequest}
           onOpenSettings={() => navigateTo("settings")}
+          onOpenStrategies={() => { setMarketsInitialView("openstrategies"); navigateTo("markets"); }}
+          onOpenMarkets={() => { setMarketsInitialView("invest"); navigateTo("markets"); }}
+          onOpenNews={() => { setMarketsInitialView("news"); navigateTo("markets"); }}
+          onOpenNewsArticle={(articleId) => { setSelectedArticleId(articleId); navigateTo("newsArticle"); }}
         />
       </AppLayout>
     );
@@ -655,7 +708,7 @@ const App = () => {
     return (
       <AppLayout
         activeTab="credit"
-        onTabChange={setCurrentPage}
+        onTabChange={handleTabChange}
         onWithdraw={handleWithdrawRequest}
         onShowComingSoon={handleShowComingSoon}
         modal={modal}
@@ -676,7 +729,7 @@ const App = () => {
     return (
       <AppLayout
         activeTab="credit"
-        onTabChange={setCurrentPage}
+        onTabChange={handleTabChange}
         onWithdraw={handleWithdrawRequest}
         onShowComingSoon={handleShowComingSoon}
         modal={modal}
@@ -694,11 +747,33 @@ const App = () => {
     );
   }
 
+  if (currentPage === "statements") {
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <AppLayout
+          activeTab="statements"
+          onTabChange={handleTabChange}
+          onWithdraw={handleWithdrawRequest}
+          onShowComingSoon={handleShowComingSoon}
+          modal={modal}
+          onCloseModal={closeModal}
+        >
+          <StatementsPage
+            onOpenNotifications={() => {
+              setNotificationReturnPage("statements");
+              navigateTo("notifications");
+            }}
+          />
+        </AppLayout>
+      </SwipeBackWrapper>
+    );
+  }
+
   if (currentPage === "transact") {
     return (
       <AppLayout
         activeTab="transact"
-        onTabChange={setCurrentPage}
+        onTabChange={handleTabChange}
         onWithdraw={handleWithdrawRequest}
         onShowComingSoon={handleShowComingSoon}
         modal={modal}
@@ -713,13 +788,14 @@ const App = () => {
     return (
       <AppLayout
         activeTab="investments"
-        onTabChange={setCurrentPage}
+        onTabChange={handleTabChange}
         onWithdraw={handleWithdrawRequest}
         onShowComingSoon={handleShowComingSoon}
         modal={modal}
         onCloseModal={closeModal}
       >
-        <InvestmentsPage
+        <NewPortfolioPage
+          onBack={goBack}
           onOpenNotifications={() => {
             setNotificationReturnPage("investments");
             navigateTo("notifications");
@@ -735,7 +811,7 @@ const App = () => {
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <AppLayout
           activeTab="home"
-          onTabChange={setCurrentPage}
+          onTabChange={handleTabChange}
           onWithdraw={handleWithdrawRequest}
           onShowComingSoon={handleShowComingSoon}
           modal={modal}
@@ -756,6 +832,7 @@ const App = () => {
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <MarketsPage
           onBack={goBack}
+          initialViewMode={marketsInitialView}
           onOpenNotifications={() => {
             setNotificationReturnPage("markets");
             navigateTo("notifications");
@@ -910,7 +987,7 @@ const App = () => {
     return (
       <AppLayout
         activeTab="more"
-        onTabChange={setCurrentPage}
+        onTabChange={handleTabChange}
         onWithdraw={handleWithdrawRequest}
         onShowComingSoon={handleShowComingSoon}
         modal={modal}
@@ -926,7 +1003,7 @@ const App = () => {
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <AppLayout
           activeTab="more"
-          onTabChange={setCurrentPage}
+          onTabChange={handleTabChange}
           onWithdraw={handleWithdrawRequest}
           onShowComingSoon={handleShowComingSoon}
           modal={modal}
@@ -943,7 +1020,7 @@ const App = () => {
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <AppLayout
           activeTab="more"
-          onTabChange={setCurrentPage}
+          onTabChange={handleTabChange}
           onWithdraw={handleWithdrawRequest}
           onShowComingSoon={handleShowComingSoon}
           modal={modal}
@@ -995,7 +1072,7 @@ const App = () => {
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <AppLayout
           activeTab="home"
-          onTabChange={setCurrentPage}
+          onTabChange={handleTabChange}
           onWithdraw={handleWithdrawRequest}
           onShowComingSoon={handleShowComingSoon}
           modal={modal}
@@ -1020,7 +1097,7 @@ const App = () => {
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <AppLayout
           activeTab="home"
-          onTabChange={setCurrentPage}
+          onTabChange={handleTabChange}
           onWithdraw={handleWithdrawRequest}
           onShowComingSoon={handleShowComingSoon}
           modal={modal}

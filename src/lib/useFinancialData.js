@@ -21,13 +21,13 @@ export const useFinancialData = () => {
     }
 
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData?.user) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
         setData((prev) => ({ ...prev, loading: false }));
         return;
       }
 
-      const userId = userData.user.id;
+      const userId = session.user.id;
 
       const [
         balanceResult,
@@ -122,13 +122,13 @@ export const useMintBalance = () => {
       }
 
       try {
-        const { data: userData } = await supabase.auth.getUser();
-        if (!userData?.user) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) {
           setData((prev) => ({ ...prev, loading: false }));
           return;
         }
 
-        const userId = userData.user.id;
+        const userId = session.user.id;
 
         const [balanceResult, holdingsResult, allTransactionsResult, recentTransactionsResult] = await Promise.all([
           supabase.from("user_balances").select("*").eq("user_id", userId).maybeSingle(),
@@ -194,8 +194,8 @@ export const useTransactions = (limit = 20) => {
       }
 
       try {
-        const { data: userData } = await supabase.auth.getUser();
-        if (!userData?.user) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) {
           setLoading(false);
           return;
         }
@@ -203,7 +203,7 @@ export const useTransactions = (limit = 20) => {
         const { data, error } = await supabase
           .from("transactions")
           .select("*")
-          .eq("user_id", userData.user.id)
+          .eq("user_id", session.user.id)
           .order("created_at", { ascending: false })
           .limit(limit);
 
@@ -245,13 +245,13 @@ export const useCreditInfo = () => {
       }
 
       try {
-        const { data: userData } = await supabase.auth.getUser();
-        if (!userData?.user) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) {
           setData((prev) => ({ ...prev, loading: false }));
           return;
         }
 
-        const userId = userData.user.id;
+        const userId = session.user.id;
 
         const [creditResult, scoreHistoryResult] = await Promise.all([
           supabase.from("credit_accounts").select("*").eq("user_id", userId).maybeSingle(),
@@ -319,16 +319,16 @@ export const useInvestments = () => {
       }
 
       try {
-        const { data: userData } = await supabase.auth.getUser();
-        if (!userData?.user) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) {
           setData((prev) => ({ ...prev, loading: false }));
           return;
         }
 
-        const userId = userData.user.id;
+        const userId = session.user.id;
 
         const [holdingsResult, goalsResult] = await Promise.all([
-          supabase.from("user_holdings").select("*, securities(symbol, name, asset_class)").eq("user_id", userId),
+          supabase.from("user_holdings").select("*, securities(symbol, name, asset_class, logo_url)").eq("user_id", userId),
           supabase.from("investment_goals").select("*").eq("user_id", userId),
         ]);
 

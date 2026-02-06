@@ -766,6 +766,124 @@ function extractLatestMilestone(milestones) {
   return latest?.code || latest?.status || latest?.state || latest?.name || null;
 }
 
+// ============ STOCK MARKET DATA ENDPOINTS ============
+
+app.get("/api/stocks/quote", async (req, res) => {
+  try {
+    const { symbols } = req.query;
+    if (!symbols) return res.status(400).json({ error: "symbols parameter required" });
+    
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbols.split(',')[0]}?interval=1d&range=1d`;
+    
+    const symbolList = symbols.split(',').map(s => s.trim());
+    const results = {};
+    
+    await Promise.all(symbolList.map(async (symbol) => {
+      try {
+        const response = await fetch(
+          `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=5d`,
+          {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            }
+          }
+        );
+        const data = await response.json();
+        const result = data?.chart?.result?.[0];
+        if (result) {
+          const meta = result.meta;
+          const prevClose = meta.chartPreviousClose || meta.previousClose;
+          const currentPrice = meta.regularMarketPrice;
+          const change = currentPrice - prevClose;
+          const changePercent = prevClose ? ((change / prevClose) * 100) : 0;
+          
+          results[symbol] = {
+            symbol: symbol,
+            name: meta.shortName || meta.longName || symbol,
+            price: currentPrice,
+            previousClose: prevClose,
+            change: change,
+            changePercent: changePercent,
+            currency: meta.currency || 'USD',
+            exchange: meta.exchangeName || '',
+          };
+        }
+      } catch (err) {
+        console.error(`Error fetching quote for ${symbol}:`, err.message);
+        results[symbol] = { symbol, error: err.message };
+      }
+    }));
+    
+    res.json(results);
+  } catch (error) {
+    console.error("Stock quote error:", error);
+    res.status(500).json({ error: "Failed to fetch stock quotes" });
+  }
+});
+
+app.get("/api/stocks/chart", async (req, res) => {
+  try {
+    const { symbol, range = '5d', interval = '15m' } = req.query;
+    if (!symbol) return res.status(400).json({ error: "symbol parameter required" });
+    
+    const response = await fetch(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=${interval}&range=${range}`,
+      {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+      }
+    );
+    
+    const data = await response.json();
+    const result = data?.chart?.result?.[0];
+    
+    if (!result) {
+      return res.status(404).json({ error: "No data found for symbol" });
+    }
+    
+    const timestamps = result.timestamp || [];
+    const quotes = result.indicators?.quote?.[0] || {};
+    const closes = quotes.close || [];
+    
+    const chartPoints = timestamps.map((ts, i) => {
+      const date = new Date(ts * 1000);
+      let label;
+      
+      if (range === '1d') {
+        label = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+      } else if (range === '5d') {
+        label = date.toLocaleDateString('en-US', { weekday: 'short' });
+      } else if (range === '1mo') {
+        label = date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+      } else if (range === '6mo' || range === '1y') {
+        label = date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+      } else {
+        label = date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+      }
+      
+      return {
+        day: label,
+        value: closes[i] != null ? Number(closes[i].toFixed(2)) : null,
+        timestamp: ts,
+      };
+    }).filter(p => p.value != null);
+    
+    const meta = result.meta;
+    
+    res.json({
+      symbol: symbol,
+      currency: meta.currency || 'USD',
+      chartPoints,
+      currentPrice: meta.regularMarketPrice,
+      previousClose: meta.chartPreviousClose || meta.previousClose,
+    });
+  } catch (error) {
+    console.error("Stock chart error:", error);
+    res.status(500).json({ error: "Failed to fetch stock chart data" });
+  }
+});
+
 const PORT = process.env.API_PORT || 3001;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`TruID API server running on port ${PORT}`);

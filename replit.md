@@ -20,15 +20,22 @@ A React authentication application using Vite as the build tool with Tailwind CS
   - `lib/` - Utility libraries
     - `supabase.js` - Supabase client initialization
     - `biometrics.js` - Biometric authentication utilities (Face ID/Touch ID)
+    - `strategyUtils.js` - Shared strategy utilities (normalizeSymbol, getHoldingsArray, buildHoldingsBySymbol, etc.)
     - `NotificationsContext.jsx` - Centralized notifications state management with real-time updates
     - `useSumsubStatus.js` - Hook for fetching KYC status directly from Sumsub API (single source of truth)
     - `useRequiredActions.js` - Hook for bank linking status only (no KYC - that's in useSumsubStatus)
+    - `useUserStrategies.js` - Hook for fetching user's investment strategies from Supabase
+    - `useFinancialData.js` - Hook for financial data utilities
+    - `strategyData.js` - Strategy price history fetching utilities
+    - `useProfile.js` - Profile hook with id, email, name, avatarUrl, phoneNumber, dateOfBirth, gender, address, idNumber, watchlist
   - `pages/` - Page components
+    - `StatementsPage.jsx` - Statements page with Strategy/Holdings/Financials tabs, real data from Supabase, PDF download
+    - `NewPortfolioPage.jsx` - Portfolio dashboard with strategy selector dropdown and performance charts
     - `AuthPage.jsx` - Authentication page
     - `OnboardingPage.jsx` - Welcome/landing page (before login)
     - `UserOnboardingPage.jsx` - User identification onboarding flow (3-step process)
     - `IdentityCheckPage.jsx` - Identity verification page (wraps UserOnboardingPage)
-    - `HomePage.jsx` - Home page after login
+    - `HomePage.jsx` - Home page with real-time subscriptions, investment goals CRUD, market insights, best assets from allocations
     - `MorePage.jsx` - Profile and menu page with KYC badge and Required Actions
     - `EditProfilePage.jsx` - Edit profile with phone, DOB, gender, country, city fields
     - `ProfileDetailsPage.jsx` - View-only profile details page
@@ -140,6 +147,14 @@ A React authentication application using Vite as the build tool with Tailwind CS
   - **KYC Status Values**: verified, pending, needs_resubmission, not_verified
   - **Notification Triggers**: Based on Sumsub status changes, stored in localStorage to prevent duplicates
   - **30-second cache**: Prevents excessive API calls while keeping status fresh
+- **Live Stock Market Data**:
+  - Backend proxy endpoints in `server/index.cjs` to fetch live data from Yahoo Finance
+  - `GET /api/stocks/quote?symbols=AAPL,MSFT` - Live stock quotes (price, change, changePercent)
+  - `GET /api/stocks/chart?symbol=AAPL&range=5d&interval=15m` - Chart data with configurable range/interval
+  - Frontend Hook: `src/lib/useStockData.js` - `useStockQuotes` and `useStockChart` hooks with 60-second caching
+  - Individual Stocks tab displays real-time market prices and charts
+  - Fallback to mock data if API is unavailable
+  - No API key required (uses Yahoo Finance public endpoints)
 - **TruID Integration** (Legacy):
   - Backend: `server/index.cjs` - Express server with TruID API endpoints
   - Client: `server/truidClient.cjs` - TruID API client with authentication
