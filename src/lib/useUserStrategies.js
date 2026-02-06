@@ -159,14 +159,11 @@ function formatChartData(priceHistory, timeFilter) {
 
   switch (timeFilter) {
     case "D": {
+      const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
       return priceHistory.map((p, idx) => {
         const date = new Date(p.ts);
-        const hour = date.getHours();
-        const ampm = hour >= 12 ? "pm" : "am";
-        const displayHour = hour % 12 || 12;
-        const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
         return {
-          day: `${dayNames[date.getDay()]} ${displayHour}${ampm}`,
+          day: dayNames[date.getDay()],
           value: p.nav,
           fullDate: date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' }),
         };

@@ -336,20 +336,7 @@ export const getStrategyPriceHistory = async (strategyId, timeframe = "6M") => {
         startDate = new Date(currentDate.getTime() - 220 * 24 * 60 * 60 * 1000);
     }
 
-    const { data: prices, error } = await supabase
-      .from("strategy_prices")
-      .select("ts, nav")
-      .eq("strategy_id", strategyId)
-      .gte("ts", startDate.toISOString())
-      .order("ts", { ascending: true });
-
-    if (!error && prices && prices.length > 0) {
-      cache.priceHistory.set(cacheKey, { data: prices, timestamp: Date.now() });
-      console.log(`✅ Fetched ${prices.length} price points from strategy_prices for ${strategyId} (${timeframe})`);
-      return prices;
-    }
-
-    console.log(`⚠️ No strategy_prices data for ${strategyId}, computing from holdings...`);
+    console.log(`🔍 Computing price history from holdings for strategy ${strategyId} (${timeframe})...`);
 
     const { data: strategy, error: stratError } = await supabase
       .from("strategies")
