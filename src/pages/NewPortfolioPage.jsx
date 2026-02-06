@@ -357,6 +357,7 @@ const NewPortfolioPage = () => {
   const [stockTimeFilter, setStockTimeFilter] = useState("W");
   const [myStocksPage, setMyStocksPage] = useState(0);
   const [otherStocksPage, setOtherStocksPage] = useState(0);
+  const [holdingsPage, setHoldingsPage] = useState(0);
   const { securities: allSecurities, quotes: liveQuotes, loading: quotesLoading } = useStockQuotes();
   const stocksList = useMemo(() => {
     if (!allSecurities || allSecurities.length === 0) return MOCK_STOCKS;
@@ -1501,48 +1502,79 @@ const NewPortfolioPage = () => {
           </div>
 
           {/* Holdings List */}
-          <div 
-            className="space-y-3"
-            style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
-          >
-            {holdingsData.map((stock) => (
-              <div 
-                key={stock.id}
-                className="rounded-2xl bg-white/70 backdrop-blur-xl p-4 shadow-sm border border-slate-100/50"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="h-11 w-11 rounded-full bg-white border border-slate-200 shadow-sm overflow-hidden flex-shrink-0">
-                    {!stock.logo || failedLogos[stock.ticker] ? (
-                      <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-100 to-purple-100 text-xs font-bold text-violet-700">
-                        {stock.ticker.slice(0, 2)}
-                      </div>
-                    ) : (
-                      <img
-                        src={stock.logo}
-                        alt={stock.name}
-                        className="h-full w-full object-cover"
-                        onError={() => setFailedLogos(prev => ({ ...prev, [stock.ticker]: true }))}
-                      />
-                    )}
+          {(() => {
+            const HOLDINGS_PER_PAGE = 6;
+            const holdingsTotalPages = Math.ceil(holdingsData.length / HOLDINGS_PER_PAGE);
+            const pagedHoldings = holdingsData.slice(holdingsPage * HOLDINGS_PER_PAGE, (holdingsPage + 1) * HOLDINGS_PER_PAGE);
+            return (
+            <section
+              className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50"
+              style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-sm font-semibold text-slate-900">Your Assets</p>
+                {holdingsTotalPages > 1 && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setHoldingsPage(p => Math.max(0, p - 1))}
+                      disabled={holdingsPage === 0}
+                      className={`h-7 w-7 rounded-full flex items-center justify-center transition ${holdingsPage === 0 ? 'text-slate-300' : 'text-slate-600 hover:bg-slate-100 active:bg-slate-200'}`}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <span className="text-xs font-medium text-slate-400 tabular-nums">{holdingsPage + 1}/{holdingsTotalPages}</span>
+                    <button
+                      onClick={() => setHoldingsPage(p => Math.min(holdingsTotalPages - 1, p + 1))}
+                      disabled={holdingsPage >= holdingsTotalPages - 1}
+                      className={`h-7 w-7 rounded-full flex items-center justify-center transition ${holdingsPage >= holdingsTotalPages - 1 ? 'text-slate-300' : 'text-slate-600 hover:bg-slate-100 active:bg-slate-200'}`}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
                   </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-900 truncate">{stock.name}</p>
-                    <p className="text-xs text-slate-500 font-medium">{stock.ticker}</p>
-                  </div>
-                  
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-sm font-bold text-slate-900">
-                      {formatCurrency(stock.currentValue)}
-                    </p>
-                    <p className={`text-xs font-medium ${stock.change >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                      {stock.change >= 0 ? '+' : ''}{stock.change.toFixed(1)}%
-                    </p>
-                  </div>
-                </div>
+                )}
               </div>
-            ))}
-          </div>
+              <div className="space-y-3">
+                {pagedHoldings.map((stock) => (
+                  <div 
+                    key={stock.id}
+                    className="rounded-2xl bg-white/70 backdrop-blur-xl p-4 shadow-sm border border-slate-100/50"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="h-11 w-11 rounded-full bg-white border border-slate-200 shadow-sm overflow-hidden flex-shrink-0">
+                        {!stock.logo || failedLogos[stock.ticker] ? (
+                          <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-100 to-purple-100 text-xs font-bold text-violet-700">
+                            {stock.ticker.slice(0, 2)}
+                          </div>
+                        ) : (
+                          <img
+                            src={stock.logo}
+                            alt={stock.name}
+                            className="h-full w-full object-cover"
+                            onError={() => setFailedLogos(prev => ({ ...prev, [stock.ticker]: true }))}
+                          />
+                        )}
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-slate-900 truncate">{stock.name}</p>
+                        <p className="text-xs text-slate-500 font-medium">{stock.ticker}</p>
+                      </div>
+                      
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-sm font-bold text-slate-900">
+                          {formatCurrency(stock.currentValue)}
+                        </p>
+                        <p className={`text-xs font-medium ${stock.change >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                          {stock.change >= 0 ? '+' : ''}{stock.change.toFixed(1)}%
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+            );
+          })()}
         </div>
         );
       })()}
