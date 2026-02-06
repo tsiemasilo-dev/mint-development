@@ -988,333 +988,50 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
           </>
         )}
 
-        {viewMode === "invest" ? (
+        {viewMode === "openstrategies" ? (
+          /* OpenStrategies View */
           <>
-            {/* Filter and Sort Bar */}
-            <div className="flex items-center justify-between gap-3">
-              <button
-                onClick={() => {
-                  setIsFilterOpen(true);
-                  setDraftSort(selectedSort);
-                  setDraftSectors(new Set(selectedSectors));
-                  setDraftExchanges(new Set(selectedExchanges));
-                }}
-                className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm transition-all active:scale-95"
-              >
-                <SlidersHorizontal className="h-4 w-4 text-slate-600" />
-                <span className="text-sm font-semibold text-slate-700">Filter & Sort</span>
-              </button>
-              <span className="text-sm font-medium text-slate-500">
-                {filteredSecurities.length} stocks
-              </span>
-            </div>
-
-            {/* Active Filter Chips */}
-            {activeChips.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {activeChips.map((chip) => (
-                  <button
-                    key={chip}
-                    onClick={() => removeChip(chip)}
-                    className="flex items-center gap-1.5 rounded-full bg-purple-100 px-3 py-1.5 text-xs font-semibold text-purple-700 transition-all active:scale-95"
-                  >
-                    {chip}
-                    <X className="h-3 w-3" />
-                  </button>
-                ))}
-                <button
-                  onClick={clearAllFilters}
-                  className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600 transition-all active:scale-95"
-                >
-                  Clear all
-                </button>
-              </div>
-            )}
-
-            {/* Grouped Sections - only show when NOT searching */}
-            {!searchQuery && (
-              <>
-                {watchedSecurities.length > 0 && (
-                  <section>
-                    <div className="mb-4 flex items-center justify-between">
-                      <h2 className="text-lg font-bold text-slate-900">My Watchlist</h2>
-                      <ChevronRight className="h-5 w-5 text-slate-400" />
-                    </div>
-                    <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-4 scrollbar-hide">
-                      {watchedSecurities.map((security) => (
-                        <button
-                          key={security.id}
-                          onClick={() => onOpenStockDetail(security)}
-                          className="relative flex-shrink-0 w-64 snap-center rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-5 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
-                        >
-                          <div onClick={(e) => toggleWatchlist(e, security.symbol)} className="absolute top-3 right-3 z-10">
-                            <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
-                          </div>
-                          <div className="flex items-start gap-3">
-                            {security.logo_url ? (
-                              <img
-                                src={security.logo_url}
-                                alt={security.symbol}
-                                className="h-12 w-12 rounded-full border border-slate-100 object-cover flex-shrink-0"
-                              />
-                            ) : (
-                              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-purple-600 text-sm font-bold text-white">
-                                {security.symbol?.substring(0, 2) || "—"}
-                              </div>
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <p className="truncate text-sm font-bold text-slate-900">
-                                {security.short_name || security.name}
-                              </p>
-                              <p className="mt-0.5 text-xs text-slate-500">{security.symbol}</p>
-                              <div className="mt-2">
-                                {security.currentPrice != null ? (
-                                  <>
-                                    <p className="text-lg font-bold text-slate-900">
-                                      <span className="text-xs text-slate-400 font-normal">{getDisplayCurrency(security)}</span>{' '}
-                                      {formatPrice(security)}
-                                    </p>
-                                    {security.changePct != null && (
-                                      <p className={`mt-1 text-xs font-semibold ${
-                                        security.changePct >= 0 ? 'text-emerald-600' : 'text-red-600'
-                                      }`}>
-                                        {security.changePct >= 0 ? '+' : ''}{security.changePct.toFixed(2)}%
-                                      </p>
-                                    )}
-                                  </>
-                                ) : (
-                                  <p className="text-xs text-slate-500">No pricing data</p>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-                )}
-
-                {/* Largest Companies Section */}
-                <section>
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-bold text-slate-900">Largest companies</h2>
-                <ChevronRight className="h-5 w-5 text-slate-400" />
-              </div>
-              <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-4 scrollbar-hide">
-                {largestCompanies.map((security) => (
-                  <button
-                    key={security.id}
-                    onClick={() => onOpenStockDetail(security)}
-                    className="relative flex-shrink-0 w-64 snap-center rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-5 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
-                  >
-                    <div onClick={(e) => toggleWatchlist(e, security.symbol)} className="absolute top-3 right-3 z-10">
-                      <Star className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
-                    </div>
-                    <div className="flex items-start gap-3">
-                      {security.logo_url ? (
-                        <img
-                          src={security.logo_url}
-                          alt={security.symbol}
-                          className="h-12 w-12 rounded-full border border-slate-100 object-cover flex-shrink-0"
-                        />
-                      ) : (
-                        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-purple-600 text-sm font-bold text-white">
-                          {security.symbol?.substring(0, 2) || "—"}
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="truncate text-sm font-bold text-slate-900">
-                          {security.short_name || security.name}
-                        </p>
-                        <p className="mt-0.5 text-xs text-slate-500">{security.symbol}</p>
-                        <div className="mt-2">
-                          {security.currentPrice != null ? (
-                            <>
-                              <p className="text-lg font-bold text-slate-900">
-                                <span className="text-xs text-slate-400 font-normal">{getDisplayCurrency(security)}</span>{' '}
-                                {formatPrice(security)}
-                              </p>
-                              {security.changePct != null && (
-                                <p className={`mt-1 text-xs font-semibold ${
-                                  security.changePct >= 0 ? 'text-emerald-600' : 'text-red-600'
-                                }`}>
-                                  {security.changePct >= 0 ? '+' : ''}{security.changePct.toFixed(2)}%
-                                </p>
-                              )}
-                            </>
-                          ) : (
-                            <p className="text-xs text-slate-500">No pricing data</p>
-                          )}
-                        </div>
+            {watchedSecurities.length > 0 ? (
+              <section>
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-lg font-bold text-slate-900">My Watchlist</h2>
+                </div>
+                <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-4 scrollbar-hide">
+                  {watchedSecurities.map((security) => (
+                    <button
+                      key={security.id}
+                      onClick={() => onOpenStockDetail(security)}
+                      className="relative flex-shrink-0 w-64 snap-center rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-5 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
+                    >
+                      <div onClick={(e) => toggleWatchlist(e, security.symbol)} className="absolute top-3 right-3 z-10">
+                        <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
                       </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            {/* Highest Dividend Yield Section */}
-            <section>
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-bold text-slate-900">Highest dividend yield</h2>
-                <ChevronRight className="h-5 w-5 text-slate-400" />
-              </div>
-              <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-4 scrollbar-hide">
-                {highestDividendYield.map((security) => (
-                  <button
-                    key={security.id}
-                    onClick={() => onOpenStockDetail(security)}
-                    className="relative flex-shrink-0 w-64 snap-center rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-5 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
-                  >
-                    <div onClick={(e) => toggleWatchlist(e, security.symbol)} className="absolute top-3 right-3 z-10">
-                      <Star className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
-                    </div>
-                    <div className="flex items-start gap-3">
-                      {security.logo_url ? (
-                        <img
-                          src={security.logo_url}
-                          alt={security.symbol}
-                          className="h-12 w-12 rounded-full border border-slate-100 object-cover flex-shrink-0"
-                        />
-                      ) : (
-                        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 text-sm font-bold text-white">
-                          {security.symbol?.substring(0, 2) || "—"}
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="truncate text-sm font-bold text-slate-900">
-                          {security.short_name || security.name}
-                        </p>
-                        <p className="mt-0.5 text-xs text-slate-500">{security.symbol}</p>
-                        <div className="mt-2">
-                          {security.currentPrice != null ? (
-                            <div className="flex items-baseline gap-2">
-                              <p className="text-lg font-bold text-slate-900">
-                                <span className="text-xs text-slate-400 font-normal">{getDisplayCurrency(security)}</span>{' '}
-                                {formatPrice(security)}
-                              </p>
-                              {security.changePct != null && (
-                                <span className={`text-xs font-semibold ${
-                                  security.changePct >= 0 ? 'text-emerald-600' : 'text-red-600'
-                                }`}>
-                                  {security.changePct >= 0 ? '+' : ''}{security.changePct.toFixed(2)}%
-                                </span>
-                              )}
-                            </div>
-                          ) : (
-                            <p className="text-sm text-slate-400">—</p>
-                          )}
-                        </div>
-                        <div className="mt-2 flex items-center gap-2">
-                          <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-700">
-                            {Number(security.dividend_yield).toFixed(2)}% yield
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            {/* Gainers Section */}
-            <section>
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-bold text-slate-900">Gainers</h2>
-                <ChevronRight className="h-5 w-5 text-slate-400" />
-              </div>
-              <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-4 scrollbar-hide">
-                {gainers.map((security) => (
-                  <button
-                    key={security.id}
-                    onClick={() => onOpenStockDetail(security)}
-                    className="relative flex-shrink-0 w-64 snap-center rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-5 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
-                  >
-                    <div onClick={(e) => toggleWatchlist(e, security.symbol)} className="absolute top-3 right-3 z-10">
-                      <Star className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
-                    </div>
-                    <div className="flex items-start gap-3">
-                      {security.logo_url ? (
-                        <img
-                          src={security.logo_url}
-                          alt={security.symbol}
-                          className="h-12 w-12 rounded-full border border-slate-100 object-cover flex-shrink-0"
-                        />
-                      ) : (
-                        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-blue-600 text-sm font-bold text-white">
-                          {security.symbol?.substring(0, 2) || "—"}
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="truncate text-sm font-bold text-slate-900">
-                          {security.short_name || security.name}
-                        </p>
-                        <p className="mt-0.5 text-xs text-slate-500">{security.symbol}</p>
-                        <div className="mt-2">
-                          {security.currentPrice != null ? (
-                            <p className="text-lg font-bold text-slate-900">
-                              <span className="text-xs text-slate-400 font-normal">{getDisplayCurrency(security)}</span>{' '}
-                              {formatPrice(security)}
-                            </p>
-                          ) : (
-                            <p className="text-xs text-slate-500">No pricing data</p>
-                          )}
-                        </div>
-                        <p className="mt-1 text-xs font-semibold text-emerald-600">
-                          +{security.percentGain.toFixed(2)}%
-                        </p>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            {/* All Section */}
-            <section>
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-bold text-slate-900">All</h2>
-                <ChevronRight className="h-5 w-5 text-slate-400" />
-              </div>
-              <div className="space-y-3">
-                {filteredSecurities.map((security) => (
-                  <button
-                    key={security.id}
-                    onClick={() => onOpenStockDetail(security)}
-                    className="w-full rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
-                  >
-                    <div className="flex items-start gap-3">
-                      {security.logo_url ? (
-                        <img
-                          src={security.logo_url}
-                          alt={security.symbol}
-                          className="h-12 w-12 rounded-full border border-slate-100 object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-purple-600 text-sm font-bold text-white">
-                          {security.symbol?.substring(0, 2) || "—"}
-                        </div>
-                      )}
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <p className="truncate text-sm font-semibold text-slate-900">
-                              {security.short_name || security.name}
-                            </p>
-                            <p className="text-xs text-slate-500">
-                              {security.symbol} · {security.exchange}
-                            </p>
+                      <div className="flex items-start gap-3">
+                        {security.logo_url ? (
+                          <img
+                            src={security.logo_url}
+                            alt={security.symbol}
+                            className="h-12 w-12 rounded-full border border-slate-100 object-cover flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-purple-600 text-sm font-bold text-white">
+                            {security.symbol?.substring(0, 2) || "—"}
                           </div>
-                          <div className="text-right">
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="truncate text-sm font-bold text-slate-900">
+                            {security.short_name || security.name}
+                          </p>
+                          <p className="mt-0.5 text-xs text-slate-500">{security.symbol}</p>
+                          <div className="mt-2">
                             {security.currentPrice != null ? (
                               <>
-                                <p className="text-sm font-semibold text-slate-900">
+                                <p className="text-lg font-bold text-slate-900">
                                   <span className="text-xs text-slate-400 font-normal">{getDisplayCurrency(security)}</span>{' '}
                                   {formatPrice(security)}
                                 </p>
                                 {security.changePct != null && (
-                                  <p className={`text-xs font-semibold ${
+                                  <p className={`mt-1 text-xs font-semibold ${
                                     security.changePct >= 0 ? 'text-emerald-600' : 'text-red-600'
                                   }`}>
                                     {security.changePct >= 0 ? '+' : ''}{security.changePct.toFixed(2)}%
@@ -1325,123 +1042,25 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                               <p className="text-xs text-slate-500">No pricing data</p>
                             )}
                           </div>
-                          <div onClick={(e) => toggleWatchlist(e, security.symbol)} className="ml-2 flex-shrink-0">
-                            <Star className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
-                          </div>
-                        </div>
-
-                        <div className="mt-3 flex items-center gap-2">
-                          {security.sector && (
-                            <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-600">
-                              {security.sector}
-                            </span>
-                          )}
-                          {security.pe && (
-                            <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-medium text-blue-700">
-                              P/E {Number(security.pe).toFixed(2)}
-                            </span>
-                          )}
                         </div>
                       </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </section>
-              </>
-            )}
-
-            {/* All Securities List */}
-            {searchQuery && (
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ) : (
               <section>
-                <h2 className="mb-4 text-lg font-bold text-slate-900">Search results</h2>
-                {filteredSecurities.length === 0 ? (
-                  <div className="rounded-3xl bg-white px-6 py-12 text-center shadow-md">
-                    <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100">
-                      <Search className="h-8 w-8 text-slate-400" />
-                    </div>
-                    <p className="text-sm font-semibold text-slate-700">No securities found</p>
-                    <p className="mt-1 text-xs text-slate-400">Try adjusting your search or filter</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {filteredSecurities.map((security) => (
-                      <button
-                        key={security.id}
-                        onClick={() => onOpenStockDetail(security)}
-                        className="w-full rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
-                      >
-                        <div className="flex items-start gap-3">
-                          {security.logo_url ? (
-                            <img
-                              src={security.logo_url}
-                              alt={security.symbol}
-                              className="h-12 w-12 rounded-full border border-slate-100 object-cover"
-                            />
-                          ) : (
-                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-purple-600 text-sm font-bold text-white">
-                              {security.symbol?.substring(0, 2) || "—"}
-                            </div>
-                          )}
-
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex-1 min-w-0">
-                                <p className="truncate text-sm font-semibold text-slate-900">
-                                  {security.short_name || security.name}
-                                </p>
-                                <p className="text-xs text-slate-500">
-                                  {security.symbol} · {security.exchange}
-                                </p>
-                              </div>
-                              <div className="text-right">
-                                {security.currentPrice != null ? (
-                                  <>
-                                    <p className="text-sm font-semibold text-slate-900">
-                                      <span className="text-xs text-slate-400 font-normal">{getDisplayCurrency(security)}</span>{' '}
-                                      {formatPrice(security)}
-                                    </p>
-                                    {security.changePct != null && (
-                                      <p className={`text-xs font-semibold ${
-                                        security.changePct >= 0 ? 'text-emerald-600' : 'text-red-600'
-                                      }`}>
-                                        {security.changePct >= 0 ? '+' : ''}{security.changePct.toFixed(2)}%
-                                      </p>
-                                    )}
-                                  </>
-                                ) : (
-                                  <p className="text-xs text-slate-400">—</p>
-                                )}
-                              </div>
-                              <div onClick={(e) => toggleWatchlist(e, security.symbol)} className="ml-2 flex-shrink-0">
-                                <Star className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
-                              </div>
-                            </div>
-
-                            <div className="mt-3 flex items-center gap-2">
-                              {security.sector && (
-                                <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-600">
-                                  {security.sector}
-                                </span>
-                              )}
-                              {security.pe && (
-                                <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-medium text-blue-700">
-                                  P/E {Number(security.pe).toFixed(2)}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-lg font-bold text-slate-900">My Watchlist</h2>
+                </div>
+                <div className="rounded-3xl border border-dashed border-slate-200 bg-white/60 backdrop-blur-sm p-6 text-center">
+                  <Star className="mx-auto h-8 w-8 text-slate-300 mb-2" />
+                  <p className="text-sm font-medium text-slate-500">No stocks in your watchlist</p>
+                  <p className="text-xs text-slate-400 mt-1">Tap the star on any stock to add it here</p>
+                </div>
               </section>
             )}
-          </>
-        ) : viewMode === "openstrategies" ? (
-          /* OpenStrategies View */
-          <>
+
             {publicStrategiesLoading ? (
               <div className="space-y-4">
                 <Skeleton className="h-64 w-full rounded-2xl" />
@@ -1909,12 +1528,10 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
 
             {/* Header */}
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-5 pb-4 pt-3">
-              <h3 className="text-lg font-semibold text-slate-900">
-                {viewMode === "openstrategies" ? "Filters" : "Filter & Sort"}
-              </h3>
+              <h3 className="text-lg font-semibold text-slate-900">Filters</h3>
               <button
                 type="button"
-                onClick={viewMode === "openstrategies" ? clearAllStrategyFilters : clearAllFilters}
+                onClick={clearAllStrategyFilters}
                 className="text-sm font-semibold text-slate-500"
               >
                 Clear all
@@ -1923,10 +1540,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto px-5 py-4">
-              {viewMode === "openstrategies" ? (
-                /* OpenStrategies Filters */
-                <>
-                  <div className="space-y-5">
+              <div className="space-y-5">
                     <div className="space-y-3">
                       <p className="text-sm font-semibold text-slate-800">Sort</p>
                       <div className="flex flex-wrap gap-2">
@@ -2077,87 +1691,6 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                       </div>
                     </div>
                   </div>
-                </>
-              ) : (
-                /* Invest Filters */
-                <>
-                  {/* Sort Options */}
-                  <section className="mb-6">
-                    <h4 className="mb-3 text-sm font-semibold text-slate-700">Sort by</h4>
-                    <div className="space-y-2">
-                      {sortOptions.map((option) => (
-                        <button
-                          key={option}
-                          onClick={() => setDraftSort(option)}
-                          className={`w-full rounded-xl px-4 py-3 text-left text-sm font-medium transition-all ${
-                            draftSort === option
-                              ? "bg-purple-50 text-purple-700 ring-2 ring-purple-200"
-                              : "bg-slate-50 text-slate-700 hover:bg-slate-100"
-                          }`}
-                        >
-                          {option}
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-
-                  {/* Sector Filter */}
-                  <section className="mb-6">
-                    <h4 className="mb-3 text-sm font-semibold text-slate-700">Sector</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {sectors.map((sector) => (
-                        <button
-                          key={sector}
-                          onClick={() => {
-                            const next = new Set(draftSectors);
-                            if (next.has(sector)) {
-                              next.delete(sector);
-                            } else {
-                              next.add(sector);
-                            }
-                            setDraftSectors(next);
-                          }}
-                          className={`rounded-full px-4 py-2 text-xs font-semibold transition-all ${
-                            draftSectors.has(sector)
-                              ? "bg-purple-600 text-white"
-                              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                          }`}
-                        >
-                          {sector}
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-
-                  {/* Exchange Filter */}
-                  <section className="mb-6">
-                    <h4 className="mb-3 text-sm font-semibold text-slate-700">Exchange</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {exchanges.map((exchange) => (
-                        <button
-                          key={exchange}
-                          onClick={() => {
-                            const next = new Set(draftExchanges);
-                            if (next.has(exchange)) {
-                              next.delete(exchange);
-                            } else {
-                              next.add(exchange);
-                            }
-                            setDraftExchanges(next);
-                          }}
-                          className={`rounded-full px-4 py-2 text-xs font-semibold transition-all ${
-                            draftExchanges.has(exchange)
-                              ? "bg-purple-600 text-white"
-                              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                          }`}
-                        >
-                          {exchange}
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-                </>
-              )}
             </div>
 
             {/* Apply Button */}
@@ -2166,11 +1699,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
               <button
                 type="button"
                 onClick={() => {
-                  if (viewMode === "openstrategies") {
-                    applyStrategyFilters();
-                  } else {
-                    applyFilters();
-                  }
+                  applyStrategyFilters();
                   resetSheetPosition();
                 }}
                 className="relative w-full rounded-2xl bg-gradient-to-r from-[#111111] via-[#3b1b7a] to-[#5b21b6] py-3 text-sm font-semibold text-white shadow-lg shadow-violet-200/60"
