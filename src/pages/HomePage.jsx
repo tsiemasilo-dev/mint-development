@@ -110,6 +110,7 @@ const HomePage = ({
   onOpenStrategies,
   onOpenMarkets,
   onOpenNews,
+  onOpenNewsArticle,
 }) => {
   const { profile, loading } = useProfile();
   const { bankLinked, loading: actionsLoading, refetch: fetchRequiredActions } = useRequiredActions();
@@ -909,45 +910,46 @@ const HomePage = ({
               </div>
             </div>
             <button 
-              onClick={() => onOpenNews && onOpenNews("news")}
+              onClick={() => onOpenNews && onOpenNews()}
               className="mb-1 text-xs font-semibold text-violet-600 active:opacity-70"
             >
               View all
             </button>
           </div>
 
-          <div className="space-y-3">
+          <div className="rounded-3xl bg-white shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] overflow-hidden divide-y divide-slate-100">
             {news.length > 0 ? (
-              news.map((item) => (
+              news.slice(0, 4).map((item) => (
                 <button
                   key={item.id}
-                  onClick={() => onOpenNews && onOpenNews(item)}
-                  className="flex w-full items-center gap-4 rounded-3xl bg-white p-3 shadow-md transition-active active:scale-[0.98]"
+                  onClick={() => onOpenNewsArticle && onOpenNewsArticle(item.id)}
+                  className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors active:bg-slate-50"
                 >
-                  <div className="flex-1 text-left">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-violet-600 bg-violet-50 px-2 py-0.5 rounded-md">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-semibold text-slate-900 line-clamp-2 leading-snug">
+                      {item.title}
+                    </p>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-violet-600">
                         {item.source || 'Market'}
                       </span>
+                      <span className="text-[10px] text-slate-300">•</span>
                       <span className="text-[10px] text-slate-400">
                         {formatDate(item.published_at)}
                       </span>
                     </div>
-                    <p className="text-sm font-semibold text-slate-900 line-clamp-2 leading-snug">
-                      {item.title}
-                    </p>
                   </div>
-                  <ChevronRight className="h-4 w-4 text-slate-300" />
+                  <ChevronRight className="h-4 w-4 text-slate-300 flex-shrink-0" />
                 </button>
               ))
             ) : !loadingNews && (
-              <div className="rounded-3xl bg-white p-6 text-center shadow-md">
+              <div className="p-6 text-center">
                 <p className="text-xs text-slate-400">No recent insights available.</p>
               </div>
             )}
             
             {loadingNews && (
-              <div className="flex justify-center py-4">
+              <div className="flex justify-center py-6">
                 <div className="h-6 w-6 animate-spin rounded-full border-2 border-violet-100 border-t-violet-600" />
               </div>
             )}

@@ -699,6 +699,7 @@ const App = () => {
           onOpenStrategies={() => { setMarketsInitialView("openstrategies"); navigateTo("markets"); }}
           onOpenMarkets={() => { setMarketsInitialView("invest"); navigateTo("markets"); }}
           onOpenNews={() => { setMarketsInitialView("news"); navigateTo("markets"); }}
+          onOpenNewsArticle={(articleId) => { setSelectedArticleId(articleId); navigateTo("newsArticle"); }}
         />
       </AppLayout>
     );
