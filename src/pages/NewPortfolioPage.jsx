@@ -726,7 +726,7 @@ const NewPortfolioPage = () => {
                 <span className="text-lg font-semibold tracking-tight" style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}>
                   {currentStrategy.name || "Strategy"}
                 </span>
-                <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${showStrategyDropdown ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${showStrategyDropdown ? 'rotate-180' : ''}`} />
               </button>
               {showStrategyDropdown && strategies.length > 0 && (
                 <div 
