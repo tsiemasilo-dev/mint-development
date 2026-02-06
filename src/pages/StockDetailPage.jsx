@@ -1,13 +1,52 @@
-import React, { useState, useEffect } from "react";
-import { ArrowLeft, TrendingUp, TrendingDown } from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+import { ArrowLeft, TrendingUp, TrendingDown, Star, Check } from "lucide-react";
 import { getSecurityBySymbol, getSecurityPrices, normalizePriceSeries } from "../lib/marketData.js";
+import { supabase } from "../lib/supabase.js";
+import { useProfile } from "../lib/useProfile";
 
 const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy }) => {
+  const { profile } = useProfile();
   const [selectedPeriod, setSelectedPeriod] = useState("1M");
   const [security, setSecurity] = useState(initialSecurity);
   const [priceHistory, setPriceHistory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [watchlist, setWatchlist] = useState([]);
+  const [watchlistAnimating, setWatchlistAnimating] = useState(false);
   const periods = ["1W", "1M", "3M", "6M", "YTD", "1Y"];
+
+  useEffect(() => {
+    if (profile?.watchlist && Array.isArray(profile.watchlist)) {
+      setWatchlist(profile.watchlist);
+    }
+  }, [profile]);
+
+  const isWatched = useMemo(() => {
+    return watchlist.includes(initialSecurity?.symbol);
+  }, [watchlist, initialSecurity?.symbol]);
+
+  const toggleWatchlist = async () => {
+    if (!profile?.id || !initialSecurity?.symbol) return;
+
+    const symbol = initialSecurity.symbol;
+    const wasWatched = watchlist.includes(symbol);
+    const newWatchlist = wasWatched
+      ? watchlist.filter((t) => t !== symbol)
+      : [...watchlist, symbol];
+
+    setWatchlist(newWatchlist);
+    setWatchlistAnimating(true);
+    setTimeout(() => setWatchlistAnimating(false), 600);
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({ watchlist: newWatchlist })
+      .eq('id', profile.id);
+
+    if (error) {
+      setWatchlist(watchlist);
+      console.error("Watchlist sync failed:", error);
+    }
+  };
 
   console.log("🔍 Initial security prop:", {
     symbol: initialSecurity?.symbol,
@@ -163,14 +202,27 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy }) => {
     <div className="min-h-screen bg-white pb-[env(safe-area-inset-bottom)] text-slate-900">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-white px-4 pb-4 pt-12">
-        <button
-          type="button"
-          onClick={onBack}
-          aria-label="Back"
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-700 active:scale-95"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </button>
+        <div className="flex items-center justify-between">
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Back"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-700 active:scale-95"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+          <button
+            onClick={toggleWatchlist}
+            className={`flex h-10 w-10 items-center justify-center rounded-full transition-all duration-300 active:scale-90 ${
+              isWatched ? "bg-yellow-50" : "bg-slate-100"
+            } ${watchlistAnimating ? "scale-125" : "scale-100"}`}
+            aria-label={isWatched ? "Remove from Watchlist" : "Add to Watchlist"}
+          >
+            <Star className={`h-5 w-5 transition-all duration-300 ${
+              isWatched ? "fill-yellow-400 text-yellow-400" : "text-slate-400"
+            } ${watchlistAnimating ? "scale-110" : ""}`} />
+          </button>
+        </div>
 
         <div className="mt-6 flex items-start gap-3">
           {security.logo_url ? (
@@ -442,8 +494,27 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy }) => {
           >
             Buy
           </button>
-          <button className="rounded-2xl border-2 border-slate-200 bg-white py-4 font-semibold text-slate-900 transition-all active:scale-95">
-            Add to Watchlist
+          <button
+            onClick={toggleWatchlist}
+            className={`relative overflow-hidden rounded-2xl border-2 py-4 font-semibold transition-all duration-300 active:scale-95 ${
+              isWatched
+                ? "border-yellow-400 bg-yellow-50 text-yellow-700"
+                : "border-slate-200 bg-white text-slate-900"
+            } ${watchlistAnimating ? "scale-95" : ""}`}
+          >
+            <span className={`flex items-center justify-center gap-2 transition-all duration-300 ${watchlistAnimating ? "scale-110" : "scale-100"}`}>
+              {isWatched ? (
+                <>
+                  <Star className={`h-5 w-5 fill-yellow-400 text-yellow-400 ${watchlistAnimating ? "animate-[spin_0.4s_ease-out]" : ""}`} />
+                  Watchlisted
+                </>
+              ) : (
+                <>
+                  <Star className="h-5 w-5" />
+                  Add to Watchlist
+                </>
+              )}
+            </span>
           </button>
         </div>
       </div>
