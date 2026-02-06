@@ -170,7 +170,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   
   // News pagination
   const [newsPage, setNewsPage] = useState(1);
-  const newsPerPage = 20;
+  const newsPerPage = 7;
 
   const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(" ");
   const initials = displayName
@@ -1006,12 +1006,12 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 <h2 className="text-lg font-bold text-slate-900">Largest companies</h2>
                 <ChevronRight className="h-5 w-5 text-slate-400" />
               </div>
-              <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 scrollbar-hide">
+              <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-4 scrollbar-hide">
                 {largestCompanies.map((security) => (
                   <button
                     key={security.id}
                     onClick={() => onOpenStockDetail(security)}
-                    className="flex-shrink-0 w-64 snap-center rounded-3xl border border-slate-100 bg-white p-4 text-left shadow-sm transition-all hover:shadow-md active:scale-[0.98]"
+                    className="flex-shrink-0 w-64 snap-center rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-5 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
                   >
                     <div className="flex items-start gap-3">
                       {security.logo_url ? (
@@ -1062,12 +1062,12 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 <h2 className="text-lg font-bold text-slate-900">Highest dividend yield</h2>
                 <ChevronRight className="h-5 w-5 text-slate-400" />
               </div>
-              <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 scrollbar-hide">
+              <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-4 scrollbar-hide">
                 {highestDividendYield.map((security) => (
                   <button
                     key={security.id}
                     onClick={() => onOpenStockDetail(security)}
-                    className="flex-shrink-0 w-64 snap-center rounded-3xl border border-slate-100 bg-white p-4 text-left shadow-sm transition-all hover:shadow-md active:scale-[0.98]"
+                    className="flex-shrink-0 w-64 snap-center rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-5 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
                   >
                     <div className="flex items-start gap-3">
                       {security.logo_url ? (
@@ -1127,12 +1127,12 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 <h2 className="text-lg font-bold text-slate-900">Gainers</h2>
                 <ChevronRight className="h-5 w-5 text-slate-400" />
               </div>
-              <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 scrollbar-hide">
+              <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-4 scrollbar-hide">
                 {gainers.map((security) => (
                   <button
                     key={security.id}
                     onClick={() => onOpenStockDetail(security)}
-                    className="flex-shrink-0 w-64 snap-center rounded-3xl border border-slate-100 bg-white p-4 text-left shadow-sm transition-all hover:shadow-md active:scale-[0.98]"
+                    className="flex-shrink-0 w-64 snap-center rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-5 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
                   >
                     <div className="flex items-start gap-3">
                       {security.logo_url ? (
@@ -1182,7 +1182,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                   <button
                     key={security.id}
                     onClick={() => onOpenStockDetail(security)}
-                    className="w-full rounded-3xl bg-white p-4 text-left shadow-sm transition-all hover:shadow-md active:scale-[0.98]"
+                    className="w-full rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
                   >
                     <div className="flex items-start gap-3">
                       {security.logo_url ? (
@@ -1267,7 +1267,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                       <button
                         key={security.id}
                         onClick={() => onOpenStockDetail(security)}
-                        className="w-full rounded-3xl bg-white p-4 text-left shadow-sm transition-all hover:shadow-md active:scale-[0.98]"
+                        className="w-full rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
                       >
                         <div className="flex items-start gap-3">
                           {security.logo_url ? (
