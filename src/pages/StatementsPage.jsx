@@ -81,9 +81,10 @@ const StatementsPage = ({ onOpenNotifications }) => {
 
           const changePct = latestMetric?.change_pct != null ? Number(latestMetric.change_pct) : null;
 
+          const holdingsCount = Array.isArray(strategy.holdings) ? strategy.holdings.length : 0;
+
           return {
             type: "Strategy",
-            icon: "📊",
             title: strategy.short_name || strategy.name || "—",
             shortName: strategy.short_name || null,
             fullName: strategy.name || "—",
@@ -94,15 +95,24 @@ const StatementsPage = ({ onOpenNotifications }) => {
             riskLevel: strategy.risk_level || null,
             changePct,
             tags: strategy.tags || [],
-            time: "—",
             flow: "out",
             strategyName: strategy.name || "—",
-            allocation: "—",
-            capitalInvested: "—",
-            currentValue: latestMetric?.last_close ? formatCurrency(latestMetric.last_close) : "—",
-            unrealisedPL: "—",
-            realisedPL: "—",
-            totalPL: "—",
+            objective: strategy.objective || null,
+            currentValue: latestMetric?.last_close ? formatCurrency(latestMetric.last_close) : null,
+            lastClose: latestMetric?.last_close || null,
+            prevClose: latestMetric?.prev_close || null,
+            changeAbs: latestMetric?.change_abs || null,
+            r1w: latestMetric?.r_1w || null,
+            r1m: latestMetric?.r_1m || null,
+            r3m: latestMetric?.r_3m || null,
+            r6m: latestMetric?.r_6m || null,
+            rytd: latestMetric?.r_ytd || null,
+            r1y: latestMetric?.r_1y || null,
+            baseCurrency: strategy.base_currency || "ZAR",
+            minInvestment: strategy.min_investment || null,
+            providerName: strategy.provider_name || null,
+            managementFeeBps: strategy.management_fee_bps || null,
+            holdingsCount,
           };
         });
 
@@ -409,18 +419,6 @@ const StatementsPage = ({ onOpenNotifications }) => {
   useEffect(() => {
     setPage(1);
   }, [activeTab, searchQuery]);
-
-  const strategyDetails = selectedCard
-    ? {
-        strategyName: selectedCard.strategyName || selectedCard.title || "—",
-        allocation: selectedCard.allocation || "—",
-        capitalInvested: selectedCard.capitalInvested || "—",
-        currentValue: selectedCard.currentValue || selectedCard.amount || "—",
-        unrealisedPL: selectedCard.unrealisedPL || selectedCard.unrealizedPL || "—",
-        realisedPL: selectedCard.realisedPL || "—",
-        totalPL: selectedCard.totalPL || "—",
-      }
-    : null;
 
   const handleDownloadPdf = async () => {
     const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
@@ -1013,21 +1011,23 @@ const StatementsPage = ({ onOpenNotifications }) => {
       </div>
 
       {selectedCard && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60">
           <button
             type="button"
             className="absolute inset-0 h-full w-full cursor-default"
             aria-label="Close modal"
             onClick={() => setSelectedCard(null)}
           />
-          <div className="relative z-10 w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl">
-            <div className="flex items-center justify-center pt-3">
+          <div className="relative z-10 w-full max-w-md overflow-hidden rounded-t-3xl bg-white shadow-2xl animate-[slideUp_0.3s_ease-out]">
+            <div className="flex items-center justify-center pt-3 pb-1">
               <div className="h-1.5 w-12 rounded-full bg-slate-200" />
             </div>
 
-            <div className="p-6">
-              <div className="mb-6 flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-slate-900">Statement Details</h2>
+            <div className="max-h-[80vh] overflow-y-auto px-6 pb-8 pt-2">
+              <div className="mb-5 flex items-center justify-between">
+                <h2 className="text-lg font-bold text-slate-900">
+                  {selectedCard.type === "Holdings" ? "Stock Details" : selectedCard.type === "Strategy" ? "Strategy Details" : "Transaction Details"}
+                </h2>
                 <button
                   type="button"
                   onClick={() => setSelectedCard(null)}
@@ -1038,101 +1038,170 @@ const StatementsPage = ({ onOpenNotifications }) => {
                 </button>
               </div>
 
-              <div className="space-y-6">
-                {activeTab === "holdings" && (
-                  <div className="flex items-center justify-center">
-                    <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm">
+              {selectedCard.type === "Holdings" ? (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
                       {selectedCard.logoUrl ? (
-                        <img
-                          src={selectedCard.logoUrl}
-                          alt={selectedCard.title}
-                          className="h-full w-full object-contain"
-                        />
+                        <img src={selectedCard.logoUrl} alt={selectedCard.title} className="h-full w-full object-contain" />
                       ) : (
-                        <span className="text-3xl text-slate-400">—</span>
+                        <div className="flex h-full w-full items-center justify-center rounded-2xl bg-gradient-to-br from-purple-500 to-purple-600 text-lg font-bold text-white">
+                          {selectedCard.ticker?.substring(0, 2) || "—"}
+                        </div>
                       )}
                     </div>
-                  </div>
-                )}
-
-                {selectedCard.type === "Holdings" ? (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="rounded-2xl bg-slate-50 p-4">
-                        <p className="mb-1 text-xs uppercase text-slate-400">Instrument</p>
-                        <p className="text-sm font-medium text-slate-900">{selectedCard.instrument}</p>
-                      </div>
-                      <div className="rounded-2xl bg-slate-50 p-4">
-                        <p className="mb-1 text-xs uppercase text-slate-400">Ticker</p>
-                        <p className="text-sm font-medium text-slate-900">{selectedCard.ticker}</p>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="rounded-2xl bg-slate-50 p-4">
-                        <p className="mb-1 text-xs uppercase text-slate-400">Quantity</p>
-                        <p className="text-sm font-medium text-slate-900">{selectedCard.quantity}</p>
-                      </div>
-                      <div className="rounded-2xl bg-slate-50 p-4">
-                        <p className="mb-1 text-xs uppercase text-slate-400">Avg Cost</p>
-                        <p className="text-sm font-medium text-slate-900">{selectedCard.avgCost}</p>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="rounded-2xl bg-slate-50 p-4">
-                        <p className="mb-1 text-xs uppercase text-slate-400">Market Price</p>
-                        <p className="text-sm font-medium text-slate-900">{selectedCard.marketPrice}</p>
-                      </div>
-                      <div className="rounded-2xl bg-slate-50 p-4">
-                        <p className="mb-1 text-xs uppercase text-slate-400">Market Value</p>
-                        <p className="text-sm font-medium text-slate-900">{selectedCard.marketValue}</p>
-                      </div>
-                    </div>
-
-                    <div className="rounded-2xl bg-slate-50 p-4">
-                      <p className="mb-1 text-xs uppercase text-slate-400">Unrealised P/L</p>
-                      <p className="text-sm font-medium text-slate-900">{selectedCard.unrealizedPL}</p>
+                    <div>
+                      <p className="text-base font-bold text-slate-900">{selectedCard.title}</p>
+                      <p className="text-sm text-slate-500">{selectedCard.desc}</p>
                     </div>
                   </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="rounded-2xl bg-slate-50 p-4">
-                      <p className="mb-2 text-xs uppercase text-slate-400">Strategy</p>
-                      <div className="space-y-3 text-sm text-slate-700">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs uppercase text-slate-400">Strategy Name</span>
-                          <span className="font-medium text-slate-900">{strategyDetails?.strategyName}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs uppercase text-slate-400">Allocation (%)</span>
-                          <span className="font-medium text-slate-900">{strategyDetails?.allocation}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs uppercase text-slate-400">Capital Invested</span>
-                          <span className="font-medium text-slate-900">{strategyDetails?.capitalInvested}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs uppercase text-slate-400">Current Value</span>
-                          <span className="font-medium text-slate-900">{strategyDetails?.currentValue}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs uppercase text-slate-400">Unrealised P/L</span>
-                          <span className="font-medium text-slate-900">{strategyDetails?.unrealisedPL}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs uppercase text-slate-400">Realised P/L</span>
-                          <span className="font-medium text-slate-900">{strategyDetails?.realisedPL}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs uppercase text-slate-400">Total P/L</span>
-                          <span className="font-semibold text-slate-900">{strategyDetails?.totalPL}</span>
-                        </div>
-                      </div>
+
+                  <div className="rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-50 to-white p-4">
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-slate-900">{selectedCard.amount}</p>
+                      <p className={`mt-1 text-sm font-semibold ${
+                        selectedCard.unrealizedPL?.startsWith("+") ? "text-emerald-600" : selectedCard.unrealizedPL?.startsWith("-") ? "text-red-600" : "text-slate-400"
+                      }`}>{selectedCard.unrealizedPL || "—"}</p>
+                      <p className="mt-0.5 text-xs text-slate-400">Unrealised P/L</p>
                     </div>
                   </div>
-                )}
-              </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { label: "Quantity", value: selectedCard.quantity },
+                      { label: "Avg Cost", value: selectedCard.avgCost },
+                      { label: "Market Price", value: selectedCard.marketPrice },
+                      { label: "Market Value", value: selectedCard.marketValue },
+                    ].map((item) => (
+                      <div key={item.label} className="rounded-2xl border border-slate-100 bg-white p-3.5">
+                        <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{item.label}</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-900">{item.value || "—"}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {selectedCard.date && (
+                    <p className="text-center text-xs text-slate-400">As of {selectedCard.date}</p>
+                  )}
+                </div>
+              ) : selectedCard.type === "Strategy" ? (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    {(() => {
+                      const snapshot = strategySnapshotsMap.get(selectedCard.title) || [];
+                      return snapshot.length > 0 ? (
+                        <div className="flex -space-x-2">
+                          {snapshot.slice(0, 3).map((h) => (
+                            <div key={`modal-${h.id || h.symbol}`} className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white shadow-sm">
+                              {h.logo_url ? (
+                                <img src={h.logo_url} alt={h.name} className="h-full w-full object-cover" />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[10px] font-bold text-slate-600">{h.symbol?.substring(0, 2)}</div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : null;
+                    })()}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-base font-bold text-slate-900">{selectedCard.fullName || selectedCard.title}</p>
+                      {selectedCard.objective && <p className="text-sm text-slate-500">{selectedCard.objective}</p>}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-100 bg-gradient-to-br from-purple-50 to-white p-4">
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-slate-900">{selectedCard.currentValue || selectedCard.amount}</p>
+                      {selectedCard.changePct != null && Number.isFinite(selectedCard.changePct) && (
+                        <p className={`mt-1 text-sm font-semibold ${selectedCard.changePct >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                          {selectedCard.changePct >= 0 ? "+" : ""}{selectedCard.changePct.toFixed(2)}%
+                          {selectedCard.changeAbs != null && (
+                            <span className="ml-1 text-xs font-normal text-slate-400">
+                              ({selectedCard.changeAbs >= 0 ? "+" : ""}{formatCurrency(selectedCard.changeAbs)})
+                            </span>
+                          )}
+                        </p>
+                      )}
+                      <p className="mt-0.5 text-xs text-slate-400">Current Value</p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {selectedCard.riskLevel && (
+                      <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">{selectedCard.riskLevel}</span>
+                    )}
+                    {selectedCard.baseCurrency && (
+                      <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">{selectedCard.baseCurrency}</span>
+                    )}
+                    {selectedCard.holdingsCount > 0 && (
+                      <span className="rounded-full border border-purple-200 bg-purple-50 px-3 py-1 text-xs font-semibold text-purple-700">{selectedCard.holdingsCount} Holdings</span>
+                    )}
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-100 bg-white">
+                    <p className="px-4 pt-3 pb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Performance</p>
+                    <div className="divide-y divide-slate-50">
+                      {[
+                        { label: "1 Week", value: selectedCard.r1w },
+                        { label: "1 Month", value: selectedCard.r1m },
+                        { label: "3 Months", value: selectedCard.r3m },
+                        { label: "6 Months", value: selectedCard.r6m },
+                        { label: "YTD", value: selectedCard.rytd },
+                        { label: "1 Year", value: selectedCard.r1y },
+                      ].filter((p) => p.value != null).map((p) => (
+                        <div key={p.label} className="flex items-center justify-between px-4 py-2.5">
+                          <span className="text-sm text-slate-600">{p.label}</span>
+                          <span className={`text-sm font-semibold ${Number(p.value) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                            {Number(p.value) >= 0 ? "+" : ""}{Number(p.value).toFixed(2)}%
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { label: "Min Investment", value: selectedCard.minInvestment ? formatCurrency(selectedCard.minInvestment) : null },
+                      { label: "Provider", value: selectedCard.providerName },
+                      { label: "Mgmt Fee", value: selectedCard.managementFeeBps != null ? `${(selectedCard.managementFeeBps / 100).toFixed(2)}%` : null },
+                      { label: "As of", value: selectedCard.date },
+                    ].filter((item) => item.value).map((item) => (
+                      <div key={item.label} className="rounded-2xl border border-slate-100 bg-white p-3.5">
+                        <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{item.label}</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-900">{item.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${selectedCard.flow === "in" ? "bg-emerald-50" : "bg-red-50"}`}>
+                      {selectedCard.flow === "in" ? (
+                        <ArrowUpRight className="h-7 w-7 text-emerald-600" />
+                      ) : (
+                        <ArrowDownRight className="h-7 w-7 text-rose-500" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-base font-bold text-slate-900">{selectedCard.title}</p>
+                      <p className="text-sm text-slate-500">{selectedCard.desc}</p>
+                    </div>
+                  </div>
+
+                  <div className={`rounded-2xl border p-4 text-center ${selectedCard.flow === "in" ? "border-emerald-100 bg-emerald-50/50" : "border-red-100 bg-red-50/50"}`}>
+                    <p className={`text-2xl font-bold ${selectedCard.flow === "in" ? "text-emerald-700" : "text-red-700"}`}>{selectedCard.amount}</p>
+                    <p className="mt-0.5 text-xs text-slate-400">{selectedCard.meta}</p>
+                  </div>
+
+                  {selectedCard.date && (
+                    <div className="rounded-2xl border border-slate-100 bg-white p-3.5">
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Date</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-900">{selectedCard.date}</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
