@@ -436,8 +436,8 @@ const HomePage = ({
                       {tab.label}
                     </button>
                     {tab.disabled && (
-                      <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[8px] text-white/40 font-medium whitespace-nowrap tracking-wide">
-                        Soon
+                      <span className="absolute -bottom-3.5 left-1/2 -translate-x-1/2 text-[7px] text-white/35 font-medium whitespace-nowrap tracking-wider uppercase">
+                        Coming Soon
                       </span>
                     )}
                   </div>
