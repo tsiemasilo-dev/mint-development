@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useRef, useEffect } from "react";
+import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Bell, Eye, EyeOff, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, TrendingUp, TrendingDown, Plus } from "lucide-react";
 import { Area, ComposedChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell } from 'recharts';
 import { useFinancialData } from "../lib/useFinancialData";
@@ -688,26 +689,41 @@ const NewPortfolioPage = () => {
             <p className="mt-1 text-sm text-white/40">Account Value</p>
           </section>
 
-          {/* Tabs: Strategy, Individual Stocks, Goals */}
-          <section className="flex gap-2 mt-1">
-            {[
-              { id: "strategy", label: "Strategies" },
-              { id: "stocks", label: "Individual Stocks" },
-              { id: "holdings", label: "Holdings" },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2.5 rounded-full text-sm font-semibold transition-all ${
-                  activeTab === tab.id
-                    ? "bg-violet-500 text-white shadow-lg shadow-violet-500/30"
-                    : "border border-white/60 text-white backdrop-blur-xl hover:bg-white/20"
-                }`}
-                style={activeTab !== tab.id ? { background: 'rgba(255,255,255,0.15)', textShadow: '0 0 8px rgba(0,0,0,0.5), 0 1px 4px rgba(0,0,0,0.3)' } : {}}
-              >
-                {tab.label}
-              </button>
-            ))}
+          {/* iOS-style Segmented Control */}
+          <section className="mt-1">
+            <div 
+              className="relative flex rounded-2xl p-1 backdrop-blur-xl border border-white/30"
+              style={{ background: 'rgba(255,255,255,0.12)' }}
+            >
+              {[
+                { id: "strategy", label: "Strategies" },
+                { id: "stocks", label: "Individual Stocks" },
+                { id: "holdings", label: "Holdings" },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className="relative z-10 flex-1 py-2 text-sm font-semibold transition-colors duration-200"
+                  style={{ 
+                    color: activeTab === tab.id ? '#fff' : 'rgba(255,255,255,0.75)',
+                  }}
+                >
+                  {tab.label}
+                  {activeTab === tab.id && (
+                    <motion.div
+                      layoutId="activeTabIndicator"
+                      className="absolute inset-0 rounded-xl shadow-lg"
+                      style={{ 
+                        background: 'linear-gradient(135deg, rgba(139,92,246,0.9), rgba(109,40,217,0.95))',
+                        boxShadow: '0 4px 15px rgba(139,92,246,0.4)',
+                        zIndex: -1,
+                      }}
+                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                    />
+                  )}
+                </button>
+              ))}
+            </div>
           </section>
         </div>
       </div>
