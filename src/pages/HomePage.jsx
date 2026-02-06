@@ -308,10 +308,17 @@ const HomePage = ({
           <TransactionHistorySection items={transactionHistory} onViewAll={onOpenActivity} />
         ) : (
           <section className="rounded-3xl bg-white p-5 shadow-md">
-            <p className="text-sm font-semibold text-slate-900 mb-3">Recent Activity</p>
-            <div className="text-center py-4">
-              <p className="text-xs text-slate-500">No transactions yet</p>
-              <p className="text-xs text-slate-400 mt-1">Your activity will appear here</p>
+            <p className="text-sm font-semibold text-slate-900 mb-3">Calendar Returns</p>
+            <div className="grid grid-cols-3 gap-2">
+              {["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"].map((label) => (
+                <div
+                  key={label}
+                  className="rounded-xl bg-slate-50 px-3 py-2.5 text-center"
+                >
+                  <p className="text-[10px] font-semibold text-slate-300">{label}</p>
+                  <p className="mt-0.5 text-sm font-bold text-slate-300">—</p>
+                </div>
+              ))}
             </div>
           </section>
         )}
