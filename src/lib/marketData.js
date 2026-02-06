@@ -27,26 +27,13 @@ export const getMarketsSecuritiesWithMetrics = async () => {
   try {
     console.log("🔍 Fetching securities with metrics from Supabase...");
     
-    // Fetch securities with nested security_metrics using explicit join
+    // Fetch securities - last_price and change_percentage are directly on securities table
     const { data: securities, error: securitiesError } = await supabase
       .from("securities")
       .select(`
-        id, symbol, name, exchange, logo_url, sector, industry, market_cap,
-        security_metrics(
-          as_of_date,
-          last_close,
-          prev_close,
-          change_abs,
-          change_pct,
-          r_1d,
-          r_1w,
-          r_1m,
-          r_3m,
-          r_6m,
-          r_ytd,
-          r_1y
-        )
+        *
       `)
+      .eq("is_active", true)
       .order("market_cap", { ascending: false, nullsFirst: false });
 
     if (securitiesError) {
@@ -56,45 +43,22 @@ export const getMarketsSecuritiesWithMetrics = async () => {
 
     console.log("🔍 Raw securities sample:", securities?.[0]);
 
-    // Process securities to flatten metrics
+    // Process securities - convert last_price from cents to Rands
     const processedSecurities = (securities || []).map(security => {
-      const metrics = Array.isArray(security.security_metrics) 
-        ? security.security_metrics[0] 
-        : security.security_metrics;
-      
-      if (!metrics) {
-        console.warn(`⚠️ No metrics for security ${security.symbol} (id: ${security.id})`);
-      }
-      
       return {
         ...security,
-        // Flatten metrics for easier access
-        currentPrice: metrics?.last_close ? Number(metrics.last_close) : null,
-        prevClose: metrics?.prev_close ? Number(metrics.prev_close) : null,
-        changeAbs: metrics?.change_abs ? Number(metrics.change_abs) : null,
-        changePct: metrics?.change_pct ? Number(metrics.change_pct) : null,
-        asOfDate: metrics?.as_of_date || null,
-        returns: {
-          r_1d: metrics?.r_1d ? Number(metrics.r_1d) : null,
-          r_1w: metrics?.r_1w ? Number(metrics.r_1w) : null,
-          r_1m: metrics?.r_1m ? Number(metrics.r_1m) : null,
-          r_3m: metrics?.r_3m ? Number(metrics.r_3m) : null,
-          r_6m: metrics?.r_6m ? Number(metrics.r_6m) : null,
-          r_ytd: metrics?.r_ytd ? Number(metrics.r_ytd) : null,
-          r_1y: metrics?.r_1y ? Number(metrics.r_1y) : null,
-        },
-        // Remove the nested security_metrics array
-        security_metrics: undefined,
+        // Convert last_price from cents to Rands by dividing by 100
+        currentPrice: security.last_price ? Number(security.last_price) / 100 : null,
+        // Use change_percentage directly without division
+        changePct: security.change_percentage != null
+          ? Number(security.change_percentage)
+          : security.change_percent != null
+            ? Number(security.change_percent)
+            : null,
       };
     });
 
     console.log(`✅ Fetched ${processedSecurities.length} securities with metrics`);
-    
-    // Log price availability
-    const withPrices = processedSecurities.filter(s => s.currentPrice != null).length;
-    const withoutPrices = processedSecurities.filter(s => s.currentPrice == null).length;
-    console.log(`📊 Securities with prices: ${withPrices}`);
-    console.log(`📊 Securities without prices: ${withoutPrices}`);
     
     // Update cache
     cache.markets.data = processedSecurities;
@@ -126,6 +90,7 @@ export const getSecurityBySymbol = async (symbol) => {
       .from("securities")
       .select("*")
       .eq("symbol", symbol)
+      .eq("is_active", true)
       .single();
 
     if (securityError) {
@@ -139,36 +104,19 @@ export const getSecurityBySymbol = async (symbol) => {
     }
 
     console.log(`✅ Found security ${symbol}, id: ${security.id}`);
-
-    // Now fetch metrics for this security_id
-    const { data: metrics, error: metricsError } = await supabase
-      .from("security_metrics")
-      .select("*")
-      .eq("security_id", security.id)
-      .single();
-
-    if (metricsError) {
-      console.warn(`⚠️ No metrics found for ${symbol}:`, metricsError.message);
-    }
-
-    console.log(`🔍 Raw metrics for ${symbol}:`, metrics);
     
     const processedSecurity = {
       ...security,
-      currentPrice: metrics?.last_close ? Number(metrics.last_close) : null,
-      prevClose: metrics?.prev_close ? Number(metrics.prev_close) : null,
-      changeAbs: metrics?.change_abs ? Number(metrics.change_abs) : null,
-      changePct: metrics?.change_pct ? Number(metrics.change_pct) : null,
-      asOfDate: metrics?.as_of_date || null,
-      returns: {
-        r_1d: metrics?.r_1d ? Number(metrics.r_1d) : null,
-        r_1w: metrics?.r_1w ? Number(metrics.r_1w) : null,
-        r_1m: metrics?.r_1m ? Number(metrics.r_1m) : null,
-        r_3m: metrics?.r_3m ? Number(metrics.r_3m) : null,
-        r_6m: metrics?.r_6m ? Number(metrics.r_6m) : null,
-        r_ytd: metrics?.r_ytd ? Number(metrics.r_ytd) : null,
-        r_1y: metrics?.r_1y ? Number(metrics.r_1y) : null,
-      },
+      // Convert last_price from cents to Rands by dividing by 100
+      currentPrice: security.last_price ? Number(security.last_price) / 100 : null,
+        // change_price is already in cents, keep it as is for flexibility
+        change_price: security.change_price != null ? Number(security.change_price) : null,
+      // Use change_percentage or change_percent directly without division
+      changePct: security.change_percentage != null
+        ? Number(security.change_percentage)
+        : security.change_percent != null
+          ? Number(security.change_percent)
+          : null,
     };
 
     console.log(`✅ Processed ${symbol} with currentPrice: ${processedSecurity.currentPrice}, changeAbs: ${processedSecurity.changeAbs}`);
@@ -210,29 +158,31 @@ export const getSecurityPrices = async (securityId, timeframe = "1M") => {
     
     switch (timeframe) {
       case "1D":
-        daysToFetch = 3;
+        // Since we don't have intraday data yet, fetch last 30 days and display as "1M" style
+        daysToFetch = 30;
         break;
       case "1W":
-        daysToFetch = 10;
+        daysToFetch = 10; // ~2 weeks of trading days to get 7-10 days
         break;
       case "1M":
-        daysToFetch = 45;
+        daysToFetch = 45; // ~30 trading days
         break;
       case "3M":
-        daysToFetch = 110;
+        daysToFetch = 110; // ~90 trading days
         break;
       case "6M":
-        daysToFetch = 220;
+        daysToFetch = 220; // ~180 trading days
         break;
       case "YTD":
+        // Get from Jan 1 of current year
         const currentYear = new Date().getFullYear();
         dateFilter = new Date(currentYear, 0, 1).toISOString();
         break;
       case "1Y":
-        daysToFetch = 420;
+        daysToFetch = 420; // ~365 trading days
         break;
       case "5Y":
-        daysToFetch = 1825;
+        daysToFetch = 1825; // ~5 years
         break;
       default:
         daysToFetch = 45;
@@ -240,13 +190,15 @@ export const getSecurityPrices = async (securityId, timeframe = "1M") => {
 
     let query = supabase
       .from("security_prices")
-      .select("ts, close_price")
+        .select("ts, close_price")
       .eq("security_id", securityId)
       .order("ts", { ascending: true });
 
     if (dateFilter) {
+      // YTD filter
       query = query.gte("ts", dateFilter);
     } else {
+      // Fetch last N days
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - daysToFetch);
       query = query.gte("ts", cutoffDate.toISOString());
@@ -261,7 +213,8 @@ export const getSecurityPrices = async (securityId, timeframe = "1M") => {
 
     const prices = (data || []).map(row => ({
       ts: row.ts,
-      close: Number(row.close_price),
+        // close_price is in cents, convert to Rands
+        close: row.close_price ? Number(row.close_price) / 100 : null,
     }));
 
     console.log(`✅ Fetched ${prices.length} price points for ${timeframe}`);
