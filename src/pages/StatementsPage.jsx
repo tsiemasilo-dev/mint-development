@@ -4,6 +4,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useProfile } from "../lib/useProfile";
 import NotificationBell from "../components/NotificationBell";
+import Skeleton from "../components/Skeleton";
 import { supabase } from "../lib/supabase";
 import { formatCurrency } from "../lib/formatCurrency";
 
@@ -717,9 +718,66 @@ const StatementsPage = ({ onOpenNotifications }) => {
           </div>
 
           {isLoading ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <div className="h-6 w-6 animate-spin rounded-full border-2 border-violet-600 border-t-transparent" />
-              <p className="mt-3 text-sm text-slate-400">Loading...</p>
+            <div className="mt-4 space-y-3">
+              {activeTab === "holdings" ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="w-full rounded-3xl border border-slate-100/80 bg-white/90 p-4">
+                    <div className="flex items-start gap-3">
+                      <Skeleton className="h-10 w-10 rounded-full" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 space-y-2">
+                            <Skeleton className="h-4 w-32" />
+                            <Skeleton className="h-3 w-24" />
+                          </div>
+                          <div className="space-y-2 text-right">
+                            <Skeleton className="h-4 w-20 ml-auto" />
+                            <Skeleton className="h-3 w-14 ml-auto" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : activeTab === "strategy" ? (
+                Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="w-full rounded-3xl border border-slate-100/80 bg-white/90 p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-4 w-36" />
+                        <Skeleton className="h-3 w-48" />
+                      </div>
+                      <div className="space-y-2 text-right">
+                        <Skeleton className="h-4 w-20 ml-auto" />
+                        <Skeleton className="h-3 w-14 ml-auto" />
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <Skeleton className="h-6 w-20 rounded-full" />
+                    </div>
+                  </div>
+                ))
+              ) : (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="w-full rounded-3xl border border-slate-100/80 bg-white/90 p-4">
+                    <div className="flex items-start gap-3">
+                      <Skeleton className="h-10 w-10 rounded-full" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 space-y-2">
+                            <Skeleton className="h-4 w-28" />
+                            <Skeleton className="h-3 w-20" />
+                          </div>
+                          <div className="space-y-2 text-right">
+                            <Skeleton className="h-4 w-20 ml-auto" />
+                            <Skeleton className="h-3 w-16 ml-auto" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           ) : pageRows.length === 0 ? (
             <div className="rounded-3xl bg-white px-6 py-12 text-center shadow-md">
