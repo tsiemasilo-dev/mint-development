@@ -1152,9 +1152,14 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                         </p>
                         <p className="mt-0.5 text-xs text-slate-500">{security.symbol}</p>
                         <div className="mt-2">
-                          <p className="text-lg font-bold text-slate-900">
-                            {formatMarketCap(security.market_cap)}
-                          </p>
+                          {security.currentPrice != null ? (
+                            <p className="text-lg font-bold text-slate-900">
+                              <span className="text-xs text-slate-400 font-normal">{getDisplayCurrency(security)}</span>{' '}
+                              {formatPrice(security)}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-slate-500">No pricing data</p>
+                          )}
                         </div>
                         <p className="mt-1 text-xs font-semibold text-emerald-600">
                           +{security.percentGain.toFixed(2)}%
