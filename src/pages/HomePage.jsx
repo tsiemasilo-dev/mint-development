@@ -457,7 +457,6 @@ const HomePage = ({
                   <div className="relative h-full p-6 flex flex-col">
                     <div className="flex items-start justify-between">
                       <MintLogoWhite className="h-7 w-auto opacity-90" />
-                      <span className="text-[9px] uppercase tracking-[0.3em] text-white/30 font-medium mt-1" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>Premium</span>
                     </div>
                     <div className="flex-1 flex flex-col items-center justify-center gap-1">
                       <p className="text-[10px] uppercase tracking-[0.25em] text-white/40 font-medium" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>Available Balance</p>
@@ -473,8 +472,8 @@ const HomePage = ({
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="text-[22px] md:text-[26px] font-light text-white/90 tracking-wider" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif", fontStyle: "italic", letterSpacing: "0.08em" }}>VISA</p>
-                        <p className="text-[10px] text-white/40 tracking-[0.3em] font-light uppercase" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>Platinum</p>
+                        <p className="text-[22px] md:text-[26px] font-light text-white/90 tracking-wider" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif", fontStyle: "italic", letterSpacing: "0.08em" }}>MINT</p>
+                        <p className="text-[10px] text-white/40 tracking-[0.3em] font-light uppercase" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>Balance</p>
                       </div>
                     </div>
                   </div>
