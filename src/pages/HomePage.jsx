@@ -518,7 +518,7 @@ const HomePage = ({
       </div>
 
       <div className="mx-auto -mt-10 flex w-full max-w-sm flex-col gap-6 px-4 pb-10 md:max-w-md md:px-8">
-        <section className="grid grid-cols-4 gap-3 text-[11px] font-medium">
+        <section className="grid grid-cols-4 gap-3 text-[11px] font-medium pt-5">
           {[
             { label: <>Open<br />Strategies</>, icon: LayoutGrid, onClick: onOpenStrategies || onOpenInvest },
             { label: "Markets", icon: TrendingUp, onClick: onOpenMarkets || onOpenInvest },
@@ -529,14 +529,19 @@ const HomePage = ({
             return (
               <button
                 key={index}
-                className="flex flex-col items-center gap-2 rounded-2xl bg-white px-2 py-3 text-slate-700 shadow-md"
+                className="relative flex flex-col items-center rounded-2xl bg-white pt-7 pb-3 px-2 text-slate-700 shadow-md"
                 type="button"
                 onClick={item.onClick}
               >
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-50 text-violet-700">
-                  <Icon className="h-4 w-4" />
+                <span
+                  className="absolute -top-5 flex h-10 w-10 items-center justify-center rounded-xl shadow-lg"
+                  style={{
+                    background: "linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%)",
+                  }}
+                >
+                  <Icon className="h-5 w-5 text-white" />
                 </span>
-                <span className="text-center leading-tight">{item.label}</span>
+                <span className="text-center leading-tight text-slate-600 mt-1">{item.label}</span>
               </button>
             );
           })}
