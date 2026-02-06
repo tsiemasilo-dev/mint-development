@@ -27,7 +27,7 @@ export const getMarketsSecuritiesWithMetrics = async () => {
   try {
     console.log("🔍 Fetching securities with metrics from Supabase...");
     
-    // Fetch securities with nested security_metrics using explicit join
+    // Fetch securities - last_price and change_percentage are directly on securities table
     const { data: securities, error: securitiesError } = await supabase
       .from("securities")
       .select(`
@@ -56,35 +56,18 @@ export const getMarketsSecuritiesWithMetrics = async () => {
 
     console.log("🔍 Raw securities sample:", securities?.[0]);
 
-    // Process securities to flatten metrics
+    // Process securities - convert last_price from cents to Rands
     const processedSecurities = (securities || []).map(security => {
-      const metrics = Array.isArray(security.security_metrics) 
-        ? security.security_metrics[0] 
-        : security.security_metrics;
-      
-      if (!metrics) {
-        console.warn(`⚠️ No metrics for security ${security.symbol} (id: ${security.id})`);
-      }
-      
       return {
         ...security,
-        // Flatten metrics for easier access
-        currentPrice: metrics?.last_close ? Number(metrics.last_close) : null,
-        prevClose: metrics?.prev_close ? Number(metrics.prev_close) : null,
-        changeAbs: metrics?.change_abs ? Number(metrics.change_abs) : null,
-        changePct: metrics?.change_pct ? Number(metrics.change_pct) : null,
-        asOfDate: metrics?.as_of_date || null,
-        returns: {
-          r_1d: metrics?.r_1d ? Number(metrics.r_1d) : null,
-          r_1w: metrics?.r_1w ? Number(metrics.r_1w) : null,
-          r_1m: metrics?.r_1m ? Number(metrics.r_1m) : null,
-          r_3m: metrics?.r_3m ? Number(metrics.r_3m) : null,
-          r_6m: metrics?.r_6m ? Number(metrics.r_6m) : null,
-          r_ytd: metrics?.r_ytd ? Number(metrics.r_ytd) : null,
-          r_1y: metrics?.r_1y ? Number(metrics.r_1y) : null,
-        },
-        // Remove the nested security_metrics array
-        security_metrics: undefined,
+        // Convert last_price from cents to Rands by dividing by 100
+        currentPrice: security.last_price ? Number(security.last_price) / 100 : null,
+        // Use change_percentage directly without division
+        changePct: security.change_percentage != null
+          ? Number(security.change_percentage)
+          : security.change_percent != null
+            ? Number(security.change_percent)
+            : null,
       };
     });
 
@@ -133,36 +116,19 @@ export const getSecurityBySymbol = async (symbol) => {
     }
 
     console.log(`✅ Found security ${symbol}, id: ${security.id}`);
-
-    // Now fetch metrics for this security_id
-    const { data: metrics, error: metricsError } = await supabase
-      .from("security_metrics")
-      .select("*")
-      .eq("security_id", security.id)
-      .single();
-
-    if (metricsError) {
-      console.warn(`⚠️ No metrics found for ${symbol}:`, metricsError.message);
-    }
-
-    console.log(`🔍 Raw metrics for ${symbol}:`, metrics);
     
     const processedSecurity = {
       ...security,
-      currentPrice: metrics?.last_close ? Number(metrics.last_close) : null,
-      prevClose: metrics?.prev_close ? Number(metrics.prev_close) : null,
-      changeAbs: metrics?.change_abs ? Number(metrics.change_abs) : null,
-      changePct: metrics?.change_pct ? Number(metrics.change_pct) : null,
-      asOfDate: metrics?.as_of_date || null,
-      returns: {
-        r_1d: metrics?.r_1d ? Number(metrics.r_1d) : null,
-        r_1w: metrics?.r_1w ? Number(metrics.r_1w) : null,
-        r_1m: metrics?.r_1m ? Number(metrics.r_1m) : null,
-        r_3m: metrics?.r_3m ? Number(metrics.r_3m) : null,
-        r_6m: metrics?.r_6m ? Number(metrics.r_6m) : null,
-        r_ytd: metrics?.r_ytd ? Number(metrics.r_ytd) : null,
-        r_1y: metrics?.r_1y ? Number(metrics.r_1y) : null,
-      },
+      // Convert last_price from cents to Rands by dividing by 100
+      currentPrice: security.last_price ? Number(security.last_price) / 100 : null,
+        // change_price is already in cents, keep it as is for flexibility
+        change_price: security.change_price != null ? Number(security.change_price) : null,
+      // Use change_percentage or change_percent directly without division
+      changePct: security.change_percentage != null
+        ? Number(security.change_percentage)
+        : security.change_percent != null
+          ? Number(security.change_percent)
+          : null,
     };
 
     console.log(`✅ Processed ${symbol} with currentPrice: ${processedSecurity.currentPrice}, changeAbs: ${processedSecurity.changeAbs}`);

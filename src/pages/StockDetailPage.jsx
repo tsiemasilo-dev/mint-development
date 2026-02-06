@@ -12,7 +12,7 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy }) => {
   console.log("🔍 Initial security prop:", {
     symbol: initialSecurity?.symbol,
     currentPrice: initialSecurity?.currentPrice,
-    changeAbs: initialSecurity?.changeAbs,
+    change_price: initialSecurity?.change_price,
     changePct: initialSecurity?.changePct
   });
 
@@ -26,7 +26,7 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy }) => {
         if (updatedSecurity) {
           console.log("📊 Updated security data:", {
             currentPrice: updatedSecurity.currentPrice,
-            changeAbs: updatedSecurity.changeAbs,
+              change_price: updatedSecurity.change_price,
             changePct: updatedSecurity.changePct
           });
           setSecurity(updatedSecurity);
@@ -63,22 +63,30 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy }) => {
   
   console.log("💰 Display data:", {
     currentPrice: displaySecurity?.currentPrice,
-    changeAbs: displaySecurity?.changeAbs,
+      change_price: displaySecurity?.change_price,
     changePct: displaySecurity?.changePct,
     hasCurrentPrice: displaySecurity?.currentPrice != null,
-    hasChangeAbs: displaySecurity?.changeAbs != null
+      hasChangePrice: displaySecurity?.change_price != null
   });
   
   const currentPrice = displaySecurity?.currentPrice != null 
     ? Number(displaySecurity.currentPrice).toFixed(2)
     : "—";
-  const priceChange = displaySecurity?.changeAbs != null 
-    ? (displaySecurity.changeAbs >= 0 ? '+' : '') + Number(displaySecurity.changeAbs).toFixed(2)
+    // change_price is in cents, convert to Rands
+    const priceChange = displaySecurity?.change_price != null 
+      ? (displaySecurity.change_price >= 0 ? '+' : '') + (Number(displaySecurity.change_price) / 100).toFixed(2)
     : "—";
-  const percentChange = displaySecurity?.changePct != null 
-    ? (displaySecurity.changePct >= 0 ? '+' : '') + Number(displaySecurity.changePct).toFixed(2) + '%'
+  const rawPercentChange = displaySecurity?.change_percentage != null
+    ? Number(displaySecurity.change_percentage)
+    : displaySecurity?.change_percent != null
+      ? Number(displaySecurity.change_percent)
+      : displaySecurity?.changePct != null
+        ? Number(displaySecurity.changePct)
+        : null;
+  const percentChange = rawPercentChange != null
+    ? (rawPercentChange >= 0 ? '+' : '') + rawPercentChange.toFixed(2) + '%'
     : "—";
-  const isPositive = displaySecurity?.changePct != null && displaySecurity.changePct >= 0;
+  const isPositive = rawPercentChange != null && rawPercentChange >= 0;
 
   // Generate chart data from price history - filter out nulls
   const chartData = priceHistory.length > 0 
@@ -123,11 +131,18 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy }) => {
   const hasValidRange = paddedRange > 0 && chartData.length > 1;
 
   const formatTimestamp = () => {
-    if (!security.asOfDate) {
-      return new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    // AsOfTime is a text field in format like "16:30" or "2024-01-15 16:30:00"
+    if (displaySecurity?.AsOfTime) {
+      // If it's a full timestamp, extract time
+      if (displaySecurity.AsOfTime.includes(' ')) {
+        return displaySecurity.AsOfTime.split(' ')[1].substring(0, 5);
+      }
+      // If it's just time, use it directly
+      if (displaySecurity.AsOfTime.includes(':')) {
+        return displaySecurity.AsOfTime.substring(0, 5);
+      }
     }
-    const date = new Date(security.asOfDate);
-    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    return new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
   };
 
   // Helper function to calculate Y position with proper domain
@@ -192,7 +207,7 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy }) => {
         <div className="mt-6">
           <div className="flex items-baseline gap-2">
             <p className="text-4xl font-bold text-slate-900">{currentPrice}</p>
-            <span className="text-sm text-slate-500">{security.currency || "ZAC"}</span>
+            <span className="text-sm text-slate-500">{security.currency || "ZAR"}</span>
           </div>
           <div className="mt-2 flex items-center gap-2">
             <span className={`text-lg font-semibold ${isPositive ? "text-emerald-600" : "text-red-600"}`}>
@@ -203,10 +218,7 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy }) => {
             </span>
           </div>
           <p className="mt-1 text-xs text-slate-400">
-            {security.asOfDate 
-              ? `As of ${new Date(security.asOfDate).toLocaleDateString()} at ${formatTimestamp()} GMT+2`
-              : `As of today at ${formatTimestamp()} GMT+2`
-            }
+              As of today at {formatTimestamp()} GMT+2
           </p>
         </div>
       </div>

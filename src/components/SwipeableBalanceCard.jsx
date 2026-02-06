@@ -1,358 +1,221 @@
-import React, { useState, useMemo, useRef } from "react";
-import { Eye, EyeOff, TrendingUp } from "lucide-react";
-import { formatZar } from "../lib/formatCurrency";
-import { Area, ComposedChart, Line, ResponsiveContainer } from "recharts";
+import React, { useState, useMemo, useEffect } from "react";
+import { Eye, EyeOff, TrendingUp, LayoutGrid, ChevronDown, ChevronUp } from "lucide-react";
+import { Area, ComposedChart, Line, ResponsiveContainer, YAxis } from "recharts";
+import { supabase } from "../lib/supabase"; // Existing team client
 
 const VISIBILITY_STORAGE_KEY = "mintBalanceVisible";
 
-const generateChartData = (baseValue = 100, trend = "up", points = 20) => {
-  const data = [];
-  let value = baseValue;
-  for (let i = 0; i < points; i++) {
-    const change = trend === "up" 
-      ? Math.random() * 6 - 1.5 
-      : Math.random() * 5 - 3;
-    value = Math.max(baseValue * 0.7, value + change);
-    data.push({ x: i, value: Number(value.toFixed(2)) });
-  }
-  return data;
+const formatKMB = (value) => {
+  const num = Number(value);
+  const sign = num < 0 ? "-" : "";
+  const absNum = Math.abs(num);
+  let formatted = absNum;
+  if (absNum >= 1e9) formatted = (absNum / 1e9).toFixed(1) + "b";
+  else if (absNum >= 1e6) formatted = (absNum / 1e6).toFixed(1) + "m";
+  else if (absNum >= 1e3) formatted = (absNum / 1e3).toFixed(1) + "k";
+  else formatted = absNum.toFixed(0);
+  return `${sign}R${formatted}`;
 };
 
-const MiniChart = ({ data, color = "#FFFFFF" }) => {
-  const gradientId = useMemo(() => `gradient-${Math.random().toString(36).substr(2, 9)}`, []);
+const SwipeableBalanceCard = ({ userId }) => {
+  const [activeTab, setActiveTab] = useState("1m");
+  const [isOpen, setIsOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [selectedAsset, setSelectedAsset] = useState(null);
+  const [loading, setLoading] = useState(true);
   
-  if (!data || data.length === 0) {
-    return <div className="h-full w-full flex items-center justify-center text-white/40 text-xs">No data</div>;
-  }
-  
-  return (
-    <ResponsiveContainer width="100%" height="100%">
-      <ComposedChart data={data} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
-        <defs>
-          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity={0.35} />
-            <stop offset="100%" stopColor={color} stopOpacity={0.05} />
-          </linearGradient>
-        </defs>
-        <Area
-          type="monotone"
-          dataKey="value"
-          stroke="transparent"
-          fill={`url(#${gradientId})`}
-        />
-        <Line
-          type="monotone"
-          dataKey="value"
-          stroke={color}
-          strokeWidth={2.5}
-          dot={false}
-        />
-      </ComposedChart>
-    </ResponsiveContainer>
-  );
-};
+  const [dbData, setDbData] = useState({
+    holdings: [],
+    snapshots: [],
+    strategiesCount: 0,
+    totalMarketValue: 0, 
+    totalInvested: 0,
+    strategyMarketValue: 0,
+    strategyInvested: 0
+  });
 
-const MintLogoWhite = ({ className = "" }) => (
-  <svg viewBox="0 0 1826.64 722.72" className={className}>
-    <g>
-      <path fill="#FFFFFF" d="M1089.47,265.13c25.29,12.34,16.69,50.37-11.45,50.63h0s-512.36,0-512.36,0c-14.73,0-26.67,11.94-26.67,26.67v227.94c0,14.73-11.94,26.67-26.67,26.67H26.67c-14.73,0-26.67-11.94-26.67-26.67v-248.55c0-9.54,5.1-18.36,13.38-23.12L526.75,3.55c7.67-4.41,17.03-4.73,24.99-.85l537.73,262.43Z"/>
-      <path fill="#FFFFFF" d="M737.17,457.58c-25.29-12.34-16.69-50.37,11.45-50.63h0s512.36,0,512.36,0c14.73,0,26.67-11.94,26.67-26.67v-227.94c0-14.73,11.94-26.67,26.67-26.67h485.66c14.73,0,26.67,11.94,26.67,26.67v248.55c0,9.54-5.1,18.36-13.38,23.12l-513.38,295.15c-7.67,4.41-17.03,4.73-24.99.85l-537.73-262.43Z"/>
-    </g>
-  </svg>
-);
-
-const MintLogoSilver = ({ className = "" }) => (
-  <svg viewBox="0 0 1826.64 722.72" className={className}>
-    <g opacity="0.12">
-      <path fill="#C0C0C0" d="M1089.47,265.13c25.29,12.34,16.69,50.37-11.45,50.63h0s-512.36,0-512.36,0c-14.73,0-26.67,11.94-26.67,26.67v227.94c0,14.73-11.94,26.67-26.67,26.67H26.67c-14.73,0-26.67-11.94-26.67-26.67v-248.55c0-9.54,5.1-18.36,13.38-23.12L526.75,3.55c7.67-4.41,17.03-4.73,24.99-.85l537.73,262.43Z"/>
-      <path fill="#C0C0C0" d="M737.17,457.58c-25.29-12.34-16.69-50.37,11.45-50.63h0s512.36,0,512.36,0c14.73,0,26.67-11.94,26.67-26.67v-227.94c0-14.73,11.94-26.67,26.67-26.67h485.66c14.73,0,26.67,11.94,26.67,26.67v248.55c0,9.54-5.1,18.36-13.38,23.12l-513.38,295.15c-7.67,4.41-17.03,4.73-24.99.85l-537.73-262.43Z"/>
-    </g>
-  </svg>
-);
-
-const CardContent = ({ children, style }) => (
-  <div
-    className="absolute inset-0 rounded-[24px] overflow-hidden"
-    style={{
-      background: "linear-gradient(135deg, #2d1052 0%, #4a1d7a 25%, #6b2fa0 50%, #5a2391 75%, #3d1a6d 100%)",
-      boxShadow: "0 25px 50px -12px rgba(91, 33, 182, 0.5)",
-      backfaceVisibility: "hidden",
-      ...style,
-    }}
-  >
-    <div
-      className="absolute inset-0"
-      style={{
-        backgroundImage: `
-          repeating-linear-gradient(
-            45deg,
-            transparent,
-            transparent 8px,
-            rgba(255,255,255,0.02) 8px,
-            rgba(255,255,255,0.02) 9px
-          ),
-          repeating-linear-gradient(
-            -45deg,
-            transparent,
-            transparent 8px,
-            rgba(255,255,255,0.02) 8px,
-            rgba(255,255,255,0.02) 9px
-          ),
-          repeating-linear-gradient(
-            60deg,
-            transparent,
-            transparent 15px,
-            rgba(255,255,255,0.015) 15px,
-            rgba(255,255,255,0.015) 16px
-          ),
-          repeating-linear-gradient(
-            -60deg,
-            transparent,
-            transparent 15px,
-            rgba(255,255,255,0.015) 15px,
-            rgba(255,255,255,0.015) 16px
-          )
-        `,
-      }}
-    />
-    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-      <MintLogoSilver className="w-52 h-auto" />
-    </div>
-    {children}
-  </div>
-);
-
-const SwipeableBalanceCard = ({
-  amount = 0,
-  totalInvestments = 0,
-  investmentChange = 0,
-  bestPerformingAssets = [],
-  userName = "",
-  onPressMintBalance,
-}) => {
-  const [rotation, setRotation] = useState(0);
-  const [isAnimating, setIsAnimating] = useState(false);
   const [isVisible, setIsVisible] = useState(() => {
     if (typeof window !== "undefined") {
-      const stored = window.localStorage.getItem(VISIBILITY_STORAGE_KEY);
-      return stored !== "false";
+      return window.localStorage.getItem(VISIBILITY_STORAGE_KEY) !== "false";
     }
     return true;
   });
-  const dragStartX = useRef(0);
-  
-  const chartColor = investmentChange >= 0 ? "#10B981" : "#F43F5E";
-  
-  const investmentChartData = useMemo(() => 
-    generateChartData(totalInvestments > 0 ? 100 : 50, investmentChange >= 0 ? "up" : "down"), 
-    [totalInvestments, investmentChange]
-  );
 
-  const toggleVisibility = (e) => {
-    e.stopPropagation();
-    setIsVisible((prev) => {
-      const next = !prev;
-      window.localStorage.setItem(VISIBILITY_STORAGE_KEY, String(next));
-      return next;
-    });
-  };
+  // Isolated Fetch Logic: Only affects this component
+  useEffect(() => {
+    const loadData = async () => {
+      if (!userId) return;
+      setLoading(true);
+      
+      // Fetching specifically from your defined tables
+      const { data: holdings } = await supabase
+        .from('stock_holdings')
+        .select('*, securities(name, symbol, logo_url)')
+        .eq('user_id', userId);
 
-  const formattedAmount = useMemo(() => formatZar(amount), [amount]);
-  const formattedInvestments = useMemo(() => formatZar(totalInvestments), [totalInvestments]);
-  const maskedAmount = "••••••••";
+      const { data: snapshots } = await supabase
+        .from('mint_balance_snapshots')
+        .select('snapshot_date, total_balance')
+        .eq('user_id', userId)
+        .order('snapshot_date', { ascending: true });
 
-  const bestAsset = bestPerformingAssets.length > 0 ? bestPerformingAssets[0] : null;
-  const investmentCount = bestPerformingAssets.length;
+      const { count: sCount } = await supabase
+        .from('strategies')
+        .select('*', { count: 'exact', head: true });
 
-  const currentIndex = Math.round(rotation / 180) % 2 === 0 ? 0 : 1;
-  const normalizedIndex = Math.abs(currentIndex);
+      if (holdings) {
+        const mValue = holdings.reduce((acc, h) => acc + Number(h.market_value || 0), 0);
+        const invested = holdings.reduce((acc, h) => acc + (Number(h.avg_cost || 0) * Number(h.quantity || 0)), 0);
 
-  const handleDragStart = (e) => {
-    if (isAnimating) return;
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    dragStartX.current = clientX;
-  };
-
-  const handleDragEnd = (e) => {
-    if (isAnimating) return;
-    const clientX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
-    const diff = dragStartX.current - clientX;
-    const threshold = 50;
-    
-    if (Math.abs(diff) > threshold) {
-      setIsAnimating(true);
-      if (diff > 0) {
-        setRotation(prev => prev - 180);
-      } else {
-        setRotation(prev => prev + 180);
+        setDbData({
+          holdings,
+          snapshots: snapshots?.map(s => ({ d: s.snapshot_date, v: Number(s.total_balance) })) || [],
+          strategiesCount: sCount || 0,
+          totalMarketValue: mValue,
+          totalInvested: invested,
+          strategyMarketValue: mValue * 0.3, 
+          strategyInvested: invested * 0.35
+        });
       }
-      setTimeout(() => setIsAnimating(false), 700);
-    }
-  };
+      setLoading(false);
+    };
+    loadData();
+  }, [userId]);
 
-  const handleDotClick = (idx) => {
-    if (isAnimating) return;
-    const currentCard = normalizedIndex;
-    if (idx !== currentCard) {
-      setIsAnimating(true);
-      if (idx > currentCard) {
-        setRotation(prev => prev - 180);
-      } else {
-        setRotation(prev => prev + 180);
+  useEffect(() => {
+    const fetchChartData = async () => {
+      if (!userId) return;
+
+      const { data, error } = await supabase.rpc('get_isolated_portfolio_history', {
+        p_user_id: userId,
+        p_security_id: selectedAsset?.security_id || null 
+      });
+
+      if (!error && data) {
+        setDbData(prev => ({
+          ...prev,
+          snapshots: data.map(point => ({ d: point.d, v: Number(point.v) }))
+        }));
       }
-      setTimeout(() => setIsAnimating(false), 700);
-    }
-  };
+    };
 
-  const frontRotation = rotation;
-  const backRotation = rotation + 180;
+    fetchChartData();
+  }, [userId, selectedAsset]);
+
+  const portfolioReturn = dbData.totalMarketValue - dbData.totalInvested;
+  const strategyReturn = dbData.strategyMarketValue - dbData.strategyInvested;
+  const portfolioIsLoss = portfolioReturn < 0;
+  const strategyIsLoss = strategyReturn < 0;
+  const chartColor = portfolioIsLoss ? "#FB7185" : "#10B981"; 
+
+  const itemsPerPage = 8;
+  const totalPages = Math.ceil(dbData.holdings.length / itemsPerPage);
+  const paginatedItems = dbData.holdings.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  const masked = "••••";
+
+  if (loading && userId) return <div className="w-full aspect-[1.7/1] animate-pulse bg-white/5 rounded-[28px]" />;
 
   return (
-    <div className="relative select-none">
-      <div
-        className="relative w-full touch-pan-y"
-        style={{ 
-          aspectRatio: "1.7 / 1",
-          perspective: "1000px",
-        }}
-        onTouchStart={handleDragStart}
-        onTouchEnd={handleDragEnd}
-        onMouseDown={handleDragStart}
-        onMouseUp={handleDragEnd}
-      >
-        <CardContent 
-          style={{ 
-            transform: `rotateY(${frontRotation}deg)`,
-            transition: "transform 0.7s ease-out",
-          }}
-        >
-          <div className="relative h-full p-5 flex flex-col">
-            <div className="flex items-start justify-between">
-              <MintLogoWhite className="h-8 w-auto" />
-            </div>
-
-            <div className="flex-1 flex items-center justify-center">
-              <p className="text-3xl md:text-4xl font-bold text-white tracking-wider" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
-                {isVisible ? formattedAmount : maskedAmount}
-              </p>
-            </div>
-
-            <div className="flex items-end justify-between">
+    <div className="relative w-full z-[100]">
+      <div className="relative w-full overflow-hidden rounded-[28px] bg-gradient-to-br from-[#2D1052] to-[#1A0B2E] text-white border border-white/10" style={{ aspectRatio: "1.7 / 1" }}>
+        <div className="relative z-10 flex h-full">
+          {/* Metrics Stack */}
+          <div className="w-[50%] p-5 flex flex-col justify-between border-r border-white/5">
+            <div className="space-y-4">
               <div>
-                <p className="text-base md:text-lg uppercase tracking-[0.2em] text-white font-semibold" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", letterSpacing: "0.15em" }}>
-                  {userName || "MINT MEMBER"}
-                </p>
+                <p className="text-[10px] uppercase tracking-widest text-white/40 font-normal mb-1.5">portfolio value</p>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="text-lg font-normal">{isVisible ? formatKMB(dbData.totalMarketValue) : masked}</span>
+                  <span className="px-2 py-0.5 rounded-full bg-white/10 text-[8px] font-normal uppercase text-white/60">
+                    {isVisible ? formatKMB(dbData.totalInvested) : masked}(invested)
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-base font-normal ${portfolioIsLoss ? 'text-rose-400' : 'text-emerald-400'}`}>{isVisible ? formatKMB(portfolioReturn) : masked}</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[8px] font-normal uppercase ${portfolioIsLoss ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                    {isVisible ? "return" : masked}
+                  </span>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="text-2xl md:text-3xl font-bold text-white tracking-wider" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", fontStyle: "italic" }}>
-                  VISA
-                </p>
-                <p className="text-sm md:text-base text-white/90 tracking-widest font-medium" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
-                  Mint
-                </p>
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-white/40 font-normal mb-1.5">strategies ({dbData.strategiesCount})</p>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="text-base font-normal">{isVisible ? formatKMB(dbData.strategyMarketValue) : masked}</span>
+                  <span className="px-2 py-0.5 rounded-full bg-white/10 text-[8px] font-normal uppercase text-white/60">
+                    {isVisible ? formatKMB(dbData.strategyInvested) : masked}(invested)
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-sm font-normal ${strategyIsLoss ? 'text-rose-400' : 'text-emerald-400'}`}>{isVisible ? formatKMB(strategyReturn) : masked}</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[8px] font-normal uppercase ${strategyIsLoss ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                    {isVisible ? "return" : masked}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
-        </CardContent>
 
-        <CardContent 
-          style={{ 
-            transform: `rotateY(${backRotation}deg)`,
-            transition: "transform 0.7s ease-out",
-          }}
-        >
-          <div className="relative h-full p-5 flex flex-col">
-            <div className="flex items-start justify-between">
+          {/* Chart & Selector */}
+          <div className="w-[50%] p-5 flex flex-col">
+            <div className="flex justify-end mb-2">
+              <div className="flex bg-black/20 p-1 rounded-lg border border-white/5">
+                {["1m", "3m", "6m"].map((tab) => (
+                  <button key={tab} onClick={() => setActiveTab(tab)} className={`px-2 py-0.5 text-[9px] font-normal rounded-md ${activeTab === tab ? "bg-white text-slate-900" : "text-white/40"}`}>{tab.toUpperCase()}</button>
+                ))}
+              </div>
+            </div>
+            <div className="flex-1 min-h-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={dbData.snapshots}>
+                  <YAxis hide domain={['auto', 'auto']} /> 
+                  <Area type="monotone" dataKey="v" stroke="none" fill={chartColor} fillOpacity={0.1} />
+                  <Line type="monotone" dataKey="v" stroke={chartColor} strokeWidth={1.5} dot={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+            <button onClick={() => setIsOpen(!isOpen)} className="mt-2 flex items-center justify-between p-2 rounded-xl bg-white/5 border border-white/5">
               <div className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-white" />
-                <span className="text-xs uppercase tracking-[0.15em] text-white/80 font-medium" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
-                  Total Investments
-                </span>
+                <LayoutGrid size={12} className="text-violet-400" />
+                <span className="text-[10px] font-normal text-white/70">{selectedAsset ? selectedAsset.securities?.symbol : "All Investments"}</span>
               </div>
-            </div>
-
-            <div className="mt-2">
-              <p className="text-2xl md:text-3xl font-bold text-white tracking-wider" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
-                {isVisible ? formattedInvestments : maskedAmount}
-              </p>
-              <p className="text-sm font-semibold mt-0.5" style={{ color: chartColor, fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
-                {investmentChange >= 0 ? "+" : ""}{investmentChange.toFixed(2)}% this month
-              </p>
-            </div>
-
-            <div className="flex-1 mt-2 min-h-[60px]">
-              <MiniChart data={investmentChartData} color={chartColor} />
-            </div>
-
-            <div className="flex items-end justify-between mt-1">
-              <div>
-                <p className="text-[10px] uppercase tracking-wider text-white/60 font-medium" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
-                  Total Investments
-                </p>
-                <p className="text-lg font-bold text-white" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
-                  {investmentCount}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="text-[10px] uppercase tracking-wider text-white/60 font-medium" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
-                  Best Performing
-                </p>
-                {bestAsset ? (
-                  <div className="flex items-center justify-end gap-1">
-                    <span className="text-lg font-bold text-white" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
-                      {bestAsset.symbol}
-                    </span>
-                    <span className="text-sm font-semibold" style={{ color: chartColor }}>
-                      +{(bestAsset.change || 0).toFixed(1)}%
-                    </span>
-                  </div>
-                ) : (
-                  <p className="text-sm text-white/50">—</p>
-                )}
-              </div>
-            </div>
+              {isOpen ? <ChevronUp size={14} className="opacity-40" /> : <ChevronDown size={14} className="opacity-40" />}
+            </button>
           </div>
-        </CardContent>
-
-        <button
-          type="button"
-          onClick={toggleVisibility}
-          className="absolute top-4 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20"
-          aria-label={isVisible ? "Hide values" : "Show values"}
-        >
-          {isVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-        </button>
+        </div>
       </div>
 
-      <div className="flex justify-center gap-2 mt-3">
-        {[0, 1].map((idx) => (
-          <button
-            key={idx}
-            type="button"
-            onClick={() => handleDotClick(idx)}
-            className={`h-2 rounded-full transition-all duration-300 ${
-              normalizedIndex === idx
-                ? "w-6 bg-white"
-                : "w-2 bg-white/40 hover:bg-white/60"
-            }`}
-            aria-label={`Go to card ${idx + 1}`}
-          />
-        ))}
-      </div>
-
-      {onPressMintBalance && (
-        <button
-          type="button"
-          onClick={onPressMintBalance}
-          className="mt-4 py-2.5 px-5 rounded-lg text-sm font-medium text-white/90 transition-all duration-300 hover:text-white hover:bg-white/10 active:scale-[0.98] mx-auto flex items-center gap-2"
-          style={{
-            background: "rgba(255,255,255,0.05)",
-            border: "1px solid rgba(255,255,255,0.15)",
-            fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-          }}
-        >
-          View Investment Breakdown
-        </button>
+      {/* Light Mode Dropdown */}
+      {isOpen && (
+        <div className="absolute top-[102%] left-0 w-full bg-white border border-slate-200 rounded-[24px] shadow-2xl z-[110] overflow-hidden animate-in fade-in slide-in-from-top-2">
+          <div className="p-3 space-y-1 max-h-[320px] overflow-y-auto">
+            <button onClick={() => { setSelectedAsset(null); setIsOpen(false); }} className="w-full flex items-center p-3 rounded-2xl hover:bg-slate-50 text-left">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center"><LayoutGrid size={14} className="text-slate-400" /></div>
+                <p className="text-[11px] font-normal text-slate-900">All Investments</p>
+              </div>
+            </button>
+            {paginatedItems.map((item, idx) => (
+              <button key={idx} onClick={() => { setSelectedAsset(item); setIsOpen(false); }} className="w-full flex items-center justify-between p-3 rounded-2xl hover:bg-slate-50 text-left">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full overflow-hidden border border-slate-100 bg-slate-50">
+                    {item.securities?.logo_url ? <img src={item.securities.logo_url} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400">{item.securities?.symbol?.substring(0, 2)}</div>}
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-normal text-slate-900">{item.securities?.name}</p>
+                    <p className="text-[9px] text-slate-400 font-normal uppercase">{item.securities?.symbol}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-[11px] font-normal text-slate-900">{formatKMB(item.market_value)}</p>
+                  <p className={`text-[9px] font-normal ${item.unrealized_pnl < 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
+                    {((item.unrealized_pnl / (item.avg_cost * item.quantity)) * 100).toFixed(1)}%
+                  </p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );
