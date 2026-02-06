@@ -503,13 +503,7 @@ const NewPortfolioPage = () => {
     if (realChartData && realChartData.length > 0) {
       return realChartData;
     }
-    switch (timeFilter) {
-      case "D": return chartData.daily;
-      case "W": return chartData.weekly;
-      case "M": return chartData.monthly;
-      case "ALL": return chartData.allTime;
-      default: return chartData.weekly;
-    }
+    return [];
   };
 
   const currentChartData = getChartData();
@@ -812,6 +806,11 @@ const NewPortfolioPage = () => {
             onTouchStart={(e) => e.currentTarget.style.cursor = 'grabbing'}
             onTouchEnd={(e) => e.currentTarget.style.cursor = 'grab'}
           >
+            {currentChartData.length === 0 ? (
+              <div style={{ width: '100%', height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div className="text-slate-400 text-sm">{isLoadingData ? 'Loading chart...' : 'No data available'}</div>
+              </div>
+            ) : (
             <div style={{ width: getChartWidth(currentChartData.length), height: 220, minWidth: '100%', outline: 'none' }}>
               <ComposedChart
                 width={getChartWidth(currentChartData.length)}
@@ -923,14 +922,16 @@ const NewPortfolioPage = () => {
                   tickLine={false}
                   tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 500 }}
                   tickFormatter={(val) => {
+                    if (val >= 10000) return `R${(val / 1000).toFixed(0)}k`;
                     if (val >= 1000) return `R${(val / 1000).toFixed(1)}k`;
-                    return `R${val.toFixed(0)}`;
+                    if (val >= 100) return `R${val.toFixed(1)}`;
+                    return `R${val.toFixed(2)}`;
                   }}
-                  width={50}
+                  width={55}
                   tickCount={5}
                   domain={([dataMin, dataMax]) => {
                     const range = dataMax - dataMin;
-                    const padding = range > 0 ? range * 0.05 : 1;
+                    const padding = range > 0 ? Math.max(range * 0.15, 0.5) : 1;
                     return [dataMin - padding, dataMax + padding];
                   }}
                 />
@@ -985,6 +986,7 @@ const NewPortfolioPage = () => {
                 />
               </ComposedChart>
             </div>
+            )}
           </div>
         </section>
       </div>
@@ -1116,7 +1118,7 @@ const NewPortfolioPage = () => {
 
       {/* Individual Stocks Tab Content */}
       {activeTab === "stocks" && (() => {
-        const stockChartData = liveStockChartData.length > 0 ? liveStockChartData : getStockChartData();
+        const stockChartData = liveStockChartData.length > 0 ? liveStockChartData : [];
         if (!selectedStock) {
           return <div className="text-center py-10 text-slate-500">Loading stocks...</div>;
         }
@@ -1210,6 +1212,11 @@ const NewPortfolioPage = () => {
                   onTouchStart={(e) => e.currentTarget.style.cursor = 'grabbing'}
                   onTouchEnd={(e) => e.currentTarget.style.cursor = 'grab'}
                 >
+                  {stockChartData.length === 0 ? (
+                    <div style={{ width: '100%', height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <div className="text-slate-400 text-sm">{stockChartLoading ? 'Loading chart...' : 'No data available'}</div>
+                    </div>
+                  ) : (
                   <div style={{ width: getStockChartWidth(stockChartData.length), height: 220, minWidth: '100%', outline: 'none' }}>
                     <ComposedChart
                       width={getStockChartWidth(stockChartData.length)}
@@ -1291,14 +1298,16 @@ const NewPortfolioPage = () => {
                         tickLine={false}
                         tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 500 }}
                         tickFormatter={(val) => {
+                          if (val >= 10000) return `R${(val / 1000).toFixed(0)}k`;
                           if (val >= 1000) return `R${(val / 1000).toFixed(1)}k`;
-                          return `R${val.toFixed(0)}`;
+                          if (val >= 100) return `R${val.toFixed(1)}`;
+                          return `R${val.toFixed(2)}`;
                         }}
-                        width={50}
+                        width={55}
                         tickCount={5}
                         domain={([dataMin, dataMax]) => {
                           const range = dataMax - dataMin;
-                          const padding = range > 0 ? range * 0.05 : 1;
+                          const padding = range > 0 ? Math.max(range * 0.15, 0.5) : 1;
                           return [dataMin - padding, dataMax + padding];
                         }}
                       />
@@ -1353,6 +1362,7 @@ const NewPortfolioPage = () => {
                       />
                     </ComposedChart>
                   </div>
+                  )}
                 </div>
               </section>
             </div>
