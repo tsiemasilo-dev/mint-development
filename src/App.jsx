@@ -382,8 +382,7 @@ const App = () => {
             modal={null}
             onCloseModal={noOp}
           >
-            <NewPortfolioPage
-              onBack={noOp}
+            <InvestmentsPage
               onOpenNotifications={noOp}
               onOpenInvest={noOp}
             />
@@ -771,8 +770,7 @@ const App = () => {
         modal={modal}
         onCloseModal={closeModal}
       >
-        <NewPortfolioPage
-          onBack={goBack}
+        <InvestmentsPage
           onOpenNotifications={() => {
             setNotificationReturnPage("investments");
             navigateTo("notifications");
