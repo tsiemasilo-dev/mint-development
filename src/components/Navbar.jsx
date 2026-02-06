@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Home,
-  CreditCard,
+  FileText,
   Plus,
   PieChart,
   MoreHorizontal,
@@ -29,7 +29,7 @@ const Navbar = ({ activeTab, setActiveTab, onWithdraw, onShowComingSoon }) => {
  
   const tabs = [
     { id: "home", label: "Home", icon: Home },
-    { id: "credit", label: "Credit", icon: CreditCard },
+    { id: "statements", label: "Statements", icon: FileText },
     { id: "investments", label: "Portfolio", icon: PieChart },
     { id: "more", label: "More", icon: MoreHorizontal },
   ];

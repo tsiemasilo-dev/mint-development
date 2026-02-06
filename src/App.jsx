@@ -67,7 +67,7 @@ const getTokensFromHash = (hash) => {
 
 const recoveryTokens = isRecoveryMode ? getTokensFromHash(initialHash) : null;
 
-const mainTabs = ['home', 'credit', 'transact', 'investments', 'more', 'welcome', 'auth'];
+const mainTabs = ['home', 'credit', 'statements', 'transact', 'investments', 'more', 'welcome', 'auth'];
 
 const App = () => {
   const [currentPage, setCurrentPage] = useState(hasError ? "linkExpired" : (isRecoveryMode ? "auth" : "welcome"));
@@ -357,6 +357,19 @@ const App = () => {
               onOpenNotifications={noOp}
               onOpenCreditApply={noOp}
             />
+          </AppLayout>
+        );
+      case 'statements':
+        return (
+          <AppLayout
+            activeTab="statements"
+            onTabChange={noOp}
+            onWithdraw={noOp}
+            onShowComingSoon={noOp}
+            modal={null}
+            onCloseModal={noOp}
+          >
+            <ActivityPage onBack={noOp} />
           </AppLayout>
         );
       case 'investments':
@@ -714,6 +727,21 @@ const App = () => {
           }}
           onOpenCreditApply={() => navigateTo("creditApply")}
         />
+      </AppLayout>
+    );
+  }
+
+  if (currentPage === "statements") {
+    return (
+      <AppLayout
+        activeTab="statements"
+        onTabChange={setCurrentPage}
+        onWithdraw={handleWithdrawRequest}
+        onShowComingSoon={handleShowComingSoon}
+        modal={modal}
+        onCloseModal={closeModal}
+      >
+        <ActivityPage onBack={goBack} />
       </AppLayout>
     );
   }
