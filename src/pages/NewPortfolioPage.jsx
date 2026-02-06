@@ -927,7 +927,11 @@ const NewPortfolioPage = () => {
                 />
 
                 <YAxis
-                  hide={true}
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 500 }}
+                  tickFormatter={(val) => `R${val.toLocaleString()}`}
+                  width={65}
                   domain={([dataMin, dataMax]) => {
                     const range = dataMax - dataMin;
                     const padding = range > 0 ? range * 0.05 : 1;
@@ -1287,7 +1291,11 @@ const NewPortfolioPage = () => {
                       />
 
                       <YAxis
-                        hide={true}
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 500 }}
+                        tickFormatter={(val) => `R${val.toLocaleString()}`}
+                        width={65}
                         domain={([dataMin, dataMax]) => {
                           const range = dataMax - dataMin;
                           const padding = range > 0 ? range * 0.05 : 1;
