@@ -1391,7 +1391,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onBack }) => {
                         <p className="text-sm font-bold text-slate-900">
                           {formatCurrency(stock.currentValue)}
                         </p>
-                        <p className="text-xs font-semibold text-violet-500">
+                        <p className="text-xs font-semibold text-emerald-500">
                           {totalValue > 0 ? ((stock.currentValue / totalValue) * 100).toFixed(1) : '0.0'}%
                         </p>
                       </div>

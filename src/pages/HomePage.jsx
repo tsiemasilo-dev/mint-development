@@ -435,9 +435,6 @@ const HomePage = ({
                 <div className="relative flex items-center">
                   <span className="rounded-full px-3 py-1.5 text-xs font-semibold text-white/30 cursor-default">Credit</span>
                   <span className="rounded-full px-3 py-1.5 text-xs font-semibold text-white/30 cursor-default">Transact</span>
-                  <span className="absolute -bottom-3.5 left-1/2 -translate-x-1/2 text-[7px] text-white/35 font-medium whitespace-nowrap tracking-wider uppercase">
-                    Coming Soon
-                  </span>
                 </div>
               </div>
             </div>
