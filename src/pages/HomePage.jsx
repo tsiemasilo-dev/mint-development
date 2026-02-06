@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "../lib/supabase";
 import {
   ArrowDownToLine,
@@ -30,6 +30,7 @@ import { useRequiredActions } from "../lib/useRequiredActions";
 import { useSumsubStatus } from "../lib/useSumsubStatus";
 import { useFinancialData, useInvestments } from "../lib/useFinancialData";
 import { getStrategiesWithMetrics } from "../lib/strategyData";
+import { getHoldingsArray, normalizeSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot } from "../lib/strategyUtils";
 import { formatZar } from "../lib/formatCurrency";
 import HomeSkeleton from "../components/HomeSkeleton";
 import SwipeableBalanceCard from "../components/SwipeableBalanceCard";
@@ -104,6 +105,7 @@ const HomePage = ({
   const { balance, investments, transactions, bestAssets, loading: financialLoading, refetch: fetchFinancialData } = useFinancialData();
   const { monthlyChangePercent } = useInvestments();
   const [bestStrategies, setBestStrategies] = useState([]);
+  const [holdingsSecurities, setHoldingsSecurities] = useState([]);
   const [failedLogos, setFailedLogos] = useState({});
   const [showPayModal, setShowPayModal] = useState(false);
   const [showReceiveModal, setShowReceiveModal] = useState(false);
@@ -311,6 +313,62 @@ const HomePage = ({
     };
     fetchStrategies();
   }, []);
+
+  const holdingsBySymbol = useMemo(() => buildHoldingsBySymbol(holdingsSecurities), [holdingsSecurities]);
+
+  useEffect(() => {
+    const fetchHoldingsSecurities = async () => {
+      if (!supabase || bestStrategies.length === 0) return;
+
+      try {
+        const allTickers = [...new Set(
+          bestStrategies.flatMap((strategy) =>
+            getHoldingsArray(strategy).flatMap((h) => {
+              const rawSymbol = h.ticker || h.symbol || h;
+              const normalizedSym = normalizeSymbol(rawSymbol);
+              return normalizedSym && normalizedSym !== rawSymbol
+                ? [rawSymbol, normalizedSym]
+                : [rawSymbol];
+            })
+          )
+        )];
+
+        if (allTickers.length === 0) return;
+
+        const chunkSize = 50;
+        const chunks = [];
+        for (let i = 0; i < allTickers.length; i += chunkSize) {
+          chunks.push(allTickers.slice(i, i + chunkSize));
+        }
+
+        const results = await Promise.all(
+          chunks.map((symbols) =>
+            supabase
+              .from("securities")
+              .select("id, symbol, logo_url, name")
+              .in("symbol", symbols)
+          )
+        );
+
+        const merged = [];
+        results.forEach(({ data, error }) => {
+          if (error) {
+            console.error("Error fetching holdings securities chunk:", error);
+            return;
+          }
+          if (data?.length) merged.push(...data);
+        });
+
+        if (merged.length) {
+          setHoldingsSecurities(merged);
+        }
+      } catch (error) {
+        console.error("Error fetching holdings securities:", error);
+      }
+    };
+
+    fetchHoldingsSecurities();
+  }, [bestStrategies]);
 
   useEffect(() => {
     const fetchNews = async () => {
@@ -790,30 +848,33 @@ const HomePage = ({
           
           {hasStrategies ? (
             <div className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {bestStrategies.slice(0, 5).map((strategy) => (
-                <div
-                  key={strategy.id}
-                  className="flex min-w-[260px] flex-1 snap-start items-center gap-4 rounded-3xl bg-white p-4 shadow-md"
-                >
-                  <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-slate-50 shadow-sm ring-1 ring-slate-100">
-                    <span className="text-xs font-bold text-slate-700">
-                      {strategy.name?.substring(0, 2).toUpperCase() || "ST"}
-                    </span>
+              {bestStrategies.slice(0, 5).map((strategy) => {
+                const holdingsSnapshot = getStrategyHoldingsSnapshot(strategy, holdingsBySymbol);
+                return (
+                  <div key={strategy.id} className="flex flex-col min-w-[200px] snap-start rounded-3xl p-4 shadow-lg bg-gradient-to-br from-violet-600 to-purple-800 text-white">
+                    <div className="flex items-center gap-2 mb-2">
+                      <BadgeCheck className="h-4 w-4 text-emerald-300 shrink-0" />
+                      <p className="text-sm font-semibold line-clamp-1">{strategy.name}</p>
+                    </div>
+                    <p className="text-xs text-white/60 mb-3 line-clamp-1">{strategy.risk_level || strategy.provider_name || 'Balanced'}</p>
+                    <div className="flex items-center justify-between mt-auto">
+                      <div className="flex -space-x-2">
+                        {holdingsSnapshot.slice(0, 3).map((h) => (
+                          <div key={h.symbol} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-violet-600 bg-white shadow-sm">
+                            {h.logo_url ? <img src={h.logo_url} alt={h.symbol} className="h-full w-full object-cover" /> : <span className="text-[8px] font-bold text-slate-600">{h.symbol?.substring(0, 2)}</span>}
+                          </div>
+                        ))}
+                        {holdingsSnapshot.length > 3 && <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-violet-600 bg-white/20 text-[10px] font-semibold text-white">+{holdingsSnapshot.length - 3}</div>}
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-sm font-bold ${(strategy.change_pct || 0) >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                          {(strategy.change_pct || 0) >= 0 ? '+' : ''}{((strategy.change_pct || 0)).toFixed(2)}%
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-slate-900 line-clamp-1">{strategy.name}</p>
-                    <p className="text-xs text-slate-500 line-clamp-1">{strategy.provider_name || strategy.risk_level}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-slate-900">
-                      {strategy.last_close ? `R${strategy.last_close.toFixed(2)}` : "—"}
-                    </p>
-                    <p className={`text-xs font-semibold ${strategy.change_pct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                      {strategy.change_pct >= 0 ? '+' : ''}{strategy.change_pct ? strategy.change_pct.toFixed(2) : '0.00'}%
-                    </p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="rounded-3xl bg-white p-6 shadow-md text-center">
