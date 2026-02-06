@@ -483,7 +483,7 @@ const HomePage = ({
                   transition: "transform 0.7s ease-out",
                 }}>
                   <div className="relative h-full overflow-hidden">
-                    <SwipeableBalanceCard userId={userId} />
+                    <SwipeableBalanceCard userId={userId} isBackFacing={cardNormalizedIndex === 1} />
                   </div>
                 </CardContent>
 

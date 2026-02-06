@@ -17,9 +17,13 @@ const formatKMB = (value) => {
   return `${sign}R${formatted}`;
 };
 
-const SwipeableBalanceCard = ({ userId }) => {
+const SwipeableBalanceCard = ({ userId, isBackFacing = true }) => {
   const [activeTab, setActiveTab] = useState("1m");
   const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isBackFacing) setIsOpen(false);
+  }, [isBackFacing]);
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [loading, setLoading] = useState(true);
   
