@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import {
   ArrowDownToLine,
@@ -67,7 +67,59 @@ const HomePage = ({
   const [homeTab, setHomeTab] = useState("balance");
   const [isFlipped, setIsFlipped] = useState(false);
   const [userId, setUserId] = useState(null);
-  
+
+  const cardContainerRef = useRef(null);
+  const touchStartRef = useRef({ x: 0, y: 0 });
+  const [isSwiping, setIsSwiping] = useState(false);
+  const [swipeDelta, setSwipeDelta] = useState(0);
+  const swipeLocked = useRef(false);
+
+  const handleTouchStart = useCallback((e) => {
+    const touch = e.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+    swipeLocked.current = false;
+    setSwipeDelta(0);
+  }, []);
+
+  const handleTouchMove = useCallback((e) => {
+    const touch = e.touches[0];
+    const dx = touch.clientX - touchStartRef.current.x;
+    const dy = touch.clientY - touchStartRef.current.y;
+
+    if (!swipeLocked.current && !isSwiping) {
+      if (Math.abs(dy) > Math.abs(dx)) {
+        swipeLocked.current = true;
+        return;
+      }
+      if (Math.abs(dx) > 10) {
+        setIsSwiping(true);
+      }
+      return;
+    }
+
+    if (swipeLocked.current) return;
+
+    setSwipeDelta(dx);
+  }, [isSwiping]);
+
+  const handleTouchEnd = useCallback(() => {
+    if (!isSwiping) {
+      setSwipeDelta(0);
+      return;
+    }
+
+    const threshold = 50;
+    if (swipeDelta < -threshold && !isFlipped) {
+      setIsFlipped(true);
+    } else if (swipeDelta > threshold && isFlipped) {
+      setIsFlipped(false);
+    }
+
+    setIsSwiping(false);
+    setSwipeDelta(0);
+    swipeLocked.current = false;
+  }, [isSwiping, swipeDelta, isFlipped]);
+
   // Goals State
   const [showGoalsModal, setShowGoalsModal] = useState(false);
   const [goals, setGoals] = useState([]);
@@ -346,11 +398,18 @@ const HomePage = ({
           {homeTab === "balance" ? (
             <div style={{ perspective: "1000px" }}>
               <div
+                ref={cardContainerRef}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
                 style={{
-                  transition: "transform 0.6s cubic-bezier(0.4, 0.2, 0.2, 1)",
+                  transition: isSwiping ? "none" : "transform 0.6s cubic-bezier(0.4, 0.2, 0.2, 1)",
                   transformStyle: "preserve-3d",
-                  transform: isFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
+                  transform: isSwiping
+                    ? `rotateY(${Math.max(-180, Math.min(180, (isFlipped ? 180 : 0) + (swipeDelta / (window.innerWidth || 400)) * -90))}deg)`
+                    : isFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
                   position: "relative",
+                  touchAction: "pan-y",
                 }}
               >
                 <div style={{ backfaceVisibility: "hidden" }}>
