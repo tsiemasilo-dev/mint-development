@@ -781,29 +781,24 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onBack }) => {
               </div>
             )}
           </div>
-          {availableCalendarYears.length === 0 ? (
-            <div className="text-center py-4">
-              <p className="text-sm text-slate-500">Calendar return data will be available once you have investment history.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-3 gap-2">
-              {monthNames.map((label, index) => {
-                const monthKey = String(index + 1).padStart(2, "0");
-                const value = calendarData[String(calendarYear)]?.[monthKey];
-                return (
-                  <div
-                    key={`${calendarYear}-${label}`}
-                    className={`rounded-xl px-3 py-2.5 text-center ${getReturnColor(value)}`}
-                  >
-                    <p className="text-[10px] font-semibold text-slate-500">{label}</p>
-                    <p className="mt-0.5 text-sm font-bold">
-                      {value == null ? "—" : `${(Number(value) * 100).toFixed(2)}%`}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <div className="grid grid-cols-3 gap-2">
+            {monthNames.map((label, index) => {
+              const monthKey = String(index + 1).padStart(2, "0");
+              const value = calendarData[String(calendarYear)]?.[monthKey];
+              const hasData = value != null;
+              return (
+                <div
+                  key={`${calendarYear}-${label}`}
+                  className={`rounded-xl px-3 py-2.5 text-center ${hasData ? getReturnColor(value) : "bg-slate-50"}`}
+                >
+                  <p className={`text-[10px] font-semibold ${hasData ? "text-slate-500" : "text-slate-300"}`}>{label}</p>
+                  <p className={`mt-0.5 text-sm font-bold ${hasData ? "" : "text-slate-300"}`}>
+                    {hasData ? `${(Number(value) * 100).toFixed(2)}%` : "—"}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
         </section>
       </div>
         </>
