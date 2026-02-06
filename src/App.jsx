@@ -618,6 +618,14 @@ const App = () => {
     return renderPageContent(previousPageName, true);
   }, [previousPageName, currentPage, renderPageContent]);
 
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0d0d12]">
+        <div className="w-8 h-8 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   if (currentPage === "linkExpired") {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center px-6">
@@ -1122,14 +1130,6 @@ const App = () => {
 
   if (currentPage === "userOnboarding") {
     return <UserOnboardingPage onComplete={() => setCurrentPage("home")} />;
-  }
-
-  if (isCheckingAuth) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0d0d12]">
-        <div className="w-8 h-8 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
   }
 
   if (currentPage === "welcome") {
