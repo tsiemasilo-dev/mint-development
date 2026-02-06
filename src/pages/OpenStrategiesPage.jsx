@@ -6,123 +6,7 @@ import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer } from "r
 import { supabase } from "../lib/supabase";
 import { getStrategiesWithMetrics, formatChangePct, formatChangeAbs, getChangeColor } from "../lib/strategyData.js";
 import { formatCurrency } from "../lib/formatCurrency";
-
-// Mock strategies for fallback
-const mockStrategyCards = [
-  {
-    name: "Balanced Growth",
-    risk: "Balanced",
-    return: "+8.7%",
-    returnRate: "6.7%",
-    minimum: 2500,
-    minimum_display: "Min. R2,500",
-    tags: ["Balanced", "Low risk", "Automated"],
-    holdings: [
-      { ticker: "AGL", weight: 25.5 },
-      { ticker: "NPN", weight: 22.3 },
-      { ticker: "SHP", weight: 18.7 },
-      { ticker: "ABG", weight: 15.2 },
-      { ticker: "SLM", weight: 12.1 },
-      { ticker: "SOL", weight: 6.2 },
-    ],
-    exposure: "Global",
-    minInvestment: "R2,500+",
-    timeHorizon: "Long",
-    sectors: ["Technology", "Consumer"],
-    popularity: "Most popular",
-    maxDrawdown: "Lowest max drawdown",
-    volatility: "Lowest volatility",
-    returnScore: 6.7,
-    maxDrawdownScore: 6.2,
-    volatilityScore: 3.1,
-    minInvestmentValue: 2500,
-    popularityScore: 4,
-    sparkline: [12, 18, 16, 24, 28, 26, 32, 35, 40, 44],
-  },
-  {
-    name: "Dividend Focus",
-    risk: "Low risk",
-    return: "+5.3%",
-    returnRate: "5.3%",
-    minimum: 1500,
-    minimum_display: "Min. R1,500",
-    tags: ["Income", "Low risk", "Automated"],
-    holdings: [
-      { ticker: "AGL", weight: 30.0 },
-      { ticker: "BTI", weight: 25.0 },
-      { ticker: "SBK", weight: 20.0 },
-      { ticker: "VOD", weight: 15.0 },
-      { ticker: "NED", weight: 10.0 },
-    ],
-    exposure: "Mixed",
-    minInvestment: "R500+",
-    timeHorizon: "Medium",
-    sectors: ["Consumer", "Healthcare"],
-    popularity: "Recommended",
-    maxDrawdown: "Lowest max drawdown",
-    volatility: "Lowest volatility",
-    returnScore: 5.3,
-    maxDrawdownScore: 4.8,
-    volatilityScore: 2.4,
-    minInvestmentValue: 500,
-    popularityScore: 5,
-    sparkline: [10, 12, 15, 14, 18, 20, 22, 24, 26, 28],
-  },
-  {
-    name: "Momentum Select",
-    risk: "Growth",
-    return: "+9.1%",
-    returnRate: "9.1%",
-    minimum: 5000,
-    minimum_display: "Min. R5,000",
-    tags: ["Growth", "Higher risk", "Automated"],
-    holdings: [
-      { ticker: "NPN", weight: 35.0 },
-      { ticker: "PRX", weight: 25.0 },
-      { ticker: "AMS", weight: 20.0 },
-      { ticker: "SHP", weight: 12.0 },
-      { ticker: "MTN", weight: 8.0 },
-    ],
-    exposure: "Equities",
-    minInvestment: "R10,000+",
-    timeHorizon: "Short",
-    sectors: ["Technology", "Energy"],
-    popularity: "Best performance",
-    maxDrawdown: "Lowest max drawdown",
-    volatility: "Lowest volatility",
-    returnScore: 9.1,
-    maxDrawdownScore: 7.4,
-    volatilityScore: 5.6,
-    minInvestmentValue: 10000,
-    popularityScore: 3,
-    sparkline: [8, 14, 12, 20, 26, 24, 30, 36, 34, 42],
-  },
-];
-
-// Fallback sparkline data for strategies without price history
-const generateSparkline = (changePct) => {
-  const base = 20;
-  const trend = changePct || 0;
-  return Array.from({ length: 10 }, (_, i) => {
-    const progress = i / 9;
-    return base + (trend * 5 * progress) + (Math.random() * 2 - 1);
-  });
-};
-
-const holdingsSnapshot = [
-  {
-    name: "Anglo American",
-    src: "https://s3-symbol-logo.tradingview.com/anglo-american--big.svg",
-  },
-  {
-    name: "Naspers",
-    src: "https://s3-symbol-logo.tradingview.com/naspers--big.svg",
-  },
-  {
-    name: "Shoprite",
-    src: "https://s3-symbol-logo.tradingview.com/shoprite-holdings--big.svg",
-  },
-];
+import { normalizeSymbol, getHoldingsArray, getHoldingSymbol, buildHoldingsBySymbol } from "../lib/strategyUtils";
 
 const sortOptions = [
   "Recommended",
@@ -259,12 +143,12 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
         const data = await getStrategiesWithMetrics();
         if (isMounted) {
           console.log("✅ Fetched strategies:", data);
-          setStrategies(data.length > 0 ? data : mockStrategyCards);
+          setStrategies(data);
         }
       } catch (error) {
         console.error("Error fetching strategies:", error);
         if (isMounted) {
-          setStrategies(mockStrategyCards);
+          setStrategies([]);
         }
       } finally {
         if (isMounted) {
@@ -280,79 +164,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
     };
   }, []);
 
-  const normalizeSymbol = (symbol) => {
-    if (typeof symbol !== "string") return symbol;
-    const trimmed = symbol.trim();
-    if (!trimmed) return symbol;
-    return trimmed.split(".")[0].toUpperCase();
-  };
-
-  const getHoldingsArray = (strategy) => {
-    const holdings = strategy?.holdings;
-    if (Array.isArray(holdings)) return holdings;
-    if (typeof holdings === "string") {
-      try {
-        const parsed = JSON.parse(holdings);
-        return Array.isArray(parsed) ? parsed : [];
-      } catch (error) {
-        return [];
-      }
-    }
-    return [];
-  };
-
-  const holdingsBySymbol = useMemo(() => {
-    const map = new Map();
-    holdingsSecurities.forEach((security) => {
-      if (!security?.symbol) return;
-      map.set(security.symbol, security);
-      const normalized = normalizeSymbol(security.symbol);
-      if (normalized && normalized !== security.symbol) {
-        map.set(normalized, security);
-      }
-    });
-    return map;
-  }, [holdingsSecurities]);
-
-  const getHoldingSymbol = (holding) => {
-    const rawSymbol = holding?.ticker || holding?.symbol || holding;
-    return normalizeSymbol(rawSymbol);
-  };
-
-  const getHoldingsMinInvestment = (strategy) => {
-    const holdings = getHoldingsArray(strategy);
-    if (!holdings.length) return null;
-    const totalCents = holdings.reduce((sum, holding) => {
-      const rawSymbol = holding?.ticker || holding?.symbol || holding;
-      const symbol = getHoldingSymbol(holding);
-      const security = holdingsBySymbol.get(rawSymbol) || holdingsBySymbol.get(symbol);
-      const lastPrice = security?.last_price;
-      const shares = Number(holding?.shares);
-      if (!Number.isFinite(shares) || shares <= 0 || lastPrice == null) return sum;
-      return sum + (Number(lastPrice) * shares);
-    }, 0);
-    return totalCents > 0 ? totalCents / 100 : null;
-  };
-
-  const getFallbackMinInvestment = (strategy) => {
-    const fallback = Number(
-      strategy?.min_investment ?? strategy?.minimum ?? strategy?.minInvestmentValue,
-    );
-    return Number.isFinite(fallback) ? fallback : null;
-  };
-
-  const getMinInvestmentValue = (strategy) => {
-    const holdingsMin = getHoldingsMinInvestment(strategy);
-    if (holdingsMin != null) return holdingsMin;
-    return getFallbackMinInvestment(strategy);
-  };
-
-  const getMinInvestmentCategory = (value) => {
-    if (!Number.isFinite(value)) return null;
-    if (value >= 10000) return "R10,000+";
-    if (value >= 2500) return "R2,500+";
-    return "R500+";
-  };
+  const holdingsBySymbol = useMemo(() => buildHoldingsBySymbol(holdingsSecurities), [holdingsSecurities]);
 
   // Fetch securities for strategy holdings with logos
   useEffect(() => {
@@ -434,7 +246,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
   const formattedReturn = `${returnValue >= 0 ? "+" : ""}${returnValue.toFixed(2)}%`;
   const formattedAllTimeReturn = `${allTimeReturn >= 0 ? "+" : ""}${allTimeReturn.toFixed(2)}%`;
   const normalizedQuery = searchQuery.trim().toLowerCase();
-  const strategyData = strategies.length > 0 ? strategies : mockStrategyCards;
+  const strategyData = strategies;
   const holdingSuggestions = useMemo(() => {
     if (!normalizedQuery) return [];
     const suggestions = new Map();
@@ -477,10 +289,11 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
       const matchesRisk = selectedRisks.size
         ? selectedRisks.has(strategy.risk_level || strategy.risk)
         : true;
-      const minInvestmentValue = getMinInvestmentValue(strategy);
-      const minInvestmentCategory = getMinInvestmentCategory(minInvestmentValue);
+      const minInvest = strategy.min_investment || 0;
       const matchesMinInvestment = selectedMinInvestment
-        ? minInvestmentCategory === selectedMinInvestment
+        ? (minInvest >= 10000 && selectedMinInvestment === "R10,000+") ||
+          (minInvest >= 2500 && minInvest < 10000 && selectedMinInvestment === "R2,500+") ||
+          (minInvest < 2500 && selectedMinInvestment === "R500+")
         : true;
       const matchesExposure = selectedExposure.size
         ? selectedExposure.has(strategy.exposure)
@@ -518,11 +331,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
       sorted.sort((a, b) => a.volatilityScore - b.volatilityScore);
     }
     if (selectedSort === "Lowest minimum") {
-      sorted.sort((a, b) => {
-        const minA = getMinInvestmentValue(a) ?? Number.POSITIVE_INFINITY;
-        const minB = getMinInvestmentValue(b) ?? Number.POSITIVE_INFINITY;
-        return minA - minB;
-      });
+      sorted.sort((a, b) => (a.min_investment || Infinity) - (b.min_investment || Infinity));
     }
     if (selectedSort === "Most popular") {
       sorted.sort((a, b) => b.popularityScore - a.popularityScore);
@@ -778,13 +587,9 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
                 const hasMetrics = price !== null && price !== undefined;
                 const holdings = getHoldingsArray(strategy);
                 
-                const minInvestmentValue = getMinInvestmentValue(strategy);
-                const minInvestmentText = minInvestmentValue != null
-                  ? `Min. ${formatCurrency(minInvestmentValue, "R")}`
-                  : "Min. R0";
+                const minInvestmentText = `Min. ${formatCurrency(strategy.min_investment || 0, "R")}`;
 
-                // Generate sparkline from real data if available, otherwise use mock
-                const sparkline = strategy.sparkline || generateSparkline(changePct);
+                const sparkline = strategy.sparkline || [20, 22, 21, 24, 26, 25, 28, 30, 29, 32];
                 
                 return (
                 <button
@@ -1097,12 +902,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold text-slate-900">{selectedStrategy.name}</h3>
                   <p className="text-sm text-slate-500">
-                    {(() => {
-                      const minInvestmentValue = getMinInvestmentValue(selectedStrategy);
-                      return minInvestmentValue != null
-                        ? `Min. ${formatCurrency(minInvestmentValue, "R")}`
-                        : "Min. R0";
-                    })()}
+                    Min. {formatCurrency(selectedStrategy.min_investment || 0, "R")}
                   </p>
                 </div>
                 <button

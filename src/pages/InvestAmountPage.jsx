@@ -2,18 +2,6 @@ import React, { useState } from "react";
 import { ArrowLeft, Info, Plus, Minus } from "lucide-react";
 import { formatCurrency } from "../lib/formatCurrency";
 
-const companyLogos = {
-  AAPL: "https://s3-symbol-logo.tradingview.com/apple--big.svg",
-  MSFT: "https://s3-symbol-logo.tradingview.com/microsoft--big.svg",
-  NVDA: "https://s3-symbol-logo.tradingview.com/nvidia--big.svg",
-  TSLA: "https://s3-symbol-logo.tradingview.com/tesla--big.svg",
-  AMZN: "https://s3-symbol-logo.tradingview.com/amazon--big.svg",
-  KO: "https://s3-symbol-logo.tradingview.com/coca-cola--big.svg",
-  PG: "https://s3-symbol-logo.tradingview.com/procter-gamble--big.svg",
-  V: "https://s3-symbol-logo.tradingview.com/visa--big.svg",
-  JNJ: "https://s3-symbol-logo.tradingview.com/johnson-johnson--big.svg",
-};
-
 const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
   const currentStrategy = strategy || {
     name: "Strategy",
@@ -24,7 +12,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
   };
 
   // Default minimum investment
-  const minimumInvestment = currentStrategy.minimum_investment || 2500;
+  const minimumInvestment = currentStrategy.min_investment || 2500;
   const currency = currentStrategy.currency || 'R';
   
   const [amount, setAmount] = useState(minimumInvestment);
@@ -90,7 +78,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
                   className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-slate-100 overflow-hidden flex-shrink-0"
                 >
                   <img
-                    src={companyLogos[ticker] || `https://s3-symbol-logo.tradingview.com/${ticker.toLowerCase()}--big.svg`}
+                    src={`https://s3-symbol-logo.tradingview.com/${ticker.toLowerCase()}--big.svg`}
                     alt={ticker}
                     className="h-full w-full object-cover"
                     onError={(e) => {

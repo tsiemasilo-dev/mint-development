@@ -9,16 +9,7 @@ import Skeleton from "../components/Skeleton";
 import { ChartContainer } from "../components/ui/line-charts-2";
 import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatCurrency } from "../lib/formatCurrency";
-
-// Fallback sparkline data for strategies without price history
-const generateSparkline = (changePct) => {
-  const base = 20;
-  const trend = changePct || 0;
-  return Array.from({ length: 10 }, (_, i) => {
-    const progress = i / 9;
-    return base + (trend * 5 * progress) + (Math.random() * 2 - 1);
-  });
-};
+import { normalizeSymbol, getHoldingsArray, getHoldingSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot } from "../lib/strategyUtils";
 
 const sortOptions = ["Market Cap", "Dividend Yield", "P/E Ratio"];
 
@@ -174,56 +165,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const [draftTimeHorizon, setDraftTimeHorizon] = useState(new Set());
   const [draftStrategySectors, setDraftStrategySectors] = useState(new Set());
 
-  const normalizeSymbol = (symbol) => {
-    if (typeof symbol !== "string") return symbol;
-    const trimmed = symbol.trim();
-    if (!trimmed) return symbol;
-    return trimmed.split(".")[0].toUpperCase();
-  };
-
-  const getHoldingsArray = (strategy) => {
-    const holdings = strategy?.holdings;
-    if (Array.isArray(holdings)) return holdings;
-    if (typeof holdings === "string") {
-      try {
-        const parsed = JSON.parse(holdings);
-        return Array.isArray(parsed) ? parsed : [];
-      } catch (error) {
-        return [];
-      }
-    }
-    return [];
-  };
-
-  const holdingsBySymbol = useMemo(() => {
-    const map = new Map();
-    holdingsSecurities.forEach((security) => {
-      if (!security?.symbol) return;
-      map.set(security.symbol, security);
-      const normalized = normalizeSymbol(security.symbol);
-      if (normalized && normalized !== security.symbol) {
-        map.set(normalized, security);
-      }
-    });
-    return map;
-  }, [holdingsSecurities]);
+  const holdingsBySymbol = useMemo(() => buildHoldingsBySymbol(holdingsSecurities), [holdingsSecurities]);
   const previewGradientId = useId();
-
-  const getStrategyHoldingsSnapshot = (strategy) => {
-    const holdings = getHoldingsArray(strategy);
-    if (!holdings.length) return [];
-    return holdings.map((holding) => {
-      const rawSymbol = holding.ticker || holding.symbol || holding;
-      const normalizedSymbol = normalizeSymbol(rawSymbol);
-      const security = holdingsBySymbol.get(rawSymbol) || holdingsBySymbol.get(normalizedSymbol);
-      return {
-        id: security?.id || null,
-        symbol: rawSymbol,
-        name: security?.name || rawSymbol,
-        logo_url: security?.logo_url || null,
-      };
-    });
-  };
   
   // News pagination
   const [newsPage, setNewsPage] = useState(1);
@@ -329,7 +272,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
           chunks.map((symbols) => (
             supabase
               .from("securities")
-              .select("id, symbol, logo_url, name, currency, last_price")
+              .select("id, symbol, logo_url, name, last_price")
               .in("symbol", symbols)
           )),
         );
@@ -554,41 +497,15 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
     return `R${num.toFixed(2)}`;
   };
 
-  const getDisplayCurrency = (security) => {
-    const currency = security.currency || "R";
-    return currency.toUpperCase() === "ZAC" ? "R" : currency;
-  };
+  const getDisplayCurrency = () => "R";
 
   const formatPrice = (security) => {
     if (security.currentPrice != null) {
-      const currency = security.currency || "R";
-      const priceValue = currency.toUpperCase() === "ZAC"
-        ? Number(security.currentPrice) / 100
-        : Number(security.currentPrice);
-      return priceValue.toFixed(2);
+      return Number(security.currentPrice).toFixed(2);
     }
     return "—";
   };
 
-  const getHoldingSymbol = (holding) => {
-    const rawSymbol = holding?.ticker || holding?.symbol || holding;
-    return normalizeSymbol(rawSymbol);
-  };
-
-  const getHoldingsMinInvestment = (strategy) => {
-    const holdings = getHoldingsArray(strategy);
-    if (!holdings.length) return null;
-    const totalCents = holdings.reduce((sum, holding) => {
-      const rawSymbol = holding?.ticker || holding?.symbol || holding;
-      const symbol = getHoldingSymbol(holding);
-      const security = holdingsBySymbol.get(rawSymbol) || holdingsBySymbol.get(symbol);
-      const lastPrice = security?.last_price;
-      const shares = Number(holding?.shares);
-      if (!Number.isFinite(shares) || shares <= 0 || lastPrice == null) return sum;
-      return sum + (Number(lastPrice) * shares);
-    }, 0);
-    return totalCents > 0 ? totalCents / 100 : null;
-  };
 
   useEffect(() => {
     if (!selectedStrategy) {
@@ -1451,18 +1368,11 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                           : strategy.description
                         : '';
                       
-                      const holdingsMinInvestment = getHoldingsMinInvestment(strategy);
-                      const fallbackMinInvestment = Number(strategy.min_investment);
-                      const minInvestmentValue = holdingsMinInvestment
-                        ?? (Number.isFinite(fallbackMinInvestment) ? fallbackMinInvestment : null);
-                      const formattedMinInvestment = minInvestmentValue != null
-                        ? `Min. ${formatCurrency(minInvestmentValue, "R")}`
-                        : "Min. R0";
+                      const formattedMinInvestment = `Min. ${formatCurrency(strategy.min_investment || 0, "R")}`;
                       
-                      // Generate sparkline (fallback until we have real price history)
-                      const sparkline = generateSparkline(0);
+                      const sparkline = [20, 22, 21, 24, 26, 25, 28, 30, 29, 32];
                       
-                      const holdingsSnapshot = getStrategyHoldingsSnapshot(strategy);
+                      const holdingsSnapshot = getStrategyHoldingsSnapshot(strategy, holdingsBySymbol);
                       
                       return (
                       <button
@@ -1664,15 +1574,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 <div className="flex-1">
                   <h2 className="text-lg font-semibold text-slate-900">{selectedStrategy.name}</h2>
                   <p className="text-sm text-slate-500">
-                    {(() => {
-                      const holdingsMinInvestment = getHoldingsMinInvestment(selectedStrategy);
-                      const fallbackMinInvestment = Number(selectedStrategy.min_investment);
-                      const minInvestmentValue = holdingsMinInvestment
-                        ?? (Number.isFinite(fallbackMinInvestment) ? fallbackMinInvestment : null);
-                      return minInvestmentValue != null
-                        ? `Min. ${formatCurrency(minInvestmentValue, "R")}`
-                        : "Min. R0";
-                    })()}
+                    Min. {formatCurrency(selectedStrategy.min_investment || 0, "R")}
                   </p>
                 </div>
               </div>
