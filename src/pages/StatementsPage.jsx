@@ -1011,19 +1011,19 @@ const StatementsPage = ({ onOpenNotifications }) => {
       </div>
 
       {selectedCard && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4">
           <button
             type="button"
             className="absolute inset-0 h-full w-full cursor-default"
             aria-label="Close modal"
             onClick={() => setSelectedCard(null)}
           />
-          <div className="relative z-10 w-full max-w-md overflow-hidden rounded-t-3xl bg-white shadow-2xl animate-[slideUp_0.3s_ease-out]">
+          <div className="relative z-10 w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl">
             <div className="flex items-center justify-center pt-3 pb-1">
               <div className="h-1.5 w-12 rounded-full bg-slate-200" />
             </div>
 
-            <div className="max-h-[80vh] overflow-y-auto px-6 pb-8 pt-2">
+            <div className="max-h-[75vh] overflow-y-auto px-6 pb-6 pt-2">
               <div className="mb-5 flex items-center justify-between">
                 <h2 className="text-lg font-bold text-slate-900">
                   {selectedCard.type === "Holdings" ? "Stock Details" : selectedCard.type === "Strategy" ? "Strategy Details" : "Transaction Details"}
