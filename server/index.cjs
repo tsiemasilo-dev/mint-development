@@ -946,6 +946,15 @@ app.post("/api/record-investment", async (req, res) => {
       return res.status(400).json({ success: false, error: payError || "Payment verification failed" });
     }
 
+    const { data: existingTx } = await db
+      .from("transactions")
+      .select("id")
+      .eq("store_reference", paymentReference)
+      .maybeSingle();
+    if (existingTx) {
+      return res.json({ success: true, message: "Already recorded", duplicate: true });
+    }
+
     const paidAmount = payData.amount / 100;
     if (Math.abs(paidAmount - amount) > 1) {
       return res.status(400).json({ success: false, error: `Amount mismatch: paid ${paidAmount}, expected ${amount}` });
@@ -1038,11 +1047,14 @@ app.post("/api/record-investment", async (req, res) => {
       .from("transactions")
       .insert({
         user_id: userId,
-        type: "buy",
-        amount: amount,
+        direction: "debit",
+        name: `Purchased ${name || symbol || "Stock"}`,
         description: `Purchased ${qtyText} of ${name || symbol || "Unknown"}`,
-        reference: paymentReference || null,
-        status: "completed",
+        amount: Math.round(amount * 100),
+        store_reference: paymentReference || null,
+        currency: "ZAR",
+        status: "posted",
+        transaction_date: new Date().toISOString(),
         created_at: new Date().toISOString(),
       });
 
@@ -1133,9 +1145,9 @@ app.get("/api/user/transactions", async (req, res) => {
 
     const { data: transactions, error: txError } = await db
       .from("transactions")
-      .select("*")
+      .select("id, user_id, direction, name, description, amount, store_reference, currency, status, transaction_date, created_at")
       .eq("user_id", userId)
-      .order("created_at", { ascending: false })
+      .order("transaction_date", { ascending: false })
       .limit(limit);
 
     if (txError) {

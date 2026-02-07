@@ -97,14 +97,14 @@ export const useFinancialData = () => {
 
       const totalInvestments = holdings.reduce((sum, h) => sum + ((h.avg_fill || 0) * (h.quantity || 0)) / 100, 0);
       
-      const incomeTypes = ["deposit", "credit", "gain"];
-      const expenseTypes = ["withdrawal", "expense"];
+      const incomeTypes = ["credit"];
+      const expenseTypes = ["debit"];
       const totalIncome = allTransactions
-        .filter((t) => incomeTypes.includes(t.type))
-        .reduce((sum, t) => sum + Math.abs(t.amount || 0), 0);
+        .filter((t) => incomeTypes.includes(t.direction))
+        .reduce((sum, t) => sum + Math.abs((t.amount || 0) / 100), 0);
       const totalExpenses = allTransactions
-        .filter((t) => expenseTypes.includes(t.type))
-        .reduce((sum, t) => sum + Math.abs(t.amount || 0), 0);
+        .filter((t) => expenseTypes.includes(t.direction))
+        .reduce((sum, t) => sum + Math.abs((t.amount || 0) / 100), 0);
       const availableCredit = Math.max(0, (totalIncome - totalExpenses) * 0.2);
       const totalBalance = totalInvestments + availableCredit;
 
@@ -176,21 +176,21 @@ export const useMintBalance = () => {
         const totalInvestments = holdings.reduce((sum, h) => sum + ((h.avg_fill || 0) * (h.quantity || 0)) / 100, 0);
         const dailyChange = holdings.reduce((sum, h) => sum + ((h.unrealized_pnl || 0) / 100), 0);
         
-        const incomeTypes = ["deposit", "credit", "gain"];
-        const expenseTypes = ["withdrawal", "expense"];
+        const incomeTypes = ["credit"];
+        const expenseTypes = ["debit"];
         const totalIncome = allTransactions
-          .filter((t) => incomeTypes.includes(t.type))
-          .reduce((sum, t) => sum + Math.abs(t.amount || 0), 0);
+          .filter((t) => incomeTypes.includes(t.direction))
+          .reduce((sum, t) => sum + Math.abs((t.amount || 0) / 100), 0);
         const totalExpenses = allTransactions
-          .filter((t) => expenseTypes.includes(t.type))
-          .reduce((sum, t) => sum + Math.abs(t.amount || 0), 0);
+          .filter((t) => expenseTypes.includes(t.direction))
+          .reduce((sum, t) => sum + Math.abs((t.amount || 0) / 100), 0);
         const availableCredit = Math.max(0, (totalIncome - totalExpenses) * 0.2);
         const totalBalance = totalInvestments + availableCredit;
 
         const recentChanges = recentTransactions.map((t) => ({
-          title: t.description || t.type || "Transaction",
-          date: formatTransactionDate(t.created_at),
-          amount: formatTransactionAmount(t.amount, t.type),
+          title: t.name || t.description || "Transaction",
+          date: formatTransactionDate(t.transaction_date || t.created_at),
+          amount: formatTransactionAmount((t.amount || 0) / 100, t.direction),
         }));
 
         setData({
@@ -418,9 +418,9 @@ function formatTransactionDate(dateString) {
   return date.toLocaleDateString("en-ZA", { day: "numeric", month: "short" });
 }
 
-function formatTransactionAmount(amount, type) {
+function formatTransactionAmount(amount, direction) {
   if (amount === undefined || amount === null) return "R0";
-  const isPositive = type === "deposit" || type === "credit" || type === "gain" || amount > 0;
+  const isPositive = direction === "credit";
   const sign = isPositive ? "+" : "-";
   return `${sign}R${Math.abs(amount).toLocaleString()}`;
 }

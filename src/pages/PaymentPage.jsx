@@ -1,14 +1,29 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { ArrowLeft, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
 import { supabase } from "../lib/supabase";
 
 const PaymentPage = ({ onBack, strategy, amount, onSuccess, onCancel }) => {
   const { profile } = useProfile();
-  const [paymentStatus, setPaymentStatus] = useState("initializing"); // initializing, processing, success, failed
+  const [paymentStatus, setPaymentStatus] = useState("initializing");
   const [errorMessage, setErrorMessage] = useState("");
+  const hasInitialized = useRef(false);
+  const onSuccessRef = useRef(onSuccess);
+  const onCancelRef = useRef(onCancel);
+  const strategyRef = useRef(strategy);
+  const amountRef = useRef(amount);
+  const profileRef = useRef(profile);
+
+  useEffect(() => { onSuccessRef.current = onSuccess; }, [onSuccess]);
+  useEffect(() => { onCancelRef.current = onCancel; }, [onCancel]);
+  useEffect(() => { strategyRef.current = strategy; }, [strategy]);
+  useEffect(() => { amountRef.current = amount; }, [amount]);
+  useEffect(() => { profileRef.current = profile; }, [profile]);
 
   useEffect(() => {
+    if (hasInitialized.current) return;
+    hasInitialized.current = true;
+
     const initializePaystack = () => {
       if (!window.PaystackPop) {
         console.error("Paystack SDK not loaded");
@@ -25,7 +40,11 @@ const PaymentPage = ({ onBack, strategy, amount, onSuccess, onCancel }) => {
         return;
       }
 
-      const chargeAmount = Math.round((amount || 0) * 100);
+      const currentAmount = amountRef.current;
+      const currentStrategy = strategyRef.current;
+      const currentProfile = profileRef.current;
+
+      const chargeAmount = Math.round((currentAmount || 0) * 100);
       if (!chargeAmount || chargeAmount <= 0) {
         setPaymentStatus("failed");
         setErrorMessage("Invalid payment amount.");
@@ -37,22 +56,22 @@ const PaymentPage = ({ onBack, strategy, amount, onSuccess, onCancel }) => {
       const paystack = new window.PaystackPop();
       paystack.newTransaction({
         key: publicKey,
-        email: profile?.email || "user@example.com",
+        email: currentProfile?.email || "user@example.com",
         amount: chargeAmount,
         currency: "ZAR",
         channels: ["card", "bank", "bank_transfer"],
         ref: `MINT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         metadata: {
-          strategy_id: strategy?.id,
-          strategy_name: strategy?.name,
-          user_id: profile?.id,
-          investment_amount: amount,
+          strategy_id: currentStrategy?.id,
+          strategy_name: currentStrategy?.name,
+          user_id: currentProfile?.id,
+          investment_amount: currentAmount,
         },
         onClose: function () {
           console.log("Payment window closed");
           setPaymentStatus("failed");
           setErrorMessage("Payment cancelled");
-          setTimeout(() => onCancel?.(), 2000);
+          setTimeout(() => onCancelRef.current?.(), 2000);
         },
         onSuccess: async function (response) {
           console.log("Payment successful:", response);
@@ -62,11 +81,11 @@ const PaymentPage = ({ onBack, strategy, amount, onSuccess, onCancel }) => {
             const { data: { session } } = await supabase.auth.getSession();
             const token = session?.access_token;
             const recordData = {
-              securityId: strategy?.id,
-              symbol: strategy?.symbol || strategy?.short_name || "",
-              name: strategy?.name || "",
-              amount: amount,
-              strategyId: strategy?.strategyId || null,
+              securityId: currentStrategy?.id,
+              symbol: currentStrategy?.symbol || currentStrategy?.short_name || "",
+              name: currentStrategy?.name || "",
+              amount: currentAmount,
+              strategyId: currentStrategy?.strategyId || null,
               paymentReference: response?.reference || "",
             };
             const headers = { "Content-Type": "application/json" };
@@ -83,7 +102,7 @@ const PaymentPage = ({ onBack, strategy, amount, onSuccess, onCancel }) => {
           }
 
           setTimeout(() => {
-            onSuccess?.(response);
+            onSuccessRef.current?.(response);
           }, 2000);
         },
         onError: function (error) {
@@ -94,11 +113,10 @@ const PaymentPage = ({ onBack, strategy, amount, onSuccess, onCancel }) => {
       });
     };
 
-    // Small delay to ensure component is mounted
     const timer = setTimeout(initializePaystack, 500);
 
     return () => clearTimeout(timer);
-  }, [strategy, amount, profile, onSuccess, onCancel]);
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">

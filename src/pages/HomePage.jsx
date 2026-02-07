@@ -587,9 +587,9 @@ const HomePage = ({
     : [];
 
   const transactionHistory = transactions.slice(0, 3).map((t) => ({
-    title: t.title || t.description || "Transaction",
-    date: formatDate(t.created_at),
-    amount: formatAmount(t.amount, t.type),
+    title: t.name || t.description || "Transaction",
+    date: formatDate(t.transaction_date || t.created_at),
+    amount: formatAmount((t.amount || 0) / 100, t.direction),
   }));
 
   const handleActionNavigation = (action) => {
@@ -1329,11 +1329,10 @@ function formatDate(dateString) {
   return date.toLocaleDateString("en-ZA", { day: "numeric", month: "short" });
 }
 
-function formatAmount(amount, type) {
+function formatAmount(amount, direction) {
   if (amount === undefined || amount === null) return "R0";
-  const isNegative = type === "withdrawal" || type === "expense" || type === "buy";
-  const isPositive = type === "deposit" || type === "credit" || type === "gain";
-  const sign = isNegative ? "-" : (isPositive ? "+" : (amount >= 0 ? "+" : "-"));
+  const isPositive = direction === "credit";
+  const sign = isPositive ? "+" : "-";
   return `${sign}R${Math.abs(amount).toLocaleString()}`;
 }
 
