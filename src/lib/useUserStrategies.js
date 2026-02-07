@@ -26,7 +26,7 @@ export const useUserStrategies = () => {
       const userId = session.user.id;
 
       const { data: userHoldings, error: holdingsError } = await supabase
-        .from("user_holdings")
+        .from("stock_holdings")
         .select("id")
         .eq("user_id", userId)
         .limit(1);

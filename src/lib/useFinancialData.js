@@ -39,7 +39,7 @@ export const useFinancialData = () => {
         supabase.from("user_balances").select("*").eq("user_id", userId).maybeSingle(),
         supabase.from("transactions").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(20),
         supabase.from("transactions").select("type, amount").eq("user_id", userId),
-        supabase.from("user_holdings").select("*, securities(symbol, name, logo_url)").eq("user_id", userId),
+        supabase.from("stock_holdings").select("*, securities(symbol, name, logo_url)").eq("user_id", userId),
         supabase.from("credit_accounts").select("*").eq("user_id", userId).maybeSingle(),
       ]);
 
@@ -49,20 +49,25 @@ export const useFinancialData = () => {
       const creditInfo = creditResult.data;
 
       const sortedHoldings = [...holdings].sort((a, b) => {
-        const aGain = (a.current_value || 0) - (a.cost_basis || 0);
-        const bGain = (b.current_value || 0) - (b.cost_basis || 0);
+        const aGain = (a.unrealized_pnl || 0) / 100;
+        const bGain = (b.unrealized_pnl || 0) / 100;
         return bGain - aGain;
       });
 
-      const bestAssets = sortedHoldings.slice(0, 5).map((h) => ({
-        symbol: h.securities?.symbol || h.symbol || "N/A",
-        name: h.securities?.name || h.name || "Unknown",
-        value: h.current_value || 0,
-        change: h.change_percent || 0,
-        logo: h.securities?.logo_url || null,
-      }));
+      const bestAssets = sortedHoldings.slice(0, 5).map((h) => {
+        const currentValue = (h.market_value || 0) / 100;
+        const costBasis = ((h.avg_fill || 0) * (h.quantity || 0)) / 100;
+        const changePercent = costBasis > 0 ? ((currentValue - costBasis) / costBasis) * 100 : 0;
+        return {
+          symbol: h.securities?.symbol || h.symbol || "N/A",
+          name: h.securities?.name || h.name || "Unknown",
+          value: currentValue,
+          change: changePercent,
+          logo: h.securities?.logo_url || null,
+        };
+      });
 
-      const totalInvestments = holdings.reduce((sum, h) => sum + (h.cost_basis || 0), 0);
+      const totalInvestments = holdings.reduce((sum, h) => sum + ((h.avg_fill || 0) * (h.quantity || 0)) / 100, 0);
       
       const incomeTypes = ["deposit", "credit", "gain"];
       const expenseTypes = ["withdrawal", "expense"];
@@ -132,7 +137,7 @@ export const useMintBalance = () => {
 
         const [balanceResult, holdingsResult, allTransactionsResult, recentTransactionsResult] = await Promise.all([
           supabase.from("user_balances").select("*").eq("user_id", userId).maybeSingle(),
-          supabase.from("user_holdings").select("current_value, cost_basis, daily_change").eq("user_id", userId),
+          supabase.from("stock_holdings").select("market_value, avg_fill, quantity, unrealized_pnl").eq("user_id", userId),
           supabase.from("transactions").select("type, amount").eq("user_id", userId),
           supabase.from("transactions").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(10),
         ]);
@@ -141,8 +146,8 @@ export const useMintBalance = () => {
         const allTransactions = allTransactionsResult.data || [];
         const recentTransactions = recentTransactionsResult.data || [];
         
-        const totalInvestments = holdings.reduce((sum, h) => sum + (h.cost_basis || 0), 0);
-        const dailyChange = holdings.reduce((sum, h) => sum + (h.daily_change || 0), 0);
+        const totalInvestments = holdings.reduce((sum, h) => sum + ((h.avg_fill || 0) * (h.quantity || 0)) / 100, 0);
+        const dailyChange = holdings.reduce((sum, h) => sum + ((h.unrealized_pnl || 0) / 100), 0);
         
         const incomeTypes = ["deposit", "credit", "gain"];
         const expenseTypes = ["withdrawal", "expense"];
@@ -328,21 +333,22 @@ export const useInvestments = () => {
         const userId = session.user.id;
 
         const [holdingsResult, goalsResult] = await Promise.all([
-          supabase.from("user_holdings").select("*, securities(symbol, name, asset_class, logo_url)").eq("user_id", userId),
+          supabase.from("stock_holdings").select("*, securities(symbol, name, asset_class, logo_url)").eq("user_id", userId),
           supabase.from("investment_goals").select("*").eq("user_id", userId),
         ]);
 
         const holdings = holdingsResult.data || [];
         const goals = goalsResult.data || [];
 
-        const totalInvestments = holdings.reduce((sum, h) => sum + (h.cost_basis || 0), 0);
-        const monthlyChange = holdings.reduce((sum, h) => sum + (h.monthly_change || 0), 0);
+        const totalInvestments = holdings.reduce((sum, h) => sum + ((h.avg_fill || 0) * (h.quantity || 0)) / 100, 0);
+        const monthlyChange = holdings.reduce((sum, h) => sum + ((h.unrealized_pnl || 0) / 100), 0);
         const monthlyChangePercent = totalInvestments > 0 ? (monthlyChange / totalInvestments) * 100 : 0;
 
         const assetClasses = {};
         holdings.forEach((h) => {
           const assetClass = h.securities?.asset_class || h.asset_class || "Other";
-          assetClasses[assetClass] = (assetClasses[assetClass] || 0) + (h.cost_basis || 0);
+          const costBasis = ((h.avg_fill || 0) * (h.quantity || 0)) / 100;
+          assetClasses[assetClass] = (assetClasses[assetClass] || 0) + costBasis;
         });
 
         const portfolioMix = Object.entries(assetClasses).map(([label, value]) => ({

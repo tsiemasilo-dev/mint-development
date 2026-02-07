@@ -944,34 +944,37 @@ app.post("/api/record-investment", async (req, res) => {
       return res.status(400).json({ success: false, error: `Amount mismatch: paid ${paidAmount}, expected ${amount}` });
     }
 
-    let currentPrice = amount;
+    let currentPriceCents = null;
     const { data: securityData, error: secError } = await supabase
       .from("securities")
-      .select("current_price")
+      .select("last_price")
       .eq("id", securityId)
       .maybeSingle();
 
-    if (!secError && securityData?.current_price) {
-      currentPrice = securityData.current_price;
+    if (!secError && securityData?.last_price) {
+      currentPriceCents = Number(securityData.last_price);
     } else {
       const { data: priceData, error: priceError } = await supabase
         .from("security_prices")
-        .select("price")
+        .select("close_price")
         .eq("security_id", securityId)
-        .order("created_at", { ascending: false })
+        .order("price_date", { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      if (!priceError && priceData?.price) {
-        currentPrice = priceData.price;
+      if (!priceError && priceData?.close_price) {
+        currentPriceCents = Number(priceData.close_price);
       }
     }
 
-    const shares = currentPrice > 0 ? amount / currentPrice : 1;
+    const currentPriceRands = currentPriceCents ? currentPriceCents / 100 : amount;
+    const quantity = currentPriceRands > 0 ? amount / currentPriceRands : 1;
+    const avgFillCents = currentPriceCents || Math.round(amount * 100);
+    const marketValueCents = Math.round(quantity * (currentPriceCents || amount * 100));
 
     const { data: existing, error: fetchError } = await supabase
-      .from("user_holdings")
-      .select("id, shares, cost_basis, current_value")
+      .from("stock_holdings")
+      .select("id, quantity, avg_fill, market_value")
       .eq("user_id", userId)
       .eq("security_id", securityId)
       .maybeSingle();
@@ -983,15 +986,19 @@ app.post("/api/record-investment", async (req, res) => {
 
     let holdingResult;
     if (existing) {
-      const newShares = (existing.shares || 0) + shares;
-      const newCostBasis = (existing.cost_basis || 0) + amount;
-      const newCurrentValue = (existing.current_value || 0) + amount;
+      const oldQty = Number(existing.quantity || 0);
+      const oldAvgFill = Number(existing.avg_fill || 0);
+      const newQty = oldQty + quantity;
+      const newAvgFill = newQty > 0 ? ((oldAvgFill * oldQty) + (avgFillCents * quantity)) / newQty : avgFillCents;
+      const newMarketValue = Math.round(newQty * (currentPriceCents || newAvgFill));
       const { data, error } = await supabase
-        .from("user_holdings")
+        .from("stock_holdings")
         .update({
-          shares: newShares,
-          cost_basis: newCostBasis,
-          current_value: newCurrentValue,
+          quantity: newQty,
+          avg_fill: Math.round(newAvgFill),
+          market_value: newMarketValue,
+          as_of_date: new Date().toISOString().split("T")[0],
+          updated_at: new Date().toISOString(),
         })
         .eq("id", existing.id)
         .select();
@@ -1000,17 +1007,15 @@ app.post("/api/record-investment", async (req, res) => {
       const holdingData = {
         user_id: userId,
         security_id: securityId,
-        shares: shares,
-        cost_basis: amount,
-        current_value: amount,
-        change_percent: 0,
-        daily_change: 0,
+        quantity: quantity,
+        avg_fill: avgFillCents,
+        market_value: marketValueCents,
+        unrealized_pnl: 0,
+        as_of_date: new Date().toISOString().split("T")[0],
+        Status: "active",
       };
-      if (strategyId) {
-        holdingData.strategy_id = strategyId;
-      }
       const { data, error } = await supabase
-        .from("user_holdings")
+        .from("stock_holdings")
         .insert(holdingData)
         .select();
       holdingResult = { data, error };
@@ -1021,14 +1026,14 @@ app.post("/api/record-investment", async (req, res) => {
       return res.status(500).json({ success: false, error: holdingResult.error.message });
     }
 
-    const sharesText = shares === 1 ? "1 share" : `${shares.toFixed(4)} shares`;
+    const qtyText = quantity === 1 ? "1 share" : `${quantity.toFixed(4)} shares`;
     const { error: txError } = await supabase
       .from("transactions")
       .insert({
         user_id: userId,
         type: "buy",
         amount: amount,
-        description: `Purchased ${sharesText} of ${name || symbol || "Unknown"}`,
+        description: `Purchased ${qtyText} of ${name || symbol || "Unknown"}`,
         reference: paymentReference || null,
         status: "completed",
         created_at: new Date().toISOString(),

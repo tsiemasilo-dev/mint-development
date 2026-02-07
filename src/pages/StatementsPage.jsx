@@ -60,7 +60,7 @@ const StatementsPage = ({ onOpenNotifications }) => {
 
       try {
         const { data: userHoldings } = await supabase
-          .from("user_holdings")
+          .from("stock_holdings")
           .select("id")
           .eq("user_id", profile.id)
           .limit(1);

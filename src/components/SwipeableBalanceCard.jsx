@@ -69,8 +69,8 @@ const SwipeableBalanceCard = ({ userId, isBackFacing = true, forceVisible }) => 
         .select('*', { count: 'exact', head: true });
 
       if (holdings) {
-        const mValue = holdings.reduce((acc, h) => acc + Number(h.market_value || 0), 0);
-        const invested = holdings.reduce((acc, h) => acc + (Number(h.avg_cost || 0) * Number(h.quantity || 0)), 0);
+        const mValue = holdings.reduce((acc, h) => acc + Number(h.market_value || 0) / 100, 0);
+        const invested = holdings.reduce((acc, h) => acc + (Number(h.avg_fill || 0) * Number(h.quantity || 0)) / 100, 0);
 
         setDbData({
           holdings,
