@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { ArrowLeft, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
 import { supabase } from "../lib/supabase";
@@ -8,120 +8,130 @@ const PaymentPage = ({ onBack, strategy, amount, onSuccess, onCancel }) => {
   const [paymentStatus, setPaymentStatus] = useState("initializing");
   const [errorMessage, setErrorMessage] = useState("");
   const hasInitialized = useRef(false);
-  const onSuccessRef = useRef(onSuccess);
-  const onCancelRef = useRef(onCancel);
-  const strategyRef = useRef(strategy);
-  const amountRef = useRef(amount);
-  const profileRef = useRef(profile);
+  const isMounted = useRef(true);
 
-  useEffect(() => { onSuccessRef.current = onSuccess; }, [onSuccess]);
-  useEffect(() => { onCancelRef.current = onCancel; }, [onCancel]);
-  useEffect(() => { strategyRef.current = strategy; }, [strategy]);
-  useEffect(() => { amountRef.current = amount; }, [amount]);
-  useEffect(() => { profileRef.current = profile; }, [profile]);
-
-  useEffect(() => {
+  const launchPaystack = useCallback(() => {
     if (hasInitialized.current) return;
     hasInitialized.current = true;
 
-    const initializePaystack = () => {
-      if (!window.PaystackPop) {
-        console.error("Paystack SDK not loaded");
+    const publicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
+    if (!publicKey) {
+      console.error("Paystack public key missing");
+      setPaymentStatus("failed");
+      setErrorMessage("Payment system unavailable. Please try again later.");
+      return;
+    }
+
+    const chargeAmount = Math.round((amount || 0) * 100);
+    if (!chargeAmount || chargeAmount <= 0) {
+      setPaymentStatus("failed");
+      setErrorMessage("Invalid payment amount.");
+      return;
+    }
+
+    setPaymentStatus("processing");
+
+    const paystack = new window.PaystackPop();
+    paystack.newTransaction({
+      key: publicKey,
+      email: profile?.email || "user@example.com",
+      amount: chargeAmount,
+      currency: "ZAR",
+      channels: ["card", "bank", "bank_transfer"],
+      ref: `MINT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      metadata: {
+        strategy_id: strategy?.id,
+        strategy_name: strategy?.name,
+        user_id: profile?.id,
+        investment_amount: amount,
+      },
+      onClose: function () {
+        console.log("Payment window closed");
+        if (!isMounted.current) return;
         setPaymentStatus("failed");
-        setErrorMessage("Payment system unavailable. Please try again later.");
-        return;
-      }
+        setErrorMessage("Payment cancelled");
+        setTimeout(() => onCancel?.(), 2000);
+      },
+      onSuccess: async function (response) {
+        console.log("Payment successful:", response);
+        if (!isMounted.current) return;
+        setPaymentStatus("success");
 
-      const publicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
-      if (!publicKey) {
-        console.error("Paystack public key missing");
-        setPaymentStatus("failed");
-        setErrorMessage("Payment system unavailable. Please try again later.");
-        return;
-      }
-
-      const currentAmount = amountRef.current;
-      const currentStrategy = strategyRef.current;
-      const currentProfile = profileRef.current;
-
-      const chargeAmount = Math.round((currentAmount || 0) * 100);
-      if (!chargeAmount || chargeAmount <= 0) {
-        setPaymentStatus("failed");
-        setErrorMessage("Invalid payment amount.");
-        return;
-      }
-
-      setPaymentStatus("processing");
-
-      const paystack = new window.PaystackPop();
-      paystack.newTransaction({
-        key: publicKey,
-        email: currentProfile?.email || "user@example.com",
-        amount: chargeAmount,
-        currency: "ZAR",
-        channels: ["card", "bank", "bank_transfer"],
-        ref: `MINT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        metadata: {
-          strategy_id: currentStrategy?.id,
-          strategy_name: currentStrategy?.name,
-          user_id: currentProfile?.id,
-          investment_amount: currentAmount,
-        },
-        onClose: function () {
-          console.log("Payment window closed");
-          setPaymentStatus("failed");
-          setErrorMessage("Payment cancelled");
-          setTimeout(() => onCancelRef.current?.(), 2000);
-        },
-        onSuccess: async function (response) {
-          console.log("Payment successful:", response);
-          setPaymentStatus("success");
-
-          try {
-            const { data: { session } } = await supabase.auth.getSession();
-            const token = session?.access_token;
-            const recordData = {
-              securityId: currentStrategy?.id,
-              symbol: currentStrategy?.symbol || currentStrategy?.short_name || "",
-              name: currentStrategy?.name || "",
-              amount: currentAmount,
-              strategyId: currentStrategy?.strategyId || null,
-              paymentReference: response?.reference || "",
-            };
-            const headers = { "Content-Type": "application/json" };
-            if (token) {
-              headers["Authorization"] = `Bearer ${token}`;
-            }
-            await fetch("/api/record-investment", {
-              method: "POST",
-              headers,
-              body: JSON.stringify(recordData),
-            });
-          } catch (recordError) {
-            console.error("Failed to record investment:", recordError);
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const token = session?.access_token;
+          const recordData = {
+            securityId: strategy?.id,
+            symbol: strategy?.symbol || strategy?.short_name || "",
+            name: strategy?.name || "",
+            amount: amount,
+            strategyId: strategy?.strategyId || null,
+            paymentReference: response?.reference || "",
+          };
+          const headers = { "Content-Type": "application/json" };
+          if (token) {
+            headers["Authorization"] = `Bearer ${token}`;
           }
+          await fetch("/api/record-investment", {
+            method: "POST",
+            headers,
+            body: JSON.stringify(recordData),
+          });
+        } catch (recordError) {
+          console.error("Failed to record investment:", recordError);
+        }
 
-          setTimeout(() => {
-            onSuccessRef.current?.(response);
-          }, 2000);
-        },
-        onError: function (error) {
-          console.error("Payment error:", error);
-          setPaymentStatus("failed");
-          setErrorMessage("Payment failed. Please try again.");
-        },
-      });
+        setTimeout(() => {
+          onSuccess?.(response);
+        }, 2000);
+      },
+      onError: function (error) {
+        console.error("Payment error:", error);
+        if (!isMounted.current) return;
+        setPaymentStatus("failed");
+        setErrorMessage("Payment failed. Please try again.");
+      },
+    });
+  }, [strategy, amount, profile, onSuccess, onCancel]);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => { isMounted.current = false; };
+  }, []);
+
+  useEffect(() => {
+    if (hasInitialized.current) return;
+    if (!profile?.email) return;
+
+    let attempts = 0;
+    const maxAttempts = 20;
+
+    const tryInit = () => {
+      attempts++;
+      if (hasInitialized.current) return;
+
+      if (window.PaystackPop) {
+        console.log("Paystack SDK ready, launching payment...");
+        launchPaystack();
+        return;
+      }
+
+      if (attempts >= maxAttempts) {
+        console.error("Paystack SDK failed to load after", maxAttempts, "attempts");
+        setPaymentStatus("failed");
+        setErrorMessage("Payment system unavailable. Please try again later.");
+        return;
+      }
+
+      setTimeout(tryInit, 500);
     };
 
-    const timer = setTimeout(initializePaystack, 500);
-
-    return () => clearTimeout(timer);
-  }, []);
+    setTimeout(tryInit, 300);
+  }, [profile, launchPaystack]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <div className="mx-auto flex w-full max-w-sm flex-col px-3 pt-12 md:max-w-md md:px-6">
-        {/* Header */}
         <header className="flex items-center justify-center gap-3 mb-6 relative">
           <button
             type="button"
@@ -134,7 +144,6 @@ const PaymentPage = ({ onBack, strategy, amount, onSuccess, onCancel }) => {
           <h1 className="text-lg font-semibold">Payment</h1>
         </header>
 
-        {/* Payment Status Card */}
         <section className="mt-20 rounded-3xl border border-slate-100 bg-white p-8 shadow-sm text-center">
           {paymentStatus === "initializing" && (
             <>
@@ -176,7 +185,6 @@ const PaymentPage = ({ onBack, strategy, amount, onSuccess, onCancel }) => {
           )}
         </section>
 
-        {/* Payment Info */}
         <div className="mt-6 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
           <div className="space-y-2">
             <div className="flex justify-between">
