@@ -1,6 +1,36 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "./supabase";
 
+async function getAuthToken() {
+  if (!supabase) return null;
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token || null;
+}
+
+async function fetchServerHoldings(token) {
+  const res = await fetch("/api/user/holdings", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    console.error("Failed to fetch holdings from server:", res.status);
+    return [];
+  }
+  const json = await res.json();
+  return json.holdings || [];
+}
+
+async function fetchServerTransactions(token, limit = 50) {
+  const res = await fetch(`/api/user/transactions?limit=${limit}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    console.error("Failed to fetch transactions from server:", res.status);
+    return [];
+  }
+  const json = await res.json();
+  return json.transactions || [];
+}
+
 export const useFinancialData = () => {
   const [data, setData] = useState({
     balance: 0,
@@ -28,38 +58,23 @@ export const useFinancialData = () => {
       }
 
       const userId = session.user.id;
+      const token = session.access_token;
 
       const [
         balanceResult,
-        recentTransactionsResult,
-        allTransactionsResult,
-        holdingsResult,
+        holdings,
+        allServerTransactions,
         creditResult,
       ] = await Promise.all([
         supabase.from("user_balances").select("*").eq("user_id", userId).maybeSingle(),
-        supabase.from("transactions").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(20),
-        supabase.from("transactions").select("type, amount").eq("user_id", userId),
-        supabase.from("stock_holdings").select("id, user_id, security_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status").eq("user_id", userId),
+        fetchServerHoldings(token),
+        fetchServerTransactions(token, 100),
         supabase.from("credit_accounts").select("*").eq("user_id", userId).maybeSingle(),
       ]);
 
-      const transactions = recentTransactionsResult.data || [];
-      const allTransactions = allTransactionsResult.data || [];
-      const rawHoldingsData = holdingsResult.data || [];
+      const transactions = allServerTransactions.slice(0, 20);
+      const allTransactions = allServerTransactions;
       const creditInfo = creditResult.data;
-
-      const hSecIds = rawHoldingsData.map(h => h.security_id).filter(Boolean);
-      let hSecMap = {};
-      if (hSecIds.length > 0) {
-        const { data: secData } = await supabase.from("securities").select("id, symbol, name, logo_url").in("id", hSecIds);
-        if (secData) secData.forEach(s => { hSecMap[s.id] = s; });
-      }
-      const holdings = rawHoldingsData.map(h => ({
-        ...h,
-        symbol: hSecMap[h.security_id]?.symbol || "N/A",
-        name: hSecMap[h.security_id]?.name || "Unknown",
-        logo_url: hSecMap[h.security_id]?.logo_url || null,
-      }));
 
       const sortedHoldings = [...holdings].sort((a, b) => {
         const aGain = (a.unrealized_pnl || 0) / 100;
@@ -147,17 +162,16 @@ export const useMintBalance = () => {
         }
 
         const userId = session.user.id;
+        const token = session.access_token;
 
-        const [balanceResult, holdingsResult, allTransactionsResult, recentTransactionsResult] = await Promise.all([
+        const [balanceResult, holdings, allServerTransactions] = await Promise.all([
           supabase.from("user_balances").select("*").eq("user_id", userId).maybeSingle(),
-          supabase.from("stock_holdings").select("market_value, avg_fill, quantity, unrealized_pnl").eq("user_id", userId),
-          supabase.from("transactions").select("type, amount").eq("user_id", userId),
-          supabase.from("transactions").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(10),
+          fetchServerHoldings(token),
+          fetchServerTransactions(token, 100),
         ]);
 
-        const holdings = holdingsResult.data || [];
-        const allTransactions = allTransactionsResult.data || [];
-        const recentTransactions = recentTransactionsResult.data || [];
+        const recentTransactions = allServerTransactions.slice(0, 10);
+        const allTransactions = allServerTransactions;
         
         const totalInvestments = holdings.reduce((sum, h) => sum + ((h.avg_fill || 0) * (h.quantity || 0)) / 100, 0);
         const dailyChange = holdings.reduce((sum, h) => sum + ((h.unrealized_pnl || 0) / 100), 0);
@@ -212,22 +226,14 @@ export const useTransactions = (limit = 20) => {
       }
 
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.user) {
+        const token = await getAuthToken();
+        if (!token) {
           setLoading(false);
           return;
         }
 
-        const { data, error } = await supabase
-          .from("transactions")
-          .select("*")
-          .eq("user_id", session.user.id)
-          .order("created_at", { ascending: false })
-          .limit(limit);
-
-        if (error) throw error;
-
-        setTransactions(data || []);
+        const data = await fetchServerTransactions(token, limit);
+        setTransactions(data);
       } catch (err) {
         console.error("Error fetching transactions:", err);
       } finally {
@@ -344,34 +350,14 @@ export const useInvestments = () => {
         }
 
         const userId = session.user.id;
+        const token = session.access_token;
 
-        const [holdingsResult, goalsResult] = await Promise.all([
-          supabase.from("stock_holdings").select("id, user_id, security_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status").eq("user_id", userId),
+        const [holdings, goalsResult] = await Promise.all([
+          fetchServerHoldings(token),
           supabase.from("investment_goals").select("*").eq("user_id", userId),
         ]);
 
-        const rawHoldings = holdingsResult.data || [];
         const goals = goalsResult.data || [];
-
-        const securityIds = rawHoldings.map(h => h.security_id).filter(Boolean);
-        let securitiesMap = {};
-        if (securityIds.length > 0) {
-          const { data: secData } = await supabase
-            .from("securities")
-            .select("id, symbol, name, asset_class, logo_url")
-            .in("id", securityIds);
-          if (secData) {
-            secData.forEach(s => { securitiesMap[s.id] = s; });
-          }
-        }
-
-        const holdings = rawHoldings.map(h => ({
-          ...h,
-          symbol: securitiesMap[h.security_id]?.symbol || "N/A",
-          name: securitiesMap[h.security_id]?.name || "Unknown",
-          asset_class: securitiesMap[h.security_id]?.asset_class || "Other",
-          logo_url: securitiesMap[h.security_id]?.logo_url || null,
-        }));
 
         const totalInvestments = holdings.reduce((sum, h) => sum + ((h.avg_fill || 0) * (h.quantity || 0)) / 100, 0);
         const monthlyChange = holdings.reduce((sum, h) => sum + ((h.unrealized_pnl || 0) / 100), 0);

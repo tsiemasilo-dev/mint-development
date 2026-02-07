@@ -52,49 +52,39 @@ const SwipeableBalanceCard = ({ userId, isBackFacing = true, forceVisible }) => 
       if (!userId) return;
       setLoading(true);
       
-      // Fetching specifically from your defined tables
-      const { data: holdings } = await supabase
-        .from('stock_holdings')
-        .select('id, user_id, security_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status')
-        .eq('user_id', userId);
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
 
-      const { data: snapshots } = await supabase
-        .from('mint_balance_snapshots')
-        .select('snapshot_date, total_balance')
-        .eq('user_id', userId)
-        .order('snapshot_date', { ascending: true });
+      const [holdingsRes, snapshotsResult, strategiesCountResult] = await Promise.all([
+        token
+          ? fetch('/api/user/holdings', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.ok ? r.json() : { holdings: [] })
+          : Promise.resolve({ holdings: [] }),
+        supabase
+          .from('mint_balance_snapshots')
+          .select('snapshot_date, total_balance')
+          .eq('user_id', userId)
+          .order('snapshot_date', { ascending: true }),
+        supabase
+          .from('strategies')
+          .select('*', { count: 'exact', head: true }),
+      ]);
 
-      const { count: sCount } = await supabase
-        .from('strategies')
-        .select('*', { count: 'exact', head: true });
+      const enrichedHoldings = holdingsRes.holdings || [];
+      const snapshots = snapshotsResult.data;
+      const sCount = strategiesCountResult.count;
 
-      if (holdings) {
-        const secIds = holdings.map(h => h.security_id).filter(Boolean);
-        let secMap = {};
-        if (secIds.length > 0) {
-          const { data: secData } = await supabase.from('securities').select('id, symbol, name, logo_url').in('id', secIds);
-          if (secData) secData.forEach(s => { secMap[s.id] = s; });
-        }
-        const enrichedHoldings = holdings.map(h => ({
-          ...h,
-          symbol: secMap[h.security_id]?.symbol || "N/A",
-          name: secMap[h.security_id]?.name || "Unknown",
-          logo_url: secMap[h.security_id]?.logo_url || null,
-        }));
+      const mValue = enrichedHoldings.reduce((acc, h) => acc + Number(h.market_value || 0) / 100, 0);
+      const invested = enrichedHoldings.reduce((acc, h) => acc + (Number(h.avg_fill || 0) * Number(h.quantity || 0)) / 100, 0);
 
-        const mValue = enrichedHoldings.reduce((acc, h) => acc + Number(h.market_value || 0) / 100, 0);
-        const invested = enrichedHoldings.reduce((acc, h) => acc + (Number(h.avg_fill || 0) * Number(h.quantity || 0)) / 100, 0);
-
-        setDbData({
-          holdings: enrichedHoldings,
-          snapshots: snapshots?.map(s => ({ d: s.snapshot_date, v: Number(s.total_balance) })) || [],
-          strategiesCount: sCount || 0,
-          totalMarketValue: mValue,
-          totalInvested: invested,
-          strategyMarketValue: mValue * 0.3, 
-          strategyInvested: invested * 0.35
-        });
-      }
+      setDbData({
+        holdings: enrichedHoldings,
+        snapshots: snapshots?.map(s => ({ d: s.snapshot_date, v: Number(s.total_balance) })) || [],
+        strategiesCount: sCount || 0,
+        totalMarketValue: mValue,
+        totalInvested: invested,
+        strategyMarketValue: mValue * 0.3, 
+        strategyInvested: invested * 0.35
+      });
       setLoading(false);
     };
     loadData();
