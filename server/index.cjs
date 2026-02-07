@@ -135,12 +135,18 @@ const readEnv = (key) => process.env[key] || process.env[`VITE_${key}`];
 
 const SUPABASE_URL = readEnv('SUPABASE_URL') || readEnv('VITE_SUPABASE_URL');
 const SUPABASE_ANON_KEY = readEnv('SUPABASE_ANON_KEY') || readEnv('VITE_SUPABASE_ANON_KEY');
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 let supabase = null;
+let supabaseAdmin = null;
 try {
   if (SUPABASE_URL && SUPABASE_ANON_KEY) {
     const { createClient } = require('@supabase/supabase-js');
     supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    if (SUPABASE_SERVICE_ROLE_KEY) {
+      supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+      console.log('Supabase admin client initialized (service role)');
+    }
   }
 } catch (e) {
   console.warn('Supabase client not available:', e.message);
@@ -887,18 +893,14 @@ app.get("/api/stocks/chart", async (req, res) => {
 async function authenticateUser(req) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return { user: null, error: "Missing or invalid Authorization header", client: null };
+    return { user: null, error: "Missing or invalid Authorization header" };
   }
   const token = authHeader.replace("Bearer ", "");
   const { data, error } = await supabase.auth.getUser(token);
   if (error || !data?.user) {
-    return { user: null, error: error?.message || "Invalid token", client: null };
+    return { user: null, error: error?.message || "Invalid token" };
   }
-  const { createClient } = require('@supabase/supabase-js');
-  const authenticatedClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    global: { headers: { Authorization: `Bearer ${token}` } }
-  });
-  return { user: data.user, error: null, client: authenticatedClient };
+  return { user: data.user, error: null };
 }
 
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
@@ -926,12 +928,12 @@ app.post("/api/record-investment", async (req, res) => {
       return res.status(500).json({ success: false, error: "Database not connected" });
     }
 
-    const { user, error: authError, client: authClient } = await authenticateUser(req);
-    if (authError || !user || !authClient) {
+    const { user, error: authError } = await authenticateUser(req);
+    if (authError || !user) {
       return res.status(401).json({ success: false, error: authError || "Unauthorized" });
     }
     const userId = user.id;
-    const db = authClient;
+    const db = supabaseAdmin || supabase;
 
     const { securityId, symbol, name, amount, strategyId, paymentReference } = req.body;
 
