@@ -17,6 +17,7 @@ A React authentication application using Vite as the build tool with Tailwind CS
     - `AuthLayout.jsx` - Auth page layout
     - `NotificationBell.jsx` - Bell icon with unread count badge
     - `TruidConnector.jsx` - TruID Connect integration for identity verification
+    - `PinLockScreen.jsx` - PIN lock screen overlay with iOS-style number pad
   - `lib/` - Utility libraries
     - `supabase.js` - Supabase client initialization
     - `biometrics.js` - Biometric authentication utilities (Face ID/Touch ID)
@@ -28,6 +29,8 @@ A React authentication application using Vite as the build tool with Tailwind CS
     - `useFinancialData.js` - Hook for financial data utilities
     - `strategyData.js` - Strategy price history fetching utilities
     - `useProfile.js` - Profile hook with id, email, name, avatarUrl, phoneNumber, dateOfBirth, gender, address, idNumber, watchlist
+    - `useInactivityTimeout.jsx` - Inactivity timeout hook and lock screen component with configurable timeout
+    - `usePin.js` - PIN/passcode utilities (save, verify, remove, isPinEnabled) with SHA-256 hashing
   - `pages/` - Page components
     - `StatementsPage.jsx` - Statements page with Strategy/Holdings/Financials tabs, real data from Supabase, PDF download
     - `NewPortfolioPage.jsx` - Portfolio dashboard with strategy selector dropdown and performance charts
@@ -39,8 +42,10 @@ A React authentication application using Vite as the build tool with Tailwind CS
     - `MorePage.jsx` - Profile and menu page with KYC badge and Required Actions
     - `EditProfilePage.jsx` - Edit profile with phone, DOB, gender, country, city fields
     - `ProfileDetailsPage.jsx` - View-only profile details page
-    - `SettingsPage.jsx` - Settings with biometrics toggle and change password
+    - `SettingsPage.jsx` - Settings with biometrics, PIN, session timeout, active sessions, change password
     - `ChangePasswordPage.jsx` - Dedicated page for changing password
+    - `ActiveSessionsPage.jsx` - View active login sessions with device/browser info, logout options
+    - `PinSetupPage.jsx` - 4-digit PIN setup with confirm step, dark glassmorphism UI
     - `NotificationsPage.jsx` - Full notifications list with swipe-to-delete
     - `NotificationSettingsPage.jsx` - Notification type preferences toggles
   - `styles/` - CSS styles

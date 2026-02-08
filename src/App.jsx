@@ -42,6 +42,11 @@ import StatementsPage from "./pages/StatementsPage.jsx";
 import IdentityCheckPage from "./pages/IdentityCheckPage.jsx";
 import BankLinkPage from "./pages/BankLinkPage.jsx";
 import InvitePage from "./pages/InvitePage.jsx";
+import ActiveSessionsPage from "./pages/ActiveSessionsPage.jsx";
+import PinSetupPage from "./pages/PinSetupPage.jsx";
+import { useInactivityTimeout, InactivityLockScreen } from "./lib/useInactivityTimeout.jsx";
+import PinLockScreen from "./components/PinLockScreen.jsx";
+import { isPinEnabled } from "./lib/usePin.js";
 
 const initialHash = window.location.hash;
 const isRecoveryMode = initialHash.includes('type=recovery');
@@ -86,6 +91,24 @@ const App = () => {
   const [stockCheckout, setStockCheckout] = useState({ security: null, amount: 0 });
   const recoveryHandled = useRef(false);
   const { refetch: refetchNotifications } = useNotificationsContext();
+  const [showPinLock, setShowPinLock] = useState(false);
+
+  const isAuthenticated = !['welcome', 'auth', 'linkExpired'].includes(currentPage);
+  const { isLocked: isInactivityLocked, unlock: unlockInactivity } = useInactivityTimeout({
+    enabled: isAuthenticated,
+    onLogout: () => {
+      if (supabase) supabase.auth.signOut();
+      setCurrentPage("welcome");
+    },
+  });
+
+  const prevAuthRef = useRef(false);
+  useEffect(() => {
+    if (isAuthenticated && !prevAuthRef.current && isPinEnabled()) {
+      setShowPinLock(true);
+    }
+    prevAuthRef.current = isAuthenticated;
+  }, [isAuthenticated]);
   
   const navigationHistory = useRef([]);
   const pageStateCache = useRef({});
@@ -653,6 +676,12 @@ const App = () => {
     );
   }
 
+  const handleLockLogout = () => {
+    if (supabase) supabase.auth.signOut();
+    setShowPinLock(false);
+    setCurrentPage("welcome");
+  };
+
   if (currentPage === "linkExpired") {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center px-6">
@@ -669,6 +698,29 @@ const App = () => {
           </button>
         </div>
       </div>
+    );
+  }
+
+  if (showPinLock && isAuthenticated) {
+    return (
+      <PinLockScreen
+        onUnlock={() => setShowPinLock(false)}
+        onLogout={handleLockLogout}
+      />
+    );
+  }
+
+  if (isInactivityLocked && isAuthenticated) {
+    return (
+      <InactivityLockScreen
+        onUnlock={() => {
+          if (isPinEnabled()) {
+            setShowPinLock(true);
+          }
+          unlockInactivity();
+        }}
+        onLogout={handleLockLogout}
+      />
     );
   }
 
@@ -1172,6 +1224,22 @@ const App = () => {
     return (
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <ChangePasswordPage onNavigate={navigateTo} onBack={goBack} />
+      </SwipeBackWrapper>
+    );
+  }
+
+  if (currentPage === "activeSessions") {
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <ActiveSessionsPage onBack={goBack} onLogout={() => { if (supabase) supabase.auth.signOut(); setCurrentPage("welcome"); }} />
+      </SwipeBackWrapper>
+    );
+  }
+
+  if (currentPage === "pinSetup") {
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <PinSetupPage onBack={goBack} />
       </SwipeBackWrapper>
     );
   }
