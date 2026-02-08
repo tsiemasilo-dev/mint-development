@@ -1232,6 +1232,7 @@ app.get("/api/user/strategies", async (req, res) => {
     }
 
     const strategyInvestments = {};
+    const strategyFirstDate = {};
     for (const tx of (transactions || [])) {
       const txName = (tx.name || "").trim();
       let strategyName = null;
@@ -1245,6 +1246,11 @@ app.get("/api/user/strategies", async (req, res) => {
           strategyInvestments[strategyName] = 0;
         }
         strategyInvestments[strategyName] += Math.abs(tx.amount || 0);
+        if (tx.transaction_date) {
+          if (!strategyFirstDate[strategyName] || tx.transaction_date < strategyFirstDate[strategyName]) {
+            strategyFirstDate[strategyName] = tx.transaction_date;
+          }
+        }
       }
     }
 
@@ -1313,6 +1319,7 @@ app.get("/api/user/strategies", async (req, res) => {
           holdings: enrichedHoldings,
           investedAmount: strategyInvestments[matchKey] / 100,
           metrics: latestMetric || null,
+          firstInvestedDate: strategyFirstDate[matchKey] || null,
         });
       }
     }

@@ -497,10 +497,10 @@ export const getChangeColor = (change) => {
   return change > 0 ? "text-emerald-500" : "text-red-500";
 };
 
-export const getMonthlyReturns = async (strategyId) => {
+export const getMonthlyReturns = async (strategyId, startDate = null) => {
   if (!supabase || !strategyId) return {};
 
-  const cacheKey = `monthly_returns_${strategyId}`;
+  const cacheKey = `monthly_returns_${strategyId}_${startDate || 'all'}`;
   const cached = cache.priceHistory.get(cacheKey);
   if (cached && (Date.now() - cached.timestamp) < 300000) {
     return cached.data;
@@ -609,6 +609,23 @@ export const getMonthlyReturns = async (strategyId) => {
       }
     }
 
+    if (startDate) {
+      const startYM = startDate.slice(0, 7);
+      const [startYear, startMonth] = startYM.split("-");
+      for (const year of Object.keys(result)) {
+        if (year < startYear) {
+          delete result[year];
+        } else if (year === startYear) {
+          for (const month of Object.keys(result[year])) {
+            if (month < startMonth) {
+              delete result[year][month];
+            }
+          }
+          if (Object.keys(result[year]).length === 0) delete result[year];
+        }
+      }
+    }
+
     cache.priceHistory.set(cacheKey, { data: result, timestamp: Date.now() });
     return result;
   } catch (err) {
@@ -617,10 +634,10 @@ export const getMonthlyReturns = async (strategyId) => {
   }
 };
 
-export const getStockMonthlyReturns = async (securityId) => {
+export const getStockMonthlyReturns = async (securityId, startDate = null) => {
   if (!supabase || !securityId) return {};
 
-  const cacheKey = `monthly_returns_stock_${securityId}`;
+  const cacheKey = `monthly_returns_stock_${securityId}_${startDate || 'all'}`;
   const cached = cache.priceHistory.get(cacheKey);
   if (cached && (Date.now() - cached.timestamp) < 300000) {
     return cached.data;
@@ -651,6 +668,23 @@ export const getStockMonthlyReturns = async (securityId) => {
       }
     }
 
+    if (startDate) {
+      const startYM = startDate.slice(0, 7);
+      const [startYear, startMonth] = startYM.split("-");
+      for (const year of Object.keys(result)) {
+        if (year < startYear) {
+          delete result[year];
+        } else if (year === startYear) {
+          for (const month of Object.keys(result[year])) {
+            if (month < startMonth) {
+              delete result[year][month];
+            }
+          }
+          if (Object.keys(result[year]).length === 0) delete result[year];
+        }
+      }
+    }
+
     cache.priceHistory.set(cacheKey, { data: result, timestamp: Date.now() });
     return result;
   } catch (err) {
@@ -670,8 +704,8 @@ export const getOverallPortfolioMonthlyReturns = async (strategyIds, stockSecuri
     const allMonthlyData = [];
 
     for (const sid of strategyIds) {
-      const returns = await getMonthlyReturns(sid);
       const strategy = strategies.find(s => s.strategyId === sid);
+      const returns = await getMonthlyReturns(sid, strategy?.firstInvestedDate || null);
       const value = strategy?.investedAmount || strategy?.currentValue || 0;
       if (Object.keys(returns).length > 0) {
         allMonthlyData.push({ returns, value });
@@ -679,8 +713,8 @@ export const getOverallPortfolioMonthlyReturns = async (strategyIds, stockSecuri
     }
 
     for (const secId of stockSecurityIds) {
-      const returns = await getStockMonthlyReturns(secId);
       const holding = rawHoldings.find(h => h.security_id === secId);
+      const returns = await getStockMonthlyReturns(secId, holding?.created_at || null);
       const value = holding ? (holding.market_value || 0) / 100 : 0;
       if (Object.keys(returns).length > 0) {
         allMonthlyData.push({ returns, value });

@@ -209,9 +209,10 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       } else {
         const matchedStrategy = strategies.find(s => s.strategyId === calendarFilter);
         if (matchedStrategy) {
-          data = await getMonthlyReturns(calendarFilter);
+          data = await getMonthlyReturns(calendarFilter, matchedStrategy.firstInvestedDate || null);
         } else {
-          data = await getStockMonthlyReturns(calendarFilter);
+          const matchedHolding = (rawHoldings || []).find(h => h.security_id === calendarFilter);
+          data = await getStockMonthlyReturns(calendarFilter, matchedHolding?.created_at || null);
         }
       }
       if (!cancelled) {

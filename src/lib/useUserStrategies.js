@@ -69,6 +69,7 @@ export const useUserStrategies = () => {
           lastUpdated: latestMetric?.as_of_date,
           previousMonthChange: parseFloat(changePct.toFixed(1)),
           metrics: latestMetric,
+          firstInvestedDate: strategy.firstInvestedDate || null,
         };
       });
 
