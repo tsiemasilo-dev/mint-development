@@ -930,7 +930,14 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
         >
       {(() => {
-        const stockChartData = liveStockChartData.length > 0 ? liveStockChartData : [];
+        const isMyStock = myStockIds.has(selectedStock?.id);
+        const userHolding = isMyStock && selectedSecurityId ? (rawHoldings || []).find(h => h.security_id === selectedSecurityId) : null;
+        const userQuantity = userHolding ? (userHolding.quantity || 0) : 0;
+        const stockChartData = liveStockChartData.length > 0
+          ? (isMyStock && userQuantity > 0
+              ? liveStockChartData.map(d => ({ ...d, value: Number((d.value * userQuantity).toFixed(2)) }))
+              : liveStockChartData)
+          : [];
         if (!selectedStock) {
           return <div className="text-center py-10 text-slate-500">Loading stocks...</div>;
         }
@@ -998,13 +1005,29 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                 </div>
 
                 <div className="mb-3 px-1">
-                  <p className="text-3xl font-bold text-slate-900">{formatCurrency(liveQuotes[selectedStock.ticker]?.price || selectedStock.price)}</p>
                   {(() => {
-                    const change = liveQuotes[selectedStock.ticker]?.changePercent ?? selectedStock.dailyChange;
+                    const perSharePrice = liveQuotes[selectedStock.ticker]?.price || selectedStock.price;
+                    const changePct = liveQuotes[selectedStock.ticker]?.changePercent ?? selectedStock.dailyChange;
+                    if (isMyStock && userQuantity > 0) {
+                      const holdingValue = perSharePrice * userQuantity;
+                      const previousValue = holdingValue / (1 + changePct / 100);
+                      const absChange = holdingValue - previousValue;
+                      return (
+                        <>
+                          <p className="text-3xl font-bold text-slate-900">{formatCurrency(holdingValue)}</p>
+                          <p className={`text-sm ${changePct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                            {absChange >= 0 ? '+' : '-'}{formatCurrency(Math.abs(absChange))} ({changePct >= 0 ? '+' : ''}{changePct.toFixed(2)}% Today)
+                          </p>
+                        </>
+                      );
+                    }
                     return (
-                      <p className={`text-sm ${change >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                        ({change >= 0 ? '+' : ''}{change.toFixed(2)}% Today)
-                      </p>
+                      <>
+                        <p className="text-3xl font-bold text-slate-900">{formatCurrency(perSharePrice)}</p>
+                        <p className={`text-sm ${changePct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                          ({changePct >= 0 ? '+' : ''}{changePct.toFixed(2)}% Today)
+                        </p>
+                      </>
                     );
                   })()}
                 </div>
@@ -1147,6 +1170,10 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                       const livePrice = liveQuotes[stock.ticker]?.price || stock.price;
                       const liveChange = liveQuotes[stock.ticker]?.changePercent ?? stock.dailyChange;
                       const isPositive = liveChange >= 0;
+                      const stockSecId = liveQuotes[stock.ticker]?.id || null;
+                      const stockHolding = stockSecId ? (rawHoldings || []).find(h => h.security_id === stockSecId) : null;
+                      const stockQty = stockHolding ? (stockHolding.quantity || 0) : 0;
+                      const displayPrice = stockQty > 0 ? livePrice * stockQty : livePrice;
                       return (
                         <button
                           key={stock.id}
@@ -1169,10 +1196,10 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-slate-900 truncate">{stock.name}</p>
-                            <p className="text-xs text-slate-500 font-medium">{stock.ticker}</p>
+                            <p className="text-xs text-slate-500 font-medium">{stockQty > 0 ? `${stockQty} shares · ${formatCurrency(livePrice)}/share` : stock.ticker}</p>
                           </div>
                           <div className="text-right flex-shrink-0">
-                            <p className="text-sm font-bold text-slate-900">{formatCurrency(livePrice)}</p>
+                            <p className="text-sm font-bold text-slate-900">{formatCurrency(displayPrice)}</p>
                             <p className={`text-xs font-medium ${isPositive ? 'text-emerald-500' : 'text-rose-500'}`}>
                               {isPositive ? '+' : ''}{liveChange.toFixed(2)}%
                             </p>
