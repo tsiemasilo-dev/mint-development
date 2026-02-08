@@ -24,7 +24,7 @@ const getReturnColor = (value) => {
 
 const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies, onBack }) => {
   const [balanceVisible, setBalanceVisible] = useState(true);
-  const [activeTab, setActiveTab] = useState("strategy");
+  const [activeTab, setActiveTab] = useState("stocks");
   const [timeFilter, setTimeFilter] = useState("W");
   const [failedLogos, setFailedLogos] = useState({});
   const [currentView, setCurrentView] = useState("portfolio");
