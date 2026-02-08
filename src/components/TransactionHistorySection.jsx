@@ -16,7 +16,7 @@ const getIconColors = (direction, name) => {
   const lower = (name || "").toLowerCase();
   if (lower.includes("invest") || lower.includes("strategy") || lower.includes("purchas") || lower.includes("buy") || lower.includes("bought")) return { bg: "bg-blue-50", text: "text-blue-600" };
   if (direction === "credit") return { bg: "bg-emerald-50", text: "text-emerald-600" };
-  return { bg: "bg-slate-100", text: "text-slate-500" };
+  return { bg: "bg-red-50", text: "text-red-500" };
 };
 
 const TransactionHistorySection = ({ items, onViewAll }) => {
@@ -43,7 +43,15 @@ const TransactionHistorySection = ({ items, onViewAll }) => {
                 key={`${item.title}-${item.date}-${idx}`}
                 className="flex items-center gap-3 rounded-2xl border border-slate-100/80 bg-slate-50/50 px-4 py-3"
               >
-                <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${colors.bg}`}>
+                {item.logo_url ? (
+                  <img
+                    src={item.logo_url}
+                    alt=""
+                    className="h-10 w-10 flex-shrink-0 rounded-full object-cover bg-slate-50 border border-slate-100"
+                    onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                  />
+                ) : null}
+                <div className={`${item.logo_url ? 'hidden' : 'flex'} h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${colors.bg}`}>
                   <Icon className={`h-4.5 w-4.5 ${colors.text}`} />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -67,7 +75,7 @@ const TransactionHistorySection = ({ items, onViewAll }) => {
                   </div>
                 </div>
                 <p className={`text-sm font-bold tabular-nums flex-shrink-0 ${
-                  isCredit ? "text-emerald-600" : "text-slate-800"
+                  isCredit ? "text-emerald-600" : "text-red-600"
                 }`}>
                   {item.amount}
                 </p>

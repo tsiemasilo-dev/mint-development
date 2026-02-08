@@ -20,7 +20,7 @@ const getIconColors = (direction, name) => {
   const lower = (name || "").toLowerCase();
   if (lower.includes("invest") || lower.includes("strategy") || lower.includes("purchas") || lower.includes("buy") || lower.includes("bought")) return { bg: "bg-blue-50", text: "text-blue-600" };
   if (direction === "credit") return { bg: "bg-emerald-50", text: "text-emerald-600" };
-  return { bg: "bg-slate-100", text: "text-slate-500" };
+  return { bg: "bg-red-50", text: "text-red-500" };
 };
 
 const getFilterCategory = (direction, name) => {
@@ -95,6 +95,7 @@ const ActivityPage = ({ onBack }) => {
         filterCategory: getFilterCategory(t.direction, t.name),
         isPositive,
         groupLabel: formatRelativeDate(t.transaction_date || t.created_at),
+        logo_url: t.logo_url,
       };
     });
   }, [transactions]);
@@ -246,12 +247,12 @@ const ActivityPage = ({ onBack }) => {
           </div>
           <div className="rounded-2xl bg-white p-4 shadow-sm border border-slate-100/80">
             <div className="flex items-center gap-2 mb-1.5">
-              <div className="h-6 w-6 rounded-full bg-slate-100 flex items-center justify-center">
-                <ArrowUpRight className="h-3 w-3 text-slate-500" />
+              <div className="h-6 w-6 rounded-full bg-red-50 flex items-center justify-center">
+                <ArrowUpRight className="h-3 w-3 text-red-500" />
               </div>
               <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Money Out</p>
             </div>
-            <p className="text-lg font-bold text-slate-700">R{summaryStats.totalOut.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="text-lg font-bold text-red-600">R{summaryStats.totalOut.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
           </div>
         </div>
 
@@ -306,7 +307,15 @@ const ActivityPage = ({ onBack }) => {
                         key={`${item.id || itemIndex}`}
                         className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm border border-slate-100/50"
                       >
-                        <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full ${colors.bg}`}>
+                        {item.logo_url ? (
+                          <img
+                            src={item.logo_url}
+                            alt=""
+                            className="h-11 w-11 flex-shrink-0 rounded-full object-cover bg-slate-50 border border-slate-100"
+                            onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                          />
+                        ) : null}
+                        <div className={`${item.logo_url ? 'hidden' : 'flex'} h-11 w-11 flex-shrink-0 items-center justify-center rounded-full ${colors.bg}`}>
                           <Icon className={`h-5 w-5 ${colors.text}`} />
                         </div>
                         <div className="flex-1 min-w-0">
@@ -338,7 +347,7 @@ const ActivityPage = ({ onBack }) => {
                           </div>
                         </div>
                         <p className={`text-sm font-bold tabular-nums flex-shrink-0 ${
-                          item.isPositive ? "text-emerald-600" : "text-slate-800"
+                          item.isPositive ? "text-emerald-600" : "text-red-600"
                         }`}>
                           {item.amount}
                         </p>

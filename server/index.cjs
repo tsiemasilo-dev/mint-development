@@ -1364,7 +1364,51 @@ app.get("/api/user/transactions", async (req, res) => {
       return res.status(500).json({ success: false, error: txError.message });
     }
 
-    res.json({ success: true, transactions: transactions || [] });
+    const txList = transactions || [];
+
+    const strategyNames = new Set();
+    for (const tx of txList) {
+      const txName = (tx.name || "").trim();
+      let sName = null;
+      if (txName.startsWith("Strategy Investment: ")) {
+        sName = txName.replace("Strategy Investment: ", "").trim();
+      } else if (txName.startsWith("Purchased ")) {
+        sName = txName.replace("Purchased ", "").trim();
+      }
+      if (sName) strategyNames.add(sName);
+    }
+
+    let logoMap = {};
+    if (strategyNames.size > 0) {
+      const { data: strategies } = await db
+        .from("strategies")
+        .select("name, short_name, icon_url, image_url")
+        .eq("status", "active");
+
+      if (strategies) {
+        for (const s of strategies) {
+          const logo = s.icon_url || s.image_url || null;
+          if (logo) {
+            if (s.name) logoMap[s.name.toLowerCase()] = logo;
+            if (s.short_name) logoMap[s.short_name.toLowerCase()] = logo;
+          }
+        }
+      }
+    }
+
+    const enrichedTx = txList.map(tx => {
+      const txName = (tx.name || "").trim();
+      let sName = null;
+      if (txName.startsWith("Strategy Investment: ")) {
+        sName = txName.replace("Strategy Investment: ", "").trim();
+      } else if (txName.startsWith("Purchased ")) {
+        sName = txName.replace("Purchased ", "").trim();
+      }
+      const logo_url = sName ? (logoMap[sName.toLowerCase()] || null) : null;
+      return { ...tx, logo_url };
+    });
+
+    res.json({ success: true, transactions: enrichedTx });
   } catch (error) {
     console.error("User transactions error:", error);
     res.status(500).json({ success: false, error: error.message || "Failed to fetch transactions" });
