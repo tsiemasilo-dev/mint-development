@@ -742,8 +742,8 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       {/* Scrollable content section - starts after chart */}
       <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
         <button 
-          onClick={() => setCurrentView("allocations")}
-          className="w-full py-3 rounded-2xl bg-slate-50 border border-slate-200/80 text-sm font-semibold text-slate-700 active:scale-[0.98] transition-all duration-150 hover:bg-slate-100"
+          onClick={() => { setCurrentView("allocations"); window.scrollTo(0, 0); }}
+          className="w-full py-3.5 rounded-full bg-gradient-to-r from-slate-800 to-slate-900 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg shadow-slate-900/30 transition hover:-translate-y-0.5 hover:shadow-xl"
         >
           View All Allocations
         </button>
