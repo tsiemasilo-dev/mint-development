@@ -2,29 +2,21 @@ import React from "react";
 import {
   ArrowLeft,
   BadgeCheck,
-  ChevronRight,
   Landmark,
-  UserPlus,
+  ChevronRight,
   CheckCircle2,
 } from "lucide-react";
 import ActionsSkeleton from "../components/ActionsSkeleton";
-import { useRequiredActions } from "../lib/useRequiredActions";
 import { useSumsubStatus } from "../lib/useSumsubStatus";
+import { useRequiredActions } from "../lib/useRequiredActions";
 
 const ActionsPage = ({ onBack, onNavigate }) => {
-  const { bankLinked, bankInReview, bankSnapshotExists, loading: actionsLoading } = useRequiredActions();
   const { kycVerified, kycPending, kycNeedsResubmission, loading: kycLoading, rejectLabels } = useSumsubStatus();
-  const loading = actionsLoading || kycLoading;
+  const { bankLinked, loading: bankLoading } = useRequiredActions();
 
-  if (loading) {
+  if (kycLoading || bankLoading) {
     return <ActionsSkeleton />;
   }
-
-  const getBankStatus = () => {
-    if (bankLinked) return "Verified";
-    if (bankInReview) return "In review";
-    return "Required";
-  };
 
   const getKycStatus = () => {
     if (kycVerified) return { text: "Verified", style: "bg-green-100 text-green-600" };
@@ -51,6 +43,7 @@ const ActionsPage = ({ onBack, onNavigate }) => {
       }
       return "Some documents need resubmission";
     }
+    if (kycVerified) return "Identity verification complete";
     return "Needed to unlock higher limits";
   };
 
@@ -65,27 +58,15 @@ const ActionsPage = ({ onBack, onNavigate }) => {
       completed: kycVerified,
       navigateTo: "identityCheck",
     },
-    ...(bankSnapshotExists
-      ? []
-      : [
-          {
-            id: "bank-link",
-            title: "Link your primary bank",
-            description: "Connect to enable instant transfers",
-            status: getBankStatus(),
-            icon: Landmark,
-            completed: bankLinked,
-            navigateTo: "creditApply",
-          },
-        ]),
     {
-      id: "invite",
-      title: "Invite a friend",
-      description: "Share Mint and earn bonus rewards",
-      status: "Optional",
-      icon: UserPlus,
-      completed: false,
-      navigateTo: "invite",
+      id: "bank",
+      title: "Link bank account",
+      description: bankLinked ? "Bank account linked" : "Link your bank account for withdrawals",
+      status: bankLinked ? "Linked" : "Not Linked",
+      statusStyle: bankLinked ? "bg-green-100 text-green-600" : "bg-amber-100 text-amber-700",
+      icon: Landmark,
+      completed: bankLinked,
+      navigateTo: "bankLink",
     },
   ];
 

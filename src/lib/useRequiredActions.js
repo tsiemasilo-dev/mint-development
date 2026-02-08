@@ -5,7 +5,6 @@ import { createBankNotification } from "./NotificationsContext";
 const defaultActions = {
   bankLinked: false,
   bankInReview: false,
-  bankSnapshotExists: false,
   loading: true,
 };
 
@@ -33,11 +32,11 @@ function getSnapshot() {
 function subscribe(listener) {
   globalState.listeners.add(listener);
   globalState.subscriberCount++;
-
+  
   if (globalState.subscriberCount === 1 && !globalState.subscription) {
     initializeSubscription();
   }
-
+  
   return () => {
     globalState.listeners.delete(listener);
     globalState.subscriberCount--;
@@ -46,7 +45,7 @@ function subscribe(listener) {
 
 async function handleStatusChange(oldData, newData) {
   if (!globalState.userId) return;
-
+  
   const userId = globalState.userId;
   const now = Date.now();
 
@@ -54,7 +53,7 @@ async function handleStatusChange(oldData, newData) {
     linked: oldData?.bank_linked || false,
     in_review: oldData?.bank_in_review || false,
   };
-
+  
   const newBank = {
     linked: newData.bank_linked || false,
     in_review: newData.bank_in_review || false,
@@ -63,9 +62,9 @@ async function handleStatusChange(oldData, newData) {
   let notificationStatus = null;
 
   if (!oldBank.linked && newBank.linked) {
-    notificationStatus = "linked";
+    notificationStatus = 'linked';
   } else if (!oldBank.in_review && newBank.in_review && !newBank.linked) {
-    notificationStatus = "pending";
+    notificationStatus = 'pending';
   }
 
   if (!notificationStatus) {
@@ -74,14 +73,10 @@ async function handleStatusChange(oldData, newData) {
   }
 
   const notificationKey = `bank_${notificationStatus}`;
-
-  if (
-    notificationKey === globalState.lastNotificationKey &&
-    now - globalState.lastNotificationTime < DEBOUNCE_MS
-  ) {
-    console.log(
-      `Debouncing duplicate notification: ${notificationKey} (${now - globalState.lastNotificationTime}ms ago)`
-    );
+  
+  if (notificationKey === globalState.lastNotificationKey && 
+      now - globalState.lastNotificationTime < DEBOUNCE_MS) {
+    console.log(`Debouncing duplicate notification: ${notificationKey} (${now - globalState.lastNotificationTime}ms ago)`);
     return;
   }
 
@@ -89,7 +84,7 @@ async function handleStatusChange(oldData, newData) {
   globalState.lastNotificationTime = now;
 
   console.log(`Creating bank notification: ${notificationKey}`);
-
+  
   try {
     await createBankNotification(userId, notificationStatus);
   } catch (err) {
@@ -115,14 +110,6 @@ async function initializeSubscription() {
     const userId = userData.user.id;
     globalState.userId = userId;
 
-    const { data: snapshotData, error: snapshotError } = await supabase
-      .from("truid_bank_snapshots")
-      .select("id")
-      .eq("user_id", userId)
-      .limit(1);
-
-    const bankSnapshotExists = !snapshotError && (snapshotData?.length ?? 0) > 0;
-
     let { data, error } = await supabase
       .from("required_actions")
       .select("bank_linked, bank_in_review")
@@ -145,7 +132,6 @@ async function initializeSubscription() {
     globalState.actions = {
       bankLinked: data?.bank_linked || false,
       bankInReview: data?.bank_in_review || false,
-      bankSnapshotExists,
       loading: false,
     };
     notifyListeners();
@@ -155,7 +141,7 @@ async function initializeSubscription() {
       return;
     }
 
-    const channelId = "required-actions-singleton";
+    const channelId = `required-actions-singleton`;
     console.log("Setting up SINGLETON real-time subscription:", channelId);
 
     globalState.subscription = supabase
@@ -170,7 +156,7 @@ async function initializeSubscription() {
         },
         async (payload) => {
           console.log("Singleton: Real-time UPDATE received:", payload);
-
+          
           const newData = payload.new;
 
           await handleStatusChange(globalState.previousData, newData);
@@ -179,7 +165,6 @@ async function initializeSubscription() {
           globalState.actions = {
             bankLinked: newData.bank_linked || false,
             bankInReview: newData.bank_in_review || false,
-            bankSnapshotExists: globalState.actions.bankSnapshotExists,
             loading: false,
           };
           notifyListeners();
@@ -201,7 +186,6 @@ async function initializeSubscription() {
           globalState.actions = {
             bankLinked: newData.bank_linked || false,
             bankInReview: newData.bank_in_review || false,
-            bankSnapshotExists: globalState.actions.bankSnapshotExists,
             loading: false,
           };
           notifyListeners();
@@ -210,6 +194,7 @@ async function initializeSubscription() {
       .subscribe((status) => {
         console.log("Singleton subscription status:", status);
       });
+
   } catch (error) {
     console.error("Failed to initialize required actions:", error);
     globalState.actions = { ...defaultActions, loading: false };
@@ -219,45 +204,26 @@ async function initializeSubscription() {
 
 export async function refetchRequiredActions() {
   if (!supabase || !globalState.userId) return;
-
+  
   globalState.actions = { ...globalState.actions, loading: true };
   notifyListeners();
-
+  
   try {
-    const [requiredResult, snapshotResult] = await Promise.all([
-      supabase
-        .from("required_actions")
-        .select("bank_linked, bank_in_review")
-        .eq("user_id", globalState.userId)
-        .maybeSingle(),
-      supabase
-        .from("truid_bank_snapshots")
-        .select("id")
-        .eq("user_id", globalState.userId)
-        .limit(1),
-    ]);
-
-    const data = requiredResult?.data;
-    const bankSnapshotExists =
-      !snapshotResult?.error && (snapshotResult?.data?.length ?? 0) > 0;
+    const { data } = await supabase
+      .from("required_actions")
+      .select("bank_linked, bank_in_review")
+      .eq("user_id", globalState.userId)
+      .maybeSingle();
 
     if (data) {
       globalState.previousData = data;
       globalState.actions = {
         bankLinked: data.bank_linked || false,
         bankInReview: data.bank_in_review || false,
-        bankSnapshotExists,
         loading: false,
       };
-    } else {
-      globalState.actions = {
-        ...globalState.actions,
-        bankSnapshotExists,
-        loading: false,
-      };
+      notifyListeners();
     }
-
-    notifyListeners();
   } catch (error) {
     console.error("Failed to refetch required actions:", error);
     globalState.actions = { ...globalState.actions, loading: false };
@@ -267,7 +233,7 @@ export async function refetchRequiredActions() {
 
 export const useRequiredActions = () => {
   const actions = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-
+  
   const refetch = useCallback(() => {
     refetchRequiredActions();
   }, []);

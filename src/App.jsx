@@ -8,7 +8,6 @@ import AuthPage from "./pages/AuthPage.jsx";
 import HomePage from "./pages/HomePage.jsx";
 import CreditPage from "./pages/CreditPage.jsx";
 import CreditApplyPage from "./pages/CreditApplyPage.jsx";
-import LoanConfigurationPage from "./pages/LoanConfigurationPage.jsx";
 import CreditRepayPage from "./pages/CreditRepayPage.jsx";
 import InvestmentsPage from "./pages/InvestmentsPage.jsx";
 import NewPortfolioPage from "./pages/NewPortfolioPage.jsx";
@@ -368,7 +367,7 @@ const App = () => {
           >
             <CreditPage
               onOpenNotifications={noOp}
-              onOpenTruID={noOp}
+              onOpenCreditApply={noOp}
             />
           </AppLayout>
         );
@@ -599,7 +598,7 @@ const App = () => {
             <CreditPage
               initialView="score"
               onOpenNotifications={noOp}
-              onOpenTruID={noOp}
+              onOpenCreditApply={noOp}
             />
           </AppLayout>
         );
@@ -721,7 +720,7 @@ const App = () => {
             setNotificationReturnPage("credit");
             navigateTo("notifications");
           }}
-          onOpenTruID={() => navigateTo("creditApply")}
+          onOpenCreditApply={() => navigateTo("creditApply")}
         />
       </AppLayout>
     );
@@ -743,7 +742,7 @@ const App = () => {
             setNotificationReturnPage("credit");
             navigateTo("notifications");
           }}
-          onOpenTruID={() => navigateTo("creditApply")}
+          onOpenCreditApply={() => navigateTo("creditApply")}
         />
       </AppLayout>
     );
@@ -1155,20 +1154,9 @@ const App = () => {
 
   if (currentPage === "creditApply") {
     return (
-      <CreditApplyPage
-        onBack={() => setCurrentPage("credit")}
-        onComplete={() => setCurrentPage("loanConfig")}
-      />
-    );
-  }
-
-  if (currentPage === "loanConfig") {
-    return (
-      <LoanConfigurationPage
-        onBack={() => setCurrentPage("creditApply")}
-        onBackToCredit={() => setCurrentPage("credit")}
-        onComplete={() => setCurrentPage("credit")}
-      />
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <CreditApplyPage onBack={goBack} />
+      </SwipeBackWrapper>
     );
   }
 
