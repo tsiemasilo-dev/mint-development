@@ -619,6 +619,7 @@ const HomePage = ({
     status: t.status,
     description: t.description,
     logo_url: t.logo_url,
+    holding_logos: t.holding_logos || [],
   }));
 
   const handleActionNavigation = (action) => {

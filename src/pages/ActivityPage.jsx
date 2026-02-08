@@ -94,6 +94,7 @@ const ActivityPage = ({ onBack }) => {
         isPositive,
         groupLabel: formatRelativeDate(t.transaction_date || t.created_at),
         logo_url: t.logo_url,
+        holding_logos: t.holding_logos || [],
       };
     });
   }, [transactions]);
@@ -312,7 +313,19 @@ const ActivityPage = ({ onBack }) => {
                         key={`${item.id || itemIndex}`}
                         className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm border border-slate-100/50"
                       >
-                        {item.logo_url ? (
+                        {item.holding_logos && item.holding_logos.length > 0 ? (
+                          <div className="flex -space-x-2 flex-shrink-0">
+                            {item.holding_logos.slice(0, 3).map((hl, hlIdx) => (
+                              <img
+                                key={`${hl.symbol}-${hlIdx}`}
+                                src={hl.logo_url}
+                                alt={hl.name || hl.symbol}
+                                className="h-9 w-9 rounded-full object-cover bg-white border-2 border-white shadow-sm"
+                                onError={(e) => { e.target.style.display = 'none'; }}
+                              />
+                            ))}
+                          </div>
+                        ) : item.logo_url ? (
                           <img
                             src={item.logo_url}
                             alt=""
@@ -320,7 +333,7 @@ const ActivityPage = ({ onBack }) => {
                             onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
                           />
                         ) : null}
-                        <div className={`${item.logo_url ? 'hidden' : 'flex'} h-11 w-11 flex-shrink-0 items-center justify-center rounded-full ${colors.bg}`}>
+                        <div className={`${item.holding_logos?.length > 0 || item.logo_url ? 'hidden' : 'flex'} h-11 w-11 flex-shrink-0 items-center justify-center rounded-full ${colors.bg}`}>
                           <Icon className={`h-5 w-5 ${colors.text}`} />
                         </div>
                         <div className="flex-1 min-w-0">

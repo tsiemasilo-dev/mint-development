@@ -43,7 +43,19 @@ const TransactionHistorySection = ({ items, onViewAll }) => {
                 key={`${item.title}-${item.date}-${idx}`}
                 className="flex items-center gap-3 rounded-2xl border border-slate-100/80 bg-slate-50/50 px-4 py-3"
               >
-                {item.logo_url ? (
+                {item.holding_logos && item.holding_logos.length > 0 ? (
+                  <div className="flex -space-x-2 flex-shrink-0">
+                    {item.holding_logos.slice(0, 3).map((hl, hlIdx) => (
+                      <img
+                        key={`${hl.symbol}-${hlIdx}`}
+                        src={hl.logo_url}
+                        alt={hl.name || hl.symbol}
+                        className="h-8 w-8 rounded-full object-cover bg-white border-2 border-white shadow-sm"
+                        onError={(e) => { e.target.style.display = 'none'; }}
+                      />
+                    ))}
+                  </div>
+                ) : item.logo_url ? (
                   <img
                     src={item.logo_url}
                     alt=""
@@ -51,7 +63,7 @@ const TransactionHistorySection = ({ items, onViewAll }) => {
                     onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
                   />
                 ) : null}
-                <div className={`${item.logo_url ? 'hidden' : 'flex'} h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${colors.bg}`}>
+                <div className={`${item.holding_logos?.length > 0 || item.logo_url ? 'hidden' : 'flex'} h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${colors.bg}`}>
                   <Icon className={`h-4.5 w-4.5 ${colors.text}`} />
                 </div>
                 <div className="flex-1 min-w-0">

@@ -1366,77 +1366,66 @@ app.get("/api/user/transactions", async (req, res) => {
 
     const txList = transactions || [];
 
-    const extractedNames = [];
+    const extractedNames = new Map();
     for (const tx of txList) {
       const txName = (tx.name || "").trim();
-      let sName = null;
       if (txName.startsWith("Strategy Investment: ")) {
-        sName = txName.replace("Strategy Investment: ", "").trim();
+        extractedNames.set(txName.replace("Strategy Investment: ", "").trim(), "strategy");
       } else if (txName.startsWith("Purchased ")) {
-        sName = txName.replace("Purchased ", "").trim();
+        extractedNames.set(txName.replace("Purchased ", "").trim(), "purchased");
       }
-      if (sName) extractedNames.push(sName);
     }
 
-    let logoMap = {};
-    if (extractedNames.length > 0) {
-      const { data: strategies } = await db
-        .from("strategies")
-        .select("name, short_name, icon_url, image_url, holdings")
-        .eq("status", "active");
+    let strategyHoldingsMap = {};
+    let securityLogoMap = {};
 
-      if (strategies) {
-        const holdingSymbols = new Set();
-        for (const s of strategies) {
-          if (s.icon_url || s.image_url) {
-            const logo = s.icon_url || s.image_url;
-            if (s.name) logoMap[s.name.toLowerCase()] = logo;
-            if (s.short_name) logoMap[s.short_name.toLowerCase()] = logo;
-          }
-          const h = s.holdings || [];
-          if (Array.isArray(h)) {
-            h.forEach(item => { if (item.symbol) holdingSymbols.add(item.symbol); });
-          }
-        }
-
-        if (holdingSymbols.size > 0) {
-          const { data: secs } = await db
-            .from("securities")
-            .select("symbol, name, logo_url")
-            .in("symbol", Array.from(holdingSymbols));
-          if (secs) {
-            for (const sec of secs) {
-              if (sec.logo_url) {
-                if (sec.name) logoMap[sec.name.toLowerCase()] = sec.logo_url;
-                if (sec.symbol) logoMap[sec.symbol.toLowerCase()] = sec.logo_url;
+    if (extractedNames.size > 0) {
+      const { data: allSecs } = await db
+        .from("securities")
+        .select("name, symbol, logo_url");
+      if (allSecs) {
+        for (const sec of allSecs) {
+          if (sec.logo_url) {
+            if (sec.name) securityLogoMap[sec.name.toLowerCase()] = sec.logo_url;
+            if (sec.symbol) {
+              securityLogoMap[sec.symbol.toLowerCase()] = sec.logo_url;
+              const normalized = sec.symbol.split(".")[0].toUpperCase().toLowerCase();
+              if (normalized !== sec.symbol.toLowerCase()) {
+                securityLogoMap[normalized] = sec.logo_url;
               }
             }
           }
         }
       }
 
-      const { data: directSecs } = await db
-        .from("securities")
-        .select("name, symbol, logo_url");
-      if (directSecs) {
-        for (const sec of directSecs) {
-          if (sec.logo_url) {
-            if (sec.name) logoMap[sec.name.toLowerCase()] = sec.logo_url;
-            if (sec.symbol) logoMap[sec.symbol.toLowerCase()] = sec.logo_url;
-          }
-        }
-      }
+      const { data: strategies } = await db
+        .from("strategies")
+        .select("name, short_name, holdings")
+        .eq("status", "active");
 
-      for (const s of (strategies || [])) {
-        if (!logoMap[s.name?.toLowerCase()] && !logoMap[s.short_name?.toLowerCase()]) {
-          const h = s.holdings || [];
-          if (Array.isArray(h) && h.length > 0) {
-            const firstSymbol = h[0].symbol;
-            if (firstSymbol && logoMap[firstSymbol.toLowerCase()]) {
-              if (s.name) logoMap[s.name.toLowerCase()] = logoMap[firstSymbol.toLowerCase()];
-              if (s.short_name) logoMap[s.short_name.toLowerCase()] = logoMap[firstSymbol.toLowerCase()];
+      if (strategies) {
+        const findLogo = (sym) => {
+          if (!sym) return null;
+          const lower = sym.toLowerCase();
+          const normalized = sym.split(".")[0].toLowerCase();
+          return securityLogoMap[lower] || securityLogoMap[normalized] || securityLogoMap[lower + ".jo"] || securityLogoMap[normalized + ".jo"] || null;
+        };
+        for (const s of strategies) {
+          const holdings = Array.isArray(s.holdings) ? s.holdings : [];
+          const sorted = [...holdings].sort((a, b) => {
+            return Number(b.weight || b.shares || b.quantity || 0) - Number(a.weight || a.shares || a.quantity || 0);
+          });
+          const top3 = [];
+          for (const h of sorted) {
+            if (top3.length >= 3) break;
+            const sym = h.symbol || h.ticker || "";
+            const logo = findLogo(sym);
+            if (logo) {
+              top3.push({ symbol: sym, logo_url: logo, name: h.name || sym });
             }
           }
+          if (s.name) strategyHoldingsMap[s.name.toLowerCase()] = top3;
+          if (s.short_name) strategyHoldingsMap[s.short_name.toLowerCase()] = top3;
         }
       }
     }
@@ -1444,13 +1433,23 @@ app.get("/api/user/transactions", async (req, res) => {
     const enrichedTx = txList.map(tx => {
       const txName = (tx.name || "").trim();
       let sName = null;
+      let isStrategy = false;
       if (txName.startsWith("Strategy Investment: ")) {
         sName = txName.replace("Strategy Investment: ", "").trim();
+        isStrategy = true;
       } else if (txName.startsWith("Purchased ")) {
         sName = txName.replace("Purchased ", "").trim();
       }
-      const logo_url = sName ? (logoMap[sName.toLowerCase()] || null) : null;
-      return { ...tx, logo_url };
+      
+      if (isStrategy && sName) {
+        const holdingLogos = strategyHoldingsMap[sName.toLowerCase()] || [];
+        return { ...tx, holding_logos: holdingLogos, logo_url: null };
+      } else if (sName) {
+        const lower = sName.toLowerCase();
+        const logo_url = securityLogoMap[lower] || securityLogoMap[lower.split(".")[0]] || null;
+        return { ...tx, holding_logos: [], logo_url };
+      }
+      return { ...tx, holding_logos: [], logo_url: null };
     });
 
     res.json({ success: true, transactions: enrichedTx });
