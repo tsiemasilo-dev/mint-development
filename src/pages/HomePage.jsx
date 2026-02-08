@@ -542,8 +542,7 @@ const HomePage = ({
         name: newGoal.name,
         target_amount: parseFloat(newGoal.target_amount),
         target_date: newGoal.target_date || null,
-        current_amount: 0,
-        progress_percent: 0
+        current_amount: 0
       });
 
       if (error) throw error;
@@ -1202,7 +1201,7 @@ const HomePage = ({
             <div className="p-6">
               <header className="mb-6 flex items-center justify-between">
                 <h2 className="text-xl font-bold text-slate-900">
-                  {editingGoalId ? "Edit Goal" : isCreatingGoal ? "New Goal" : "Your Goals"}
+                  {editingGoalId ? "Edit Goal" : (isCreatingGoal || goals.length === 0) ? "New Goal" : "Your Goals"}
                 </h2>
                 <button
                   type="button"
@@ -1223,7 +1222,7 @@ const HomePage = ({
                   <div className="flex h-40 flex-col items-center justify-center">
                     <div className="h-8 w-8 animate-spin rounded-full border-4 border-violet-100 border-t-violet-600" />
                   </div>
-                ) : isCreatingGoal || editingGoalId ? (
+                ) : isCreatingGoal || editingGoalId || goals.length === 0 ? (
                   <form onSubmit={editingGoalId ? handleUpdateGoal : handleCreateGoal} className="space-y-4">
                     <div>
                       <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">Goal Name</label>

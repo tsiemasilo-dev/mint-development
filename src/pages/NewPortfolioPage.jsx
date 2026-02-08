@@ -766,7 +766,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onBack }) => {
                     <p className="text-xs text-slate-500">{holding.name}</p>
                   </div>
                 </div>
-                <p className={`text-sm font-semibold ${holding.change > 0 ? 'text-emerald-600' : holding.change < 0 ? 'text-rose-600' : 'text-slate-700'}`}>
+                <p className="text-sm font-semibold text-emerald-600">
                   {holding.weight.toFixed(1)}%
                 </p>
               </div>
@@ -1171,6 +1171,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onBack }) => {
               })()}
 
               <button
+                onClick={() => onOpenInvest && onOpenInvest()}
                 className="w-full py-3.5 rounded-full bg-gradient-to-r from-slate-800 to-slate-900 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg shadow-slate-900/30 transition hover:-translate-y-0.5 hover:shadow-xl flex items-center justify-center gap-2"
               >
                 <Plus className="h-4 w-4" />
@@ -1418,7 +1419,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onBack }) => {
                         <p className="text-sm font-bold text-slate-900">
                           {formatCurrency(stock.currentValue)}
                         </p>
-                        <p className={`text-xs font-semibold ${stock.change > 0 ? 'text-emerald-500' : stock.change < 0 ? 'text-rose-500' : 'text-violet-500'}`}>
+                        <p className="text-xs font-semibold text-emerald-500">
                           {pctValue.toFixed(1)}%
                         </p>
                       </div>
