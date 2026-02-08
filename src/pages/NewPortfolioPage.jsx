@@ -182,10 +182,8 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onBack }) => {
   
   const displayAccountValue = useMemo(() => {
     const holdingsValue = (rawHoldings || []).reduce((sum, h) => sum + ((h.market_value || 0) / 100), 0);
-    if (holdingsValue > 0) return holdingsValue;
-    return strategies.length > 0 
-      ? strategies.reduce((sum, s) => sum + (s.currentValue || 0), 0) 
-      : 0;
+    const strategiesValue = strategies.reduce((sum, s) => sum + (s.investedAmount || 0), 0);
+    return holdingsValue + strategiesValue;
   }, [rawHoldings, strategies]);
 
   const allStrategyHoldings = useMemo(() => {
@@ -207,6 +205,23 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onBack }) => {
           change: changePct,
         });
       });
+    }
+    strategies.forEach(s => {
+      const sym = s.shortName || s.name || "Strategy";
+      if (!holdingsMap.has(sym)) {
+        holdingsMap.set(sym, {
+          symbol: sym,
+          name: s.name || "Strategy",
+          weight: 0,
+          logo: s.iconUrl || s.imageUrl || null,
+          currentValue: s.investedAmount || 0,
+          change: s.previousMonthChange || 0,
+        });
+      }
+    });
+    const totalValue = Array.from(holdingsMap.values()).reduce((sum, h) => sum + h.currentValue, 0);
+    if (totalValue > 0) {
+      holdingsMap.forEach(h => { h.weight = (h.currentValue / totalValue) * 100; });
     }
     return Array.from(holdingsMap.values()).sort((a, b) => b.weight - a.weight);
   }, [rawHoldings, strategies, stocksList, liveQuotes]);

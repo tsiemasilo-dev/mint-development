@@ -48,11 +48,24 @@ const SwipeableBalanceCard = ({ userId, isBackFacing = true, forceVisible }) => 
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
 
-      const holdingsRes = token
-        ? await fetch('/api/user/holdings', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.ok ? r.json() : { holdings: [] })
-        : { holdings: [] };
+      const [holdingsRes, strategiesRes] = token
+        ? await Promise.all([
+            fetch('/api/user/holdings', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.ok ? r.json() : { holdings: [] }),
+            fetch('/api/user/strategies', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.ok ? r.json() : { strategies: [] }),
+          ])
+        : [{ holdings: [] }, { strategies: [] }];
 
-      const enrichedHoldings = holdingsRes.holdings || [];
+      const stockHoldings = holdingsRes.holdings || [];
+      const strategyItems = (strategiesRes.strategies || []).map(s => ({
+        symbol: s.shortName || s.name || "Strategy",
+        name: s.name || "Strategy",
+        market_value: (s.investedAmount || 0) * 100,
+        avg_fill: (s.investedAmount || 0) * 100,
+        quantity: 1,
+        logo_url: s.iconUrl || s.imageUrl || null,
+        security_id: null,
+      }));
+      const enrichedHoldings = [...stockHoldings, ...strategyItems];
 
       const mValue = enrichedHoldings.reduce((acc, h) => acc + Number(h.market_value || 0) / 100, 0);
       const invested = enrichedHoldings.reduce((acc, h) => acc + (Number(h.avg_fill || 0) * Number(h.quantity || 0)) / 100, 0);
