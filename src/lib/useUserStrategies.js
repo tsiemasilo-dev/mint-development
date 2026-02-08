@@ -158,7 +158,7 @@ function formatChartData(priceHistory, timeFilter) {
       return priceHistory.map((p, idx) => {
         const date = new Date(p.ts);
         return {
-          day: dayNames[date.getDay()],
+          day: dayNames[date.getDay()] + ' ' + date.getDate(),
           value: p.nav,
           fullDate: date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' }),
         };

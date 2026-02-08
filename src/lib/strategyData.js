@@ -455,6 +455,15 @@ export const getStrategyPriceHistory = async (strategyId, timeframe = "6M") => {
       }
     });
 
+    if (timeframe === "1D") {
+      const uniqueDates = [...new Set(result.map(r => r.ts.split("T")[0]))];
+      const recentDates = uniqueDates.slice(-3);
+      const trimmed = result.filter(r => recentDates.includes(r.ts.split("T")[0]));
+      cache.priceHistory.set(cacheKey, { data: trimmed, timestamp: Date.now() });
+      console.log(`✅ Computed ${trimmed.length} NAV points from holdings for strategy ${strategyId} (${timeframe})`);
+      return trimmed;
+    }
+
     cache.priceHistory.set(cacheKey, { data: result, timestamp: Date.now() });
     console.log(`✅ Computed ${result.length} NAV points from holdings for strategy ${strategyId} (${timeframe})`);
     return result;

@@ -285,6 +285,16 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
 
   const getChartData = () => {
     if (realChartData && realChartData.length > 0) {
+      const investedAmount = currentStrategy.currentValue || currentStrategy.investedAmount || 0;
+      if (investedAmount > 0 && realChartData.length > 0) {
+        const latestNav = realChartData[realChartData.length - 1].value;
+        if (!latestNav || latestNav <= 0) return realChartData;
+        const scaleFactor = investedAmount / latestNav;
+        return realChartData.map(d => ({
+          ...d,
+          value: Number((d.value * scaleFactor).toFixed(2)),
+        }));
+      }
       return realChartData;
     }
     return [];
