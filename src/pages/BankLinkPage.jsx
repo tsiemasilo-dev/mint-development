@@ -39,7 +39,10 @@ const BankLinkPage = ({ onBack, onComplete }) => {
       });
 
       const data = await response.json();
-      if (!data.success) throw new Error(data.error || "Connection failed");
+      if (!data.success) {
+        const errMsg = typeof data.error === "string" ? data.error : data.error?.message || "Connection failed";
+        throw new Error(errMsg);
+      }
 
       collectionIdRef.current = data.collectionId;
 
