@@ -3,6 +3,23 @@ import { Lock, LogOut } from 'lucide-react';
 import { supabase } from './supabase';
 
 const TIMEOUT_MINUTES = 5;
+const TIMEOUT_MS = TIMEOUT_MINUTES * 60 * 1000;
+const LAST_ACTIVITY_KEY = 'mint_last_activity';
+
+export function getLastActivityTimestamp() {
+  const stored = localStorage.getItem(LAST_ACTIVITY_KEY);
+  return stored ? parseInt(stored, 10) : null;
+}
+
+export function hasInactivityExpired() {
+  const last = getLastActivityTimestamp();
+  if (!last) return false;
+  return Date.now() - last >= TIMEOUT_MS;
+}
+
+function saveActivityTimestamp() {
+  localStorage.setItem(LAST_ACTIVITY_KEY, Date.now().toString());
+}
 
 export const useInactivityTimeout = ({ onLogout, enabled = true } = {}) => {
   const [isLocked, setIsLocked] = useState(false);
@@ -11,14 +28,15 @@ export const useInactivityTimeout = ({ onLogout, enabled = true } = {}) => {
   const resetTimer = useCallback(() => {
     if (isLocked || !enabled) return;
     if (timerRef.current) clearTimeout(timerRef.current);
-    const minutes = TIMEOUT_MINUTES;
+    saveActivityTimestamp();
     timerRef.current = setTimeout(() => {
       setIsLocked(true);
-    }, minutes * 60 * 1000);
+    }, TIMEOUT_MS);
   }, [isLocked, enabled]);
 
   const unlock = useCallback(() => {
     setIsLocked(false);
+    saveActivityTimestamp();
   }, []);
 
   const lock = useCallback(() => {
@@ -31,7 +49,26 @@ export const useInactivityTimeout = ({ onLogout, enabled = true } = {}) => {
       return;
     }
 
-    resetTimer();
+    if (hasInactivityExpired()) {
+      setIsLocked(true);
+      return;
+    }
+
+    const last = getLastActivityTimestamp();
+    if (last) {
+      const elapsed = Date.now() - last;
+      const remaining = TIMEOUT_MS - elapsed;
+      if (remaining > 0) {
+        timerRef.current = setTimeout(() => {
+          setIsLocked(true);
+        }, remaining);
+      } else {
+        setIsLocked(true);
+        return;
+      }
+    } else {
+      resetTimer();
+    }
 
     const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
     const handler = () => resetTimer();

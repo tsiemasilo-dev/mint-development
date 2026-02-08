@@ -44,7 +44,7 @@ import BankLinkPage from "./pages/BankLinkPage.jsx";
 import InvitePage from "./pages/InvitePage.jsx";
 import ActiveSessionsPage from "./pages/ActiveSessionsPage.jsx";
 import PinSetupPage from "./pages/PinSetupPage.jsx";
-import { useInactivityTimeout, InactivityLockScreen } from "./lib/useInactivityTimeout.jsx";
+import { useInactivityTimeout, InactivityLockScreen, hasInactivityExpired } from "./lib/useInactivityTimeout.jsx";
 import PinLockScreen from "./components/PinLockScreen.jsx";
 import { isPinEnabled } from "./lib/usePin.js";
 
@@ -106,7 +106,9 @@ const App = () => {
   const prevAuthRef = useRef(false);
   useEffect(() => {
     if (isAuthenticated && !prevAuthRef.current && isPinEnabled() && !justLoggedInRef.current) {
-      setShowPinLock(true);
+      if (hasInactivityExpired()) {
+        setShowPinLock(true);
+      }
     }
     prevAuthRef.current = isAuthenticated;
     if (justLoggedInRef.current) {
