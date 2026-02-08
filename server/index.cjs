@@ -1244,19 +1244,20 @@ async function authenticateUser(req) {
   return { user: data.user, error: null };
 }
 
-const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
-
 async function verifyPaystackPayment(reference) {
-  if (!PAYSTACK_SECRET_KEY) {
+  const secretKey = process.env.PAYSTACK_SECRET_KEY;
+  if (!secretKey) {
     return { verified: false, error: "Paystack secret key not configured" };
   }
+  console.log("[paystack-verify] Verifying reference:", reference, "key prefix:", secretKey.substring(0, 8) + "...");
   const response = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
     method: "GET",
     headers: {
-      Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+      Authorization: `Bearer ${secretKey}`,
     },
   });
   const result = await response.json();
+  console.log("[paystack-verify] API response status:", result.status, "data.status:", result.data?.status, "data.gateway_response:", result.data?.gateway_response, "message:", result.message);
   if (!result.status || result.data?.status !== "success") {
     return { verified: false, error: "Payment not successful", data: result.data };
   }
