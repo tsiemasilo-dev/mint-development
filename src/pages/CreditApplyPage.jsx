@@ -15,6 +15,7 @@ const ConnectionStage = ({ onComplete, onError }) => {
   const [status, setStatus] = useState("idle");
   const [message, setMessage] = useState("");
   const [consumerUrl, setConsumerUrl] = useState(null);
+  const [iframeLoaded, setIframeLoaded] = useState(false);
   const collectionIdRef = useRef(null);
   const pollingRef = useRef(null);
 
@@ -45,6 +46,7 @@ const ConnectionStage = ({ onComplete, onError }) => {
       }
 
       collectionIdRef.current = data.collectionId;
+      setIframeLoaded(false);
       setConsumerUrl(data.consumerUrl);
       setStatus("banking");
       setMessage("");
@@ -164,12 +166,34 @@ const ConnectionStage = ({ onComplete, onError }) => {
         </header>
 
         <div className="flex-1 relative">
+          {!iframeLoaded && (
+            <div className="absolute inset-0 z-10 bg-white p-6 animate-pulse">
+              <div className="mx-auto max-w-md space-y-6 pt-8">
+                <div className="flex justify-center">
+                  <div className="h-16 w-16 rounded-full bg-slate-200" />
+                </div>
+                <div className="space-y-3">
+                  <div className="mx-auto h-5 w-48 rounded-lg bg-slate-200" />
+                  <div className="mx-auto h-3 w-64 rounded bg-slate-100" />
+                </div>
+                <div className="space-y-4 pt-4">
+                  <div className="h-12 w-full rounded-xl bg-slate-200" />
+                  <div className="h-12 w-full rounded-xl bg-slate-200" />
+                  <div className="h-12 w-full rounded-xl bg-slate-100" />
+                </div>
+                <div className="pt-4">
+                  <div className="h-14 w-full rounded-full bg-slate-200" />
+                </div>
+              </div>
+            </div>
+          )}
           <iframe
             src={consumerUrl}
             title="TruID Bank Verification"
-            className="absolute inset-0 w-full h-full border-0"
+            className={`absolute inset-0 w-full h-full border-0 transition-opacity duration-300 ${iframeLoaded ? "opacity-100" : "opacity-0"}`}
             allow="camera; microphone"
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation allow-modals"
+            onLoad={() => setIframeLoaded(true)}
           />
         </div>
 
