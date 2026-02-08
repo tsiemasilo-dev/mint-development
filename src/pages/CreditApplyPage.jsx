@@ -70,7 +70,15 @@ const ConnectionStage = ({ onComplete, onError }) => {
        popupCheckRef.current = setInterval(() => {
          if (popup.closed) {
            clearInterval(popupCheckRef.current);
-           addLog("Popup closed by user");
+           if (pollingRef.current) {
+             clearInterval(pollingRef.current);
+             pollingRef.current = null;
+           }
+           addLog("Popup closed by user - polling stopped");
+           if (status === "polling") {
+             setStatus("idle");
+             setMessage("Bank window was closed. Tap Connect Bank to try again.");
+           }
          }
        }, 1000);
 
@@ -391,7 +399,7 @@ const EnrichmentStage = ({ onSubmit, defaultValues, employerOptions, employerLoc
 
 
 // Stage 3: Results
-const ResultStage = ({ score, isCalculating, breakdown, engineResult, onRunAssessment, onContinue }) => {
+const ResultStage = ({ score, isCalculating, engineFailed, breakdown, engineResult, onRunAssessment, onContinue }) => {
       const [showAllData, setShowAllData] = useState(false);
       const [loaderValue, setLoaderValue] = useState(0);
 
@@ -407,9 +415,11 @@ const ResultStage = ({ score, isCalculating, breakdown, engineResult, onRunAsses
              }, 20);
          } else if (score > 0) {
              setLoaderValue(score);
+         } else if (engineFailed) {
+             setLoaderValue(0);
          }
          return () => clearInterval(interval);
-      }, [isCalculating, score]);
+      }, [isCalculating, score, engineFailed]);
 
       const sanitizeData = (value) => {
          if (Array.isArray(value)) return value.map(sanitizeData);
@@ -437,7 +447,7 @@ const ResultStage = ({ score, isCalculating, breakdown, engineResult, onRunAsses
       const scoreReasons = engineResult?.scoreReasons || [];
       const tenureMonths = engineResult?.breakdown?.employmentTenure?.monthsInCurrentJob;
 
-      const hasAssessment = score > 0 || isCalculating;
+      const hasAssessment = score > 0 || isCalculating || engineFailed;
       const isDeclined = !isCalculating && score > 0 && score < 50;
       const scoreOutcome = score >= 80
          ? "Auto-approval at best rate"
@@ -458,7 +468,7 @@ const ResultStage = ({ score, isCalculating, breakdown, engineResult, onRunAsses
       ];
       const messageIndex = Math.min(statusMessages.length - 1, Math.floor((loaderValue / 100) * statusMessages.length));
       const statusText = hasAssessment 
-        ? (isCalculating ? statusMessages[messageIndex] : "Trust Score")
+        ? (engineFailed ? "Error" : isCalculating ? statusMessages[messageIndex] : "Trust Score")
         : "Start Check";
 
 
@@ -529,6 +539,19 @@ const ResultStage = ({ score, isCalculating, breakdown, engineResult, onRunAsses
                       </button>
                   </div>
 
+                  {engineFailed && !isCalculating && (
+                     <div className="pt-6 space-y-4 text-center">
+                        <p className="text-sm font-semibold text-red-600">Assessment could not be completed.</p>
+                        <p className="text-xs text-slate-500">{engineResult?.error || "Please try again."}</p>
+                        <button
+                           onClick={onRunAssessment}
+                           className="w-full py-3 rounded-full bg-slate-900 text-white font-semibold text-sm shadow-lg hover:bg-slate-800 active:scale-95 transition-all"
+                        >
+                           Retry Assessment
+                        </button>
+                     </div>
+                  )}
+
                   {!isCalculating && score > 0 && (
                      <div className="pt-8 border-t border-slate-50 mt-8 space-y-4">
                         <div className={`rounded-xl border px-4 py-3 text-sm font-semibold ${
@@ -557,7 +580,10 @@ const ResultStage = ({ score, isCalculating, breakdown, engineResult, onRunAsses
                               {scoreReasons.length ? (
                                  <ul className="list-disc pl-5 space-y-1">
                                     {scoreReasons.map((reason, idx) => (
-                                       <li key={idx}>{reason}</li>
+                                       <li key={idx} className={reason.impact === "positive" ? "text-emerald-700" : reason.impact === "negative" ? "text-red-600" : "text-slate-700"}>
+                                          <span className="font-semibold">{reason.factor || reason}</span>
+                                          {reason.detail ? `: ${reason.detail}` : typeof reason === "string" ? "" : ""}
+                                       </li>
                                     ))}
                                  </ul>
                               ) : (
@@ -700,6 +726,7 @@ const CreditApplyWizard = ({ onBack, onComplete }) => {
   } = useCreditCheck();
 
   const isCalculating = engineStatus === "Running";
+  const engineFailed = engineStatus === "Failed";
   const score = engineResult?.loanEngineScoreNormalized ?? engineResult?.loanEngineScore ?? 0;
 
    const formatAmount = (value) => {
@@ -1007,6 +1034,7 @@ const CreditApplyWizard = ({ onBack, onComplete }) => {
           return <ResultStage 
              score={score} 
              isCalculating={isCalculating} 
+             engineFailed={engineFailed}
              breakdown={engineResult?.breakdown} 
                 engineResult={engineResult}
                 onRunAssessment={handleRunAssessment}

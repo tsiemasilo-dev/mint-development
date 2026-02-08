@@ -70,6 +70,14 @@ const BankLinkPage = ({ onBack, onComplete }) => {
       popupCheckRef.current = setInterval(() => {
         if (popup.closed) {
           clearInterval(popupCheckRef.current);
+          if (pollingRef.current) {
+            clearInterval(pollingRef.current);
+            pollingRef.current = null;
+          }
+          if (status === "polling") {
+            setStatus("idle");
+            setMessage("Bank window was closed. Tap Connect Bank to try again.");
+          }
         }
       }, 1000);
     } catch (err) {
