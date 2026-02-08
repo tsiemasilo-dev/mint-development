@@ -850,8 +850,30 @@ app.post("/api/banking/initiate", async (req, res) => {
     }
 
     const fullName = [profile.first_name, profile.last_name].filter(Boolean).join(" ");
-    if (!fullName || !profile.id_number) {
-      console.error("Profile incomplete:", { hasName: !!fullName, hasIdNumber: !!profile.id_number });
+    let idNumber = profile.id_number;
+
+    if (!idNumber) {
+      try {
+        const applicant = await getSumsubApplicantByExternalId(user.id);
+        if (applicant?.info?.idDocs?.length) {
+          const idDoc = applicant.info.idDocs.find(d => d.number) || {};
+          idNumber = idDoc.number || null;
+        }
+        if (!idNumber && applicant?.fixedInfo?.idDocs?.length) {
+          const idDoc = applicant.fixedInfo.idDocs.find(d => d.number) || {};
+          idNumber = idDoc.number || null;
+        }
+        if (idNumber) {
+          console.log("ID number retrieved from Sumsub KYC data");
+          await db.from("profiles").update({ id_number: idNumber }).eq("id", user.id);
+        }
+      } catch (sumsubErr) {
+        console.warn("Could not fetch ID from Sumsub:", sumsubErr.message);
+      }
+    }
+
+    if (!fullName || !idNumber) {
+      console.error("Profile incomplete:", { hasName: !!fullName, hasIdNumber: !!idNumber });
       return res.status(400).json({
         success: false,
         error: { message: "Profile is missing name or ID number. Please complete your profile first." }
@@ -860,7 +882,7 @@ app.post("/api/banking/initiate", async (req, res) => {
 
     const collection = await truIDClient.createCollection({
       name: fullName,
-      idNumber: profile.id_number,
+      idNumber: idNumber,
       email: user.email
     });
 
