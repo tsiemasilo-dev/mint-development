@@ -24,7 +24,7 @@ A React authentication application using Vite as the build tool with Tailwind CS
     - `NotificationsContext.jsx` - Centralized notifications state management with real-time updates
     - `useSumsubStatus.js` - Hook for fetching KYC status directly from Sumsub API (single source of truth)
     - `useRequiredActions.js` - Hook for bank linking status only (no KYC - that's in useSumsubStatus)
-    - `useUserStrategies.js` - Hook for fetching user's investment strategies from Supabase
+    - `useUserStrategies.js` - Hook for fetching user's investment strategies via /api/user/strategies endpoint (derives from transactions)
     - `useFinancialData.js` - Hook for financial data utilities
     - `strategyData.js` - Strategy price history fetching utilities
     - `useProfile.js` - Profile hook with id, email, name, avatarUrl, phoneNumber, dateOfBirth, gender, address, idNumber, watchlist
