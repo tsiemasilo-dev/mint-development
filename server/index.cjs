@@ -837,27 +837,30 @@ app.post("/api/banking/initiate", async (req, res) => {
 
     const { data: profile, error: profileError } = await db
       .from("profiles")
-      .select("name, idNumber")
+      .select("first_name, last_name, id_number")
       .eq("id", user.id)
       .maybeSingle();
 
     if (profileError || !profile) {
+      console.error("Profile lookup error:", profileError?.message || "No profile found");
       return res.status(400).json({
         success: false,
         error: { message: "User profile not found or missing required fields" }
       });
     }
 
-    if (!profile.name || !profile.idNumber) {
+    const fullName = [profile.first_name, profile.last_name].filter(Boolean).join(" ");
+    if (!fullName || !profile.id_number) {
+      console.error("Profile incomplete:", { hasName: !!fullName, hasIdNumber: !!profile.id_number });
       return res.status(400).json({
         success: false,
-        error: { message: "Profile is missing name or ID number" }
+        error: { message: "Profile is missing name or ID number. Please complete your profile first." }
       });
     }
 
     const collection = await truIDClient.createCollection({
-      name: profile.name,
-      idNumber: profile.idNumber,
+      name: fullName,
+      idNumber: profile.id_number,
       email: user.email
     });
 
