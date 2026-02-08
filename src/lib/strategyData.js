@@ -617,6 +617,117 @@ export const getMonthlyReturns = async (strategyId) => {
   }
 };
 
+export const getStockMonthlyReturns = async (securityId) => {
+  if (!supabase || !securityId) return {};
+
+  const cacheKey = `monthly_returns_stock_${securityId}`;
+  const cached = cache.priceHistory.get(cacheKey);
+  if (cached && (Date.now() - cached.timestamp) < 300000) {
+    return cached.data;
+  }
+
+  try {
+    const priceSeries = await getSecurityPrices(securityId, "1Y");
+    if (!priceSeries || priceSeries.length < 2) return {};
+
+    const monthlyNav = {};
+    priceSeries.forEach(p => {
+      const dateKey = p.ts.split("T")[0];
+      const [year, month] = dateKey.split("-");
+      const key = `${year}-${month}`;
+      monthlyNav[key] = p.close;
+    });
+
+    const sortedMonths = Object.keys(monthlyNav).sort();
+    const result = {};
+
+    for (let i = 1; i < sortedMonths.length; i++) {
+      const prevNav = monthlyNav[sortedMonths[i - 1]];
+      const currNav = monthlyNav[sortedMonths[i]];
+      if (prevNav && prevNav > 0) {
+        const [year, month] = sortedMonths[i].split("-");
+        if (!result[year]) result[year] = {};
+        result[year][month] = (currNav - prevNav) / prevNav;
+      }
+    }
+
+    cache.priceHistory.set(cacheKey, { data: result, timestamp: Date.now() });
+    return result;
+  } catch (err) {
+    console.error("Error computing stock monthly returns:", err);
+    return {};
+  }
+};
+
+export const getOverallPortfolioMonthlyReturns = async (strategyIds, stockSecurityIds, strategies, rawHoldings) => {
+  const cacheKey = `monthly_returns_overall_${strategyIds.sort().join("_")}_${stockSecurityIds.sort().join("_")}`;
+  const cached = cache.priceHistory.get(cacheKey);
+  if (cached && (Date.now() - cached.timestamp) < 300000) {
+    return cached.data;
+  }
+
+  try {
+    const allMonthlyData = [];
+
+    for (const sid of strategyIds) {
+      const returns = await getMonthlyReturns(sid);
+      const strategy = strategies.find(s => s.strategyId === sid);
+      const value = strategy?.investedAmount || strategy?.currentValue || 0;
+      if (Object.keys(returns).length > 0) {
+        allMonthlyData.push({ returns, value });
+      }
+    }
+
+    for (const secId of stockSecurityIds) {
+      const returns = await getStockMonthlyReturns(secId);
+      const holding = rawHoldings.find(h => h.security_id === secId);
+      const value = holding ? (holding.market_value || 0) / 100 : 0;
+      if (Object.keys(returns).length > 0) {
+        allMonthlyData.push({ returns, value });
+      }
+    }
+
+    if (allMonthlyData.length === 0) return {};
+
+    const totalValue = allMonthlyData.reduce((sum, d) => sum + d.value, 0);
+    if (totalValue === 0) return {};
+
+    const allMonths = new Set();
+    allMonthlyData.forEach(({ returns }) => {
+      Object.entries(returns).forEach(([year, months]) => {
+        Object.keys(months).forEach(month => allMonths.add(`${year}-${month}`));
+      });
+    });
+
+    const result = {};
+    Array.from(allMonths).sort().forEach(key => {
+      const [year, month] = key.split("-");
+      let weightedReturn = 0;
+      let totalWeight = 0;
+
+      allMonthlyData.forEach(({ returns, value }) => {
+        const ret = returns[year]?.[month];
+        if (ret != null) {
+          const weight = value / totalValue;
+          weightedReturn += ret * weight;
+          totalWeight += weight;
+        }
+      });
+
+      if (totalWeight > 0) {
+        if (!result[year]) result[year] = {};
+        result[year][month] = weightedReturn / totalWeight;
+      }
+    });
+
+    cache.priceHistory.set(cacheKey, { data: result, timestamp: Date.now() });
+    return result;
+  } catch (err) {
+    console.error("Error computing overall portfolio monthly returns:", err);
+    return {};
+  }
+};
+
 /**
  * Clear strategy data cache
  */

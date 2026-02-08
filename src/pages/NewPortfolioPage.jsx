@@ -5,7 +5,7 @@ import { Area, ComposedChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, 
 import { useInvestments } from "../lib/useFinancialData";
 import { useProfile } from "../lib/useProfile";
 import { useUserStrategies, useStrategyChartData } from "../lib/useUserStrategies";
-import { getMonthlyReturns } from "../lib/strategyData";
+import { getMonthlyReturns, getStockMonthlyReturns, getOverallPortfolioMonthlyReturns } from "../lib/strategyData";
 import { useStockQuotes, useStockChart } from "../lib/useStockData";
 import SwipeBackWrapper from "../components/SwipeBackWrapper.jsx";
 import PortfolioSkeleton from "../components/PortfolioSkeleton";
@@ -41,6 +41,8 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
   const [calendarData, setCalendarData] = useState({});
   const [showYearDropdown, setShowYearDropdown] = useState(false);
+  const [calendarFilter, setCalendarFilter] = useState("overall");
+  const [showCalendarFilterDropdown, setShowCalendarFilterDropdown] = useState(false);
   const tabOrder = ["strategy", "stocks", "holdings"];
 
   useEffect(() => {
@@ -132,6 +134,18 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   }, [showYearDropdown]);
 
   useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (calendarFilterRef.current && !calendarFilterRef.current.contains(event.target)) {
+        setShowCalendarFilterDropdown(false);
+      }
+    };
+    if (showCalendarFilterDropdown) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showCalendarFilterDropdown]);
+
+  useEffect(() => {
     if (!selectedStock && stocksList.length > 0) {
       setSelectedStock(stocksList[0]);
     }
@@ -141,21 +155,6 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     selectStrategy(strategy);
     setShowStrategyDropdown(false);
   };
-
-  useEffect(() => {
-    if (!currentStrategy?.strategyId) return;
-    let cancelled = false;
-    getMonthlyReturns(currentStrategy.strategyId).then(data => {
-      if (!cancelled) {
-        setCalendarData(data);
-        const years = Object.keys(data).sort().reverse();
-        if (years.length > 0 && !years.includes(String(calendarYear))) {
-          setCalendarYear(Number(years[0]));
-        }
-      }
-    });
-    return () => { cancelled = true; };
-  }, [currentStrategy?.strategyId]);
 
   const availableCalendarYears = useMemo(() => {
     const currentYear = new Date().getFullYear();
@@ -172,6 +171,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     return years;
   }, [calendarData, currentStrategy]);
   const yearDropdownRef = useRef(null);
+  const calendarFilterRef = useRef(null);
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
@@ -179,7 +179,53 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   };
 
   const { holdings: rawHoldings, loading: holdingsLoading, goals: investmentGoals } = useInvestments();
-  
+
+  const calendarFilterOptions = useMemo(() => {
+    const options = [{ id: "overall", label: "Overall Portfolio" }];
+    strategies.forEach(s => {
+      options.push({ id: s.strategyId, label: s.shortName || s.name, type: "strategy" });
+    });
+    if (rawHoldings && rawHoldings.length > 0) {
+      rawHoldings.forEach(h => {
+        if (h.security_id) {
+          options.push({ id: h.security_id, label: h.symbol || h.name, type: "stock" });
+        }
+      });
+    }
+    return options;
+  }, [strategies, rawHoldings]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchCalendarData = async () => {
+      let data = {};
+      if (calendarFilter === "overall") {
+        data = await getOverallPortfolioMonthlyReturns(
+          strategies.map(s => s.strategyId).filter(Boolean),
+          (rawHoldings || []).filter(h => h.security_id).map(h => h.security_id),
+          strategies,
+          rawHoldings || []
+        );
+      } else {
+        const matchedStrategy = strategies.find(s => s.strategyId === calendarFilter);
+        if (matchedStrategy) {
+          data = await getMonthlyReturns(calendarFilter);
+        } else {
+          data = await getStockMonthlyReturns(calendarFilter);
+        }
+      }
+      if (!cancelled) {
+        setCalendarData(data);
+        const years = Object.keys(data).sort().reverse();
+        if (years.length > 0 && !years.includes(String(calendarYear))) {
+          setCalendarYear(Number(years[0]));
+        }
+      }
+    };
+    fetchCalendarData();
+    return () => { cancelled = true; };
+  }, [calendarFilter, strategies, rawHoldings]);
+
   const displayAccountValue = useMemo(() => {
     const holdingsValue = (rawHoldings || []).reduce((sum, h) => sum + ((h.market_value || 0) / 100), 0);
     const strategiesValue = strategies.reduce((sum, s) => sum + (s.investedAmount || 0), 0);
@@ -776,36 +822,64 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
 
         {/* Calendar Returns */}
         <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50">
-          <div className="flex items-center justify-between gap-4 mb-4">
+          <div className="flex items-center justify-between gap-2 mb-4">
             <p className="text-sm font-semibold text-slate-900">Calendar Returns</p>
-            {availableCalendarYears.length > 0 && (
-              <div className="relative" ref={yearDropdownRef}>
+            <div className="flex items-center gap-2">
+              <div className="relative" ref={calendarFilterRef}>
                 <button
-                  onClick={() => setShowYearDropdown(!showYearDropdown)}
-                  className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-200"
+                  onClick={() => setShowCalendarFilterDropdown(!showCalendarFilterDropdown)}
+                  className="flex items-center gap-1 rounded-full bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 transition hover:bg-violet-100 max-w-[140px]"
                 >
-                  {calendarYear}
-                  <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${showYearDropdown ? 'rotate-180' : ''}`} />
+                  <span className="truncate">{calendarFilterOptions.find(o => o.id === calendarFilter)?.label || "Overall Portfolio"}</span>
+                  <ChevronDown className={`h-3.5 w-3.5 flex-shrink-0 transition-transform duration-200 ${showCalendarFilterDropdown ? 'rotate-180' : ''}`} />
                 </button>
-                {showYearDropdown && (
-                  <div className="absolute right-0 top-full mt-1 min-w-[80px] bg-white rounded-xl shadow-xl border border-slate-200/50 z-50 overflow-hidden">
-                    {availableCalendarYears.map((year) => (
+                {showCalendarFilterDropdown && (
+                  <div className="absolute right-0 top-full mt-1 min-w-[160px] max-h-[200px] overflow-y-auto bg-white rounded-xl shadow-xl border border-slate-200/50 z-50 overflow-hidden">
+                    {calendarFilterOptions.map((option) => (
                       <button
-                        key={year}
-                        onClick={() => { setCalendarYear(Number(year)); setShowYearDropdown(false); }}
+                        key={option.id}
+                        onClick={() => { setCalendarFilter(option.id); setShowCalendarFilterDropdown(false); }}
                         className={`w-full px-4 py-2.5 text-left text-xs font-semibold transition-colors ${
-                          Number(year) === calendarYear
+                          option.id === calendarFilter
                             ? "bg-violet-50 text-violet-700"
                             : "text-slate-600 hover:bg-slate-50"
                         }`}
                       >
-                        {year}
+                        {option.label}
                       </button>
                     ))}
                   </div>
                 )}
               </div>
-            )}
+              {availableCalendarYears.length > 0 && (
+                <div className="relative" ref={yearDropdownRef}>
+                  <button
+                    onClick={() => setShowYearDropdown(!showYearDropdown)}
+                    className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-200"
+                  >
+                    {calendarYear}
+                    <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${showYearDropdown ? 'rotate-180' : ''}`} />
+                  </button>
+                  {showYearDropdown && (
+                    <div className="absolute right-0 top-full mt-1 min-w-[80px] bg-white rounded-xl shadow-xl border border-slate-200/50 z-50 overflow-hidden">
+                      {availableCalendarYears.map((year) => (
+                        <button
+                          key={year}
+                          onClick={() => { setCalendarYear(Number(year)); setShowYearDropdown(false); }}
+                          className={`w-full px-4 py-2.5 text-left text-xs font-semibold transition-colors ${
+                            Number(year) === calendarYear
+                              ? "bg-violet-50 text-violet-700"
+                              : "text-slate-600 hover:bg-slate-50"
+                          }`}
+                        >
+                          {year}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
           <div className="grid grid-cols-3 gap-2">
             {monthNames.map((label, index) => {
