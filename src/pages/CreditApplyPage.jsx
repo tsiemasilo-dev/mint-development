@@ -308,101 +308,67 @@ const EnrichmentStage = ({ onSubmit, defaultValues, employerOptions, employerLoc
             <div className="space-y-3">
                <label className="block">
                  <span className="text-xs font-bold text-slate-400 uppercase">Employer Name</span>
-                 {employerLocked ? (
-                   <div className="mt-1 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800">
-                     {formData.employerName || "Unknown Employer"}
-                   </div>
-                 ) : (
-                   <>
-                     <input 
-                       list="employer-list"
-                       className="w-full mt-1 border-b border-slate-200 bg-transparent py-2 text-sm font-semibold focus:border-slate-900 focus:outline-none transition-colors"
-                       value={formData.employerName}
-                       onChange={(e) => handleChange("employerName", e.target.value)}
-                       placeholder="e.g. Acme Corp" 
-                     />
-                     {employerOptions?.length > 0 && (
-                       <datalist id="employer-list">
-                         {employerOptions.map((name) => (
-                            <option key={name} value={name} />
-                         ))}
-                       </datalist>
-                     )}
-                   </>
+                 <input 
+                   list="employer-list"
+                   className="w-full mt-1 border-b border-slate-200 bg-transparent py-2 text-sm font-semibold focus:border-slate-900 focus:outline-none transition-colors"
+                   value={formData.employerName}
+                   onChange={(e) => handleChange("employerName", e.target.value)}
+                   placeholder="e.g. Acme Corp" 
+                 />
+                 {employerOptions?.length > 0 && (
+                   <datalist id="employer-list">
+                     {employerOptions.map((name) => (
+                        <option key={name} value={name} />
+                     ))}
+                   </datalist>
                  )}
                </label>
                
                <div className="grid grid-cols-2 gap-4">
                   <label className="block">
                      <span className="text-xs font-bold text-slate-400 uppercase">Sector</span>
-                     {sectorLocked ? (
-                        <div className="mt-1 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800">
-                           {formData.employmentSector === "listed"
-                              ? "Listed Company"
-                              : formData.employmentSector === "government"
-                                ? "Government"
-                                : formData.employmentSector === "private"
-                                  ? "Private"
-                                  : formData.employmentSector === "other"
-                                    ? "Other"
-                                    : "--"}
-                        </div>
-                     ) : (
-                        <select 
-                           value={formData.employmentSector}
-                           onChange={(e) => handleChange('employmentSector', e.target.value)}
-                           className="w-full mt-1 border-b border-slate-200 bg-transparent py-2 text-sm font-semibold focus:border-slate-900 focus:outline-none"
-                        >
-                            <option value="">Select...</option>
-                            <option value="government">Government</option>
-                            <option value="private">Private</option>
-                            <option value="listed">Listed Company</option>
-                            <option value="other">Other</option>
-                        </select>
-                     )}
+                     <select 
+                        value={formData.employmentSector}
+                        onChange={(e) => handleChange('employmentSector', e.target.value)}
+                        className="w-full mt-1 border-b border-slate-200 bg-transparent py-2 text-sm font-semibold focus:border-slate-900 focus:outline-none"
+                     >
+                         <option value="">Select...</option>
+                         <option value="government">Government</option>
+                         <option value="private">Private</option>
+                         <option value="listed">Listed Company</option>
+                         <option value="other">Other</option>
+                     </select>
                   </label>
                   <label className="block">
                      <span className="text-xs font-bold text-slate-400 uppercase">Contract</span>
-                     {contractLocked ? (
-                        <div className="mt-1 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800">
-                           {formatContractLabel(formData.contractType)}
-                        </div>
-                     ) : (
-                        <select 
-                           value={formData.contractType}
-                           onChange={(e) => handleChange('contractType', e.target.value)}
-                           className="w-full mt-1 border-b border-slate-200 bg-transparent py-2 text-sm font-semibold focus:border-slate-900 focus:outline-none"
-                        >
-                            <option value="">Select...</option>
-                            <option value="PERMANENT">Permanent</option>
-                            <option value="FIXED_TERM_12_PLUS">Fixed Term ({'>'}12m)</option>
-                            <option value="FIXED_TERM_LT_12">Fixed Term ({'<'}12m)</option>
-                            <option value="SELF_EMPLOYED_12_PLUS">Self Employed</option>
-                        </select>
-                     )}
+                     <select 
+                        value={formData.contractType}
+                        onChange={(e) => handleChange('contractType', e.target.value)}
+                        className="w-full mt-1 border-b border-slate-200 bg-transparent py-2 text-sm font-semibold focus:border-slate-900 focus:outline-none"
+                     >
+                         <option value="">Select...</option>
+                         <option value="PERMANENT">Permanent</option>
+                         <option value="FIXED_TERM_12_PLUS">Fixed Term ({'>'}12m)</option>
+                         <option value="FIXED_TERM_LT_12">Fixed Term ({'<'}12m)</option>
+                         <option value="SELF_EMPLOYED_12_PLUS">Self Employed</option>
+                     </select>
                   </label>
                </div>
 
                <label className="block">
                   <span className="text-xs font-bold text-slate-400 uppercase">Years at current employer</span>
-                  {yearsLocked ? (
-                     <div className="mt-1 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800">
-                        {formData.yearsCurrentEmployer || "--"}
-                     </div>
-                  ) : (
-                     <select
-                        value={formData.yearsCurrentEmployer}
-                        onChange={(e) => handleChange("yearsCurrentEmployer", e.target.value)}
-                        className="w-full mt-1 border-b border-slate-200 bg-transparent py-2 text-sm font-semibold focus:border-slate-900 focus:outline-none"
-                     >
-                        <option value="">Select...</option>
-                        <option value="<1">Less than 1</option>
-                        <option value="1">1</option>
-                        <option value="2">2</option>
-                        <option value="3">3</option>
-                        <option value="4+">4+</option>
-                     </select>
-                  )}
+                  <select
+                     value={formData.yearsCurrentEmployer}
+                     onChange={(e) => handleChange("yearsCurrentEmployer", e.target.value)}
+                     className="w-full mt-1 border-b border-slate-200 bg-transparent py-2 text-sm font-semibold focus:border-slate-900 focus:outline-none"
+                  >
+                     <option value="">Select...</option>
+                     <option value="<1">Less than 1</option>
+                     <option value="1">1</option>
+                     <option value="2">2</option>
+                     <option value="3">3</option>
+                     <option value="4+">4+</option>
+                  </select>
                </label>
             </div>
          </div>
@@ -776,13 +742,7 @@ const CreditApplyWizard = ({ onBack, onComplete }) => {
       return () => clearTimeout(timer);
    }, [snapshot, step, loadingProfile]);
 
-   useEffect(() => {
-      if (loadingProfile) return;
-      if (step !== 2) return;
-      if (onboardingEmployerName && contractTypeLocked && sectorLocked && yearsAtEmployerLocked) {
-         setStep(3);
-      }
-   }, [loadingProfile, step, onboardingEmployerName, contractTypeLocked, sectorLocked, yearsAtEmployerLocked]);
+   
 
    useEffect(() => {
       if (loadingProfile || checkedExistingScore) return;

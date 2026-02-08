@@ -454,8 +454,20 @@ export const createBankNotification = async (userId, status, bankName = "your ba
   }
 
   try {
-    console.log("Creating bank notification:", { userId, status, title: notificationData.title });
-    
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const { data: existing } = await supabase
+      .from("notifications")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("title", notificationData.title)
+      .gte("created_at", fiveMinutesAgo)
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      console.log("Skipping duplicate bank notification:", notificationData.title);
+      return false;
+    }
+
     const { data, error } = await supabase.from("notifications").insert({
       user_id: userId,
       title: notificationData.title,
@@ -469,7 +481,7 @@ export const createBankNotification = async (userId, status, bankName = "your ba
       return false;
     }
 
-    console.log("Bank notification created successfully:", data);
+    console.log("Bank notification created:", data);
     return true;
   } catch (err) {
     console.error("Error creating bank notification:", err);
