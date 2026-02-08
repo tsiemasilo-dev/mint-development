@@ -70,3 +70,16 @@ export const getStrategyHoldingsSnapshot = (strategy, holdingsBySymbol) => {
     };
   });
 };
+
+export const getStrategyCurrentValue = (investedAmount, metrics) => {
+  if (!investedAmount || investedAmount <= 0) return 0;
+  if (!metrics) return investedAmount;
+  const bestReturn = metrics.r_ytd ?? metrics.r_1y ?? metrics.r_3m ?? metrics.r_1m ?? 0;
+  return investedAmount * (1 + bestReturn);
+};
+
+export const getStrategyReturnPct = (metrics) => {
+  if (!metrics) return 0;
+  const bestReturn = metrics.r_ytd ?? metrics.r_1y ?? metrics.r_3m ?? metrics.r_1m ?? 0;
+  return bestReturn * 100;
+};

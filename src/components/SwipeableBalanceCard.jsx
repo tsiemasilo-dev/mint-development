@@ -3,6 +3,7 @@ import { Eye, EyeOff, TrendingUp, LayoutGrid, ChevronDown, ChevronUp } from "luc
 import { Area, ComposedChart, Line, ResponsiveContainer, YAxis } from "recharts";
 import { supabase } from "../lib/supabase";
 import { getStrategyPriceHistory } from "../lib/strategyData";
+import { getStrategyCurrentValue, getStrategyReturnPct } from "../lib/strategyUtils";
 
 const VISIBILITY_STORAGE_KEY = "mintBalanceVisible";
 
@@ -65,9 +66,11 @@ const SwipeableBalanceCard = ({ userId, isBackFacing = true, forceVisible }) => 
           .map(h => h.logo_url || null)
           .filter(Boolean);
         const metrics = s.metrics || {};
-        const changePct = metrics.r_1m ? metrics.r_1m * 100 : 0;
-        const investedCents = (s.investedAmount || 0) * 100;
-        const currentCents = investedCents * (1 + (metrics.r_1m || 0));
+        const investedRands = s.investedAmount || 0;
+        const currentRands = getStrategyCurrentValue(investedRands, metrics);
+        const changePct = getStrategyReturnPct(metrics);
+        const investedCents = investedRands * 100;
+        const currentCents = currentRands * 100;
         return {
           symbol: s.shortName || s.name || "Strategy",
           name: s.name || "Strategy",

@@ -228,7 +228,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
 
   const displayAccountValue = useMemo(() => {
     const holdingsValue = (rawHoldings || []).reduce((sum, h) => sum + ((h.market_value || 0) / 100), 0);
-    const strategiesValue = strategies.reduce((sum, s) => sum + (s.investedAmount || 0), 0);
+    const strategiesValue = strategies.reduce((sum, s) => sum + (s.currentValue || s.investedAmount || 0), 0);
     return holdingsValue + strategiesValue;
   }, [rawHoldings, strategies]);
 
@@ -268,7 +268,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           logo: null,
           isStrategy: true,
           topLogos,
-          currentValue: s.investedAmount || 0,
+          currentValue: s.currentValue || s.investedAmount || 0,
           change: s.previousMonthChange || 0,
         });
       }

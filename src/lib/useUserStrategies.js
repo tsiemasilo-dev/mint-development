@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "./supabase";
 import { getStrategyPriceHistory } from "./strategyData";
+import { getStrategyCurrentValue, getStrategyReturnPct } from "./strategyUtils";
 
 export const useUserStrategies = () => {
   const [data, setData] = useState({
@@ -46,7 +47,9 @@ export const useUserStrategies = () => {
 
       const formattedStrategies = serverStrategies.map((strategy) => {
         const latestMetric = strategy.metrics;
-        const changePercent = latestMetric?.r_1m ? (latestMetric.r_1m * 100).toFixed(1) : 0;
+        const invested = strategy.investedAmount || 0;
+        const currentVal = getStrategyCurrentValue(invested, latestMetric);
+        const changePct = getStrategyReturnPct(latestMetric);
 
         return {
           id: strategy.id,
@@ -59,12 +62,12 @@ export const useUserStrategies = () => {
           iconUrl: strategy.iconUrl,
           imageUrl: strategy.imageUrl,
           holdings: strategy.holdings || [],
-          investedAmount: strategy.investedAmount || 0,
-          currentValue: latestMetric?.last_close || 0,
+          investedAmount: invested,
+          currentValue: currentVal,
           unitsHeld: 0,
           entryDate: null,
           lastUpdated: latestMetric?.as_of_date,
-          previousMonthChange: parseFloat(changePercent),
+          previousMonthChange: parseFloat(changePct.toFixed(1)),
           metrics: latestMetric,
         };
       });
