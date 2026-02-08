@@ -7,11 +7,14 @@ const getTransactionIcon = (name, direction) => {
   if (lower.includes("credit") || lower.includes("loan")) return CreditCard;
   if (lower.includes("withdraw") || lower.includes("repay")) return Wallet;
   if (lower.includes("recurring") || lower.includes("auto")) return RefreshCw;
+  if (lower.includes("invest") || lower.includes("strategy") || lower.includes("purchas") || lower.includes("buy") || lower.includes("bought")) return TrendingUp;
   if (direction === "credit") return ArrowDownLeft;
   return ArrowUpRight;
 };
 
-const getIconColors = (direction) => {
+const getIconColors = (direction, name) => {
+  const lower = (name || "").toLowerCase();
+  if (lower.includes("invest") || lower.includes("strategy") || lower.includes("purchas") || lower.includes("buy") || lower.includes("bought")) return { bg: "bg-violet-50", text: "text-violet-600" };
   if (direction === "credit") return { bg: "bg-emerald-50", text: "text-emerald-600" };
   return { bg: "bg-rose-50", text: "text-rose-500" };
 };
@@ -33,7 +36,7 @@ const TransactionHistorySection = ({ items, onViewAll }) => {
         {items && items.length > 0 ? (
           items.slice(0, 3).map((item, idx) => {
             const Icon = getTransactionIcon(item.title, item.direction);
-            const colors = getIconColors(item.direction);
+            const colors = getIconColors(item.direction, item.title);
             const isCredit = item.direction === "credit";
             return (
               <div
@@ -51,19 +54,21 @@ const TransactionHistorySection = ({ items, onViewAll }) => {
                       <>
                         <span className="text-slate-300">·</span>
                         <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
-                          item.status === "successful" || item.status === "completed"
+                          item.status === "successful" || item.status === "completed" || item.status === "posted"
                             ? "bg-emerald-50 text-emerald-600"
                             : item.status === "pending"
                             ? "bg-amber-50 text-amber-600"
                             : "bg-slate-100 text-slate-500"
                         }`}>
-                          {item.status === "successful" || item.status === "completed" ? "Completed" : item.status === "pending" ? "Pending" : item.status}
+                          {item.status === "successful" || item.status === "completed" || item.status === "posted" ? "Completed" : item.status === "pending" ? "Pending" : item.status}
                         </span>
                       </>
                     )}
                   </div>
                 </div>
-                <p className={`text-sm font-bold tabular-nums flex-shrink-0 ${isCredit ? "text-emerald-600" : "text-slate-800"}`}>
+                <p className={`text-sm font-bold tabular-nums flex-shrink-0 ${
+                  (item.title || "").toLowerCase().match(/invest|strategy|purchas|buy|bought/) ? "text-violet-600" : isCredit ? "text-emerald-600" : "text-slate-800"
+                }`}>
                   {item.amount}
                 </p>
               </div>

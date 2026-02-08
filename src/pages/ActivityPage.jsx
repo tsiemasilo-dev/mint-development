@@ -11,11 +11,14 @@ const getTransactionIcon = (name, direction) => {
   if (lower.includes("credit") || lower.includes("loan")) return CreditCard;
   if (lower.includes("withdraw") || lower.includes("repay")) return Wallet;
   if (lower.includes("recurring") || lower.includes("auto")) return RefreshCw;
+  if (lower.includes("invest") || lower.includes("strategy") || lower.includes("purchas") || lower.includes("buy") || lower.includes("bought")) return TrendingUp;
   if (direction === "credit") return ArrowDownLeft;
   return ArrowUpRight;
 };
 
-const getIconColors = (direction) => {
+const getIconColors = (direction, name) => {
+  const lower = (name || "").toLowerCase();
+  if (lower.includes("invest") || lower.includes("strategy") || lower.includes("purchas") || lower.includes("buy") || lower.includes("bought")) return { bg: "bg-violet-50", text: "text-violet-600" };
   if (direction === "credit") return { bg: "bg-emerald-50", text: "text-emerald-600" };
   return { bg: "bg-rose-50", text: "text-rose-500" };
 };
@@ -97,9 +100,14 @@ const ActivityPage = ({ onBack }) => {
   }, [transactions]);
 
   const summaryStats = useMemo(() => {
-    const totalIn = activityItems.filter(i => i.isPositive).reduce((sum, i) => sum + Math.abs(i.rawAmount), 0);
-    const totalOut = activityItems.filter(i => !i.isPositive).reduce((sum, i) => sum + Math.abs(i.rawAmount), 0);
-    return { totalIn, totalOut, count: activityItems.length };
+    const investKeywords = /invest|strategy|purchas|buy|bought/i;
+    const totalInvested = activityItems
+      .filter(i => !i.isPositive && investKeywords.test(i.title))
+      .reduce((sum, i) => sum + Math.abs(i.rawAmount), 0);
+    const totalDeposits = activityItems
+      .filter(i => i.isPositive)
+      .reduce((sum, i) => sum + Math.abs(i.rawAmount), 0);
+    return { totalInvested, totalDeposits, count: activityItems.length };
   }, [activityItems]);
 
   const visibleItems = useMemo(() => {
@@ -234,21 +242,21 @@ const ActivityPage = ({ onBack }) => {
         <div className="mt-5 grid grid-cols-2 gap-3">
           <div className="rounded-2xl bg-white p-4 shadow-sm border border-slate-100/80">
             <div className="flex items-center gap-2 mb-1.5">
-              <div className="h-6 w-6 rounded-full bg-emerald-50 flex items-center justify-center">
-                <ArrowDownLeft className="h-3 w-3 text-emerald-600" />
+              <div className="h-6 w-6 rounded-full bg-violet-50 flex items-center justify-center">
+                <TrendingUp className="h-3 w-3 text-violet-600" />
               </div>
-              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Money In</p>
+              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Invested</p>
             </div>
-            <p className="text-lg font-bold text-emerald-600">R{summaryStats.totalIn.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="text-lg font-bold text-violet-600">R{summaryStats.totalInvested.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
           </div>
           <div className="rounded-2xl bg-white p-4 shadow-sm border border-slate-100/80">
             <div className="flex items-center gap-2 mb-1.5">
-              <div className="h-6 w-6 rounded-full bg-rose-50 flex items-center justify-center">
-                <ArrowUpRight className="h-3 w-3 text-rose-500" />
+              <div className="h-6 w-6 rounded-full bg-emerald-50 flex items-center justify-center">
+                <ArrowDownLeft className="h-3 w-3 text-emerald-600" />
               </div>
-              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Money Out</p>
+              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Deposits</p>
             </div>
-            <p className="text-lg font-bold text-slate-800">R{summaryStats.totalOut.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="text-lg font-bold text-emerald-600">R{summaryStats.totalDeposits.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
           </div>
         </div>
 
@@ -297,7 +305,7 @@ const ActivityPage = ({ onBack }) => {
                 <div className="space-y-2">
                   {group.items.map((item, itemIndex) => {
                     const Icon = getTransactionIcon(item.title, item.direction);
-                    const colors = getIconColors(item.direction);
+                    const colors = getIconColors(item.direction, item.title);
                     return (
                       <div
                         key={`${item.id || itemIndex}`}
@@ -320,7 +328,7 @@ const ActivityPage = ({ onBack }) => {
                               <>
                                 <span className="text-slate-300">·</span>
                                 <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
-                                  item.status === "successful" || item.status === "completed"
+                                  item.status === "successful" || item.status === "completed" || item.status === "posted"
                                     ? "bg-emerald-50 text-emerald-600"
                                     : item.status === "pending"
                                     ? "bg-amber-50 text-amber-600"
@@ -328,13 +336,15 @@ const ActivityPage = ({ onBack }) => {
                                     ? "bg-rose-50 text-rose-500"
                                     : "bg-slate-100 text-slate-500"
                                 }`}>
-                                  {item.status === "successful" || item.status === "completed" ? "Completed" : item.status === "pending" ? "Pending" : item.status === "failed" ? "Failed" : item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                                  {item.status === "successful" || item.status === "completed" || item.status === "posted" ? "Completed" : item.status === "pending" ? "Pending" : item.status === "failed" ? "Failed" : item.status.charAt(0).toUpperCase() + item.status.slice(1)}
                                 </span>
                               </>
                             )}
                           </div>
                         </div>
-                        <p className={`text-sm font-bold tabular-nums flex-shrink-0 ${item.isPositive ? "text-emerald-600" : "text-slate-800"}`}>
+                        <p className={`text-sm font-bold tabular-nums flex-shrink-0 ${
+                          (item.title || "").toLowerCase().match(/invest|strategy|purchas|buy|bought/) ? "text-violet-600" : item.isPositive ? "text-emerald-600" : "text-slate-800"
+                        }`}>
                           {item.amount}
                         </p>
                       </div>
