@@ -1273,6 +1273,46 @@ const App = () => {
     );
   }
 
+  const recordSession = async () => {
+    try {
+      if (!supabase) return;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) return;
+      const ua = navigator.userAgent || '';
+      let browser = 'Unknown';
+      if (ua.includes('Chrome') && !ua.includes('Edg')) browser = 'Chrome';
+      else if (ua.includes('Safari') && !ua.includes('Chrome')) browser = 'Safari';
+      else if (ua.includes('Firefox')) browser = 'Firefox';
+      else if (ua.includes('Edg')) browser = 'Edge';
+      else if (ua.includes('Opera') || ua.includes('OPR')) browser = 'Opera';
+      let os = 'Unknown';
+      if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS';
+      else if (ua.includes('Android')) os = 'Android';
+      else if (ua.includes('Mac OS')) os = 'macOS';
+      else if (ua.includes('Windows')) os = 'Windows';
+      else if (ua.includes('Linux')) os = 'Linux';
+      const isMobile = /iPhone|iPad|iPod|Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+      const deviceType = isMobile ? 'mobile' : 'desktop';
+      let fingerprint = localStorage.getItem('mint_session_fingerprint');
+      if (!fingerprint) {
+        fingerprint = 'sf_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
+        localStorage.setItem('mint_session_fingerprint', fingerprint);
+      }
+      const res = await fetch('/api/sessions/record', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ userAgent: ua, browser, os, deviceType, sessionFingerprint: fingerprint }),
+      });
+      const json = await res.json();
+      if (json.sessionId) {
+        localStorage.setItem('mint_session_id', json.sessionId);
+      }
+    } catch (err) {
+      console.error('Failed to record session:', err);
+    }
+  };
+
   const handleSignupComplete = async () => {
     justLoggedInRef.current = true;
     localStorage.setItem('mint_last_activity', Date.now().toString());
@@ -1283,6 +1323,7 @@ const App = () => {
         await refetchNotifications();
       }
     }
+    await recordSession();
     setCurrentPage("home");
   };
 
@@ -1295,6 +1336,7 @@ const App = () => {
         await refetchNotifications();
       }
     }
+    await recordSession();
     setCurrentPage("home");
   };
 

@@ -1952,6 +1952,154 @@ app.post("/api/credit-check", async (req, res) => {
   }
 });
 
+app.post("/api/sessions/record", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+    const token = authHeader.split(" ")[1];
+    const db = supabaseAdmin || supabase;
+    if (!db) {
+      return res.status(500).json({ success: false, error: "Database not available" });
+    }
+    const { data: { user }, error: authError } = await db.auth.getUser(token);
+    if (authError || !user) {
+      return res.status(401).json({ success: false, error: "Invalid token" });
+    }
+    const { userAgent, browser, os, deviceType, sessionFingerprint } = req.body;
+    if (sessionFingerprint) {
+      await db.from("user_sessions").delete().eq("user_id", user.id).eq("session_token", sessionFingerprint);
+    }
+    const { data: inserted, error: insertError } = await db.from("user_sessions").insert({
+      user_id: user.id,
+      session_token: sessionFingerprint || user.id + "_" + Date.now(),
+      user_agent: userAgent || "",
+      browser: browser || "",
+      os: os || "",
+      device_type: deviceType || "desktop",
+      ip_address: req.headers["x-forwarded-for"] || req.socket.remoteAddress || "",
+      is_current: false,
+      created_at: new Date().toISOString(),
+      last_active_at: new Date().toISOString(),
+    }).select("id").single();
+    if (insertError) {
+      console.error("Session insert error:", insertError.message);
+      return res.status(500).json({ success: false, error: insertError.message });
+    }
+    res.json({ success: true, sessionId: inserted?.id });
+  } catch (error) {
+    console.error("Session record error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get("/api/sessions/list", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+    const token = authHeader.split(" ")[1];
+    const db = supabaseAdmin || supabase;
+    if (!db) {
+      return res.status(500).json({ success: false, error: "Database not available" });
+    }
+    const { data: { user }, error: authError } = await db.auth.getUser(token);
+    if (authError || !user) {
+      return res.status(401).json({ success: false, error: "Invalid token" });
+    }
+    const currentFingerprint = req.query.fingerprint || "";
+    const { data: sessions, error: fetchError } = await db
+      .from("user_sessions")
+      .select("id, user_id, session_token, browser, os, device_type, ip_address, created_at, last_active_at")
+      .eq("user_id", user.id)
+      .order("last_active_at", { ascending: false });
+    if (fetchError) {
+      return res.status(500).json({ success: false, error: fetchError.message });
+    }
+    let foundCurrent = false;
+    const sessionsWithCurrent = (sessions || []).map((s) => {
+      const isCurrent = !foundCurrent && currentFingerprint && s.session_token === currentFingerprint;
+      if (isCurrent) foundCurrent = true;
+      const { session_token, ...safe } = s;
+      return { ...safe, is_current: isCurrent };
+    });
+    res.json({ success: true, sessions: sessionsWithCurrent });
+  } catch (error) {
+    console.error("Session list error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post("/api/sessions/revoke", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+    const token = authHeader.split(" ")[1];
+    const db = supabaseAdmin || supabase;
+    if (!db) {
+      return res.status(500).json({ success: false, error: "Database not available" });
+    }
+    const { data: { user }, error: authError } = await db.auth.getUser(token);
+    if (authError || !user) {
+      return res.status(401).json({ success: false, error: "Invalid token" });
+    }
+    const { sessionId } = req.body;
+    if (!sessionId) {
+      return res.status(400).json({ success: false, error: "sessionId required" });
+    }
+    const { error: deleteError } = await db
+      .from("user_sessions")
+      .delete()
+      .eq("id", sessionId)
+      .eq("user_id", user.id);
+    if (deleteError) {
+      return res.status(500).json({ success: false, error: deleteError.message });
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Session revoke error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post("/api/sessions/revoke-others", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+    const token = authHeader.split(" ")[1];
+    const db = supabaseAdmin || supabase;
+    if (!db) {
+      return res.status(500).json({ success: false, error: "Database not available" });
+    }
+    const { data: { user }, error: authError } = await db.auth.getUser(token);
+    if (authError || !user) {
+      return res.status(401).json({ success: false, error: "Invalid token" });
+    }
+    const { currentSessionId } = req.body;
+    if (!currentSessionId) {
+      return res.status(400).json({ success: false, error: "currentSessionId required" });
+    }
+    const { error: deleteError } = await db
+      .from("user_sessions")
+      .delete()
+      .eq("user_id", user.id)
+      .neq("id", currentSessionId);
+    if (deleteError) {
+      return res.status(500).json({ success: false, error: deleteError.message });
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Session revoke-others error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 const PORT = process.env.API_PORT || 3001;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`TruID API server running on port ${PORT}`);

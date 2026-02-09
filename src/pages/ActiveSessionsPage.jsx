@@ -1,29 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, Smartphone, Monitor, Globe, LogOut, Shield, Clock } from 'lucide-react';
+import { ArrowLeft, Smartphone, Monitor, Globe, LogOut, Shield, Clock, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-
-const parseUserAgent = (ua) => {
-  if (!ua) return { device: 'Unknown Device', browser: 'Unknown Browser', os: 'Unknown OS', isMobile: false };
-
-  let browser = 'Unknown Browser';
-  if (ua.includes('Chrome') && !ua.includes('Edg')) browser = 'Chrome';
-  else if (ua.includes('Safari') && !ua.includes('Chrome')) browser = 'Safari';
-  else if (ua.includes('Firefox')) browser = 'Firefox';
-  else if (ua.includes('Edg')) browser = 'Edge';
-  else if (ua.includes('Opera') || ua.includes('OPR')) browser = 'Opera';
-
-  let os = 'Unknown OS';
-  if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS';
-  else if (ua.includes('Android')) os = 'Android';
-  else if (ua.includes('Mac OS')) os = 'macOS';
-  else if (ua.includes('Windows')) os = 'Windows';
-  else if (ua.includes('Linux')) os = 'Linux';
-
-  const isMobile = /iPhone|iPad|iPod|Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua);
-  const device = isMobile ? 'Mobile Device' : 'Desktop';
-
-  return { device, browser, os, isMobile };
-};
 
 const formatDate = (dateStr) => {
   if (!dateStr) return 'Unknown';
@@ -42,8 +19,9 @@ const formatDate = (dateStr) => {
 };
 
 const ActiveSessionsPage = ({ onNavigate, onBack }) => {
-  const [session, setSession] = useState(null);
+  const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [userEmail, setUserEmail] = useState('');
   const [toast, setToast] = useState({ show: false, message: '', type: '' });
 
   const showToast = (message, type = 'success') => {
@@ -51,29 +29,81 @@ const ActiveSessionsPage = ({ onNavigate, onBack }) => {
     setTimeout(() => setToast({ show: false, message: '', type: '' }), 3000);
   };
 
-  useEffect(() => {
-    const loadSession = async () => {
-      try {
-        if (!supabase) {
-          setLoading(false);
-          return;
-        }
-        const { data } = await supabase.auth.getSession();
-        setSession(data?.session || null);
-      } catch (err) {
-        console.error('Failed to load session:', err);
-      } finally {
+  const getAuthToken = async () => {
+    if (!supabase) return null;
+    const { data } = await supabase.auth.getSession();
+    return data?.session?.access_token || null;
+  };
+
+  const fetchSessions = async () => {
+    try {
+      const token = await getAuthToken();
+      if (!token) {
         setLoading(false);
+        return;
       }
-    };
-    loadSession();
+      const { data: userData } = await supabase.auth.getUser();
+      setUserEmail(userData?.user?.email || '');
+      const fingerprint = localStorage.getItem('mint_session_fingerprint') || '';
+      const res = await fetch(`/api/sessions/list?fingerprint=${encodeURIComponent(fingerprint)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+      if (json.success) {
+        setSessions(json.sessions || []);
+      }
+    } catch (err) {
+      console.error('Failed to load sessions:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSessions();
   }, []);
+
+  const handleRevokeSession = async (sessionId) => {
+    try {
+      const token = await getAuthToken();
+      if (!token) return;
+      const res = await fetch('/api/sessions/revoke', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ sessionId }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+        showToast('Session revoked');
+      }
+    } catch (err) {
+      console.error('Failed to revoke session:', err);
+      showToast('Failed to revoke session', 'error');
+    }
+  };
 
   const handleSignOutOthers = async () => {
     try {
-      if (!supabase) return;
-      await supabase.auth.signOut({ scope: 'others' });
-      showToast('Logged out of all other devices');
+      const token = await getAuthToken();
+      if (!token) return;
+      const currentSession = sessions.find((s) => s.is_current);
+      if (!currentSession) {
+        await supabase.auth.signOut({ scope: 'others' });
+        showToast('Logged out of all other devices');
+        return;
+      }
+      const res = await fetch('/api/sessions/revoke-others', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ currentSessionId: currentSession.id }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        await supabase.auth.signOut({ scope: 'others' });
+        setSessions((prev) => prev.filter((s) => s.is_current));
+        showToast('Logged out of all other devices');
+      }
     } catch (err) {
       console.error('Failed to sign out others:', err);
       showToast('Failed to log out other devices', 'error');
@@ -82,8 +112,25 @@ const ActiveSessionsPage = ({ onNavigate, onBack }) => {
 
   const handleSignOutGlobal = async () => {
     try {
-      if (!supabase) return;
-      await supabase.auth.signOut({ scope: 'global' });
+      const token = await getAuthToken();
+      if (token) {
+        const currentSession = sessions.find((s) => s.is_current);
+        if (currentSession) {
+          await fetch('/api/sessions/revoke-others', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ currentSessionId: 'none' }),
+          });
+        }
+        await fetch('/api/sessions/revoke', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ sessionId: currentSession?.id }),
+        });
+      }
+      if (supabase) {
+        await supabase.auth.signOut({ scope: 'global' });
+      }
       onNavigate?.('auth');
     } catch (err) {
       console.error('Failed to sign out globally:', err);
@@ -91,9 +138,8 @@ const ActiveSessionsPage = ({ onNavigate, onBack }) => {
     }
   };
 
-  const uaInfo = parseUserAgent(navigator.userAgent);
-  const loginTime = session?.user?.last_sign_in_at || session?.user?.created_at;
-  const DeviceIcon = uaInfo.isMobile ? Smartphone : Monitor;
+  const currentSession = sessions.find((s) => s.is_current);
+  const otherSessions = sessions.filter((s) => !s.is_current);
 
   return (
     <div className="min-h-screen bg-slate-50 px-6 pt-12 pb-24">
@@ -122,45 +168,67 @@ const ActiveSessionsPage = ({ onNavigate, onBack }) => {
       {loading ? (
         <div className="space-y-4">
           <div className="h-32 animate-pulse rounded-2xl bg-white shadow-sm" />
+          <div className="h-32 animate-pulse rounded-2xl bg-white shadow-sm" />
           <div className="h-14 animate-pulse rounded-2xl bg-white shadow-sm" />
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="rounded-2xl bg-white p-4 shadow-sm">
-            <div className="mb-3 flex items-center gap-2">
-              <Shield className="h-5 w-5 text-slate-700" />
-              <h2 className="text-base font-semibold text-slate-900">Current Session</h2>
+          {currentSession && (
+            <div className="rounded-2xl bg-white p-4 shadow-sm">
+              <div className="mb-3 flex items-center gap-2">
+                <Shield className="h-5 w-5 text-slate-700" />
+                <h2 className="text-base font-semibold text-slate-900">Current Session</h2>
+              </div>
+              <SessionCard session={currentSession} email={userEmail} isCurrent />
             </div>
+          )}
 
-            <div className="rounded-xl bg-slate-50 p-4">
-              <div className="flex items-start gap-3">
-                <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700">
-                  <DeviceIcon className="h-5 w-5" />
-                </span>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-slate-900">
-                      {uaInfo.browser} on {uaInfo.os}
-                    </span>
-                    <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
-                      Active
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-slate-500">{uaInfo.device}</p>
-                  {loginTime && (
-                    <div className="mt-2 flex items-center gap-1 text-xs text-slate-400">
-                      <Clock className="h-3 w-3" />
-                      <span>Signed in {formatDate(loginTime)}</span>
+          {otherSessions.length > 0 && (
+            <div className="rounded-2xl bg-white p-4 shadow-sm">
+              <div className="mb-3 flex items-center gap-2">
+                <Monitor className="h-5 w-5 text-slate-700" />
+                <h2 className="text-base font-semibold text-slate-900">Other Devices</h2>
+              </div>
+              <div className="space-y-3">
+                {otherSessions.map((s) => (
+                  <SessionCard
+                    key={s.id}
+                    session={s}
+                    email={userEmail}
+                    isCurrent={false}
+                    onRevoke={() => handleRevokeSession(s.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {sessions.length === 0 && !loading && (
+            <div className="rounded-2xl bg-white p-4 shadow-sm">
+              <div className="mb-3 flex items-center gap-2">
+                <Shield className="h-5 w-5 text-slate-700" />
+                <h2 className="text-base font-semibold text-slate-900">Current Session</h2>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-4">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700">
+                    {/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ? <Smartphone className="h-5 w-5" /> : <Monitor className="h-5 w-5" />}
+                  </span>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-slate-900">This Device</span>
+                      <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">Active</span>
                     </div>
-                  )}
-                  <div className="mt-1 flex items-center gap-1 text-xs text-slate-400">
-                    <Globe className="h-3 w-3" />
-                    <span>{session?.user?.email || 'Unknown email'}</span>
+                    <p className="mt-1 text-xs text-slate-500">{/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ? 'Mobile Device' : 'Desktop'}</p>
+                    <div className="mt-1 flex items-center gap-1 text-xs text-slate-400">
+                      <Globe className="h-3 w-3" />
+                      <span>{userEmail || 'Unknown email'}</span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
 
           <button
             type="button"
@@ -191,6 +259,55 @@ const ActiveSessionsPage = ({ onNavigate, onBack }) => {
           </button>
         </div>
       )}
+    </div>
+  );
+};
+
+const SessionCard = ({ session, email, isCurrent, onRevoke }) => {
+  const DeviceIcon = session.device_type === 'mobile' ? Smartphone : Monitor;
+
+  return (
+    <div className="rounded-xl bg-slate-50 p-4">
+      <div className="flex items-start gap-3">
+        <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700">
+          <DeviceIcon className="h-5 w-5" />
+        </span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-slate-900 truncate">
+              {session.browser || 'Unknown'} on {session.os || 'Unknown'}
+            </span>
+            {isCurrent && (
+              <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 flex-shrink-0">
+                Active
+              </span>
+            )}
+          </div>
+          <p className="mt-1 text-xs text-slate-500">
+            {session.device_type === 'mobile' ? 'Mobile Device' : 'Desktop'}
+          </p>
+          {session.created_at && (
+            <div className="mt-2 flex items-center gap-1 text-xs text-slate-400">
+              <Clock className="h-3 w-3" />
+              <span>Signed in {formatDate(session.created_at)}</span>
+            </div>
+          )}
+          <div className="mt-1 flex items-center gap-1 text-xs text-slate-400">
+            <Globe className="h-3 w-3" />
+            <span>{email || 'Unknown email'}</span>
+          </div>
+        </div>
+        {!isCurrent && onRevoke && (
+          <button
+            type="button"
+            onClick={onRevoke}
+            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-200 hover:text-red-500 transition"
+            aria-label="Revoke session"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
     </div>
   );
 };
