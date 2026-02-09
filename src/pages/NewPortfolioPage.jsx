@@ -310,10 +310,14 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   const myStockIds = useMemo(() => new Set(myStocks.map(s => s.id)), [myStocks]);
 
   useEffect(() => {
-    if (!selectedStock && myStocks.length > 0) {
-      setSelectedStock(myStocks[0]);
+    if (!selectedStock) {
+      if (myStocks.length > 0) {
+        setSelectedStock(myStocks[0]);
+      } else if (stocksList.length > 0) {
+        setSelectedStock(stocksList[0]);
+      }
     }
-  }, [myStocks, selectedStock]);
+  }, [myStocks, stocksList, selectedStock]);
 
   const goal = investmentGoals && investmentGoals.length > 0 ? investmentGoals[0] : null;
   const goalProgress = goal && goal.targetAmount > 0 ? (goal.currentAmount / goal.targetAmount) * 100 : 0;
@@ -966,10 +970,13 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
               : liveStockChartData)
           : [];
         if (!selectedStock) {
-          if (myStocks.length === 0 && !holdingsLoading) {
-            return <div className="text-center py-10 text-slate-500">You don't own any stocks yet.</div>;
+          if (quotesLoading || holdingsLoading) {
+            return <div className="text-center py-10 text-slate-500">Loading stocks...</div>;
           }
-          return <div className="text-center py-10 text-slate-500">Loading stocks...</div>;
+          if (stocksList.length === 0) {
+            return <div className="text-center py-10 text-slate-500">No stocks available.</div>;
+          }
+          return null;
         }
         const otherStocks = stocksList.filter(s => s.id !== selectedStock?.id && !myStockIds.has(s.id));
         return (
@@ -987,12 +994,12 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                       </span>
                       <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${showStockDropdown ? 'rotate-180' : ''}`} />
                     </button>
-                    {showStockDropdown && myStocks.length > 0 && (
+                    {showStockDropdown && (myStocks.length > 0 || stocksList.length > 0) && (
                       <div
                         className="absolute top-full left-0 mt-2 min-w-[200px] max-h-[280px] overflow-y-auto bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200/50 z-50 overscroll-contain"
                         style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif", WebkitOverflowScrolling: 'touch' }}
                       >
-                        {myStocks.map((stock) => (
+                        {(myStocks.length > 0 ? myStocks : stocksList.slice(0, 20)).map((stock) => (
                           <button
                             key={stock.id}
                             onClick={() => { setSelectedStock(stock); setShowStockDropdown(false); }}
