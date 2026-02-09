@@ -89,7 +89,15 @@ const ActionsPage = ({ onBack, onNavigate }) => {
               <CheckCircle2 className="h-10 w-10" />
             </div>
             <h2 className="text-lg font-semibold text-slate-900 mb-2">All done!</h2>
-            <p className="text-sm text-slate-500">You've completed all required actions.</p>
+            <p className="text-sm text-slate-500 mb-6">You've completed all required actions.</p>
+            <button
+              type="button"
+              onClick={onBack}
+              className="px-6 py-2.5 rounded-full font-medium text-white text-sm transition-all duration-200"
+              style={{ background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)' }}
+            >
+              Go Back
+            </button>
           </div>
         ) : (
           <>

@@ -152,10 +152,12 @@ const SumsubVerification = ({ onVerified }) => {
         if ((reviewStatus === "completed" || reviewStatus === "onHold") && reviewAnswer === "GREEN") {
           setVerificationComplete(true);
           setVerificationStatus("approved");
+          setError(null);
+          setErrorType(null);
           if (onVerified) {
             onVerified();
           }
-        } else if (reviewAnswer === "RED") {
+        } else if (reviewAnswer === "RED" && reviewStatus === "completed") {
           setVerificationStatus("rejected");
           if (rejectType === "RETRY") {
             setError("Some documents need to be resubmitted. Please try again with clearer images.");
@@ -164,6 +166,9 @@ const SumsubVerification = ({ onVerified }) => {
             setError("Verification was not successful. Please contact support for assistance.");
             setErrorType("rejected");
           }
+        } else if (reviewAnswer === "RED" && (reviewStatus === "prechecked" || reviewStatus === "pending")) {
+          console.log("Precheck/pending rejection with RETRY - Sumsub SDK will handle retry flow internally");
+          setVerificationStatus("pending");
         } else if (reviewStatus === "pending" || reviewStatus === "queued" || reviewStatus === "onHold") {
           setVerificationStatus("pending");
         }
