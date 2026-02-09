@@ -1286,9 +1286,9 @@ const App = () => {
 
   if (currentPage === "actions") {
     return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+      <SwipeBackWrapper onBack={() => navigateTo("home")} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <ActionsPage
-          onBack={goBack}
+          onBack={() => navigateTo("home")}
           onNavigate={navigateTo}
         />
       </SwipeBackWrapper>
@@ -1299,8 +1299,8 @@ const App = () => {
     return (
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <IdentityCheckPage 
-          onBack={goBack} 
-          onComplete={() => navigateTo("actions")}
+          onBack={() => navigateTo("home")} 
+          onComplete={() => navigateTo("home")}
         />
       </SwipeBackWrapper>
     );

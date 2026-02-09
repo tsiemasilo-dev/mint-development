@@ -96,7 +96,7 @@ const ActionsPage = ({ onBack, onNavigate }) => {
               className="px-6 py-2.5 rounded-full font-medium text-white text-sm transition-all duration-200"
               style={{ background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)' }}
             >
-              Go Back
+              Go to Home
             </button>
           </div>
         ) : (
