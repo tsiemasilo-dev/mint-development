@@ -1002,6 +1002,30 @@ app.post("/api/banking/capture", async (req, res) => {
 
     const data = await truIDClient.getCollectionData(collectionId);
 
+    let bankAccounts = [];
+    try {
+      const summary = data?.data || data;
+      if (summary?.accounts && Array.isArray(summary.accounts)) {
+        bankAccounts = summary.accounts.map(acc => ({
+          bankName: acc.institution || acc.bankName || acc.bank_name || "Bank Account",
+          accountNumber: acc.accountNumber || acc.account_number || acc.maskedNumber || "",
+          accountType: acc.accountType || acc.account_type || acc.type || "Current",
+        }));
+      } else if (summary?.institution || summary?.bankName || summary?.bank_name) {
+        bankAccounts = [{
+          bankName: summary.institution || summary.bankName || summary.bank_name || "Bank Account",
+          accountNumber: summary.accountNumber || summary.account_number || summary.maskedNumber || "",
+          accountType: summary.accountType || summary.account_type || summary.type || "Current",
+        }];
+      }
+    } catch (parseErr) {
+      console.error("Error parsing TruID bank data:", parseErr);
+    }
+
+    if (bankAccounts.length === 0) {
+      bankAccounts = [{ bankName: "Bank Account", accountNumber: "", accountType: "Current" }];
+    }
+
     const { data: existingAction } = await db
       .from("required_actions")
       .select("id")
@@ -1021,7 +1045,8 @@ app.post("/api/banking/capture", async (req, res) => {
 
     res.json({
       success: true,
-      snapshot: data
+      snapshot: data,
+      bankAccounts
     });
   } catch (error) {
     console.error("Banking capture error:", error);

@@ -3,6 +3,51 @@ import { ArrowLeft, Landmark, ShieldCheck, CheckCircle2, Shield, X, XCircle, Loc
 import { supabase } from "../lib/supabase";
 import { useRequiredActions } from "../lib/useRequiredActions";
 
+const BANK_BRANDS = {
+  "fnb": { name: "FNB", color: "#009A44", textColor: "#FFFFFF" },
+  "first national bank": { name: "FNB", color: "#009A44", textColor: "#FFFFFF" },
+  "standard bank": { name: "SB", color: "#003DA5", textColor: "#FFFFFF" },
+  "absa": { name: "ABSA", color: "#AF1F2D", textColor: "#FFFFFF" },
+  "nedbank": { name: "NB", color: "#009639", textColor: "#FFFFFF" },
+  "capitec": { name: "C", color: "#0033A0", textColor: "#FFFFFF" },
+  "capitec bank": { name: "C", color: "#0033A0", textColor: "#FFFFFF" },
+  "investec": { name: "IN", color: "#003B5C", textColor: "#FFFFFF" },
+  "discovery bank": { name: "D", color: "#FF6B00", textColor: "#FFFFFF" },
+  "tymebank": { name: "TB", color: "#FFD100", textColor: "#1A1A1A" },
+  "african bank": { name: "AB", color: "#E31937", textColor: "#FFFFFF" },
+  "bank zero": { name: "BZ", color: "#00C4B3", textColor: "#FFFFFF" },
+};
+
+const getBankBrand = (bankName) => {
+  if (!bankName) return { name: "BA", color: "#64748b", textColor: "#FFFFFF" };
+  const key = bankName.toLowerCase().trim();
+  for (const [pattern, brand] of Object.entries(BANK_BRANDS)) {
+    if (key.includes(pattern)) return brand;
+  }
+  const initials = bankName.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
+  return { name: initials || "BA", color: "#64748b", textColor: "#FFFFFF" };
+};
+
+const maskAccountNumber = (num) => {
+  if (!num) return "••••";
+  const cleaned = num.replace(/\s/g, "");
+  if (cleaned.length <= 4) return cleaned;
+  return "•••• " + cleaned.slice(-4);
+};
+
+const getLinkedBanks = () => {
+  try {
+    const stored = localStorage.getItem("mint_linked_banks");
+    return stored ? JSON.parse(stored) : [];
+  } catch { return []; }
+};
+
+const saveLinkedBanks = (banks) => {
+  try {
+    localStorage.setItem("mint_linked_banks", JSON.stringify(banks));
+  } catch (e) { console.error("Failed to save linked banks:", e); }
+};
+
 const MintBankPage = ({ onBack, onComplete }) => {
   const { bankLinked } = useRequiredActions();
   const [step, setStep] = useState("intro");
@@ -11,11 +56,17 @@ const MintBankPage = ({ onBack, onComplete }) => {
   const [message, setMessage] = useState("");
   const [consumerUrl, setConsumerUrl] = useState(null);
   const [iframeLoaded, setIframeLoaded] = useState(false);
+  const [linkedBanks, setLinkedBanks] = useState(() => getLinkedBanks());
   const collectionIdRef = useRef(null);
   const pollingRef = useRef(null);
 
   useEffect(() => {
-    if (bankLinked) setStep("already_linked");
+    if (bankLinked) {
+      if (linkedBanks.length === 0) {
+        setLinkedBanks([{ bankName: "Bank Account", accountNumber: "", accountType: "Current", linkedAt: new Date().toISOString() }]);
+      }
+      setStep("already_linked");
+    }
   }, [bankLinked]);
 
   useEffect(() => {
@@ -116,6 +167,13 @@ const MintBankPage = ({ onBack, onComplete }) => {
               throw new Error(captureData.error || "Capture failed");
             }
 
+            const newAccounts = (captureData.bankAccounts || []).map(acc => ({
+              ...acc,
+              linkedAt: new Date().toISOString(),
+            }));
+            const updated = [...linkedBanks, ...newAccounts];
+            setLinkedBanks(updated);
+            saveLinkedBanks(updated);
             setStep("success");
           } catch (captureErr) {
             console.error("Capture error:", captureErr);
@@ -167,6 +225,7 @@ const MintBankPage = ({ onBack, onComplete }) => {
   }
 
   if (step === "linked_accounts" || step === "already_linked") {
+    const displayBanks = linkedBanks.length > 0 ? linkedBanks : [{ bankName: "Bank Account", accountNumber: "", accountType: "Current" }];
     return (
       <div className="animate-in fade-in slide-in-from-bottom-8 duration-700 flex flex-col px-6 pb-10 min-h-screen bg-white">
         <header className="w-full flex items-center justify-between pt-10 pb-6">
@@ -181,18 +240,28 @@ const MintBankPage = ({ onBack, onComplete }) => {
         </header>
 
         <div className="mt-6 space-y-3">
-          <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-50 text-green-600 shrink-0">
-              <Landmark className="h-6 w-6" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-slate-900">Primary Bank Account</p>
-              <p className="text-xs text-slate-500 mt-0.5">Verified via TruID</p>
-            </div>
-            <span className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-green-100 text-green-700 shrink-0">
-              Linked
-            </span>
-          </div>
+          {displayBanks.map((bank, idx) => {
+            const brand = getBankBrand(bank.bankName);
+            return (
+              <div key={idx} className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                <div
+                  className="flex h-12 w-12 items-center justify-center rounded-xl shrink-0 text-xs font-bold"
+                  style={{ backgroundColor: brand.color, color: brand.textColor }}
+                >
+                  {brand.name}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-slate-900">{bank.bankName}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {bank.accountType || "Current"} • {maskAccountNumber(bank.accountNumber)}
+                  </p>
+                </div>
+                <span className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-green-100 text-green-700 shrink-0">
+                  Linked
+                </span>
+              </div>
+            );
+          })}
         </div>
 
         <div className="mt-8 space-y-3">
