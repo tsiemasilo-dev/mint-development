@@ -145,12 +145,6 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showCalendarFilterDropdown]);
 
-  useEffect(() => {
-    if (!selectedStock && myStocks.length > 0) {
-      setSelectedStock(myStocks[0]);
-    }
-  }, [myStocks, selectedStock]);
-
   const handleStrategySelect = (strategy) => {
     selectStrategy(strategy);
     setShowStrategyDropdown(false);
@@ -314,6 +308,12 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   }, [allStrategyHoldings, stocksList]);
 
   const myStockIds = useMemo(() => new Set(myStocks.map(s => s.id)), [myStocks]);
+
+  useEffect(() => {
+    if (!selectedStock && myStocks.length > 0) {
+      setSelectedStock(myStocks[0]);
+    }
+  }, [myStocks, selectedStock]);
 
   const goal = investmentGoals && investmentGoals.length > 0 ? investmentGoals[0] : null;
   const goalProgress = goal && goal.targetAmount > 0 ? (goal.currentAmount / goal.targetAmount) * 100 : 0;
