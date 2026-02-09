@@ -41,6 +41,7 @@ import LegalDocumentationPage from "./pages/LegalDocumentationPage.jsx";
 import StatementsPage from "./pages/StatementsPage.jsx";
 import IdentityCheckPage from "./pages/IdentityCheckPage.jsx";
 import BankLinkPage from "./pages/BankLinkPage.jsx";
+import MintBankPage from "./pages/MintBankPage.jsx";
 import InvitePage from "./pages/InvitePage.jsx";
 import ActiveSessionsPage from "./pages/ActiveSessionsPage.jsx";
 import PinSetupPage from "./pages/PinSetupPage.jsx";
@@ -664,7 +665,7 @@ const App = () => {
       case 'identityCheck':
         return <IdentityCheckPage onBack={noOp} onComplete={noOp} />;
       case 'bankLink':
-        return <BankLinkPage onBack={noOp} onComplete={noOp} />;
+        return <MintBankPage onBack={noOp} onComplete={noOp} />;
       case 'invite':
         return <InvitePage onBack={noOp} />;
       case 'newsArticle':
@@ -1325,7 +1326,7 @@ const App = () => {
   if (currentPage === "bankLink") {
     return (
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
-        <BankLinkPage
+        <MintBankPage
           onBack={goBack}
           onComplete={() => setCurrentPage("home")}
         />
