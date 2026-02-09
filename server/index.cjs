@@ -1006,40 +1006,51 @@ app.post("/api/banking/capture", async (req, res) => {
     try {
       console.log("TruID capture raw data:", JSON.stringify(data, null, 2));
       const summary = data?.data || data;
+      const statement = summary?.statement || {};
+      const customer = statement?.customer || {};
+      const bankName = customer.bank || customer.institution || customer.bankName || "";
 
-      const extractAccount = (obj) => {
-        if (!obj || typeof obj !== 'object') return null;
-        const bankName = obj.institution || obj.institutionName || obj.bankName || obj.bank_name || obj.bank || obj.name || "";
-        const accountNumber = obj.accountNumber || obj.account_number || obj.maskedNumber || obj.number || obj.accountId || "";
-        const accountType = obj.accountType || obj.account_type || obj.type || obj.subtype || "Current";
-        return { bankName, accountNumber, accountType };
-      };
+      if (statement.accounts && Array.isArray(statement.accounts) && statement.accounts.length > 0) {
+        bankAccounts = statement.accounts.map(acc => ({
+          bankName: acc.bank || acc.institution || bankName || "Bank Account",
+          accountNumber: acc.accountNumber || acc.account_number || acc.number || acc.accountId || "",
+          accountType: acc.accountType || acc.account_type || acc.type || "Current",
+        }));
+      }
 
-      const findAccounts = (obj) => {
-        if (!obj || typeof obj !== 'object') return;
-        if (Array.isArray(obj)) {
-          obj.forEach(item => {
-            const acc = extractAccount(item);
-            if (acc && (acc.bankName || acc.accountNumber)) bankAccounts.push(acc);
-            findAccounts(item);
-          });
-          return;
+      if (bankAccounts.length === 0 && bankName) {
+        try {
+          const detailRes = await truIDClient.deliveryClient.get(`/collections/${collectionId}/products`);
+          console.log("TruID products detail:", JSON.stringify(detailRes.data, null, 2));
+          const products = detailRes.data;
+
+          const extractAccounts = (obj) => {
+            if (!obj || typeof obj !== 'object') return;
+            if (Array.isArray(obj)) {
+              obj.forEach(item => extractAccounts(item));
+              return;
+            }
+            const accNum = obj.accountNumber || obj.account_number || obj.number || obj.accountId || obj.accountNo || "";
+            if (accNum) {
+              bankAccounts.push({
+                bankName: obj.bank || obj.institution || bankName,
+                accountNumber: accNum,
+                accountType: obj.accountType || obj.account_type || obj.type || "Current",
+              });
+            }
+            for (const val of Object.values(obj)) {
+              if (typeof val === 'object') extractAccounts(val);
+            }
+          };
+          extractAccounts(products);
+        } catch (detailErr) {
+          console.log("TruID products detail not available:", detailErr.message);
         }
-        for (const key of Object.keys(obj)) {
-          const val = obj[key];
-          if (['accounts', 'bankAccounts', 'bank_accounts', 'items', 'products'].includes(key) && Array.isArray(val)) {
-            val.forEach(item => {
-              const acc = extractAccount(item);
-              if (acc && (acc.bankName || acc.accountNumber)) bankAccounts.push(acc);
-            });
-          }
-          if (typeof val === 'object') findAccounts(val);
-        }
-      };
+      }
 
-      const topAcc = extractAccount(summary);
-      if (topAcc && (topAcc.bankName || topAcc.accountNumber)) bankAccounts.push(topAcc);
-      findAccounts(summary);
+      if (bankAccounts.length === 0 && bankName) {
+        bankAccounts = [{ bankName, accountNumber: customer.id || "", accountType: customer.type || "Current" }];
+      }
 
       const seen = new Set();
       bankAccounts = bankAccounts.filter(a => {
