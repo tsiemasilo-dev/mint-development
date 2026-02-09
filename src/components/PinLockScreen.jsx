@@ -103,7 +103,7 @@ const PinLockScreen = ({ onUnlock, onLogout, userEmail, userAvatar, userName }) 
   const handleLogout = async () => {
     try {
       if (supabase) {
-        await supabase.auth.signOut();
+        await supabase.auth.signOut({ scope: 'local' });
       }
     } catch (e) {
       console.error('Sign out failed:', e);

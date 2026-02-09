@@ -99,7 +99,7 @@ const App = () => {
   useInactivityTimeout({
     enabled: isAuthenticated,
     onLogout: () => {
-      if (supabase) supabase.auth.signOut();
+      if (supabase) supabase.auth.signOut({ scope: 'local' });
       setShowPinLock(false);
       setCurrentPage("welcome");
     },
@@ -366,7 +366,7 @@ const App = () => {
             const json = await res.json();
             if (json.success && json.valid === false) {
               console.log('[session-check] Session revoked remotely');
-              await supabase.auth.signOut();
+              await supabase.auth.signOut({ scope: 'local' });
               setShowPinLock(false);
               setCurrentPage("welcome");
               return;
@@ -761,7 +761,7 @@ const App = () => {
   }, [previousPageName, currentPage, renderPageContent]);
 
   const handleLockLogout = useCallback(() => {
-    if (supabase) supabase.auth.signOut();
+    if (supabase) supabase.auth.signOut({ scope: 'local' });
     setShowPinLock(false);
     setCurrentPage("welcome");
   }, []);
