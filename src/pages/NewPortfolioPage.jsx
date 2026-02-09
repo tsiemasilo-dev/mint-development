@@ -573,6 +573,20 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           {/* Chart section */}
           <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 md:max-w-md md:px-8">
         <section className="py-2">
+          {strategies.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 px-6">
+              <div className="w-16 h-16 rounded-full bg-purple-50 flex items-center justify-center mb-4">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                  <path d="M2 17l10 5 10-5" />
+                  <path d="M2 12l10 5 10-5" />
+                </svg>
+              </div>
+              <p className="text-lg font-semibold text-slate-900 mb-1">Invest in Your First Strategy</p>
+              <p className="text-sm text-slate-500 text-center max-w-[260px]">Choose a strategy and start building your portfolio. Your performance will show up here.</p>
+            </div>
+          ) : (
+          <>
           <div className="flex items-center justify-between mb-3 -ml-4">
             <div className="relative" ref={dropdownRef}>
               <button 
@@ -736,17 +750,28 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
               </ResponsiveContainer>
             )}
           </div>
+          </>
+          )}
         </section>
       </div>
 
       {/* Scrollable content section - starts after chart */}
       <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
-        <button 
-          onClick={() => { setCurrentView("allocations"); window.scrollTo(0, 0); }}
-          className="w-full py-3.5 rounded-full bg-gradient-to-r from-slate-800 to-slate-900 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg shadow-slate-900/30 transition hover:-translate-y-0.5 hover:shadow-xl"
-        >
-          View All Allocations
-        </button>
+        {strategies.length === 0 ? (
+          <button 
+            onClick={() => { /* Navigate to strategy selection */ }}
+            className="w-full py-3.5 rounded-full bg-gradient-to-r from-purple-600 to-purple-700 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg shadow-purple-600/30 transition hover:-translate-y-0.5 hover:shadow-xl"
+          >
+            Make Your First Investment
+          </button>
+        ) : (
+          <button 
+            onClick={() => { setCurrentView("allocations"); window.scrollTo(0, 0); }}
+            className="w-full py-3.5 rounded-full bg-gradient-to-r from-slate-800 to-slate-900 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg shadow-slate-900/30 transition hover:-translate-y-0.5 hover:shadow-xl"
+          >
+            View All Allocations
+          </button>
+        )}
 
         <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50">
           <div className="flex items-center justify-between mb-4">
