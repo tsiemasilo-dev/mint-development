@@ -299,7 +299,7 @@ const App = () => {
         handleRecoveryFlow();
       }
       if (event === 'SIGNED_OUT') {
-        if (justLoggedInRef.current) {
+        if (justLoggedInRef.current || Date.now() < sessionCheckSkipUntilRef.current) {
           return;
         }
         if (!['welcome', 'auth', 'linkExpired'].includes(currentPageRef.current)) {
@@ -322,24 +322,33 @@ const App = () => {
   const [showSessionExpired, setShowSessionExpired] = useState(false);
   const sessionExpiredPageRef = useRef(null);
 
+  const sessionCheckSkipUntilRef = useRef(0);
+
   useEffect(() => {
     if (!supabase || !isAuthenticated) return;
 
     const checkSession = async () => {
+      if (justLoggedInRef.current) return;
+      if (Date.now() < sessionCheckSkipUntilRef.current) return;
+
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
-          console.log('[session-check] No active session found');
-          sessionExpiredPageRef.current = currentPageRef.current;
-          setShowPinLock(false);
-          setShowSessionExpired(true);
-          return;
+          const { data: refreshed } = await supabase.auth.refreshSession();
+          if (!refreshed?.session) {
+            console.log('[session-check] No active session found');
+            sessionExpiredPageRef.current = currentPageRef.current;
+            setShowPinLock(false);
+            setShowSessionExpired(true);
+            return;
+          }
         }
+        const activeSession = session || (await supabase.auth.getSession()).data?.session;
         const fingerprint = localStorage.getItem('mint_session_fingerprint');
-        if (fingerprint && session.access_token) {
+        if (fingerprint && activeSession?.access_token) {
           try {
             const res = await fetch(`/api/sessions/validate?fingerprint=${encodeURIComponent(fingerprint)}`, {
-              headers: { Authorization: `Bearer ${session.access_token}` },
+              headers: { Authorization: `Bearer ${activeSession.access_token}` },
             });
             const json = await res.json();
             if (json.success && json.valid === false) {
@@ -350,7 +359,7 @@ const App = () => {
               return;
             }
           } catch (valErr) {
-            console.error('[session-check] Validation error:', valErr);
+            // ignore validation errors
           }
         }
       } catch (err) {
@@ -358,10 +367,13 @@ const App = () => {
       }
     };
 
+    const initialDelay = setTimeout(() => checkSession(), 10000);
     const interval = setInterval(checkSession, 15000);
-    checkSession();
 
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(initialDelay);
+      clearInterval(interval);
+    };
   }, [isAuthenticated]);
 
   const openAuthFlow = (step) => {
@@ -1410,9 +1422,11 @@ const App = () => {
 
   const handleSignupComplete = async () => {
     justLoggedInRef.current = true;
+    sessionCheckSkipUntilRef.current = Date.now() + 30000;
     localStorage.setItem('mint_last_activity', Date.now().toString());
     setCurrentPage("home");
     try {
+      await recordSession();
       if (supabase) {
         const { data: userData } = await supabase.auth.getUser();
         if (userData?.user) {
@@ -1420,14 +1434,15 @@ const App = () => {
           await refetchNotifications().catch(() => {});
         }
       }
-      await recordSession();
     } catch (err) {
       console.error('Post-signup tasks error:', err);
     }
+    justLoggedInRef.current = false;
   };
 
   const handleLoginComplete = async () => {
     justLoggedInRef.current = true;
+    sessionCheckSkipUntilRef.current = Date.now() + 30000;
     setShowSessionExpired(false);
     localStorage.setItem('mint_last_activity', Date.now().toString());
     const returnPage = sessionExpiredPageRef.current;
@@ -1438,16 +1453,17 @@ const App = () => {
       setCurrentPage("home");
     }
     try {
+      await recordSession();
       if (supabase) {
         const { data: userData } = await supabase.auth.getUser();
         if (userData?.user) {
           await refetchNotifications().catch(() => {});
         }
       }
-      await recordSession();
     } catch (err) {
       console.error('Post-login tasks error:', err);
     }
+    justLoggedInRef.current = false;
   };
 
   return (
