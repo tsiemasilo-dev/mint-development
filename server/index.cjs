@@ -1,7 +1,14 @@
 const express = require("express");
 const cors = require("cors");
 const crypto = require("crypto");
+const { Pool } = require("pg");
 const truIDClient = require("./truidClient.cjs");
+
+const pgPool = process.env.DATABASE_URL ? new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+  max: 5,
+}) : null;
 
 const app = express();
 app.use(cors());
@@ -1967,27 +1974,23 @@ app.post("/api/sessions/record", async (req, res) => {
     if (authError || !user) {
       return res.status(401).json({ success: false, error: "Invalid token" });
     }
+    if (!pgPool) {
+      return res.status(500).json({ success: false, error: "Direct database not available" });
+    }
     const { userAgent, browser, os, deviceType, sessionFingerprint } = req.body;
-    if (sessionFingerprint) {
-      await db.from("user_sessions").delete().eq("user_id", user.id).eq("session_token", sessionFingerprint);
+    const fingerprint = sessionFingerprint || user.id + "_" + Date.now();
+    const client = await pgPool.connect();
+    try {
+      await client.query("DELETE FROM user_sessions WHERE user_id = $1 AND session_token = $2", [user.id, fingerprint]);
+      const result = await client.query(
+        `INSERT INTO user_sessions (user_id, session_token, user_agent, browser, os, device_type, ip_address, is_current, created_at, last_active_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, false, NOW(), NOW()) RETURNING id`,
+        [user.id, fingerprint, userAgent || "", browser || "", os || "", deviceType || "desktop", req.headers["x-forwarded-for"] || req.socket.remoteAddress || ""]
+      );
+      res.json({ success: true, sessionId: result.rows[0]?.id });
+    } finally {
+      client.release();
     }
-    const { data: inserted, error: insertError } = await db.from("user_sessions").insert({
-      user_id: user.id,
-      session_token: sessionFingerprint || user.id + "_" + Date.now(),
-      user_agent: userAgent || "",
-      browser: browser || "",
-      os: os || "",
-      device_type: deviceType || "desktop",
-      ip_address: req.headers["x-forwarded-for"] || req.socket.remoteAddress || "",
-      is_current: false,
-      created_at: new Date().toISOString(),
-      last_active_at: new Date().toISOString(),
-    }).select("id").single();
-    if (insertError) {
-      console.error("Session insert error:", insertError.message);
-      return res.status(500).json({ success: false, error: insertError.message });
-    }
-    res.json({ success: true, sessionId: inserted?.id });
   } catch (error) {
     console.error("Session record error:", error);
     res.status(500).json({ success: false, error: error.message });
@@ -2009,23 +2012,22 @@ app.get("/api/sessions/list", async (req, res) => {
     if (authError || !user) {
       return res.status(401).json({ success: false, error: "Invalid token" });
     }
-    const currentFingerprint = req.query.fingerprint || "";
-    const { data: sessions, error: fetchError } = await db
-      .from("user_sessions")
-      .select("id, user_id, session_token, browser, os, device_type, ip_address, created_at, last_active_at")
-      .eq("user_id", user.id)
-      .order("last_active_at", { ascending: false });
-    if (fetchError) {
-      return res.status(500).json({ success: false, error: fetchError.message });
+    if (!pgPool) {
+      return res.status(500).json({ success: false, error: "Direct database not available" });
     }
-    let foundCurrent = false;
-    const sessionsWithCurrent = (sessions || []).map((s) => {
-      const isCurrent = !foundCurrent && currentFingerprint && s.session_token === currentFingerprint;
-      if (isCurrent) foundCurrent = true;
-      const { session_token, ...safe } = s;
-      return { ...safe, is_current: isCurrent };
-    });
-    res.json({ success: true, sessions: sessionsWithCurrent });
+    const currentFingerprint = req.query.fingerprint || "";
+    const client = await pgPool.connect();
+    try {
+      const result = await client.query(
+        `SELECT id, user_id, browser, os, device_type, ip_address, created_at, last_active_at,
+          CASE WHEN $2 != '' AND session_token = $2 THEN true ELSE false END AS is_current
+         FROM user_sessions WHERE user_id = $1 ORDER BY last_active_at DESC`,
+        [user.id, currentFingerprint]
+      );
+      res.json({ success: true, sessions: result.rows });
+    } finally {
+      client.release();
+    }
   } catch (error) {
     console.error("Session list error:", error);
     res.status(500).json({ success: false, error: error.message });
@@ -2051,15 +2053,16 @@ app.post("/api/sessions/revoke", async (req, res) => {
     if (!sessionId) {
       return res.status(400).json({ success: false, error: "sessionId required" });
     }
-    const { error: deleteError } = await db
-      .from("user_sessions")
-      .delete()
-      .eq("id", sessionId)
-      .eq("user_id", user.id);
-    if (deleteError) {
-      return res.status(500).json({ success: false, error: deleteError.message });
+    if (!pgPool) {
+      return res.status(500).json({ success: false, error: "Direct database not available" });
     }
-    res.json({ success: true });
+    const client = await pgPool.connect();
+    try {
+      await client.query("DELETE FROM user_sessions WHERE id = $1 AND user_id = $2", [sessionId, user.id]);
+      res.json({ success: true });
+    } finally {
+      client.release();
+    }
   } catch (error) {
     console.error("Session revoke error:", error);
     res.status(500).json({ success: false, error: error.message });
@@ -2085,15 +2088,16 @@ app.post("/api/sessions/revoke-others", async (req, res) => {
     if (!currentSessionId) {
       return res.status(400).json({ success: false, error: "currentSessionId required" });
     }
-    const { error: deleteError } = await db
-      .from("user_sessions")
-      .delete()
-      .eq("user_id", user.id)
-      .neq("id", currentSessionId);
-    if (deleteError) {
-      return res.status(500).json({ success: false, error: deleteError.message });
+    if (!pgPool) {
+      return res.status(500).json({ success: false, error: "Direct database not available" });
     }
-    res.json({ success: true });
+    const client = await pgPool.connect();
+    try {
+      await client.query("DELETE FROM user_sessions WHERE user_id = $1 AND id != $2", [user.id, currentSessionId]);
+      res.json({ success: true });
+    } finally {
+      client.release();
+    }
   } catch (error) {
     console.error("Session revoke-others error:", error);
     res.status(500).json({ success: false, error: error.message });
