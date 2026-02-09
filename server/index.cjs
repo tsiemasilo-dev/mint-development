@@ -1004,20 +1004,50 @@ app.post("/api/banking/capture", async (req, res) => {
 
     let bankAccounts = [];
     try {
+      console.log("TruID capture raw data:", JSON.stringify(data, null, 2));
       const summary = data?.data || data;
-      if (summary?.accounts && Array.isArray(summary.accounts)) {
-        bankAccounts = summary.accounts.map(acc => ({
-          bankName: acc.institution || acc.bankName || acc.bank_name || "Bank Account",
-          accountNumber: acc.accountNumber || acc.account_number || acc.maskedNumber || "",
-          accountType: acc.accountType || acc.account_type || acc.type || "Current",
-        }));
-      } else if (summary?.institution || summary?.bankName || summary?.bank_name) {
-        bankAccounts = [{
-          bankName: summary.institution || summary.bankName || summary.bank_name || "Bank Account",
-          accountNumber: summary.accountNumber || summary.account_number || summary.maskedNumber || "",
-          accountType: summary.accountType || summary.account_type || summary.type || "Current",
-        }];
-      }
+
+      const extractAccount = (obj) => {
+        if (!obj || typeof obj !== 'object') return null;
+        const bankName = obj.institution || obj.institutionName || obj.bankName || obj.bank_name || obj.bank || obj.name || "";
+        const accountNumber = obj.accountNumber || obj.account_number || obj.maskedNumber || obj.number || obj.accountId || "";
+        const accountType = obj.accountType || obj.account_type || obj.type || obj.subtype || "Current";
+        return { bankName, accountNumber, accountType };
+      };
+
+      const findAccounts = (obj) => {
+        if (!obj || typeof obj !== 'object') return;
+        if (Array.isArray(obj)) {
+          obj.forEach(item => {
+            const acc = extractAccount(item);
+            if (acc && (acc.bankName || acc.accountNumber)) bankAccounts.push(acc);
+            findAccounts(item);
+          });
+          return;
+        }
+        for (const key of Object.keys(obj)) {
+          const val = obj[key];
+          if (['accounts', 'bankAccounts', 'bank_accounts', 'items', 'products'].includes(key) && Array.isArray(val)) {
+            val.forEach(item => {
+              const acc = extractAccount(item);
+              if (acc && (acc.bankName || acc.accountNumber)) bankAccounts.push(acc);
+            });
+          }
+          if (typeof val === 'object') findAccounts(val);
+        }
+      };
+
+      const topAcc = extractAccount(summary);
+      if (topAcc && (topAcc.bankName || topAcc.accountNumber)) bankAccounts.push(topAcc);
+      findAccounts(summary);
+
+      const seen = new Set();
+      bankAccounts = bankAccounts.filter(a => {
+        const key = `${a.bankName}|${a.accountNumber}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
     } catch (parseErr) {
       console.error("Error parsing TruID bank data:", parseErr);
     }
@@ -1025,6 +1055,8 @@ app.post("/api/banking/capture", async (req, res) => {
     if (bankAccounts.length === 0) {
       bankAccounts = [{ bankName: "Bank Account", accountNumber: "", accountType: "Current" }];
     }
+
+    console.log("Extracted bank accounts:", JSON.stringify(bankAccounts));
 
     const { data: existingAction } = await db
       .from("required_actions")
@@ -1054,6 +1086,91 @@ app.post("/api/banking/capture", async (req, res) => {
       success: false,
       error: { message: error.message || "Internal server error" }
     });
+  }
+});
+
+app.get("/api/banking/accounts", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (!token) return res.status(401).json({ success: false, error: "Missing token" });
+
+    const db = supabaseAdmin || supabase;
+    const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(token);
+    if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
+
+    const { data: actions } = await db
+      .from("required_actions")
+      .select("bank_linked, bank_linked_at")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (!actions?.bank_linked) {
+      return res.json({ success: true, accounts: [] });
+    }
+
+    const { data: profile } = await db
+      .from("profiles")
+      .select("first_name, last_name, id_number")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    let accounts = [];
+    if (profile?.id_number) {
+      try {
+        const searchRes = await truIDClient.consultantClient.get(`/collections`, {
+          params: { idNumber: profile.id_number, status: "COMPLETED" }
+        });
+        const collections = searchRes.data?.content || searchRes.data || [];
+        const collArr = Array.isArray(collections) ? collections : [];
+
+        for (const col of collArr.slice(0, 3)) {
+          try {
+            const colId = col.id || col.collectionId;
+            if (!colId) continue;
+            const summaryRes = await truIDClient.deliveryClient.get(`/collections/${colId}/products/summary`);
+            const summary = summaryRes.data;
+
+            const extractFromObj = (obj) => {
+              if (!obj || typeof obj !== 'object') return;
+              if (Array.isArray(obj)) {
+                obj.forEach(item => extractFromObj(item));
+                return;
+              }
+              const bankName = obj.institution || obj.institutionName || obj.bankName || obj.bank_name || obj.bank || "";
+              const accountNumber = obj.accountNumber || obj.account_number || obj.maskedNumber || obj.number || obj.accountId || "";
+              const accountType = obj.accountType || obj.account_type || obj.type || obj.subtype || "";
+              if (bankName || accountNumber) {
+                accounts.push({ bankName: bankName || "Bank Account", accountNumber, accountType: accountType || "Current" });
+              }
+              for (const key of Object.keys(obj)) {
+                if (['accounts', 'bankAccounts', 'bank_accounts', 'items', 'products'].includes(key)) {
+                  extractFromObj(obj[key]);
+                }
+              }
+            };
+            extractFromObj(summary);
+          } catch (colErr) {
+            console.error("Error fetching collection summary:", colErr.message);
+          }
+        }
+      } catch (searchErr) {
+        console.error("Error searching TruID collections:", searchErr.message);
+      }
+    }
+
+    const seen = new Set();
+    accounts = accounts.filter(a => {
+      const key = `${a.bankName}|${a.accountNumber}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    res.json({ success: true, accounts });
+  } catch (error) {
+    console.error("Fetch linked accounts error:", error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

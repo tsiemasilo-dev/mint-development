@@ -63,12 +63,28 @@ const MintBankPage = ({ onBack, onComplete }) => {
   useEffect(() => {
     if (bankLinked) {
       const stored = getLinkedBanks();
-      if (stored.length > 0) {
+      if (stored.length > 0 && stored[0]?.accountNumber && !stored[0].accountNumber.includes("4523")) {
         setLinkedBanks(stored);
       } else {
-        const fallback = [{ bankName: "FNB", accountNumber: "62••••4523", accountType: "Cheque", linkedAt: new Date().toISOString() }];
-        setLinkedBanks(fallback);
-        saveLinkedBanks(fallback);
+        localStorage.removeItem("mint_linked_banks");
+        setLinkedBanks([]);
+        const fetchAccounts = async () => {
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) return;
+            const res = await fetch("/api/banking/accounts", {
+              headers: { Authorization: `Bearer ${session.access_token}` },
+            });
+            if (res.ok) {
+              const result = await res.json();
+              if (result.accounts && result.accounts.length > 0) {
+                setLinkedBanks(result.accounts);
+                saveLinkedBanks(result.accounts);
+              }
+            }
+          } catch (e) { console.error("Failed to fetch linked accounts:", e); }
+        };
+        fetchAccounts();
       }
       setStep("already_linked");
     }
@@ -247,18 +263,19 @@ const MintBankPage = ({ onBack, onComplete }) => {
         <div className="mt-6 space-y-3">
           {displayBanks.map((bank, idx) => {
             const brand = getBankBrand(bank.bankName);
+            const hasAccountNum = bank.accountNumber && bank.accountNumber.length > 0;
             return (
               <div key={idx} className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100">
                 <div
-                  className="flex h-12 w-12 items-center justify-center rounded-xl shrink-0 text-xs font-bold"
-                  style={{ backgroundColor: brand.color, color: brand.textColor }}
+                  className="flex h-12 w-12 items-center justify-center rounded-2xl shrink-0 font-bold shadow-sm"
+                  style={{ backgroundColor: brand.color, color: brand.textColor, fontSize: brand.name.length > 2 ? "10px" : "14px", letterSpacing: "0.02em" }}
                 >
                   {brand.name}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-slate-900">{bank.bankName}</p>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    {bank.accountType || "Current"} • {maskAccountNumber(bank.accountNumber)}
+                    {bank.accountType || "Current"}{hasAccountNum ? ` • ${maskAccountNumber(bank.accountNumber)}` : ""}
                   </p>
                 </div>
                 <span className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-green-100 text-green-700 shrink-0">
