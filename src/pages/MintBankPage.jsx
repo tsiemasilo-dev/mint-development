@@ -63,28 +63,8 @@ const MintBankPage = ({ onBack, onComplete }) => {
   useEffect(() => {
     if (bankLinked) {
       const stored = getLinkedBanks();
-      if (stored.length > 0 && stored[0]?.accountNumber && !stored[0].accountNumber.includes("4523")) {
+      if (stored.length > 0) {
         setLinkedBanks(stored);
-      } else {
-        localStorage.removeItem("mint_linked_banks");
-        setLinkedBanks([]);
-        const fetchAccounts = async () => {
-          try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) return;
-            const res = await fetch("/api/banking/accounts", {
-              headers: { Authorization: `Bearer ${session.access_token}` },
-            });
-            if (res.ok) {
-              const result = await res.json();
-              if (result.accounts && result.accounts.length > 0) {
-                setLinkedBanks(result.accounts);
-                saveLinkedBanks(result.accounts);
-              }
-            }
-          } catch (e) { console.error("Failed to fetch linked accounts:", e); }
-        };
-        fetchAccounts();
       }
       setStep("already_linked");
     }
@@ -246,7 +226,7 @@ const MintBankPage = ({ onBack, onComplete }) => {
   }
 
   if (step === "linked_accounts" || step === "already_linked") {
-    const displayBanks = linkedBanks.length > 0 ? linkedBanks : [{ bankName: "Bank Account", accountNumber: "", accountType: "Current" }];
+    const hasStoredAccounts = linkedBanks.length > 0;
     return (
       <div className="animate-in fade-in slide-in-from-bottom-8 duration-700 flex flex-col px-6 pb-10 min-h-screen bg-white">
         <header className="w-full flex items-center justify-between pt-10 pb-6">
@@ -260,31 +240,49 @@ const MintBankPage = ({ onBack, onComplete }) => {
           <div className="h-10 w-10" aria-hidden="true" />
         </header>
 
-        <div className="mt-6 space-y-3">
-          {displayBanks.map((bank, idx) => {
-            const brand = getBankBrand(bank.bankName);
-            const hasAccountNum = bank.accountNumber && bank.accountNumber.length > 0;
-            return (
-              <div key={idx} className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100">
-                <div
-                  className="flex h-12 w-12 items-center justify-center rounded-2xl shrink-0 font-bold shadow-sm"
-                  style={{ backgroundColor: brand.color, color: brand.textColor, fontSize: brand.name.length > 2 ? "10px" : "14px", letterSpacing: "0.02em" }}
-                >
-                  {brand.name}
+        {hasStoredAccounts ? (
+          <div className="mt-6 space-y-3">
+            {linkedBanks.map((bank, idx) => {
+              const brand = getBankBrand(bank.bankName);
+              const hasAccountNum = bank.accountNumber && bank.accountNumber.length > 0;
+              return (
+                <div key={idx} className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                  <div
+                    className="flex h-12 w-12 items-center justify-center rounded-2xl shrink-0 font-bold shadow-sm"
+                    style={{ backgroundColor: brand.color, color: brand.textColor, fontSize: brand.name.length > 2 ? "10px" : "14px", letterSpacing: "0.02em" }}
+                  >
+                    {brand.name}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-900">{bank.bankName}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {bank.accountType || "Current"}{hasAccountNum ? ` • ${maskAccountNumber(bank.accountNumber)}` : ""}
+                    </p>
+                  </div>
+                  <span className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-green-100 text-green-700 shrink-0">
+                    Linked
+                  </span>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-slate-900">{bank.bankName}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {bank.accountType || "Current"}{hasAccountNum ? ` • ${maskAccountNumber(bank.accountNumber)}` : ""}
-                  </p>
-                </div>
-                <span className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-green-100 text-green-700 shrink-0">
-                  Linked
-                </span>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="mt-6">
+            <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl shrink-0 bg-green-100">
+                <CheckCircle2 className="h-6 w-6 text-green-600" />
               </div>
-            );
-          })}
-        </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-slate-900">Bank Account Linked</p>
+                <p className="text-xs text-slate-500 mt-0.5">Verified via TruID</p>
+              </div>
+              <span className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-green-100 text-green-700 shrink-0">
+                Linked
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 text-center mt-4">Re-link your account to view full bank details.</p>
+          </div>
+        )}
 
         <div className="mt-8 space-y-3">
           <button
@@ -297,7 +295,7 @@ const MintBankPage = ({ onBack, onComplete }) => {
             className="w-full py-4 rounded-full bg-slate-900 text-white font-semibold text-sm uppercase tracking-[0.15em] shadow-lg shadow-slate-900/20 active:scale-95 transition-all flex items-center justify-center gap-2"
           >
             <Plus className="h-4 w-4" />
-            Link Another Account
+            {hasStoredAccounts ? "Link Another Account" : "Re-link Account"}
           </button>
           <button
             type="button"
