@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from "react";
-import { ArrowLeft, Landmark, ShieldCheck, CheckCircle2, Shield, X, XCircle, Lock, Info, ChevronDown, ChevronUp, CreditCard, Wallet } from "lucide-react";
+import { ArrowLeft, Landmark, ShieldCheck, CheckCircle2, Shield, X, XCircle, Lock, Info, ChevronDown, ChevronUp, CreditCard, Wallet, Plus } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useRequiredActions } from "../lib/useRequiredActions";
 
@@ -137,31 +137,58 @@ const MintBankPage = ({ onBack, onComplete }) => {
 
   if (step === "success" || step === "already_linked") {
     return (
-      <div className="animate-in fade-in slide-in-from-bottom-8 duration-700 flex flex-col items-center px-6 pb-10 min-h-screen bg-white">
-        <header className="w-full flex items-center justify-start pt-10 pb-6">
+      <div className="animate-in fade-in slide-in-from-bottom-8 duration-700 flex flex-col px-6 pb-10 min-h-screen bg-white">
+        <header className="w-full flex items-center justify-between pt-10 pb-6">
           <button
             onClick={() => onBack ? onBack() : window.history.back()}
             className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-700 transition active:scale-95"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
+          <h1 className="text-lg font-semibold text-slate-900">Linked Accounts</h1>
+          <div className="h-10 w-10" aria-hidden="true" />
         </header>
 
-        <div className="mt-16 flex flex-col items-center justify-center text-center">
-          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-green-50 text-green-600 mb-4">
-            <CheckCircle2 className="h-10 w-10" />
+        <div className="mt-6 space-y-3">
+          <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-50 text-green-600 shrink-0">
+              <Landmark className="h-6 w-6" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-slate-900">Primary Bank Account</p>
+              <p className="text-xs text-slate-500 mt-0.5">Verified via TruID</p>
+            </div>
+            <span className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-green-100 text-green-700 shrink-0">
+              Linked
+            </span>
           </div>
-          <h2 className="text-lg font-semibold text-slate-900 mb-2">Bank Account Linked</h2>
-          <p className="text-sm text-slate-500 mb-8 max-w-[280px]">
-            Your bank account has been successfully verified and linked.
-          </p>
+        </div>
+
+        <div className="mt-8 space-y-3">
+          <button
+            type="button"
+            onClick={() => {
+              setStep("connect");
+              setStatus("idle");
+              setMessage("");
+            }}
+            className="w-full py-4 rounded-full bg-slate-900 text-white font-semibold text-sm uppercase tracking-[0.15em] shadow-lg shadow-slate-900/20 active:scale-95 transition-all flex items-center justify-center gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Link Another Account
+          </button>
           <button
             type="button"
             onClick={() => onComplete ? onComplete() : onBack ? onBack() : window.history.back()}
-            className="inline-flex items-center justify-center rounded-full bg-slate-900 px-8 py-3.5 text-sm font-semibold uppercase tracking-[0.2em] text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5 active:scale-95"
+            className="w-full py-4 rounded-full bg-slate-100 text-slate-700 font-semibold text-sm uppercase tracking-[0.15em] active:scale-95 transition-all"
           >
             Done
           </button>
+        </div>
+
+        <div className="mt-8 flex items-center justify-center gap-2 text-xs text-slate-400">
+          <Shield className="h-4 w-4" />
+          <span>All accounts are securely verified through TruID Connect.</span>
         </div>
       </div>
     );
