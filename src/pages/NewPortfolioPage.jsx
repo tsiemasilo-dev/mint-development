@@ -146,10 +146,10 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   }, [showCalendarFilterDropdown]);
 
   useEffect(() => {
-    if (!selectedStock && stocksList.length > 0) {
-      setSelectedStock(stocksList[0]);
+    if (!selectedStock && myStocks.length > 0) {
+      setSelectedStock(myStocks[0]);
     }
-  }, [stocksList, selectedStock]);
+  }, [myStocks, selectedStock]);
 
   const handleStrategySelect = (strategy) => {
     selectStrategy(strategy);
@@ -586,8 +586,8 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
               </button>
               {showStrategyDropdown && strategies.length > 0 && (
                 <div 
-                  className="absolute top-full left-0 mt-2 min-w-[200px] bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200/50 z-50 overflow-hidden"
-                  style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
+                  className="absolute top-full left-0 mt-2 min-w-[200px] max-h-[280px] overflow-y-auto bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200/50 z-50 overscroll-contain"
+                  style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif", WebkitOverflowScrolling: 'touch' }}
                 >
                   {strategies.map((strategy) => (
                     <button
@@ -939,6 +939,9 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
               : liveStockChartData)
           : [];
         if (!selectedStock) {
+          if (myStocks.length === 0 && !holdingsLoading) {
+            return <div className="text-center py-10 text-slate-500">You don't own any stocks yet.</div>;
+          }
           return <div className="text-center py-10 text-slate-500">Loading stocks...</div>;
         }
         const otherStocks = stocksList.filter(s => s.id !== selectedStock?.id && !myStockIds.has(s.id));
@@ -957,12 +960,12 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                       </span>
                       <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${showStockDropdown ? 'rotate-180' : ''}`} />
                     </button>
-                    {showStockDropdown && (
+                    {showStockDropdown && myStocks.length > 0 && (
                       <div
-                        className="absolute top-full left-0 mt-2 min-w-[200px] bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200/50 z-50 overflow-hidden"
-                        style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
+                        className="absolute top-full left-0 mt-2 min-w-[200px] max-h-[280px] overflow-y-auto bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200/50 z-50 overscroll-contain"
+                        style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif", WebkitOverflowScrolling: 'touch' }}
                       >
-                        {stocksList.map((stock) => (
+                        {myStocks.map((stock) => (
                           <button
                             key={stock.id}
                             onClick={() => { setSelectedStock(stock); setShowStockDropdown(false); }}
