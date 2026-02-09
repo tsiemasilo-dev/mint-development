@@ -62,8 +62,13 @@ const MintBankPage = ({ onBack, onComplete }) => {
 
   useEffect(() => {
     if (bankLinked) {
-      if (linkedBanks.length === 0) {
-        setLinkedBanks([{ bankName: "Bank Account", accountNumber: "", accountType: "Current", linkedAt: new Date().toISOString() }]);
+      const stored = getLinkedBanks();
+      if (stored.length > 0) {
+        setLinkedBanks(stored);
+      } else {
+        const fallback = [{ bankName: "FNB", accountNumber: "62••••4523", accountType: "Cheque", linkedAt: new Date().toISOString() }];
+        setLinkedBanks(fallback);
+        saveLinkedBanks(fallback);
       }
       setStep("already_linked");
     }

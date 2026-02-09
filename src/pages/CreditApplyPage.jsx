@@ -122,6 +122,13 @@ const ConnectionStage = ({ onComplete, onError }) => {
               throw new Error(captureData.error || "Capture failed");
             }
 
+            if (captureData.bankAccounts && captureData.bankAccounts.length > 0) {
+              try {
+                const existing = JSON.parse(localStorage.getItem("mint_linked_banks") || "[]");
+                const newAccounts = captureData.bankAccounts.map(acc => ({ ...acc, linkedAt: new Date().toISOString() }));
+                localStorage.setItem("mint_linked_banks", JSON.stringify([...existing, ...newAccounts]));
+              } catch (e) { console.error("Failed to save bank data:", e); }
+            }
             setStatus("success");
             setMessage("Bank account linked successfully!");
             onComplete(collectionId, captureData.success ? captureData.snapshot : null);
