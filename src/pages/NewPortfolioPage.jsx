@@ -979,10 +979,24 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           return null;
         }
         const otherStocks = stocksList.filter(s => s.id !== selectedStock?.id && !myStockIds.has(s.id));
+        const hasNoHoldings = myStocks.length === 0;
         return (
           <>
+            {hasNoHoldings ? (
+              <div className="flex flex-col items-center justify-center py-12 px-6">
+                <div className="w-16 h-16 rounded-full bg-purple-50 flex items-center justify-center mb-4">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+                    <polyline points="16 7 22 7 22 13" />
+                  </svg>
+                </div>
+                <p className="text-lg font-semibold text-slate-900 mb-1">Invest in Your First Stock</p>
+                <p className="text-sm text-slate-500 text-center max-w-[260px]">Browse stocks below and start building your portfolio. Your holdings will show up here.</p>
+              </div>
+            ) : (
             <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 md:max-w-md md:px-8">
               <section className="py-2">
+                {/* Chart and stock selector only shown when user has holdings */}
                 <div className="flex items-center justify-between mb-3 px-1">
                   <div className="relative" ref={stockDropdownRef}>
                     <button
@@ -1169,6 +1183,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                 </div>
               </section>
             </div>
+            )}
 
             <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
               {myStocks.length > 0 && (() => {
