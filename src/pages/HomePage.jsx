@@ -130,6 +130,7 @@ const HomePage = ({
   const [homeTab, setHomeTab] = useState("invest");
   const [userId, setUserId] = useState(null);
   const [localBestAssets, setLocalBestAssets] = useState([]);
+  const [onboardingComplete, setOnboardingComplete] = useState(true);
 
   const [cardRotation, setCardRotation] = useState(-180);
   const [isCardAnimating, setIsCardAnimating] = useState(false);
@@ -320,6 +321,23 @@ const HomePage = ({
     };
     getUser();
   }, []);
+
+  useEffect(() => {
+    const checkOnboarding = async () => {
+      if (!supabase || !profile?.id) return;
+      try {
+        const { data } = await supabase
+          .from("user_onboarding")
+          .select("risk_disclosure_agreed, source_of_funds")
+          .eq("user_id", profile.id)
+          .order("created_at", { ascending: false })
+          .limit(1);
+        const record = data?.[0];
+        setOnboardingComplete(!!(record?.risk_disclosure_agreed && record?.source_of_funds));
+      } catch {}
+    };
+    checkOnboarding();
+  }, [profile?.id]);
 
   useEffect(() => {
     if (!profile?.id) return;
@@ -611,15 +629,21 @@ const HomePage = ({
       icon: ShieldCheck,
       routeName: "actions",
       isComplete: kycVerified,
-      dueAt: "2025-01-20T12:00:00Z",
-      createdAt: "2025-01-18T09:00:00Z",
+    },
+    {
+      id: "onboarding",
+      title: "Complete onboarding",
+      description: "Risk disclosure, source of funds, and agreements",
+      priority: 2,
+      status: onboardingComplete ? "Complete" : "Required",
+      statusStyle: onboardingComplete ? "bg-green-100 text-green-600" : "bg-slate-100 text-slate-500",
+      icon: FileSignature,
+      routeName: "actions",
+      isComplete: onboardingComplete,
     },
   ];
 
-  const showOutstandingActions = !kycVerified || kycNeedsResubmission;
-  const outstandingActions = showOutstandingActions
-    ? actionsData.filter((action) => !action.isComplete)
-    : [];
+  const outstandingActions = actionsData.filter((action) => !action.isComplete);
 
   const transactionHistory = transactions.slice(0, 3).map((t) => ({
     title: t.name || t.description || "Transaction",
