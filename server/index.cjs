@@ -1002,6 +1002,73 @@ app.post("/api/banking/capture", async (req, res) => {
 
     const data = await truIDClient.getCollectionData(collectionId);
 
+    let bankAccounts = [];
+    try {
+      console.log("TruID capture raw data:", JSON.stringify(data, null, 2));
+      const summary = data?.data || data;
+      const statement = summary?.statement || {};
+      const customer = statement?.customer || {};
+      const bankName = customer.bank || customer.institution || customer.bankName || "";
+
+      if (statement.accounts && Array.isArray(statement.accounts) && statement.accounts.length > 0) {
+        bankAccounts = statement.accounts.map(acc => ({
+          bankName: acc.bank || acc.institution || bankName || "Bank Account",
+          accountNumber: acc.accountNumber || acc.account_number || acc.number || acc.accountId || "",
+          accountType: acc.accountType || acc.account_type || acc.type || "Current",
+        }));
+      }
+
+      if (bankAccounts.length === 0 && bankName) {
+        try {
+          const detailRes = await truIDClient.deliveryClient.get(`/collections/${collectionId}/products`);
+          console.log("TruID products detail:", JSON.stringify(detailRes.data, null, 2));
+          const products = detailRes.data;
+
+          const extractAccounts = (obj) => {
+            if (!obj || typeof obj !== 'object') return;
+            if (Array.isArray(obj)) {
+              obj.forEach(item => extractAccounts(item));
+              return;
+            }
+            const accNum = obj.accountNumber || obj.account_number || obj.number || obj.accountId || obj.accountNo || "";
+            if (accNum) {
+              bankAccounts.push({
+                bankName: obj.bank || obj.institution || bankName,
+                accountNumber: accNum,
+                accountType: obj.accountType || obj.account_type || obj.type || "Current",
+              });
+            }
+            for (const val of Object.values(obj)) {
+              if (typeof val === 'object') extractAccounts(val);
+            }
+          };
+          extractAccounts(products);
+        } catch (detailErr) {
+          console.log("TruID products detail not available:", detailErr.message);
+        }
+      }
+
+      if (bankAccounts.length === 0 && bankName) {
+        bankAccounts = [{ bankName, accountNumber: customer.id || "", accountType: customer.type || "Current" }];
+      }
+
+      const seen = new Set();
+      bankAccounts = bankAccounts.filter(a => {
+        const key = `${a.bankName}|${a.accountNumber}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    } catch (parseErr) {
+      console.error("Error parsing TruID bank data:", parseErr);
+    }
+
+    if (bankAccounts.length === 0) {
+      bankAccounts = [{ bankName: "Bank Account", accountNumber: "", accountType: "Current" }];
+    }
+
+    console.log("Extracted bank accounts:", JSON.stringify(bankAccounts));
+
     const { data: existingAction } = await db
       .from("required_actions")
       .select("id")
@@ -1019,9 +1086,30 @@ app.post("/api/banking/capture", async (req, res) => {
         .insert({ user_id: user.id, bank_linked: true, bank_in_review: false });
     }
 
+    try {
+      const bankJson = JSON.stringify(bankAccounts);
+      const { data: existingOnboarding } = await db
+        .from("user_onboarding")
+        .select("id")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (existingOnboarding) {
+        await db
+          .from("user_onboarding")
+          .update({ sumsub_outcome: bankJson })
+          .eq("id", existingOnboarding.id);
+      }
+    } catch (bankSaveErr) {
+      console.error("Failed to save bank details:", bankSaveErr.message);
+    }
+
     res.json({
       success: true,
-      snapshot: data
+      snapshot: data,
+      bankAccounts
     });
   } catch (error) {
     console.error("Banking capture error:", error);
@@ -1032,6 +1120,46 @@ app.post("/api/banking/capture", async (req, res) => {
   }
 });
 
+
+app.get("/api/banking/accounts", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (!token) return res.status(401).json({ success: false, error: "Missing token" });
+
+    const db = supabaseAdmin || supabase;
+    const authClient = supabaseAdmin || supabase;
+    const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
+    if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
+
+    const { data, error } = await db
+      .from("user_onboarding")
+      .select("sumsub_outcome")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      return res.status(500).json({ success: false, error: error.message });
+    }
+
+    let accounts = [];
+    if (data?.sumsub_outcome) {
+      try {
+        accounts = JSON.parse(data.sumsub_outcome);
+      } catch (e) {
+        accounts = [];
+      }
+    }
+
+    res.json({ success: true, accounts });
+  } catch (error) {
+    console.error("Fetch bank accounts error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.post("/api/banking/unlink", async (req, res) => {
   try {
     const authHeader = req.headers.authorization || "";
@@ -1039,15 +1167,51 @@ app.post("/api/banking/unlink", async (req, res) => {
     if (!token) return res.status(401).json({ success: false, error: "Missing token" });
 
     const db = supabaseAdmin || supabase;
-    const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
+    const authClient = supabaseAdmin || supabase;
+    const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
     if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
 
-    await db
-      .from("required_actions")
-      .update({ bank_linked: false, bank_in_review: false, bank_linked_at: null })
-      .eq("user_id", user.id);
+    const { accountIndex, unlinkAll } = req.body;
 
-    res.json({ success: true, message: "Bank account unlinked" });
+    const { data: onboarding } = await db
+      .from("user_onboarding")
+      .select("id, sumsub_outcome")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    let remainingAccounts = [];
+    if (onboarding?.sumsub_outcome) {
+      try {
+        const accounts = JSON.parse(onboarding.sumsub_outcome);
+        if (unlinkAll) {
+          remainingAccounts = [];
+        } else if (typeof accountIndex === "number" && accountIndex >= 0 && accountIndex < accounts.length) {
+          remainingAccounts = accounts.filter((_, i) => i !== accountIndex);
+        } else {
+          return res.status(400).json({ success: false, error: "Valid accountIndex or unlinkAll flag required" });
+        }
+      } catch (e) {
+        remainingAccounts = [];
+      }
+    }
+
+    if (onboarding) {
+      await db
+        .from("user_onboarding")
+        .update({ sumsub_outcome: remainingAccounts.length > 0 ? JSON.stringify(remainingAccounts) : null })
+        .eq("id", onboarding.id);
+    }
+
+    if (remainingAccounts.length === 0) {
+      await db
+        .from("required_actions")
+        .update({ bank_linked: false, bank_in_review: false, bank_linked_at: null })
+        .eq("user_id", user.id);
+    }
+
+    res.json({ success: true, remainingAccounts, message: remainingAccounts.length > 0 ? "Account removed" : "All bank accounts unlinked" });
   } catch (error) {
     console.error("Unlink error:", error);
     res.status(500).json({ success: false, error: error.message });
@@ -1502,32 +1666,70 @@ app.get("/api/user/holdings", async (req, res) => {
     const rawHoldings = holdings || [];
     const securityIds = rawHoldings.map(h => h.security_id).filter(Boolean);
     let securitiesMap = {};
+    let latestPricesMap = {};
 
     if (securityIds.length > 0) {
-      const { data: secData, error: secError } = await db
-        .from("securities")
-        .select("id, symbol, name, logo_url, last_price, sector, exchange")
-        .in("id", securityIds);
+      const [secResult, pricesResult] = await Promise.all([
+        db.from("securities")
+          .select("id, symbol, name, logo_url, last_price, change_price, change_percent, sector, exchange")
+          .in("id", securityIds),
+        db.from("security_prices")
+          .select("security_id, close_price, ts")
+          .in("security_id", securityIds)
+          .order("ts", { ascending: false })
+          .limit(securityIds.length * 2)
+      ]);
 
-      if (secError) {
-        console.error("Error fetching securities for holdings:", secError);
+      if (secResult.error) {
+        console.error("Error fetching securities for holdings:", secResult.error);
       }
-      if (secData) {
-        secData.forEach(s => { securitiesMap[s.id] = s; });
+      if (secResult.data) {
+        secResult.data.forEach(s => { securitiesMap[s.id] = s; });
+      }
+
+      const pricesBySecId = {};
+      (pricesResult.data || []).forEach(p => {
+        if (!pricesBySecId[p.security_id]) pricesBySecId[p.security_id] = [];
+        if (pricesBySecId[p.security_id].length < 2) {
+          pricesBySecId[p.security_id].push(p.close_price);
+        }
+      });
+      for (const [secId, prices] of Object.entries(pricesBySecId)) {
+        latestPricesMap[secId] = {
+          latestPrice: prices[0],
+          prevPrice: prices.length > 1 ? prices[1] : prices[0],
+        };
       }
     }
 
     const enrichedHoldings = rawHoldings
       .filter(h => securitiesMap[h.security_id])
-      .map(h => ({
-        ...h,
-        symbol: securitiesMap[h.security_id]?.symbol || "N/A",
-        name: securitiesMap[h.security_id]?.name || "Unknown",
-        asset_class: securitiesMap[h.security_id]?.sector || "Other",
-        logo_url: securitiesMap[h.security_id]?.logo_url || null,
-        last_price: securitiesMap[h.security_id]?.last_price || null,
-        exchange: securitiesMap[h.security_id]?.exchange || null,
-      }));
+      .map(h => {
+        const sec = securitiesMap[h.security_id];
+        const priceData = latestPricesMap[h.security_id];
+        const livePrice = priceData?.latestPrice ?? sec?.last_price ?? 0;
+        const prevPrice = priceData?.prevPrice ?? livePrice;
+        const dailyChange = livePrice - prevPrice;
+        const dailyChangePct = prevPrice > 0 ? ((dailyChange / prevPrice) * 100) : 0;
+        const quantity = h.quantity || 0;
+        const avgFill = h.avg_fill || 0;
+        const costBasis = avgFill * quantity;
+        const liveMarketValue = livePrice * quantity;
+        const pnl = liveMarketValue - costBasis;
+        return {
+          ...h,
+          market_value: liveMarketValue,
+          unrealized_pnl: pnl,
+          symbol: sec?.symbol || "N/A",
+          name: sec?.name || "Unknown",
+          asset_class: sec?.sector || "Other",
+          logo_url: sec?.logo_url || null,
+          last_price: livePrice,
+          change_price: dailyChange,
+          change_percent: Number(dailyChangePct.toFixed(2)),
+          exchange: sec?.exchange || null,
+        };
+      });
 
     res.json({ success: true, holdings: enrichedHoldings });
   } catch (error) {
@@ -2142,6 +2344,73 @@ app.get("/api/sessions/validate", async (req, res) => {
   } catch (error) {
     console.error("Session validate error:", error);
     res.json({ success: true, valid: true });
+  }
+});
+
+app.post("/api/migrate/onboarding-columns", async (req, res) => {
+  try {
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      return res.json({ error: "Missing Supabase credentials" });
+    }
+
+    const db = supabaseAdmin || supabase;
+    if (!db) return res.json({ error: "no db" });
+
+    const testResult = await db
+      .from("user_onboarding")
+      .select("risk_disclosure_agreed")
+      .limit(1);
+
+    if (testResult.error) {
+      const sql = `
+ALTER TABLE user_onboarding ADD COLUMN IF NOT EXISTS risk_disclosure_agreed boolean DEFAULT false;
+ALTER TABLE user_onboarding ADD COLUMN IF NOT EXISTS source_of_funds text;
+ALTER TABLE user_onboarding ADD COLUMN IF NOT EXISTS source_of_funds_other text;
+ALTER TABLE user_onboarding ADD COLUMN IF NOT EXISTS expected_monthly_investment text;`;
+
+      // Try via Supabase SQL API  
+      const response = await globalThis.fetch(`${SUPABASE_URL}/rest/v1/rpc/exec_sql`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_SERVICE_ROLE_KEY,
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify({ sql_query: sql }),
+      });
+
+      res.json({
+        status: "columns_missing",
+        column_test_error: testResult.error.message,
+        sql_to_run: sql.trim(),
+      });
+    } else {
+      res.json({ status: "columns_exist", data: testResult.data });
+    }
+  } catch (e) {
+    res.json({ error: e.message });
+  }
+});
+
+app.get("/api/debug/onboarding/:userId", async (req, res) => {
+  try {
+    const db = supabaseAdmin || supabase;
+    if (!db) return res.json({ error: "no db" });
+    const { data: onboarding, error: e1 } = await db
+      .from("user_onboarding")
+      .select("*")
+      .eq("user_id", req.params.userId)
+      .order("created_at", { ascending: false })
+      .limit(5);
+    const { data: actions, error: e2 } = await db
+      .from("required_actions")
+      .select("*")
+      .eq("user_id", req.params.userId)
+      .limit(1);
+    res.json({ onboarding, actions, errors: { onboarding: e1?.message, actions: e2?.message } });
+  } catch (e) {
+    res.json({ error: e.message });
   }
 });
 

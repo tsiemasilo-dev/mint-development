@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useMemo } from "react";
-import { ArrowDownRight, ArrowUpRight, MoreHorizontal, X } from "lucide-react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
+import { ArrowDownRight, ArrowDownLeft, ArrowUpRight, MoreHorizontal, X, Search, CalendarDays, TrendingUp, CreditCard, Wallet, RefreshCw, Gift, Filter } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useProfile } from "../lib/useProfile";
@@ -8,6 +8,71 @@ import Skeleton from "../components/Skeleton";
 import { supabase } from "../lib/supabase";
 import { formatCurrency } from "../lib/formatCurrency";
 import { normalizeSymbol, getHoldingsArray, buildHoldingsBySymbol, getStrategyHoldingsSnapshot } from "../lib/strategyUtils";
+import { useTransactions } from "../lib/useFinancialData";
+import ActivitySkeleton from "../components/ActivitySkeleton";
+
+const activityFilters = ["All", "Investments", "Deposits", "Withdrawals"];
+
+const getTransactionIcon = (name, direction) => {
+  const lower = (name || "").toLowerCase();
+  if (lower.includes("dividend") || lower.includes("interest")) return Gift;
+  if (lower.includes("credit") || lower.includes("loan")) return CreditCard;
+  if (lower.includes("withdraw") || lower.includes("repay")) return Wallet;
+  if (lower.includes("recurring") || lower.includes("auto")) return RefreshCw;
+  if (lower.includes("invest") || lower.includes("strategy") || lower.includes("purchas") || lower.includes("buy") || lower.includes("bought")) return TrendingUp;
+  if (direction === "credit") return ArrowDownLeft;
+  return ArrowUpRight;
+};
+
+const getIconColors = (direction, name) => {
+  const lower = (name || "").toLowerCase();
+  if (lower.includes("invest") || lower.includes("strategy") || lower.includes("purchas") || lower.includes("buy") || lower.includes("bought")) return { bg: "bg-blue-50", text: "text-blue-600" };
+  if (direction === "credit") return { bg: "bg-emerald-50", text: "text-emerald-600" };
+  return { bg: "bg-red-50", text: "text-red-500" };
+};
+
+const getFilterCategory = (direction, name) => {
+  const lower = (name || "").toLowerCase();
+  if (lower.includes("withdraw") || lower.includes("repay")) return "Withdrawals";
+  if (lower.includes("deposit") || direction === "credit") return "Deposits";
+  if (lower.includes("invest") || lower.includes("buy") || lower.includes("strategy") || direction === "debit") return "Investments";
+  return "Other";
+};
+
+const formatRelativeDate = (dateString) => {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return dateString;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const itemDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffDays = Math.floor((today - itemDate) / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return "This Week";
+  if (diffDays < 30) return "This Month";
+  return date.toLocaleDateString("en-ZA", { month: "long", year: "numeric" });
+};
+
+const formatTime = (dateString) => {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return "";
+  return date.toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" });
+};
+
+const formatShortDate = (dateString) => {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return dateString;
+  return date.toLocaleDateString("en-ZA", { day: "numeric", month: "short" });
+};
+
+const formatAmount = (amount, direction) => {
+  if (amount === undefined || amount === null) return "R0.00";
+  const val = Math.abs(amount) / 100;
+  return `R${val.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
 
 const StatementsPage = ({ onOpenNotifications }) => {
   const { profile } = useProfile();
@@ -19,12 +84,18 @@ const StatementsPage = ({ onOpenNotifications }) => {
   const [holdingsRows, setHoldingsRows] = useState([]);
   const [holdingsRaw, setHoldingsRaw] = useState([]);
   const [strategyRows, setStrategyRows] = useState([]);
-  const [financialsRows, setFinancialsRows] = useState([]);
   const [rawStrategies, setRawStrategies] = useState([]);
   const [holdingsSecurities, setHoldingsSecurities] = useState([]);
   const [strategiesLoading, setStrategiesLoading] = useState(true);
   const [holdingsLoading, setHoldingsLoading] = useState(true);
-  const [financialsLoading, setFinancialsLoading] = useState(true);
+
+  const { transactions: activityTransactions, loading: activityLoading } = useTransactions(100);
+  const [activityFilter, setActivityFilter] = useState("All");
+  const [activitySearchQuery, setActivitySearchQuery] = useState("");
+  const [showDateFilter, setShowDateFilter] = useState(false);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const activitySearchRef = useRef(null);
 
   const displayName = [profile?.firstName, profile?.lastName].filter(Boolean).join(" ");
   const initials = displayName
@@ -322,63 +393,6 @@ const StatementsPage = ({ onOpenNotifications }) => {
   }, [profile?.id]);
 
   useEffect(() => {
-    let isMounted = true;
-
-    const loadFinancials = async () => {
-      if (!supabase || !profile?.id) {
-        return;
-      }
-      if (isMounted) setFinancialsLoading(true);
-
-      try {
-        const { data: allocations, error } = await supabase
-          .from("allocations")
-          .select("*")
-          .eq("user_id", profile.id)
-          .order("created_at", { ascending: false });
-
-        if (error) throw error;
-
-        const mapped = (allocations || []).map((alloc) => {
-          const createdAt = alloc.created_at ? new Date(alloc.created_at) : null;
-          const dateLabel = createdAt
-            ? createdAt.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" })
-            : "—";
-          const timeLabel = createdAt
-            ? createdAt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
-            : "—";
-
-          return {
-            type: "Reports",
-            icon: "📄",
-            title: alloc.type || alloc.description || "Allocation",
-            desc: alloc.description || alloc.type || "—",
-            date: dateLabel,
-            amount: alloc.amount != null ? formatCurrency(Number(alloc.amount)) : "—",
-            meta: alloc.type || "Allocation",
-            time: timeLabel,
-            flow: alloc.type === "Withdrawal" ? "out" : "in",
-          };
-        });
-
-        if (isMounted) {
-          setFinancialsRows(mapped);
-          setFinancialsLoading(false);
-        }
-      } catch (error) {
-        console.error("Failed to load financials", error);
-        if (isMounted) setFinancialsLoading(false);
-      }
-    };
-
-    loadFinancials();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [profile?.id]);
-
-  useEffect(() => {
     const updateMarketValues = async () => {
       if (!supabase || activeTab !== "holdings" || holdingsRaw.length === 0) return;
 
@@ -421,12 +435,12 @@ const StatementsPage = ({ onOpenNotifications }) => {
     return map;
   }, [rawStrategies, holdingsBySymbol]);
 
-  const combinedRows = [...strategyRows, ...holdingsRows, ...financialsRows];
+  const combinedRows = [...strategyRows, ...holdingsRows];
 
   const filtered = combinedRows.filter((row) => {
     if (activeTab === "strategy") return row.type === "Strategy";
     if (activeTab === "holdings") return row.type === "Holdings";
-    if (activeTab === "financials") return row.type === "Reports";
+    if (activeTab === "activity") return false;
     return true;
   });
 
@@ -436,8 +450,94 @@ const StatementsPage = ({ onOpenNotifications }) => {
 
   const isLoading =
     (activeTab === "strategy" && strategiesLoading) ||
-    (activeTab === "holdings" && holdingsLoading) ||
-    (activeTab === "financials" && financialsLoading);
+    (activeTab === "holdings" && holdingsLoading);
+
+  const activityItems = useMemo(() => {
+    return activityTransactions.map((t) => {
+      const isPositive = t.direction === "credit";
+      return {
+        id: t.id,
+        title: t.name || t.description || "Transaction",
+        description: t.description || t.store_reference || "",
+        date: t.transaction_date || t.created_at || "",
+        displayDate: formatShortDate(t.transaction_date || t.created_at),
+        time: formatTime(t.transaction_date || t.created_at),
+        amount: formatAmount(t.amount, t.direction),
+        rawAmount: (t.amount || 0) / 100,
+        direction: t.direction,
+        status: t.status,
+        filterCategory: getFilterCategory(t.direction, t.name),
+        isPositive,
+        groupLabel: formatRelativeDate(t.transaction_date || t.created_at),
+        logo_url: t.logo_url,
+        holding_logos: t.holding_logos || [],
+      };
+    });
+  }, [activityTransactions]);
+
+  const activitySummaryStats = useMemo(() => {
+    const totalIn = activityItems.filter(i => {
+      const lower = (i.title || "").toLowerCase();
+      const isWithdrawal = lower.includes("withdraw") || lower.includes("repay");
+      return !isWithdrawal;
+    }).reduce((sum, i) => sum + Math.abs(i.rawAmount), 0);
+    const totalOut = activityItems.filter(i => {
+      const lower = (i.title || "").toLowerCase();
+      return lower.includes("withdraw") || lower.includes("repay");
+    }).reduce((sum, i) => sum + Math.abs(i.rawAmount), 0);
+    return { totalIn, totalOut, count: activityItems.length };
+  }, [activityItems]);
+
+  const activityVisibleItems = useMemo(() => {
+    let items = activityFilter === "All"
+      ? activityItems
+      : activityItems.filter((item) => item.filterCategory === activityFilter);
+
+    if (activitySearchQuery.trim()) {
+      const q = activitySearchQuery.toLowerCase();
+      items = items.filter((item) =>
+        item.title.toLowerCase().includes(q) ||
+        item.description.toLowerCase().includes(q) ||
+        item.amount.toLowerCase().includes(q)
+      );
+    }
+
+    if (fromDate || toDate) {
+      const fromTime = fromDate ? new Date(`${fromDate}T00:00:00`).getTime() : null;
+      const toTime = toDate ? new Date(`${toDate}T23:59:59`).getTime() : null;
+      items = items.filter((item) => {
+        const itemTime = new Date(item.date).getTime();
+        if (isNaN(itemTime)) return false;
+        if (fromTime && itemTime < fromTime) return false;
+        if (toTime && itemTime > toTime) return false;
+        return true;
+      });
+    }
+
+    return items;
+  }, [activityFilter, activitySearchQuery, fromDate, toDate, activityItems]);
+
+  const activityGroupedItems = useMemo(() => {
+    const groups = {};
+    activityVisibleItems.forEach((item) => {
+      const label = item.groupLabel;
+      if (!groups[label]) groups[label] = [];
+      groups[label].push(item);
+    });
+    const groupOrder = ["Today", "Yesterday", "This Week", "This Month"];
+    return Object.entries(groups)
+      .sort(([a, aItems], [b, bItems]) => {
+        const aIdx = groupOrder.indexOf(a);
+        const bIdx = groupOrder.indexOf(b);
+        if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+        if (aIdx !== -1) return -1;
+        if (bIdx !== -1) return 1;
+        const dateA = new Date(aItems[0].date).getTime();
+        const dateB = new Date(bItems[0].date).getTime();
+        return dateB - dateA;
+      })
+      .map(([label, items]) => ({ label, items }));
+  }, [activityVisibleItems]);
 
   const pages = Math.max(1, Math.ceil(searchFiltered.length / perPage));
   const start = (page - 1) * perPage;
@@ -752,7 +852,7 @@ const StatementsPage = ({ onOpenNotifications }) => {
                 {[
                   { id: "strategy", label: "Strategy" },
                   { id: "holdings", label: "Individual Stocks" },
-                  { id: "financials", label: "Financials" },
+                  { id: "activity", label: "Transaction History" },
                 ].map((tab) => (
                   <button
                     key={tab.id}
@@ -768,29 +868,260 @@ const StatementsPage = ({ onOpenNotifications }) => {
                 ))}
               </div>
 
-              <div className="mt-3 grid w-full grid-cols-3 gap-2">
-                <div className="col-span-2">
-                  <input
-                    type="text"
-                    placeholder="Search"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full rounded-full border border-white/20 bg-white/10 px-3 py-2 text-xs text-white placeholder:text-white/70 shadow-sm backdrop-blur-md focus:outline-none focus:ring-2 focus:ring-white/40"
-                  />
+              {activeTab !== "activity" && (
+                <div className="mt-3 grid w-full grid-cols-3 gap-2">
+                  <div className="col-span-2">
+                    <input
+                      type="text"
+                      placeholder="Search"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full rounded-full border border-white/20 bg-white/10 px-3 py-2 text-xs text-white placeholder:text-white/70 shadow-sm backdrop-blur-md focus:outline-none focus:ring-2 focus:ring-white/40"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleDownloadPdf}
+                    className="col-span-1 rounded-full bg-white/90 px-3 py-2 text-xs font-semibold text-slate-900 shadow-sm transition hover:bg-white"
+                  >
+                    Download PDF
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleDownloadPdf}
-                  className="col-span-1 rounded-full bg-white/90 px-3 py-2 text-xs font-semibold text-slate-900 shadow-sm transition hover:bg-white"
-                >
-                  Download PDF
-                </button>
-              </div>
+              )}
             </div>
           </div>
         </div>
       </div>
 
+      {activeTab === "activity" ? (
+        <div className="mx-auto -mt-6 w-full max-w-md px-4 pb-16">
+          {activityLoading ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                {[0, 1].map((i) => (
+                  <div key={i} className="rounded-2xl bg-white p-4 shadow-sm border border-slate-100/80">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Skeleton className="h-6 w-6 rounded-full" />
+                      <Skeleton className="h-3 w-16" />
+                    </div>
+                    <Skeleton className="h-5 w-24" />
+                  </div>
+                ))}
+              </div>
+              <div className="relative">
+                <Skeleton className="h-11 w-full rounded-2xl" />
+              </div>
+              <div className="flex gap-2">
+                {[0, 1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-9 w-24 rounded-full" />
+                ))}
+              </div>
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-4 w-16 mt-2" />
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm border border-slate-100/50">
+                  <Skeleton className="h-11 w-11 rounded-full flex-shrink-0" />
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <Skeleton className="h-4 w-40" />
+                    <div className="flex items-center gap-1.5">
+                      <Skeleton className="h-3 w-14" />
+                      <Skeleton className="h-3 w-10" />
+                      <Skeleton className="h-4 w-16 rounded-full" />
+                    </div>
+                  </div>
+                  <Skeleton className="h-4 w-14 flex-shrink-0" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-2xl bg-white p-4 shadow-sm border border-slate-100/80">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <div className="h-6 w-6 rounded-full bg-emerald-50 flex items-center justify-center">
+                      <ArrowDownLeft className="h-3 w-3 text-emerald-600" />
+                    </div>
+                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Money In</p>
+                  </div>
+                  <p className="text-lg font-bold text-slate-900">R{activitySummaryStats.totalIn.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                </div>
+                <div className="rounded-2xl bg-white p-4 shadow-sm border border-slate-100/80">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <div className="h-6 w-6 rounded-full bg-red-50 flex items-center justify-center">
+                      <ArrowUpRight className="h-3 w-3 text-red-500" />
+                    </div>
+                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Money Out</p>
+                  </div>
+                  <p className="text-lg font-bold text-slate-900">R{activitySummaryStats.totalOut.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                </div>
+              </div>
+
+              <div className="mt-4 relative">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <input
+                  ref={activitySearchRef}
+                  type="text"
+                  placeholder="Search transactions..."
+                  value={activitySearchQuery}
+                  onChange={(e) => setActivitySearchQuery(e.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-10 py-3 text-sm text-slate-700 placeholder-slate-400 focus:border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-50 transition"
+                />
+                {activitySearchQuery && (
+                  <button
+                    onClick={() => setActivitySearchQuery("")}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 h-5 w-5 flex items-center justify-center rounded-full bg-slate-200 text-slate-500 hover:bg-slate-300 transition"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+
+              {showDateFilter && (
+                <div className="mt-3 rounded-2xl bg-white p-4 shadow-sm border border-slate-100">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs font-semibold text-slate-500">Date Range</p>
+                    {(fromDate || toDate) && (
+                      <button onClick={() => { setFromDate(""); setToDate(""); }} className="text-[11px] font-semibold text-blue-600">Clear</button>
+                    )}
+                  </div>
+                  <div className="grid gap-3 grid-cols-2">
+                    <label className="flex flex-col gap-1.5 text-[11px] font-semibold text-slate-400">
+                      From
+                      <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-blue-200 focus:outline-none" />
+                    </label>
+                    <label className="flex flex-col gap-1.5 text-[11px] font-semibold text-slate-400">
+                      To
+                      <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-blue-200 focus:outline-none" />
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-4 flex gap-2 overflow-x-auto scrollbar-none">
+                <button
+                  type="button"
+                  aria-label="Filter by date"
+                  onClick={() => setShowDateFilter((prev) => !prev)}
+                  className={`flex-shrink-0 flex items-center justify-center h-9 w-9 rounded-full shadow-sm transition ${showDateFilter || fromDate || toDate ? "bg-blue-50 text-blue-600 border border-blue-200" : "bg-white text-slate-500 border border-slate-100"}`}
+                >
+                  <CalendarDays className="h-4 w-4" />
+                </button>
+                {activityFilters.map((filter) => (
+                  <button
+                    key={filter}
+                    type="button"
+                    onClick={() => setActivityFilter(filter)}
+                    className={`flex-shrink-0 rounded-full px-4 py-2 text-xs font-semibold transition ${
+                      activityFilter === filter
+                        ? "bg-slate-900 text-white shadow-sm"
+                        : "bg-white text-slate-500 hover:text-slate-700 shadow-sm border border-slate-100"
+                    }`}
+                  >
+                    {filter}
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-4 flex items-center justify-between">
+                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                  {activityVisibleItems.length} transaction{activityVisibleItems.length !== 1 ? "s" : ""}
+                </p>
+              </div>
+
+              {activityGroupedItems.length === 0 ? (
+                <div className="mt-8 flex flex-col items-center justify-center text-center">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 text-slate-400 mb-4">
+                    {activitySearchQuery ? <Search className="h-7 w-7" /> : <TrendingUp className="h-7 w-7" />}
+                  </div>
+                  <p className="text-sm font-semibold text-slate-900 mb-1">
+                    {activitySearchQuery ? "No results found" : "No activity yet"}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {activitySearchQuery ? `No transactions matching "${activitySearchQuery}"` : "Your transactions will appear here"}
+                  </p>
+                </div>
+              ) : (
+                <section className="mt-3 space-y-5">
+                  {activityGroupedItems.map((group, groupIndex) => (
+                    <div key={`${group.label}-${groupIndex}`}>
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-3 px-1">
+                        {group.label}
+                      </p>
+                      <div className="space-y-2">
+                        {group.items.map((item, itemIndex) => {
+                          const Icon = getTransactionIcon(item.title, item.direction);
+                          const colors = getIconColors(item.direction, item.title);
+                          return (
+                            <div
+                              key={`${item.id || itemIndex}`}
+                              className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm border border-slate-100/50"
+                            >
+                              {item.holding_logos && item.holding_logos.length > 0 ? (
+                                <div className="flex -space-x-2 flex-shrink-0">
+                                  {item.holding_logos.slice(0, 3).map((hl, hlIdx) => (
+                                    <img
+                                      key={`${hl.symbol}-${hlIdx}`}
+                                      src={hl.logo_url}
+                                      alt={hl.name || hl.symbol}
+                                      className="h-9 w-9 rounded-full object-cover bg-white border-2 border-white shadow-sm"
+                                      onError={(e) => { e.target.style.display = 'none'; }}
+                                    />
+                                  ))}
+                                </div>
+                              ) : item.logo_url ? (
+                                <img
+                                  src={item.logo_url}
+                                  alt=""
+                                  className="h-11 w-11 flex-shrink-0 rounded-full object-cover bg-slate-50 border border-slate-100"
+                                  onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                                />
+                              ) : null}
+                              <div className={`${item.holding_logos?.length > 0 || item.logo_url ? 'hidden' : 'flex'} h-11 w-11 flex-shrink-0 items-center justify-center rounded-full ${colors.bg}`}>
+                                <Icon className={`h-5 w-5 ${colors.text}`} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-slate-800 truncate">{item.title}</p>
+                                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                  <p className="text-[11px] text-slate-400">{item.displayDate}</p>
+                                  {item.time && (
+                                    <>
+                                      <span className="text-slate-300">&middot;</span>
+                                      <p className="text-[11px] text-slate-400">{item.time}</p>
+                                    </>
+                                  )}
+                                  {item.status && (
+                                    <>
+                                      <span className="text-slate-300">&middot;</span>
+                                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                                        item.status === "successful" || item.status === "completed" || item.status === "posted"
+                                          ? "bg-emerald-50 text-emerald-600"
+                                          : item.status === "pending"
+                                          ? "bg-amber-50 text-amber-600"
+                                          : item.status === "failed"
+                                          ? "bg-rose-50 text-rose-500"
+                                          : "bg-slate-100 text-slate-500"
+                                      }`}>
+                                        {item.status === "successful" || item.status === "completed" || item.status === "posted" ? "Completed" : item.status === "pending" ? "Pending" : item.status === "failed" ? "Failed" : item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                                      </span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                              <p className="text-sm font-bold tabular-nums flex-shrink-0 text-slate-900">
+                                {item.amount}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </section>
+              )}
+            </>
+          )}
+        </div>
+      ) : (
       <div className="mx-auto -mt-6 w-full max-w-md px-4 pb-16">
         <div className="rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)]">
           <div className="flex items-center justify-between">
@@ -1042,6 +1373,7 @@ const StatementsPage = ({ onOpenNotifications }) => {
           </div>
         </div>
       </div>
+      )}
 
       {selectedCard && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4">

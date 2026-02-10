@@ -29,6 +29,7 @@ import { useProfile } from "../lib/useProfile";
 import { useRequiredActions } from "../lib/useRequiredActions";
 import { useSumsubStatus } from "../lib/useSumsubStatus";
 import { useFinancialData, useInvestments } from "../lib/useFinancialData";
+import { useRealtimePrices } from "../lib/useRealtimePrices";
 import { getHoldingsArray, normalizeSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot } from "../lib/strategyUtils";
 import { formatZar } from "../lib/formatCurrency";
 import HomeSkeleton from "../components/HomeSkeleton";
@@ -117,6 +118,7 @@ const HomePage = ({
   const { kycVerified, kycPending, kycNeedsResubmission } = useSumsubStatus();
   const { balance, investments, transactions, bestAssets, loading: financialLoading, refetch: fetchFinancialData } = useFinancialData();
   const { monthlyChangePercent } = useInvestments();
+  const { lastUpdated: pricesLastUpdated } = useRealtimePrices();
   const [bestStrategies, setBestStrategies] = useState([]);
   const [holdingsSecurities, setHoldingsSecurities] = useState([]);
   const [failedLogos, setFailedLogos] = useState({});
@@ -128,6 +130,7 @@ const HomePage = ({
   const [homeTab, setHomeTab] = useState("invest");
   const [userId, setUserId] = useState(null);
   const [localBestAssets, setLocalBestAssets] = useState([]);
+  const [onboardingComplete, setOnboardingComplete] = useState(true);
 
   const [cardRotation, setCardRotation] = useState(-180);
   const [isCardAnimating, setIsCardAnimating] = useState(false);
@@ -319,6 +322,29 @@ const HomePage = ({
     getUser();
   }, []);
 
+  const fetchOnboardingStatus = React.useCallback(async () => {
+    if (!supabase || !profile?.id) return;
+    try {
+      const { data, error } = await supabase
+        .from("user_onboarding")
+        .select("kyc_status")
+        .eq("user_id", profile.id)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      console.log("[Onboarding Check] data:", JSON.stringify(data), "error:", error?.message || "none");
+      const record = data?.[0];
+      const complete = record?.kyc_status === "onboarding_complete";
+      console.log("[Onboarding Check] kyc_status:", record?.kyc_status, "complete:", complete);
+      setOnboardingComplete(complete);
+    } catch (err) {
+      console.error("[Onboarding Check] Error:", err);
+    }
+  }, [profile?.id]);
+
+  useEffect(() => {
+    fetchOnboardingStatus();
+  }, [fetchOnboardingStatus]);
+
   useEffect(() => {
     if (!profile?.id) return;
 
@@ -347,6 +373,14 @@ const HomePage = ({
       }, () => {
         if (typeof fetchRequiredActions === 'function') fetchRequiredActions();
       })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'user_onboarding',
+        filter: `user_id=eq.${profile.id}`
+      }, () => {
+        fetchOnboardingStatus();
+      })
       .subscribe();
 
     fetchBestAssets();
@@ -355,7 +389,14 @@ const HomePage = ({
     return () => {
       supabase.removeChannel(homeSubscription);
     };
-  }, [profile?.id, fetchBestAssets, fetchGoals, fetchFinancialData, fetchRequiredActions]);
+  }, [profile?.id, fetchBestAssets, fetchGoals, fetchFinancialData, fetchRequiredActions, fetchOnboardingStatus]);
+
+  useEffect(() => {
+    if (pricesLastUpdated && profile?.id) {
+      fetchBestAssets();
+      if (typeof fetchFinancialData === 'function') fetchFinancialData();
+    }
+  }, [pricesLastUpdated]);
 
   useEffect(() => {
     if (showGoalsModal && profile?.id) {
@@ -419,7 +460,7 @@ const HomePage = ({
       }
     };
     fetchStrategies();
-  }, [profile?.id]);
+  }, [profile?.id, pricesLastUpdated]);
 
   const holdingsBySymbol = useMemo(() => buildHoldingsBySymbol(holdingsSecurities), [holdingsSecurities]);
 
@@ -602,15 +643,21 @@ const HomePage = ({
       icon: ShieldCheck,
       routeName: "actions",
       isComplete: kycVerified,
-      dueAt: "2025-01-20T12:00:00Z",
-      createdAt: "2025-01-18T09:00:00Z",
+    },
+    {
+      id: "onboarding",
+      title: "Complete onboarding",
+      description: "Risk disclosure, source of funds, and agreements",
+      priority: 2,
+      status: onboardingComplete ? "Complete" : "Required",
+      statusStyle: onboardingComplete ? "bg-green-100 text-green-600" : "bg-slate-100 text-slate-500",
+      icon: FileSignature,
+      routeName: "actions",
+      isComplete: onboardingComplete,
     },
   ];
 
-  const showOutstandingActions = !kycVerified || kycNeedsResubmission;
-  const outstandingActions = showOutstandingActions
-    ? actionsData.filter((action) => !action.isComplete)
-    : [];
+  const outstandingActions = actionsData.filter((action) => !action.isComplete);
 
   const transactionHistory = transactions.slice(0, 3).map((t) => ({
     title: t.name || t.description || "Transaction",

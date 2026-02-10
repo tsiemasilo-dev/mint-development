@@ -1,15 +1,48 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ArrowLeft, Clock, AlertTriangle, CheckCircle2, RefreshCw } from "lucide-react";
 import UserOnboardingPage from "./UserOnboardingPage";
 import SumsubVerification from "../components/SumsubVerification";
 import { useSumsubStatus } from "../lib/useSumsubStatus";
+import { supabase } from "../lib/supabase";
 
 const IdentityCheckPage = ({ onBack, onComplete }) => {
   const { kycVerified, kycPending, kycNeedsResubmission, loading, refetch } = useSumsubStatus();
   const [showResubmission, setShowResubmission] = useState(false);
-  const [justVerified, setJustVerified] = useState(false);
+  const [onboardingComplete, setOnboardingComplete] = useState(false);
+  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
 
-  if (loading) {
+  useEffect(() => {
+    const checkOnboardingStatus = async () => {
+      if (!supabase) {
+        setCheckingOnboarding(false);
+        return;
+      }
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        const userId = userData?.user?.id;
+        if (!userId) {
+          setCheckingOnboarding(false);
+          return;
+        }
+        const { data } = await supabase
+          .from("user_onboarding")
+          .select("kyc_status")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(1);
+        const record = data?.[0];
+        if (record?.kyc_status === "onboarding_complete") {
+          setOnboardingComplete(true);
+        }
+      } catch {
+      } finally {
+        setCheckingOnboarding(false);
+      }
+    };
+    checkOnboardingStatus();
+  }, []);
+
+  if (loading || checkingOnboarding) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-600 mb-4"></div>
@@ -18,7 +51,7 @@ const IdentityCheckPage = ({ onBack, onComplete }) => {
     );
   }
 
-  if (justVerified || kycVerified) {
+  if (kycVerified && onboardingComplete) {
     return (
       <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)] text-slate-900">
         <div className="mx-auto flex w-full max-w-sm flex-col px-4 pb-10 pt-12 md:max-w-md md:px-8">
@@ -31,7 +64,7 @@ const IdentityCheckPage = ({ onBack, onComplete }) => {
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
-            <h1 className="text-lg font-semibold">Identity Check</h1>
+            <h1 className="text-lg font-semibold">Onboarding</h1>
             <div className="h-10 w-10" aria-hidden="true" />
           </header>
 
@@ -39,9 +72,9 @@ const IdentityCheckPage = ({ onBack, onComplete }) => {
             <div className="flex h-20 w-20 items-center justify-center rounded-full bg-green-50 text-green-600 mb-6">
               <CheckCircle2 className="h-10 w-10" />
             </div>
-            <h2 className="text-2xl font-semibold text-slate-900 mb-3">Identity Verified</h2>
+            <h2 className="text-2xl font-semibold text-slate-900 mb-3">Onboarding Complete</h2>
             <p className="text-sm text-slate-500 mb-8 max-w-xs">
-              Your identity has been successfully verified. You have full access to all features.
+              Your identity has been verified and all onboarding steps are complete. You have full access to all features.
             </p>
             <button
               type="button"
@@ -134,7 +167,6 @@ const IdentityCheckPage = ({ onBack, onComplete }) => {
               <SumsubVerification 
                 onVerified={() => {
                   refetch();
-                  setJustVerified(true);
                 }}
               />
             </div>
@@ -209,7 +241,10 @@ const IdentityCheckPage = ({ onBack, onComplete }) => {
   return (
     <UserOnboardingPage 
       onBack={onBack} 
-      onComplete={() => setJustVerified(true)} 
+      onComplete={() => {
+        setOnboardingComplete(true);
+        if (onComplete) onComplete();
+      }} 
     />
   );
 };

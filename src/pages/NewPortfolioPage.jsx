@@ -3,10 +3,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Bell, Eye, EyeOff, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, TrendingUp, TrendingDown, Plus } from "lucide-react";
 import { Area, ComposedChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell } from 'recharts';
 import { useInvestments } from "../lib/useFinancialData";
+import { useRealtimePrices } from "../lib/useRealtimePrices";
 import { useProfile } from "../lib/useProfile";
 import { useUserStrategies, useStrategyChartData } from "../lib/useUserStrategies";
 import { getMonthlyReturns, getStockMonthlyReturns, getOverallPortfolioMonthlyReturns } from "../lib/strategyData";
 import { useStockQuotes, useStockChart } from "../lib/useStockData";
+import { clearMarketDataCache } from "../lib/marketData";
 import SwipeBackWrapper from "../components/SwipeBackWrapper.jsx";
 import PortfolioSkeleton from "../components/PortfolioSkeleton";
 
@@ -60,7 +62,8 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     }
   }, [currentView]);
 
-  const { securities: allSecurities, quotes: liveQuotes, loading: quotesLoading } = useStockQuotes(true);
+  const { lastUpdated: pricesLastUpdated } = useRealtimePrices();
+  const { securities: allSecurities, quotes: liveQuotes, loading: quotesLoading, refetch: refetchStocks } = useStockQuotes(true);
   const stocksList = useMemo(() => {
     if (!allSecurities || allSecurities.length === 0) return [];
     return allSecurities
@@ -84,7 +87,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   const dropdownRef = useRef(null);
   const stockDropdownRef = useRef(null);
   const { profile } = useProfile();
-  const { strategies, selectedStrategy: userSelectedStrategy, loading: strategiesLoading, selectStrategy } = useUserStrategies();
+  const { strategies, selectedStrategy: userSelectedStrategy, loading: strategiesLoading, selectStrategy, refetch: refetchStrategies } = useUserStrategies();
   const { chartData: realChartData, loading: chartLoading } = useStrategyChartData(userSelectedStrategy?.strategyId, timeFilter);
   
   const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(" ") || "User";
@@ -172,7 +175,16 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     return date.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
   };
 
-  const { holdings: rawHoldings, loading: holdingsLoading, goals: investmentGoals } = useInvestments();
+  const { holdings: rawHoldings, loading: holdingsLoading, goals: investmentGoals, refetch: refetchInvestments } = useInvestments();
+
+  useEffect(() => {
+    if (pricesLastUpdated) {
+      clearMarketDataCache();
+      refetchStocks();
+      refetchInvestments();
+      refetchStrategies();
+    }
+  }, [pricesLastUpdated, refetchInvestments, refetchStrategies]);
 
   const calendarFilterOptions = useMemo(() => {
     const options = [{ id: "overall", label: "Overall Portfolio" }];
@@ -302,22 +314,28 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   };
 
   const myStocks = useMemo(() => {
-    if (!stocksList || stocksList.length === 0 || allStrategyHoldings.length === 0) return [];
-    const holdingSymbols = new Set(allStrategyHoldings.map(h => h.symbol));
+    if (!stocksList || stocksList.length === 0) return [];
+    const holdingSymbols = new Set();
+    (rawHoldings || []).forEach(h => { if (h.symbol) holdingSymbols.add(h.symbol); });
+    allStrategyHoldings.forEach(h => { if (h.symbol && !h.isStrategy) holdingSymbols.add(h.symbol); });
+    if (holdingSymbols.size === 0) return [];
     return stocksList.filter(stock => holdingSymbols.has(stock.ticker));
-  }, [allStrategyHoldings, stocksList]);
+  }, [rawHoldings, allStrategyHoldings, stocksList]);
 
   const myStockIds = useMemo(() => new Set(myStocks.map(s => s.id)), [myStocks]);
 
+  const prevMyStocksRef = useRef(0);
   useEffect(() => {
-    if (!selectedStock) {
-      if (myStocks.length > 0) {
+    if (myStocks.length > 0) {
+      const currentIsMyStock = selectedStock && myStocks.some(s => s.id === selectedStock.id);
+      if (!selectedStock || !currentIsMyStock || prevMyStocksRef.current === 0) {
         setSelectedStock(myStocks[0]);
-      } else if (stocksList.length > 0) {
-        setSelectedStock(stocksList[0]);
       }
+      prevMyStocksRef.current = myStocks.length;
+    } else if (!selectedStock && stocksList.length > 0) {
+      setSelectedStock(stocksList[0]);
     }
-  }, [myStocks, stocksList, selectedStock]);
+  }, [myStocks, stocksList]);
 
   const goal = investmentGoals && investmentGoals.length > 0 ? investmentGoals[0] : null;
   const goalProgress = goal && goal.targetAmount > 0 ? (goal.currentAmount / goal.targetAmount) * 100 : 0;
@@ -1063,21 +1081,24 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
 
                 <div className="mb-3 px-1">
                   {(() => {
-                    const perSharePrice = liveQuotes[selectedStock.ticker]?.price || selectedStock.price;
-                    const changePct = liveQuotes[selectedStock.ticker]?.changePercent ?? selectedStock.dailyChange;
-                    if (isMyStock && userQuantity > 0) {
-                      const holdingValue = perSharePrice * userQuantity;
-                      const previousValue = holdingValue / (1 + changePct / 100);
-                      const absChange = holdingValue - previousValue;
+                    if (isMyStock && userHolding && userQuantity > 0) {
+                      const holdingMarketValue = (userHolding.market_value || 0) / 100;
+                      const costBasis = ((userHolding.avg_fill || 0) * userQuantity) / 100;
+                      const pnl = holdingMarketValue - costBasis;
+                      const pnlPct = costBasis > 0 ? ((pnl / costBasis) * 100) : 0;
+                      const dailyChangePct = userHolding.change_percent || 0;
+                      const dailyChangeAmt = (holdingMarketValue * dailyChangePct) / (100 + dailyChangePct);
                       return (
                         <>
-                          <p className="text-3xl font-bold text-slate-900">{formatCurrency(holdingValue)}</p>
-                          <p className={`text-sm ${changePct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                            {absChange >= 0 ? '+' : '-'}{formatCurrency(Math.abs(absChange))} ({changePct >= 0 ? '+' : ''}{changePct.toFixed(2)}% Today)
+                          <p className="text-3xl font-bold text-slate-900">{formatCurrency(holdingMarketValue)}</p>
+                          <p className={`text-sm ${pnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                            {pnl >= 0 ? '+' : ''}{formatCurrency(pnl)} ({pnl >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%)
                           </p>
                         </>
                       );
                     }
+                    const perSharePrice = liveQuotes[selectedStock.ticker]?.price || selectedStock.price;
+                    const changePct = liveQuotes[selectedStock.ticker]?.changePercent ?? selectedStock.dailyChange;
                     return (
                       <>
                         <p className="text-3xl font-bold text-slate-900">{formatCurrency(perSharePrice)}</p>
