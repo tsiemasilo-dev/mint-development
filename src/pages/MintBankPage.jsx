@@ -2,41 +2,72 @@ import React, { useRef, useState, useEffect, useCallback } from "react";
 import { ArrowLeft, Landmark, ShieldCheck, CheckCircle2, Shield, X, XCircle, Lock, Info, ChevronDown, ChevronUp, CreditCard, Wallet, Plus, Unlink, AlertTriangle, Eye, EyeOff, Loader2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useRequiredActions } from "../lib/useRequiredActions";
+import fnbLogo from "../assets/banks/fnb.svg";
+import standardBankLogo from "../assets/banks/standard-bank.svg";
+import absaLogo from "../assets/banks/absa.svg";
+import nedbankLogo from "../assets/banks/nedbank.svg";
+import capitecLogo from "../assets/banks/capitec.svg";
+import investecLogo from "../assets/banks/investec.svg";
+import discoveryLogo from "../assets/banks/discovery.svg";
+import tymebankLogo from "../assets/banks/tymebank.svg";
+import africanBankLogo from "../assets/banks/african-bank.svg";
+import bankZeroLogo from "../assets/banks/bank-zero.svg";
+import defaultBankLogo from "../assets/banks/default.svg";
 
-const BANK_BRANDS = {
-  "fnb": { name: "FNB", color: "#009A44", textColor: "#FFFFFF" },
-  "first national bank": { name: "FNB", color: "#009A44", textColor: "#FFFFFF" },
-  "first national": { name: "FNB", color: "#009A44", textColor: "#FFFFFF" },
-  "standard bank": { name: "SB", color: "#003DA5", textColor: "#FFFFFF" },
-  "standard": { name: "SB", color: "#003DA5", textColor: "#FFFFFF" },
-  "absa": { name: "ABSA", color: "#AF1F2D", textColor: "#FFFFFF" },
-  "abs": { name: "ABSA", color: "#AF1F2D", textColor: "#FFFFFF" },
-  "nedbank": { name: "NB", color: "#009639", textColor: "#FFFFFF" },
-  "ned": { name: "NB", color: "#009639", textColor: "#FFFFFF" },
-  "capitec": { name: "C", color: "#0033A0", textColor: "#FFFFFF" },
-  "capitec bank": { name: "C", color: "#0033A0", textColor: "#FFFFFF" },
-  "cap": { name: "C", color: "#0033A0", textColor: "#FFFFFF" },
-  "investec": { name: "IN", color: "#003B5C", textColor: "#FFFFFF" },
-  "discovery bank": { name: "D", color: "#FF6B00", textColor: "#FFFFFF" },
-  "discovery": { name: "D", color: "#FF6B00", textColor: "#FFFFFF" },
-  "disc": { name: "D", color: "#FF6B00", textColor: "#FFFFFF" },
-  "tymebank": { name: "TB", color: "#FFD100", textColor: "#1A1A1A" },
-  "tyme": { name: "TB", color: "#FFD100", textColor: "#1A1A1A" },
-  "african bank": { name: "AB", color: "#E31937", textColor: "#FFFFFF" },
-  "bank zero": { name: "BZ", color: "#00C4B3", textColor: "#FFFFFF" },
-  "bidvest": { name: "BV", color: "#1B3A6B", textColor: "#FFFFFF" },
-  "sasfin": { name: "SF", color: "#003366", textColor: "#FFFFFF" },
-  "grindrod": { name: "GR", color: "#005B2F", textColor: "#FFFFFF" },
+const SA_BANKS = [
+  { id: "fnb", label: "FNB (First National Bank)", logo: fnbLogo },
+  { id: "standard-bank", label: "Standard Bank", logo: standardBankLogo },
+  { id: "absa", label: "ABSA", logo: absaLogo },
+  { id: "nedbank", label: "Nedbank", logo: nedbankLogo },
+  { id: "capitec", label: "Capitec Bank", logo: capitecLogo },
+  { id: "investec", label: "Investec", logo: investecLogo },
+  { id: "discovery", label: "Discovery Bank", logo: discoveryLogo },
+  { id: "tymebank", label: "TymeBank", logo: tymebankLogo },
+  { id: "african-bank", label: "African Bank", logo: africanBankLogo },
+  { id: "bank-zero", label: "Bank Zero", logo: bankZeroLogo },
+];
+
+const ACCOUNT_TYPES = ["Cheque Account", "Savings Account", "Credit Card", "Transmission Account", "Business Account"];
+
+const getBankLogo = (bankId) => {
+  const bank = SA_BANKS.find(b => b.id === bankId);
+  return bank ? bank.logo : defaultBankLogo;
 };
 
-const getBankBrand = (bankName) => {
-  if (!bankName) return { name: "BA", color: "#64748b", textColor: "#FFFFFF" };
-  const key = bankName.toLowerCase().trim();
-  for (const [pattern, brand] of Object.entries(BANK_BRANDS)) {
-    if (key.includes(pattern)) return brand;
+const getBankLabel = (bankId) => {
+  const bank = SA_BANKS.find(b => b.id === bankId);
+  return bank ? bank.label : bankId || "Bank Account";
+};
+
+const matchBankId = (bankName) => {
+  if (!bankName) return "";
+  const lower = bankName.toLowerCase().trim();
+  const patterns = [
+    { id: "fnb", keys: ["fnb", "first national"] },
+    { id: "standard-bank", keys: ["standard bank", "standard"] },
+    { id: "absa", keys: ["absa"] },
+    { id: "nedbank", keys: ["nedbank", "ned "] },
+    { id: "capitec", keys: ["capitec"] },
+    { id: "investec", keys: ["investec"] },
+    { id: "discovery", keys: ["discovery"] },
+    { id: "tymebank", keys: ["tymebank", "tyme"] },
+    { id: "african-bank", keys: ["african bank"] },
+    { id: "bank-zero", keys: ["bank zero"] },
+  ];
+  for (const p of patterns) {
+    if (p.keys.some(k => lower.includes(k))) return p.id;
   }
-  const initials = bankName.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
-  return { name: initials || "BA", color: "#334155", textColor: "#FFFFFF" };
+  return "";
+};
+
+const matchAccountType = (type) => {
+  if (!type) return "Cheque Account";
+  const lower = type.toLowerCase();
+  if (lower.includes("saving")) return "Savings Account";
+  if (lower.includes("credit")) return "Credit Card";
+  if (lower.includes("transmission")) return "Transmission Account";
+  if (lower.includes("business")) return "Business Account";
+  return "Cheque Account";
 };
 
 const maskAccountNumber = (num) => {
@@ -65,6 +96,13 @@ const MintBankPage = ({ onBack, onComplete }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [unlinkSuccess, setUnlinkSuccess] = useState(false);
   const [unlinkingIndex, setUnlinkingIndex] = useState(null);
+  const [confirmBank, setConfirmBank] = useState("");
+  const [confirmAccountNum, setConfirmAccountNum] = useState("");
+  const [confirmAccountType, setConfirmAccountType] = useState("Cheque Account");
+  const [confirmSaving, setConfirmSaving] = useState(false);
+  const [showBankDropdown, setShowBankDropdown] = useState(false);
+  const [showTypeDropdown, setShowTypeDropdown] = useState(false);
+  const [pendingTruidAccounts, setPendingTruidAccounts] = useState([]);
 
   const fetchBankAccounts = useCallback(async () => {
     try {
@@ -84,6 +122,43 @@ const MintBankPage = ({ onBack, onComplete }) => {
       setLoadingAccounts(false);
     }
   }, []);
+
+  const saveConfirmedAccount = async () => {
+    if (!confirmBank) return;
+    setConfirmSaving(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("No session");
+
+      const newAccount = {
+        bankId: confirmBank,
+        bankName: getBankLabel(confirmBank),
+        accountNumber: confirmAccountNum.trim(),
+        accountType: confirmAccountType,
+        linkedAt: new Date().toISOString(),
+      };
+
+      const allAccounts = [...linkedBanks, newAccount];
+
+      const res = await fetch("/api/banking/capture-confirm", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ accounts: allAccounts }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || "Save failed");
+
+      setLinkedBanks(allAccounts);
+      setStep("success");
+    } catch (err) {
+      console.error("Save confirmed account error:", err);
+    } finally {
+      setConfirmSaving(false);
+    }
+  };
 
   useEffect(() => {
     if (bankLinked) {
@@ -256,8 +331,12 @@ const MintBankPage = ({ onBack, onComplete }) => {
               ...acc,
               linkedAt: new Date().toISOString(),
             }));
-            setLinkedBanks(prev => [...prev, ...newAccounts]);
-            setStep("success");
+            setPendingTruidAccounts(newAccounts);
+            const firstAcc = newAccounts[0] || {};
+            setConfirmBank(matchBankId(firstAcc.bankName) || "");
+            setConfirmAccountNum(firstAcc.accountNumber || "");
+            setConfirmAccountType(matchAccountType(firstAcc.accountType));
+            setStep("confirm");
           } catch (captureErr) {
             console.error("Capture error:", captureErr);
             setStatus("error");
@@ -275,6 +354,126 @@ const MintBankPage = ({ onBack, onComplete }) => {
       }
     }, 3000);
   };
+
+  if (step === "confirm") {
+    return (
+      <div className="animate-in fade-in slide-in-from-bottom-8 duration-700 flex flex-col px-6 pb-10 min-h-screen bg-white">
+        <header className="w-full flex items-center justify-between pt-10 pb-6">
+          <button
+            onClick={() => { setStep("connect"); setStatus("idle"); }}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-700 transition active:scale-95"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+          <h1 className="text-lg font-semibold text-slate-900">Confirm Details</h1>
+          <div className="h-10 w-10" aria-hidden="true" />
+        </header>
+
+        <div className="flex items-center gap-3 p-4 rounded-2xl bg-green-50 border border-green-100 mb-6">
+          <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
+          <p className="text-sm text-green-800">Bank verified successfully via TruID. Please confirm your account details below.</p>
+        </div>
+
+        <div className="space-y-5">
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Select Your Bank</label>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => { setShowBankDropdown(!showBankDropdown); setShowTypeDropdown(false); }}
+                className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border border-slate-200 bg-slate-50 text-left transition-all focus:ring-2 focus:ring-blue-200"
+              >
+                {confirmBank ? (
+                  <>
+                    <img src={getBankLogo(confirmBank)} alt="" className="h-8 w-8 rounded-lg" />
+                    <span className="text-sm font-medium text-slate-900">{getBankLabel(confirmBank)}</span>
+                  </>
+                ) : (
+                  <span className="text-sm text-slate-400">Choose your bank...</span>
+                )}
+                <ChevronDown className="h-4 w-4 text-slate-400 ml-auto" />
+              </button>
+              {showBankDropdown && (
+                <div className="absolute z-20 mt-1 w-full bg-white rounded-xl border border-slate-200 shadow-xl max-h-64 overflow-y-auto">
+                  {SA_BANKS.map(bank => (
+                    <button
+                      key={bank.id}
+                      type="button"
+                      onClick={() => { setConfirmBank(bank.id); setShowBankDropdown(false); }}
+                      className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors ${confirmBank === bank.id ? "bg-blue-50" : ""}`}
+                    >
+                      <img src={bank.logo} alt="" className="h-8 w-8 rounded-lg" />
+                      <span className="text-sm font-medium text-slate-900">{bank.label}</span>
+                      {confirmBank === bank.id && <CheckCircle2 className="h-4 w-4 text-blue-600 ml-auto" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Account Number</label>
+            <input
+              type="text"
+              value={confirmAccountNum}
+              onChange={e => setConfirmAccountNum(e.target.value.replace(/[^0-9]/g, ""))}
+              placeholder="Enter account number"
+              maxLength={16}
+              inputMode="numeric"
+              className="w-full px-4 py-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 transition-all"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Account Type</label>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => { setShowTypeDropdown(!showTypeDropdown); setShowBankDropdown(false); }}
+                className="w-full flex items-center justify-between px-4 py-3.5 rounded-xl border border-slate-200 bg-slate-50 text-left transition-all focus:ring-2 focus:ring-blue-200"
+              >
+                <span className="text-sm font-medium text-slate-900">{confirmAccountType}</span>
+                <ChevronDown className="h-4 w-4 text-slate-400" />
+              </button>
+              {showTypeDropdown && (
+                <div className="absolute z-20 mt-1 w-full bg-white rounded-xl border border-slate-200 shadow-xl">
+                  {ACCOUNT_TYPES.map(type => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => { setConfirmAccountType(type); setShowTypeDropdown(false); }}
+                      className={`w-full px-4 py-3 text-left text-sm hover:bg-slate-50 transition-colors ${confirmAccountType === type ? "bg-blue-50 font-medium text-blue-700" : "text-slate-700"}`}
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={saveConfirmedAccount}
+          disabled={!confirmBank || confirmSaving}
+          className="w-full mt-8 py-4 rounded-full bg-slate-900 text-white font-semibold text-sm uppercase tracking-[0.15em] shadow-lg shadow-slate-900/20 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        >
+          {confirmSaving ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            "Confirm & Link"
+          )}
+        </button>
+
+        <p className="text-xs text-slate-400 text-center mt-4">Account number is optional but recommended for your records.</p>
+      </div>
+    );
+  }
 
   if (step === "success") {
     return (
@@ -330,18 +529,13 @@ const MintBankPage = ({ onBack, onComplete }) => {
         ) : hasStoredAccounts ? (
           <div className="mt-6 space-y-3">
             {linkedBanks.map((bank, idx) => {
-              const brand = getBankBrand(bank.bankName);
+              const logoSrc = bank.bankId ? getBankLogo(bank.bankId) : defaultBankLogo;
               const maskedNum = maskAccountNumber(bank.accountNumber);
               return (
                 <div key={idx} className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100">
-                  <div
-                    className="flex h-12 w-12 items-center justify-center rounded-2xl shrink-0 font-bold shadow-sm"
-                    style={{ backgroundColor: brand.color, color: brand.textColor, fontSize: brand.name.length > 2 ? "10px" : "14px" }}
-                  >
-                    {brand.name}
-                  </div>
+                  <img src={logoSrc} alt="" className="h-12 w-12 rounded-2xl shrink-0 shadow-sm" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-900">{bank.bankName}</p>
+                    <p className="text-sm font-semibold text-slate-900">{bank.bankId ? getBankLabel(bank.bankId) : bank.bankName || "Bank Account"}</p>
                     <p className="text-xs text-slate-500 mt-0.5">
                       {bank.accountType || "Current"}{maskedNum ? ` • ${maskedNum}` : ""}
                     </p>
