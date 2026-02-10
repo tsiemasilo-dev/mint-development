@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useMemo } from "react";
-import { ArrowDownRight, ArrowUpRight, MoreHorizontal, X } from "lucide-react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
+import { ArrowDownRight, ArrowDownLeft, ArrowUpRight, MoreHorizontal, X, Search, CalendarDays, TrendingUp, CreditCard, Wallet, RefreshCw, Gift, Filter } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useProfile } from "../lib/useProfile";
@@ -8,6 +8,71 @@ import Skeleton from "../components/Skeleton";
 import { supabase } from "../lib/supabase";
 import { formatCurrency } from "../lib/formatCurrency";
 import { normalizeSymbol, getHoldingsArray, buildHoldingsBySymbol, getStrategyHoldingsSnapshot } from "../lib/strategyUtils";
+import { useTransactions } from "../lib/useFinancialData";
+import ActivitySkeleton from "../components/ActivitySkeleton";
+
+const activityFilters = ["All", "Investments", "Deposits", "Withdrawals"];
+
+const getTransactionIcon = (name, direction) => {
+  const lower = (name || "").toLowerCase();
+  if (lower.includes("dividend") || lower.includes("interest")) return Gift;
+  if (lower.includes("credit") || lower.includes("loan")) return CreditCard;
+  if (lower.includes("withdraw") || lower.includes("repay")) return Wallet;
+  if (lower.includes("recurring") || lower.includes("auto")) return RefreshCw;
+  if (lower.includes("invest") || lower.includes("strategy") || lower.includes("purchas") || lower.includes("buy") || lower.includes("bought")) return TrendingUp;
+  if (direction === "credit") return ArrowDownLeft;
+  return ArrowUpRight;
+};
+
+const getIconColors = (direction, name) => {
+  const lower = (name || "").toLowerCase();
+  if (lower.includes("invest") || lower.includes("strategy") || lower.includes("purchas") || lower.includes("buy") || lower.includes("bought")) return { bg: "bg-blue-50", text: "text-blue-600" };
+  if (direction === "credit") return { bg: "bg-emerald-50", text: "text-emerald-600" };
+  return { bg: "bg-red-50", text: "text-red-500" };
+};
+
+const getFilterCategory = (direction, name) => {
+  const lower = (name || "").toLowerCase();
+  if (lower.includes("withdraw") || lower.includes("repay")) return "Withdrawals";
+  if (lower.includes("deposit") || direction === "credit") return "Deposits";
+  if (lower.includes("invest") || lower.includes("buy") || lower.includes("strategy") || direction === "debit") return "Investments";
+  return "Other";
+};
+
+const formatRelativeDate = (dateString) => {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return dateString;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const itemDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffDays = Math.floor((today - itemDate) / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return "This Week";
+  if (diffDays < 30) return "This Month";
+  return date.toLocaleDateString("en-ZA", { month: "long", year: "numeric" });
+};
+
+const formatTime = (dateString) => {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return "";
+  return date.toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" });
+};
+
+const formatShortDate = (dateString) => {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return dateString;
+  return date.toLocaleDateString("en-ZA", { day: "numeric", month: "short" });
+};
+
+const formatAmount = (amount, direction) => {
+  if (amount === undefined || amount === null) return "R0.00";
+  const val = Math.abs(amount) / 100;
+  return `R${val.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
 
 const StatementsPage = ({ onOpenNotifications }) => {
   const { profile } = useProfile();
@@ -19,12 +84,18 @@ const StatementsPage = ({ onOpenNotifications }) => {
   const [holdingsRows, setHoldingsRows] = useState([]);
   const [holdingsRaw, setHoldingsRaw] = useState([]);
   const [strategyRows, setStrategyRows] = useState([]);
-  const [financialsRows, setFinancialsRows] = useState([]);
   const [rawStrategies, setRawStrategies] = useState([]);
   const [holdingsSecurities, setHoldingsSecurities] = useState([]);
   const [strategiesLoading, setStrategiesLoading] = useState(true);
   const [holdingsLoading, setHoldingsLoading] = useState(true);
-  const [financialsLoading, setFinancialsLoading] = useState(true);
+
+  const { transactions: activityTransactions, loading: activityLoading } = useTransactions(100);
+  const [activityFilter, setActivityFilter] = useState("All");
+  const [activitySearchQuery, setActivitySearchQuery] = useState("");
+  const [showDateFilter, setShowDateFilter] = useState(false);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const activitySearchRef = useRef(null);
 
   const displayName = [profile?.firstName, profile?.lastName].filter(Boolean).join(" ");
   const initials = displayName
@@ -322,63 +393,6 @@ const StatementsPage = ({ onOpenNotifications }) => {
   }, [profile?.id]);
 
   useEffect(() => {
-    let isMounted = true;
-
-    const loadFinancials = async () => {
-      if (!supabase || !profile?.id) {
-        return;
-      }
-      if (isMounted) setFinancialsLoading(true);
-
-      try {
-        const { data: allocations, error } = await supabase
-          .from("allocations")
-          .select("*")
-          .eq("user_id", profile.id)
-          .order("created_at", { ascending: false });
-
-        if (error) throw error;
-
-        const mapped = (allocations || []).map((alloc) => {
-          const createdAt = alloc.created_at ? new Date(alloc.created_at) : null;
-          const dateLabel = createdAt
-            ? createdAt.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" })
-            : "—";
-          const timeLabel = createdAt
-            ? createdAt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
-            : "—";
-
-          return {
-            type: "Reports",
-            icon: "📄",
-            title: alloc.type || alloc.description || "Allocation",
-            desc: alloc.description || alloc.type || "—",
-            date: dateLabel,
-            amount: alloc.amount != null ? formatCurrency(Number(alloc.amount)) : "—",
-            meta: alloc.type || "Allocation",
-            time: timeLabel,
-            flow: alloc.type === "Withdrawal" ? "out" : "in",
-          };
-        });
-
-        if (isMounted) {
-          setFinancialsRows(mapped);
-          setFinancialsLoading(false);
-        }
-      } catch (error) {
-        console.error("Failed to load financials", error);
-        if (isMounted) setFinancialsLoading(false);
-      }
-    };
-
-    loadFinancials();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [profile?.id]);
-
-  useEffect(() => {
     const updateMarketValues = async () => {
       if (!supabase || activeTab !== "holdings" || holdingsRaw.length === 0) return;
 
@@ -421,12 +435,12 @@ const StatementsPage = ({ onOpenNotifications }) => {
     return map;
   }, [rawStrategies, holdingsBySymbol]);
 
-  const combinedRows = [...strategyRows, ...holdingsRows, ...financialsRows];
+  const combinedRows = [...strategyRows, ...holdingsRows];
 
   const filtered = combinedRows.filter((row) => {
     if (activeTab === "strategy") return row.type === "Strategy";
     if (activeTab === "holdings") return row.type === "Holdings";
-    if (activeTab === "financials") return row.type === "Reports";
+    if (activeTab === "activity") return false;
     return true;
   });
 
@@ -436,8 +450,94 @@ const StatementsPage = ({ onOpenNotifications }) => {
 
   const isLoading =
     (activeTab === "strategy" && strategiesLoading) ||
-    (activeTab === "holdings" && holdingsLoading) ||
-    (activeTab === "financials" && financialsLoading);
+    (activeTab === "holdings" && holdingsLoading);
+
+  const activityItems = useMemo(() => {
+    return activityTransactions.map((t) => {
+      const isPositive = t.direction === "credit";
+      return {
+        id: t.id,
+        title: t.name || t.description || "Transaction",
+        description: t.description || t.store_reference || "",
+        date: t.transaction_date || t.created_at || "",
+        displayDate: formatShortDate(t.transaction_date || t.created_at),
+        time: formatTime(t.transaction_date || t.created_at),
+        amount: formatAmount(t.amount, t.direction),
+        rawAmount: (t.amount || 0) / 100,
+        direction: t.direction,
+        status: t.status,
+        filterCategory: getFilterCategory(t.direction, t.name),
+        isPositive,
+        groupLabel: formatRelativeDate(t.transaction_date || t.created_at),
+        logo_url: t.logo_url,
+        holding_logos: t.holding_logos || [],
+      };
+    });
+  }, [activityTransactions]);
+
+  const activitySummaryStats = useMemo(() => {
+    const totalIn = activityItems.filter(i => {
+      const lower = (i.title || "").toLowerCase();
+      const isWithdrawal = lower.includes("withdraw") || lower.includes("repay");
+      return !isWithdrawal;
+    }).reduce((sum, i) => sum + Math.abs(i.rawAmount), 0);
+    const totalOut = activityItems.filter(i => {
+      const lower = (i.title || "").toLowerCase();
+      return lower.includes("withdraw") || lower.includes("repay");
+    }).reduce((sum, i) => sum + Math.abs(i.rawAmount), 0);
+    return { totalIn, totalOut, count: activityItems.length };
+  }, [activityItems]);
+
+  const activityVisibleItems = useMemo(() => {
+    let items = activityFilter === "All"
+      ? activityItems
+      : activityItems.filter((item) => item.filterCategory === activityFilter);
+
+    if (activitySearchQuery.trim()) {
+      const q = activitySearchQuery.toLowerCase();
+      items = items.filter((item) =>
+        item.title.toLowerCase().includes(q) ||
+        item.description.toLowerCase().includes(q) ||
+        item.amount.toLowerCase().includes(q)
+      );
+    }
+
+    if (fromDate || toDate) {
+      const fromTime = fromDate ? new Date(`${fromDate}T00:00:00`).getTime() : null;
+      const toTime = toDate ? new Date(`${toDate}T23:59:59`).getTime() : null;
+      items = items.filter((item) => {
+        const itemTime = new Date(item.date).getTime();
+        if (isNaN(itemTime)) return false;
+        if (fromTime && itemTime < fromTime) return false;
+        if (toTime && itemTime > toTime) return false;
+        return true;
+      });
+    }
+
+    return items;
+  }, [activityFilter, activitySearchQuery, fromDate, toDate, activityItems]);
+
+  const activityGroupedItems = useMemo(() => {
+    const groups = {};
+    activityVisibleItems.forEach((item) => {
+      const label = item.groupLabel;
+      if (!groups[label]) groups[label] = [];
+      groups[label].push(item);
+    });
+    const groupOrder = ["Today", "Yesterday", "This Week", "This Month"];
+    return Object.entries(groups)
+      .sort(([a, aItems], [b, bItems]) => {
+        const aIdx = groupOrder.indexOf(a);
+        const bIdx = groupOrder.indexOf(b);
+        if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+        if (aIdx !== -1) return -1;
+        if (bIdx !== -1) return 1;
+        const dateA = new Date(aItems[0].date).getTime();
+        const dateB = new Date(bItems[0].date).getTime();
+        return dateB - dateA;
+      })
+      .map(([label, items]) => ({ label, items }));
+  }, [activityVisibleItems]);
 
   const pages = Math.max(1, Math.ceil(searchFiltered.length / perPage));
   const start = (page - 1) * perPage;
