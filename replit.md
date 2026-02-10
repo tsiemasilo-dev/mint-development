@@ -164,11 +164,16 @@ A React authentication application using Vite as the build tool with Tailwind CS
   - Individual Stocks tab displays real-time market prices and charts
   - Fallback to mock data if API is unavailable
   - No API key required (uses Yahoo Finance public endpoints)
-- **TruID Integration** (Legacy):
+- **TruID Bank Linking**:
   - Backend: `server/index.cjs` - Express server with TruID API endpoints
   - Client: `server/truidClient.cjs` - TruID API client with authentication
-  - Frontend: `src/components/TruidConnector.jsx` - Verification UI component
-  - Endpoints: POST `/api/truid/initiate`, GET `/api/truid/status`
+  - Frontend: `src/pages/MintBankPage.jsx` - Bank linking page with confirmation flow
+  - SVG bank logos: `src/assets/banks/` - FNB, Standard Bank, ABSA, Nedbank, Capitec, Investec, Discovery, TymeBank, African Bank, Bank Zero
+  - **Flow**: TruID verification → User confirms bank/account details → Saved to Supabase
+  - **Confirm step**: After TruID verifies, user selects bank from dropdown (auto-prefilled from TruID data), enters account number, selects account type
+  - **Storage**: Bank accounts stored as JSON in `user_onboarding.sumsub_outcome` column
+  - **Per-account unlink**: Individual accounts can be removed with password confirmation
+  - Endpoints: POST `/api/banking/initiate`, GET `/api/banking/status`, POST `/api/banking/capture`, POST `/api/banking/capture-confirm`, GET `/api/banking/accounts`, POST `/api/banking/unlink`
   - Environment variables: TRUID_API_KEY, BRAND_ID, COMPANY_ID, TRUID_API_BASE, TRUID_DOMAIN, REDIRECT_URL, WEBHOOK_URL
 - **Notifications System**:
   - Centralized state management via NotificationsProvider context

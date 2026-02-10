@@ -1160,6 +1160,59 @@ app.get("/api/banking/accounts", async (req, res) => {
   }
 });
 
+app.post("/api/banking/capture-confirm", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (!token) return res.status(401).json({ success: false, error: "Missing token" });
+
+    const db = supabaseAdmin || supabase;
+    const authClient = supabaseAdmin || supabase;
+    const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
+    if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
+
+    const { accounts } = req.body;
+    if (!accounts || !Array.isArray(accounts)) {
+      return res.status(400).json({ success: false, error: "accounts array required" });
+    }
+
+    const bankJson = JSON.stringify(accounts);
+
+    const { data: existing } = await db
+      .from("user_onboarding")
+      .select("id")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existing) {
+      await db
+        .from("user_onboarding")
+        .update({ sumsub_outcome: bankJson })
+        .eq("id", existing.id);
+    }
+
+    const { data: existingAction } = await db
+      .from("required_actions")
+      .select("id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    const actionData = { bank_linked: true, bank_in_review: false, bank_linked_at: new Date().toISOString() };
+    if (existingAction) {
+      await db.from("required_actions").update(actionData).eq("id", existingAction.id);
+    } else {
+      await db.from("required_actions").insert({ user_id: user.id, ...actionData });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Capture confirm error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.post("/api/banking/unlink", async (req, res) => {
   try {
     const authHeader = req.headers.authorization || "";
