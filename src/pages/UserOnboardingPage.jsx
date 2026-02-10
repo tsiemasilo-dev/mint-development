@@ -113,6 +113,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const [expectedMonthlyInvestment, setExpectedMonthlyInvestment] = useState("");
   const [agreedSourceOfFunds, setAgreedSourceOfFunds] = useState(false);
   const [sofDropdownOpen, setSofDropdownOpen] = useState(false);
+  const [kycAlreadyVerified, setKycAlreadyVerified] = useState(false);
   const [authStatus, setAuthStatus] = useState({
     isChecked: false,
     isAuthenticated: false,
@@ -324,6 +325,30 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
       setAgreedTerms(false);
       setAgreedPrivacy(false);
     }
+  }, [step]);
+
+  useEffect(() => {
+    if (step !== 2) return;
+    const checkKycStatus = async () => {
+      try {
+        const apiBase = import.meta.env.VITE_API_URL || "";
+        const { data: userData } = await supabase.auth.getUser();
+        const userId = userData?.user?.id;
+        if (!userId) return;
+        const res = await fetch(`${apiBase}/api/sumsub/status`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId }),
+        });
+        const data = await res.json();
+        if (data.success && data.status === "verified") {
+          setKycAlreadyVerified(true);
+          setShowProceed(true);
+        }
+      } catch {
+      }
+    };
+    checkKycStatus();
   }, [step]);
 
   const showEmployedSection =
@@ -730,21 +755,48 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               <div className="text-center mb-8 animate-fade-in delay-1">
                 <p
                   className="text-xs uppercase tracking-[0.2em] mb-2"
-                  style={{ color: "#6b7280" }}
+                  style={{ color: "hsl(270 20% 55%)" }}
                 >
                   Step 1 of 4
                 </p>
                 <h2
                   className="text-3xl font-light tracking-tight mb-2"
-                  style={{ color: "#1f2937" }}
+                  style={{ color: "hsl(270 30% 25%)" }}
                 >
                   Identity Verification
                 </h2>
-                <p className="text-sm" style={{ color: "#6b7280" }}>
-                  Verify your identity securely with Sumsub
+                <p className="text-sm" style={{ color: "hsl(270 20% 50%)" }}>
+                  {kycAlreadyVerified
+                    ? "Your identity has already been verified"
+                    : "Verify your identity securely with Sumsub"}
                 </p>
               </div>
-              <SumsubVerification onVerified={() => setShowProceed(true)} />
+              {kycAlreadyVerified ? (
+                <div className="text-center py-8 animate-fade-in delay-2">
+                  <div
+                    className="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center"
+                    style={{ background: "linear-gradient(135deg, #10b981 0%, #059669 100%)" }}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" className="w-8 h-8">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-medium mb-2" style={{ color: "hsl(270 30% 25%)" }}>
+                    Identity Verified
+                  </h3>
+                  <p className="text-sm mb-6" style={{ color: "hsl(270 20% 50%)" }}>
+                    Your identity has been successfully verified
+                  </p>
+                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium" style={{ background: "hsl(152 80% 95%)", color: "hsl(152 60% 30%)" }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                    </svg>
+                    <span>Verification Complete</span>
+                  </div>
+                </div>
+              ) : (
+                <SumsubVerification onVerified={() => setShowProceed(true)} />
+              )}
               {showProceed && (
                 <div className="text-center mt-8 animate-fade-in delay-2">
                   <button
