@@ -1,19 +1,57 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   ArrowLeft,
   BadgeCheck,
   ChevronRight,
   CheckCircle2,
+  Shield,
+  Wallet,
+  FileText,
 } from "lucide-react";
 import ActionsSkeleton from "../components/ActionsSkeleton";
 import { useSumsubStatus } from "../lib/useSumsubStatus";
+import { supabase } from "../lib/supabase";
 
 const ActionsPage = ({ onBack, onNavigate }) => {
   const { kycVerified, kycPending, kycNeedsResubmission, loading: kycLoading, rejectLabels } = useSumsubStatus();
+  const [onboardingData, setOnboardingData] = useState(null);
+  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
 
-  if (kycLoading) {
+  useEffect(() => {
+    const checkOnboarding = async () => {
+      if (!supabase) {
+        setCheckingOnboarding(false);
+        return;
+      }
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        const userId = userData?.user?.id;
+        if (!userId) {
+          setCheckingOnboarding(false);
+          return;
+        }
+        const { data } = await supabase
+          .from("user_onboarding")
+          .select("risk_disclosure_agreed, source_of_funds, expected_monthly_investment")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(1);
+        setOnboardingData(data?.[0] || null);
+      } catch {
+      } finally {
+        setCheckingOnboarding(false);
+      }
+    };
+    checkOnboarding();
+  }, []);
+
+  if (kycLoading || checkingOnboarding) {
     return <ActionsSkeleton />;
   }
+
+  const riskDisclosureComplete = !!onboardingData?.risk_disclosure_agreed;
+  const sourceOfFundsComplete = !!onboardingData?.source_of_funds;
+  const allOnboardingComplete = kycVerified && riskDisclosureComplete && sourceOfFundsComplete;
 
   const getKycStatus = () => {
     if (kycVerified) return { text: "Verified", style: "bg-green-100 text-green-600" };
@@ -44,6 +82,14 @@ const ActionsPage = ({ onBack, onNavigate }) => {
     return "Needed to unlock higher limits";
   };
 
+  const getOnboardingStatus = () => {
+    if (!kycVerified) return { text: "Awaiting KYC", style: "bg-slate-100 text-slate-500" };
+    if (allOnboardingComplete) return { text: "Complete", style: "bg-green-100 text-green-600" };
+    return { text: "Required", style: "bg-slate-100 text-slate-500" };
+  };
+
+  const onboardingStatus = getOnboardingStatus();
+
   const allActions = [
     {
       id: "identity",
@@ -55,11 +101,24 @@ const ActionsPage = ({ onBack, onNavigate }) => {
       completed: kycVerified,
       navigateTo: "identityCheck",
     },
+    {
+      id: "onboarding",
+      title: "Complete onboarding",
+      description: allOnboardingComplete
+        ? "Risk disclosure, source of funds, and agreements complete"
+        : "Risk disclosure, source of funds, and agreements",
+      status: onboardingStatus.text,
+      statusStyle: onboardingStatus.style,
+      icon: FileText,
+      completed: allOnboardingComplete,
+      navigateTo: "identityCheck",
+      disabled: !kycVerified,
+    },
   ];
 
-  const outstandingActions = allActions.filter((a) => !a.completed);
+  const outstandingActions = allActions.filter((a) => !a.completed && !a.disabled);
   const completedActions = allActions.filter((a) => a.completed);
-  const allRequiredComplete = kycVerified;
+  const allRequiredComplete = allOnboardingComplete;
 
   const handleActionPress = (action) => {
     if (onNavigate && action.navigateTo) {
