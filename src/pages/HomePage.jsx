@@ -428,7 +428,7 @@ const HomePage = ({
       }
     };
     fetchStrategies();
-  }, [profile?.id]);
+  }, [profile?.id, pricesLastUpdated]);
 
   const holdingsBySymbol = useMemo(() => buildHoldingsBySymbol(holdingsSecurities), [holdingsSecurities]);
 

@@ -87,7 +87,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   const dropdownRef = useRef(null);
   const stockDropdownRef = useRef(null);
   const { profile } = useProfile();
-  const { strategies, selectedStrategy: userSelectedStrategy, loading: strategiesLoading, selectStrategy } = useUserStrategies();
+  const { strategies, selectedStrategy: userSelectedStrategy, loading: strategiesLoading, selectStrategy, refetch: refetchStrategies } = useUserStrategies();
   const { chartData: realChartData, loading: chartLoading } = useStrategyChartData(userSelectedStrategy?.strategyId, timeFilter);
   
   const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(" ") || "User";
@@ -182,8 +182,9 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       clearMarketDataCache();
       refetchStocks();
       refetchInvestments();
+      refetchStrategies();
     }
-  }, [pricesLastUpdated, refetchInvestments]);
+  }, [pricesLastUpdated, refetchInvestments, refetchStrategies]);
 
   const calendarFilterOptions = useMemo(() => {
     const options = [{ id: "overall", label: "Overall Portfolio" }];
