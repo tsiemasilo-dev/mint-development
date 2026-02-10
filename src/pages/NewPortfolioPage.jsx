@@ -302,10 +302,13 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   };
 
   const myStocks = useMemo(() => {
-    if (!stocksList || stocksList.length === 0 || allStrategyHoldings.length === 0) return [];
-    const holdingSymbols = new Set(allStrategyHoldings.map(h => h.symbol));
+    if (!stocksList || stocksList.length === 0) return [];
+    const holdingSymbols = new Set();
+    (rawHoldings || []).forEach(h => { if (h.symbol) holdingSymbols.add(h.symbol); });
+    allStrategyHoldings.forEach(h => { if (h.symbol && !h.isStrategy) holdingSymbols.add(h.symbol); });
+    if (holdingSymbols.size === 0) return [];
     return stocksList.filter(stock => holdingSymbols.has(stock.ticker));
-  }, [allStrategyHoldings, stocksList]);
+  }, [rawHoldings, allStrategyHoldings, stocksList]);
 
   const myStockIds = useMemo(() => new Set(myStocks.map(s => s.id)), [myStocks]);
 
