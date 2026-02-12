@@ -60,18 +60,14 @@ const MintLogoSilver = ({ className = "" }) => (
 );
 
 const CardContent = ({ children, style, variant = "default" }) => {
-  const bg = variant === "invest"
-    ? "linear-gradient(180deg, #111111 0%, #3b1b7a 50%, #5b21b6 100%)"
-    : "linear-gradient(135deg, #2d1052 0%, #4a1d7a 25%, #6b2fa0 50%, #5a2391 75%, #3d1a6d 100%)";
+  const bg = "#ffffff";
 
   return (
     <div
       className="absolute inset-0 rounded-[24px] overflow-hidden"
       style={{
         background: bg,
-        boxShadow: variant === "invest"
-          ? "0 25px 50px -12px rgba(0, 0, 0, 0.6)"
-          : "0 25px 50px -12px rgba(91, 33, 182, 0.5)",
+        boxShadow: "0 16px 36px -14px rgba(15, 23, 42, 0.28)",
         backfaceVisibility: "hidden",
         ...style,
       }}
@@ -754,23 +750,23 @@ const HomePage = ({
                 }}>
                   <div className="relative h-full p-6 flex flex-col">
                     <div className="flex items-start justify-between">
-                      <MintLogoWhite className="h-7 w-auto opacity-90" />
+                      <MintLogoWhite className="h-7 w-auto opacity-0" />
                     </div>
                     <div className="flex-1 flex flex-col items-center justify-center gap-1">
-                      <p className="text-[10px] uppercase tracking-[0.25em] text-white/40 font-medium" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>Available Balance</p>
-                      <p className="text-[28px] md:text-[34px] font-extralight text-white tracking-wide" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", letterSpacing: "0.04em" }}>
+                      <p className="text-[10px] uppercase tracking-[0.25em] text-slate-500 font-medium" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>Available Balance</p>
+                      <p className="text-[28px] md:text-[34px] font-extralight text-slate-900 tracking-wide" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", letterSpacing: "0.04em" }}>
                         {isCardVisible ? formatZar(balance) : "••••••••"}
                       </p>
                     </div>
                     <div className="flex items-end justify-between">
                       <div>
-                        <p className="text-[9px] uppercase tracking-[0.2em] text-white/35 font-normal mb-1" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>Card Holder</p>
-                        <p className="text-[13px] uppercase tracking-[0.18em] text-white/90 font-light" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif", letterSpacing: "0.18em" }}>
+                        <p className="text-[9px] uppercase tracking-[0.2em] text-slate-400 font-normal mb-1" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>Card Holder</p>
+                        <p className="text-[13px] uppercase tracking-[0.18em] text-slate-800 font-light" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif", letterSpacing: "0.18em" }}>
                           {displayName || "MINT MEMBER"}
                         </p>
                       </div>
                       <div className="text-right flex items-end">
-                        <p className="text-[22px] md:text-[26px] font-light text-white/90 tracking-wider mb-[-2px]" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif", fontStyle: "italic", letterSpacing: "0.08em" }}>MINT</p>
+                        <p className="text-[22px] md:text-[26px] font-light text-slate-800 tracking-wider mb-[-2px]" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif", fontStyle: "italic", letterSpacing: "0.08em" }}>MINT</p>
                       </div>
                     </div>
                   </div>
@@ -789,7 +785,7 @@ const HomePage = ({
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); toggleCardVisibility(); }}
-                    className="absolute top-4 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20"
+                    className="absolute top-4 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200"
                   >
                     {isCardVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                   </button>
