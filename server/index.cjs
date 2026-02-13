@@ -3218,6 +3218,10 @@ app.post("/api/webhooks/broker", async (req, res) => {
   }
 });
 
+app.use((req, res) => {
+  res.status(404).json({ error: "Not found", message: "This is the API server. The frontend is served separately." });
+});
+
 const PORT = process.env.API_PORT || 3001;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`TruID API server running on port ${PORT}`);
