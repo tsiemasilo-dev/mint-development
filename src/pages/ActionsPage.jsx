@@ -92,11 +92,23 @@ const ActionsPage = ({ onBack, onNavigate }) => {
 
   const allActions = [
     {
-      id: "identity",
-      title: "Complete identity check",
+      id: "kyc",
+      title: "KYC verification",
       description: getKycDescription(),
       status: kycStatus.text,
       statusStyle: kycStatus.style,
+      icon: Shield,
+      completed: kycVerified,
+      navigateTo: "identityCheck",
+    },
+    {
+      id: "identity",
+      title: "Complete identity",
+      description: kycVerified
+        ? "Employment details and identity verification complete"
+        : "Employment details and identity verification",
+      status: kycVerified ? { text: "Complete", style: "bg-green-100 text-green-600" }.text : "Required",
+      statusStyle: kycVerified ? "bg-green-100 text-green-600" : "bg-slate-100 text-slate-500",
       icon: BadgeCheck,
       completed: kycVerified,
       navigateTo: "identityCheck",

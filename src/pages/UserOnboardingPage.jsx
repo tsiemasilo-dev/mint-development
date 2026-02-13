@@ -318,7 +318,6 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   }, [step]);
 
   useEffect(() => {
-    if (step !== 2) return;
     const checkKycStatus = async () => {
       try {
         const apiBase = import.meta.env.VITE_API_URL || "";
@@ -333,7 +332,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
         const data = await res.json();
         if (data.success && data.status === "verified") {
           setKycAlreadyVerified(true);
-          setShowProceed(true);
+          if (step === 2) setShowProceed(true);
         }
       } catch {
       }
@@ -433,8 +432,14 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               </div>
 
               <div className="steps-container animate-fade-in delay-2">
-                <div className="step-circle">1</div>
-                <div className="step-line"></div>
+                <div className={`step-circle ${kycAlreadyVerified ? 'step-circle-complete' : ''}`}>
+                  {kycAlreadyVerified ? (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="16" height="16">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                    </svg>
+                  ) : '1'}
+                </div>
+                <div className={`step-line ${kycAlreadyVerified ? 'step-line-complete' : ''}`}></div>
                 <div className="step-circle">2</div>
                 <div className="step-line"></div>
                 <div className="step-circle">3</div>
@@ -443,12 +448,23 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               </div>
 
               <div className="step-info animate-fade-in delay-3">
-                <div className="step-item">
-                  <div className="step-number">1</div>
+                <div className={`step-item ${kycAlreadyVerified ? 'step-item-complete' : ''}`}>
+                  <div className={`step-number ${kycAlreadyVerified ? 'step-number-complete' : ''}`}>
+                    {kycAlreadyVerified ? (
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="14" height="14">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                      </svg>
+                    ) : '1'}
+                  </div>
                   <div className="step-content">
-                    <div className="step-title">Identification</div>
+                    <div className="step-title">
+                      Identification
+                      {kycAlreadyVerified && <span className="step-verified-badge">Verified</span>}
+                    </div>
                     <div className="step-description">
-                      Verify your identity for security purposes
+                      {kycAlreadyVerified
+                        ? 'Identity verification complete'
+                        : 'Verify your identity for security purposes'}
                     </div>
                   </div>
                 </div>
