@@ -140,7 +140,11 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
   const handleContinue = () => {
     if (step === 0) {
-      goToStep(2);
+      if (kycAlreadyVerified) {
+        goToStep(3);
+      } else {
+        goToStep(2);
+      }
     }
   };
 
@@ -150,7 +154,11 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
     } else if (step === 4) {
       goToStep(3);
     } else if (step === 3) {
-      goToStep(2);
+      if (kycAlreadyVerified) {
+        goToStep(0);
+      } else {
+        goToStep(2);
+      }
     } else if (step === 2) {
       goToStep(0);
     } else if (onBack) {
