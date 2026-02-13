@@ -77,24 +77,7 @@ const SumsubVerification = ({ onVerified, resubmitMode = false }) => {
         const authToken = session?.access_token;
 
         if (resubmitMode) {
-          console.log("Resubmit mode: resetting applicant before re-initialization");
-          try {
-            const resetRes = await fetch(`${apiBase}/api/sumsub/reset`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                ...(authToken ? { "Authorization": `Bearer ${authToken}` } : {}),
-              },
-            });
-            const resetData = await resetRes.json();
-            if (resetData.success) {
-              console.log("Applicant reset successfully for resubmission");
-            } else {
-              console.warn("Applicant reset returned:", resetData.error?.message);
-            }
-          } catch (resetErr) {
-            console.warn("Applicant reset failed (continuing anyway):", resetErr.message);
-          }
+          console.log("Resubmit mode: opening Sumsub SDK for document resubmission (no reset - preserves existing data)");
         }
 
         const response = await fetch(`${apiBase}/api/sumsub/access-token`, {
@@ -247,24 +230,7 @@ const SumsubVerification = ({ onVerified, resubmitMode = false }) => {
         const { data: { session: sess } } = await supabase.auth.getSession();
         const aToken = sess?.access_token;
 
-        console.log("Retry: resetting applicant before re-initialization");
-        try {
-          const resetRes = await fetch(`${apiBase}/api/sumsub/reset`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              ...(aToken ? { "Authorization": `Bearer ${aToken}` } : {}),
-            },
-          });
-          const resetData = await resetRes.json();
-          if (resetData.success) {
-            console.log("Applicant reset successfully for retry");
-          } else {
-            console.warn("Applicant reset returned:", resetData.error?.message);
-          }
-        } catch (resetErr) {
-          console.warn("Applicant reset failed (continuing anyway):", resetErr.message);
-        }
+        console.log("Retry: re-initializing Sumsub SDK (preserving existing applicant data)");
 
         const response = await fetch(`${apiBase}/api/sumsub/access-token`, {
           method: "POST",
