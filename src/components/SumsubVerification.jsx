@@ -72,13 +72,17 @@ const SumsubVerification = ({ onVerified }) => {
         setUserId(currentUserId);
 
         const apiBase = import.meta.env.VITE_API_URL || "";
+        const { data: { session } } = await supabase.auth.getSession();
+        const authToken = session?.access_token;
         const response = await fetch(`${apiBase}/api/sumsub/access-token`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            ...(authToken ? { "Authorization": `Bearer ${authToken}` } : {}),
           },
           body: JSON.stringify({
             userId: currentUserId,
+            levelName: undefined,
           }),
         });
 
@@ -104,10 +108,13 @@ const SumsubVerification = ({ onVerified }) => {
   const accessTokenExpirationHandler = useCallback(async () => {
     try {
       const apiBase = import.meta.env.VITE_API_URL || "";
+      const { data: { session } } = await supabase.auth.getSession();
+      const authToken = session?.access_token;
       const response = await fetch(`${apiBase}/api/sumsub/access-token`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...(authToken ? { "Authorization": `Bearer ${authToken}` } : {}),
         },
         body: JSON.stringify({
           userId,
@@ -205,9 +212,14 @@ const SumsubVerification = ({ onVerified }) => {
     const reinitialize = async () => {
       try {
         const apiBase = import.meta.env.VITE_API_URL || "";
+        const { data: { session: sess } } = await supabase.auth.getSession();
+        const aToken = sess?.access_token;
         const response = await fetch(`${apiBase}/api/sumsub/access-token`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(aToken ? { "Authorization": `Bearer ${aToken}` } : {}),
+          },
           body: JSON.stringify({ userId }),
         });
         const data = await response.json();

@@ -357,17 +357,31 @@ app.post("/api/sumsub/access-token", async (req, res) => {
       });
     }
 
-    const { userId, levelName = SUMSUB_LEVEL_NAME } = req.body;
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.replace("Bearer ", "");
+    const db = supabaseAdmin || supabase;
+    let authenticatedUserId = null;
+
+    if (token && db) {
+      try {
+        const { data: { user } } = await db.auth.getUser(token);
+        if (user) authenticatedUserId = user.id;
+      } catch (e) {}
+    }
+
+    const { levelName = SUMSUB_LEVEL_NAME } = req.body;
+    const userId = authenticatedUserId;
     
     if (!userId) {
-      return res.status(400).json({
+      return res.status(401).json({
         success: false,
-        error: { message: "userId is required" }
+        error: { message: "Authentication required" }
       });
     }
 
+    let applicantData = null;
     try {
-      await createSumsubApplicant(userId, levelName);
+      applicantData = await createSumsubApplicant(userId, levelName);
     } catch (err) {
       if (!err.message.includes("already exists")) {
         console.error("Create applicant error:", err.message);
@@ -375,6 +389,41 @@ app.post("/api/sumsub/access-token", async (req, res) => {
     }
 
     const tokenData = await generateSumsubAccessToken(userId, levelName);
+
+    const onbDb = supabaseAdmin || supabase;
+    if (onbDb) {
+      try {
+        const { data: existing } = await onbDb
+          .from("user_onboarding")
+          .select("id")
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (!existing) {
+          const { error: insErr } = await onbDb.from("user_onboarding").insert({
+            user_id: userId,
+            employment_status: "not_provided",
+            sumsub_external_user_id: userId,
+            sumsub_applicant_id: applicantData?.id || null,
+            kyc_status: "pending",
+            kyc_checked_at: new Date().toISOString(),
+            annual_income_currency: "USD",
+          });
+          if (insErr) {
+            console.error("[Sumsub] Failed to create onboarding record:", insErr.message);
+          } else {
+            console.log(`[Sumsub] Created onboarding record for user ${userId}`);
+          }
+        } else if (applicantData?.id) {
+          await onbDb.from("user_onboarding")
+            .update({ sumsub_applicant_id: applicantData.id, sumsub_external_user_id: userId, updated_at: new Date().toISOString() })
+            .eq("id", existing.id)
+            .eq("user_id", userId);
+        }
+      } catch (dbErr) {
+        console.error("[Sumsub] Onboarding record error:", dbErr.message);
+      }
+    }
     
     res.json({
       success: true,
@@ -744,32 +793,44 @@ app.post("/api/sumsub/sync-status", async (req, res) => {
 });
 
 app.post("/api/sumsub/webhook", async (req, res) => {
-  console.log("Sumsub webhook received:", JSON.stringify(req.body, null, 2));
+  const digestHeader = req.headers["x-payload-digest"] || req.headers["x-signature"];
+  if (SUMSUB_SECRET_KEY && digestHeader) {
+    try {
+      const rawBody = JSON.stringify(req.body);
+      const computed = crypto.createHmac("sha256", SUMSUB_SECRET_KEY).update(rawBody).digest("hex");
+      if (computed !== digestHeader) {
+        console.warn("[Webhook] Signature mismatch, rejecting");
+        return res.status(403).json({ error: "Invalid signature" });
+      }
+    } catch (sigErr) {
+      console.warn("[Webhook] Signature verification error:", sigErr.message);
+    }
+  }
+
+  console.log("[Webhook] Sumsub webhook received:", JSON.stringify(req.body, null, 2));
   
   const { type, applicantId, reviewResult, reviewStatus, externalUserId } = req.body;
+  const db = supabaseAdmin || supabase;
   
-  if (!supabase || !externalUserId) {
-    console.log("No Supabase or externalUserId, skipping database update");
+  if (!db || !externalUserId) {
+    console.log("[Webhook] No database client or externalUserId, skipping");
     return res.status(200).json({ received: true });
   }
 
   try {
     let kycUpdate = null;
+    let onboardingKycStatus = null;
+    let reviewAnswer = null;
     
-    // Determine status based on webhook type and review result
     if (type === "applicantReviewed") {
-      const reviewAnswer = reviewResult?.reviewAnswer;
+      reviewAnswer = reviewResult?.reviewAnswer;
       const rejectLabels = reviewResult?.rejectLabels || [];
       
       if (reviewAnswer === "GREEN") {
-        console.log(`User ${externalUserId} KYC verified successfully`);
-        kycUpdate = { 
-          kyc_verified: true, 
-          kyc_pending: false, 
-          kyc_needs_resubmission: false 
-        };
+        console.log(`[Webhook] User ${externalUserId} KYC verified successfully`);
+        kycUpdate = { kyc_verified: true, kyc_pending: false, kyc_needs_resubmission: false };
+        onboardingKycStatus = "verified";
       } else if (reviewAnswer === "RED") {
-        // Check if it's a temporary rejection (can resubmit) or permanent
         const canResubmit = rejectLabels.some(label => 
           ["DOCUMENT_PAGE_MISSING", "INCOMPLETE_DOCUMENT", "UNSATISFACTORY_PHOTOS", 
            "DOCUMENT_DAMAGED", "SCREENSHOTS", "SPAM", "NOT_DOCUMENT", "SELFIE_MISMATCH",
@@ -777,65 +838,82 @@ app.post("/api/sumsub/webhook", async (req, res) => {
         );
         
         if (canResubmit) {
-          console.log(`User ${externalUserId} KYC needs resubmission: ${rejectLabels.join(", ")}`);
-          kycUpdate = { 
-            kyc_verified: false, 
-            kyc_pending: false, 
-            kyc_needs_resubmission: true 
-          };
+          console.log(`[Webhook] User ${externalUserId} KYC needs resubmission: ${rejectLabels.join(", ")}`);
+          kycUpdate = { kyc_verified: false, kyc_pending: false, kyc_needs_resubmission: true };
+          onboardingKycStatus = "resubmission_required";
         } else {
-          console.log(`User ${externalUserId} KYC rejected permanently: ${rejectLabels.join(", ")}`);
-          kycUpdate = { 
-            kyc_verified: false, 
-            kyc_pending: false, 
-            kyc_needs_resubmission: false 
-          };
+          console.log(`[Webhook] User ${externalUserId} KYC rejected permanently: ${rejectLabels.join(", ")}`);
+          kycUpdate = { kyc_verified: false, kyc_pending: false, kyc_needs_resubmission: false };
+          onboardingKycStatus = "rejected";
         }
       }
     } else if (type === "applicantPending" || type === "applicantCreated") {
-      console.log(`User ${externalUserId} KYC is pending review`);
-      kycUpdate = { 
-        kyc_verified: false, 
-        kyc_pending: true, 
-        kyc_needs_resubmission: false 
-      };
+      console.log(`[Webhook] User ${externalUserId} KYC is pending review`);
+      kycUpdate = { kyc_verified: false, kyc_pending: true, kyc_needs_resubmission: false };
+      onboardingKycStatus = "pending";
     } else if (type === "applicantOnHold") {
-      console.log(`User ${externalUserId} KYC on hold - action required`);
-      kycUpdate = { 
-        kyc_verified: false, 
-        kyc_pending: false, 
-        kyc_needs_resubmission: true 
-      };
+      console.log(`[Webhook] User ${externalUserId} KYC on hold`);
+      kycUpdate = { kyc_verified: false, kyc_pending: false, kyc_needs_resubmission: true };
+      onboardingKycStatus = "on_hold";
     } else if (type === "applicantActionPending") {
-      console.log(`User ${externalUserId} KYC action pending - resubmission needed`);
-      kycUpdate = { 
-        kyc_verified: false, 
-        kyc_pending: false, 
-        kyc_needs_resubmission: true 
-      };
+      console.log(`[Webhook] User ${externalUserId} KYC action pending`);
+      kycUpdate = { kyc_verified: false, kyc_pending: false, kyc_needs_resubmission: true };
+      onboardingKycStatus = "action_required";
     }
     
     if (kycUpdate) {
-      const { data: existingAction } = await supabase
+      const { data: existingAction } = await db
         .from("required_actions")
         .select("id")
         .eq("user_id", externalUserId)
         .maybeSingle();
 
       if (existingAction) {
-        await supabase
-          .from("required_actions")
-          .update(kycUpdate)
-          .eq("user_id", externalUserId);
+        await db.from("required_actions").update(kycUpdate).eq("user_id", externalUserId);
       } else {
-        await supabase
-          .from("required_actions")
-          .insert({ user_id: externalUserId, ...kycUpdate });
+        await db.from("required_actions").insert({ user_id: externalUserId, ...kycUpdate });
       }
-      console.log(`Updated KYC status for user ${externalUserId}:`, kycUpdate);
+      console.log(`[Webhook] Updated required_actions for user ${externalUserId}`);
+    }
+
+    if (onboardingKycStatus) {
+      const onboardingUpdate = {
+        sumsub_external_user_id: externalUserId,
+        sumsub_applicant_id: applicantId || null,
+        sumsub_review_status: reviewStatus || type,
+        sumsub_review_answer: reviewAnswer,
+        kyc_status: onboardingKycStatus,
+        kyc_checked_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      if (onboardingKycStatus === "verified") {
+        onboardingUpdate.kyc_verified_at = new Date().toISOString();
+      }
+
+      const { data: existingOnboarding } = await db
+        .from("user_onboarding")
+        .select("id")
+        .eq("user_id", externalUserId)
+        .maybeSingle();
+
+      if (existingOnboarding) {
+        await db.from("user_onboarding").update(onboardingUpdate).eq("id", existingOnboarding.id).eq("user_id", externalUserId);
+        console.log(`[Webhook] Updated user_onboarding for user ${externalUserId} -> ${onboardingKycStatus}`);
+      } else {
+        const { error: insErr } = await db.from("user_onboarding").insert({
+          user_id: externalUserId,
+          employment_status: "not_provided",
+          ...onboardingUpdate,
+        });
+        if (insErr) {
+          console.error(`[Webhook] Failed to create user_onboarding for ${externalUserId}:`, insErr.message);
+        } else {
+          console.log(`[Webhook] Created user_onboarding for user ${externalUserId} -> ${onboardingKycStatus}`);
+        }
+      }
     }
   } catch (err) {
-    console.error("Failed to update KYC status:", err);
+    console.error("[Webhook] Failed to process Sumsub webhook:", err);
   }
   
   res.status(200).json({ received: true });
@@ -2634,6 +2712,112 @@ app.get("/api/debug/onboarding/:userId", async (req, res) => {
     res.json({ onboarding, actions, errors: { onboarding: e1?.message, actions: e2?.message } });
   } catch (e) {
     res.json({ error: e.message });
+  }
+});
+
+// ============================================================
+// Sumsub Sync - backfill missed applicants into user_onboarding
+// ============================================================
+
+app.post("/api/sumsub/sync", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.replace("Bearer ", "");
+    const db = supabaseAdmin || supabase;
+    
+    if (!db) return res.status(500).json({ error: "No database client" });
+    
+    let isAdmin = false;
+    if (token) {
+      try {
+        const { data: { user } } = await db.auth.getUser(token);
+        if (user) isAdmin = true;
+      } catch (e) {}
+    }
+    
+    const internalCall = req.headers["x-internal-key"] === SUMSUB_SECRET_KEY;
+    if (!isAdmin && !internalCall) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+
+    if (!SUMSUB_APP_TOKEN || !SUMSUB_SECRET_KEY) {
+      return res.status(500).json({ error: "Sumsub credentials not configured" });
+    }
+
+    const { data: { users } } = await db.auth.admin.listUsers();
+    if (!users || users.length === 0) return res.json({ synced: 0, message: "No users found" });
+
+    const { data: onboarded } = await db.from("user_onboarding").select("user_id");
+    const onboardedIds = new Set((onboarded || []).map(o => o.user_id));
+
+    const confirmedUsers = users.filter(u => u.email_confirmed_at && !onboardedIds.has(u.id));
+    console.log(`[Sync] Checking ${confirmedUsers.length} users without onboarding records against Sumsub...`);
+
+    let synced = 0;
+    const results = [];
+
+    for (const u of confirmedUsers) {
+      try {
+        const ts = Math.floor(Date.now() / 1000).toString();
+        const path = `/resources/applicants/-;externalUserId=${u.id}/one`;
+        const sig = createSumsubSignature(ts, "GET", path);
+        
+        const response = await fetch(`${SUMSUB_BASE_URL.startsWith("http") ? SUMSUB_BASE_URL : "https://" + SUMSUB_BASE_URL}${path}`, {
+          method: "GET",
+          headers: {
+            "Accept": "application/json",
+            "X-App-Token": SUMSUB_APP_TOKEN,
+            "X-App-Access-Ts": ts,
+            "X-App-Access-Sig": sig,
+          },
+        });
+
+        if (!response.ok) continue;
+
+        const applicant = await response.json();
+        if (!applicant || !applicant.id) continue;
+
+        const review = applicant.review || {};
+        const reviewAnswer = review.reviewResult?.reviewAnswer || null;
+        const reviewStatus = review.reviewStatus || "init";
+
+        let kycStatus = "pending";
+        if (reviewStatus === "completed" && reviewAnswer === "GREEN") kycStatus = "verified";
+        else if (reviewStatus === "completed" && reviewAnswer === "RED") kycStatus = "rejected";
+        else if (reviewStatus === "onHold") kycStatus = "on_hold";
+
+        const record = {
+          user_id: u.id,
+          employment_status: "not_provided",
+          sumsub_external_user_id: u.id,
+          sumsub_applicant_id: applicant.id,
+          sumsub_review_status: reviewStatus,
+          sumsub_review_answer: reviewAnswer,
+          kyc_status: kycStatus,
+          kyc_checked_at: new Date().toISOString(),
+          annual_income_currency: "USD",
+        };
+        if (kycStatus === "verified") record.kyc_verified_at = new Date().toISOString();
+
+        const { error: insErr } = await db.from("user_onboarding").insert(record);
+        if (insErr) {
+          console.error(`[Sync] Failed for ${u.email}:`, insErr.message);
+          results.push({ userId: u.id, status: "error" });
+        } else {
+          synced++;
+          results.push({ userId: u.id, status: "synced", kycStatus });
+          console.log(`[Sync] Created onboarding for ${u.email} -> ${kycStatus}`);
+        }
+      } catch (fetchErr) {
+        continue;
+      }
+    }
+
+    console.log(`[Sync] Complete: ${synced} new records created`);
+    res.json({ synced, total_checked: confirmedUsers.length, results });
+  } catch (error) {
+    console.error("[Sync] Error:", error);
+    res.status(500).json({ error: error.message });
   }
 });
 
