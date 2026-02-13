@@ -439,6 +439,83 @@ app.post("/api/sumsub/access-token", async (req, res) => {
   }
 });
 
+app.post("/api/sumsub/reset", async (req, res) => {
+  try {
+    if (!SUMSUB_APP_TOKEN || !SUMSUB_SECRET_KEY) {
+      return res.status(500).json({ success: false, error: { message: "Sumsub credentials not configured" } });
+    }
+
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.replace("Bearer ", "");
+    const db = supabaseAdmin || supabase;
+    let authenticatedUserId = null;
+
+    if (token && db) {
+      try {
+        const { data: { user } } = await db.auth.getUser(token);
+        if (user) authenticatedUserId = user.id;
+      } catch (e) {}
+    }
+
+    if (!authenticatedUserId) {
+      return res.status(401).json({ success: false, error: { message: "Authentication required" } });
+    }
+
+    const applicant = await getSumsubApplicantByExternalId(authenticatedUserId);
+    if (!applicant) {
+      return res.status(404).json({ success: false, error: { message: "No applicant found" } });
+    }
+
+    const applicantId = applicant.id;
+    const ts = Math.floor(Date.now() / 1000).toString();
+    const resetPath = `/resources/applicants/${applicantId}/reset`;
+    const signature = createSumsubSignature(ts, "POST", resetPath);
+
+    const resetResponse = await fetch(`${SUMSUB_BASE_URL}${resetPath}`, {
+      method: "POST",
+      headers: {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "X-App-Token": SUMSUB_APP_TOKEN,
+        "X-App-Access-Ts": ts,
+        "X-App-Access-Sig": signature,
+      },
+    });
+
+    if (!resetResponse.ok) {
+      const errorText = await resetResponse.text();
+      console.error(`Sumsub reset error: ${resetResponse.status} - ${errorText}`);
+      return res.status(resetResponse.status).json({
+        success: false,
+        error: { message: `Failed to reset applicant: ${errorText}` }
+      });
+    }
+
+    console.log(`[Sumsub] Reset applicant ${applicantId} for user ${authenticatedUserId}`);
+
+    const onbDb = supabaseAdmin || supabase;
+    if (onbDb) {
+      try {
+        await onbDb.from("user_onboarding").update({
+          sumsub_review_status: "init",
+          sumsub_review_answer: null,
+          sumsub_outcome: null,
+          kyc_status: "pending",
+          kyc_verified_at: null,
+          updated_at: new Date().toISOString(),
+        }).eq("user_id", authenticatedUserId);
+      } catch (dbErr) {
+        console.error("[Sumsub] Failed to update onboarding on reset:", dbErr.message);
+      }
+    }
+
+    res.json({ success: true, message: "Applicant reset successfully" });
+  } catch (error) {
+    console.error("Sumsub reset error:", error);
+    res.status(500).json({ success: false, error: { message: error.message || "Failed to reset applicant" } });
+  }
+});
+
 async function getSumsubApplicantById(applicantId) {
   const ts = Math.floor(Date.now() / 1000).toString();
   const path = `/resources/applicants/${applicantId}/one`;

@@ -25,7 +25,7 @@ const LoadingSpinner = () => (
   <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-solid border-current border-r-transparent motion-reduce:animate-[spin_1.5s_linear_infinite]" />
 );
 
-const SumsubVerification = ({ onVerified }) => {
+const SumsubVerification = ({ onVerified, resubmitMode = false }) => {
   const [accessToken, setAccessToken] = useState(null);
   const [userId, setUserId] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -35,6 +35,7 @@ const SumsubVerification = ({ onVerified }) => {
   const [verificationStatus, setVerificationStatus] = useState(null);
   const initializedRef = useRef(false);
   const sdkKeyRef = useRef(`sumsub-${Date.now()}`);
+  const hasReceivedInitialStatus = useRef(false);
 
   // Pause polling while widget is active to prevent camera interference
   useEffect(() => {
@@ -74,6 +75,28 @@ const SumsubVerification = ({ onVerified }) => {
         const apiBase = import.meta.env.VITE_API_URL || "";
         const { data: { session } } = await supabase.auth.getSession();
         const authToken = session?.access_token;
+
+        if (resubmitMode) {
+          console.log("Resubmit mode: resetting applicant before re-initialization");
+          try {
+            const resetRes = await fetch(`${apiBase}/api/sumsub/reset`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                ...(authToken ? { "Authorization": `Bearer ${authToken}` } : {}),
+              },
+            });
+            const resetData = await resetRes.json();
+            if (resetData.success) {
+              console.log("Applicant reset successfully for resubmission");
+            } else {
+              console.warn("Applicant reset returned:", resetData.error?.message);
+            }
+          } catch (resetErr) {
+            console.warn("Applicant reset failed (continuing anyway):", resetErr.message);
+          }
+        }
+
         const response = await fetch(`${apiBase}/api/sumsub/access-token`, {
           method: "POST",
           headers: {
@@ -165,13 +188,21 @@ const SumsubVerification = ({ onVerified }) => {
             onVerified();
           }
         } else if (reviewAnswer === "RED" && reviewStatus === "completed") {
-          setVerificationStatus("rejected");
-          if (rejectType === "RETRY") {
-            setError("Some documents need to be resubmitted. Please try again with clearer images.");
-            setErrorType("resubmit");
+          const moderationComment = payload?.reviewResult?.moderationComment;
+          if (resubmitMode) {
+            console.log("Resubmit mode active - letting Sumsub SDK handle resubmission flow natively");
+            if (!hasReceivedInitialStatus.current) {
+              hasReceivedInitialStatus.current = true;
+            }
           } else {
-            setError("Verification was not successful. Please contact support for assistance.");
-            setErrorType("rejected");
+            setVerificationStatus("rejected");
+            if (rejectType === "RETRY") {
+              setError(moderationComment || "Some documents need to be resubmitted. Please try again with clearer images.");
+              setErrorType("resubmit");
+            } else {
+              setError(moderationComment || "Verification was not successful. Please contact support for assistance.");
+              setErrorType("resubmit");
+            }
           }
         } else if (reviewAnswer === "RED" && (reviewStatus === "prechecked" || reviewStatus === "pending")) {
           console.log("Precheck/pending rejection with RETRY - Sumsub SDK will handle retry flow internally");
@@ -193,7 +224,7 @@ const SumsubVerification = ({ onVerified }) => {
       default:
         break;
     }
-  }, [onVerified]);
+  }, [onVerified, resubmitMode]);
 
   const errorHandler = useCallback((error) => {
     console.error("Sumsub SDK error:", error);
@@ -207,13 +238,34 @@ const SumsubVerification = ({ onVerified }) => {
     setVerificationStatus(null);
     setLoading(true);
     setAccessToken(null);
+    hasReceivedInitialStatus.current = false;
+    sdkKeyRef.current = `sumsub-${Date.now()}`;
     
-    // Re-initialize Sumsub
     const reinitialize = async () => {
       try {
         const apiBase = import.meta.env.VITE_API_URL || "";
         const { data: { session: sess } } = await supabase.auth.getSession();
         const aToken = sess?.access_token;
+
+        console.log("Retry: resetting applicant before re-initialization");
+        try {
+          const resetRes = await fetch(`${apiBase}/api/sumsub/reset`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(aToken ? { "Authorization": `Bearer ${aToken}` } : {}),
+            },
+          });
+          const resetData = await resetRes.json();
+          if (resetData.success) {
+            console.log("Applicant reset successfully for retry");
+          } else {
+            console.warn("Applicant reset returned:", resetData.error?.message);
+          }
+        } catch (resetErr) {
+          console.warn("Applicant reset failed (continuing anyway):", resetErr.message);
+        }
+
         const response = await fetch(`${apiBase}/api/sumsub/access-token`, {
           method: "POST",
           headers: {
