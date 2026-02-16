@@ -108,6 +108,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const [agreedPrivacy, setAgreedPrivacy] = useState(false);
   const [existingOnboardingId, setExistingOnboardingId] = useState(null);
   const [agreedRiskDisclosure, setAgreedRiskDisclosure] = useState(false);
+  const [agreedMandate, setAgreedMandate] = useState(false);
   const [sourceOfFunds, setSourceOfFunds] = useState("");
   const [sourceOfFundsOther, setSourceOfFundsOther] = useState("");
   const [expectedMonthlyInvestment, setExpectedMonthlyInvestment] = useState("");
@@ -149,7 +150,9 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   };
 
   const handleBack = () => {
-    if (step === 5) {
+    if (step === 6) {
+      goToStep(5);
+    } else if (step === 5) {
       goToStep(4);
     } else if (step === 4) {
       goToStep(3);
@@ -453,6 +456,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <div className="step-circle">3</div>
                 <div className="step-line"></div>
                 <div className="step-circle">4</div>
+                <div className="step-line"></div>
+                <div className="step-circle">5</div>
               </div>
 
               <div className="step-info animate-fade-in delay-3">
@@ -480,6 +485,16 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <div className="step-item">
                   <div className="step-number">2</div>
                   <div className="step-content">
+                    <div className="step-title">Discretionary Mandate</div>
+                    <div className="step-description">
+                      Review and accept the FSP investment mandate
+                    </div>
+                  </div>
+                </div>
+
+                <div className="step-item">
+                  <div className="step-number">3</div>
+                  <div className="step-content">
                     <div className="step-title">Risk Disclosure</div>
                     <div className="step-description">
                       Review investment risk disclosure
@@ -488,7 +503,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 </div>
 
                 <div className="step-item">
-                  <div className="step-number">3</div>
+                  <div className="step-number">4</div>
                   <div className="step-content">
                     <div className="step-title">Source of Funds</div>
                     <div className="step-description">
@@ -498,7 +513,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 </div>
 
                 <div className="step-item">
-                  <div className="step-number">4</div>
+                  <div className="step-number">5</div>
                   <div className="step-content">
                     <div className="step-title">Agreements</div>
                     <div className="step-description">
@@ -520,7 +535,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
               <div className="text-center mt-6 animate-fade-in delay-4">
                 <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  You'll be taken through our four-step process
+                  You'll be taken through our five-step process
                 </p>
               </div>
             </div>
@@ -531,7 +546,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   className="text-xs uppercase tracking-[0.2em] mb-2"
                   style={{ color: "hsl(270 20% 55%)" }}
                 >
-                  Step 1 of 4
+                  Step 1 of 5
                 </p>
                 <h2
                   className="text-3xl font-light tracking-tight mb-2"
@@ -756,7 +771,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   className="text-xs uppercase tracking-[0.2em] mb-2"
                   style={{ color: "hsl(270 20% 55%)" }}
                 >
-                  Step 1 of 4
+                  Step 1 of 5
                 </p>
                 <h2
                   className="text-3xl font-light tracking-tight mb-2"
@@ -803,12 +818,218 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                     className="continue-button proceed-button"
                     onClick={() => goToStep(3)}
                   >
-                    Continue to Risk Disclosure
+                    Continue to Mandate
                   </button>
                 </div>
               )}
             </div>
           ) : step === 3 ? (
+            <div className="w-full max-w-3xl mx-auto">
+              <div className="text-center animate-fade-in delay-1">
+                <div className="hero-icon">
+                  <FileContractIcon width={48} height={48} />
+                </div>
+                <h2
+                  className="text-3xl font-light tracking-tight mb-2"
+                  style={{ color: "hsl(270 30% 25%)" }}
+                >
+                  Discretionary FSP Mandate
+                </h2>
+                <p className="text-sm mb-6" style={{ color: "hsl(270 20% 50%)" }}>
+                  Please review and accept the investment management mandate
+                </p>
+              </div>
+
+              <div className="progress-bar animate-fade-in delay-1">
+                <div className="progress-step active"></div>
+                <div className="progress-step active"></div>
+                <div className="progress-step"></div>
+                <div className="progress-step"></div>
+                <div className="progress-step"></div>
+              </div>
+
+              <div className="agreement-card animate-fade-in delay-2">
+                <div className="agreement-title">Discretionary Investment Management Mandate</div>
+
+                <div className="agreement-section">
+                  <div className="agreement-text" style={{ textAlign: 'center', fontWeight: 'bold', marginBottom: '8px' }}>
+                    ENTERED INTO BETWEEN
+                  </div>
+                  <div className="agreement-text" style={{ textAlign: 'center' }}>
+                    <strong>ALGOHIVE (PTY) LTD</strong><br />
+                    (Registration Number: 2024/644796/07)<br />
+                    An Authorised Financial Services Provider<br />
+                    <strong>FSP NO 55118</strong>
+                  </div>
+                  <div className="agreement-text" style={{ textAlign: 'center', margin: '8px 0' }}>and</div>
+                  <div className="agreement-text" style={{ textAlign: 'center' }}>
+                    <strong>The Client</strong> (as per your registered account details)
+                  </div>
+                </div>
+
+                <div className="agreement-section">
+                  <div className="section-title">1. Introduction</div>
+                  <div className="agreement-text">
+                    1.1 ALGOHIVE warrants that it is the holder of a Category II FSP license number 55118, in accordance with the Financial Advisory and Intermediary Services Act, 2002 (Act No. 37 of 2002), hereafter referred to as FAIS and is authorised to render intermediary services of a discretionary nature.
+                  </div>
+                  <div className="agreement-text">
+                    1.2 ALGOHIVE may, in order to render an intermediary service to the Client, utilise the services of its own staff/approved strategists or that of another approved FSP.
+                  </div>
+                  <div className="agreement-text">
+                    1.3 ALGOHIVE is authorised to invest in financial product categories including Long term Insurance (Sub Categories A, B1, B2, C), Retail Pension Funds, Pension Fund Benefits, Shares, Money Market, Participatory Interest in Collective Investment Schemes, Long-term Deposits, Short-term Deposits, and Crypto Assets under Category I; and Shares, Participatory Interest in Collective Investment Schemes, Long-term Deposits, Short-term Deposits, and Crypto Assets under Category II.
+                  </div>
+                  <div className="agreement-text">
+                    1.4 Prior to entering into this Mandate, ALGOHIVE obtained from the Client information with regards to the Client's financial circumstances, needs and objectives and such other information necessary to enable ALGOHIVE to render suitable intermediary services to the Client.
+                  </div>
+                </div>
+
+                <div className="agreement-section">
+                  <div className="section-title">2. Authorisation</div>
+                  <div className="agreement-text">
+                    2.1 The Client hereby authorises ALGOHIVE to manage the Client's investments either with full discretion or limited discretion as set out in the schedule that is attached to this Mandate.
+                  </div>
+                  <div className="agreement-text">
+                    2.2 This Mandate and attached schedules authorise ALGOHIVE, as the Client's duly authorised agent, to purchase, sell and enter into any transaction on the Client's behalf and in respect of the investments.
+                  </div>
+                  <div className="agreement-text">
+                    2.3 ALGOHIVE may implement investment instructions or model portfolios that replicate, or mirror investment strategies selected by the Client from approved strategist models, within the discretion authorised under this mandate.
+                  </div>
+                  <div className="agreement-text">
+                    2.4 ALGOHIVE may invest in foreign investments on behalf of the Client.
+                  </div>
+                </div>
+
+                <div className="agreement-section">
+                  <div className="section-title">3. Investment Objectives</div>
+                  <div className="agreement-text">
+                    3.1 The Client's investment objectives are specified in the schedule that is attached to this Mandate.
+                  </div>
+                  <div className="agreement-text">
+                    3.2 The Client's risk profile is determined considering the Client's current set of information and circumstances and the Client acknowledges that these circumstances and information may change over time.
+                  </div>
+                  <div className="agreement-text">
+                    3.3 The Client warrants the on-going accuracy and correctness of the Client's investment objectives and any other information that has been provided to ALGOHIVE.
+                  </div>
+                </div>
+
+                <div className="agreement-section">
+                  <div className="section-title">4. Risk Disclosure</div>
+                  <div className="agreement-text">
+                    4.1 ALGOHIVE uses its discretion to invest on the Client's behalf with great care and diligence. However, the Client acknowledges that there is a risk associated with investing in the financial products involved. The value of the investments and income may rise as well as fall, and there is a risk that the Client may suffer financial losses.
+                  </div>
+                  <div className="agreement-text">
+                    4.2 Where the Client selects a strategist model for replication, performance may vary due to timing, execution, liquidity, and cost factors. Past performance of strategist models is not necessarily indicative of future results. ALGOHIVE does not guarantee identical performance or outcomes.
+                  </div>
+                  <div className="agreement-text">
+                    4.3 The Client acknowledges that it has been made aware by ALGOHIVE of risks pertaining to the investments which may result in financial loss and acknowledges that it accepts such risks.
+                  </div>
+                  <div className="agreement-text">
+                    4.4 The Client hereby irrevocably indemnifies ALGOHIVE and holds it harmless against all and any claims of whatsoever nature arising from its management of the investments.
+                  </div>
+                  <div className="agreement-text">
+                    4.5 When investing in foreign investment products, obtaining access to performance information may be more difficult, investments are exposed to different tax regimes, exchange control measures may change, and the Rand value of foreign investments will fluctuate with currency movements.
+                  </div>
+                </div>
+
+                <div className="agreement-section">
+                  <div className="section-title">5. Registration of Investments</div>
+                  <div className="agreement-text">
+                    5.1 All investments managed by ALGOHIVE shall be registered in the name of the Client, a Nominee company as custodian, a Nominee company of a member of the relevant stock exchange, or in the case of a discretionary LISP, the independent custodian.
+                  </div>
+                  <div className="agreement-text">
+                    5.2 The Client warrants that all investments entrusted to ALGOHIVE are not subject to any lien, charge or other encumbrance.
+                  </div>
+                </div>
+
+                <div className="agreement-section">
+                  <div className="section-title">6. Treatment of Funds</div>
+                  <div className="agreement-text">
+                    6.1 ALGOHIVE shall not receive funds from the Client directly. The Client will deposit the funds directly into the bank account of the investment company or their nominee company.
+                  </div>
+                  <div className="agreement-text">
+                    6.2 Any income, dividends or other distributions will be re-invested unless otherwise instructed by the Client.
+                  </div>
+                  <div className="agreement-text">
+                    6.3 Interest and dividends will be accrued and apportioned for the account of the client after deduction of stated fees.
+                  </div>
+                  <div className="agreement-text">
+                    6.4 No third-party payments will be undertaken by ALGOHIVE on behalf of the Client.
+                  </div>
+                </div>
+
+                <div className="agreement-section">
+                  <div className="section-title">7. Reporting</div>
+                  <div className="agreement-text">
+                    ALGOHIVE shall furnish the Client with quarterly reports concerning the Client's investments. Reports will include details of portfolio holdings, transactions, and where applicable, performance attribution. ALGOHIVE shall provide any reasonable information regarding the investments, market practices and inherent risks on request.
+                  </div>
+                </div>
+
+                <div className="agreement-section">
+                  <div className="section-title">8. Remuneration</div>
+                  <div className="agreement-text">
+                    <strong>(a) AlgoHive Managed Funds:</strong> An annual management fee of 0.99% based on the market value of the portfolio, calculated monthly in arrears.
+                  </div>
+                  <div className="agreement-text">
+                    <strong>(b) OpenStrategies Platform:</strong> No asset-based management fee. Instead: 70% of profits accrue to the Client, 20–25% to the selected Strategist, and 5–10% retained by AlgoHive for platform and oversight services.
+                  </div>
+                  <div className="agreement-text">
+                    <strong>(c) Transaction Costs:</strong> Brokerage and execution fees are for the Client's account. AlgoHive may earn a margin on execution costs as disclosed by the executing broker.
+                  </div>
+                </div>
+
+                <div className="agreement-section">
+                  <div className="section-title">9. Disputes</div>
+                  <div className="agreement-text">
+                    Any dispute arising from this Mandate shall be referred for arbitration before a single arbitrator in Durban. The decision of the arbitrator shall be final and binding. This clause does not prevent a party from applying to court for urgent relief.
+                  </div>
+                </div>
+
+                <div className="agreement-section">
+                  <div className="section-title">10. Termination</div>
+                  <div className="agreement-text">
+                    Either party may terminate this Mandate by furnishing not less than sixty (60) calendar days' written notice. Upon termination, all outstanding fees shall become due and payable. ALGOHIVE's appointment shall immediately cease if its FSP license is withdrawn.
+                  </div>
+                </div>
+
+                <div className="agreement-section">
+                  <div className="section-title">11. General</div>
+                  <div className="agreement-text">
+                    This Mandate constitutes the entire agreement between the parties. Any amendment must be in writing. This agreement shall be governed by the laws of the Republic of South Africa. Failure to enforce any provision shall not constitute a waiver.
+                  </div>
+                </div>
+              </div>
+
+              <div className="checkbox-container animate-fade-in delay-3" style={{ display: 'block' }}>
+                <label className="checkbox-item">
+                  <input
+                    type="checkbox"
+                    checked={agreedMandate}
+                    onChange={(event) => setAgreedMandate(event.target.checked)}
+                  />
+                  <span className="checkbox-label">
+                    I have read and agree to the Discretionary FSP Mandate and authorise ALGOHIVE to manage my investments as described
+                  </span>
+                </label>
+              </div>
+
+              <div className="text-center mt-8 animate-fade-in delay-4">
+                <button
+                  type="button"
+                  className={`continue-button agreement-continue ${agreedMandate ? "enabled" : ""}`}
+                  disabled={!agreedMandate}
+                  onClick={() => goToStep(4)}
+                >
+                  Continue to Risk Disclosure
+                </button>
+              </div>
+
+              <div className="text-center mt-6 animate-fade-in delay-4">
+                <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
+                  Step 2 of 5
+                </p>
+              </div>
+            </div>
+          ) : step === 4 ? (
             <div className="w-full max-w-3xl mx-auto">
               <div className="text-center animate-fade-in delay-1">
                 <div className="hero-icon">
@@ -826,6 +1047,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               </div>
 
               <div className="progress-bar animate-fade-in delay-1">
+                <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step"></div>
@@ -889,7 +1111,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   type="button"
                   className={`continue-button agreement-continue ${agreedRiskDisclosure ? "enabled" : ""}`}
                   disabled={!agreedRiskDisclosure}
-                  onClick={() => goToStep(4)}
+                  onClick={() => goToStep(5)}
                 >
                   Continue to Source of Funds
                 </button>
@@ -897,11 +1119,11 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
               <div className="text-center mt-6 animate-fade-in delay-4">
                 <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  Step 2 of 4
+                  Step 3 of 5
                 </p>
               </div>
             </div>
-          ) : step === 4 ? (
+          ) : step === 5 ? (
             <div className="w-full max-w-3xl mx-auto">
               <div className="text-center animate-fade-in delay-1">
                 <div className="hero-icon">
@@ -919,6 +1141,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               </div>
 
               <div className="progress-bar animate-fade-in delay-1">
+                <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
@@ -1032,7 +1255,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                     type="button"
                     className={`continue-button agreement-continue ${sofReady ? "enabled" : ""}`}
                     disabled={!sofReady}
-                    onClick={() => goToStep(5)}
+                    onClick={() => goToStep(6)}
                   >
                     Continue to Agreements
                   </button>
@@ -1040,7 +1263,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
                 <div className="text-center mt-6 animate-fade-in delay-4 hide-when-dropdown-open">
                   <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                    Step 3 of 4
+                    Step 4 of 5
                   </p>
                 </div>
               </div>
@@ -1063,6 +1286,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               </div>
 
               <div className="progress-bar animate-fade-in delay-1">
+                <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
@@ -1159,7 +1383,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
               <div className="text-center mt-6 animate-fade-in delay-4">
                 <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  Step 4 of 4 - Final step to complete your onboarding
+                  Step 5 of 5 - Final step to complete your onboarding
                 </p>
               </div>
             </div>
