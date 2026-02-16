@@ -602,7 +602,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           {/* Chart section */}
           <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 md:max-w-md md:px-8">
         <section className="py-2">
-          {strategies.length === 0 ? (
+          {strategies.length === 0 || (holdingSettlementStatus && holdingSettlementStatus !== "confirmed") ? (
             <div className="flex flex-col items-center justify-center py-12 px-6">
               <div className="w-16 h-16 rounded-full bg-purple-50 flex items-center justify-center mb-4">
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -848,7 +848,12 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                     )}
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">{holding.symbol}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-semibold text-slate-900">{holding.symbol}</p>
+                      {holdingSettlementStatus && holdingSettlementStatus !== "confirmed" && (
+                        <SettlementBadge status={holdingSettlementStatus} size="xs" />
+                      )}
+                    </div>
                     <p className="text-xs text-slate-500">{holding.name}</p>
                   </div>
                 </div>
@@ -982,8 +987,9 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           }
           return null;
         }
+        const isPending = holdingSettlementStatus && holdingSettlementStatus !== "confirmed";
         const otherStocks = stocksList.filter(s => s.id !== selectedStock?.id && !myStockIds.has(s.id));
-        const hasNoHoldings = myStocks.length === 0;
+        const hasNoHoldings = myStocks.length === 0 || isPending;
         return (
           <>
             {hasNoHoldings ? (
@@ -995,13 +1001,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                   </svg>
                 </div>
                 <p className="text-lg font-semibold text-slate-900 mb-1">Invest in Your First Stock</p>
-                <p className="text-sm text-slate-500 text-center max-w-[260px] mb-5">Browse stocks below and start building your portfolio. Your holdings will show up here.</p>
-                <button
-                  onClick={() => onOpenInvest && onOpenInvest()}
-                  className="w-full max-w-[280px] py-3.5 rounded-full bg-gradient-to-r from-slate-800 to-slate-900 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg shadow-slate-900/30 transition hover:-translate-y-0.5 hover:shadow-xl"
-                >
-                  Make Your First Investment
-                </button>
+                <p className="text-sm text-slate-500 text-center max-w-[260px]">Browse individual stocks and start building your portfolio. Your holdings will show up here.</p>
               </div>
             ) : (
             <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 md:max-w-md md:px-8">
@@ -1031,7 +1031,12 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                               selectedStock.id === stock.id ? 'bg-purple-50' : ''
                             }`}
                           >
-                            <p className="font-medium text-slate-800 text-sm tracking-tight">{stock.name}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-slate-800 text-sm tracking-tight">{stock.name}</p>
+                              {holdingSettlementStatus && holdingSettlementStatus !== "confirmed" && (
+                                <SettlementBadge status={holdingSettlementStatus} size="xs" />
+                              )}
+                            </div>
                             <p className="text-xs text-slate-400 mt-0.5 font-medium tabular-nums">
                               {formatCurrency(liveQuotes[stock.ticker]?.price || stock.price)}
                             </p>
@@ -1260,7 +1265,12 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                             )}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-slate-900 truncate">{stock.name}</p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-sm font-semibold text-slate-900 truncate">{stock.name}</p>
+                              {holdingSettlementStatus && holdingSettlementStatus !== "confirmed" && (
+                                <SettlementBadge status={holdingSettlementStatus} size="xs" />
+                              )}
+                            </div>
                             <p className="text-xs text-slate-500 font-medium">{stockQty > 0 ? `${stockQty} shares · ${formatCurrency(livePrice)}/share` : stock.ticker}</p>
                           </div>
                           <div className="text-right flex-shrink-0">
