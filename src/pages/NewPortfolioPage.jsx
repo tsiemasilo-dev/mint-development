@@ -1445,9 +1445,16 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                           <div className="flex items-center justify-between mb-1">
                             <div>
                               <p className="text-sm font-semibold text-slate-900">{g.label}</p>
-                              {g.linkedAssetName && (
-                                <p className="text-[10px] text-slate-400">Linked to {g.linkedAssetName}</p>
-                              )}
+                              <div className="flex items-center gap-1.5">
+                                {g.linkedAssetName && (
+                                  <p className="text-[10px] text-slate-400">Linked to {g.linkedAssetName}</p>
+                                )}
+                                {g.targetDate && !isNaN(new Date(g.targetDate).getTime()) && (
+                                  <p className="text-[10px] text-slate-400">
+                                    {g.linkedAssetName ? '• ' : ''}{new Date(g.targetDate).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
+                                  </p>
+                                )}
+                              </div>
                             </div>
                             <p className="text-xs font-semibold text-slate-600">
                               {formatCurrency(currentValue)} / {formatCurrency(target)}
@@ -1706,9 +1713,16 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                         <div className="flex items-center justify-between mb-1">
                           <div>
                             <p className="text-sm font-semibold text-slate-900">{g.label}</p>
-                            {g.linkedAssetName && (
-                              <p className="text-[10px] text-slate-400">Linked to {g.linkedAssetName}</p>
-                            )}
+                            <div className="flex items-center gap-1.5">
+                              {g.linkedAssetName && (
+                                <p className="text-[10px] text-slate-400">Linked to {g.linkedAssetName}</p>
+                              )}
+                              {g.targetDate && !isNaN(new Date(g.targetDate).getTime()) && (
+                                <p className="text-[10px] text-slate-400">
+                                  {g.linkedAssetName ? '• ' : ''}{new Date(g.targetDate).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
+                                </p>
+                              )}
+                            </div>
                           </div>
                           <p className="text-xs font-semibold text-slate-600">
                             {formatCurrency(currentValue)} / {formatCurrency(target)}
