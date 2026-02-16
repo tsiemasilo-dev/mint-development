@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import SumsubVerification from "../components/SumsubVerification";
+import MandateViewer from "../components/MandateViewer";
 import { supabase } from "../lib/supabase";
+import { useProfile } from "../lib/useProfile";
 import "../styles/onboarding-process.css";
 
 const ClipboardCheckIcon = (props) => (
@@ -88,6 +90,7 @@ const monthlyInvestmentOptions = [
 ];
 
 const OnboardingProcessPage = ({ onBack, onComplete }) => {
+  const { profile } = useProfile();
   const [step, setStep] = useState(0);
   const [isFading, setIsFading] = useState(false);
   const [employmentStatus, setEmploymentStatus] = useState("");
@@ -855,16 +858,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 boxShadow: '0 4px 20px rgba(100, 60, 140, 0.08)',
                 background: 'white',
               }}>
-                <iframe
-                  src="/mandate.html"
-                  title="Discretionary FSP Mandate"
-                  style={{
-                    width: '100%',
-                    height: '70vh',
-                    border: 'none',
-                    display: 'block',
-                  }}
-                />
+                <MandateViewer profile={profile} />
               </div>
 
               <div className="checkbox-container animate-fade-in delay-3" style={{ display: 'block' }}>
