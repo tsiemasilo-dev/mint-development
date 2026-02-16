@@ -291,17 +291,13 @@ async function migrateGoalColumns() {
   const db = supabaseAdmin || supabase;
   if (!db) return;
   try {
-    const { data, error } = await db.from('investment_goals').select('linked_strategy_id').limit(1);
-    if (!error) {
-      console.log('[goals] Goal linkage columns already exist');
-      return;
-    }
-    console.log('[goals] Adding linkage columns to investment_goals...');
+    console.log('[goals] Ensuring all investment_goals columns exist...');
     const cols = [
       "ALTER TABLE investment_goals ADD COLUMN IF NOT EXISTS linked_strategy_id text",
       "ALTER TABLE investment_goals ADD COLUMN IF NOT EXISTS linked_security_id text",
       "ALTER TABLE investment_goals ADD COLUMN IF NOT EXISTS invested_amount numeric DEFAULT 0",
       "ALTER TABLE investment_goals ADD COLUMN IF NOT EXISTS linked_asset_name text",
+      "ALTER TABLE investment_goals ADD COLUMN IF NOT EXISTS target_date date",
     ];
     for (const sql of cols) {
       try {
@@ -2772,7 +2768,8 @@ app.post("/api/migrate/goal-columns", async (req, res) => {
 ALTER TABLE investment_goals ADD COLUMN IF NOT EXISTS linked_strategy_id text;
 ALTER TABLE investment_goals ADD COLUMN IF NOT EXISTS linked_security_id text;
 ALTER TABLE investment_goals ADD COLUMN IF NOT EXISTS invested_amount numeric DEFAULT 0;
-ALTER TABLE investment_goals ADD COLUMN IF NOT EXISTS linked_asset_name text;`;
+ALTER TABLE investment_goals ADD COLUMN IF NOT EXISTS linked_asset_name text;
+ALTER TABLE investment_goals ADD COLUMN IF NOT EXISTS target_date date;`;
 
       const response = await globalThis.fetch(`${SUPABASE_URL}/rest/v1/rpc/exec_sql`, {
         method: 'POST',
