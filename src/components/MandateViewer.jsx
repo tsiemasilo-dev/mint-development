@@ -706,7 +706,20 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData })
               transition: "all 0.2s ease",
             }}
           >
-            <p style={{ fontWeight: "bold", fontSize: "13px", marginBottom: "8px", color: "hsl(270 40% 35%)" }}>SCHEDULE – FULL DISCRETION</p>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+              <p style={{ fontWeight: "bold", fontSize: "13px", margin: 0, color: "hsl(270 40% 35%)" }}>SCHEDULE – FULL DISCRETION</p>
+              <span style={{
+                background: "linear-gradient(135deg, #7c3aed, #a855f7)",
+                color: "#fff",
+                fontSize: "9px",
+                fontWeight: "700",
+                padding: "3px 10px",
+                borderRadius: "999px",
+                letterSpacing: "0.05em",
+                textTransform: "uppercase",
+                whiteSpace: "nowrap",
+              }}>Recommended</span>
+            </div>
             <p style={{ fontSize: "11px", color: "#555", lineHeight: "1.6", margin: 0 }}>
               This schedule delegates authority to ALGOHIVE to effect transactions in your name without limitation. If you wish for transactions to be entered into on your behalf to be limited or conditional in any way, this form should not be used. Refer to the limited discretion schedule.
             </p>

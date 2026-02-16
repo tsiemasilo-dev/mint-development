@@ -3074,10 +3074,21 @@ app.post("/api/onboarding/save-mandate", async (req, res) => {
       if (latest?.id) onboardingId = latest.id;
     }
 
+    const { data: currentRow } = onboardingId
+      ? await db.from("user_onboarding").select("sumsub_raw").eq("id", onboardingId).eq("user_id", user.id).maybeSingle()
+      : await db.from("user_onboarding").select("sumsub_raw").eq("user_id", user.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+
+    let existingRaw = {};
+    if (currentRow?.sumsub_raw) {
+      try { existingRaw = typeof currentRow.sumsub_raw === "string" ? JSON.parse(currentRow.sumsub_raw) : currentRow.sumsub_raw; } catch (e) { existingRaw = {}; }
+    }
+    existingRaw.mandate_data = JSON.parse(mandateJson);
+    const mergedRaw = JSON.stringify(existingRaw);
+
     if (onboardingId) {
       const { error } = await db
         .from("user_onboarding")
-        .update({ mandate_data: mandateJson })
+        .update({ sumsub_raw: mergedRaw })
         .eq("id", onboardingId)
         .eq("user_id", user.id);
       if (error) {
@@ -3087,7 +3098,7 @@ app.post("/api/onboarding/save-mandate", async (req, res) => {
     } else {
       const { data, error } = await db
         .from("user_onboarding")
-        .insert({ user_id: user.id, mandate_data: mandateJson })
+        .insert({ user_id: user.id, sumsub_raw: mergedRaw })
         .select("id")
         .single();
       if (error) {
@@ -3118,7 +3129,7 @@ app.get("/api/onboarding/mandate", async (req, res) => {
 
     const { data, error } = await db
       .from("user_onboarding")
-      .select("mandate_data")
+      .select("sumsub_raw")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -3130,11 +3141,12 @@ app.get("/api/onboarding/mandate", async (req, res) => {
     }
 
     let mandateData = null;
-    if (data?.mandate_data) {
+    if (data?.sumsub_raw) {
       try {
-        mandateData = typeof data.mandate_data === "string" ? JSON.parse(data.mandate_data) : data.mandate_data;
+        const parsed = typeof data.sumsub_raw === "string" ? JSON.parse(data.sumsub_raw) : data.sumsub_raw;
+        mandateData = parsed?.mandate_data || null;
       } catch (e) {
-        mandateData = data.mandate_data;
+        mandateData = null;
       }
     }
 
