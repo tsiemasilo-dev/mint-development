@@ -135,7 +135,8 @@ const HomePage = ({
   const [homeTab, setHomeTab] = useState("invest");
   const [userId, setUserId] = useState(null);
   const [localBestAssets, setLocalBestAssets] = useState([]);
-  const [onboardingComplete, setOnboardingComplete] = useState(true);
+  const [onboardingComplete, setOnboardingComplete] = useState(false);
+  const [onboardingChecked, setOnboardingChecked] = useState(false);
 
   const [cardRotation, setCardRotation] = useState(-180);
   const [isCardAnimating, setIsCardAnimating] = useState(false);
@@ -347,13 +348,13 @@ const HomePage = ({
         .eq("user_id", profile.id)
         .order("created_at", { ascending: false })
         .limit(1);
-      console.log("[Onboarding Check] data:", JSON.stringify(data), "error:", error?.message || "none");
       const record = data?.[0];
       const complete = record?.kyc_status === "onboarding_complete";
-      console.log("[Onboarding Check] kyc_status:", record?.kyc_status, "complete:", complete);
       setOnboardingComplete(complete);
+      setOnboardingChecked(true);
     } catch (err) {
       console.error("[Onboarding Check] Error:", err);
+      setOnboardingChecked(true);
     }
   }, [profile?.id]);
 
@@ -854,7 +855,7 @@ const HomePage = ({
           })}
         </section>
 
-        {outstandingActions.length > 0 ? (
+        {onboardingChecked && outstandingActions.length > 0 ? (
           <OutstandingActionsSection
             actions={outstandingActions}
             onViewAll={onOpenActions}

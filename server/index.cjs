@@ -185,6 +185,19 @@ try {
   console.warn('Supabase client not available:', e.message);
 }
 
+function getAuthenticatedDb(token) {
+  if (supabaseAdmin) return supabaseAdmin;
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !token) return supabase;
+  try {
+    const { createClient } = require('@supabase/supabase-js');
+    return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: `Bearer ${token}` } }
+    });
+  } catch (e) {
+    return supabase;
+  }
+}
+
 async function cleanupInvalidHoldings() {
   const db = supabaseAdmin || supabase;
   if (!db) return;
@@ -2979,7 +2992,7 @@ app.post("/api/onboarding/save-employment", async (req, res) => {
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
     if (!token) return res.status(401).json({ success: false, error: "Missing token" });
 
-    const db = supabaseAdmin || supabase;
+    const db = getAuthenticatedDb(token);
     const authClient = supabaseAdmin || supabase;
     const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
     if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
@@ -3046,7 +3059,7 @@ app.post("/api/onboarding/save-mandate", async (req, res) => {
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
     if (!token) return res.status(401).json({ success: false, error: "Missing token" });
 
-    const db = supabaseAdmin || supabase;
+    const db = getAuthenticatedDb(token);
     const authClient = supabaseAdmin || supabase;
     const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
     if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
@@ -3160,7 +3173,7 @@ app.post("/api/onboarding/complete", async (req, res) => {
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
     if (!token) return res.status(401).json({ success: false, error: "Missing token" });
 
-    const db = supabaseAdmin || supabase;
+    const db = getAuthenticatedDb(token);
     const authClient = supabaseAdmin || supabase;
     const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
     if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
@@ -3177,34 +3190,34 @@ app.post("/api/onboarding/complete", async (req, res) => {
 
     const userId = user.id;
 
-    const { data: existingAction } = await db
-      .from("required_actions")
-      .select("id")
-      .eq("user_id", userId)
-      .maybeSingle();
+    try {
+      const { data: existingAction } = await db
+        .from("required_actions")
+        .select("id")
+        .eq("user_id", userId)
+        .maybeSingle();
 
-    const actionPayload = { kyc_verified: true };
-    if (existingAction) {
-      await db.from("required_actions").update(actionPayload).eq("user_id", userId);
-    } else {
-      await db.from("required_actions").insert({ user_id: userId, ...actionPayload });
+      if (existingAction) {
+        await db.from("required_actions").update({ kyc_verified: true }).eq("user_id", userId);
+      } else {
+        await db.from("required_actions").insert({ user_id: userId, kyc_verified: true });
+      }
+    } catch (actionErr) {
+      console.warn("[Onboarding] required_actions update failed (non-critical):", actionErr?.message);
     }
-
-    const sofData = JSON.stringify({
-      risk_disclosure_agreed: risk_disclosure_agreed || false,
-      source_of_funds: source_of_funds || null,
-      source_of_funds_other: source_of_funds === "other" ? (source_of_funds_other || null) : null,
-      expected_monthly_investment: expected_monthly_investment || null,
-      agreed_terms: agreed_terms || false,
-      agreed_privacy: agreed_privacy || false,
-      completed_at: new Date().toISOString(),
-    });
 
     const onboardingPayload = {
       user_id: userId,
       kyc_status: "onboarding_complete",
-      sumsub_raw: sofData,
     };
+
+    const extraFields = {};
+    if (risk_disclosure_agreed !== undefined) extraFields.risk_disclosure_agreed = risk_disclosure_agreed || false;
+    if (source_of_funds !== undefined) extraFields.source_of_funds = source_of_funds || null;
+    if (source_of_funds_other !== undefined) extraFields.source_of_funds_other = source_of_funds === "other" ? (source_of_funds_other || null) : null;
+    if (expected_monthly_investment !== undefined) extraFields.expected_monthly_investment = expected_monthly_investment || null;
+
+    const fullPayload = { ...onboardingPayload, ...extraFields };
 
     let onboardingId = existing_onboarding_id;
     if (!onboardingId) {
@@ -3218,30 +3231,55 @@ app.post("/api/onboarding/complete", async (req, res) => {
       if (latest?.id) onboardingId = latest.id;
     }
 
+    let saved = false;
+
     if (onboardingId) {
       const { data: updated, error } = await db
         .from("user_onboarding")
-        .update(onboardingPayload)
+        .update(fullPayload)
         .eq("id", onboardingId)
         .eq("user_id", userId)
         .select("id");
+
       if (error) {
-        console.error("[Onboarding] Complete update error:", error.message);
-        return res.status(500).json({ success: false, error: error.message });
-      }
-      if (!updated || updated.length === 0) {
-        const { error: insErr } = await db.from("user_onboarding").insert(onboardingPayload);
-        if (insErr) {
-          console.error("[Onboarding] Complete insert fallback error:", insErr.message);
-          return res.status(500).json({ success: false, error: insErr.message });
+        console.warn("[Onboarding] Full update failed, trying minimal:", error.message);
+        const { data: minUpdated, error: minErr } = await db
+          .from("user_onboarding")
+          .update(onboardingPayload)
+          .eq("id", onboardingId)
+          .eq("user_id", userId)
+          .select("id");
+        if (minErr) {
+          console.error("[Onboarding] Minimal update also failed:", minErr.message);
+        } else if (minUpdated && minUpdated.length > 0) {
+          saved = true;
         }
+      } else if (updated && updated.length > 0) {
+        saved = true;
+      }
+
+      if (!saved) {
+        const { error: insErr } = await db.from("user_onboarding").insert(fullPayload);
+        if (insErr) {
+          const { error: minInsErr } = await db.from("user_onboarding").insert(onboardingPayload);
+          if (minInsErr) {
+            console.error("[Onboarding] Complete insert fallback error:", minInsErr.message);
+            return res.status(500).json({ success: false, error: minInsErr.message });
+          }
+        }
+        saved = true;
       }
     } else {
-      const { error } = await db.from("user_onboarding").insert(onboardingPayload);
+      const { error } = await db.from("user_onboarding").insert(fullPayload);
       if (error) {
-        console.error("[Onboarding] Complete insert error:", error.message);
-        return res.status(500).json({ success: false, error: error.message });
+        console.warn("[Onboarding] Full insert failed, trying minimal:", error.message);
+        const { error: minErr } = await db.from("user_onboarding").insert(onboardingPayload);
+        if (minErr) {
+          console.error("[Onboarding] Complete insert error:", minErr.message);
+          return res.status(500).json({ success: false, error: minErr.message });
+        }
       }
+      saved = true;
     }
 
     console.log(`[Onboarding] Completed for user ${userId}`);
@@ -3258,7 +3296,7 @@ app.get("/api/onboarding/status", async (req, res) => {
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
     if (!token) return res.status(401).json({ success: false, error: "Missing token" });
 
-    const db = supabaseAdmin || supabase;
+    const db = getAuthenticatedDb(token);
     const authClient = supabaseAdmin || supabase;
     const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
     if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });

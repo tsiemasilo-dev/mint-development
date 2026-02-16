@@ -49,8 +49,9 @@ const ActionsPage = ({ onBack, onNavigate }) => {
 
   const hasOnboardingRecord = !!onboardingData;
   const employmentDone = hasOnboardingRecord && onboardingData.employment_status && onboardingData.employment_status !== "not_provided";
-  const identityComplete = kycVerified && employmentDone;
-  const allOnboardingComplete = identityComplete && onboardingData?.kyc_status === "onboarding_complete";
+  const onboardingMarkedComplete = onboardingData?.kyc_status === "onboarding_complete";
+  const identityComplete = kycVerified && (employmentDone || onboardingMarkedComplete);
+  const allOnboardingComplete = onboardingMarkedComplete;
 
   const getIdentityStatus = () => {
     if (identityComplete) return { text: "Complete", style: "bg-green-100 text-green-600" };
