@@ -635,23 +635,16 @@ const HomePage = ({
   const actionsData = [
     {
       id: "identity",
-      title: "Complete KYC verification",
-      description: kycNeedsResubmission ? "Some documents need resubmission" : "Verify your identity to unlock all features",
+      title: "Complete identity",
+      description: kycNeedsResubmission
+        ? "Some documents need resubmission"
+        : onboardingComplete
+        ? "Identity and onboarding complete"
+        : "Verify your identity and complete onboarding",
       priority: 1,
-      status: kycStatus.text,
-      statusStyle: kycStatus.style,
+      status: onboardingComplete ? "Complete" : kycStatus.text,
+      statusStyle: onboardingComplete ? "bg-green-100 text-green-600" : kycStatus.style,
       icon: ShieldCheck,
-      routeName: "actions",
-      isComplete: kycVerified,
-    },
-    {
-      id: "onboarding",
-      title: "Complete onboarding",
-      description: "Risk disclosure, source of funds, and agreements",
-      priority: 2,
-      status: onboardingComplete ? "Complete" : "Required",
-      statusStyle: onboardingComplete ? "bg-green-100 text-green-600" : "bg-slate-100 text-slate-500",
-      icon: FileSignature,
       routeName: "actions",
       isComplete: onboardingComplete,
     },
