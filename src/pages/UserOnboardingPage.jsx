@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import SumsubVerification from "../components/SumsubVerification";
+import MandateViewer from "../components/MandateViewer";
 import { supabase } from "../lib/supabase";
+import { useProfile } from "../lib/useProfile";
 import "../styles/onboarding-process.css";
 
 const ClipboardCheckIcon = (props) => (
@@ -88,6 +90,7 @@ const monthlyInvestmentOptions = [
 ];
 
 const OnboardingProcessPage = ({ onBack, onComplete }) => {
+  const { profile } = useProfile();
   const [step, setStep] = useState(0);
   const [isFading, setIsFading] = useState(false);
   const [employmentStatus, setEmploymentStatus] = useState("");
@@ -108,6 +111,9 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const [agreedPrivacy, setAgreedPrivacy] = useState(false);
   const [existingOnboardingId, setExistingOnboardingId] = useState(null);
   const [agreedRiskDisclosure, setAgreedRiskDisclosure] = useState(false);
+  const [agreedMandate, setAgreedMandate] = useState(false);
+  const [mandateValid, setMandateValid] = useState(false);
+  const mandateDataRef = useRef(null);
   const [sourceOfFunds, setSourceOfFunds] = useState("");
   const [sourceOfFundsOther, setSourceOfFundsOther] = useState("");
   const [expectedMonthlyInvestment, setExpectedMonthlyInvestment] = useState("");
@@ -149,7 +155,9 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   };
 
   const handleBack = () => {
-    if (step === 5) {
+    if (step === 6) {
+      goToStep(5);
+    } else if (step === 5) {
       goToStep(4);
     } else if (step === 4) {
       goToStep(3);
@@ -367,6 +375,21 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       if (token) {
+        if (mandateDataRef.current) {
+          const savePayload = { ...mandateDataRef.current, agreedMandate };
+          try {
+            const mandateRes = await fetch("/api/onboarding/save-mandate", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ mandate_data: savePayload, existing_onboarding_id: existingOnboardingId || null }),
+            });
+            const mandateResult = await mandateRes.json();
+            if (mandateResult.onboarding_id) setExistingOnboardingId(mandateResult.onboarding_id);
+          } catch (e) {
+            console.error("Mandate save error during completion:", e);
+          }
+        }
+
         const res = await fetch("/api/onboarding/complete", {
           method: "POST",
           headers: {
@@ -453,6 +476,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <div className="step-circle">3</div>
                 <div className="step-line"></div>
                 <div className="step-circle">4</div>
+                <div className="step-line"></div>
+                <div className="step-circle">5</div>
               </div>
 
               <div className="step-info animate-fade-in delay-3">
@@ -480,6 +505,16 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <div className="step-item">
                   <div className="step-number">2</div>
                   <div className="step-content">
+                    <div className="step-title">Discretionary Mandate</div>
+                    <div className="step-description">
+                      Review and accept the FSP investment mandate
+                    </div>
+                  </div>
+                </div>
+
+                <div className="step-item">
+                  <div className="step-number">3</div>
+                  <div className="step-content">
                     <div className="step-title">Risk Disclosure</div>
                     <div className="step-description">
                       Review investment risk disclosure
@@ -488,7 +523,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 </div>
 
                 <div className="step-item">
-                  <div className="step-number">3</div>
+                  <div className="step-number">4</div>
                   <div className="step-content">
                     <div className="step-title">Source of Funds</div>
                     <div className="step-description">
@@ -498,7 +533,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 </div>
 
                 <div className="step-item">
-                  <div className="step-number">4</div>
+                  <div className="step-number">5</div>
                   <div className="step-content">
                     <div className="step-title">Agreements</div>
                     <div className="step-description">
@@ -520,7 +555,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
               <div className="text-center mt-6 animate-fade-in delay-4">
                 <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  You'll be taken through our four-step process
+                  You'll be taken through our five-step process
                 </p>
               </div>
             </div>
@@ -531,7 +566,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   className="text-xs uppercase tracking-[0.2em] mb-2"
                   style={{ color: "hsl(270 20% 55%)" }}
                 >
-                  Step 1 of 4
+                  Step 1 of 5
                 </p>
                 <h2
                   className="text-3xl font-light tracking-tight mb-2"
@@ -756,7 +791,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   className="text-xs uppercase tracking-[0.2em] mb-2"
                   style={{ color: "hsl(270 20% 55%)" }}
                 >
-                  Step 1 of 4
+                  Step 1 of 5
                 </p>
                 <h2
                   className="text-3xl font-light tracking-tight mb-2"
@@ -803,12 +838,93 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                     className="continue-button proceed-button"
                     onClick={() => goToStep(3)}
                   >
-                    Continue to Risk Disclosure
+                    Continue to Mandate
                   </button>
                 </div>
               )}
             </div>
           ) : step === 3 ? (
+            <div className="w-full max-w-3xl mx-auto">
+              <div className="text-center animate-fade-in delay-1">
+                <div className="hero-icon">
+                  <FileContractIcon width={48} height={48} />
+                </div>
+                <h2
+                  className="text-3xl font-light tracking-tight mb-2"
+                  style={{ color: "hsl(270 30% 25%)" }}
+                >
+                  Discretionary FSP Mandate
+                </h2>
+                <p className="text-sm mb-6" style={{ color: "hsl(270 20% 50%)" }}>
+                  Please review and accept the investment management mandate
+                </p>
+              </div>
+
+              <div className="progress-bar animate-fade-in delay-1">
+                <div className="progress-step active"></div>
+                <div className="progress-step active"></div>
+                <div className="progress-step"></div>
+                <div className="progress-step"></div>
+                <div className="progress-step"></div>
+              </div>
+
+              <div className="animate-fade-in delay-2" style={{
+                borderRadius: '16px',
+                overflow: 'hidden',
+                border: '1px solid hsl(270 20% 90%)',
+                boxShadow: '0 4px 20px rgba(100, 60, 140, 0.08)',
+                background: 'white',
+              }}>
+                <MandateViewer
+                  profile={profile}
+                  onValidChange={setMandateValid}
+                  onDataChange={(data) => { mandateDataRef.current = data; }}
+                />
+              </div>
+
+              <div className="checkbox-container animate-fade-in delay-3" style={{ display: 'block' }}>
+                <label className="checkbox-item">
+                  <input
+                    type="checkbox"
+                    checked={agreedMandate}
+                    onChange={(event) => setAgreedMandate(event.target.checked)}
+                  />
+                  <span className="checkbox-label">
+                    I have read and agree to the Discretionary FSP Mandate and authorise ALGOHIVE to manage my investments as described
+                  </span>
+                </label>
+              </div>
+
+              {!mandateValid && agreedMandate && (
+                <p className="text-center animate-fade-in" style={{ color: "#ef4444", fontSize: "12px", marginTop: "8px" }}>
+                  Please enter your initials and select at least one option under each checkbox group in the Schedules section before continuing.
+                </p>
+              )}
+
+              {submitError && (
+                <p className="text-center animate-fade-in" style={{ color: "#ef4444", fontSize: "12px", marginTop: "8px" }}>
+                  {submitError}
+                </p>
+              )}
+
+              <div className="text-center mt-8 animate-fade-in delay-4">
+                <button
+                  type="button"
+                  className={`continue-button agreement-continue ${agreedMandate && mandateValid ? "enabled" : ""}`}
+                  disabled={!agreedMandate || !mandateValid}
+                  onClick={() => goToStep(4)}
+                >
+                  Continue to Risk Disclosure
+                </button>
+              </div>
+
+              <div className="text-center mt-6 animate-fade-in delay-4">
+                <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
+                  Step 2 of 5
+                </p>
+              </div>
+            </div>
+          ) : step === 4 ? (
             <div className="w-full max-w-3xl mx-auto">
               <div className="text-center animate-fade-in delay-1">
                 <div className="hero-icon">
@@ -826,6 +942,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               </div>
 
               <div className="progress-bar animate-fade-in delay-1">
+                <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step"></div>
@@ -889,7 +1006,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   type="button"
                   className={`continue-button agreement-continue ${agreedRiskDisclosure ? "enabled" : ""}`}
                   disabled={!agreedRiskDisclosure}
-                  onClick={() => goToStep(4)}
+                  onClick={() => goToStep(5)}
                 >
                   Continue to Source of Funds
                 </button>
@@ -897,11 +1014,11 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
               <div className="text-center mt-6 animate-fade-in delay-4">
                 <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  Step 2 of 4
+                  Step 3 of 5
                 </p>
               </div>
             </div>
-          ) : step === 4 ? (
+          ) : step === 5 ? (
             <div className="w-full max-w-3xl mx-auto">
               <div className="text-center animate-fade-in delay-1">
                 <div className="hero-icon">
@@ -919,6 +1036,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               </div>
 
               <div className="progress-bar animate-fade-in delay-1">
+                <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
@@ -1032,7 +1150,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                     type="button"
                     className={`continue-button agreement-continue ${sofReady ? "enabled" : ""}`}
                     disabled={!sofReady}
-                    onClick={() => goToStep(5)}
+                    onClick={() => goToStep(6)}
                   >
                     Continue to Agreements
                   </button>
@@ -1040,7 +1158,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
                 <div className="text-center mt-6 animate-fade-in delay-4 hide-when-dropdown-open">
                   <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                    Step 3 of 4
+                    Step 4 of 5
                   </p>
                 </div>
               </div>
@@ -1063,6 +1181,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               </div>
 
               <div className="progress-bar animate-fade-in delay-1">
+                <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
@@ -1159,7 +1278,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
               <div className="text-center mt-6 animate-fade-in delay-4">
                 <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  Step 4 of 4 - Final step to complete your onboarding
+                  Step 5 of 5 - Final step to complete your onboarding
                 </p>
               </div>
             </div>

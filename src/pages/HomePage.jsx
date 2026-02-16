@@ -303,12 +303,23 @@ const HomePage = ({
     if (!profile?.id) return;
     setLoadingGoals(true);
     try {
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('investment_goals')
-        .select('id, name, target_amount, current_amount, progress_percent')
+        .select('id, name, target_amount, current_amount, invested_amount, progress_percent, linked_asset_name')
         .eq('user_id', profile.id)
         .eq('is_active', true)
         .order('created_at', { ascending: false });
+
+      if (error && error.message && error.message.includes('does not exist')) {
+        const fallback = await supabase
+          .from('investment_goals')
+          .select('id, name, target_amount, current_amount, progress_percent')
+          .eq('user_id', profile.id)
+          .eq('is_active', true)
+          .order('created_at', { ascending: false });
+        data = fallback.data;
+        error = fallback.error;
+      }
 
       if (error) throw error;
       setGoals(data || []);
@@ -628,35 +639,29 @@ const HomePage = ({
     }
   };
 
-  const getKycStatus = () => {
-    if (kycVerified) return { text: "Verified", style: "bg-green-100 text-green-600" };
+  const getIdentityStatusForHome = () => {
+    if (onboardingComplete) return { text: "Verified", style: "bg-green-100 text-green-600" };
     if (kycNeedsResubmission) return { text: "Needs Attention", style: "bg-amber-100 text-amber-700" };
     if (kycPending) return { text: "Pending", style: "bg-blue-100 text-blue-600" };
-    return { text: "Not Verified", style: "bg-slate-100 text-slate-500" };
+    if (kycVerified) return { text: "Required", style: "bg-slate-100 text-slate-500" };
+    return { text: "Required", style: "bg-slate-100 text-slate-500" };
   };
 
-  const kycStatus = getKycStatus();
+  const identityStatusHome = getIdentityStatusForHome();
 
   const actionsData = [
     {
       id: "identity",
-      title: "Complete KYC verification",
-      description: kycNeedsResubmission ? "Some documents need resubmission" : "Verify your identity to unlock all features",
+      title: "Complete identity",
+      description: kycNeedsResubmission
+        ? "Some documents need resubmission"
+        : onboardingComplete
+        ? "Identity and onboarding complete"
+        : "Verify your identity and complete onboarding",
       priority: 1,
-      status: kycStatus.text,
-      statusStyle: kycStatus.style,
+      status: identityStatusHome.text,
+      statusStyle: identityStatusHome.style,
       icon: ShieldCheck,
-      routeName: "actions",
-      isComplete: kycVerified,
-    },
-    {
-      id: "onboarding",
-      title: "Complete onboarding",
-      description: "Risk disclosure, source of funds, and agreements",
-      priority: 2,
-      status: onboardingComplete ? "Complete" : "Required",
-      statusStyle: onboardingComplete ? "bg-green-100 text-green-600" : "bg-slate-100 text-slate-500",
-      icon: FileSignature,
       routeName: "actions",
       isComplete: onboardingComplete,
     },

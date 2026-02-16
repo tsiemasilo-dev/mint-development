@@ -342,9 +342,6 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     }
   }, [myStocks, stocksList]);
 
-  const goal = investmentGoals && investmentGoals.length > 0 ? investmentGoals[0] : null;
-  const goalProgress = goal && goal.targetAmount > 0 ? (goal.currentAmount / goal.targetAmount) * 100 : 0;
-
   if (strategiesLoading && holdingsLoading) {
     return <PortfolioSkeleton />;
   }
@@ -605,7 +602,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           {/* Chart section */}
           <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 md:max-w-md md:px-8">
         <section className="py-2">
-          {strategies.length === 0 ? (
+          {strategies.length === 0 || (holdingSettlementStatus && holdingSettlementStatus !== "confirmed") ? (
             <div className="flex flex-col items-center justify-center py-12 px-6">
               <div className="w-16 h-16 rounded-full bg-purple-50 flex items-center justify-center mb-4">
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -816,37 +813,6 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
         )}
 
         <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50">
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-sm font-semibold text-slate-900">Linked Goals</p>
-          </div>
-          
-          {goal ? (
-            <div className="rounded-2xl bg-slate-50 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-sm font-semibold text-slate-900">{goal.label}</p>
-                <p className="text-sm font-semibold text-slate-900">
-                  {formatCurrency(goal.currentAmount)} / {formatCurrency(goal.targetAmount)}
-                </p>
-              </div>
-              <div className="h-2.5 w-full rounded-full bg-slate-200 overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-600 transition-all"
-                  style={{ width: `${goalProgress}%` }}
-                />
-              </div>
-              <p className="mt-2 text-xs text-slate-500">
-                {goalProgress.toFixed(0)}% of your goal achieved
-              </p>
-            </div>
-          ) : (
-            <div className="rounded-2xl bg-slate-50 p-4 text-center">
-              <p className="text-sm font-semibold text-slate-900 mb-1">No linked goals yet</p>
-              <p className="text-xs text-slate-500">Set up investment goals to track your progress.</p>
-            </div>
-          )}
-        </section>
-
-        <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50">
           <div className="flex items-center justify-between mb-1">
             <p className="text-sm font-semibold text-slate-900">Portfolio Holdings</p>
           </div>
@@ -882,7 +848,12 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                     )}
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">{holding.symbol}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-semibold text-slate-900">{holding.symbol}</p>
+                      {holdingSettlementStatus && holdingSettlementStatus !== "confirmed" && (
+                        <SettlementBadge status={holdingSettlementStatus} size="xs" />
+                      )}
+                    </div>
                     <p className="text-xs text-slate-500">{holding.name}</p>
                   </div>
                 </div>
@@ -1016,8 +987,9 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           }
           return null;
         }
+        const isPending = holdingSettlementStatus && holdingSettlementStatus !== "confirmed";
         const otherStocks = stocksList.filter(s => s.id !== selectedStock?.id && !myStockIds.has(s.id));
-        const hasNoHoldings = myStocks.length === 0;
+        const hasNoHoldings = myStocks.length === 0 || isPending;
         return (
           <>
             {hasNoHoldings ? (
@@ -1029,7 +1001,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                   </svg>
                 </div>
                 <p className="text-lg font-semibold text-slate-900 mb-1">Invest in Your First Stock</p>
-                <p className="text-sm text-slate-500 text-center max-w-[260px] mb-5">Browse stocks below and start building your portfolio. Your holdings will show up here.</p>
+                <p className="text-sm text-slate-500 text-center max-w-[260px] mb-5">Browse individual stocks and start building your portfolio. Your holdings will show up here.</p>
                 <button
                   onClick={() => onOpenInvest && onOpenInvest()}
                   className="w-full max-w-[280px] py-3.5 rounded-full bg-gradient-to-r from-slate-800 to-slate-900 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg shadow-slate-900/30 transition hover:-translate-y-0.5 hover:shadow-xl"
@@ -1065,7 +1037,12 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                               selectedStock.id === stock.id ? 'bg-purple-50' : ''
                             }`}
                           >
-                            <p className="font-medium text-slate-800 text-sm tracking-tight">{stock.name}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-slate-800 text-sm tracking-tight">{stock.name}</p>
+                              {holdingSettlementStatus && holdingSettlementStatus !== "confirmed" && (
+                                <SettlementBadge status={holdingSettlementStatus} size="xs" />
+                              )}
+                            </div>
                             <p className="text-xs text-slate-400 mt-0.5 font-medium tabular-nums">
                               {formatCurrency(liveQuotes[stock.ticker]?.price || stock.price)}
                             </p>
@@ -1294,7 +1271,12 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                             )}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-slate-900 truncate">{stock.name}</p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-sm font-semibold text-slate-900 truncate">{stock.name}</p>
+                              {holdingSettlementStatus && holdingSettlementStatus !== "confirmed" && (
+                                <SettlementBadge status={holdingSettlementStatus} size="xs" />
+                              )}
+                            </div>
                             <p className="text-xs text-slate-500 font-medium">{stockQty > 0 ? `${stockQty} shares · ${formatCurrency(livePrice)}/share` : stock.ticker}</p>
                           </div>
                           <div className="text-right flex-shrink-0">
@@ -1444,6 +1426,58 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                 <p className="text-lg font-semibold text-slate-900 mb-1">No holdings yet</p>
                 <p className="text-sm text-slate-500">Your investment holdings will appear here once you start investing.</p>
               </div>
+              {investmentGoals && investmentGoals.length > 0 && (
+                <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50">
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="text-sm font-semibold text-slate-900">Your Goals</p>
+                    <span className="text-xs font-semibold text-violet-600 bg-violet-50 rounded-full px-2 py-0.5">{investmentGoals.length}</span>
+                  </div>
+                  <div className="space-y-3">
+                    {investmentGoals.map((g) => {
+                      const currentValue = g.currentAmount || 0;
+                      const invested = g.investedAmount || 0;
+                      const target = g.targetAmount || 0;
+                      const remaining = Math.max(0, target - currentValue);
+                      const pct = target > 0 ? Math.min(100, (currentValue / target) * 100) : 0;
+                      const gainLoss = currentValue - invested;
+                      return (
+                        <div key={g.id || (g.label + g.targetAmount)} className="rounded-2xl bg-slate-50 p-4">
+                          <div className="flex items-center justify-between mb-1">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900">{g.label}</p>
+                              {g.linkedAssetName && (
+                                <p className="text-[10px] text-slate-400">Linked to {g.linkedAssetName}</p>
+                              )}
+                            </div>
+                            <p className="text-xs font-semibold text-slate-600">
+                              {formatCurrency(currentValue)} / {formatCurrency(target)}
+                            </p>
+                          </div>
+                          <div className="h-2.5 w-full rounded-full bg-slate-200 overflow-hidden mb-2">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-600 transition-all"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs text-slate-500">
+                              {pct >= 100 ? "Goal reached!" : `${formatCurrency(remaining)} remaining`}
+                            </p>
+                            <div className="flex items-center gap-2">
+                              {gainLoss !== 0 && invested > 0 && (
+                                <span className={`text-[10px] font-semibold ${gainLoss > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                  {gainLoss > 0 ? '+' : ''}{formatCurrency(gainLoss)}
+                                </span>
+                              )}
+                              <p className="text-xs font-semibold text-violet-600">{pct.toFixed(0)}%</p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
             </div>
           );
         }
@@ -1571,6 +1605,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
             const holdingsTotalPages = Math.ceil(holdingsData.length / HOLDINGS_PER_PAGE);
             const pagedHoldings = holdingsData.slice(holdingsPage * HOLDINGS_PER_PAGE, (holdingsPage + 1) * HOLDINGS_PER_PAGE);
             return (
+            <>
             <section
               className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50"
               style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
@@ -1651,7 +1686,61 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                 })}
               </div>
             </section>
-            );
+
+            {investmentGoals && investmentGoals.length > 0 && (
+              <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50 mt-4">
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-sm font-semibold text-slate-900">Your Goals</p>
+                  <span className="text-xs font-semibold text-violet-600 bg-violet-50 rounded-full px-2 py-0.5">{investmentGoals.length}</span>
+                </div>
+                <div className="space-y-3">
+                  {investmentGoals.map((g) => {
+                    const currentValue = g.currentAmount || 0;
+                    const invested = g.investedAmount || 0;
+                    const target = g.targetAmount || 0;
+                    const remaining = Math.max(0, target - currentValue);
+                    const pct = target > 0 ? Math.min(100, (currentValue / target) * 100) : 0;
+                    const gainLoss = currentValue - invested;
+                    return (
+                      <div key={g.id || (g.label + g.targetAmount)} className="rounded-2xl bg-slate-50 p-4">
+                        <div className="flex items-center justify-between mb-1">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">{g.label}</p>
+                            {g.linkedAssetName && (
+                              <p className="text-[10px] text-slate-400">Linked to {g.linkedAssetName}</p>
+                            )}
+                          </div>
+                          <p className="text-xs font-semibold text-slate-600">
+                            {formatCurrency(currentValue)} / {formatCurrency(target)}
+                          </p>
+                        </div>
+                        <div className="h-2.5 w-full rounded-full bg-slate-200 overflow-hidden mb-2">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-600 transition-all"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-slate-500">
+                            {pct >= 100 ? "Goal reached!" : `${formatCurrency(remaining)} remaining`}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            {gainLoss !== 0 && invested > 0 && (
+                              <span className={`text-[10px] font-semibold ${gainLoss > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                {gainLoss > 0 ? '+' : ''}{formatCurrency(gainLoss)}
+                              </span>
+                            )}
+                            <p className="text-xs font-semibold text-violet-600">{pct.toFixed(0)}%</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+          </>
+          );
           })()}
         </div>
         );

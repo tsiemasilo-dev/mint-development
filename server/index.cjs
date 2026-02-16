@@ -287,6 +287,35 @@ async function runSettlementMigration() {
   }
 }
 
+async function migrateGoalColumns() {
+  const db = supabaseAdmin || supabase;
+  if (!db) return;
+  try {
+    const { data, error } = await db.from('investment_goals').select('linked_strategy_id').limit(1);
+    if (!error) {
+      console.log('[goals] Goal linkage columns already exist');
+      return;
+    }
+    console.log('[goals] Adding linkage columns to investment_goals...');
+    const cols = [
+      "ALTER TABLE investment_goals ADD COLUMN IF NOT EXISTS linked_strategy_id text",
+      "ALTER TABLE investment_goals ADD COLUMN IF NOT EXISTS linked_security_id text",
+      "ALTER TABLE investment_goals ADD COLUMN IF NOT EXISTS invested_amount numeric DEFAULT 0",
+      "ALTER TABLE investment_goals ADD COLUMN IF NOT EXISTS linked_asset_name text",
+    ];
+    for (const sql of cols) {
+      try {
+        await db.rpc('exec_sql', { query: sql });
+      } catch (e) {
+        console.log('[goals] RPC failed for column, may need manual addition:', e.message);
+      }
+    }
+  } catch (e) {
+    console.log('[goals] Migration check error:', e.message);
+  }
+}
+migrateGoalColumns();
+
 function deriveSettlementStatus(record) {
   if (record.settlement_status) {
     return record.settlement_status;
@@ -2725,6 +2754,51 @@ app.get("/api/sessions/validate", async (req, res) => {
   }
 });
 
+app.post("/api/migrate/goal-columns", async (req, res) => {
+  try {
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      return res.json({ error: "Missing Supabase credentials" });
+    }
+    const db = supabaseAdmin || supabase;
+    if (!db) return res.json({ error: "no db" });
+
+    const testResult = await db
+      .from("investment_goals")
+      .select("linked_strategy_id")
+      .limit(1);
+
+    if (testResult.error) {
+      const sql = `
+ALTER TABLE investment_goals ADD COLUMN IF NOT EXISTS linked_strategy_id text;
+ALTER TABLE investment_goals ADD COLUMN IF NOT EXISTS linked_security_id text;
+ALTER TABLE investment_goals ADD COLUMN IF NOT EXISTS invested_amount numeric DEFAULT 0;
+ALTER TABLE investment_goals ADD COLUMN IF NOT EXISTS linked_asset_name text;`;
+
+      const response = await globalThis.fetch(`${SUPABASE_URL}/rest/v1/rpc/exec_sql`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_SERVICE_ROLE_KEY,
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify({ sql_query: sql }),
+      });
+
+      res.json({
+        status: "columns_missing",
+        column_test_error: testResult.error.message,
+        sql_to_run: sql.trim(),
+      });
+    } else {
+      res.json({ status: "columns_exist" });
+    }
+  } catch (e) {
+    console.error("[migrate/goal-columns] Error:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post("/api/migrate/onboarding-columns", async (req, res) => {
   try {
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
@@ -2965,6 +3039,120 @@ app.post("/api/onboarding/save-employment", async (req, res) => {
     res.json({ success: true, onboarding_id: savedId });
   } catch (error) {
     console.error("[Onboarding] Employment save error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post("/api/onboarding/save-mandate", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (!token) return res.status(401).json({ success: false, error: "Missing token" });
+
+    const db = supabaseAdmin || supabase;
+    const authClient = supabaseAdmin || supabase;
+    const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
+    if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
+
+    const { mandate_data, existing_onboarding_id } = req.body;
+
+    if (!mandate_data) {
+      return res.status(400).json({ success: false, error: "Missing mandate_data" });
+    }
+
+    const mandateJson = typeof mandate_data === "string" ? mandate_data : JSON.stringify(mandate_data);
+
+    let onboardingId = existing_onboarding_id;
+    if (!onboardingId) {
+      const { data: latest } = await db
+        .from("user_onboarding")
+        .select("id")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (latest?.id) onboardingId = latest.id;
+    }
+
+    const { data: currentRow } = onboardingId
+      ? await db.from("user_onboarding").select("sumsub_raw").eq("id", onboardingId).eq("user_id", user.id).maybeSingle()
+      : await db.from("user_onboarding").select("sumsub_raw").eq("user_id", user.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+
+    let existingRaw = {};
+    if (currentRow?.sumsub_raw) {
+      try { existingRaw = typeof currentRow.sumsub_raw === "string" ? JSON.parse(currentRow.sumsub_raw) : currentRow.sumsub_raw; } catch (e) { existingRaw = {}; }
+    }
+    existingRaw.mandate_data = JSON.parse(mandateJson);
+    const mergedRaw = JSON.stringify(existingRaw);
+
+    if (onboardingId) {
+      const { error } = await db
+        .from("user_onboarding")
+        .update({ sumsub_raw: mergedRaw })
+        .eq("id", onboardingId)
+        .eq("user_id", user.id);
+      if (error) {
+        console.error("[Onboarding] Mandate save update error:", error.message);
+        return res.status(500).json({ success: false, error: error.message });
+      }
+    } else {
+      const { data, error } = await db
+        .from("user_onboarding")
+        .insert({ user_id: user.id, sumsub_raw: mergedRaw })
+        .select("id")
+        .single();
+      if (error) {
+        console.error("[Onboarding] Mandate save insert error:", error.message);
+        return res.status(500).json({ success: false, error: error.message });
+      }
+      onboardingId = data?.id;
+    }
+
+    console.log(`[Onboarding] Mandate saved for user ${user.id}, onboarding_id: ${onboardingId}`);
+    res.json({ success: true, onboarding_id: onboardingId });
+  } catch (error) {
+    console.error("[Onboarding] Mandate save error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get("/api/onboarding/mandate", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (!token) return res.status(401).json({ success: false, error: "Missing token" });
+
+    const db = supabaseAdmin || supabase;
+    const authClient = supabaseAdmin || supabase;
+    const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
+    if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
+
+    const { data, error } = await db
+      .from("user_onboarding")
+      .select("sumsub_raw")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.error("[Onboarding] Mandate load error:", error.message);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+
+    let mandateData = null;
+    if (data?.sumsub_raw) {
+      try {
+        const parsed = typeof data.sumsub_raw === "string" ? JSON.parse(data.sumsub_raw) : data.sumsub_raw;
+        mandateData = parsed?.mandate_data || null;
+      } catch (e) {
+        mandateData = null;
+      }
+    }
+
+    res.json({ success: true, mandate_data: mandateData });
+  } catch (error) {
+    console.error("[Onboarding] Mandate load error:", error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

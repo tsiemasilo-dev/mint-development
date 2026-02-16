@@ -374,13 +374,38 @@ export const useInvestments = () => {
         value: totalInvestments > 0 ? Math.round((value / totalInvestments) * 100) + "%" : "0%",
       }));
 
-      const formattedGoals = goals.map((g) => ({
-        label: g.name || "Goal",
-        value: `R${(g.target_amount || 0).toLocaleString()}`,
-        progress: g.target_amount > 0 ? Math.round((g.current_amount / g.target_amount) * 100) + "%" : "0%",
-        currentAmount: g.current_amount || 0,
-        targetAmount: g.target_amount || 0,
-      }));
+      const formattedGoals = goals.map((g) => {
+        const invested = g.invested_amount || g.current_amount || 0;
+        let currentValue = invested;
+
+        if (g.linked_security_id || g.linked_strategy_id) {
+          const linkedHolding = holdings.find(
+            (h) => h.security_id === g.linked_security_id || h.strategy_id === g.linked_strategy_id
+          );
+          if (linkedHolding) {
+            const marketVal = (linkedHolding.market_value || 0) / 100;
+            const costBasis = ((linkedHolding.avg_fill || 0) * (linkedHolding.quantity || 0)) / 100;
+            const gainLoss = marketVal - costBasis;
+            currentValue = invested + (costBasis > 0 ? (gainLoss / costBasis) * invested : 0);
+          }
+        }
+
+        const target = g.target_amount || 0;
+        const pct = target > 0 ? Math.min(100, Math.round((currentValue / target) * 100)) : 0;
+
+        return {
+          id: g.id,
+          label: g.name || "Goal",
+          value: `R${target.toLocaleString()}`,
+          progress: pct + "%",
+          currentAmount: currentValue,
+          investedAmount: invested,
+          targetAmount: target,
+          linkedAssetName: g.linked_asset_name || null,
+          linkedStrategyId: g.linked_strategy_id || null,
+          linkedSecurityId: g.linked_security_id || null,
+        };
+      });
 
       setData({
         totalInvestments,
