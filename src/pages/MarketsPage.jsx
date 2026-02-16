@@ -656,6 +656,26 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
     };
   }, [selectedStrategy]);
 
+  useEffect(() => {
+    if (!selectedStrategy) return;
+
+    const originalOverflow = document.body.style.overflow;
+    const appContent = document.querySelector(".app-content");
+    const originalAppContentOverflow = appContent?.style.overflow;
+
+    document.body.style.overflow = "hidden";
+    if (appContent) {
+      appContent.style.overflow = "hidden";
+    }
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      if (appContent) {
+        appContent.style.overflow = originalAppContentOverflow || "";
+      }
+    };
+  }, [selectedStrategy]);
+
   const availablePreviewTimeframes = useMemo(() => {
     const curves = selectedStrategyAnalytics?.curves || {};
     return strategyTimeframeOptions
@@ -1733,14 +1753,14 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
 
       {/* Strategy Preview Modal */}
       {selectedStrategy && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 overscroll-contain">
           <button
             type="button"
             className="absolute inset-0 h-full w-full cursor-default"
             aria-label="Close preview"
             onClick={() => setSelectedStrategy(null)}
           />
-          <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-[32px] bg-white shadow-2xl">
+          <div className="relative z-10 flex max-h-[85vh] w-full max-w-sm flex-col overflow-hidden rounded-[32px] bg-white shadow-2xl">
             <button
               type="button"
               onClick={() => setSelectedStrategy(null)}
@@ -1750,7 +1770,10 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
               <X className="h-4 w-4" />
             </button>
             
-            <div className="p-6">
+            <div
+              className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6"
+              style={{ WebkitOverflowScrolling: "touch" }}
+            >
               <div className="flex items-start gap-3 mb-6">
                 <div className="flex-1">
                   <h2 className="text-lg font-semibold text-slate-900">{selectedStrategy.name}</h2>

@@ -340,15 +340,15 @@ const SwipeableBalanceCard = ({ userId, isBackFacing = true, forceVisible }) => 
         </div>
       )}
       <div className="relative z-10 flex h-full text-white">
-        <div className="w-[50%] p-4 flex flex-col justify-between border-r border-white/5">
+        <div className="w-[50%] p-4 flex flex-col justify-between border-r border-white/15">
           <div className="space-y-3">
             <div>
-              <p className="text-[10px] uppercase tracking-widest text-white/50 font-medium mb-1.5">
+              <p className="text-[10px] uppercase tracking-widest text-white/55 font-medium mb-1.5">
                 {selectedAsset ? selectedAsset.symbol : "portfolio value"}
               </p>
               <div className="flex items-center gap-2 mb-1.5">
                 <span className="text-base font-semibold">{isVisible ? formatKMB(displayMarketValue) : masked}</span>
-                <span className="px-1.5 py-0.5 rounded-full bg-white/10 text-[8px] font-medium uppercase text-white/60">
+                <span className="px-1.5 py-0.5 rounded-full bg-white/12 text-[8px] font-medium uppercase text-white/70 border border-white/10">
                   {isVisible ? formatKMB(displayInvested) : masked}(inv)
                 </span>
               </div>
@@ -360,23 +360,23 @@ const SwipeableBalanceCard = ({ userId, isBackFacing = true, forceVisible }) => 
               </div>
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-widest text-white/50 font-medium mb-1.5">
+              <p className="text-[10px] uppercase tracking-widest text-white/55 font-medium mb-1.5">
                 holdings ({dbData.holdingsCount})
               </p>
               {dbData.holdings.length > 0 ? (
                 <div className="flex flex-wrap gap-1">
                   {dbData.holdings.slice(0, 3).map((h, i) => (
-                    <div key={i} className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-white/10">
+                    <div key={i} className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-white/10 border border-white/10">
                       {h.isStrategy && h.topLogos?.length > 0 ? (
                         <div className="flex -space-x-1">
                           {h.topLogos.slice(0, 3).map((logo, li) => (
-                            <img key={li} src={logo} className="w-3 h-3 rounded-full object-cover border border-white/20" />
+                            <img key={li} src={logo} className="w-3 h-3 rounded-full object-cover border border-white/25" />
                           ))}
                         </div>
                       ) : h.logo_url ? (
                         <img src={h.logo_url} className="w-3 h-3 rounded-full object-cover" />
                       ) : (
-                        <span className="text-[6px] text-white/60">{h.symbol?.substring(0, 2)}</span>
+                        <span className="text-[6px] text-white/65">{h.symbol?.substring(0, 2)}</span>
                       )}
                       <span className="text-[8px] font-medium text-white/80">{h.isStrategy ? h.symbol : h.symbol?.replace('.JO', '')}</span>
                       {(() => {
@@ -386,11 +386,11 @@ const SwipeableBalanceCard = ({ userId, isBackFacing = true, forceVisible }) => 
                     </div>
                   ))}
                   {dbData.holdings.length > 3 && (
-                    <span className="text-[8px] text-white/40 self-center">+{dbData.holdings.length - 3}</span>
+                    <span className="text-[8px] text-white/45 self-center">+{dbData.holdings.length - 3}</span>
                   )}
                 </div>
               ) : (
-                <p className="text-[9px] text-white/40">No holdings yet</p>
+                <p className="text-[9px] text-white/45">No holdings yet</p>
               )}
             </div>
           </div>
@@ -398,9 +398,9 @@ const SwipeableBalanceCard = ({ userId, isBackFacing = true, forceVisible }) => 
 
         <div className="w-[50%] p-4 flex flex-col">
           <div className="flex justify-end mb-2">
-            <div className="flex bg-black/20 p-0.5 rounded-lg border border-white/5">
+            <div className="flex bg-white/12 p-0.5 rounded-lg border border-white/10 backdrop-blur-sm">
               {["1m", "3m", "6m"].map((tab) => (
-                <button key={tab} onClick={() => setActiveTab(tab)} className={`px-3 py-1 text-[10px] font-semibold rounded-md ${activeTab === tab ? "bg-white text-slate-900" : "text-white/50"}`}>{tab.toUpperCase()}</button>
+                <button key={tab} onClick={() => setActiveTab(tab)} className={`px-3 py-1 text-[10px] font-semibold rounded-md ${activeTab === tab ? "bg-white text-slate-900" : "text-white/60"}`}>{tab.toUpperCase()}</button>
               ))}
             </div>
           </div>
@@ -422,41 +422,41 @@ const SwipeableBalanceCard = ({ userId, isBackFacing = true, forceVisible }) => 
                     ))}
                   </div>
                 ) : (
-                  <p className="text-[9px] text-white/30">No chart data</p>
+                  <p className="text-[9px] text-white/40">No chart data</p>
                 )}
               </div>
             )}
           </div>
-          <button onClick={() => setIsOpen(!isOpen)} className="mt-2 flex items-center justify-between p-2 rounded-xl bg-white/5 border border-white/5">
+          <button onClick={() => setIsOpen(!isOpen)} className="mt-2 flex items-center justify-between p-2 rounded-xl bg-white/10 border border-white/10 backdrop-blur-sm">
             <div className="flex items-center gap-2">
               <LayoutGrid size={12} className="text-violet-400" />
-              <span className="text-[10px] font-medium text-white/80">{selectedAsset ? selectedAsset.symbol : "All Investments"}</span>
+              <span className="text-[10px] font-medium text-white/85">{selectedAsset ? selectedAsset.symbol : "All Investments"}</span>
             </div>
-            {isOpen ? <ChevronUp size={14} className="opacity-50" /> : <ChevronDown size={14} className="opacity-50" />}
+            {isOpen ? <ChevronUp size={14} className="text-white/65" /> : <ChevronDown size={14} className="text-white/65" />}
           </button>
         </div>
       </div>
 
       {isOpen && (
-        <div className="absolute bottom-0 right-0 w-[55%] max-h-[70%] bg-black/80 backdrop-blur-md rounded-xl z-[120] overflow-hidden border border-white/10">
+        <div className="absolute bottom-0 right-0 w-[55%] max-h-[70%] bg-white/20 backdrop-blur-md rounded-xl z-[120] overflow-hidden border border-white/20 shadow-lg">
           <div className="py-1 overflow-y-auto max-h-[140px]">
-            <button onClick={() => { setSelectedAsset(null); setIsOpen(false); }} className={`w-full flex items-center gap-2 px-3 py-1.5 text-left ${!selectedAsset ? 'bg-white/10' : 'hover:bg-white/5'}`}>
+            <button onClick={() => { setSelectedAsset(null); setIsOpen(false); }} className={`w-full flex items-center gap-2 px-3 py-1.5 text-left ${!selectedAsset ? 'bg-white/20' : 'hover:bg-white/10'}`}>
               <LayoutGrid size={10} className="text-violet-400 shrink-0" />
               <span className="text-[9px] font-medium text-white/90 truncate">All Investments</span>
             </button>
             {dbData.holdings.map((item, idx) => (
-              <button key={idx} onClick={() => { setSelectedAsset(item); setIsOpen(false); }} className={`w-full flex items-center gap-2 px-3 py-1.5 text-left ${selectedAsset?.symbol === item.symbol ? 'bg-white/10' : 'hover:bg-white/5'}`}>
-                <div className="w-4 h-4 rounded-full overflow-hidden bg-white/10 shrink-0">
+              <button key={idx} onClick={() => { setSelectedAsset(item); setIsOpen(false); }} className={`w-full flex items-center gap-2 px-3 py-1.5 text-left ${selectedAsset?.symbol === item.symbol ? 'bg-white/20' : 'hover:bg-white/10'}`}>
+                <div className="w-4 h-4 rounded-full overflow-hidden bg-white/20 shrink-0">
                   {item.isStrategy && item.topLogos?.length > 0 ? (
                     <div className="flex -space-x-1 h-full items-center justify-center">
                       {item.topLogos.slice(0, 2).map((logo, li) => (
-                        <img key={li} src={logo} className="w-3 h-3 rounded-full object-cover border border-white/20" />
+                        <img key={li} src={logo} className="w-3 h-3 rounded-full object-cover border border-white/25" />
                       ))}
                     </div>
                   ) : item.logo_url ? (
                     <img src={item.logo_url} className="w-full h-full object-cover" />
                   ) : (
-                    <span className="flex items-center justify-center w-full h-full text-[6px] text-white/60">{item.symbol?.substring(0, 2)}</span>
+                    <span className="flex items-center justify-center w-full h-full text-[6px] text-white/70">{item.symbol?.substring(0, 2)}</span>
                   )}
                 </div>
                 <span className="text-[9px] font-medium text-white/90 truncate">{item.symbol}</span>
