@@ -999,34 +999,99 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData })
 
       <div style={{
         display: "flex",
-        justifyContent: "center",
         alignItems: "center",
-        gap: "8px",
-        padding: "12px 0 4px",
+        justifyContent: "space-between",
+        padding: "12px 16px 4px",
       }}>
-        {TAB_LABELS.map((_, idx) => (
-          <button
-            key={idx}
-            type="button"
-            onClick={() => {
+        <button
+          type="button"
+          onClick={() => {
+            if (activeTab > 0) {
+              setActiveTab(activeTab - 1);
+              if (scrollRef.current) scrollRef.current.scrollTop = 0;
+            }
+          }}
+          disabled={activeTab === 0}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
+            background: activeTab === 0 ? "transparent" : "hsl(270 30% 96%)",
+            border: activeTab === 0 ? "1px solid transparent" : "1px solid hsl(270 25% 88%)",
+            borderRadius: "8px",
+            padding: "6px 12px",
+            fontSize: "12px",
+            fontWeight: "600",
+            color: activeTab === 0 ? "transparent" : "hsl(270 40% 45%)",
+            cursor: activeTab === 0 ? "default" : "pointer",
+            transition: "all 0.2s ease",
+            visibility: activeTab === 0 ? "hidden" : "visible",
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          Previous
+        </button>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          {TAB_LABELS.map((_, idx) => (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => {
+                if (activeTab === 2 && !allGroupsValid()) {
+                  setShowErrors(true);
+                }
+                setActiveTab(idx);
+                if (scrollRef.current) scrollRef.current.scrollTop = 0;
+              }}
+              style={{
+                width: activeTab === idx ? "24px" : "8px",
+                height: "8px",
+                borderRadius: "4px",
+                background: activeTab === idx ? "hsl(270 60% 55%)" : "hsl(270 20% 85%)",
+                border: "none",
+                cursor: "pointer",
+                transition: "all 0.3s ease",
+                padding: 0,
+              }}
+              aria-label={`Go to section ${idx + 1}`}
+            />
+          ))}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            if (activeTab < TAB_LABELS.length - 1) {
               if (activeTab === 2 && !allGroupsValid()) {
                 setShowErrors(true);
+                return;
               }
-              setActiveTab(idx);
-            }}
-            style={{
-              width: activeTab === idx ? "24px" : "8px",
-              height: "8px",
-              borderRadius: "4px",
-              background: activeTab === idx ? "hsl(270 60% 55%)" : "hsl(270 20% 85%)",
-              border: "none",
-              cursor: "pointer",
-              transition: "all 0.3s ease",
-              padding: 0,
-            }}
-            aria-label={`Go to section ${idx + 1}`}
-          />
-        ))}
+              setActiveTab(activeTab + 1);
+              if (scrollRef.current) scrollRef.current.scrollTop = 0;
+            }
+          }}
+          disabled={activeTab === TAB_LABELS.length - 1}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
+            background: activeTab === TAB_LABELS.length - 1 ? "transparent" : "linear-gradient(135deg, #7c3aed, #a855f7)",
+            border: "none",
+            borderRadius: "8px",
+            padding: "6px 12px",
+            fontSize: "12px",
+            fontWeight: "600",
+            color: activeTab === TAB_LABELS.length - 1 ? "transparent" : "#fff",
+            cursor: activeTab === TAB_LABELS.length - 1 ? "default" : "pointer",
+            transition: "all 0.2s ease",
+            visibility: activeTab === TAB_LABELS.length - 1 ? "hidden" : "visible",
+            boxShadow: activeTab === TAB_LABELS.length - 1 ? "none" : "0 2px 8px rgba(124, 58, 237, 0.3)",
+          }}
+        >
+          Next
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
       </div>
 
       <p style={{
