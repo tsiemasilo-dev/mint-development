@@ -861,25 +861,63 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                     An Authorised Financial Services Provider<br />
                     <strong>FSP NO 55118</strong>
                   </div>
-                  <div className="agreement-text" style={{ textAlign: 'center', margin: '8px 0' }}>and</div>
+                  <div className="agreement-text" style={{ textAlign: 'center' }}>
+                    3 Gwen Lane, Sandown, Sandton, 2031<br />
+                    Tel: +27 (0) 73 781 3375<br />
+                    Email: info@thealgohive.com
+                  </div>
+                  <div className="agreement-text" style={{ textAlign: 'center', margin: '8px 0' }}>
+                    (hereinafter referred to as <strong>ALGOHIVE</strong>)
+                  </div>
+                  <div className="agreement-text" style={{ textAlign: 'center', fontWeight: 'bold' }}>and</div>
                   <div className="agreement-text" style={{ textAlign: 'center' }}>
                     <strong>The Client</strong> (as per your registered account details)
+                  </div>
+                  <div className="agreement-text" style={{ textAlign: 'center', margin: '8px 0' }}>
+                    (hereinafter referred to as the <strong>Client</strong>)
                   </div>
                 </div>
 
                 <div className="agreement-section">
                   <div className="section-title">1. Introduction</div>
                   <div className="agreement-text">
-                    1.1 ALGOHIVE warrants that it is the holder of a Category II FSP license number 55118, in accordance with the Financial Advisory and Intermediary Services Act, 2002 (Act No. 37 of 2002), hereafter referred to as FAIS and is authorised to render intermediary services of a discretionary nature.
+                    1.1 ALGOHIVE warrants that it is the holder of a Category II FSP license number 55118, in accordance with the Financial Advisory and Intermediary Services Act, 2002 (Act No. 37 of 2002), hereafter referred to as FAIS and is authorised to render intermediary services of a discretionary nature in respect of investment products residing under the financial product subcategories indicated in paragraph 1.2 hereunder. The Conditions promulgated in terms of FAIS, provide that a Discretionary Financial Service Provider shall enter into a written mandate with the Client to record the arrangements between the Client and the Financial Service Provider (FSP). The terms and conditions of this written mandate are recorded hereunder.
                   </div>
                   <div className="agreement-text">
                     1.2 ALGOHIVE may, in order to render an intermediary service to the Client, utilise the services of its own staff/approved strategists or that of another approved FSP.
                   </div>
                   <div className="agreement-text">
-                    1.3 ALGOHIVE is authorised to invest in financial product categories including Long term Insurance (Sub Categories A, B1, B2, C), Retail Pension Funds, Pension Fund Benefits, Shares, Money Market, Participatory Interest in Collective Investment Schemes, Long-term Deposits, Short-term Deposits, and Crypto Assets under Category I; and Shares, Participatory Interest in Collective Investment Schemes, Long-term Deposits, Short-term Deposits, and Crypto Assets under Category II.
+                    1.3 ALGOHIVE is authorised to invest in any of the following financial product categories:
+                  </div>
+                  <div className="agreement-text" style={{ marginTop: '8px' }}>
+                    <strong>Category I – Advice and Intermediary Services:</strong>
+                  </div>
+                  <div className="agreement-text" style={{ paddingLeft: '16px' }}>
+                    • Long term Insurance Sub Category A<br />
+                    • Long term Insurance Sub Category B1<br />
+                    • Long term Insurance Sub Category B2<br />
+                    • Long term Insurance Sub Category C<br />
+                    • Retail Pension Funds<br />
+                    • Pension Fund Benefits<br />
+                    • Shares<br />
+                    • Money Market<br />
+                    • Participatory Interest in a Collective Investment Scheme<br />
+                    • Long-term Deposits<br />
+                    • Short-term Deposits<br />
+                    • Crypto Assets
+                  </div>
+                  <div className="agreement-text" style={{ marginTop: '8px' }}>
+                    <strong>Category II – Intermediary Services:</strong>
+                  </div>
+                  <div className="agreement-text" style={{ paddingLeft: '16px' }}>
+                    • Shares<br />
+                    • Participatory Interest in a Collective Investment Scheme<br />
+                    • Long term Deposits<br />
+                    • Short term Deposits<br />
+                    • Crypto Assets
                   </div>
                   <div className="agreement-text">
-                    1.4 Prior to entering into this Mandate, ALGOHIVE obtained from the Client information with regards to the Client's financial circumstances, needs and objectives and such other information necessary to enable ALGOHIVE to render suitable intermediary services to the Client.
+                    1.4 Prior to entering into this Mandate ALGOHIVE obtained from the Client information, with regards to the Client's financial circumstances, needs and objectives and such other information necessary to enable ALGOHIVE to render suitable intermediary services to the Client in terms hereof. Alternatively, ALGOHIVE has ascertained that such information was obtained from the Client's financial advisor and has checked that the advisor is licensed in terms of the FAIS Act.
                   </div>
                 </div>
 
@@ -908,7 +946,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                     3.2 The Client's risk profile is determined considering the Client's current set of information and circumstances and the Client acknowledges that these circumstances and information may change over time.
                   </div>
                   <div className="agreement-text">
-                    3.3 The Client warrants the on-going accuracy and correctness of the Client's investment objectives and any other information that has been provided to ALGOHIVE.
+                    3.3 The Client warrants the on-going accuracy and correctness of the Client's investment objectives and any other information that has been provided to ALGOHIVE in order to conclude this Mandate.
                   </div>
                 </div>
 
@@ -921,36 +959,58 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                     4.2 Where the Client selects a strategist model for replication, performance may vary due to timing, execution, liquidity, and cost factors. Past performance of strategist models is not necessarily indicative of future results. ALGOHIVE does not guarantee identical performance or outcomes.
                   </div>
                   <div className="agreement-text">
-                    4.3 The Client acknowledges that it has been made aware by ALGOHIVE of risks pertaining to the investments which may result in financial loss and acknowledges that it accepts such risks.
+                    4.3 The Client acknowledges that it has been made aware by ALGOHIVE of risks pertaining to the investments which may result in financial loss to it and acknowledges that it accepts such risks and ALGOHIVE or its staff will not be liable or responsible for any financial losses.
                   </div>
                   <div className="agreement-text">
-                    4.4 The Client hereby irrevocably indemnifies ALGOHIVE and holds it harmless against all and any claims of whatsoever nature arising from its management of the investments.
+                    4.4 The Client hereby irrevocably indemnifies ALGOHIVE and holds it harmless against all and any claims of whatsoever nature that might be made against it howsoever arising from its management of the investments including but not limited to any loss or damage which might be suffered by the Client in consequence of any depreciation in the value of the investments from whatsoever cause arising.
                   </div>
                   <div className="agreement-text">
-                    4.5 When investing in foreign investment products, obtaining access to performance information may be more difficult, investments are exposed to different tax regimes, exchange control measures may change, and the Rand value of foreign investments will fluctuate with currency movements.
+                    4.5 When investing in foreign investment products, it is important to be aware of the following risks:
+                  </div>
+                  <div className="agreement-text" style={{ paddingLeft: '16px' }}>
+                    4.5.1 Obtaining access to investment performance information may be more difficult than South African based investments.<br /><br />
+                    4.5.2 Investments are exposed to different tax regimes which may change without warning, and which may influence investment returns.<br /><br />
+                    4.5.3 Exchange control measures may change in the country of investment and it may influence accessibility to the invested capital.<br /><br />
+                    4.5.4 The value of the Rand with respect to the base currencies in which the foreign investment products are invested will fluctuate. The Rand value of such foreign investment products will also fluctuate accordingly.
+                  </div>
+                  <div className="agreement-text">
+                    4.6 Subject to its discretionary authorisation, ALGOHIVE may invest in wrap funds or models on behalf of the Client in terms of this Mandate and is thus required by the registrar to make certain disclosures regarding wrap funds and how they differ from funds of funds:
+                  </div>
+                  <div className="agreement-text" style={{ paddingLeft: '16px' }}>
+                    4.6.1 A fund of funds is a collective investment scheme fund that is not allowed to invest more than 50% of the value of the fund in any one collective investment scheme fund. The Collective Investment Scheme Act guarantees the repurchase of participatory interests in a fund of funds by the management company.<br /><br />
+                    4.6.2 A wrap fund or a model is a basket of different collective investment schemes wrapped as a single investment portfolio. The underlying combination of collective investments schemes is selected optimally to target the risk/return requirement and investment objectives of the client. In fact, it is a number of separate investments in which the investor has direct ownership. These underlying investments are selected in line with the investment requirements of the Client. There is no joint ownership among investors and individual ownership of the participatory interests in the collective investment schemes can be transparently demonstrated at all times. A wrap fund investment is administered and facilitated by a linked investment service provider (LISP) i.e. an Administrative FSP. A wrap fund has no limit concerning the collective investment schemes that it may include in its portfolio. The Administrative FSP of the wrap funds does not guarantee the repurchase of participatory interests in the collective investment schemes that comprise the wrap funds. The Administrative FSP has service level agreements in place with the management company of each collective investment scheme according to which the repurchase of participatory interests in collective investment schemes comprising wrap funds are guaranteed. The costs and other information applicable to wrap funds are set out in the documentation of the administrator of the wrap funds.
+                  </div>
+                  <div className="agreement-text">
+                    4.7 Any jurisdiction restrictions in respect of the client's portfolio are specified in the schedule that is attached to this Mandate.
                   </div>
                 </div>
 
                 <div className="agreement-section">
                   <div className="section-title">5. Registration of Investments</div>
                   <div className="agreement-text">
-                    5.1 All investments managed by ALGOHIVE shall be registered in the name of the Client, a Nominee company as custodian, a Nominee company of a member of the relevant stock exchange, or in the case of a discretionary LISP, the independent custodian.
+                    5.1 All investments managed by ALGOHIVE in terms of this Mandate shall, at ALGOHIVE's election, be registered from time to time in the name of:
+                  </div>
+                  <div className="agreement-text" style={{ paddingLeft: '16px' }}>
+                    5.1.1 The Client, or<br /><br />
+                    5.1.2 A Nominee company as the custodian thereof for the benefit of the Client, or<br /><br />
+                    5.1.3 A Nominee company of a member of the relevant stock or securities exchange, or<br /><br />
+                    5.1.4 In the case of a discretionary LISP, the independent custodian
                   </div>
                   <div className="agreement-text">
-                    5.2 The Client warrants that all investments entrusted to ALGOHIVE are not subject to any lien, charge or other encumbrance.
+                    5.2 The Client warrants and undertakes that all investments entrusted and/or delivered by it, or under its authority, to ALGOHIVE in terms of or for the purposes of this Mandate, are not and will not be subject to any lien, charge or other encumbrance or impediment to transfer and that the same shall remain free to any such lien, charge, encumbrance or impediment whilst subject to ALGOHIVE's authority pursuant to this Mandate.
                   </div>
                 </div>
 
                 <div className="agreement-section">
                   <div className="section-title">6. Treatment of Funds</div>
                   <div className="agreement-text">
-                    6.1 ALGOHIVE shall not receive funds from the Client directly. The Client will deposit the funds directly into the bank account of the investment company or their nominee company.
+                    6.1 ALGOHIVE shall not receive funds from the Client for the purpose of managing the investments as defined in the Mandate. The Client will deposit the funds directly into the bank account of the investment company or their nominee company (see Annexure A for banking details) where such funds are to be placed for the future management of the investment. Further, ALGOHIVE will not receive any monies whatsoever which are not received through the intermediation of a bank.
                   </div>
                   <div className="agreement-text">
-                    6.2 Any income, dividends or other distributions will be re-invested unless otherwise instructed by the Client.
+                    6.2 Any income, dividends or other distributions generated by the investment will be re-invested in the investment for the Client unless otherwise instructed in the Schedule. If the Client instructs such income, dividends or other distributions to be paid to the Client quarterly or six-monthly, depending on the underlying investments, payment will be effected into the Client's stipulated bank account as they fall due.
                   </div>
                   <div className="agreement-text">
-                    6.3 Interest and dividends will be accrued and apportioned for the account of the client after deduction of stated fees.
+                    6.3 In respect of any monies received from an ALGOHIVE client and paid into the ALGOHIVE Client Account, a rate equal to the prevailing banks daily call rate will be accrued and invested for or on behalf of the client as part of their portfolio as soon as the investment on behalf of the client is made. Any other cash portfolio utilized by ALGOHIVE on behalf of a client which earns either interest and/or dividends will be solely for the account of the client after the deduction of the stated fees. Both interest and dividends will be apportioned immediately following accrual and receipt thereof.
                   </div>
                   <div className="agreement-text">
                     6.4 No third-party payments will be undertaken by ALGOHIVE on behalf of the Client.
@@ -958,43 +1018,263 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 </div>
 
                 <div className="agreement-section">
-                  <div className="section-title">7. Reporting</div>
+                  <div className="section-title">7. Voting on Behalf of Clients</div>
                   <div className="agreement-text">
-                    ALGOHIVE shall furnish the Client with quarterly reports concerning the Client's investments. Reports will include details of portfolio holdings, transactions, and where applicable, performance attribution. ALGOHIVE shall provide any reasonable information regarding the investments, market practices and inherent risks on request.
+                    7.1 ALGOHIVE may vote on behalf of the Client in respect of a ballot conducted by collective investment scheme in so far as the ballot relates to the investments managed by ALGOHIVE on behalf of the Client.
                   </div>
                 </div>
 
                 <div className="agreement-section">
-                  <div className="section-title">8. Remuneration</div>
+                  <div className="section-title">8. Information to be Disclosed by Product Providers</div>
                   <div className="agreement-text">
-                    <strong>(a) AlgoHive Managed Funds:</strong> An annual management fee of 0.99% based on the market value of the portfolio, calculated monthly in arrears.
-                  </div>
-                  <div className="agreement-text">
-                    <strong>(b) OpenStrategies Platform:</strong> No asset-based management fee. Instead: 70% of profits accrue to the Client, 20–25% to the selected Strategist, and 5–10% retained by AlgoHive for platform and oversight services.
-                  </div>
-                  <div className="agreement-text">
-                    <strong>(c) Transaction Costs:</strong> Brokerage and execution fees are for the Client's account. AlgoHive may earn a margin on execution costs as disclosed by the executing broker.
+                    8.1 The Client confirms that ALGOHIVE shall not be required to provide the Client with any information other than that which a product provider, such as a collective investment scheme or other listed insurance company, is required by law to disclose to the Client.
                   </div>
                 </div>
 
                 <div className="agreement-section">
-                  <div className="section-title">9. Disputes</div>
+                  <div className="section-title">9. Prohibition Against Selling or Buying Certain Investments</div>
                   <div className="agreement-text">
-                    Any dispute arising from this Mandate shall be referred for arbitration before a single arbitrator in Durban. The decision of the arbitrator shall be final and binding. This clause does not prevent a party from applying to court for urgent relief.
+                    9.1 ALGOHIVE shall not directly or indirectly:
+                  </div>
+                  <div className="agreement-text" style={{ paddingLeft: '16px' }}>
+                    9.1.1 Sell any financial products owned by ALGOHIVE to the Client<br /><br />
+                    9.1.2 Buy for its own account any investments owned by the Client
                   </div>
                 </div>
 
                 <div className="agreement-section">
-                  <div className="section-title">10. Termination</div>
+                  <div className="section-title">10. Declaration Regarding Funds & Investments</div>
                   <div className="agreement-text">
-                    Either party may terminate this Mandate by furnishing not less than sixty (60) calendar days' written notice. Upon termination, all outstanding fees shall become due and payable. ALGOHIVE's appointment shall immediately cease if its FSP license is withdrawn.
+                    10.1 The Client warrants, declares and undertakes that all investments entrusted and/or delivered by it, or under its authority, to ALGOHIVE in terms or for the purposes of this Mandate are derived from legitimate sources and do not constitute the "proceeds of unlawful activities" either as defined in the Prevention of Organised Crime Act No. 121 of 1998, as amended, or at all.
+                  </div>
+                  <div className="agreement-text">
+                    10.2 The Client further warrants that, where required, all funds entrusted to ALGOHIVE in terms or for the purpose of this Mandate are duly declared in terms of the Income Tax Act of 1962 and that the Client has obtained all necessary approvals from the South African Reserve Bank for foreign funds, assets or investments owned by the Client.
                   </div>
                 </div>
 
                 <div className="agreement-section">
-                  <div className="section-title">11. General</div>
+                  <div className="section-title">11. Reporting</div>
                   <div className="agreement-text">
-                    This Mandate constitutes the entire agreement between the parties. Any amendment must be in writing. This agreement shall be governed by the laws of the Republic of South Africa. Failure to enforce any provision shall not constitute a waiver.
+                    11.1 ALGOHIVE shall furnish the Client with quarterly reports concerning the Client's investments.
+                  </div>
+                  <div className="agreement-text">
+                    11.2 ALGOHIVE may furnish the Client with electronic reports provided that the Client can access the reports.
+                  </div>
+                  <div className="agreement-text">
+                    11.3 The reports shall contain such information as is reasonably necessary to enable the Client to:
+                  </div>
+                  <div className="agreement-text" style={{ paddingLeft: '16px' }}>
+                    11.3.1 Produce a set of financial statements;<br /><br />
+                    11.3.2 Determine the composition of the financial products comprising the investments and any changes therein over the period to which such report relates;<br /><br />
+                    11.3.3 Determine the market value of such financial products and any changes therein during the period to which such report relates.
+                  </div>
+                  <div className="agreement-text">
+                    11.4 ALGOHIVE shall, on request in a comprehensible and timely manner, provide to the Client any reasonable information regarding the investments, market practices and the risks inherent in the different markets and products.
+                  </div>
+                  <div className="agreement-text">
+                    11.5 Reports will include details of portfolio holdings, transactions, and where applicable, performance attribution relative to the selected strategist model.
+                  </div>
+                </div>
+
+                <div className="agreement-section">
+                  <div className="section-title">12. Remuneration</div>
+                  <div className="agreement-text">
+                    12.1 In consideration for the management by ALGOHIVE of the investments, the Client shall make payment to ALGOHIVE an annual management fee of 1.00% based on the market value of the portfolio of the Client. Such management fee will be calculated on the market value of the portfolio at the end of each month.
+                  </div>
+                  <div className="agreement-text">
+                    12.2 ALGOHIVE may recover the remuneration referred to above at intervals of 1 month from the investment of the Client.
+                  </div>
+                  <div className="agreement-text">
+                    12.3 ALGOHIVE will receive no commission / incentives, fee reductions or rebates from a LISP, collective investment scheme for placing the Client's funds with them.
+                  </div>
+                  <div className="agreement-text">
+                    12.4 In the event of ALGOHIVE being remunerated by the Life Assurance or Investment Companies, this fact will be disclosed to the Client and the parties may elect to negotiate a different fee structure.
+                  </div>
+                  <div className="agreement-text">
+                    12.5 Fees for managing the Client's investments will depend on the type of solution selected:
+                  </div>
+                  <div className="agreement-text" style={{ paddingLeft: '16px' }}>
+                    <strong>(a) AlgoHive Managed Funds</strong><br />
+                    For investments placed into AlgoHive-managed funds or model portfolios (excluding the OpenStrategies platform), the Client shall pay an annual management fee of 0.99% based on the market value of the portfolio. This fee will be calculated monthly in arrears on the closing market value and deducted directly from the investment account.<br /><br />
+                    <strong>(b) OpenStrategies Platform</strong><br />
+                    For investments executed via the OpenStrategies mirrored strategy platform, no asset-based management fee will be charged. Instead:<br />
+                    • 70% of profits realised accrue to the Client<br />
+                    • 20–25% of profits are allocated to the selected Strategist<br />
+                    • 5–10% of profits are retained by AlgoHive for platform and oversight services<br />
+                    These allocations are calculated and settled in accordance with the OpenStrategies participation terms signed by the Client.<br /><br />
+                    <strong>(c) Transaction Costs</strong><br />
+                    Brokerage and execution fees, including those from Interactive Brokers (IBKR) or any appointed execution broker, are for the Client's account. AlgoHive may earn a margin on these execution costs and pass them through at cost as disclosed by the executing broker.
+                  </div>
+                  <div className="agreement-text">
+                    12.6 Fees and performance allocations will be deducted automatically from the investment account and itemised in periodic statements provided to the Client.
+                  </div>
+                </div>
+
+                <div className="agreement-section">
+                  <div className="section-title">13. Disputes</div>
+                  <div className="agreement-text">
+                    13.1 If any dispute or difference arises as to the validity, interpretation, effect or rights and obligations of either party under this Mandate, either party shall have the right to require that such dispute or difference be referred for a decision to arbitration before a single arbitrator.
+                  </div>
+                  <div className="agreement-text">
+                    13.2 The arbitration shall be held in an informal manner in Durban and the identity of the arbitrator shall be mutually agreed upon between the parties within a period of 5 (five) days from the date that the arbitration is called for. The arbitrator shall be an attorney or advocate of 10 (ten) years' standing or more with experience and knowledge of insurance law and with no interest in the proceedings.
+                  </div>
+                  <div className="agreement-text">
+                    13.3 The parties agree to keep the arbitration, its subject matter and evidence heard during the arbitration confidential and not to disclose it to any other person.
+                  </div>
+                  <div className="agreement-text">
+                    13.4 The decision of the arbitrator shall be final and binding upon the parties and not subject to appeal.
+                  </div>
+                  <div className="agreement-text">
+                    13.5 The arbitrator shall include in his award an order as to the costs of the arbitration and who shall bear them.
+                  </div>
+                  <div className="agreement-text">
+                    13.6 The arbitrator shall at his sole discretion decide on the formulation of the dispute for arbitration but shall at all times be guided by the requirements of the Financial Advisory and Intermediary Services Act 2002 and all applicable ancillary legislation.
+                  </div>
+                  <div className="agreement-text">
+                    13.7 The inclusion of this arbitration clause shall not prevent a party from applying to court for urgent relief in the appropriate circumstances.
+                  </div>
+                  <div className="agreement-text">
+                    13.8 The parties agree that all the terms of this Mandate are material.
+                  </div>
+                </div>
+
+                <div className="agreement-section">
+                  <div className="section-title">14. Termination of Mandate</div>
+                  <div className="agreement-text">
+                    14.1 ALGOHIVE or the Client shall be entitled to terminate this Mandate by furnishing, the one to the other, not less than sixty (60) calendar days' written notice of such termination.
+                  </div>
+                  <div className="agreement-text">
+                    14.2 ALGOHIVE shall not initiate any market transactions in respect of any investments on behalf of the Client after receipt of notice of termination by the Client of this Mandate unless specifically instructed otherwise by the Client.
+                  </div>
+                  <div className="agreement-text">
+                    14.3 Upon receipt from the Client of any such notice of termination of this Mandate, all outstanding fees owing to ALGOHIVE in terms of or arising from the Mandate shall forthwith thereupon be and become due, owing and payable. In this regard the Client irrevocably authorises and empowers ALGOHIVE to deduct such fees either from the cash standing to the credit of the investment's portfolio or from the sale of any securities or financial instruments forming part of the investments if such cash balance is insufficient to enable payment of such fees to be made.
+                  </div>
+                  <div className="agreement-text">
+                    14.4 Notwithstanding any other provision in this Mandate, ALGOHIVE's appointment shall immediately cease without prejudice to the rights and obligations of ALGOHIVE and the Client if its status as an authorised financial services provider is finally withdrawn in terms of the FAIS Act or any other provision of applicable legislation.
+                  </div>
+                </div>
+
+                <div className="agreement-section">
+                  <div className="section-title">15. Effective Date</div>
+                  <div className="agreement-text">
+                    15.1 This Agreement will become of force and effect on last date of signature.
+                  </div>
+                </div>
+
+                <div className="agreement-section">
+                  <div className="section-title">16. Administrative Arrangements</div>
+                  <div className="agreement-text">
+                    16.1 The Client shall apply for the investment products and portfolios on the applicable initial investment application forms.
+                  </div>
+                  <div className="agreement-text">
+                    16.2 Any amendment of any provision of this mandate shall be in writing and shall be by means of a supplementary or new agreement between ALGOHIVE and the Client.
+                  </div>
+                  <div className="agreement-text">
+                    16.3 ALGOHIVE may make use of the services of its staff and/or that of another authorised financial services provider to execute certain administrative functions in the course of rendering intermediary services to the Client.
+                  </div>
+                </div>
+
+                <div className="agreement-section" style={{ borderTop: '2px solid hsl(270 20% 85%)', paddingTop: '16px', marginTop: '16px' }}>
+                  <div className="section-title">Schedule – Full Discretion</div>
+                  <div className="agreement-text" style={{ fontWeight: 'bold', border: '1px solid hsl(270 20% 80%)', padding: '10px', borderRadius: '8px', marginBottom: '12px' }}>
+                    This schedule delegates authority to ALGOHIVE to effect transactions in your name without limitation. If you wish for transactions to be entered into on your behalf to be limited or conditional in any way, this form should not be used. Refer to the limited discretion schedule.
+                  </div>
+                  <div className="agreement-text">
+                    I hereby authorise ALGOHIVE to manage my investments at its sole and full discretion in order to achieve my investment objectives as indicated below. This means that the Mandate is an unlimited Mandate for ALGOHIVE to exercise its full discretion with regards to the process of managing my investments and ALGOHIVE shall not need to obtain further authority or consent from me to effect any transactions in terms of the Mandate to which this is attached. ALGOHIVE may reinvest in terms of this schedule any amounts that have accrued to me in the form of interests, dividends and the proceeds of disposals.
+                  </div>
+                  <div className="agreement-text">
+                    I hereby authorise ALGOHIVE to manage my portfolio in respect of:
+                  </div>
+                  <div className="agreement-text" style={{ paddingLeft: '16px' }}>
+                    • Local jurisdictions only<br />
+                    • Off-shore jurisdictions only<br />
+                    • Both local and off-shore jurisdictions
+                  </div>
+                  <div className="agreement-text">
+                    <strong>Investment Objectives:</strong>
+                  </div>
+                  <div className="agreement-text" style={{ paddingLeft: '16px' }}>
+                    <strong>Long Term (5 years or longer):</strong> Capital Growth / Income Generation<br />
+                    <strong>Medium Term (2 to 5 years):</strong> Capital Growth / Income Generation<br />
+                    <strong>Short Term (3 months to 2 years):</strong> Capital Growth / Income Generation
+                  </div>
+                  <div className="agreement-text">
+                    <strong>Risk Preference:</strong> Very Conservative / Conservative / Moderate / Aggressive / Very Aggressive
+                  </div>
+                </div>
+
+                <div className="agreement-section" style={{ borderTop: '2px solid hsl(270 20% 85%)', paddingTop: '16px', marginTop: '16px' }}>
+                  <div className="section-title">Schedule – Limited Discretion</div>
+                  <div className="agreement-text" style={{ fontWeight: 'bold', border: '1px solid hsl(270 20% 80%)', padding: '10px', borderRadius: '8px', marginBottom: '12px' }}>
+                    This schedule delegates limited authority to ALGOHIVE to effect transactions in your name. If you wish for transactions to be entered into on your behalf, not to be limited or conditional in any way, this form should not be used. Refer to the full discretion schedule.
+                  </div>
+                  <div className="agreement-text">
+                    I hereby restrict ALGOHIVE's discretion in the management on my behalf. ALGOHIVE's right to purchase and sell investments on my behalf may only be exercised by ALGOHIVE:
+                  </div>
+                  <div className="agreement-text" style={{ paddingLeft: '16px' }}>
+                    • On my instruction and prior consent<br />
+                    • On the instruction of my investment advisor, who is a financial services provider licensed in terms of section 8 of the FAIS Act<br />
+                    • Upon me receiving advice in respect of such investments from ALGOHIVE, and to which I have consented
+                  </div>
+                  <div className="agreement-text">
+                    I hereby authorise ALGOHIVE to manage my portfolio in respect of:
+                  </div>
+                  <div className="agreement-text" style={{ paddingLeft: '16px' }}>
+                    • Local jurisdictions only<br />
+                    • Off-shore jurisdictions only<br />
+                    • Both local and off-shore jurisdictions
+                  </div>
+                  <div className="agreement-text">
+                    Unless instructed otherwise, all cash accruals received in respect of the investments including dividends and interest, shall be:
+                  </div>
+                  <div className="agreement-text" style={{ paddingLeft: '16px' }}>
+                    • Reinvested as and when they fall due and shall form part of the investments<br />
+                    • Paid out to the client into the indicated bank account
+                  </div>
+                  <div className="agreement-text">
+                    <strong>Investment Objectives:</strong>
+                  </div>
+                  <div className="agreement-text" style={{ paddingLeft: '16px' }}>
+                    <strong>Long Term (5 years or longer):</strong> Capital Growth / Income Generation<br />
+                    <strong>Medium Term (2 to 5 years):</strong> Capital Growth / Income Generation<br />
+                    <strong>Short Term (3 months to 2 years):</strong> Capital Growth / Income Generation
+                  </div>
+                  <div className="agreement-text">
+                    <strong>Risk Preference:</strong> Very Conservative / Conservative / Moderate / Aggressive / Very Aggressive
+                  </div>
+                </div>
+
+                <div className="agreement-section" style={{ borderTop: '2px solid hsl(270 20% 85%)', paddingTop: '16px', marginTop: '16px' }}>
+                  <div className="section-title">17. General</div>
+                  <div className="agreement-text">
+                    17.1 This Mandate constitutes the entire agreement between the parties regarding the subject matter hereof and supersedes all prior agreements, representations and negotiations.
+                  </div>
+                  <div className="agreement-text">
+                    17.2 No amendment of any provision of this Mandate shall be binding unless made in writing and signed by both parties.
+                  </div>
+                  <div className="agreement-text">
+                    17.3 The failure by any party to enforce any provision of this Mandate shall not be deemed a waiver of such right.
+                  </div>
+                  <div className="agreement-text">
+                    17.4 This agreement shall be governed by the laws of the Republic of South Africa.
+                  </div>
+                  <div className="agreement-text">
+                    17.5 Both parties accept the jurisdiction of the relevant South African courts.
+                  </div>
+                  <div className="agreement-text">
+                    17.6 The invalidity of any provision of this Mandate shall not affect the validity of the remaining provisions.
+                  </div>
+                </div>
+
+                <div className="agreement-section" style={{ borderTop: '2px solid hsl(270 20% 85%)', paddingTop: '16px', marginTop: '16px' }}>
+                  <div className="section-title">Annexure A – Banking Details</div>
+                  <div className="agreement-text">
+                    <strong>Account Holder:</strong> ALGOHIVE (PTY) LTD<br />
+                    <strong>Bank:</strong> TBA<br />
+                    <strong>Type of Account:</strong> Business Current Account<br />
+                    <strong>Account Number:</strong> 000 000 000<br />
+                    <strong>Branch Opened:</strong> TBA<br />
+                    <strong>Branch Code:</strong> 000000
                   </div>
                 </div>
               </div>
