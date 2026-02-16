@@ -754,8 +754,20 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData })
           gap: "8px",
           marginBottom: "20px",
         }}>
-          <button type="button" style={selectorButtonStyle(discretionType === "full")} onClick={() => selectDiscretion("full")}>
+          <button type="button" style={{...selectorButtonStyle(discretionType === "full"), position: "relative"}} onClick={() => selectDiscretion("full")}>
             Full Discretion
+            <span style={{
+              fontSize: "9px",
+              fontWeight: 700,
+              color: discretionType === "full" ? "#fff" : "hsl(270 60% 50%)",
+              background: discretionType === "full" ? "rgba(255,255,255,0.25)" : "hsl(270 80% 95%)",
+              borderRadius: "6px",
+              padding: "1px 6px",
+              marginLeft: "6px",
+              letterSpacing: "0.5px",
+              textTransform: "uppercase",
+              lineHeight: "1.4",
+            }}>Recommended</span>
           </button>
           <button type="button" style={selectorButtonStyle(discretionType === "limited")} onClick={() => selectDiscretion("limited")}>
             Limited Discretion
