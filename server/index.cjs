@@ -778,9 +778,10 @@ app.post("/api/sumsub/status", async (req, res) => {
     
     // Priority order for status determination:
     // 1. If all steps are GREEN and review is GREEN → verified
-    // 2. If any steps are rejected → needs_resubmission
-    // 3. If user submitted something but incomplete → pending (in progress)
-    // 4. If user never submitted anything → not_verified
+    // 2. If any steps are rejected or on hold → needs_resubmission
+    // 3. If there are incomplete/missing steps → needs_resubmission (documents required)
+    // 4. If all submitted and review pending → pending (under review)
+    // 5. If user never submitted anything → not_verified
     
     if (allStepsGreen && reviewAnswer === "GREEN") {
       status = "verified";
@@ -791,18 +792,21 @@ app.post("/api/sumsub/status", async (req, res) => {
     } else if (reviewStatus === "onHold") {
       status = "needs_resubmission";
       console.log(`Status: needs_resubmission (on hold)`);
-    } else if (hasIncompleteSteps && hasAnySubmittedSteps && (reviewStatus === "init" || !reviewStatus)) {
+    } else if (hasIncompleteSteps && hasAnySubmittedSteps) {
       status = "needs_resubmission";
-      console.log(`Status: needs_resubmission (documents requested - reset with incomplete steps)`);
+      console.log(`Status: needs_resubmission (documents missing or cleared)`);
+    } else if (hasIncompleteSteps && !hasAnySubmittedSteps) {
+      status = "not_verified";
+      console.log(`Status: not_verified (no documents submitted yet)`);
+    } else if (!allStepsGreen) {
+      status = "needs_resubmission";
+      console.log(`Status: needs_resubmission (not all steps green)`);
     } else if (reviewStatus === "pending" || reviewStatus === "queued") {
       status = "pending";
       console.log(`Status: pending (review pending/queued)`);
     } else if (hasAnySubmittedSteps && !hasIncompleteSteps) {
       status = "pending";
       console.log(`Status: pending (verification in progress)`);
-    } else if (hasAnySubmittedSteps) {
-      status = "pending";
-      console.log(`Status: pending (partially submitted)`);
     } else {
       status = "not_verified";
       console.log(`Status: not_verified (no documents submitted)`);
