@@ -6,8 +6,50 @@ const TAB_LABELS = [
   "Schedules & Annexures",
 ];
 
+const InitialsBox = ({ value, onChange, isFirst }) => (
+  <div style={{
+    display: "flex",
+    justifyContent: "flex-end",
+    marginTop: "20px",
+    paddingTop: "10px",
+  }}>
+    <div style={{
+      border: "1px solid #333",
+      padding: "5px 8px",
+      width: "120px",
+      background: "white",
+    }}>
+      <label style={{ fontSize: "9px", fontWeight: "bold", display: "block", marginBottom: "3px" }}>Initials:</label>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value.toUpperCase())}
+        placeholder={isFirst ? "Type here" : ""}
+        maxLength={5}
+        style={{
+          width: "100%",
+          border: "none",
+          borderBottom: "1px solid #333",
+          padding: "2px 0",
+          fontSize: "11px",
+          outline: "none",
+          background: value ? "#f8f6ff" : "transparent",
+          textTransform: "uppercase",
+          letterSpacing: "2px",
+        }}
+      />
+      {isFirst && !value && (
+        <span style={{ fontSize: "8px", color: "hsl(270 40% 55%)", display: "block", marginTop: "2px" }}>
+          Enter once, fills all pages
+        </span>
+      )}
+    </div>
+  </div>
+);
+
 const MandateViewer = ({ profile = {} }) => {
   const [activeTab, setActiveTab] = useState(0);
+  const [initials, setInitials] = useState("");
 
   const {
     firstName = "",
@@ -271,6 +313,8 @@ const MandateViewer = ({ profile = {} }) => {
       </table>
 
       <p style={{ textAlign: "center", marginTop: "20px" }}>(hereinafter referred to as the <strong>Client</strong>)</p>
+
+      <InitialsBox value={initials} onChange={setInitials} isFirst={true} />
     </div>
   );
 
@@ -458,6 +502,8 @@ const MandateViewer = ({ profile = {} }) => {
       <p style={pStyle}><span style={sectionNumStyle}>16.1</span> The Client shall apply for the investment products and portfolios on the applicable initial investment application forms.</p>
       <p style={pStyle}><span style={sectionNumStyle}>16.2</span> Any amendment of any provision of this mandate shall be in writing and shall be by means of a supplementary or new agreement between ALGOHIVE and the Client.</p>
       <p style={pStyle}><span style={sectionNumStyle}>16.3</span> ALGOHIVE may make use of the services of its staff and/or that of another authorised financial services provider to execute certain administrative functions in the course of rendering intermediary services to the Client.</p>
+
+      <InitialsBox value={initials} onChange={setInitials} />
     </div>
   );
 
@@ -656,6 +702,8 @@ const MandateViewer = ({ profile = {} }) => {
           <tr><td style={infoTdFirstStyle}>Branch code</td><td style={infoTdStyle}>000000</td></tr>
         </tbody>
       </table>
+
+      <InitialsBox value={initials} onChange={setInitials} />
     </div>
   );
 
