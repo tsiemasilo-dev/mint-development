@@ -300,7 +300,7 @@ const HomePage = ({
     try {
       const { data, error } = await supabase
         .from('investment_goals')
-        .select('id, name, target_amount, current_amount, progress_percent')
+        .select('id, name, target_amount, current_amount, invested_amount, progress_percent, linked_asset_name')
         .eq('user_id', profile.id)
         .eq('is_active', true)
         .order('created_at', { ascending: false });

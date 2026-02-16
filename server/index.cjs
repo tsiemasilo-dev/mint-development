@@ -287,6 +287,35 @@ async function runSettlementMigration() {
   }
 }
 
+async function migrateGoalColumns() {
+  const db = supabaseAdmin || supabase;
+  if (!db) return;
+  try {
+    const { data, error } = await db.from('investment_goals').select('linked_strategy_id').limit(1);
+    if (!error) {
+      console.log('[goals] Goal linkage columns already exist');
+      return;
+    }
+    console.log('[goals] Adding linkage columns to investment_goals...');
+    const cols = [
+      "ALTER TABLE investment_goals ADD COLUMN IF NOT EXISTS linked_strategy_id text",
+      "ALTER TABLE investment_goals ADD COLUMN IF NOT EXISTS linked_security_id text",
+      "ALTER TABLE investment_goals ADD COLUMN IF NOT EXISTS invested_amount numeric DEFAULT 0",
+      "ALTER TABLE investment_goals ADD COLUMN IF NOT EXISTS linked_asset_name text",
+    ];
+    for (const sql of cols) {
+      try {
+        await db.rpc('exec_sql', { query: sql });
+      } catch (e) {
+        console.log('[goals] RPC failed for column, may need manual addition:', e.message);
+      }
+    }
+  } catch (e) {
+    console.log('[goals] Migration check error:', e.message);
+  }
+}
+migrateGoalColumns();
+
 function deriveSettlementStatus(record) {
   if (record.settlement_status) {
     return record.settlement_status;
@@ -2722,6 +2751,51 @@ app.get("/api/sessions/validate", async (req, res) => {
   } catch (error) {
     console.error("Session validate error:", error);
     res.json({ success: true, valid: true });
+  }
+});
+
+app.post("/api/migrate/goal-columns", async (req, res) => {
+  try {
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      return res.json({ error: "Missing Supabase credentials" });
+    }
+    const db = supabaseAdmin || supabase;
+    if (!db) return res.json({ error: "no db" });
+
+    const testResult = await db
+      .from("investment_goals")
+      .select("linked_strategy_id")
+      .limit(1);
+
+    if (testResult.error) {
+      const sql = `
+ALTER TABLE investment_goals ADD COLUMN IF NOT EXISTS linked_strategy_id text;
+ALTER TABLE investment_goals ADD COLUMN IF NOT EXISTS linked_security_id text;
+ALTER TABLE investment_goals ADD COLUMN IF NOT EXISTS invested_amount numeric DEFAULT 0;
+ALTER TABLE investment_goals ADD COLUMN IF NOT EXISTS linked_asset_name text;`;
+
+      const response = await globalThis.fetch(`${SUPABASE_URL}/rest/v1/rpc/exec_sql`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_SERVICE_ROLE_KEY,
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify({ sql_query: sql }),
+      });
+
+      res.json({
+        status: "columns_missing",
+        column_test_error: testResult.error.message,
+        sql_to_run: sql.trim(),
+      });
+    } else {
+      res.json({ status: "columns_exist" });
+    }
+  } catch (e) {
+    console.error("[migrate/goal-columns] Error:", e);
+    res.status(500).json({ error: e.message });
   }
 });
 

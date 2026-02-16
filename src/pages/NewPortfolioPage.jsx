@@ -342,9 +342,6 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     }
   }, [myStocks, stocksList]);
 
-  const goal = investmentGoals && investmentGoals.length > 0 ? investmentGoals[0] : null;
-  const goalProgress = goal && goal.targetAmount > 0 ? (goal.currentAmount / goal.targetAmount) * 100 : 0;
-
   if (strategiesLoading && holdingsLoading) {
     return <PortfolioSkeleton />;
   }
@@ -814,37 +811,6 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
             View All Allocations
           </button>
         )}
-
-        <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50">
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-sm font-semibold text-slate-900">Linked Goals</p>
-          </div>
-          
-          {goal ? (
-            <div className="rounded-2xl bg-slate-50 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-sm font-semibold text-slate-900">{goal.label}</p>
-                <p className="text-sm font-semibold text-slate-900">
-                  {formatCurrency(goal.currentAmount)} / {formatCurrency(goal.targetAmount)}
-                </p>
-              </div>
-              <div className="h-2.5 w-full rounded-full bg-slate-200 overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-600 transition-all"
-                  style={{ width: `${goalProgress}%` }}
-                />
-              </div>
-              <p className="mt-2 text-xs text-slate-500">
-                {goalProgress.toFixed(0)}% of your goal achieved
-              </p>
-            </div>
-          ) : (
-            <div className="rounded-2xl bg-slate-50 p-4 text-center">
-              <p className="text-sm font-semibold text-slate-900 mb-1">No linked goals yet</p>
-              <p className="text-xs text-slate-500">Set up investment goals to track your progress.</p>
-            </div>
-          )}
-        </section>
 
         <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50">
           <div className="flex items-center justify-between mb-1">
@@ -1444,6 +1410,58 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                 <p className="text-lg font-semibold text-slate-900 mb-1">No holdings yet</p>
                 <p className="text-sm text-slate-500">Your investment holdings will appear here once you start investing.</p>
               </div>
+              {investmentGoals && investmentGoals.length > 0 && (
+                <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50">
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="text-sm font-semibold text-slate-900">Your Goals</p>
+                    <span className="text-xs font-semibold text-violet-600 bg-violet-50 rounded-full px-2 py-0.5">{investmentGoals.length}</span>
+                  </div>
+                  <div className="space-y-3">
+                    {investmentGoals.map((g) => {
+                      const currentValue = g.currentAmount || 0;
+                      const invested = g.investedAmount || 0;
+                      const target = g.targetAmount || 0;
+                      const remaining = Math.max(0, target - currentValue);
+                      const pct = target > 0 ? Math.min(100, (currentValue / target) * 100) : 0;
+                      const gainLoss = currentValue - invested;
+                      return (
+                        <div key={g.id || (g.label + g.targetAmount)} className="rounded-2xl bg-slate-50 p-4">
+                          <div className="flex items-center justify-between mb-1">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900">{g.label}</p>
+                              {g.linkedAssetName && (
+                                <p className="text-[10px] text-slate-400">Linked to {g.linkedAssetName}</p>
+                              )}
+                            </div>
+                            <p className="text-xs font-semibold text-slate-600">
+                              {formatCurrency(currentValue)} / {formatCurrency(target)}
+                            </p>
+                          </div>
+                          <div className="h-2.5 w-full rounded-full bg-slate-200 overflow-hidden mb-2">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-600 transition-all"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs text-slate-500">
+                              {pct >= 100 ? "Goal reached!" : `${formatCurrency(remaining)} remaining`}
+                            </p>
+                            <div className="flex items-center gap-2">
+                              {gainLoss !== 0 && invested > 0 && (
+                                <span className={`text-[10px] font-semibold ${gainLoss > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                  {gainLoss > 0 ? '+' : ''}{formatCurrency(gainLoss)}
+                                </span>
+                              )}
+                              <p className="text-xs font-semibold text-violet-600">{pct.toFixed(0)}%</p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
             </div>
           );
         }
@@ -1571,6 +1589,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
             const holdingsTotalPages = Math.ceil(holdingsData.length / HOLDINGS_PER_PAGE);
             const pagedHoldings = holdingsData.slice(holdingsPage * HOLDINGS_PER_PAGE, (holdingsPage + 1) * HOLDINGS_PER_PAGE);
             return (
+            <>
             <section
               className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50"
               style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
@@ -1651,7 +1670,61 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                 })}
               </div>
             </section>
-            );
+
+            {investmentGoals && investmentGoals.length > 0 && (
+              <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50 mt-4">
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-sm font-semibold text-slate-900">Your Goals</p>
+                  <span className="text-xs font-semibold text-violet-600 bg-violet-50 rounded-full px-2 py-0.5">{investmentGoals.length}</span>
+                </div>
+                <div className="space-y-3">
+                  {investmentGoals.map((g) => {
+                    const currentValue = g.currentAmount || 0;
+                    const invested = g.investedAmount || 0;
+                    const target = g.targetAmount || 0;
+                    const remaining = Math.max(0, target - currentValue);
+                    const pct = target > 0 ? Math.min(100, (currentValue / target) * 100) : 0;
+                    const gainLoss = currentValue - invested;
+                    return (
+                      <div key={g.id || (g.label + g.targetAmount)} className="rounded-2xl bg-slate-50 p-4">
+                        <div className="flex items-center justify-between mb-1">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">{g.label}</p>
+                            {g.linkedAssetName && (
+                              <p className="text-[10px] text-slate-400">Linked to {g.linkedAssetName}</p>
+                            )}
+                          </div>
+                          <p className="text-xs font-semibold text-slate-600">
+                            {formatCurrency(currentValue)} / {formatCurrency(target)}
+                          </p>
+                        </div>
+                        <div className="h-2.5 w-full rounded-full bg-slate-200 overflow-hidden mb-2">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-600 transition-all"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-slate-500">
+                            {pct >= 100 ? "Goal reached!" : `${formatCurrency(remaining)} remaining`}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            {gainLoss !== 0 && invested > 0 && (
+                              <span className={`text-[10px] font-semibold ${gainLoss > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                {gainLoss > 0 ? '+' : ''}{formatCurrency(gainLoss)}
+                              </span>
+                            )}
+                            <p className="text-xs font-semibold text-violet-600">{pct.toFixed(0)}%</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+          </>
+          );
           })()}
         </div>
         );

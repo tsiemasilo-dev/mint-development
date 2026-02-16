@@ -48,6 +48,7 @@ import PinSetupPage from "./pages/PinSetupPage.jsx";
 import { useInactivityTimeout } from "./lib/useInactivityTimeout.jsx";
 import PinLockScreen from "./components/PinLockScreen.jsx";
 import { isPinEnabled } from "./lib/usePin.js";
+import GoalLinkModal from "./components/GoalLinkModal.jsx";
 
 const initialHash = window.location.hash;
 const isRecoveryMode = initialHash.includes('type=recovery');
@@ -90,6 +91,9 @@ const App = () => {
   const [marketsInitialView, setMarketsInitialView] = useState(null);
   const [investmentAmount, setInvestmentAmount] = useState(0);
   const [stockCheckout, setStockCheckout] = useState({ security: null, amount: 0 });
+  const [showGoalModal, setShowGoalModal] = useState(false);
+  const [pendingGoalFlow, setPendingGoalFlow] = useState(null);
+  const [selectedGoalId, setSelectedGoalId] = useState(null);
   const recoveryHandled = useRef(false);
   const { refetch: refetchNotifications } = useNotificationsContext();
   const [showPinLock, setShowPinLock] = useState(false);
@@ -1066,8 +1070,26 @@ const App = () => {
           onBack={goBack}
           onContinue={(amount, security) => {
             setStockCheckout({ security, amount });
+            setPendingGoalFlow({
+              type: "stock",
+              amount,
+              assetName: security?.name || security?.symbol || "Stock",
+              securityId: security?.id || null,
+            });
+            setShowGoalModal(true);
+          }}
+        />
+        <GoalLinkModal
+          isOpen={showGoalModal && pendingGoalFlow?.type === "stock"}
+          onClose={() => { setShowGoalModal(false); setPendingGoalFlow(null); setSelectedGoalId(null); }}
+          onConfirm={(goalId) => {
+            setSelectedGoalId(goalId);
+            setShowGoalModal(false);
+            setPendingGoalFlow(null);
             navigateTo("stockPayment");
           }}
+          investmentAmount={pendingGoalFlow?.amount || stockCheckout.amount}
+          assetName={pendingGoalFlow?.assetName || selectedSecurity?.name || "Stock"}
         />
       </SwipeBackWrapper>
     );
@@ -1085,8 +1107,37 @@ const App = () => {
           onBack={goBack}
           strategy={paymentItem}
           amount={stockCheckout.amount}
-          onSuccess={(response) => {
+          onSuccess={async (response) => {
             console.log("Payment successful:", response);
+            if (selectedGoalId && supabase) {
+              try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session?.user) {
+                  const { data: goal } = await supabase
+                    .from("investment_goals")
+                    .select("invested_amount, target_amount")
+                    .eq("id", selectedGoalId)
+                    .single();
+                  if (goal) {
+                    const newInvested = (goal.invested_amount || 0) + (stockCheckout.amount || 0);
+                    const progress = goal.target_amount > 0 ? Math.min(100, (newInvested / goal.target_amount) * 100) : 0;
+                    await supabase
+                      .from("investment_goals")
+                      .update({
+                        invested_amount: newInvested,
+                        current_amount: newInvested,
+                        progress_percent: progress,
+                        linked_security_id: stockCheckout.security?.id || null,
+                        linked_asset_name: stockCheckout.security?.name || stockCheckout.security?.symbol || null,
+                      })
+                      .eq("id", selectedGoalId);
+                  }
+                }
+              } catch (e) {
+                console.error("Error updating goal:", e);
+              }
+            }
+            setSelectedGoalId(null);
             navigationHistory.current = [];
             setPreviousPageName(null);
             setCurrentPage("paymentSuccess");
@@ -1145,8 +1196,26 @@ const App = () => {
           strategy={selectedStrategy}
           onContinue={(amount) => {
             setInvestmentAmount(amount);
+            setPendingGoalFlow({
+              type: "strategy",
+              amount,
+              assetName: selectedStrategy?.name || "Strategy",
+              strategyId: selectedStrategy?.id || selectedStrategy?.strategyId || null,
+            });
+            setShowGoalModal(true);
+          }}
+        />
+        <GoalLinkModal
+          isOpen={showGoalModal && pendingGoalFlow?.type === "strategy"}
+          onClose={() => { setShowGoalModal(false); setPendingGoalFlow(null); setSelectedGoalId(null); }}
+          onConfirm={(goalId) => {
+            setSelectedGoalId(goalId);
+            setShowGoalModal(false);
+            setPendingGoalFlow(null);
             navigateTo("payment");
           }}
+          investmentAmount={pendingGoalFlow?.amount || investmentAmount}
+          assetName={pendingGoalFlow?.assetName || selectedStrategy?.name || "Strategy"}
         />
       </SwipeBackWrapper>
     );
@@ -1159,8 +1228,37 @@ const App = () => {
           onBack={goBack}
           strategy={selectedStrategy}
           amount={investmentAmount}
-          onSuccess={(response) => {
+          onSuccess={async (response) => {
             console.log("Payment successful:", response);
+            if (selectedGoalId && supabase) {
+              try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session?.user) {
+                  const { data: goal } = await supabase
+                    .from("investment_goals")
+                    .select("invested_amount, target_amount")
+                    .eq("id", selectedGoalId)
+                    .single();
+                  if (goal) {
+                    const newInvested = (goal.invested_amount || 0) + (investmentAmount || 0);
+                    const progress = goal.target_amount > 0 ? Math.min(100, (newInvested / goal.target_amount) * 100) : 0;
+                    await supabase
+                      .from("investment_goals")
+                      .update({
+                        invested_amount: newInvested,
+                        current_amount: newInvested,
+                        progress_percent: progress,
+                        linked_strategy_id: selectedStrategy?.id || selectedStrategy?.strategyId || null,
+                        linked_asset_name: selectedStrategy?.name || null,
+                      })
+                      .eq("id", selectedGoalId);
+                  }
+                }
+              } catch (e) {
+                console.error("Error updating goal:", e);
+              }
+            }
+            setSelectedGoalId(null);
             navigationHistory.current = [];
             setPreviousPageName(null);
             setCurrentPage("paymentSuccess");
