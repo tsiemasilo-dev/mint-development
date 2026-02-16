@@ -641,31 +641,37 @@ const HomePage = ({
     }
   };
 
+  const identityFullyComplete = kycVerified && onboardingComplete;
+
   const getIdentityStatusForHome = () => {
-    if (onboardingComplete) return { text: "Verified", style: "bg-green-100 text-green-600" };
-    if (kycNeedsResubmission) return { text: "Needs Attention", style: "bg-amber-100 text-amber-700" };
-    if (kycPending) return { text: "Pending", style: "bg-blue-100 text-blue-600" };
-    if (kycVerified) return { text: "Required", style: "bg-slate-100 text-slate-500" };
-    return { text: "Required", style: "bg-slate-100 text-slate-500" };
+    if (identityFullyComplete) return { text: "Verified", style: "bg-green-100 text-green-600" };
+    if (kycNeedsResubmission) return { text: "Documents Required", style: "bg-amber-100 text-amber-700" };
+    if (kycPending) return { text: "Under Review", style: "bg-blue-100 text-blue-600" };
+    if (kycVerified && !onboardingComplete) return { text: "Continue Onboarding", style: "bg-blue-100 text-blue-600" };
+    return { text: "Action Required", style: "bg-red-50 text-red-600" };
   };
 
   const identityStatusHome = getIdentityStatusForHome();
+
+  const getIdentityDescription = () => {
+    if (identityFullyComplete) return "Identity and onboarding complete";
+    if (kycNeedsResubmission) return "Some documents need to be submitted or resubmitted";
+    if (kycPending) return "Your documents are being reviewed";
+    if (kycVerified && !onboardingComplete) return "Identity verified — complete remaining onboarding steps";
+    return "Verify your identity to get started";
+  };
 
   const actionsData = [
     {
       id: "identity",
       title: "Complete identity",
-      description: kycNeedsResubmission
-        ? "Some documents need resubmission"
-        : onboardingComplete
-        ? "Identity and onboarding complete"
-        : "Verify your identity and complete onboarding",
+      description: getIdentityDescription(),
       priority: 1,
       status: identityStatusHome.text,
       statusStyle: identityStatusHome.style,
       icon: ShieldCheck,
       routeName: "actions",
-      isComplete: onboardingComplete,
+      isComplete: identityFullyComplete,
     },
   ];
 

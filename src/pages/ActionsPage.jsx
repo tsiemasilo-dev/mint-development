@@ -55,9 +55,9 @@ const ActionsPage = ({ onBack, onNavigate }) => {
 
   const getIdentityStatus = () => {
     if (identityComplete) return { text: "Complete", style: "bg-green-100 text-green-600" };
-    if (kycNeedsResubmission) return { text: "Needs Attention", style: "bg-amber-100 text-amber-700" };
-    if (kycPending) return { text: "Pending", style: "bg-blue-100 text-blue-600" };
-    return { text: "Required", style: "bg-slate-100 text-slate-500" };
+    if (kycNeedsResubmission) return { text: "Documents Required", style: "bg-amber-100 text-amber-700" };
+    if (kycPending) return { text: "Under Review", style: "bg-blue-100 text-blue-600" };
+    return { text: "Action Required", style: "bg-red-50 text-red-600" };
   };
 
   const getIdentityDescription = () => {
@@ -73,11 +73,12 @@ const ActionsPage = ({ onBack, onNavigate }) => {
           "SELFIE_MISMATCH": "Selfie doesn't match",
         };
         const firstLabel = rejectLabels[0];
-        return labelMap[firstLabel] || "Some documents need resubmission";
+        return labelMap[firstLabel] || "Some documents need to be submitted or resubmitted";
       }
-      return "Some documents need resubmission";
+      return "Some documents need to be submitted or resubmitted";
     }
-    return "Employment details and identity verification";
+    if (kycPending) return "Your documents are being reviewed";
+    return "Verify your identity to get started";
   };
 
   const identityStatus = getIdentityStatus();
