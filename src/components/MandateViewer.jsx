@@ -68,9 +68,23 @@ const MandateViewer = ({ profile = {}, onValidChange }) => {
   const [activeTab, setActiveTab] = useState(0);
   const [initials, setInitials] = useState("");
   const scrollRef = useRef(null);
+  const fullRef = useRef(null);
+  const limitedRef = useRef(null);
   const [checkedBoxes, setCheckedBoxes] = useState({});
   const [showErrors, setShowErrors] = useState(false);
   const [discretionType, setDiscretionType] = useState(null);
+
+  const selectDiscretion = (type) => {
+    setDiscretionType(type);
+    setTimeout(() => {
+      const ref = type === "full" ? fullRef : limitedRef;
+      if (ref.current && scrollRef.current) {
+        const containerTop = scrollRef.current.getBoundingClientRect().top;
+        const elementTop = ref.current.getBoundingClientRect().top;
+        scrollRef.current.scrollTop += (elementTop - containerTop) - 10;
+      }
+    }, 50);
+  };
 
   const toggleCheckbox = (id) => {
     setCheckedBoxes((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -643,32 +657,54 @@ const MandateViewer = ({ profile = {}, onValidChange }) => {
 
       {!discretionType && (
         <div style={{
-          background: "hsl(270 30% 97%)",
-          border: "2px solid hsl(270 30% 85%)",
-          borderRadius: "12px",
-          padding: "24px 20px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "16px",
           marginBottom: "24px",
-          textAlign: "center",
         }}>
-          <p style={{ fontWeight: "bold", fontSize: "13px", marginBottom: "6px", color: "hsl(270 30% 30%)" }}>
+          <p style={{ fontWeight: "bold", fontSize: "14px", textAlign: "center", color: "hsl(270 30% 30%)", marginBottom: "4px" }}>
             Select Your Mandate Type
           </p>
-          <p style={{ fontSize: "11px", color: "hsl(270 15% 50%)", marginBottom: "16px" }}>
-            Please choose whether you want full or limited discretion for managing your investments.
-          </p>
-          <div style={{ display: "flex", gap: "12px" }}>
-            <button type="button" style={selectorButtonStyle(false)} onClick={() => setDiscretionType("full")}>
-              <strong>Full Discretion</strong>
-              <br />
-              <span style={{ fontSize: "10px", opacity: 0.8 }}>Unlimited authority to manage investments</span>
-            </button>
-            <button type="button" style={selectorButtonStyle(false)} onClick={() => setDiscretionType("limited")}>
-              <strong>Limited Discretion</strong>
-              <br />
-              <span style={{ fontSize: "10px", opacity: 0.8 }}>Restricted authority with conditions</span>
-            </button>
-          </div>
-          {showErrors && !discretionType && <p style={{ color: "#ef4444", fontSize: "10px", marginTop: "10px" }}>Please select a mandate type to continue</p>}
+
+          <button
+            type="button"
+            onClick={() => selectDiscretion("full")}
+            style={{
+              background: "hsl(270 30% 97%)",
+              border: "2px solid hsl(270 30% 85%)",
+              borderRadius: "12px",
+              padding: "20px",
+              cursor: "pointer",
+              textAlign: "left",
+              transition: "all 0.2s ease",
+            }}
+          >
+            <p style={{ fontWeight: "bold", fontSize: "13px", marginBottom: "8px", color: "hsl(270 40% 35%)" }}>SCHEDULE – FULL DISCRETION</p>
+            <p style={{ fontSize: "11px", color: "#555", lineHeight: "1.6", margin: 0 }}>
+              This schedule delegates authority to ALGOHIVE to effect transactions in your name without limitation. If you wish for transactions to be entered into on your behalf to be limited or conditional in any way, this form should not be used. Refer to the limited discretion schedule.
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => selectDiscretion("limited")}
+            style={{
+              background: "hsl(270 30% 97%)",
+              border: "2px solid hsl(270 30% 85%)",
+              borderRadius: "12px",
+              padding: "20px",
+              cursor: "pointer",
+              textAlign: "left",
+              transition: "all 0.2s ease",
+            }}
+          >
+            <p style={{ fontWeight: "bold", fontSize: "13px", marginBottom: "8px", color: "hsl(270 40% 35%)" }}>SCHEDULE – LIMITED DISCRETION</p>
+            <p style={{ fontSize: "11px", color: "#555", lineHeight: "1.6", margin: 0 }}>
+              This schedule delegates limited authority to ALGOHIVE to effect transactions in your name. If you wish for transactions to be entered into on your behalf, not to be limited or conditional in any way, this form should not be used. Refer to the full discretion schedule.
+            </p>
+          </button>
+
+          {showErrors && !discretionType && <p style={{ color: "#ef4444", fontSize: "10px", textAlign: "center", marginTop: "4px" }}>Please select a mandate type to continue</p>}
         </div>
       )}
 
@@ -678,16 +714,16 @@ const MandateViewer = ({ profile = {}, onValidChange }) => {
           gap: "8px",
           marginBottom: "20px",
         }}>
-          <button type="button" style={selectorButtonStyle(discretionType === "full")} onClick={() => setDiscretionType("full")}>
+          <button type="button" style={selectorButtonStyle(discretionType === "full")} onClick={() => selectDiscretion("full")}>
             Full Discretion
           </button>
-          <button type="button" style={selectorButtonStyle(discretionType === "limited")} onClick={() => setDiscretionType("limited")}>
+          <button type="button" style={selectorButtonStyle(discretionType === "limited")} onClick={() => selectDiscretion("limited")}>
             Limited Discretion
           </button>
         </div>
       )}
 
-      <div style={discretionType === "limited" ? disabledOverlayStyle : {}}>
+      <div ref={fullRef} style={discretionType === "limited" ? disabledOverlayStyle : {}}>
         <h2 style={h2Style}>SCHEDULE – FULL DISCRETION</h2>
 
         <div style={warningBoxStyle}>
@@ -738,7 +774,7 @@ const MandateViewer = ({ profile = {}, onValidChange }) => {
 
       <hr style={{ margin: "30px 0", border: "none", borderTop: "2px solid #ccc" }} />
 
-      <div style={discretionType === "full" ? disabledOverlayStyle : {}}>
+      <div ref={limitedRef} style={discretionType === "full" ? disabledOverlayStyle : {}}>
         <h2 style={h2Style}>SCHEDULE – LIMITED DISCRETION</h2>
 
         <div style={warningBoxStyle}>
