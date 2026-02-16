@@ -64,15 +64,42 @@ const CHECKBOX_GROUPS = {
   lim_risk: ["lim-rp-0", "lim-rp-1", "lim-rp-2", "lim-rp-3", "lim-rp-4"],
 };
 
-const MandateViewer = ({ profile = {}, onValidChange }) => {
+const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData }) => {
   const [activeTab, setActiveTab] = useState(0);
-  const [initials, setInitials] = useState("");
+  const [initials, setInitials] = useState(savedData?.initials || "");
   const scrollRef = useRef(null);
   const fullRef = useRef(null);
   const limitedRef = useRef(null);
-  const [checkedBoxes, setCheckedBoxes] = useState({});
+  const [checkedBoxes, setCheckedBoxes] = useState(savedData?.checkedBoxes || {});
   const [showErrors, setShowErrors] = useState(false);
-  const [discretionType, setDiscretionType] = useState(null);
+  const [discretionType, setDiscretionType] = useState(savedData?.discretionType || null);
+  const [editableFields, setEditableFields] = useState(savedData?.editableFields || {});
+
+  const updateEditableField = (key, value) => {
+    setEditableFields((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const getMandateData = useCallback(() => ({
+    initials,
+    checkedBoxes,
+    discretionType,
+    editableFields,
+    agreedMandate: true,
+    savedAt: new Date().toISOString(),
+  }), [initials, checkedBoxes, discretionType, editableFields]);
+
+  useEffect(() => {
+    if (savedData && savedData.initials !== undefined) {
+      setInitials(savedData.initials || "");
+      setCheckedBoxes(savedData.checkedBoxes || {});
+      setDiscretionType(savedData.discretionType || null);
+      setEditableFields(savedData.editableFields || {});
+    }
+  }, [savedData]);
+
+  useEffect(() => {
+    if (onDataChange) onDataChange(getMandateData());
+  }, [initials, checkedBoxes, discretionType, editableFields]);
 
   const selectDiscretion = (type) => {
     setDiscretionType(type);
@@ -394,19 +421,19 @@ const MandateViewer = ({ profile = {}, onValidChange }) => {
           </tr>
           <tr>
             <td style={infoTdFirstStyle}>Tel Number (H)</td>
-            <td style={infoTdStyle}>Country Code ( <input type="text" style={smallInputStyle} /> ) Regional Code ( <input type="text" style={smallInputStyle} /> ) <input type="text" style={inputStyle} /></td>
+            <td style={infoTdStyle}>Country Code ( <input type="text" style={smallInputStyle} value={editableFields.telH_cc || ""} onChange={(e) => updateEditableField("telH_cc", e.target.value)} /> ) Regional Code ( <input type="text" style={smallInputStyle} value={editableFields.telH_rc || ""} onChange={(e) => updateEditableField("telH_rc", e.target.value)} /> ) <input type="text" style={inputStyle} value={editableFields.telH_num || ""} onChange={(e) => updateEditableField("telH_num", e.target.value)} /></td>
           </tr>
           <tr>
             <td style={infoTdFirstStyle}>Tel Number (W)</td>
-            <td style={infoTdStyle}>Country Code ( <input type="text" style={smallInputStyle} /> ) Regional Code ( <input type="text" style={smallInputStyle} /> ) <input type="text" style={inputStyle} /></td>
+            <td style={infoTdStyle}>Country Code ( <input type="text" style={smallInputStyle} value={editableFields.telW_cc || ""} onChange={(e) => updateEditableField("telW_cc", e.target.value)} /> ) Regional Code ( <input type="text" style={smallInputStyle} value={editableFields.telW_rc || ""} onChange={(e) => updateEditableField("telW_rc", e.target.value)} /> ) <input type="text" style={inputStyle} value={editableFields.telW_num || ""} onChange={(e) => updateEditableField("telW_num", e.target.value)} /></td>
           </tr>
           <tr>
             <td style={infoTdFirstStyle}>Fax Number (Confidential)</td>
-            <td style={infoTdStyle}>Country Code ( <input type="text" style={smallInputStyle} /> ) Regional Code ( <input type="text" style={smallInputStyle} /> ) <input type="text" style={inputStyle} /></td>
+            <td style={infoTdStyle}>Country Code ( <input type="text" style={smallInputStyle} value={editableFields.faxConf_cc || ""} onChange={(e) => updateEditableField("faxConf_cc", e.target.value)} /> ) Regional Code ( <input type="text" style={smallInputStyle} value={editableFields.faxConf_rc || ""} onChange={(e) => updateEditableField("faxConf_rc", e.target.value)} /> ) <input type="text" style={inputStyle} value={editableFields.faxConf_num || ""} onChange={(e) => updateEditableField("faxConf_num", e.target.value)} /></td>
           </tr>
           <tr>
             <td style={infoTdFirstStyle}>Fax Number (Other)</td>
-            <td style={infoTdStyle}>Country Code ( <input type="text" style={smallInputStyle} /> ) Regional Code ( <input type="text" style={smallInputStyle} /> ) <input type="text" style={inputStyle} /></td>
+            <td style={infoTdStyle}>Country Code ( <input type="text" style={smallInputStyle} value={editableFields.faxOther_cc || ""} onChange={(e) => updateEditableField("faxOther_cc", e.target.value)} /> ) Regional Code ( <input type="text" style={smallInputStyle} value={editableFields.faxOther_rc || ""} onChange={(e) => updateEditableField("faxOther_rc", e.target.value)} /> ) <input type="text" style={inputStyle} value={editableFields.faxOther_num || ""} onChange={(e) => updateEditableField("faxOther_num", e.target.value)} /></td>
           </tr>
           <tr>
             <td style={infoTdFirstStyle}>Cell Number</td>
@@ -418,7 +445,7 @@ const MandateViewer = ({ profile = {}, onValidChange }) => {
           </tr>
           <tr>
             <td style={infoTdFirstStyle}>Email Address (Other)</td>
-            <td style={infoTdStyle}><input type="text" style={inputStyle} /></td>
+            <td style={infoTdStyle}><input type="text" style={inputStyle} value={editableFields.emailOther || ""} onChange={(e) => updateEditableField("emailOther", e.target.value)} /></td>
           </tr>
         </tbody>
       </table>

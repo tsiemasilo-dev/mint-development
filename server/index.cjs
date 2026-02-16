@@ -3043,6 +3043,108 @@ app.post("/api/onboarding/save-employment", async (req, res) => {
   }
 });
 
+app.post("/api/onboarding/save-mandate", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (!token) return res.status(401).json({ success: false, error: "Missing token" });
+
+    const db = supabaseAdmin || supabase;
+    const authClient = supabaseAdmin || supabase;
+    const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
+    if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
+
+    const { mandate_data, existing_onboarding_id } = req.body;
+
+    if (!mandate_data) {
+      return res.status(400).json({ success: false, error: "Missing mandate_data" });
+    }
+
+    const mandateJson = typeof mandate_data === "string" ? mandate_data : JSON.stringify(mandate_data);
+
+    let onboardingId = existing_onboarding_id;
+    if (!onboardingId) {
+      const { data: latest } = await db
+        .from("user_onboarding")
+        .select("id")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (latest?.id) onboardingId = latest.id;
+    }
+
+    if (onboardingId) {
+      const { error } = await db
+        .from("user_onboarding")
+        .update({ mandate_data: mandateJson })
+        .eq("id", onboardingId)
+        .eq("user_id", user.id);
+      if (error) {
+        console.error("[Onboarding] Mandate save update error:", error.message);
+        return res.status(500).json({ success: false, error: error.message });
+      }
+    } else {
+      const { data, error } = await db
+        .from("user_onboarding")
+        .insert({ user_id: user.id, mandate_data: mandateJson })
+        .select("id")
+        .single();
+      if (error) {
+        console.error("[Onboarding] Mandate save insert error:", error.message);
+        return res.status(500).json({ success: false, error: error.message });
+      }
+      onboardingId = data?.id;
+    }
+
+    console.log(`[Onboarding] Mandate saved for user ${user.id}, onboarding_id: ${onboardingId}`);
+    res.json({ success: true, onboarding_id: onboardingId });
+  } catch (error) {
+    console.error("[Onboarding] Mandate save error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get("/api/onboarding/mandate", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (!token) return res.status(401).json({ success: false, error: "Missing token" });
+
+    const db = supabaseAdmin || supabase;
+    const authClient = supabaseAdmin || supabase;
+    const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
+    if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
+
+    const { data, error } = await db
+      .from("user_onboarding")
+      .select("mandate_data")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.error("[Onboarding] Mandate load error:", error.message);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+
+    let mandateData = null;
+    if (data?.mandate_data) {
+      try {
+        mandateData = typeof data.mandate_data === "string" ? JSON.parse(data.mandate_data) : data.mandate_data;
+      } catch (e) {
+        mandateData = data.mandate_data;
+      }
+    }
+
+    res.json({ success: true, mandate_data: mandateData });
+  } catch (error) {
+    console.error("[Onboarding] Mandate load error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.post("/api/onboarding/complete", async (req, res) => {
   try {
     const authHeader = req.headers.authorization || "";
