@@ -326,7 +326,8 @@ async function migrateGoalColumns() {
 migrateGoalColumns();
 
 function generateMintNumber(firstName, idNumber, createdAt) {
-  const namePart = (firstName || 'MNT').toUpperCase().replace(/[^A-Z]/g, '').padEnd(3, 'X').substring(0, 3);
+  const normalized = (firstName || 'MNT').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const namePart = normalized.toUpperCase().replace(/[^A-Z]/g, '').padEnd(3, 'X').substring(0, 3);
 
   let idPart = '0000';
   if (idNumber && idNumber.length >= 10) {

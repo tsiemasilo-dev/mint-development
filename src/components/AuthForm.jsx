@@ -865,7 +865,7 @@ const AuthForm = ({ initialStep = 'email', onSignupComplete, onLoginComplete, on
                   required
                   autoComplete="given-name"
                   value={firstName}
-                  onChange={(event) => setFirstName(event.target.value.replace(/[^a-zA-Z\s'-]/g, ''))}
+                  onChange={(event) => setFirstName(event.target.value.replace(/[^a-zA-ZÀ-ÖØ-öø-ÿ\s'-]/g, ''))}
                 />
               </div>
               <div className={`glass glass-input shadow-xl animate-on-load delay-5 ${lastName ? 'has-value' : ''}`}>
@@ -875,7 +875,7 @@ const AuthForm = ({ initialStep = 'email', onSignupComplete, onLoginComplete, on
                   required
                   autoComplete="family-name"
                   value={lastName}
-                  onChange={(event) => setLastName(event.target.value.replace(/[^a-zA-Z\s'-]/g, ''))}
+                  onChange={(event) => setLastName(event.target.value.replace(/[^a-zA-ZÀ-ÖØ-öø-ÿ\s'-]/g, ''))}
                 />
                 <PrimaryButton ariaLabel="Continue" onClick={handleNameContinue}>
                   <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
