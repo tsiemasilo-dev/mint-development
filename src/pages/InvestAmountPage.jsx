@@ -217,7 +217,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
         {/* Continue Button */}
         <button
           type="button"
-          onClick={() => onContinue?.(amount)}
+          onClick={() => onContinue?.(fees.totalCost)}
           disabled={!agreementChecked}
           className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3 text-sm font-semibold text-white shadow-lg shadow-violet-200/60 disabled:opacity-50 disabled:cursor-not-allowed hover:enabled:-translate-y-0.5 transition"
         >
