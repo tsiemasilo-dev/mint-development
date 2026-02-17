@@ -347,6 +347,42 @@ function generateMintNumber(firstName, idNumber, createdAt) {
   return namePart + idPart + datePart;
 }
 
+function extractIdNumberFromPackDetails(packDetails) {
+  try {
+    const info = packDetails?.info;
+    if (!info) return null;
+    const idDocs = info.idDocs;
+    if (!Array.isArray(idDocs)) return null;
+    for (const doc of idDocs) {
+      if (doc.number && doc.number.length >= 10 && (doc.idDocType === 'ID_CARD' || doc.idDocType === 'PASSPORT' || doc.idDocType === 'DRIVERS')) {
+        return doc.number;
+      }
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function getIdNumberWithFallback(db, userId, profileIdNumber) {
+  if (profileIdNumber && profileIdNumber.length >= 10) {
+    return profileIdNumber;
+  }
+  try {
+    const { data: onboarding } = await db
+      .from('user_onboarding_pack_details')
+      .select('pack_details')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (onboarding?.pack_details) {
+      return extractIdNumberFromPackDetails(onboarding.pack_details);
+    }
+  } catch (e) {
+    console.log('[mint] Fallback ID lookup error for', userId, e.message);
+  }
+  return null;
+}
+
 let mintColumnAvailable = false;
 
 async function ensureMintNumberColumn() {
@@ -381,27 +417,43 @@ async function populateMintNumbers() {
       return;
     }
 
-    const { data: profiles, error } = await db
+    const { data: allProfiles } = await db
       .from('profiles')
-      .select('id, first_name, id_number, created_at, mint_number')
-      .is('mint_number', null);
-    if (!profiles || profiles.length === 0) {
-      console.log('[mint] All profiles already have mint numbers');
+      .select('id, first_name, id_number, created_at, mint_number');
+
+    if (!allProfiles || allProfiles.length === 0) {
+      console.log('[mint] No profiles found');
       return;
     }
 
-    console.log(`[mint] Generating mint numbers for ${profiles.length} profiles...`);
-    for (const p of profiles) {
-      const mintNum = generateMintNumber(p.first_name, p.id_number, p.created_at);
-      const { error: updateErr } = await db
-        .from('profiles')
-        .update({ mint_number: mintNum })
-        .eq('id', p.id);
-      if (updateErr) {
-        console.log(`[mint] Failed to update profile ${p.id}:`, updateErr.message);
+    let backfilledCount = 0;
+    let mintUpdatedCount = 0;
+
+    for (const p of allProfiles) {
+      const resolvedId = await getIdNumberWithFallback(db, p.id, p.id_number);
+
+      if (resolvedId && (!p.id_number || p.id_number.length < 10)) {
+        const { error: idErr } = await db
+          .from('profiles')
+          .update({ id_number: resolvedId })
+          .eq('id', p.id);
+        if (!idErr) backfilledCount++;
+      }
+
+      const effectiveId = resolvedId || p.id_number;
+      const mintNum = generateMintNumber(p.first_name, effectiveId, p.created_at);
+
+      if (mintNum !== p.mint_number) {
+        const { error: updateErr } = await db
+          .from('profiles')
+          .update({ mint_number: mintNum })
+          .eq('id', p.id);
+        if (!updateErr) mintUpdatedCount++;
+        else console.log(`[mint] Failed to update profile ${p.id}:`, updateErr.message);
       }
     }
-    console.log('[mint] Mint number population complete');
+
+    console.log(`[mint] Complete: backfilled ${backfilledCount} ID numbers, updated ${mintUpdatedCount} mint numbers`);
   } catch (e) {
     console.log('[mint] Error populating mint numbers:', e.message);
   }
@@ -2139,11 +2191,19 @@ app.post("/api/user/ensure-mint-number", async (req, res) => {
       return res.json({ success: true, mint_number: null });
     }
 
-    if (profile.mint_number) {
+    const resolvedId = await getIdNumberWithFallback(db, user.id, profile.id_number);
+
+    if (resolvedId && (!profile.id_number || profile.id_number.length < 10)) {
+      await db.from('profiles').update({ id_number: resolvedId }).eq('id', user.id);
+    }
+
+    const effectiveId = resolvedId || profile.id_number;
+    const mintNum = generateMintNumber(profile.first_name, effectiveId, profile.created_at);
+
+    if (mintNum === profile.mint_number) {
       return res.json({ success: true, mint_number: profile.mint_number });
     }
 
-    const mintNum = generateMintNumber(profile.first_name, profile.id_number, profile.created_at);
     const { error: updateErr } = await db
       .from('profiles')
       .update({ mint_number: mintNum })
@@ -2151,7 +2211,6 @@ app.post("/api/user/ensure-mint-number", async (req, res) => {
 
     if (updateErr) {
       console.log('[mint] Error setting mint number:', updateErr.message);
-      return res.json({ success: true, mint_number: mintNum });
     }
 
     return res.json({ success: true, mint_number: mintNum });
