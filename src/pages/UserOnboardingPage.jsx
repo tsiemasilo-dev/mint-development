@@ -934,7 +934,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
               {!mandateValid && agreedMandate && (
                 <p className="text-center animate-fade-in" style={{ color: "#ef4444", fontSize: "12px", marginTop: "8px" }}>
-                  Please enter your initials and select at least one option under each checkbox group in the Schedules section before continuing.
+                  Please fill in all required client details (name, surname, ID, address, email, cell number), enter your initials, and select at least one option under each checkbox group in the Schedules section before continuing.
                 </p>
               )}
 

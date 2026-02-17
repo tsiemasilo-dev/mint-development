@@ -139,7 +139,35 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData })
     return groups.every((key) => isGroupValid(key));
   }, [isGroupValid, activeGroups]);
 
-  const isMandateValid = initials.trim().length > 0 && allGroupsValid() && discretionType !== null;
+  const {
+    firstName: profileFirstName = "",
+    lastName: profileLastName = "",
+    idNumber: profileIdNumber = "",
+    address: profileAddress = "",
+    phoneNumber: profilePhoneNumber = "",
+    email: profileEmail = "",
+  } = profile;
+
+  const getField = (key, profileValue) => editableFields[key] !== undefined ? editableFields[key] : (profileValue || "");
+  const isFieldFromProfile = (profileValue) => !!(profileValue && profileValue.trim());
+
+  const firstName = getField("firstName", profileFirstName);
+  const lastName = getField("lastName", profileLastName);
+  const idNumber = getField("idNumber", profileIdNumber);
+  const address = getField("address", profileAddress);
+  const email = getField("email", profileEmail);
+  const phoneNumber = getField("phoneNumber", profilePhoneNumber);
+
+  const requiredFieldsFilled = !!(
+    firstName.trim() &&
+    lastName.trim() &&
+    idNumber.trim() &&
+    address.trim() &&
+    email.trim() &&
+    phoneNumber.trim()
+  );
+
+  const isMandateValid = initials.trim().length > 0 && allGroupsValid() && discretionType !== null && requiredFieldsFilled;
 
   const getAddendumChecked = useCallback((sectionIndex, itemIndex) => {
     if (!discretionType) return false;
@@ -161,15 +189,6 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData })
       setShowErrors(true);
     }
   }, [activeTab]);
-
-  const {
-    firstName = "",
-    lastName = "",
-    idNumber = "",
-    address = "",
-    phoneNumber = "",
-    email = "",
-  } = profile;
 
   const extractCountryCode = (phone) => {
     if (!phone) return { countryCode: "", cellCode: "", number: "" };
@@ -200,6 +219,21 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData })
   };
 
   const addressDetails = extractPostalCode(address);
+
+  const editableInputStyle = {
+    width: "100%",
+    border: "none",
+    borderBottom: "1.5px solid #7c3aed",
+    padding: "2px 0",
+    fontSize: "11px",
+    background: "rgba(124, 58, 237, 0.04)",
+    color: "#333",
+    outline: "none",
+  };
+
+  const missingFieldStyle = (value) => ({
+    ...(value && value.trim() ? {} : { borderBottom: showErrors ? "1.5px solid #ef4444" : "1.5px solid #7c3aed" }),
+  });
 
   const pageStyle = {
     background: "white",
@@ -381,19 +415,37 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData })
       <p style={{ textAlign: "center", margin: "20px 0" }}>(hereinafter referred to as <strong>ALGOHIVE</strong>)</p>
       <p style={{ textAlign: "center", fontWeight: "bold" }}>and</p>
 
+      {!requiredFieldsFilled && showErrors && (
+        <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: "6px", padding: "8px 12px", margin: "10px 0", fontSize: "11px", color: "#dc2626" }}>
+          Please fill in all highlighted fields below before continuing.
+        </div>
+      )}
+
       <table style={{ ...infoTableStyle, marginTop: "20px" }}>
         <tbody>
           <tr>
             <td style={infoTdFirstStyle}><strong>CLIENT DETAILS:</strong></td>
-            <td style={infoTdStyle}>Surname: <input type="text" style={inputStyle} value={lastName} readOnly /></td>
+            <td style={infoTdStyle}>Surname: {isFieldFromProfile(profileLastName) ? (
+              <input type="text" style={inputStyle} value={lastName} readOnly />
+            ) : (
+              <input type="text" style={{ ...editableInputStyle, ...missingFieldStyle(lastName) }} value={lastName} onChange={(e) => updateEditableField("lastName", e.target.value)} placeholder="Enter surname" />
+            )}</td>
           </tr>
           <tr>
             <td style={infoTdFirstStyle}></td>
-            <td style={infoTdStyle}>First Name/s: <input type="text" style={inputStyle} value={firstName} readOnly /></td>
+            <td style={infoTdStyle}>First Name/s: {isFieldFromProfile(profileFirstName) ? (
+              <input type="text" style={inputStyle} value={firstName} readOnly />
+            ) : (
+              <input type="text" style={{ ...editableInputStyle, ...missingFieldStyle(firstName) }} value={firstName} onChange={(e) => updateEditableField("firstName", e.target.value)} placeholder="Enter first name(s)" />
+            )}</td>
           </tr>
           <tr>
             <td style={infoTdFirstStyle}>ID Number (or Passport Number)</td>
-            <td style={infoTdStyle}><input type="text" style={inputStyle} value={idNumber} readOnly /></td>
+            <td style={infoTdStyle}>{isFieldFromProfile(profileIdNumber) ? (
+              <input type="text" style={inputStyle} value={idNumber} readOnly />
+            ) : (
+              <input type="text" style={{ ...editableInputStyle, ...missingFieldStyle(idNumber) }} value={idNumber} onChange={(e) => updateEditableField("idNumber", e.target.value)} placeholder="Enter ID or passport number" />
+            )}</td>
           </tr>
           <tr>
             <td style={infoTdFirstStyle}><strong>OR</strong></td>
@@ -401,23 +453,35 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData })
           </tr>
           <tr>
             <td style={infoTdFirstStyle}>Company/Trust Registration Number</td>
-            <td style={infoTdStyle}><input type="text" style={inputStyle} readOnly /></td>
+            <td style={infoTdStyle}><input type="text" style={inputStyle} value={editableFields.companyRegNo || ""} onChange={(e) => updateEditableField("companyRegNo", e.target.value)} /></td>
           </tr>
           <tr>
             <td style={infoTdFirstStyle}>Postal Address</td>
-            <td style={infoTdStyle}><input type="text" style={inputStyle} value={addressDetails.address} readOnly /></td>
+            <td style={infoTdStyle}>{isFieldFromProfile(profileAddress) ? (
+              <input type="text" style={inputStyle} value={addressDetails.address} readOnly />
+            ) : (
+              <input type="text" style={{ ...editableInputStyle, ...missingFieldStyle(address) }} value={address} onChange={(e) => updateEditableField("address", e.target.value)} placeholder="Enter full address" />
+            )}</td>
           </tr>
           <tr>
             <td style={infoTdFirstStyle}></td>
-            <td style={infoTdStyle}>Code: <input type="text" style={{ ...inputStyle, width: "100px" }} value={addressDetails.code} readOnly /></td>
+            <td style={infoTdStyle}>Code: {isFieldFromProfile(profileAddress) ? (
+              <input type="text" style={{ ...inputStyle, width: "100px" }} value={addressDetails.code} readOnly />
+            ) : (
+              <input type="text" style={{ ...editableInputStyle, width: "100px" }} value={editableFields.postalCode || ""} onChange={(e) => updateEditableField("postalCode", e.target.value)} placeholder="Code" />
+            )}</td>
           </tr>
           <tr>
             <td style={infoTdFirstStyle}>Residential Address</td>
-            <td style={infoTdStyle}><input type="text" style={inputStyle} value={address} readOnly /></td>
+            <td style={infoTdStyle}>{isFieldFromProfile(profileAddress) ? (
+              <input type="text" style={inputStyle} value={address} readOnly />
+            ) : (
+              <input type="text" style={editableInputStyle} value={editableFields.residentialAddress || ""} onChange={(e) => updateEditableField("residentialAddress", e.target.value)} placeholder="Enter residential address (if different)" />
+            )}</td>
           </tr>
           <tr>
             <td style={infoTdFirstStyle}></td>
-            <td style={infoTdStyle}><input type="text" style={inputStyle} readOnly /></td>
+            <td style={infoTdStyle}><input type="text" style={inputStyle} value={editableFields.residentialAddress2 || ""} onChange={(e) => updateEditableField("residentialAddress2", e.target.value)} /></td>
           </tr>
           <tr>
             <td style={infoTdFirstStyle}>Tel Number (H)</td>
@@ -437,11 +501,19 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData })
           </tr>
           <tr>
             <td style={infoTdFirstStyle}>Cell Number</td>
-            <td style={infoTdStyle}>Country Code ( <input type="text" style={smallInputStyle} value={phoneDetails.countryCode} readOnly /> ) Cell Code ( <input type="text" style={smallInputStyle} value={phoneDetails.cellCode} readOnly /> ) <input type="text" style={inputStyle} value={phoneDetails.number} readOnly /></td>
+            <td style={infoTdStyle}>{isFieldFromProfile(profilePhoneNumber) ? (
+              <>Country Code ( <input type="text" style={smallInputStyle} value={phoneDetails.countryCode} readOnly /> ) Cell Code ( <input type="text" style={smallInputStyle} value={phoneDetails.cellCode} readOnly /> ) <input type="text" style={inputStyle} value={phoneDetails.number} readOnly /></>
+            ) : (
+              <input type="text" style={{ ...editableInputStyle, ...missingFieldStyle(phoneNumber) }} value={phoneNumber} onChange={(e) => updateEditableField("phoneNumber", e.target.value)} placeholder="e.g. +27 82 123 4567" />
+            )}</td>
           </tr>
           <tr>
             <td style={infoTdFirstStyle}>Email Address (Confidential)</td>
-            <td style={infoTdStyle}><input type="text" style={inputStyle} value={email} readOnly /></td>
+            <td style={infoTdStyle}>{isFieldFromProfile(profileEmail) ? (
+              <input type="text" style={inputStyle} value={email} readOnly />
+            ) : (
+              <input type="text" style={{ ...editableInputStyle, ...missingFieldStyle(email) }} value={email} onChange={(e) => updateEditableField("email", e.target.value)} placeholder="Enter email address" />
+            )}</td>
           </tr>
           <tr>
             <td style={infoTdFirstStyle}>Email Address (Other)</td>
