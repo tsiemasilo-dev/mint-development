@@ -443,19 +443,12 @@ const SwipeableBalanceCard = ({ userId, isBackFacing = true, forceVisible, mintN
         </div>
         </div>
 
-        {mintNumber && mintNumber.length >= 13 && (
-          <div className="px-4 pb-2 flex items-center justify-start">
-            <p className="text-[9px] uppercase tracking-[0.15em] text-slate-400 font-medium" style={{ fontFamily: "'SF Mono', 'Fira Code', monospace" }}>
-              <span className="text-slate-500 mr-1">MINT</span>
-              {mintNumber.substring(0, 3)}{' '}{mintNumber.substring(3, 7)}{' '}{mintNumber.substring(7, 13)}
-            </p>
-          </div>
-        )}
-        {mintNumber && mintNumber.length > 0 && mintNumber.length < 13 && (
-          <div className="px-4 pb-2 flex items-center justify-start">
-            <p className="text-[9px] uppercase tracking-[0.15em] text-slate-400 font-medium" style={{ fontFamily: "'SF Mono', 'Fira Code', monospace" }}>
-              <span className="text-slate-500 mr-1">MINT</span>
-              {mintNumber}
+        {mintNumber && mintNumber.length > 0 && (
+          <div className="px-4 pb-3 flex items-center justify-center">
+            <p className="text-[13px] tracking-[0.25em] text-slate-600 font-semibold" style={{ fontFamily: "'SF Mono', 'Fira Code', 'Courier New', monospace" }}>
+              {mintNumber.length >= 13
+                ? `${mintNumber.substring(0, 3)} ${mintNumber.substring(3, 7)} ${mintNumber.substring(7, 13)}`
+                : mintNumber}
             </p>
           </div>
         )}
