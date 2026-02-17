@@ -194,9 +194,9 @@ const PaymentPage = ({ onBack, strategy, amount, onSuccess, onCancel }) => {
               <span className="text-xs font-semibold text-slate-900">{strategy?.name || "N/A"}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-xs text-slate-600">Amount</span>
+              <span className="text-xs text-slate-600">Total Cost (incl. fees)</span>
               <span className="text-xs font-semibold text-slate-900">
-                {strategy?.currency || "R"}{amount?.toLocaleString() || "0"}
+                {strategy?.currency || "R"}{amount?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0.00"}
               </span>
             </div>
             <div className="flex justify-between pt-2 border-t border-slate-100">
