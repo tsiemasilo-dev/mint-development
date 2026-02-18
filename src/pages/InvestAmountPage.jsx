@@ -171,11 +171,11 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
                 <p className="text-xs font-semibold text-slate-900">{formatCurrency(fees.brokerAmount, currency)}</p>
               </div>
               <div className="flex items-center justify-between">
-                <p className="text-xs text-slate-600">ISIN Fee ({formatCurrency(ISIN_FEE_PER_ASSET, currency)} × {numAssets} asset{numAssets !== 1 ? "s" : ""})</p>
+                <p className="text-xs text-slate-600">Custody Fee ({formatCurrency(ISIN_FEE_PER_ASSET, currency)} × {numAssets} asset{numAssets !== 1 ? "s" : ""})</p>
                 <p className="text-xs font-semibold text-slate-900">{formatCurrency(fees.isinTotal, currency)}</p>
               </div>
               <div className="flex items-center justify-between">
-                <p className="text-xs text-slate-600">Paystack Fee (2.9%)</p>
+                <p className="text-xs text-slate-600">Transaction Fee (2.9%)</p>
                 <p className="text-xs font-semibold text-slate-900">{formatCurrency(fees.paystackAmount, currency)}</p>
               </div>
             </div>
@@ -217,7 +217,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
         {/* Continue Button */}
         <button
           type="button"
-          onClick={() => onContinue?.(fees.totalCost)}
+          onClick={() => onContinue?.(fees.totalCost, amount)}
           disabled={!agreementChecked}
           className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3 text-sm font-semibold text-white shadow-lg shadow-violet-200/60 disabled:opacity-50 disabled:cursor-not-allowed hover:enabled:-translate-y-0.5 transition"
         >

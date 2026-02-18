@@ -1068,11 +1068,12 @@ const App = () => {
         <StockBuyPage
           security={selectedSecurity}
           onBack={goBack}
-          onContinue={(amount, security) => {
+          onContinue={(amount, security, baseAmount) => {
             setStockCheckout({ security, amount });
             setPendingGoalFlow({
               type: "stock",
               amount,
+              baseAmount: baseAmount || amount,
               assetName: security?.name || security?.symbol || "Stock",
               securityId: security?.id || null,
             });
@@ -1088,7 +1089,7 @@ const App = () => {
             setPendingGoalFlow(null);
             navigateTo("stockPayment");
           }}
-          investmentAmount={pendingGoalFlow?.amount || stockCheckout.amount}
+          investmentAmount={pendingGoalFlow?.baseAmount || pendingGoalFlow?.amount || stockCheckout.amount}
           assetName={pendingGoalFlow?.assetName || selectedSecurity?.name || "Stock"}
         />
       </SwipeBackWrapper>
@@ -1194,11 +1195,12 @@ const App = () => {
         <InvestAmountPage
           onBack={goBack}
           strategy={selectedStrategy}
-          onContinue={(amount) => {
+          onContinue={(amount, baseAmount) => {
             setInvestmentAmount(amount);
             setPendingGoalFlow({
               type: "strategy",
               amount,
+              baseAmount: baseAmount || amount,
               assetName: selectedStrategy?.name || "Strategy",
               strategyId: selectedStrategy?.id || selectedStrategy?.strategyId || null,
             });
@@ -1214,7 +1216,7 @@ const App = () => {
             setPendingGoalFlow(null);
             navigateTo("payment");
           }}
-          investmentAmount={pendingGoalFlow?.amount || investmentAmount}
+          investmentAmount={pendingGoalFlow?.baseAmount || pendingGoalFlow?.amount || investmentAmount}
           assetName={pendingGoalFlow?.assetName || selectedStrategy?.name || "Strategy"}
         />
       </SwipeBackWrapper>

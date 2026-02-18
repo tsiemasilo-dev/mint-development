@@ -41,7 +41,7 @@ const StockBuyPage = ({ security, onBack, onContinue }) => {
   const handleSubmit = (event) => {
     event.preventDefault();
     if (!security || !shares || shares <= 0) return;
-    onContinue?.(fees.totalCost, security);
+    onContinue?.(fees.totalCost, security, totalAmount);
   };
 
   return (
@@ -107,11 +107,11 @@ const StockBuyPage = ({ security, onBack, onContinue }) => {
                   <p className="text-xs font-semibold text-slate-900">{formatCurrency(fees.brokerAmount, displayCurrency)}</p>
                 </div>
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-slate-600">ISIN Fee ({formatCurrency(ISIN_FEE_PER_ASSET, displayCurrency)} × {numAssets} asset{numAssets !== 1 ? "s" : ""})</p>
+                  <p className="text-xs text-slate-600">Custody Fee ({formatCurrency(ISIN_FEE_PER_ASSET, displayCurrency)} × {numAssets} asset{numAssets !== 1 ? "s" : ""})</p>
                   <p className="text-xs font-semibold text-slate-900">{formatCurrency(fees.isinTotal, displayCurrency)}</p>
                 </div>
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-slate-600">Paystack Fee (2.9%)</p>
+                  <p className="text-xs text-slate-600">Transaction Fee (2.9%)</p>
                   <p className="text-xs font-semibold text-slate-900">{formatCurrency(fees.paystackAmount, displayCurrency)}</p>
                 </div>
               </div>
