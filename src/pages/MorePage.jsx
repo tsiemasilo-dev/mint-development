@@ -22,6 +22,7 @@ const MorePage = ({ onNavigate }) => {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
   const [error, setError] = useState("");
+  const [subscriptionPlan, setSubscriptionPlan] = useState(null);
   const { bankLinked } = useRequiredActions();
   const { kycVerified, kycPending, kycNeedsResubmission } = useSumsubStatus();
 
@@ -67,6 +68,17 @@ const MorePage = ({ onNavigate }) => {
           .eq("id", userData.user.id)
           .maybeSingle();
 
+        let plan = null;
+        try {
+          const { data: sub, error: subErr } = await supabase
+            .from("subscriptions")
+            .select("plan")
+            .eq("user_id", userData.user.id)
+            .eq("status", "active")
+            .maybeSingle();
+          if (!subErr && sub?.plan) plan = sub.plan;
+        } catch (_) {}
+
         if (alive) {
           const metadata = userData.user.user_metadata || {};
           setProfile(profileData || {
@@ -75,6 +87,7 @@ const MorePage = ({ onNavigate }) => {
             email: userData.user.email || "",
             avatar_url: metadata.avatar_url || "",
           });
+          setSubscriptionPlan(plan || "free");
           setLoading(false);
         }
       } catch (err) {
@@ -165,6 +178,22 @@ const MorePage = ({ onNavigate }) => {
       </header>
 
       <div className="flex flex-col items-center text-center">
+        {subscriptionPlan && (
+          <span
+            className={`mt-2 inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${
+              subscriptionPlan === "premium" || subscriptionPlan === "pro"
+                ? "bg-gradient-to-r from-violet-100 to-purple-100 text-violet-700 border border-violet-200"
+                : "bg-slate-100 text-slate-600 border border-slate-200"
+            }`}
+          >
+            {(subscriptionPlan === "premium" || subscriptionPlan === "pro") && (
+              <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5">
+                <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
+              </svg>
+            )}
+            {subscriptionPlan.charAt(0).toUpperCase() + subscriptionPlan.slice(1)} Plan
+          </span>
+        )}
         <h2 className="mt-3 text-xl font-semibold text-slate-900">{nameLabel}</h2>
         <p className="mt-1 text-sm text-slate-500">{usernameLabel}</p>
         <button
