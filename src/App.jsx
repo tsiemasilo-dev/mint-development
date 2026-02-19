@@ -1057,6 +1057,7 @@ const App = () => {
           security={selectedSecurity}
           onBack={goBack}
           onOpenBuy={() => navigateTo("stockBuy")}
+          onNavigateToOnboarding={() => navigateTo("identityCheck")}
         />
       </SwipeBackWrapper>
     );
@@ -1184,6 +1185,7 @@ const App = () => {
             setSelectedStrategy(strategy);
             navigateTo("investAmount");
           }}
+          onNavigateToOnboarding={() => navigateTo("identityCheck")}
         />
       </SwipeBackWrapper>
     );

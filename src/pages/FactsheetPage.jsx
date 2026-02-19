@@ -25,7 +25,7 @@ const timeframeOptions = [
 
 const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
+const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding }) => {
   const [timeframe, setTimeframe] = useState("1M");
   const [activeLabel, setActiveLabel] = useState(null);
   const [selectedMetricModal, setSelectedMetricModal] = useState(null);
@@ -888,10 +888,20 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest }) => {
             </p>
             <button
               type="button"
-              onClick={() => setShowOnboardingModal(false)}
+              onClick={() => {
+                setShowOnboardingModal(false);
+                if (onNavigateToOnboarding) onNavigateToOnboarding();
+              }}
               className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3 text-sm font-semibold text-white shadow-lg"
             >
-              Got it
+              Complete Onboarding
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowOnboardingModal(false)}
+              className="w-full mt-2 rounded-2xl py-3 text-sm font-semibold text-slate-500"
+            >
+              Not now
             </button>
           </div>
         </div>

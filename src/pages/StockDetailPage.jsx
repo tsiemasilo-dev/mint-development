@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase.js";
 import { useProfile } from "../lib/useProfile";
 import { checkOnboardingComplete } from "../lib/checkOnboardingComplete";
 
-const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy }) => {
+const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavigateToOnboarding }) => {
   const { profile } = useProfile();
   const [selectedPeriod, setSelectedPeriod] = useState("1M");
   const [security, setSecurity] = useState(initialSecurity);
@@ -546,10 +546,19 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy }) => {
               You need to complete your identity verification and onboarding before you can start investing. This helps us keep your account secure.
             </p>
             <button
-              onClick={() => setShowOnboardingModal(false)}
+              onClick={() => {
+                setShowOnboardingModal(false);
+                if (onNavigateToOnboarding) onNavigateToOnboarding();
+              }}
               className="w-full rounded-2xl bg-gradient-to-r from-black to-purple-600 py-3 text-sm font-semibold text-white shadow-lg"
             >
-              Got it
+              Complete Onboarding
+            </button>
+            <button
+              onClick={() => setShowOnboardingModal(false)}
+              className="w-full mt-2 rounded-2xl py-3 text-sm font-semibold text-slate-500"
+            >
+              Not now
             </button>
           </div>
         </div>
