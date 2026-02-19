@@ -99,12 +99,11 @@ const ActionsPage = ({ onBack, onNavigate }) => {
 
   const onboardingStatus = getOnboardingStatus();
 
-  const getMandateStatus = () => {
-    if (!identityComplete) return { text: "Awaiting Identity", style: "bg-slate-100 text-slate-500" };
-    if (mandateAgreed) return { text: "Complete", style: "bg-green-100 text-green-600" };
-    return { text: "Action Required", style: "bg-red-50 text-red-600" };
+  const getOnboardingDescription = () => {
+    if (allOnboardingComplete) return "Risk disclosure, source of funds, mandate, and agreements complete";
+    if (onboardingMarkedComplete && !mandateAgreed) return "Discretionary mandate still needs to be signed";
+    return "Risk disclosure, source of funds, mandate, and agreements";
   };
-  const mandateStatus = getMandateStatus();
 
   const allActions = [
     {
@@ -118,24 +117,9 @@ const ActionsPage = ({ onBack, onNavigate }) => {
       navigateTo: "identityCheck",
     },
     {
-      id: "mandate",
-      title: "Sign discretionary mandate",
-      description: mandateAgreed
-        ? "Investment mandate signed and agreed"
-        : "Review and accept the FSP investment mandate",
-      status: mandateStatus.text,
-      statusStyle: mandateStatus.style,
-      icon: FileText,
-      completed: mandateAgreed,
-      navigateTo: "identityCheck",
-      disabled: !identityComplete,
-    },
-    {
       id: "onboarding",
       title: "Complete onboarding",
-      description: allOnboardingComplete
-        ? "Risk disclosure, source of funds, and agreements complete"
-        : "Risk disclosure, source of funds, and agreements",
+      description: getOnboardingDescription(),
       status: onboardingStatus.text,
       statusStyle: onboardingStatus.style,
       icon: FileText,
