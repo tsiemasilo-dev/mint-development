@@ -964,17 +964,20 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
                 return;
               }
 
-              const currentStrategyId = currentStrategy?.id || currentStrategy?.strategy_id || null;
+              const currentStrategyName = currentStrategy?.name || null;
 
-              const { data: userStrategies } = await supabase
-                .from("user_strategies")
-                .select("strategy_id")
-                .eq("user_id", session.user.id);
+              const { data: strategyTxns } = await supabase
+                .from("transactions")
+                .select("name")
+                .eq("user_id", session.user.id)
+                .like("name", "Strategy Investment:%");
 
-              const existingIds = (userStrategies || []).map(s => s.strategy_id);
-              const alreadyInvested = currentStrategyId && existingIds.includes(currentStrategyId);
+              const investedStrategies = new Set(
+                (strategyTxns || []).map(t => t.name.replace("Strategy Investment: ", "").trim())
+              );
+              const alreadyInvested = currentStrategyName && investedStrategies.has(currentStrategyName);
 
-              if (!alreadyInvested && existingIds.length >= 1) {
+              if (!alreadyInvested && investedStrategies.size >= 1) {
                 let isPremium = false;
                 try {
                   const { data: sub, error: subErr } = await supabase
