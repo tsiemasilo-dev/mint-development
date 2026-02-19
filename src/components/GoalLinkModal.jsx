@@ -71,17 +71,17 @@ const GoalLinkModal = ({ isOpen, onClose, onConfirm, investmentAmount, assetName
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return;
 
+      const payload = {
+        user_id: session.user.id,
+        name: newGoalName,
+        target_amount: parseFloat(newGoalTarget),
+        target_date: newGoalDate || null,
+        is_active: true,
+      };
+
       const { data, error } = await supabase
         .from("investment_goals")
-        .insert({
-          user_id: session.user.id,
-          name: newGoalName,
-          target_amount: parseFloat(newGoalTarget),
-          target_date: newGoalDate || null,
-          current_amount: 0,
-          invested_amount: 0,
-          is_active: true,
-        })
+        .insert(payload)
         .select()
         .single();
 
