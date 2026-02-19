@@ -52,6 +52,38 @@ const SwipeableBalanceCard = ({ userId, isBackFacing = true, forceVisible, mintN
   const [loading, setLoading] = useState(true);
   const [chartData, setChartData] = useState([]);
   const [chartLoading, setChartLoading] = useState(false);
+  const holdingsScrollRef = useRef(null);
+  const scrollTimerRef = useRef(null);
+
+  const handleHoldingsScroll = () => {
+    if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
+    scrollTimerRef.current = setTimeout(() => {
+      const container = holdingsScrollRef.current;
+      if (!container) return;
+      const items = container.querySelectorAll('[data-holding-index]');
+      const containerRect = container.getBoundingClientRect();
+      const containerCenter = containerRect.left + containerRect.width / 2;
+      let closestItem = null;
+      let closestDist = Infinity;
+      items.forEach(item => {
+        const rect = item.getBoundingClientRect();
+        const itemCenter = rect.left + rect.width / 2;
+        const dist = Math.abs(itemCenter - containerCenter);
+        if (dist < closestDist) {
+          closestDist = dist;
+          closestItem = item;
+        }
+      });
+      if (closestItem) {
+        const idx = parseInt(closestItem.getAttribute('data-holding-index'), 10);
+        if (idx === -1) {
+          setSelectedAsset(null);
+        } else if (idx >= 0 && idx < dbData.holdings.length) {
+          setSelectedAsset(dbData.holdings[idx]);
+        }
+      }
+    }, 150);
+  };
   
   const [dbData, setDbData] = useState({
     holdings: [],
@@ -370,28 +402,51 @@ const SwipeableBalanceCard = ({ userId, isBackFacing = true, forceVisible, mintN
                 holdings ({dbData.holdingsCount})
               </p>
               {dbData.holdings.length > 0 ? (
-                <div className="overflow-x-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}>
-                  <div className="flex gap-1.5 w-max">
-                    {dbData.holdings.map((h, i) => (
-                      <div key={i} className="flex items-center gap-1 px-2 py-1 rounded-full bg-slate-100 border border-slate-200 whitespace-nowrap">
-                        {h.isStrategy && h.topLogos?.length > 0 ? (
-                          <div className="flex -space-x-1 shrink-0">
-                            {h.topLogos.slice(0, 3).map((logo, li) => (
-                              <img key={li} src={logo} className="w-3.5 h-3.5 rounded-full object-cover border border-white/25" />
-                            ))}
-                          </div>
-                        ) : h.logo_url ? (
-                          <img src={h.logo_url} className="w-3.5 h-3.5 rounded-full object-cover shrink-0" />
-                        ) : (
-                          <span className="text-[7px] text-slate-500 shrink-0">{h.symbol?.substring(0, 2)}</span>
-                        )}
-                        <span className="text-[9px] font-medium text-slate-600">{h.isStrategy ? h.symbol : h.symbol?.replace('.JO', '')}</span>
-                        {(() => {
-                          const s = h.settlement_status || holdingSettlementStatus;
-                          return s && s !== "confirmed" ? <SettlementBadge status={s} size="xs" /> : null;
-                        })()}
-                      </div>
-                    ))}
+                <div
+                  ref={holdingsScrollRef}
+                  className="overflow-x-auto"
+                  style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch', scrollSnapType: 'x mandatory' }}
+                  onScroll={handleHoldingsScroll}
+                >
+                  <div className="flex gap-1.5 w-max px-0.5">
+                    <div
+                      data-holding-index={-1}
+                      onClick={() => setSelectedAsset(null)}
+                      className={`flex items-center gap-1 px-2 py-1 rounded-full border whitespace-nowrap cursor-pointer transition-all duration-200 ${!selectedAsset ? 'bg-violet-100 border-violet-300 ring-1 ring-violet-300' : 'bg-slate-100 border-slate-200'}`}
+                      style={{ scrollSnapAlign: 'center' }}
+                    >
+                      <LayoutGrid size={10} className="text-violet-400 shrink-0" />
+                      <span className={`text-[9px] font-medium ${!selectedAsset ? 'text-violet-600' : 'text-slate-600'}`}>All</span>
+                    </div>
+                    {dbData.holdings.map((h, i) => {
+                      const isActive = selectedAsset?.symbol === h.symbol;
+                      return (
+                        <div
+                          key={i}
+                          data-holding-index={i}
+                          onClick={() => setSelectedAsset(h)}
+                          className={`flex items-center gap-1 px-2 py-1 rounded-full border whitespace-nowrap cursor-pointer transition-all duration-200 ${isActive ? 'bg-violet-100 border-violet-300 ring-1 ring-violet-300' : 'bg-slate-100 border-slate-200'}`}
+                          style={{ scrollSnapAlign: 'center' }}
+                        >
+                          {h.isStrategy && h.topLogos?.length > 0 ? (
+                            <div className="flex -space-x-1 shrink-0">
+                              {h.topLogos.slice(0, 3).map((logo, li) => (
+                                <img key={li} src={logo} className="w-3.5 h-3.5 rounded-full object-cover border border-white/25" />
+                              ))}
+                            </div>
+                          ) : h.logo_url ? (
+                            <img src={h.logo_url} className="w-3.5 h-3.5 rounded-full object-cover shrink-0" />
+                          ) : (
+                            <span className="text-[7px] text-slate-500 shrink-0">{h.symbol?.substring(0, 2)}</span>
+                          )}
+                          <span className={`text-[9px] font-medium ${isActive ? 'text-violet-600' : 'text-slate-600'}`}>{h.isStrategy ? h.symbol : h.symbol?.replace('.JO', '')}</span>
+                          {(() => {
+                            const s = h.settlement_status || holdingSettlementStatus;
+                            return s && s !== "confirmed" ? <SettlementBadge status={s} size="xs" /> : null;
+                          })()}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               ) : (
