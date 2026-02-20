@@ -2068,6 +2068,205 @@ async function verifyPaystackPayment(reference) {
   return { verified: true, data: result.data };
 }
 
+app.post("/api/reconcile-payments", async (req, res) => {
+  try {
+    console.log("[reconcile] === ENDPOINT CALLED ===");
+
+    if (!supabase) {
+      return res.status(500).json({ success: false, error: "Database not connected" });
+    }
+
+    const { user, error: authError } = await authenticateUser(req);
+    if (authError || !user) {
+      return res.status(401).json({ success: false, error: authError || "Unauthorized" });
+    }
+
+    const userId = user.id;
+    console.log("[reconcile] Authenticated user:", userId);
+
+    const paystackKey = process.env.PAYSTACK_SECRET_KEY;
+    if (!paystackKey) {
+      return res.status(500).json({ success: false, error: "Paystack not configured" });
+    }
+
+    const https = require("https");
+    const fetchPaystackPage = (page) => {
+      return new Promise((resolve) => {
+        const options = {
+          hostname: "api.paystack.co",
+          path: `/transaction?perPage=100&page=${page}&status=success`,
+          method: "GET",
+          headers: { Authorization: `Bearer ${paystackKey}` },
+        };
+        const req = https.request(options, (resp) => {
+          let body = "";
+          resp.on("data", (d) => (body += d));
+          resp.on("end", () => {
+            try { resolve(JSON.parse(body)); } catch (e) { resolve({ status: false }); }
+          });
+        });
+        req.on("error", () => resolve({ status: false }));
+        req.end();
+      });
+    };
+
+    let allPaystackTxns = [];
+    let page = 1;
+    const maxPages = 10;
+    while (page <= maxPages) {
+      const result = await fetchPaystackPage(page);
+      if (!result.status || !result.data || result.data.length === 0) break;
+      allPaystackTxns = allPaystackTxns.concat(result.data);
+      if (result.data.length < 100) break;
+      page++;
+    }
+
+    console.log("[reconcile] Fetched", allPaystackTxns.length, "total Paystack transactions across", page, "pages");
+
+    const userPaystackTxns = allPaystackTxns.filter(
+      (t) =>
+        t.status === "success" &&
+        t.reference?.startsWith("MINT-") &&
+        t.metadata?.user_id === userId
+    );
+
+    console.log("[reconcile] Found", userPaystackTxns.length, "successful MINT payments for this user");
+
+    const { data: existingTxns } = await (supabaseAdmin || supabase)
+      .from("transactions")
+      .select("store_reference")
+      .eq("user_id", userId);
+
+    const recordedRefs = new Set((existingTxns || []).map((t) => t.store_reference));
+    const candidates = userPaystackTxns.filter((t) => !recordedRefs.has(t.reference));
+
+    console.log("[reconcile] Candidates missing from DB:", candidates.length);
+
+    const recovered = [];
+    const skipped = [];
+    const db = supabaseAdmin || supabase;
+
+    for (const candidate of candidates) {
+      const ref = candidate.reference;
+
+      const { verified, error: verifyErr, data: verifiedData } = await verifyPaystackPayment(ref);
+      if (!verified) {
+        console.log("[reconcile] SKIPPING", ref, "- verification failed:", verifyErr);
+        skipped.push({ reference: ref, reason: verifyErr || "Verification failed" });
+        continue;
+      }
+
+      if (verifiedData.metadata?.user_id !== userId) {
+        console.log("[reconcile] SKIPPING", ref, "- user_id mismatch in verified data");
+        skipped.push({ reference: ref, reason: "User ID mismatch" });
+        continue;
+      }
+
+      const paidAmount = verifiedData.amount / 100;
+      const meta = verifiedData.metadata || {};
+      const securityId = meta.strategy_id;
+      const assetName = meta.strategy_name || "";
+      const investmentAmount = meta.investment_amount || paidAmount;
+      const shareCount = meta.share_count ? Number(meta.share_count) : null;
+
+      console.log("[reconcile] Verified & recovering:", ref, "R" + paidAmount, assetName);
+
+      const { data: securityCheck } = await db
+        .from("securities")
+        .select("id, last_price")
+        .eq("id", securityId)
+        .maybeSingle();
+
+      const isStrategy = !securityCheck;
+      const description = isStrategy
+        ? `Invested in strategy ${assetName}`
+        : `Purchased shares of ${assetName}`;
+
+      const { error: txError } = await db.from("transactions").insert({
+        user_id: userId,
+        amount: investmentAmount,
+        description,
+        store_reference: ref,
+        direction: "debit",
+        name: isStrategy ? `Invested ${assetName}` : `Purchased ${assetName}`,
+        currency: "ZAR",
+        status: "posted",
+      });
+
+      if (txError) {
+        console.error("[reconcile] Transaction insert error for", ref, ":", txError.message);
+        skipped.push({ reference: ref, reason: "DB insert failed: " + txError.message });
+        continue;
+      }
+
+      if (securityCheck) {
+        const currentPriceCents = securityCheck.last_price || 0;
+        const currentPriceRands = currentPriceCents / 100;
+        const quantity = shareCount || (currentPriceRands > 0 ? Math.max(1, Math.floor(investmentAmount / currentPriceRands)) : 1);
+        const avgFillCents = currentPriceCents;
+        const marketValueCents = quantity * currentPriceCents;
+
+        const { data: existing } = await db
+          .from("stock_holdings")
+          .select("*")
+          .eq("user_id", userId)
+          .eq("security_id", securityId)
+          .maybeSingle();
+
+        if (existing) {
+          const newQty = existing.quantity + quantity;
+          const newMarketValue = newQty * currentPriceCents;
+          await db
+            .from("stock_holdings")
+            .update({ quantity: newQty, market_value: newMarketValue, as_of_date: new Date().toISOString().split("T")[0] })
+            .eq("id", existing.id);
+        } else {
+          await db.from("stock_holdings").insert({
+            user_id: userId,
+            security_id: securityId,
+            quantity,
+            avg_fill: avgFillCents,
+            market_value: marketValueCents,
+            Status: "active",
+            as_of_date: new Date().toISOString().split("T")[0],
+          });
+        }
+      }
+
+      if (isStrategy && meta.strategy_id) {
+        const { data: existingStrat } = await db
+          .from("user_strategies")
+          .select("*")
+          .eq("user_id", userId)
+          .eq("strategy_id", meta.strategy_id)
+          .maybeSingle();
+
+        if (existingStrat) {
+          await db
+            .from("user_strategies")
+            .update({ invested_amount: (existingStrat.invested_amount || 0) + investmentAmount })
+            .eq("id", existingStrat.id);
+        } else {
+          await db.from("user_strategies").insert({
+            user_id: userId,
+            strategy_id: meta.strategy_id,
+            invested_amount: investmentAmount,
+            status: "active",
+          });
+        }
+      }
+
+      recovered.push({ reference: ref, amount: paidAmount, asset: assetName });
+    }
+
+    console.log("[reconcile] === DONE === Recovered:", recovered.length, "Skipped:", skipped.length);
+    res.json({ success: true, recovered: recovered.length, skipped: skipped.length, details: recovered, skippedDetails: skipped });
+  } catch (error) {
+    console.error("[reconcile] === UNCAUGHT ERROR ===", error);
+    res.status(500).json({ success: false, error: error.message || "Reconciliation failed" });
+  }
+});
+
 app.post("/api/record-investment", async (req, res) => {
   try {
     console.log("[record-investment] === ENDPOINT CALLED ===");
@@ -2111,7 +2310,7 @@ app.post("/api/record-investment", async (req, res) => {
       .maybeSingle();
     if (existingTx) {
       console.log("[record-investment] DUPLICATE: Transaction already recorded for ref:", paymentReference, "tx id:", existingTx.id);
-      return res.json({ success: true, message: "Already recorded", duplicate: true });
+      return res.status(409).json({ success: true, message: "Already recorded", duplicate: true });
     }
 
     const paidAmount = payData.amount / 100;

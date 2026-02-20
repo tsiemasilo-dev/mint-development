@@ -44,6 +44,7 @@ const PaymentPage = ({ onBack, strategy, amount, shareCount, onSuccess, onCancel
         strategy_name: strategy?.name,
         user_id: profile?.id,
         investment_amount: amount,
+        share_count: shareCount ? Number(shareCount) : null,
       },
       onClose: function () {
         console.log("Payment window closed");
@@ -57,31 +58,65 @@ const PaymentPage = ({ onBack, strategy, amount, shareCount, onSuccess, onCancel
         if (!isMounted.current) return;
         setPaymentStatus("success");
 
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          const token = session?.access_token;
-          const isStrategy = !!(strategy?.holdings || strategy?.risk_level || strategy?.slug);
-          const stratId = strategy?.strategyId || (isStrategy ? strategy?.id : null);
-          const recordData = {
-            securityId: strategy?.id,
-            symbol: strategy?.symbol || strategy?.short_name || "",
-            name: strategy?.name || "",
-            amount: amount,
-            strategyId: stratId,
-            paymentReference: response?.reference || "",
-            ...(shareCount ? { shareCount: Number(shareCount) } : {}),
-          };
-          const headers = { "Content-Type": "application/json" };
-          if (token) {
-            headers["Authorization"] = `Bearer ${token}`;
+        const maxRetries = 5;
+        let recorded = false;
+
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const token = session?.access_token;
+            const isStrategy = !!(strategy?.holdings || strategy?.risk_level || strategy?.slug);
+            const stratId = strategy?.strategyId || (isStrategy ? strategy?.id : null);
+            const recordData = {
+              securityId: strategy?.id,
+              symbol: strategy?.symbol || strategy?.short_name || "",
+              name: strategy?.name || "",
+              amount: amount,
+              strategyId: stratId,
+              paymentReference: response?.reference || "",
+              ...(shareCount ? { shareCount: Number(shareCount) } : {}),
+            };
+            const headers = { "Content-Type": "application/json" };
+            if (token) {
+              headers["Authorization"] = `Bearer ${token}`;
+            }
+            const res = await fetch("/api/record-investment", {
+              method: "POST",
+              headers,
+              body: JSON.stringify(recordData),
+            });
+
+            if (res.ok) {
+              console.log("Investment recorded successfully on attempt", attempt);
+              recorded = true;
+              break;
+            }
+
+            const errorBody = await res.text();
+            console.warn(`Record attempt ${attempt}/${maxRetries} failed (${res.status}):`, errorBody);
+
+            if (res.status === 409) {
+              console.log("Duplicate detected — already recorded");
+              recorded = true;
+              break;
+            }
+
+            if (res.status === 400) {
+              console.error("Terminal error (validation failed), not retrying:", errorBody);
+              break;
+            }
+          } catch (recordError) {
+            console.warn(`Record attempt ${attempt}/${maxRetries} network error:`, recordError.message);
           }
-          await fetch("/api/record-investment", {
-            method: "POST",
-            headers,
-            body: JSON.stringify(recordData),
-          });
-        } catch (recordError) {
-          console.error("Failed to record investment:", recordError);
+
+          if (attempt < maxRetries) {
+            const delay = Math.min(1000 * Math.pow(2, attempt - 1), 8000);
+            await new Promise(r => setTimeout(r, delay));
+          }
+        }
+
+        if (!recorded) {
+          console.error("Failed to record investment after all retries. Payment ref:", response?.reference, "— can be recovered via reconciliation.");
         }
 
         setTimeout(() => {
