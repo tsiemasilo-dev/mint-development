@@ -509,7 +509,7 @@ async function sendEmailToAllUsers(supabaseAdmin, article) {
     const emailPromises = batch.map(async (user) => {
       try {
         await getResend().emails.send({
-          from: 'MINT MORNINGS <mornings@thealgohive.com>',
+          from: 'MINT MORNINGS <mornings@mymint.co.za>',
           to: [user.email],
           subject: `MINT MORNINGS — ${article.title}`,
           html: html,
@@ -692,7 +692,7 @@ async function sendTestEmail(supabaseAdmin, testEmail) {
 
   try {
     const resendResponse = await getResend().emails.send({
-      from: 'MINT MORNINGS <mornings@thealgohive.com>',
+      from: 'MINT MORNINGS <mornings@mymint.co.za>',
       to: [testEmail],
       subject: `MINT MORNINGS — ${article.title}`,
       html: html,
