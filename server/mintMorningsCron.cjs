@@ -1,6 +1,12 @@
 const { Resend } = require('resend');
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+let resend = null;
+function getResend() {
+  if (!resend && process.env.RESEND_API_KEY) {
+    resend = new Resend(process.env.RESEND_API_KEY);
+  }
+  return resend;
+}
 
 const processedDocIds = new Set();
 
@@ -497,7 +503,7 @@ async function sendEmailToAllUsers(supabaseAdmin, article) {
     const batch = confirmedUsers.slice(i, i + batchSize);
     const emailPromises = batch.map(async (user) => {
       try {
-        await resend.emails.send({
+        await getResend().emails.send({
           from: 'MINT MORNINGS <mornings@thealgohive.com>',
           to: [user.email],
           subject: `MINT MORNINGS — ${article.title}`,
@@ -649,7 +655,7 @@ async function sendTestEmail(supabaseAdmin, testEmail) {
   const html = buildMintMorningsHtml([article]);
 
   try {
-    await resend.emails.send({
+    await getResend().emails.send({
       from: 'MINT MORNINGS <mornings@thealgohive.com>',
       to: [testEmail],
       subject: `MINT MORNINGS — ${article.title}`,
