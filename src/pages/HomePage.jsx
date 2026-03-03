@@ -873,6 +873,75 @@ const HomePage = ({
           })}
         </section>
 
+        {/* Market Insights */}
+        <section>
+          <div className="flex items-end justify-between px-5 mb-3">
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-slate-900">
+                Market Insights
+              </p>
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 text-slate-500">
+                  <Newspaper className="h-3 w-3" />
+                </span>
+                <span>Latest updates for your portfolio</span>
+              </div>
+            </div>
+            <button 
+              onClick={() => onOpenNews && onOpenNews()}
+              className="mb-1 text-xs font-semibold text-violet-600 active:opacity-70 transition-colors"
+            >
+              View all
+            </button>
+          </div>
+
+          <div className="rounded-3xl bg-white shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] overflow-hidden divide-y divide-slate-100">
+            {news.length > 0 ? (
+              news.slice(0, 4).map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => onOpenNewsArticle && onOpenNewsArticle(item.id)}
+                  className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors active:bg-slate-50"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-violet-600 bg-violet-50 px-2 py-0.5 rounded-md">
+                        {item.source || 'Market'}
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        {formatDate(item.published_at)}
+                      </span>
+                    </div>
+                    <p className="text-[13px] font-semibold text-slate-900 line-clamp-2 leading-snug">
+                      {item.title}
+                    </p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-slate-300 flex-shrink-0" />
+                </button>
+              ))
+            ) : !loadingNews && (
+              <div className="p-6 text-center">
+                <p className="text-xs text-slate-400">No recent insights available.</p>
+              </div>
+            )}
+            
+            {loadingNews && (
+              <div className="divide-y divide-slate-100">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="px-5 py-4 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="h-4 w-14 rounded-full" />
+                      <Skeleton className="h-3 w-20" />
+                    </div>
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-3/4" />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+
         {onboardingChecked && outstandingActions.length > 0 ? (
           <OutstandingActionsSection
             actions={outstandingActions}
@@ -1187,75 +1256,6 @@ const HomePage = ({
           )}
         </section>
 
-        {/* Market Insights */}
-        <section>
-          <div className="flex items-end justify-between px-5 mb-3">
-            <div className="space-y-1">
-              <p className="text-sm font-semibold text-slate-900">
-                Market Insights
-              </p>
-              <div className="flex items-center gap-2 text-xs text-slate-500">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 text-slate-500">
-                  <Newspaper className="h-3 w-3" />
-                </span>
-                <span>Latest updates for your portfolio</span>
-              </div>
-            </div>
-            <button 
-              onClick={() => onOpenNews && onOpenNews()}
-              className="mb-1 text-xs font-semibold text-violet-600 active:opacity-70 transition-colors"
-            >
-              View all
-            </button>
-          </div>
-
-          <div className="rounded-3xl bg-white shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] overflow-hidden divide-y divide-slate-100">
-            {news.length > 0 ? (
-              news.slice(0, 4).map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => onOpenNewsArticle && onOpenNewsArticle(item.id)}
-                  className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors active:bg-slate-50"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-violet-600 bg-violet-50 px-2 py-0.5 rounded-md">
-                        {item.source || 'Market'}
-                      </span>
-                      <span className="text-[10px] text-slate-400">
-                        {formatDate(item.published_at)}
-                      </span>
-                    </div>
-                    <p className="text-[13px] font-semibold text-slate-900 line-clamp-2 leading-snug">
-                      {item.title}
-                    </p>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-slate-300 flex-shrink-0" />
-                </button>
-              ))
-            ) : !loadingNews && (
-              <div className="p-6 text-center">
-                <p className="text-xs text-slate-400">No recent insights available.</p>
-              </div>
-            )}
-            
-            {loadingNews && (
-              <div className="divide-y divide-slate-100">
-                {[0, 1, 2].map((i) => (
-                  <div key={i} className="px-5 py-4 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Skeleton className="h-4 w-14 rounded-full" />
-                      <Skeleton className="h-3 w-20" />
-                    </div>
-                    <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-4 w-3/4" />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
-        
         {transactionHistory.length > 0 ? (
           <TransactionHistorySection items={transactionHistory} onViewAll={onOpenActivity} />
         ) : (
