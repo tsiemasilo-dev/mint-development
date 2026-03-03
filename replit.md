@@ -54,6 +54,16 @@ Mint Auth is a React authentication application built with Vite, Tailwind CSS, a
 - **Security**: Vercel cron endpoint supports optional `CRON_SECRET` env var for authentication (Vercel sends this automatically)
 - **Test Endpoints**: `POST /api/test-mint-mornings-single` (send to specific email), `POST /api/test-mint-mornings` (admin-only, requires Bearer token + admin role)
 
+### Filter Persistence
+- **File**: `src/lib/usePersistedFilters.js` — localStorage-based filter save/restore
+- **Contexts**: 3 independent filter contexts:
+  - `marketsInvest` — sort, sectors, exchanges (MarketsPage Invest tab)
+  - `marketsStrategies` — sort, risks, minInvestment, exposure, timeHorizon, sectors (MarketsPage OpenStrategies tab)
+  - `openStrategies` — same shape as marketsStrategies (standalone OpenStrategiesPage)
+- **Serialization**: Sets serialized as arrays in JSON; rebuilt as Sets on load
+- **Chip rebuilding**: Active filter chips are reconstructed on page load and on tab switch in MarketsPage
+- **Storage keys**: `mint_filters_markets_invest`, `mint_filters_markets_strategies`, `mint_filters_open_strategies`
+
 ## External Dependencies
 
 - **Supabase**: Backend-as-a-Service for user authentication (signup, login, email verification, password reset), database services for user data, onboarding information, and real-time subscriptions for notifications and market data.

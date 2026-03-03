@@ -1,6 +1,7 @@
 import React, { useId, useMemo, useRef, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { ArrowLeft, ChevronRight, Search, SlidersHorizontal, Heart, X } from "lucide-react";
+import { saveOpenStrategiesFilters, loadOpenStrategiesFilters, buildChipsFromFilters } from "../lib/usePersistedFilters.js";
 import { StrategyReturnHeaderChart } from "../components/StrategyReturnHeaderChart";
 import { ChartContainer } from "../components/ui/line-charts-2";
 import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer } from "recharts";
@@ -111,20 +112,21 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
   const [strategiesLoading, setStrategiesLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedHolding, setSelectedHolding] = useState(null);
-  const [activeChips, setActiveChips] = useState([]);
+  const _savedFilters = useMemo(() => loadOpenStrategiesFilters(), []);
+  const [activeChips, setActiveChips] = useState(() => _savedFilters ? buildChipsFromFilters(_savedFilters) : []);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [selectedSort, setSelectedSort] = useState("Recommended");
-  const [selectedRisks, setSelectedRisks] = useState(new Set());
-  const [selectedMinInvestment, setSelectedMinInvestment] = useState(null);
-  const [selectedExposure, setSelectedExposure] = useState(new Set());
-  const [selectedTimeHorizon, setSelectedTimeHorizon] = useState(new Set());
-  const [selectedSectors, setSelectedSectors] = useState(new Set());
-  const [draftSort, setDraftSort] = useState("Recommended");
-  const [draftRisks, setDraftRisks] = useState(new Set());
-  const [draftMinInvestment, setDraftMinInvestment] = useState(null);
-  const [draftExposure, setDraftExposure] = useState(new Set());
-  const [draftTimeHorizon, setDraftTimeHorizon] = useState(new Set());
-  const [draftSectors, setDraftSectors] = useState(new Set());
+  const [selectedSort, setSelectedSort] = useState(_savedFilters?.sort || "Recommended");
+  const [selectedRisks, setSelectedRisks] = useState(_savedFilters?.risks || new Set());
+  const [selectedMinInvestment, setSelectedMinInvestment] = useState(_savedFilters?.minInvestment ?? null);
+  const [selectedExposure, setSelectedExposure] = useState(_savedFilters?.exposure || new Set());
+  const [selectedTimeHorizon, setSelectedTimeHorizon] = useState(_savedFilters?.timeHorizon || new Set());
+  const [selectedSectors, setSelectedSectors] = useState(_savedFilters?.sectors || new Set());
+  const [draftSort, setDraftSort] = useState(_savedFilters?.sort || "Recommended");
+  const [draftRisks, setDraftRisks] = useState(_savedFilters?.risks || new Set());
+  const [draftMinInvestment, setDraftMinInvestment] = useState(_savedFilters?.minInvestment ?? null);
+  const [draftExposure, setDraftExposure] = useState(_savedFilters?.exposure || new Set());
+  const [draftTimeHorizon, setDraftTimeHorizon] = useState(_savedFilters?.timeHorizon || new Set());
+  const [draftSectors, setDraftSectors] = useState(_savedFilters?.sectors || new Set());
   const [sheetOffset, setSheetOffset] = useState(0);
   const [selectedStrategy, setSelectedStrategy] = useState(null);
   const [selectedSectorFilter, setSelectedSectorFilter] = useState(null);
@@ -357,12 +359,16 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
   ]);
 
   const applyFilters = () => {
+    const newRisks = new Set(draftRisks);
+    const newExposure = new Set(draftExposure);
+    const newTimeHorizon = new Set(draftTimeHorizon);
+    const newSectors = new Set(draftSectors);
     setSelectedSort(draftSort);
-    setSelectedRisks(new Set(draftRisks));
+    setSelectedRisks(newRisks);
     setSelectedMinInvestment(draftMinInvestment);
-    setSelectedExposure(new Set(draftExposure));
-    setSelectedTimeHorizon(new Set(draftTimeHorizon));
-    setSelectedSectors(new Set(draftSectors));
+    setSelectedExposure(newExposure);
+    setSelectedTimeHorizon(newTimeHorizon);
+    setSelectedSectors(newSectors);
     const chips = [];
     if (draftRisks.size) {
       chips.push(...Array.from(draftRisks));
@@ -384,6 +390,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
     }
     setActiveChips(chips);
     setIsFilterOpen(false);
+    saveOpenStrategiesFilters({ sort: draftSort, risks: newRisks, minInvestment: draftMinInvestment, exposure: newExposure, timeHorizon: newTimeHorizon, sectors: newSectors });
   };
 
   const clearAllFilters = () => {
@@ -402,6 +409,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
     setSelectedHolding(null);
     setSearchQuery("");
     setActiveChips([]);
+    saveOpenStrategiesFilters({ sort: "Recommended", risks: new Set(), minInvestment: null, exposure: new Set(), timeHorizon: new Set(), sectors: new Set() });
   };
 
   const resetSheetPosition = () => {

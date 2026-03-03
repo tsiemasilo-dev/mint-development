@@ -5,6 +5,7 @@ import { getMarketsSecuritiesWithMetrics } from "../lib/marketData.js";
 import { getStrategiesWithMetrics, getPublicStrategies, formatChangePct, formatChangeAbs, getChangeColor } from "../lib/strategyData.js";
 import { useProfile } from "../lib/useProfile";
 import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Star } from "lucide-react";
+import { saveMarketsInvestFilters, loadMarketsInvestFilters, saveMarketsStrategyFilters, loadMarketsStrategyFilters, buildInvestChips, buildChipsFromFilters } from "../lib/usePersistedFilters.js";
 import NotificationBell from "../components/NotificationBell";
 import Skeleton from "../components/Skeleton";
 import { ChartContainer } from "../components/ui/line-charts-2";
@@ -145,28 +146,34 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const dragStartY = useRef(null);
   const isDragging = useRef(false);
   
-  // Filter states for Invest view
-  const [selectedSort, setSelectedSort] = useState("Market Cap");
-  const [selectedSectors, setSelectedSectors] = useState(new Set());
-  const [selectedExchanges, setSelectedExchanges] = useState(new Set());
-  const [draftSort, setDraftSort] = useState("Market Cap");
-  const [draftSectors, setDraftSectors] = useState(new Set());
-  const [draftExchanges, setDraftExchanges] = useState(new Set());
-  const [activeChips, setActiveChips] = useState([]);
+  // Filter states for Invest view (restored from localStorage)
+  const _savedInvest = useMemo(() => loadMarketsInvestFilters(), []);
+  const [selectedSort, setSelectedSort] = useState(_savedInvest?.sort || "Market Cap");
+  const [selectedSectors, setSelectedSectors] = useState(_savedInvest?.sectors || new Set());
+  const [selectedExchanges, setSelectedExchanges] = useState(_savedInvest?.exchanges || new Set());
+  const [draftSort, setDraftSort] = useState(_savedInvest?.sort || "Market Cap");
+  const [draftSectors, setDraftSectors] = useState(_savedInvest?.sectors || new Set());
+  const [draftExchanges, setDraftExchanges] = useState(_savedInvest?.exchanges || new Set());
   
-  // Filter states for OpenStrategies view
-  const [strategySort, setStrategySort] = useState("Recommended");
-  const [selectedRisks, setSelectedRisks] = useState(new Set());
-  const [selectedMinInvestment, setSelectedMinInvestment] = useState("Any");
-  const [selectedExposure, setSelectedExposure] = useState(new Set());
-  const [selectedTimeHorizon, setSelectedTimeHorizon] = useState(new Set());
-  const [selectedStrategySectors, setSelectedStrategySectors] = useState(new Set());
-  const [draftStrategySort, setDraftStrategySort] = useState("Recommended");
-  const [draftRisks, setDraftRisks] = useState(new Set());
-  const [draftMinInvestment, setDraftMinInvestment] = useState("Any");
-  const [draftExposure, setDraftExposure] = useState(new Set());
-  const [draftTimeHorizon, setDraftTimeHorizon] = useState(new Set());
-  const [draftStrategySectors, setDraftStrategySectors] = useState(new Set());
+  const _savedStrat = useMemo(() => loadMarketsStrategyFilters(), []);
+  const [strategySort, setStrategySort] = useState(_savedStrat?.sort || "Recommended");
+  const [selectedRisks, setSelectedRisks] = useState(_savedStrat?.risks || new Set());
+  const [selectedMinInvestment, setSelectedMinInvestment] = useState(_savedStrat?.minInvestment ?? null);
+  const [selectedExposure, setSelectedExposure] = useState(_savedStrat?.exposure || new Set());
+  const [selectedTimeHorizon, setSelectedTimeHorizon] = useState(_savedStrat?.timeHorizon || new Set());
+  const [selectedStrategySectors, setSelectedStrategySectors] = useState(_savedStrat?.sectors || new Set());
+  const [draftStrategySort, setDraftStrategySort] = useState(_savedStrat?.sort || "Recommended");
+  const [draftRisks, setDraftRisks] = useState(_savedStrat?.risks || new Set());
+  const [draftMinInvestment, setDraftMinInvestment] = useState(_savedStrat?.minInvestment ?? null);
+  const [draftExposure, setDraftExposure] = useState(_savedStrat?.exposure || new Set());
+  const [draftTimeHorizon, setDraftTimeHorizon] = useState(_savedStrat?.timeHorizon || new Set());
+  const [draftStrategySectors, setDraftStrategySectors] = useState(_savedStrat?.sectors || new Set());
+
+  const [activeChips, setActiveChips] = useState(() => {
+    if (viewMode === "openstrategies" && _savedStrat) return buildChipsFromFilters(_savedStrat);
+    if (viewMode === "invest" && _savedInvest) return buildInvestChips(_savedInvest);
+    return [];
+  });
 
   const [watchlist, setWatchlist] = useState([]);
 
@@ -775,15 +782,18 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   };
 
   const applyFilters = () => {
+    const newSectors = new Set(draftSectors);
+    const newExchanges = new Set(draftExchanges);
     setSelectedSort(draftSort);
-    setSelectedSectors(new Set(draftSectors));
-    setSelectedExchanges(new Set(draftExchanges));
+    setSelectedSectors(newSectors);
+    setSelectedExchanges(newExchanges);
     
     const chips = [];
     if (draftSectors.size) chips.push(...Array.from(draftSectors));
     if (draftExchanges.size) chips.push(...Array.from(draftExchanges));
     setActiveChips(chips);
     setIsFilterOpen(false);
+    saveMarketsInvestFilters({ sort: draftSort, sectors: newSectors, exchanges: newExchanges });
   };
 
   const clearAllFilters = () => {
@@ -794,28 +804,36 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
     setDraftSectors(new Set());
     setDraftExchanges(new Set());
     setActiveChips([]);
+    saveMarketsInvestFilters({ sort: "Market Cap", sectors: new Set(), exchanges: new Set() });
   };
 
   const removeChip = (chip) => {
+    let newSectors = selectedSectors;
+    let newExchanges = selectedExchanges;
     if (sectors.includes(chip)) {
-      const next = new Set(selectedSectors);
-      next.delete(chip);
-      setSelectedSectors(next);
+      newSectors = new Set(selectedSectors);
+      newSectors.delete(chip);
+      setSelectedSectors(newSectors);
     } else if (exchanges.includes(chip)) {
-      const next = new Set(selectedExchanges);
-      next.delete(chip);
-      setSelectedExchanges(next);
+      newExchanges = new Set(selectedExchanges);
+      newExchanges.delete(chip);
+      setSelectedExchanges(newExchanges);
     }
     setActiveChips((prev) => prev.filter((item) => item !== chip));
+    saveMarketsInvestFilters({ sort: selectedSort, sectors: newSectors, exchanges: newExchanges });
   };
 
   const applyStrategyFilters = () => {
+    const newRisks = new Set(draftRisks);
+    const newExposure = new Set(draftExposure);
+    const newTimeHorizon = new Set(draftTimeHorizon);
+    const newSectors = new Set(draftStrategySectors);
     setStrategySort(draftStrategySort);
-    setSelectedRisks(new Set(draftRisks));
+    setSelectedRisks(newRisks);
     setSelectedMinInvestment(draftMinInvestment);
-    setSelectedExposure(new Set(draftExposure));
-    setSelectedTimeHorizon(new Set(draftTimeHorizon));
-    setSelectedStrategySectors(new Set(draftStrategySectors));
+    setSelectedExposure(newExposure);
+    setSelectedTimeHorizon(newTimeHorizon);
+    setSelectedStrategySectors(newSectors);
     
     const chips = [];
     if (draftRisks.size) chips.push(...Array.from(draftRisks));
@@ -825,6 +843,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
     if (draftStrategySectors.size) chips.push(...Array.from(draftStrategySectors));
     setActiveChips(chips);
     setIsFilterOpen(false);
+    saveMarketsStrategyFilters({ sort: draftStrategySort, risks: newRisks, minInvestment: draftMinInvestment, exposure: newExposure, timeHorizon: newTimeHorizon, sectors: newSectors });
   };
 
   const clearAllStrategyFilters = () => {
@@ -841,6 +860,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
     setDraftTimeHorizon(new Set());
     setDraftStrategySectors(new Set());
     setActiveChips([]);
+    saveMarketsStrategyFilters({ sort: "Recommended", risks: new Set(), minInvestment: null, exposure: new Set(), timeHorizon: new Set(), sectors: new Set() });
   };
 
   if (profileLoading || loading) {
@@ -887,7 +907,10 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
           {/* Toggle between OpenStrategies, Invest, and News */}
           <div className="flex gap-2 rounded-2xl bg-white/10 p-1 backdrop-blur-sm">
             <button
-              onClick={() => setViewMode("openstrategies")}
+              onClick={() => {
+                setViewMode("openstrategies");
+                setActiveChips(buildChipsFromFilters({ risks: selectedRisks, exposure: selectedExposure, minInvestment: selectedMinInvestment, timeHorizon: selectedTimeHorizon, sectors: selectedStrategySectors }));
+              }}
               className={`flex-1 rounded-xl px-3 py-2 text-xs font-semibold transition-all ${
                 viewMode === "openstrategies"
                   ? "bg-white text-slate-900 shadow-md"
@@ -897,7 +920,10 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
               OpenStrategies
             </button>
             <button
-              onClick={() => setViewMode("invest")}
+              onClick={() => {
+                setViewMode("invest");
+                setActiveChips(buildInvestChips({ sectors: selectedSectors, exchanges: selectedExchanges }));
+              }}
               className={`flex-1 rounded-xl px-3 py-2 text-xs font-semibold transition-all ${
                 viewMode === "invest"
                   ? "bg-white text-slate-900 shadow-md"
@@ -907,7 +933,10 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
               Invest
             </button>
             <button
-              onClick={() => setViewMode("news")}
+              onClick={() => {
+                setViewMode("news");
+                setActiveChips([]);
+              }}
               className={`flex-1 rounded-xl px-3 py-2 text-xs font-semibold transition-all ${
                 viewMode === "news"
                   ? "bg-white text-slate-900 shadow-md"
