@@ -3398,7 +3398,10 @@ app.post("/api/migrate/onboarding-columns", async (req, res) => {
 ALTER TABLE user_onboarding ADD COLUMN IF NOT EXISTS risk_disclosure_agreed boolean DEFAULT false;
 ALTER TABLE user_onboarding ADD COLUMN IF NOT EXISTS source_of_funds text;
 ALTER TABLE user_onboarding ADD COLUMN IF NOT EXISTS source_of_funds_other text;
-ALTER TABLE user_onboarding ADD COLUMN IF NOT EXISTS expected_monthly_investment text;`;
+ALTER TABLE user_onboarding ADD COLUMN IF NOT EXISTS expected_monthly_investment text;
+ALTER TABLE user_onboarding ADD COLUMN IF NOT EXISTS bank_name text;
+ALTER TABLE user_onboarding ADD COLUMN IF NOT EXISTS bank_account_number text;
+ALTER TABLE user_onboarding ADD COLUMN IF NOT EXISTS bank_branch_code text;`;
 
       // Try via Supabase SQL API  
       const response = await globalThis.fetch(`${SUPABASE_URL}/rest/v1/rpc/exec_sql`, {
@@ -3777,6 +3780,9 @@ app.post("/api/onboarding/complete", async (req, res) => {
       expected_monthly_investment,
       agreed_terms,
       agreed_privacy,
+      bank_name,
+      bank_account_number,
+      bank_branch_code,
     } = req.body;
 
     const userId = user.id;
@@ -3809,12 +3815,26 @@ app.post("/api/onboarding/complete", async (req, res) => {
       if (latest?.id) onboardingId = latest.id;
     }
 
+    const bankDetails = (bank_name || bank_account_number || bank_branch_code) ? {
+      bank_name: bank_name || null,
+      bank_account_number: bank_account_number || null,
+      bank_branch_code: bank_branch_code || null,
+      savedAt: new Date().toISOString(),
+    } : null;
+
     const updatePayload = { kyc_status: "onboarding_complete" };
     const insertPayload = {
       user_id: userId,
       kyc_status: "onboarding_complete",
       employment_status: "not_provided",
     };
+
+    if (bank_name) updatePayload.bank_name = bank_name;
+    if (bank_account_number) updatePayload.bank_account_number = bank_account_number;
+    if (bank_branch_code) updatePayload.bank_branch_code = bank_branch_code;
+    if (bank_name) insertPayload.bank_name = bank_name;
+    if (bank_account_number) insertPayload.bank_account_number = bank_account_number;
+    if (bank_branch_code) insertPayload.bank_branch_code = bank_branch_code;
 
     let saved = false;
 
@@ -3844,6 +3864,29 @@ app.post("/api/onboarding/complete", async (req, res) => {
       }
       saved = true;
       if (inserted?.[0]?.id) onboardingId = inserted[0].id;
+    }
+
+    if (bankDetails && onboardingId) {
+      try {
+        const { data: current } = await db
+          .from("user_onboarding")
+          .select("sumsub_raw")
+          .eq("id", onboardingId)
+          .maybeSingle();
+
+        let rawData = {};
+        if (current?.sumsub_raw) {
+          rawData = typeof current.sumsub_raw === "string" ? JSON.parse(current.sumsub_raw) : current.sumsub_raw;
+        }
+        rawData.bank_details = bankDetails;
+
+        await db
+          .from("user_onboarding")
+          .update({ sumsub_raw: JSON.stringify(rawData) })
+          .eq("id", onboardingId);
+      } catch (rawErr) {
+        console.warn("[Onboarding] Failed to save bank details to sumsub_raw:", rawErr?.message);
+      }
     }
 
     console.log(`[Onboarding] Completed for user ${userId}, onboarding_id: ${onboardingId}`);

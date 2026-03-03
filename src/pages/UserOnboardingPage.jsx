@@ -56,6 +56,30 @@ const WalletIcon = (props) => (
   </svg>
 );
 
+const BankIcon = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" {...props}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6M4.5 9.75v10.5h15V9.75" />
+  </svg>
+);
+
+const southAfricanBanks = [
+  { value: "", label: "Select your bank", logo: null },
+  { value: "absa", label: "Absa Bank", logo: "https://logo.clearbit.com/absa.co.za" },
+  { value: "african_bank", label: "African Bank", logo: "https://logo.clearbit.com/africanbank.co.za" },
+  { value: "bidvest_bank", label: "Bidvest Bank", logo: "https://logo.clearbit.com/bidvestbank.co.za" },
+  { value: "capitec", label: "Capitec Bank", logo: "https://logo.clearbit.com/capitecbank.co.za" },
+  { value: "discovery_bank", label: "Discovery Bank", logo: "https://logo.clearbit.com/discovery.co.za" },
+  { value: "fnb", label: "First National Bank (FNB)", logo: "https://logo.clearbit.com/fnb.co.za" },
+  { value: "investec", label: "Investec", logo: "https://logo.clearbit.com/investec.com" },
+  { value: "nedbank", label: "Nedbank", logo: "https://logo.clearbit.com/nedbank.co.za" },
+  { value: "old_mutual", label: "Old Mutual", logo: "https://logo.clearbit.com/oldmutual.co.za" },
+  { value: "sasfin", label: "Sasfin Bank", logo: "https://logo.clearbit.com/sasfin.com" },
+  { value: "standard_bank", label: "Standard Bank", logo: "https://logo.clearbit.com/standardbank.co.za" },
+  { value: "tyme_bank", label: "TymeBank", logo: "https://logo.clearbit.com/tymebank.co.za" },
+  { value: "zero", label: "Bank Zero", logo: "https://logo.clearbit.com/bankzero.co.za" },
+  { value: "other", label: "Other", logo: null },
+];
+
 const employmentOptions = [
   { value: "", label: "Select your status" },
   { value: "employed", label: "Employed" },
@@ -119,6 +143,11 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const [expectedMonthlyInvestment, setExpectedMonthlyInvestment] = useState("");
   const [agreedSourceOfFunds, setAgreedSourceOfFunds] = useState(false);
   const [sofDropdownOpen, setSofDropdownOpen] = useState(false);
+  const [bankName, setBankName] = useState("");
+  const [bankAccountNumber, setBankAccountNumber] = useState("");
+  const [bankBranchCode, setBankBranchCode] = useState("");
+  const [bankDropdownOpen, setBankDropdownOpen] = useState(false);
+  const bankDropdownRef = useRef(null);
   const [kycAlreadyVerified, setKycAlreadyVerified] = useState(false);
   const [authStatus, setAuthStatus] = useState({
     isChecked: false,
@@ -135,6 +164,17 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const selectedSofOption = sourceOfFundsOptions.find(
     (option) => option.value === sourceOfFunds
   );
+
+  const selectedBankOption = southAfricanBanks.find(
+    (option) => option.value === bankName
+  );
+
+  const handleBankSelect = (value) => {
+    setBankName(value);
+    setBankDropdownOpen(false);
+  };
+
+  const bankDetailsReady = bankName && bankAccountNumber && bankBranchCode;
 
   const goToStep = (nextStep) => {
     setIsFading(true);
@@ -177,7 +217,9 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   };
 
   const handleBack = () => {
-    if (step === 6) {
+    if (step === 7) {
+      goToStep(6);
+    } else if (step === 6) {
       goToStep(5);
     } else if (step === 5) {
       goToStep(4);
@@ -284,6 +326,9 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
       }
       if (sofDropdownRef.current && !sofDropdownRef.current.contains(event.target)) {
         setSofDropdownOpen(false);
+      }
+      if (bankDropdownRef.current && !bankDropdownRef.current.contains(event.target)) {
+        setBankDropdownOpen(false);
       }
     };
 
@@ -422,6 +467,9 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
           expected_monthly_investment: expectedMonthlyInvestment || null,
           agreed_terms: agreedTerms || false,
           agreed_privacy: agreedPrivacy || false,
+          bank_name: bankName || null,
+          bank_account_number: bankAccountNumber || null,
+          bank_branch_code: bankBranchCode || null,
         };
 
         const res = await fetch("/api/onboarding/complete", {
@@ -480,7 +528,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   return (
     <div
       className={`onboarding-process ${isFading ? "fade-out" : "fade-in"} ${
-        isDropdownOpen || sofDropdownOpen ? "dropdown-open" : ""
+        isDropdownOpen || sofDropdownOpen || bankDropdownOpen ? "dropdown-open" : ""
       }`}
     >
       <div className="min-h-screen flex items-center justify-center px-4 py-8 relative">
@@ -537,6 +585,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <div className="step-circle">4</div>
                 <div className="step-line"></div>
                 <div className="step-circle">5</div>
+                <div className="step-line"></div>
+                <div className="step-circle">6</div>
               </div>
 
               <div className="step-info animate-fade-in delay-3">
@@ -594,6 +644,16 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <div className="step-item">
                   <div className="step-number">5</div>
                   <div className="step-content">
+                    <div className="step-title">Bank Account</div>
+                    <div className="step-description">
+                      Add your bank account details
+                    </div>
+                  </div>
+                </div>
+
+                <div className="step-item">
+                  <div className="step-number">6</div>
+                  <div className="step-content">
                     <div className="step-title">Agreements</div>
                     <div className="step-description">
                       Review and accept terms and conditions
@@ -614,7 +674,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
               <div className="text-center mt-6 animate-fade-in delay-4">
                 <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  You'll be taken through our five-step process
+                  You'll be taken through our six-step process
                 </p>
               </div>
             </div>
@@ -625,7 +685,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   className="text-xs uppercase tracking-[0.2em] mb-2"
                   style={{ color: "hsl(270 20% 55%)" }}
                 >
-                  Step 1 of 5
+                  Step 1 of 6
                 </p>
                 <h2
                   className="text-3xl font-light tracking-tight mb-2"
@@ -850,7 +910,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   className="text-xs uppercase tracking-[0.2em] mb-2"
                   style={{ color: "hsl(270 20% 55%)" }}
                 >
-                  Step 1 of 5
+                  Step 1 of 6
                 </p>
                 <h2
                   className="text-3xl font-light tracking-tight mb-2"
@@ -925,6 +985,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <div className="progress-step"></div>
                 <div className="progress-step"></div>
                 <div className="progress-step"></div>
+                <div className="progress-step"></div>
               </div>
 
               <div className="animate-fade-in delay-2" style={{
@@ -979,7 +1040,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
               <div className="text-center mt-6 animate-fade-in delay-4">
                 <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  Step 2 of 5
+                  Step 2 of 6
                 </p>
               </div>
             </div>
@@ -1004,6 +1065,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
+                <div className="progress-step"></div>
                 <div className="progress-step"></div>
                 <div className="progress-step"></div>
               </div>
@@ -1073,7 +1135,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
               <div className="text-center mt-6 animate-fade-in delay-4">
                 <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  Step 3 of 5
+                  Step 3 of 6
                 </p>
               </div>
             </div>
@@ -1099,6 +1161,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
+                <div className="progress-step"></div>
                 <div className="progress-step"></div>
               </div>
 
@@ -1211,13 +1274,150 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                     disabled={!sofReady}
                     onClick={() => goToStep(6)}
                   >
+                    Continue to Bank Details
+                  </button>
+                </div>
+
+                <div className="text-center mt-6 animate-fade-in delay-4 hide-when-dropdown-open">
+                  <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
+                    Step 4 of 6
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : step === 6 ? (
+            <div className="w-full max-w-3xl mx-auto">
+              <div className="text-center animate-fade-in delay-1">
+                <div className="hero-icon">
+                  <BankIcon width={48} height={48} />
+                </div>
+                <h2
+                  className="text-3xl font-light tracking-tight mb-2"
+                  style={{ color: "hsl(270 30% 25%)" }}
+                >
+                  Bank Account Details
+                </h2>
+                <p className="text-sm mb-6" style={{ color: "hsl(270 20% 50%)" }}>
+                  Add the bank account you'll use with <span className="mint-brand">MINT</span>
+                </p>
+              </div>
+
+              <div className="progress-bar animate-fade-in delay-1">
+                <div className="progress-step active"></div>
+                <div className="progress-step active"></div>
+                <div className="progress-step active"></div>
+                <div className="progress-step active"></div>
+                <div className="progress-step active"></div>
+                <div className="progress-step"></div>
+              </div>
+
+              <div className="space-y-5">
+                <div className="animate-fade-in delay-2">
+                  <label htmlFor="bank-name">Bank Name</label>
+                  <div className="custom-select" ref={bankDropdownRef}>
+                    <div
+                      className={`glass-field select-trigger ${bankDropdownOpen ? "active" : ""}`}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setBankDropdownOpen((prev) => !prev)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setBankDropdownOpen((prev) => !prev);
+                        }
+                      }}
+                    >
+                      <div className="selected-value" data-placeholder="Select your bank">
+                        {bankName ? (
+                          <span style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                            {selectedBankOption?.logo && (
+                              <img
+                                src={selectedBankOption.logo}
+                                alt=""
+                                style={{ width: 20, height: 20, borderRadius: 4, objectFit: "contain" }}
+                                onError={(e) => { e.target.style.display = "none"; }}
+                              />
+                            )}
+                            {selectedBankOption?.label}
+                          </span>
+                        ) : ""}
+                      </div>
+                    </div>
+                    <div className={`custom-dropdown ${bankDropdownOpen ? "active" : ""}`}>
+                      {southAfricanBanks.map((option) => (
+                        <div
+                          key={option.value || "placeholder"}
+                          className={`custom-option ${bankName === option.value ? "selected" : ""}`}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => handleBankSelect(option.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              handleBankSelect(option.value);
+                            }
+                          }}
+                        >
+                          <span style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                            {option.logo && (
+                              <img
+                                src={option.logo}
+                                alt=""
+                                style={{ width: 20, height: 20, borderRadius: 4, objectFit: "contain" }}
+                                onError={(e) => { e.target.style.display = "none"; }}
+                              />
+                            )}
+                            {option.label}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <input type="hidden" id="bank-name" name="bank-name" value={bankName} />
+                  </div>
+                </div>
+
+                <div className="animate-fade-in delay-3 hide-when-dropdown-open">
+                  <label htmlFor="bank-account-number">Account Number</label>
+                  <div className="glass-field">
+                    <input
+                      type="text"
+                      id="bank-account-number"
+                      placeholder="Enter your account number"
+                      value={bankAccountNumber}
+                      onChange={(event) => setBankAccountNumber(event.target.value.replace(/\D/g, ""))}
+                      inputMode="numeric"
+                    />
+                  </div>
+                </div>
+
+                <div className="animate-fade-in delay-3 hide-when-dropdown-open">
+                  <label htmlFor="bank-branch-code">Branch Code</label>
+                  <div className="glass-field">
+                    <input
+                      type="text"
+                      id="bank-branch-code"
+                      placeholder="Enter your branch code"
+                      value={bankBranchCode}
+                      onChange={(event) => setBankBranchCode(event.target.value.replace(/\D/g, ""))}
+                      inputMode="numeric"
+                    />
+                  </div>
+                </div>
+
+                <div className="text-center mt-8 animate-fade-in delay-4 hide-when-dropdown-open">
+                  <button
+                    type="button"
+                    className={`continue-button agreement-continue ${bankDetailsReady ? "enabled" : ""}`}
+                    disabled={!bankDetailsReady}
+                    onClick={() => goToStep(7)}
+                  >
                     Continue to Agreements
                   </button>
                 </div>
 
                 <div className="text-center mt-6 animate-fade-in delay-4 hide-when-dropdown-open">
                   <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                    Step 4 of 5
+                    Step 5 of 6
                   </p>
                 </div>
               </div>
@@ -1240,6 +1440,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               </div>
 
               <div className="progress-bar animate-fade-in delay-1">
+                <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
@@ -1337,7 +1538,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
               <div className="text-center mt-6 animate-fade-in delay-4">
                 <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  Step 5 of 5 - Final step to complete your onboarding
+                  Step 6 of 6 - Final step to complete your onboarding
                 </p>
               </div>
             </div>

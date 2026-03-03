@@ -14,7 +14,7 @@ export default async function handler(req, res) {
     const { data: { user }, error: authErr } = await db.auth.getUser(token);
     if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
 
-    const { existing_onboarding_id } = req.body;
+    const { existing_onboarding_id, bank_name, bank_account_number, bank_branch_code } = req.body;
     const userId = user.id;
 
     try {
@@ -45,12 +45,26 @@ export default async function handler(req, res) {
       if (latest?.id) onboardingId = latest.id;
     }
 
+    const bankDetails = (bank_name || bank_account_number || bank_branch_code) ? {
+      bank_name: bank_name || null,
+      bank_account_number: bank_account_number || null,
+      bank_branch_code: bank_branch_code || null,
+      savedAt: new Date().toISOString(),
+    } : null;
+
     const updatePayload = { kyc_status: "onboarding_complete" };
     const insertPayload = {
       user_id: userId,
       kyc_status: "onboarding_complete",
       employment_status: "not_provided",
     };
+
+    if (bank_name) updatePayload.bank_name = bank_name;
+    if (bank_account_number) updatePayload.bank_account_number = bank_account_number;
+    if (bank_branch_code) updatePayload.bank_branch_code = bank_branch_code;
+    if (bank_name) insertPayload.bank_name = bank_name;
+    if (bank_account_number) insertPayload.bank_account_number = bank_account_number;
+    if (bank_branch_code) insertPayload.bank_branch_code = bank_branch_code;
 
     let saved = false;
 
@@ -80,6 +94,29 @@ export default async function handler(req, res) {
       }
       saved = true;
       if (inserted?.[0]?.id) onboardingId = inserted[0].id;
+    }
+
+    if (bankDetails && onboardingId) {
+      try {
+        const { data: current } = await db
+          .from("user_onboarding")
+          .select("sumsub_raw")
+          .eq("id", onboardingId)
+          .maybeSingle();
+
+        let rawData = {};
+        if (current?.sumsub_raw) {
+          rawData = typeof current.sumsub_raw === "string" ? JSON.parse(current.sumsub_raw) : current.sumsub_raw;
+        }
+        rawData.bank_details = bankDetails;
+
+        await db
+          .from("user_onboarding")
+          .update({ sumsub_raw: JSON.stringify(rawData) })
+          .eq("id", onboardingId);
+      } catch (rawErr) {
+        console.warn("[Onboarding] Failed to save bank details to sumsub_raw:", rawErr?.message);
+      }
     }
 
     console.log(`[Onboarding] Completed for user ${userId}, onboarding_id: ${onboardingId}`);

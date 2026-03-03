@@ -29,7 +29,7 @@ Mint Auth is a React authentication application built with Vite, Tailwind CSS, a
     - **Forgot Password**: Standard email-based password reset with strength validation for new passwords.
 - **Biometric Authentication**: Integration with `capacitor-face-id` for native iOS/Android biometrics (Face ID/Touch ID) for secure login alternatives, configurable via settings.
 - **PIN Lock Screen**: A 5-digit PIN setup and lock screen with SHA-256 hashing for enhanced session security.
-- **User Onboarding**: A multi-step identification process including employment details, Sumsub KYC verification, risk & disclosure acknowledgment, source of funds declaration, and T&C agreements.
+- **User Onboarding**: A 6-step identification process including employment details, Sumsub KYC verification, discretionary mandate, risk disclosure, source of funds declaration, bank account details collection, and T&C agreements. Bank details (name, account number, branch code) are saved to both dedicated `user_onboarding` columns and the `sumsub_raw` JSON field.
 - **Notification System**: Centralized real-time notifications via Supabase subscriptions, grouped by date, with swipe-to-delete, "mark all as read" functionality, and user-configurable notification type preferences.
 - **Settlement Status Tracking**: Real-time detection of CSDP and broker integration via environment variables, with a settlement lifecycle (pending_csdp → pending_broker → confirmed) and status badges on holdings.
 
