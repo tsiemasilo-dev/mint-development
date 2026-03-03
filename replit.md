@@ -42,10 +42,11 @@ Mint Auth is a React authentication application built with Vite, Tailwind CSS, a
 
 ### MINT MORNINGS Scheduled Email
 - **File**: `server/mintMorningsCron.cjs` — scheduled daily newsletter sender
-- **Detection**: Polls `News_articles` table every 30 seconds for new ALLBRF articles (by `doc_id` unique identifier). New articles are queued in memory, not sent immediately.
-- **Scheduled Send**: At 07:00 SAST (05:00 UTC) each morning, all queued ALLBRF articles are sent to all confirmed users. A `lastSendDate` guard prevents duplicate sends on the same day.
+- **Detection**: Polls `News_articles` table every 30 seconds for new ALLBRF articles (by `doc_id` unique identifier).
+- **Scheduled Send**: At 07:00 SAST (05:00 UTC) each morning, queries the database for today's ALLBRF articles and sends to all confirmed users. A `lastSendDate` guard prevents duplicate sends on the same day.
+- **Catch-up**: If the server starts after 07:00 SAST, it immediately checks for unsent articles from today and sends them. This handles the Replit dev environment sleeping overnight.
 - **ALLBRF Articles**: Typically arrive in the database around 04:55 UTC (06:55 SAST), giving ~5 minutes before the scheduled send.
-- **Recipients**: All confirmed users (email_confirmed_at set) from Supabase auth
+- **Recipients**: All confirmed users (email_confirmed_at set) from Supabase auth (uses `listUsers` with pagination)
 - **Email Service**: Resend (API key stored as RESEND_API_KEY secret, plain env var — no Replit connector)
 - **Sender**: `MINT MORNINGS <mornings@mymint.co.za>`
 - **Template**: HTML5 email with responsive media queries, parsed article sections (MARKETS, COMPANY CALENDAR, ECONOMIC CALENDAR, news sections) into separate styled cards matching the Mint design system.

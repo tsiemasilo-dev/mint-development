@@ -14,6 +14,7 @@ const pendingArticles = [];
 const SEND_HOUR_UTC = 5;
 const SEND_MINUTE_UTC = 0;
 let lastSendDate = null;
+let startupCatchUpDone = false;
 
 function parseArticleSections(bodyText) {
   if (!bodyText) return { intro: '', sections: [] };
@@ -604,33 +605,64 @@ async function pollForNewArticles(supabaseAdmin) {
   }
 }
 
-function getTodayDateStr() {
+function getSASTDateStr() {
   const now = new Date();
-  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}`;
+  const sast = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+  return `${sast.getUTCFullYear()}-${String(sast.getUTCMonth() + 1).padStart(2, '0')}-${String(sast.getUTCDate()).padStart(2, '0')}`;
+}
+
+async function fetchTodaysArticles(supabaseAdmin) {
+  const now = new Date();
+  const sastNow = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+  const todayStart = new Date(Date.UTC(sastNow.getUTCFullYear(), sastNow.getUTCMonth(), sastNow.getUTCDate()));
+  const startUTC = new Date(todayStart.getTime() - 2 * 60 * 60 * 1000).toISOString();
+
+  const { data: articles, error } = await supabaseAdmin
+    .from('News_articles')
+    .select('*')
+    .filter('content_types', 'cs', '"ALLBRF"')
+    .gte('published_at', startUTC)
+    .order('published_at', { ascending: false })
+    .limit(5);
+
+  if (error) {
+    console.error('[MINT MORNINGS] Error fetching today\'s articles:', error.message);
+    return [];
+  }
+  return articles || [];
 }
 
 async function checkScheduledSend(supabaseAdmin) {
   const now = new Date();
   const currentHour = now.getUTCHours();
   const currentMinute = now.getUTCMinutes();
-  const todayStr = getTodayDateStr();
+  const todayStr = getSASTDateStr();
 
-  if (currentHour === SEND_HOUR_UTC && currentMinute >= SEND_MINUTE_UTC && currentMinute < SEND_MINUTE_UTC + 2 && lastSendDate !== todayStr) {
-    lastSendDate = todayStr;
+  const isScheduledTime = currentHour === SEND_HOUR_UTC && currentMinute >= SEND_MINUTE_UTC && currentMinute < SEND_MINUTE_UTC + 2;
+  const isCatchUp = !startupCatchUpDone && currentHour >= SEND_HOUR_UTC;
 
-    if (pendingArticles.length === 0) {
-      console.log(`[MINT MORNINGS] 07:00 SAST — no pending ALLBRF articles to send`);
+  if ((isScheduledTime || isCatchUp) && lastSendDate !== todayStr) {
+    if (isCatchUp) {
+      startupCatchUpDone = true;
+      console.log(`[MINT MORNINGS] Server started after 07:00 SAST — checking for unsent articles...`);
+    }
+
+    const articles = await fetchTodaysArticles(supabaseAdmin);
+
+    if (articles.length === 0) {
+      console.log(`[MINT MORNINGS] ${isScheduledTime ? '07:00 SAST' : 'Catch-up'} — no ALLBRF articles found for today`);
+      if (isScheduledTime) lastSendDate = todayStr;
       return;
     }
 
-    console.log(`[MINT MORNINGS] 07:00 SAST — sending ${pendingArticles.length} queued ALLBRF article(s)...`);
-    const articlesToSend = pendingArticles.splice(0, pendingArticles.length);
+    lastSendDate = todayStr;
+    console.log(`[MINT MORNINGS] ${isScheduledTime ? '07:00 SAST' : 'Catch-up'} — sending ${articles.length} ALLBRF article(s)...`);
 
-    for (const article of articlesToSend) {
+    for (const article of articles) {
       await sendEmailToAllUsers(supabaseAdmin, article);
     }
 
-    console.log(`[MINT MORNINGS] 07:00 SAST send complete`);
+    console.log(`[MINT MORNINGS] ${isScheduledTime ? '07:00 SAST' : 'Catch-up'} send complete`);
   }
 }
 
@@ -655,7 +687,11 @@ function startMintMorningsListener(supabaseAdmin) {
     checkScheduledSend(supabaseAdmin);
   }, 60000);
 
-  console.log(`[MINT MORNINGS] Listener started — polling every 30s, scheduled send at 07:00 SAST (05:00 UTC)`);
+  setTimeout(() => {
+    checkScheduledSend(supabaseAdmin);
+  }, 5000);
+
+  console.log(`[MINT MORNINGS] Listener started — polling every 30s, scheduled send at 07:00 SAST (05:00 UTC), catch-up enabled`);
   return pollingInterval;
 }
 
