@@ -42,17 +42,17 @@ Mint Auth is a React authentication application built with Vite, Tailwind CSS, a
 
 ### MINT MORNINGS Scheduled Email
 - **File**: `server/mintMorningsCron.cjs` — scheduled daily newsletter sender
-- **Detection**: Polls `News_articles` table every 30 seconds for new ALLBRF articles (by `doc_id` unique identifier).
-- **Scheduled Send**: At 07:00 SAST (05:00 UTC) each morning, queries the database for today's ALLBRF articles and sends to all confirmed users. A `lastSendDate` guard prevents duplicate sends on the same day.
-- **Catch-up**: If the server starts after 07:00 SAST, it immediately checks for unsent articles from today and sends them. This handles the Replit dev environment sleeping overnight.
+- **Vercel Cron**: `api/mint-mornings.js` — serverless function triggered by Vercel Cron at `0 5 * * *` (05:00 UTC / 07:00 SAST daily). Configured in `vercel.json`.
+- **How it works**: On each cron trigger, queries the database for today's ALLBRF articles (published since midnight SAST) and sends them to all confirmed users. No in-memory state needed — fully stateless/serverless.
+- **Replit fallback**: `server/mintMorningsCron.cjs` — in-process polling + scheduled send with catch-up logic for development. Works independently of the Vercel cron.
 - **ALLBRF Articles**: Typically arrive in the database around 04:55 UTC (06:55 SAST), giving ~5 minutes before the scheduled send.
-- **Recipients**: All confirmed users (email_confirmed_at set) from Supabase auth (uses `listUsers` with pagination)
-- **Email Service**: Resend (API key stored as RESEND_API_KEY secret, plain env var — no Replit connector)
+- **Recipients**: All confirmed users (email_confirmed_at set) from Supabase auth (uses `listUsers`)
+- **Email Service**: Resend (API key stored as RESEND_API_KEY env var)
 - **Sender**: `MINT MORNINGS <mornings@mymint.co.za>`
 - **Template**: HTML5 email with responsive media queries, parsed article sections (MARKETS, COMPANY CALENDAR, ECONOMIC CALENDAR, news sections) into separate styled cards matching the Mint design system.
 - **Batching**: Sends to users in batches of 50 with 1-second delay between batches
+- **Security**: Vercel cron endpoint supports optional `CRON_SECRET` env var for authentication (Vercel sends this automatically)
 - **Test Endpoints**: `POST /api/test-mint-mornings-single` (send to specific email), `POST /api/test-mint-mornings` (admin-only, requires Bearer token + admin role)
-- **Note**: `lastSendDate` is in-memory only; a server restart during the 05:00–05:02 UTC window could trigger a resend on the same day.
 
 ## External Dependencies
 
