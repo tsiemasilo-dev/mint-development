@@ -988,115 +988,160 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <div className="progress-step"></div>
               </div>
 
-              <div className="space-y-5">
-                <div className="animate-fade-in delay-2">
-                  <label htmlFor="bank-name">Bank Name</label>
-                  <div className="custom-select" ref={bankDropdownRef}>
-                    <div
-                      className={`glass-field select-trigger ${bankDropdownOpen ? "active" : ""}`}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setBankDropdownOpen((prev) => !prev)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          setBankDropdownOpen((prev) => !prev);
-                        }
-                      }}
-                    >
-                      <div className="selected-value" data-placeholder="Select your bank">
-                        {bankName ? (
-                          <span style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                            {selectedBankOption?.logo && (
-                              <img
-                                src={selectedBankOption.logo}
-                                alt=""
-                                style={{ width: 20, height: 20, borderRadius: 4, objectFit: "contain" }}
-                                onError={(e) => { e.target.style.display = "none"; }}
-                              />
-                            )}
-                            {selectedBankOption?.label}
-                          </span>
-                        ) : ""}
+              <div className="bank-details-card animate-fade-in delay-2">
+                <div className="bank-card-header">
+                  <div className="bank-card-header-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="20" height="20">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 0 0 3 15h-.75M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm3 0h.008v.008H18V10.5Zm-12 0h.008v.008H6V10.5Z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="bank-card-header-title">Banking Information</div>
+                    <div className="bank-card-header-subtitle">We need your bank details for deposits and withdrawals</div>
+                  </div>
+                </div>
+
+                <div className="bank-fields-container">
+                  <div className="bank-field-group">
+                    <label htmlFor="bank-name">
+                      <span className="bank-field-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="16" height="16">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0 0 12 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75Z" />
+                        </svg>
+                      </span>
+                      Bank Name
+                    </label>
+                    <div className="custom-select" ref={bankDropdownRef}>
+                      <div
+                        className={`glass-field select-trigger ${bankDropdownOpen ? "active" : ""}`}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setBankDropdownOpen((prev) => !prev)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            setBankDropdownOpen((prev) => !prev);
+                          }
+                        }}
+                      >
+                        <div className="selected-value" data-placeholder="Select your bank">
+                          {bankName ? (
+                            <span style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                              {selectedBankOption?.logo && (
+                                <img
+                                  src={selectedBankOption.logo}
+                                  alt=""
+                                  style={{ width: 22, height: 22, borderRadius: 6, objectFit: "contain", background: "white", padding: 2 }}
+                                  onError={(e) => { e.target.style.display = "none"; }}
+                                />
+                              )}
+                              {selectedBankOption?.label}
+                            </span>
+                          ) : ""}
+                        </div>
+                      </div>
+                      <div className={`custom-dropdown ${bankDropdownOpen ? "active" : ""}`}>
+                        {southAfricanBanks.map((option) => (
+                          <div
+                            key={option.value || "placeholder"}
+                            className={`custom-option ${bankName === option.value ? "selected" : ""}`}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => handleBankSelect(option.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                handleBankSelect(option.value);
+                              }
+                            }}
+                          >
+                            <span style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                              {option.logo && (
+                                <img
+                                  src={option.logo}
+                                  alt=""
+                                  style={{ width: 22, height: 22, borderRadius: 6, objectFit: "contain", background: "white", padding: 2 }}
+                                  onError={(e) => { e.target.style.display = "none"; }}
+                                />
+                              )}
+                              {option.label}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      <input type="hidden" id="bank-name" name="bank-name" value={bankName} />
+                    </div>
+                  </div>
+
+                  <div className="bank-field-row hide-when-dropdown-open">
+                    <div className="bank-field-group animate-fade-in delay-3">
+                      <label htmlFor="bank-account-number">
+                        <span className="bank-field-icon">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="16" height="16">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 8.25h15m-16.5 7.5h15m-1.8-13.5-3.9 19.5m-2.1-19.5-3.9 19.5" />
+                          </svg>
+                        </span>
+                        Account Number
+                      </label>
+                      <div className="glass-field">
+                        <input
+                          type="text"
+                          id="bank-account-number"
+                          placeholder="e.g. 1234567890"
+                          value={bankAccountNumber}
+                          onChange={(event) => setBankAccountNumber(event.target.value.replace(/\D/g, ""))}
+                          inputMode="numeric"
+                        />
                       </div>
                     </div>
-                    <div className={`custom-dropdown ${bankDropdownOpen ? "active" : ""}`}>
-                      {southAfricanBanks.map((option) => (
-                        <div
-                          key={option.value || "placeholder"}
-                          className={`custom-option ${bankName === option.value ? "selected" : ""}`}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => handleBankSelect(option.value)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter" || event.key === " ") {
-                              event.preventDefault();
-                              handleBankSelect(option.value);
-                            }
-                          }}
-                        >
-                          <span style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                            {option.logo && (
-                              <img
-                                src={option.logo}
-                                alt=""
-                                style={{ width: 20, height: 20, borderRadius: 4, objectFit: "contain" }}
-                                onError={(e) => { e.target.style.display = "none"; }}
-                              />
-                            )}
-                            {option.label}
-                          </span>
-                        </div>
-                      ))}
+
+                    <div className="bank-field-group animate-fade-in delay-3">
+                      <label htmlFor="bank-branch-code">
+                        <span className="bank-field-icon">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="16" height="16">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                          </svg>
+                        </span>
+                        Branch Code
+                      </label>
+                      <div className="glass-field">
+                        <input
+                          type="text"
+                          id="bank-branch-code"
+                          placeholder="e.g. 250655"
+                          value={bankBranchCode}
+                          onChange={(event) => setBankBranchCode(event.target.value.replace(/\D/g, ""))}
+                          inputMode="numeric"
+                        />
+                      </div>
                     </div>
-                    <input type="hidden" id="bank-name" name="bank-name" value={bankName} />
                   </div>
                 </div>
+              </div>
 
-                <div className="animate-fade-in delay-3 hide-when-dropdown-open">
-                  <label htmlFor="bank-account-number">Account Number</label>
-                  <div className="glass-field">
-                    <input
-                      type="text"
-                      id="bank-account-number"
-                      placeholder="Enter your account number"
-                      value={bankAccountNumber}
-                      onChange={(event) => setBankAccountNumber(event.target.value.replace(/\D/g, ""))}
-                      inputMode="numeric"
-                    />
-                  </div>
-                </div>
+              <div className="bank-security-notice animate-fade-in delay-3 hide-when-dropdown-open">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="16" height="16" className="bank-security-icon">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
+                </svg>
+                <span>Your banking details are encrypted and stored securely. They will only be used for transactions you authorise.</span>
+              </div>
 
-                <div className="animate-fade-in delay-3 hide-when-dropdown-open">
-                  <label htmlFor="bank-branch-code">Branch Code</label>
-                  <div className="glass-field">
-                    <input
-                      type="text"
-                      id="bank-branch-code"
-                      placeholder="Enter your branch code"
-                      value={bankBranchCode}
-                      onChange={(event) => setBankBranchCode(event.target.value.replace(/\D/g, ""))}
-                      inputMode="numeric"
-                    />
-                  </div>
-                </div>
+              <div className="text-center mt-8 animate-fade-in delay-4 hide-when-dropdown-open">
+                <button
+                  type="button"
+                  className={`continue-button agreement-continue ${bankDetailsReady ? "enabled" : ""}`}
+                  disabled={!bankDetailsReady}
+                  onClick={() => goToStep(4)}
+                >
+                  Continue to Mandate
+                </button>
+              </div>
 
-                <div className="text-center mt-8 animate-fade-in delay-4 hide-when-dropdown-open">
-                  <button
-                    type="button"
-                    className={`continue-button agreement-continue ${bankDetailsReady ? "enabled" : ""}`}
-                    disabled={!bankDetailsReady}
-                    onClick={() => goToStep(4)}
-                  >
-                    Continue to Mandate
-                  </button>
-                </div>
-
-                <div className="text-center mt-6 animate-fade-in delay-4 hide-when-dropdown-open">
-                  <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                    Step 2 of 6
-                  </p>
-                </div>
+              <div className="text-center mt-6 animate-fade-in delay-4 hide-when-dropdown-open">
+                <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
+                  Step 2 of 6
+                </p>
               </div>
             </div>
           ) : step === 4 ? (

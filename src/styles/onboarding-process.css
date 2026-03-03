@@ -767,3 +767,113 @@
 .onboarding-process .back-button:active {
   transform: translateX(0) scale(0.95);
 }
+
+.onboarding-process .bank-details-card {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.6) 0%, rgba(233, 213, 255, 0.15) 100%);
+  border: 1px solid rgba(168, 85, 247, 0.15);
+  box-shadow: 0 4px 24px rgba(139, 92, 246, 0.06),
+    0 1px 3px rgba(139, 92, 246, 0.04);
+  border-radius: 20px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.onboarding-process .bank-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 1.25rem 1.5rem;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.08) 0%, rgba(168, 85, 247, 0.04) 100%);
+  border-bottom: 1px solid rgba(168, 85, 247, 0.1);
+}
+
+.onboarding-process .bank-card-header-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(168, 85, 247, 0.1) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: hsl(270 55% 50%);
+  flex-shrink: 0;
+}
+
+.onboarding-process .bank-card-header-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: hsl(270 35% 28%);
+  margin-bottom: 0.125rem;
+}
+
+.onboarding-process .bank-card-header-subtitle {
+  font-size: 0.78rem;
+  color: hsl(270 20% 50%);
+}
+
+.onboarding-process .bank-fields-container {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.onboarding-process .bank-field-group {
+  flex: 1;
+}
+
+.onboarding-process .bank-field-group label {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: hsl(270 30% 40%);
+  letter-spacing: 0.02em;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+}
+
+.onboarding-process .bank-field-icon {
+  display: inline-flex;
+  align-items: center;
+  color: hsl(270 50% 55%);
+}
+
+.onboarding-process .bank-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 640px) {
+  .onboarding-process .bank-field-row {
+    grid-template-columns: 1fr;
+  }
+  .onboarding-process .bank-card-header {
+    padding: 1rem 1.25rem;
+  }
+  .onboarding-process .bank-fields-container {
+    padding: 1.25rem;
+  }
+}
+
+.onboarding-process .bank-security-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  margin-top: 1rem;
+  padding: 0.875rem 1.125rem;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.06) 0%, rgba(5, 150, 105, 0.03) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.15);
+  border-radius: 12px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: hsl(152 40% 35%);
+}
+
+.onboarding-process .bank-security-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: hsl(152 55% 40%);
+}
