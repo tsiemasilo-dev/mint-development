@@ -614,6 +614,16 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <div className="step-item">
                   <div className="step-number">2</div>
                   <div className="step-content">
+                    <div className="step-title">Bank Account</div>
+                    <div className="step-description">
+                      Add your bank account details
+                    </div>
+                  </div>
+                </div>
+
+                <div className="step-item">
+                  <div className="step-number">3</div>
+                  <div className="step-content">
                     <div className="step-title">Discretionary Mandate</div>
                     <div className="step-description">
                       Review and accept the FSP investment mandate
@@ -622,7 +632,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 </div>
 
                 <div className="step-item">
-                  <div className="step-number">3</div>
+                  <div className="step-number">4</div>
                   <div className="step-content">
                     <div className="step-title">Risk Disclosure</div>
                     <div className="step-description">
@@ -632,21 +642,11 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 </div>
 
                 <div className="step-item">
-                  <div className="step-number">4</div>
+                  <div className="step-number">5</div>
                   <div className="step-content">
                     <div className="step-title">Source of Funds</div>
                     <div className="step-description">
                       Declare the origin of your investment funds
-                    </div>
-                  </div>
-                </div>
-
-                <div className="step-item">
-                  <div className="step-number">5</div>
-                  <div className="step-content">
-                    <div className="step-title">Bank Account</div>
-                    <div className="step-description">
-                      Add your bank account details
                     </div>
                   </div>
                 </div>
@@ -957,12 +957,149 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                     className="continue-button proceed-button"
                     onClick={() => goToStep(3)}
                   >
-                    Continue to Mandate
+                    Continue to Bank Details
                   </button>
                 </div>
               )}
             </div>
           ) : step === 3 ? (
+            <div className="w-full max-w-3xl mx-auto">
+              <div className="text-center animate-fade-in delay-1">
+                <div className="hero-icon">
+                  <BankIcon width={48} height={48} />
+                </div>
+                <h2
+                  className="text-3xl font-light tracking-tight mb-2"
+                  style={{ color: "hsl(270 30% 25%)" }}
+                >
+                  Bank Account Details
+                </h2>
+                <p className="text-sm mb-6" style={{ color: "hsl(270 20% 50%)" }}>
+                  Add the bank account you'll use with <span className="mint-brand">MINT</span>
+                </p>
+              </div>
+
+              <div className="progress-bar animate-fade-in delay-1">
+                <div className="progress-step active"></div>
+                <div className="progress-step active"></div>
+                <div className="progress-step"></div>
+                <div className="progress-step"></div>
+                <div className="progress-step"></div>
+                <div className="progress-step"></div>
+              </div>
+
+              <div className="space-y-5">
+                <div className="animate-fade-in delay-2">
+                  <label htmlFor="bank-name">Bank Name</label>
+                  <div className="custom-select" ref={bankDropdownRef}>
+                    <div
+                      className={`glass-field select-trigger ${bankDropdownOpen ? "active" : ""}`}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setBankDropdownOpen((prev) => !prev)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setBankDropdownOpen((prev) => !prev);
+                        }
+                      }}
+                    >
+                      <div className="selected-value" data-placeholder="Select your bank">
+                        {bankName ? (
+                          <span style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                            {selectedBankOption?.logo && (
+                              <img
+                                src={selectedBankOption.logo}
+                                alt=""
+                                style={{ width: 20, height: 20, borderRadius: 4, objectFit: "contain" }}
+                                onError={(e) => { e.target.style.display = "none"; }}
+                              />
+                            )}
+                            {selectedBankOption?.label}
+                          </span>
+                        ) : ""}
+                      </div>
+                    </div>
+                    <div className={`custom-dropdown ${bankDropdownOpen ? "active" : ""}`}>
+                      {southAfricanBanks.map((option) => (
+                        <div
+                          key={option.value || "placeholder"}
+                          className={`custom-option ${bankName === option.value ? "selected" : ""}`}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => handleBankSelect(option.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              handleBankSelect(option.value);
+                            }
+                          }}
+                        >
+                          <span style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                            {option.logo && (
+                              <img
+                                src={option.logo}
+                                alt=""
+                                style={{ width: 20, height: 20, borderRadius: 4, objectFit: "contain" }}
+                                onError={(e) => { e.target.style.display = "none"; }}
+                              />
+                            )}
+                            {option.label}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <input type="hidden" id="bank-name" name="bank-name" value={bankName} />
+                  </div>
+                </div>
+
+                <div className="animate-fade-in delay-3 hide-when-dropdown-open">
+                  <label htmlFor="bank-account-number">Account Number</label>
+                  <div className="glass-field">
+                    <input
+                      type="text"
+                      id="bank-account-number"
+                      placeholder="Enter your account number"
+                      value={bankAccountNumber}
+                      onChange={(event) => setBankAccountNumber(event.target.value.replace(/\D/g, ""))}
+                      inputMode="numeric"
+                    />
+                  </div>
+                </div>
+
+                <div className="animate-fade-in delay-3 hide-when-dropdown-open">
+                  <label htmlFor="bank-branch-code">Branch Code</label>
+                  <div className="glass-field">
+                    <input
+                      type="text"
+                      id="bank-branch-code"
+                      placeholder="Enter your branch code"
+                      value={bankBranchCode}
+                      onChange={(event) => setBankBranchCode(event.target.value.replace(/\D/g, ""))}
+                      inputMode="numeric"
+                    />
+                  </div>
+                </div>
+
+                <div className="text-center mt-8 animate-fade-in delay-4 hide-when-dropdown-open">
+                  <button
+                    type="button"
+                    className={`continue-button agreement-continue ${bankDetailsReady ? "enabled" : ""}`}
+                    disabled={!bankDetailsReady}
+                    onClick={() => goToStep(4)}
+                  >
+                    Continue to Mandate
+                  </button>
+                </div>
+
+                <div className="text-center mt-6 animate-fade-in delay-4 hide-when-dropdown-open">
+                  <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
+                    Step 2 of 6
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : step === 4 ? (
             <div className="w-full max-w-3xl mx-auto">
               <div className="text-center animate-fade-in delay-1">
                 <div className="hero-icon">
@@ -982,7 +1119,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               <div className="progress-bar animate-fade-in delay-1">
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
-                <div className="progress-step"></div>
+                <div className="progress-step active"></div>
                 <div className="progress-step"></div>
                 <div className="progress-step"></div>
                 <div className="progress-step"></div>
@@ -1032,7 +1169,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   type="button"
                   className={`continue-button agreement-continue ${agreedMandate && mandateValid ? "enabled" : ""}`}
                   disabled={!agreedMandate || !mandateValid}
-                  onClick={() => goToStep(4)}
+                  onClick={() => goToStep(5)}
                 >
                   Continue to Risk Disclosure
                 </button>
@@ -1040,11 +1177,11 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
               <div className="text-center mt-6 animate-fade-in delay-4">
                 <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  Step 2 of 6
+                  Step 3 of 6
                 </p>
               </div>
             </div>
-          ) : step === 4 ? (
+          ) : step === 5 ? (
             <div className="w-full max-w-3xl mx-auto">
               <div className="text-center animate-fade-in delay-1">
                 <div className="hero-icon">
@@ -1065,7 +1202,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
-                <div className="progress-step"></div>
+                <div className="progress-step active"></div>
                 <div className="progress-step"></div>
                 <div className="progress-step"></div>
               </div>
@@ -1127,7 +1264,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   type="button"
                   className={`continue-button agreement-continue ${agreedRiskDisclosure ? "enabled" : ""}`}
                   disabled={!agreedRiskDisclosure}
-                  onClick={() => goToStep(5)}
+                  onClick={() => goToStep(6)}
                 >
                   Continue to Source of Funds
                 </button>
@@ -1135,11 +1272,11 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
               <div className="text-center mt-6 animate-fade-in delay-4">
                 <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  Step 3 of 6
+                  Step 4 of 6
                 </p>
               </div>
             </div>
-          ) : step === 5 ? (
+          ) : step === 6 ? (
             <div className="w-full max-w-3xl mx-auto">
               <div className="text-center animate-fade-in delay-1">
                 <div className="hero-icon">
@@ -1161,7 +1298,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
-                <div className="progress-step"></div>
+                <div className="progress-step active"></div>
                 <div className="progress-step"></div>
               </div>
 
@@ -1272,143 +1409,6 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                     type="button"
                     className={`continue-button agreement-continue ${sofReady ? "enabled" : ""}`}
                     disabled={!sofReady}
-                    onClick={() => goToStep(6)}
-                  >
-                    Continue to Bank Details
-                  </button>
-                </div>
-
-                <div className="text-center mt-6 animate-fade-in delay-4 hide-when-dropdown-open">
-                  <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                    Step 4 of 6
-                  </p>
-                </div>
-              </div>
-            </div>
-          ) : step === 6 ? (
-            <div className="w-full max-w-3xl mx-auto">
-              <div className="text-center animate-fade-in delay-1">
-                <div className="hero-icon">
-                  <BankIcon width={48} height={48} />
-                </div>
-                <h2
-                  className="text-3xl font-light tracking-tight mb-2"
-                  style={{ color: "hsl(270 30% 25%)" }}
-                >
-                  Bank Account Details
-                </h2>
-                <p className="text-sm mb-6" style={{ color: "hsl(270 20% 50%)" }}>
-                  Add the bank account you'll use with <span className="mint-brand">MINT</span>
-                </p>
-              </div>
-
-              <div className="progress-bar animate-fade-in delay-1">
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step"></div>
-              </div>
-
-              <div className="space-y-5">
-                <div className="animate-fade-in delay-2">
-                  <label htmlFor="bank-name">Bank Name</label>
-                  <div className="custom-select" ref={bankDropdownRef}>
-                    <div
-                      className={`glass-field select-trigger ${bankDropdownOpen ? "active" : ""}`}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setBankDropdownOpen((prev) => !prev)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          setBankDropdownOpen((prev) => !prev);
-                        }
-                      }}
-                    >
-                      <div className="selected-value" data-placeholder="Select your bank">
-                        {bankName ? (
-                          <span style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                            {selectedBankOption?.logo && (
-                              <img
-                                src={selectedBankOption.logo}
-                                alt=""
-                                style={{ width: 20, height: 20, borderRadius: 4, objectFit: "contain" }}
-                                onError={(e) => { e.target.style.display = "none"; }}
-                              />
-                            )}
-                            {selectedBankOption?.label}
-                          </span>
-                        ) : ""}
-                      </div>
-                    </div>
-                    <div className={`custom-dropdown ${bankDropdownOpen ? "active" : ""}`}>
-                      {southAfricanBanks.map((option) => (
-                        <div
-                          key={option.value || "placeholder"}
-                          className={`custom-option ${bankName === option.value ? "selected" : ""}`}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => handleBankSelect(option.value)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter" || event.key === " ") {
-                              event.preventDefault();
-                              handleBankSelect(option.value);
-                            }
-                          }}
-                        >
-                          <span style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                            {option.logo && (
-                              <img
-                                src={option.logo}
-                                alt=""
-                                style={{ width: 20, height: 20, borderRadius: 4, objectFit: "contain" }}
-                                onError={(e) => { e.target.style.display = "none"; }}
-                              />
-                            )}
-                            {option.label}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                    <input type="hidden" id="bank-name" name="bank-name" value={bankName} />
-                  </div>
-                </div>
-
-                <div className="animate-fade-in delay-3 hide-when-dropdown-open">
-                  <label htmlFor="bank-account-number">Account Number</label>
-                  <div className="glass-field">
-                    <input
-                      type="text"
-                      id="bank-account-number"
-                      placeholder="Enter your account number"
-                      value={bankAccountNumber}
-                      onChange={(event) => setBankAccountNumber(event.target.value.replace(/\D/g, ""))}
-                      inputMode="numeric"
-                    />
-                  </div>
-                </div>
-
-                <div className="animate-fade-in delay-3 hide-when-dropdown-open">
-                  <label htmlFor="bank-branch-code">Branch Code</label>
-                  <div className="glass-field">
-                    <input
-                      type="text"
-                      id="bank-branch-code"
-                      placeholder="Enter your branch code"
-                      value={bankBranchCode}
-                      onChange={(event) => setBankBranchCode(event.target.value.replace(/\D/g, ""))}
-                      inputMode="numeric"
-                    />
-                  </div>
-                </div>
-
-                <div className="text-center mt-8 animate-fade-in delay-4 hide-when-dropdown-open">
-                  <button
-                    type="button"
-                    className={`continue-button agreement-continue ${bankDetailsReady ? "enabled" : ""}`}
-                    disabled={!bankDetailsReady}
                     onClick={() => goToStep(7)}
                   >
                     Continue to Agreements
