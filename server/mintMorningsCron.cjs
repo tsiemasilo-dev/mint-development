@@ -501,31 +501,30 @@ async function sendEmailToAllUsers(supabaseAdmin, article) {
     return;
   }
 
-  const batchSize = 50;
   let successCount = 0;
   let failCount = 0;
 
-  for (let i = 0; i < confirmedUsers.length; i += batchSize) {
-    const batch = confirmedUsers.slice(i, i + batchSize);
-    const emailPromises = batch.map(async (user) => {
-      try {
-        await getResend().emails.send({
-          from: 'MINT MORNINGS <mornings@mymint.co.za>',
-          to: [user.email],
-          subject: `MINT MORNINGS — ${article.title}`,
-          html: html,
-        });
-        successCount++;
-      } catch (err) {
-        console.error(`[MINT MORNINGS] Failed to send to ${user.email}:`, err.message);
+  for (let i = 0; i < confirmedUsers.length; i++) {
+    const user = confirmedUsers[i];
+    try {
+      const resp = await getResend().emails.send({
+        from: 'MINT MORNINGS <mornings@mymint.co.za>',
+        to: [user.email],
+        subject: `MINT MORNINGS — ${article.title}`,
+        html: html,
+      });
+      if (resp.error) {
+        console.error(`[MINT MORNINGS] Failed to send to ${user.email}:`, resp.error.message);
         failCount++;
+      } else {
+        successCount++;
       }
-    });
-
-    await Promise.all(emailPromises);
-
-    if (i + batchSize < confirmedUsers.length) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+    } catch (err) {
+      console.error(`[MINT MORNINGS] Failed to send to ${user.email}:`, err.message);
+      failCount++;
+    }
+    if (i < confirmedUsers.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, 600));
     }
   }
 
@@ -742,4 +741,4 @@ async function sendTestEmail(supabaseAdmin, testEmail) {
   }
 }
 
-module.exports = { startMintMorningsListener, sendTestEmail };
+module.exports = { startMintMorningsListener, sendTestEmail, buildMintMorningsHtml };

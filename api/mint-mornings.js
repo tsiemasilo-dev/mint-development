@@ -498,31 +498,30 @@ async function sendToAllUsers(supabaseAdmin, resend, articles) {
     return { sent: 0, failed: 0 };
   }
 
-  const batchSize = 50;
   let successCount = 0;
   let failCount = 0;
 
-  for (let i = 0; i < confirmedUsers.length; i += batchSize) {
-    const batch = confirmedUsers.slice(i, i + batchSize);
-    const emailPromises = batch.map(async (user) => {
-      try {
-        await resend.emails.send({
-          from: "MINT MORNINGS <mornings@mymint.co.za>",
-          to: [user.email],
-          subject,
-          html,
-        });
-        successCount++;
-      } catch (err) {
-        console.error(`[MINT MORNINGS] Failed to send to ${user.email}:`, err.message);
+  for (let i = 0; i < confirmedUsers.length; i++) {
+    const user = confirmedUsers[i];
+    try {
+      const resp = await resend.emails.send({
+        from: "MINT MORNINGS <mornings@mymint.co.za>",
+        to: [user.email],
+        subject,
+        html,
+      });
+      if (resp.error) {
+        console.error(`[MINT MORNINGS] Failed to send to ${user.email}:`, resp.error.message);
         failCount++;
+      } else {
+        successCount++;
       }
-    });
-
-    await Promise.all(emailPromises);
-
-    if (i + batchSize < confirmedUsers.length) {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+    } catch (err) {
+      console.error(`[MINT MORNINGS] Failed to send to ${user.email}:`, err.message);
+      failCount++;
+    }
+    if (i < confirmedUsers.length - 1) {
+      await new Promise((resolve) => setTimeout(resolve, 600));
     }
   }
 
