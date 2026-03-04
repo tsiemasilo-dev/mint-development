@@ -43,7 +43,7 @@ const formatKMB = (value) => {
   return `${sign}R${formatted}`;
 };
 
-const TIMEFRAME_DAYS = { d: 7, "1m": 30, "3m": 90, "6m": 180 };
+const TIMEFRAME_DAYS = { d: 1, w: 7, m: 30 };
 
 const formatYAxis = (value) => {
   const num = Number(value);
@@ -60,7 +60,7 @@ const SwipeableBalanceCard = ({
   forceVisible,
   mintNumber,
 }) => {
-  const [activeTab, setActiveTab] = useState("1m");
+  const [activeTab, setActiveTab] = useState("m");
   const [isOpen, setIsOpen] = useState(false);
   const { lastUpdated, isConnected } = useRealtimePrices();
   const settlementCfg = useSettlementConfig();
@@ -234,7 +234,7 @@ const SwipeableBalanceCard = ({
       const holdingsToChart = selectedAsset ? [selectedAsset] : dbData.holdings;
 
       if (selectedAsset?.isStrategy && selectedAsset?.strategyId) {
-        const timeframeMap = { d: "1W", "1m": "1M", "3m": "3M", "6m": "6M" };
+        const timeframeMap = { d: "1D", w: "1W", m: "1M" };
         const tf = timeframeMap[activeTab] || "1M";
         const priceHistory = await getStrategyPriceHistory(
           selectedAsset.strategyId,
@@ -247,8 +247,13 @@ const SwipeableBalanceCard = ({
             d: p.ts,
             v:
               firstNav > 0
-                ? Number((investedValue * (p.nav / firstNav)).toFixed(2))
-                : investedValue,
+                ? Number(
+                    (
+                      investedValue * (p.nav / firstNav) -
+                      investedValue
+                    ).toFixed(2),
+                  )
+                : 0,
           }));
           setChartData(points);
         } else {
@@ -330,22 +335,33 @@ const SwipeableBalanceCard = ({
         }
       });
 
+      const costBasisByHolding = {};
+      stockHoldings.forEach((h) => {
+        if (h.security_id) {
+          costBasisByHolding[h.security_id] =
+            (Number(h.avg_fill || 0) / 100) * Number(h.quantity || 1);
+        }
+      });
+
       const points = [];
       for (const dateKey of sortedDates) {
-        let totalValue = 0;
+        let totalMarketValue = 0;
+        let totalCostBasis = 0;
         let hasData = false;
 
         for (const { securityId, quantity, fillDate } of allPriceData) {
           if (fillDate && dateKey < fillDate) continue;
           const price = filledPriceByDate[securityId]?.[dateKey];
           if (price) {
-            totalValue += quantity * price;
+            totalMarketValue += quantity * price;
+            totalCostBasis += costBasisByHolding[securityId] || 0;
             hasData = true;
           }
         }
 
         if (hasData) {
-          points.push({ d: dateKey, v: Number(totalValue.toFixed(2)) });
+          const pnl = totalMarketValue - totalCostBasis;
+          points.push({ d: dateKey, v: Number(pnl.toFixed(2)) });
         }
       }
 
@@ -519,7 +535,7 @@ const SwipeableBalanceCard = ({
           <div className="w-[50%] p-4 pb-4 flex flex-col">
             <div className="flex justify-end mb-2">
               <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
-                {["d", "1m", "3m", "6m"].map((tab) => (
+                {["d", "w", "m"].map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
@@ -538,7 +554,7 @@ const SwipeableBalanceCard = ({
                     margin={{ top: 2, right: 0, left: -12, bottom: 0 }}
                   >
                     <YAxis
-                      domain={["auto", "auto"]}
+                      domain={[(dataMin) => Math.min(0, dataMin), (dataMax) => Math.max(0, dataMax)]}
                       tickFormatter={formatYAxis}
                       tick={{ fontSize: 8, fill: "#94a3b8" }}
                       axisLine={false}
