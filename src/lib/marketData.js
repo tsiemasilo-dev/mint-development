@@ -184,6 +184,9 @@ export const getSecurityPrices = async (securityId, timeframe = "1M") => {
       case "5Y":
         daysToFetch = 1825; // ~5 years
         break;
+      case "ALL":
+        daysToFetch = 1825; // ~5 years max
+        break;
       default:
         daysToFetch = 45;
     }

@@ -75,3 +75,14 @@ Mint Auth is a React authentication application built with Vite, Tailwind CSS, a
 - **TruID Connect**: Identity verification and bank linking service. Integrated via custom backend endpoints to manage the verification and account linking flow.
 - **Sumsub**: KYC (Know Your Customer) verification service. Integrated through backend endpoints (`/api/sumsub/status`, `/api/sumsub/access-token`) and a frontend SDK (`SumsubVerification.jsx`) to manage identity checks.
 - **Yahoo Finance (via custom proxy)**: For fetching live stock market data (quotes and charts). The application uses a custom backend proxy to access Yahoo Finance public endpoints.
+
+### Portfolio Equity Curve Chart
+- **File**: `src/components/SwipeableBalanceCard.jsx` — home page balance card with portfolio chart
+- **Timeframes**: D (all-time from first fill date), 1M, 3M, 6M
+- **Equity Curve Logic**: The chart builds a real equity curve from the user's fill dates:
+  - Uses `created_at` from `stock_holdings` as the fill date for each asset
+  - For each date, computes portfolio value as sum of (quantity × close_price) for all holdings owned at that point
+  - Forward-fills prices across dates where data may be missing for some securities
+  - Holdings only contribute to the total after their fill date
+  - "D" timeframe shows the full equity curve from the earliest purchase date
+  - For strategies, uses `getStrategyPriceHistory` from `src/lib/strategyData.js` with "ALL" timeframe for D tab

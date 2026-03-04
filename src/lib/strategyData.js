@@ -332,6 +332,9 @@ export const getStrategyPriceHistory = async (strategyId, timeframe = "6M") => {
       case "1Y":
         startDate = new Date(currentDate.getTime() - 420 * 24 * 60 * 60 * 1000);
         break;
+      case "ALL":
+        startDate = new Date(currentDate.getTime() - 730 * 24 * 60 * 60 * 1000);
+        break;
       default:
         startDate = new Date(currentDate.getTime() - 220 * 24 * 60 * 60 * 1000);
     }

@@ -42,7 +42,7 @@ const formatKMB = (value) => {
   return `${sign}R${formatted}`;
 };
 
-const TIMEFRAME_DAYS = { "1m": 45, "3m": 110, "6m": 220 };
+const TIMEFRAME_DAYS = { d: null, "1m": 30, "3m": 90, "6m": 180 };
 
 const SwipeableBalanceCard = ({
   userId,
@@ -221,25 +221,10 @@ const SwipeableBalanceCard = ({
       }
       setChartLoading(true);
 
-      const days = TIMEFRAME_DAYS[activeTab] || 45;
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - days);
-      const cutoffISO = cutoff.toISOString();
-
       const holdingsToChart = selectedAsset ? [selectedAsset] : dbData.holdings;
 
-      const totalWeight = holdingsToChart.reduce(
-        (s, h) => s + Number(h.market_value || 0),
-        0,
-      );
-      if (totalWeight === 0) {
-        setChartData([]);
-        setChartLoading(false);
-        return;
-      }
-
       if (selectedAsset?.isStrategy && selectedAsset?.strategyId) {
-        const timeframeMap = { "1m": "1M", "3m": "3M", "6m": "6M" };
+        const timeframeMap = { d: "ALL", "1m": "1M", "3m": "3M", "6m": "6M" };
         const tf = timeframeMap[activeTab] || "1M";
         const priceHistory = await getStrategyPriceHistory(
           selectedAsset.strategyId,
@@ -263,23 +248,56 @@ const SwipeableBalanceCard = ({
         return;
       }
 
-      const pricePromises = holdingsToChart.map(async (h) => {
-        const secId = h.security_id;
-        if (!secId) return null;
+      const stockHoldings = holdingsToChart.filter(
+        (h) => h.security_id && !h.isStrategy,
+      );
 
+      if (stockHoldings.length === 0) {
+        setChartData([]);
+        setChartLoading(false);
+        return;
+      }
+
+      const fillDates = stockHoldings
+        .map((h) => (h.created_at || h.as_of_date || "").split("T")[0])
+        .filter(Boolean);
+      const earliestFillDate =
+        fillDates.length > 0 ? fillDates.sort()[0] : null;
+
+      let startDateStr;
+      const days = TIMEFRAME_DAYS[activeTab];
+      if (days === null) {
+        startDateStr = earliestFillDate;
+      } else {
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - days);
+        const cutoffStr = cutoff.toISOString().split("T")[0];
+        startDateStr =
+          earliestFillDate && cutoffStr > earliestFillDate
+            ? cutoffStr
+            : earliestFillDate || cutoffStr;
+      }
+
+      if (!startDateStr) {
+        const fallback = new Date();
+        fallback.setDate(fallback.getDate() - 30);
+        startDateStr = fallback.toISOString().split("T")[0];
+      }
+
+      const pricePromises = stockHoldings.map(async (h) => {
         const { data, error } = await supabase
           .from("security_prices")
           .select("ts, close_price")
-          .eq("security_id", secId)
-          .gte("ts", cutoffISO)
+          .eq("security_id", h.security_id)
+          .gte("ts", startDateStr)
           .order("ts", { ascending: true });
 
         if (error || !data || data.length === 0) return null;
 
         return {
-          securityId: secId,
-          weight: Number(h.market_value || 0) / totalWeight,
+          securityId: h.security_id,
           quantity: Number(h.quantity || 1),
+          fillDate: (h.created_at || h.as_of_date || "").split("T")[0],
           prices: data.map((p) => ({
             ts: p.ts.split("T")[0],
             close: Number(p.close_price) / 100,
@@ -287,70 +305,60 @@ const SwipeableBalanceCard = ({
         };
       });
 
-      const allPrices = (await Promise.all(pricePromises)).filter(Boolean);
-      if (allPrices.length === 0) {
+      const allPriceData = (await Promise.all(pricePromises)).filter(Boolean);
+
+      if (allPriceData.length === 0) {
         setChartData([]);
         setChartLoading(false);
         return;
       }
 
-      if (selectedAsset && allPrices.length === 1) {
-        const qty = Number(selectedAsset.quantity || 1);
-        const points = allPrices[0].prices.map((p) => ({
-          d: p.ts,
-          v: Number((p.close * qty).toFixed(2)),
-        }));
-        setChartData(points);
-        setChartLoading(false);
-        return;
-      }
-
       const dateSet = new Set();
-      allPrices.forEach(({ prices }) =>
+      allPriceData.forEach(({ prices }) =>
         prices.forEach((p) => dateSet.add(p.ts)),
       );
       const sortedDates = Array.from(dateSet).sort();
 
-      const basePrices = {};
-      allPrices.forEach(({ securityId, prices }) => {
-        if (prices.length > 0) basePrices[securityId] = prices[0].close;
-      });
-
-      const priceByDate = {};
-      allPrices.forEach(({ securityId, prices }) => {
-        priceByDate[securityId] = {};
+      const rawPriceByDate = {};
+      allPriceData.forEach(({ securityId, prices }) => {
+        rawPriceByDate[securityId] = {};
         prices.forEach((p) => {
-          priceByDate[securityId][p.ts] = p.close;
+          rawPriceByDate[securityId][p.ts] = p.close;
         });
       });
 
-      const basePortfolioValue =
-        holdingsToChart.reduce(
-          (s, h) => s + Number(h.market_value || 0) / 100,
-          0,
-        ) || 1;
-
-      const points = [];
-      sortedDates.forEach((dateKey) => {
-        let weightedReturn = 0;
-        let usedWeight = 0;
-
-        allPrices.forEach(({ securityId, weight }) => {
-          const current = priceByDate[securityId]?.[dateKey];
-          const base = basePrices[securityId];
-          if (current && base && base !== 0) {
-            const ret = current / base;
-            weightedReturn += ret * weight;
-            usedWeight += weight;
+      const filledPriceByDate = {};
+      allPriceData.forEach(({ securityId }) => {
+        filledPriceByDate[securityId] = {};
+        let lastKnown = 0;
+        for (const dateKey of sortedDates) {
+          if (rawPriceByDate[securityId]?.[dateKey] !== undefined) {
+            lastKnown = rawPriceByDate[securityId][dateKey];
           }
-        });
-
-        if (usedWeight > 0) {
-          const normalizedReturn = weightedReturn / usedWeight;
-          const portfolioValue = basePortfolioValue * normalizedReturn;
-          points.push({ d: dateKey, v: Number(portfolioValue.toFixed(2)) });
+          if (lastKnown > 0) {
+            filledPriceByDate[securityId][dateKey] = lastKnown;
+          }
         }
       });
+
+      const points = [];
+      for (const dateKey of sortedDates) {
+        let totalValue = 0;
+        let hasData = false;
+
+        for (const { securityId, quantity, fillDate } of allPriceData) {
+          if (fillDate && dateKey < fillDate) continue;
+          const price = filledPriceByDate[securityId]?.[dateKey];
+          if (price) {
+            totalValue += quantity * price;
+            hasData = true;
+          }
+        }
+
+        if (hasData) {
+          points.push({ d: dateKey, v: Number(totalValue.toFixed(2)) });
+        }
+      }
 
       setChartData(points);
       setChartLoading(false);
@@ -522,7 +530,7 @@ const SwipeableBalanceCard = ({
           <div className="w-[50%] p-4 pb-4 flex flex-col">
             <div className="flex justify-end mb-2">
               <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
-                {["1m", "3m", "6m"].map((tab) => (
+                {["d", "1m", "3m", "6m"].map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
