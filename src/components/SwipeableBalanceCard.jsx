@@ -44,7 +44,7 @@ const formatKMB = (value) => {
   return `${sign}R${formatted}`;
 };
 
-const TIMEFRAME_DAYS = { d: 1, w: 7, m: 30 };
+const TIMEFRAME_DAYS = { d: 7, w: 30, m: 90 };
 
 const formatYAxis = (value) => {
   const num = Number(value);
@@ -240,7 +240,7 @@ const SwipeableBalanceCard = ({
       const startDateStr = cutoff.toISOString().split("T")[0];
 
       if (selectedAsset?.isStrategy && selectedAsset?.strategyId) {
-        const timeframeMap = { d: "1D", w: "1W", m: "1M" };
+        const timeframeMap = { d: "1W", w: "1M", m: "3M" };
         const tf = timeframeMap[activeTab] || "1M";
         const priceHistory = await getStrategyPriceHistory(
           selectedAsset.strategyId,
@@ -279,14 +279,26 @@ const SwipeableBalanceCard = ({
       }
 
       const pricePromises = stockHoldings.map(async (h) => {
-        const { data, error } = await supabase
+        let { data, error } = await supabase
           .from("security_prices")
           .select("ts, close_price")
           .eq("security_id", h.security_id)
           .gte("ts", startDateStr)
           .order("ts", { ascending: true });
 
-        if (error || !data || data.length === 0) return null;
+        if (error || !data || data.length < 2) {
+          const fallback = await supabase
+            .from("security_prices")
+            .select("ts, close_price")
+            .eq("security_id", h.security_id)
+            .order("ts", { ascending: false })
+            .limit(30);
+          if (!fallback.error && fallback.data && fallback.data.length >= 2) {
+            data = fallback.data.reverse();
+          } else if (!data || data.length === 0) {
+            return null;
+          }
+        }
 
         return {
           securityId: h.security_id,

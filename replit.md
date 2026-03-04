@@ -78,13 +78,17 @@ Mint Auth is a React authentication application built with Vite, Tailwind CSS, a
 
 ### Portfolio Equity Curve Chart
 - **File**: `src/components/SwipeableBalanceCard.jsx` — home page balance card with portfolio chart
-- **Timeframes**: D (1 day), W (7 days), M (30 days)
-- **P&L Equity Curve**: The chart shows profit/loss starting from R0 (fintech-style):
-  - Computes gain/loss as (market value - cost basis) for each date
-  - Cost basis = avg_fill × quantity per holding
-  - Chart starts from R0 since users start with zero gain
-  - Green line = portfolio is up, Red line = portfolio is down
-  - Y axis always includes R0 as a reference point
+- **Timeframes**: D (7 days), W (30 days), M (90 days) — labels are short but data ranges ensure enough points for smooth charts
+- **Strategy timeframe mapping**: D→1W, W→1M, M→3M (matches getStrategyPriceHistory API)
+- **P&L Equity Curve**: Chart shows gain/loss starting from R0 (first data point = baseline):
+  - For stocks: gain = quantity × (current_price - first_price_in_window)
+  - For strategies: gain = invested × (NAV/firstNAV - 1)
+  - First point always = R0, subsequent points show movement up or down
+  - Green line = up, Red line = down
+  - Y axis always includes R0 tick label via computed ticks (useMemo)
+  - When data is all positive: R0 at bottom, chart space above
+  - When data is all negative: R0 at top, chart space below
+  - Dashed ReferenceLine at y=0 for visual clarity
+  - Fallback: if < 2 data points in timeframe, fetches last 30 available prices
   - Forward-fills prices across gaps for smooth curves
-  - For strategies: (NAV-weighted value - invested amount) gives P&L
   - Tooltip shows date and P&L value on hover
