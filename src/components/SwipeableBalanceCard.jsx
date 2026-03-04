@@ -47,6 +47,7 @@ const TIMEFRAME_DAYS = { d: 1, w: 7, m: 30 };
 
 const formatYAxis = (value) => {
   const num = Number(value);
+  if (Math.abs(num) < 0.5) return "R0";
   const sign = num < 0 ? "-" : "";
   const abs = Math.abs(num);
   if (abs >= 1e6) return `${sign}R${(abs / 1e6).toFixed(1)}m`;
@@ -232,6 +233,10 @@ const SwipeableBalanceCard = ({
       setChartLoading(true);
 
       const holdingsToChart = selectedAsset ? [selectedAsset] : dbData.holdings;
+      const days = TIMEFRAME_DAYS[activeTab] || 30;
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - days);
+      const startDateStr = cutoff.toISOString().split("T")[0];
 
       if (selectedAsset?.isStrategy && selectedAsset?.strategyId) {
         const timeframeMap = { d: "1D", w: "1W", m: "1M" };
@@ -241,21 +246,20 @@ const SwipeableBalanceCard = ({
           tf,
         );
         if (priceHistory && priceHistory.length > 0) {
-          const investedValue = Number(selectedAsset.avg_fill || 0) / 100;
           const firstNav = priceHistory[0].nav;
-          const points = priceHistory.map((p) => ({
-            d: p.ts,
-            v:
-              firstNav > 0
-                ? Number(
-                    (
-                      investedValue * (p.nav / firstNav) -
-                      investedValue
-                    ).toFixed(2),
-                  )
-                : 0,
-          }));
-          setChartData(points);
+          if (firstNav > 0) {
+            const points = priceHistory.map((p) => {
+              const change = (p.nav / firstNav - 1);
+              const investedValue = Number(selectedAsset.avg_fill || 0) / 100;
+              return {
+                d: p.ts,
+                v: Number((investedValue * change).toFixed(2)),
+              };
+            });
+            setChartData(points);
+          } else {
+            setChartData([]);
+          }
         } else {
           setChartData([]);
         }
@@ -273,11 +277,6 @@ const SwipeableBalanceCard = ({
         return;
       }
 
-      const days = TIMEFRAME_DAYS[activeTab] || 30;
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - days);
-      const startDateStr = cutoff.toISOString().split("T")[0];
-
       const pricePromises = stockHoldings.map(async (h) => {
         const { data, error } = await supabase
           .from("security_prices")
@@ -291,7 +290,6 @@ const SwipeableBalanceCard = ({
         return {
           securityId: h.security_id,
           quantity: Number(h.quantity || 1),
-          fillDate: (h.created_at || h.as_of_date || "").split("T")[0],
           prices: data.map((p) => ({
             ts: p.ts.split("T")[0],
             close: Number(p.close_price) / 100,
@@ -335,33 +333,29 @@ const SwipeableBalanceCard = ({
         }
       });
 
-      const costBasisByHolding = {};
-      stockHoldings.forEach((h) => {
-        if (h.security_id) {
-          costBasisByHolding[h.security_id] =
-            (Number(h.avg_fill || 0) / 100) * Number(h.quantity || 1);
+      const baselinePrices = {};
+      allPriceData.forEach(({ securityId, prices }) => {
+        if (prices.length > 0) {
+          baselinePrices[securityId] = prices[0].close;
         }
       });
 
       const points = [];
       for (const dateKey of sortedDates) {
-        let totalMarketValue = 0;
-        let totalCostBasis = 0;
+        let totalGain = 0;
         let hasData = false;
 
-        for (const { securityId, quantity, fillDate } of allPriceData) {
-          if (fillDate && dateKey < fillDate) continue;
+        for (const { securityId, quantity } of allPriceData) {
           const price = filledPriceByDate[securityId]?.[dateKey];
-          if (price) {
-            totalMarketValue += quantity * price;
-            totalCostBasis += costBasisByHolding[securityId] || 0;
+          const baseline = baselinePrices[securityId];
+          if (price && baseline) {
+            totalGain += quantity * (price - baseline);
             hasData = true;
           }
         }
 
         if (hasData) {
-          const pnl = totalMarketValue - totalCostBasis;
-          points.push({ d: dateKey, v: Number(pnl.toFixed(2)) });
+          points.push({ d: dateKey, v: Number(totalGain.toFixed(2)) });
         }
       }
 
@@ -554,7 +548,17 @@ const SwipeableBalanceCard = ({
                     margin={{ top: 2, right: 0, left: -12, bottom: 0 }}
                   >
                     <YAxis
-                      domain={[(dataMin) => Math.min(0, dataMin), (dataMax) => Math.max(0, dataMax)]}
+                      domain={[
+                        (dataMin) => {
+                          const min = Math.min(0, dataMin);
+                          const max = Math.max(0, Math.abs(dataMin));
+                          return max < 1 ? -10 : min;
+                        },
+                        (dataMax) => {
+                          const val = Math.max(0, dataMax);
+                          return val < 1 ? 10 : val;
+                        },
+                      ]}
                       tickFormatter={formatYAxis}
                       tick={{ fontSize: 8, fill: "#94a3b8" }}
                       axisLine={false}
