@@ -401,33 +401,34 @@ const SwipeableBalanceCard = ({
       dataMax = Math.max(dataMax, 5);
     }
 
-    const range = dataMax - dataMin;
-    const padding = range * 0.15;
-
     let axisMin, axisMax;
     if (dataMin >= 0) {
       axisMin = 0;
-      axisMax = dataMax + padding;
+      axisMax = dataMax * 1.15 || 10;
     } else if (dataMax <= 0) {
-      axisMin = dataMin - padding;
+      axisMin = dataMin * 1.15 || -10;
       axisMax = 0;
     } else {
-      axisMin = dataMin - padding;
-      axisMax = dataMax + padding;
+      const absMax = Math.max(Math.abs(dataMin), Math.abs(dataMax));
+      axisMin = -(absMax * 1.15);
+      axisMax = absMax * 1.15;
     }
 
-    const ticks = [0];
-    if (axisMax > 0.5) {
-      ticks.push(Math.round(axisMax / 2));
-      ticks.push(Math.round(axisMax));
+    const totalRange = axisMax - axisMin;
+    const step = Math.round(totalRange / 3) || 1;
+    const ticks = [];
+    let t = Math.round(axisMin);
+    while (t <= axisMax + 0.5) {
+      ticks.push(t);
+      t += step;
     }
-    if (axisMin < -0.5) {
-      ticks.push(-Math.round(Math.abs(axisMin) / 2));
-      ticks.push(-Math.round(Math.abs(axisMin)));
+    if (!ticks.includes(0)) {
+      ticks.push(0);
+      ticks.sort((a, b) => a - b);
     }
 
-    const unique = [...new Set(ticks)].filter((t) => !(Object.is(t, -0))).sort((a, b) => a - b);
-    return { domain: [axisMin, axisMax], ticks: unique.length >= 2 ? unique : [-5, 0, 5] };
+    const unique = [...new Set(ticks)].sort((a, b) => a - b);
+    return { domain: [axisMin, axisMax], ticks: unique.length >= 2 ? unique : [0, 5, 10] };
   }, [chartData]);
 
   const masked = "••••";
