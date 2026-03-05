@@ -452,21 +452,19 @@ export default function generateFactsheetPdf({
     .slice(0, 8)
     .map((h) => {
       const displayWeight = h.weightNorm != null ? (h.weightNorm * 100).toFixed(1) : Number(h.weight || 0).toFixed(1);
-      const sec = (holdingsSecurities || []).find((s) => s.symbol === h.symbol);
-      const isin = sec?.isin || "—";
-      return [h.symbol || "—", isin, `${displayWeight}%`];
+      return [h.symbol || "—", `${displayWeight}%`];
     });
 
   if (holdingRows.length > 0) {
     doc.autoTable({
       startY: ry,
       margin: { left: RIGHT_X, right: MR },
-      head: [["Ticker", "ISIN", "Weight"]],
+      head: [["Ticker", "Weight"]],
       body: holdingRows,
       theme: "plain",
       styles: {
-        fontSize: 5.5,
-        cellPadding: 1,
+        fontSize: 6.5,
+        cellPadding: 1.2,
         textColor: DARK,
         lineColor: DIVIDER,
         lineWidth: 0.1,
@@ -475,12 +473,11 @@ export default function generateFactsheetPdf({
         fillColor: LIGHT_BG,
         textColor: DARK,
         fontStyle: "bold",
-        fontSize: 5.5,
+        fontSize: 6,
       },
       columnStyles: {
-        0: { cellWidth: 16 },
-        1: { cellWidth: RIGHT_W - 32 },
-        2: { cellWidth: 14, halign: "right" },
+        0: { cellWidth: RIGHT_W * 0.6 },
+        1: { cellWidth: RIGHT_W * 0.35, halign: "right" },
       },
       tableWidth: RIGHT_W - 2,
     });
