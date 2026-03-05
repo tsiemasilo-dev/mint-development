@@ -412,32 +412,28 @@ export default function generateFactsheetPdf({
   doc.setFontSize(8);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...DARK);
-  doc.text("Sector Allocation", RIGHT_X, ry);
+  doc.text("Asset Allocation", RIGHT_X, ry);
   ry += 5;
 
-  const sectorMap = {};
   const holdings = Array.isArray(strategy?.holdings) ? strategy.holdings : [];
-  holdings.forEach((h) => {
-    const sym = h.ticker || h.symbol || h;
-    const sec = (holdingsSecurities || []).find((s) => s.symbol === sym);
-    const sector = sec?.sector || "Other";
-    const weight = Number(h.weight) || 0;
-    sectorMap[sector] = (sectorMap[sector] || 0) + weight;
-  });
-
-  const totalWeight = Object.values(sectorMap).reduce((a, b) => a + b, 0) || 1;
-  const sectors = Object.entries(sectorMap)
-    .map(([name, weight]) => ({ name, weight: (weight / totalWeight) * 100 }))
+  const totalWeight = holdings.reduce((sum, h) => sum + (Number(h.weight) || 0), 0) || 1;
+  const assetBars = holdings
+    .map((h) => {
+      const sym = h.ticker || h.symbol || h;
+      const holdingName = h.name || sym;
+      const weight = ((Number(h.weight) || 0) / totalWeight) * 100;
+      return { name: holdingName, weight };
+    })
     .sort((a, b) => b.weight - a.weight)
     .slice(0, 7);
 
-  if (sectors.length > 0) {
-    ry = drawSectorBars(doc, sectors, RIGHT_X, ry, RIGHT_W);
+  if (assetBars.length > 0) {
+    ry = drawSectorBars(doc, assetBars, RIGHT_X, ry, RIGHT_W);
     ry += 4;
   } else {
     doc.setFontSize(7);
     doc.setTextColor(...GRAY);
-    doc.text("Sector data unavailable", RIGHT_X, ry);
+    doc.text("Allocation data unavailable", RIGHT_X, ry);
     ry += 6;
   }
 
