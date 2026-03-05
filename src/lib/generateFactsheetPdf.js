@@ -113,29 +113,33 @@ function drawSectorBars(doc, sectors, x, y, w) {
   if (!sectors || sectors.length === 0) return y;
 
   const barH = 5;
-  const gap = 6;
-  const pctW = 12;
-  const barMaxW = w - pctW - 2;
+  const gap = 2.5;
+  const maxLabelW = 30;
+  const barStartX = x + maxLabelW + 2;
+  const barMaxW = w - maxLabelW - 4;
   const maxVal = Math.max(...sectors.map((s) => Math.abs(s.weight)));
 
   let cy = y;
   sectors.forEach((s) => {
-    doc.setFontSize(5.5);
+    doc.setFontSize(6);
     doc.setTextColor(...DARK);
-    doc.text(s.name, x, cy);
-
-    cy += 1.5;
+    const lines = doc.splitTextToSize(s.name, maxLabelW);
+    const textStartY = cy + barH / 2 + 1.5 - ((lines.length - 1) * 2.5);
+    lines.forEach((line, i) => {
+      doc.text(line, x, textStartY + i * 2.5);
+    });
 
     const barW = (Math.abs(s.weight) / maxVal) * barMaxW;
     const color = s.weight >= 0 ? PURPLE : RED;
     doc.setFillColor(...color);
-    doc.roundedRect(x, cy, barW, barH, 1, 1, "F");
+    doc.roundedRect(barStartX, cy, barW, barH, 1, 1, "F");
 
     doc.setFontSize(5.5);
     doc.setTextColor(...DARK);
-    doc.text(`${s.weight.toFixed(1)}%`, x + barW + 1.5, cy + barH / 2 + 1.5);
+    doc.text(`${s.weight.toFixed(1)}%`, barStartX + barW + 1.5, cy + barH / 2 + 1.5);
 
-    cy += barH + gap;
+    const extraLines = Math.max(0, lines.length - 1);
+    cy += barH + gap + extraLines * 2.5;
   });
 
   return cy;
