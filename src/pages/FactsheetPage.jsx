@@ -454,6 +454,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
                     holdingsWithMetrics,
                     holdingsSecurities,
                     userPosition,
+                    calculatedMinInvestment: minimumInvestmentAmount,
                   });
                 } catch (e) {
                   console.error("PDF generation error:", e?.message || e?.toString?.() || e, e?.stack);

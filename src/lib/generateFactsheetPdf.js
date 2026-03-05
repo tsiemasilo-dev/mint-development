@@ -151,6 +151,7 @@ export default function generateFactsheetPdf({
   holdingsWithMetrics,
   holdingsSecurities,
   userPosition,
+  calculatedMinInvestment,
 }) {
   console.log("[PDF] Starting generation...", { strategyName: strategy?.name, hasAnalytics: !!analytics });
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -369,7 +370,7 @@ export default function generateFactsheetPdf({
     ["NAV Index", analytics?.latest_value != null ? Number(analytics.latest_value / 100).toFixed(2) : "—"],
     ["Inception Date", strategy?.created_at ? new Date(strategy.created_at).toLocaleDateString("en-ZA", { month: "short", year: "numeric" }) : "—"],
     ["Benchmark", strategy?.benchmark_name || "JSE All Share"],
-    ["Min Investment", strategy?.min_investment ? fmtRands(strategy.min_investment) : "—"],
+    ["Min Investment", calculatedMinInvestment ? fmtRands(calculatedMinInvestment) : (strategy?.min_investment ? fmtRands(strategy.min_investment) : "—")],
     ["Currency", strategy?.base_currency || "ZAR"],
   ];
 
