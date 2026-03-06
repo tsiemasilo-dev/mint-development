@@ -107,6 +107,7 @@ const HomePage = ({
   onOpenMintBalance,
   onOpenActivity,
   onOpenActions,
+  onOpenInstantLiquidity,
   onOpenInvestments,
   onOpenCredit,
   onOpenCreditApply,
@@ -740,28 +741,30 @@ const HomePage = ({
 
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
               <div className="flex items-center rounded-full bg-white/10 p-1 backdrop-blur-md">
-                {[
-                  { id: "invest", label: "Wealth", disabled: false, action: () => { setHomeTab("invest"); } },
-                ].map((tab) => (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={tab.action}
-                    disabled={tab.disabled}
-                    className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
-                      tab.disabled
-                        ? "text-white/20 cursor-not-allowed"
-                        : homeTab === tab.id
-                          ? "bg-white text-slate-900 shadow-sm"
-                          : "text-white/70 hover:bg-white/10 hover:text-white"
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
+                <button
+                  type="button"
+                  onClick={() => setHomeTab("invest")}
+                  className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
+                    homeTab === "invest"
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-white/70 hover:bg-white/10 hover:text-white"
+                  }`}
+                >
+                  Wealth
+                </button>
+
+                <button
+                  type="button"
+                  onClick={onOpenInstantLiquidity}
+                  className="rounded-full px-3 py-1.5 text-xs font-semibold text-white/70 transition-all hover:bg-white/10 hover:text-white"
+                >
+                  Credit
+                </button>
+
                 <div className="relative flex items-center">
-                  <span className="rounded-full px-3 py-1.5 text-xs font-semibold text-white/30 cursor-default">Credit</span>
-                  <span className="rounded-full px-3 py-1.5 text-xs font-semibold text-white/30 cursor-default">Transact</span>
+                  <span className="rounded-full px-3 py-1.5 text-xs font-semibold text-white/30 cursor-default">
+                    Transact
+                  </span>
                 </div>
               </div>
             </div>

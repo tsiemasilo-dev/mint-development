@@ -19,6 +19,7 @@ import FactsheetPage from "./pages/FactsheetPage.jsx";
 import OpenStrategiesPage from "./pages/OpenStrategiesPage.jsx";
 import MorePage from "./pages/MorePage.jsx";
 import OnboardingPage from "./pages/OnboardingPage.jsx";
+import InstantLiquidityPage from "./pages/InstantLiquidity.jsx"; 
 import SettingsPage from "./pages/SettingsPage.jsx";
 import TransactPage from "./pages/TransactPage.jsx";
 import UserOnboardingPage from "./pages/UserOnboardingPage.jsx";
@@ -542,6 +543,21 @@ const App = () => {
             />
           </AppLayout>
         );
+
+        case 'instantLiquidity':
+          return (
+            <AppLayout
+              activeTab="credit" // Keeps the credit tab highlighted in the layout
+              onTabChange={handleTabChange}
+              onWithdraw={handleWithdrawRequest}
+              onShowComingSoon={handleShowComingSoon}
+              modal={modal}
+              onCloseModal={closeModal}
+            >
+              <InstantLiquidityPage onBack={goBack} />
+            </AppLayout>
+          );
+
       case 'more':
         return (
           <AppLayout
@@ -897,6 +913,7 @@ const App = () => {
           onOpenMarkets={() => { setMarketsInitialView("invest"); navigateTo("markets"); }}
           onOpenNews={() => { setMarketsInitialView("news"); navigateTo("markets"); }}
           onOpenNewsArticle={(articleId) => { setSelectedArticleId(articleId); navigateTo("newsArticle"); }}
+          onOpenInstantLiquidity={() => navigateTo("instantLiquidity")}
         />
       </AppLayout>
     );
