@@ -20,6 +20,7 @@ import OpenStrategiesPage from "./pages/OpenStrategiesPage.jsx";
 import MorePage from "./pages/MorePage.jsx";
 import OnboardingPage from "./pages/OnboardingPage.jsx";
 import InstantLiquidityPage from "./pages/InstantLiquidity.jsx"; 
+import { useProfile } from "./lib/useProfile";
 import SettingsPage from "./pages/SettingsPage.jsx";
 import TransactPage from "./pages/TransactPage.jsx";
 import UserOnboardingPage from "./pages/UserOnboardingPage.jsx";
@@ -84,6 +85,7 @@ const App = () => {
   const [authStep, setAuthStep] = useState(isRecoveryMode ? "newPassword" : "email");
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [sessionReady, setSessionReady] = useState(false);
+  const { profile } = useProfile();
   const [notificationReturnPage, setNotificationReturnPage] = useState("home");
   const [modal, setModal] = useState(null);
   const [selectedSecurity, setSelectedSecurity] = useState(null);
