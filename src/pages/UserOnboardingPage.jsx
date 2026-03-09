@@ -223,21 +223,27 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
     } catch {}
   };
 
+  const getNextIncompleteStep = (afterStep, justCompletedStep) => {
+    const steps = [
+      { step: 2, done: kycAlreadyVerified },
+      { step: 3, done: bankDone },
+      { step: 4, done: mandateDone },
+      { step: 5, done: riskDone },
+      { step: 6, done: sofDone },
+    ];
+    for (const s of steps) {
+      if (s.step > afterStep && !s.done && s.step !== justCompletedStep) return s.step;
+    }
+    return 7;
+  };
+
   const handleContinue = async () => {
     if (step === 0) {
       await ensureOnboardingRecord();
       if (!kycAlreadyVerified) {
         goToStep(2);
-      } else if (!bankDone) {
-        goToStep(3);
-      } else if (!mandateDone) {
-        goToStep(4);
-      } else if (!riskDone) {
-        goToStep(5);
-      } else if (!sofDone) {
-        goToStep(6);
       } else {
-        goToStep(7);
+        goToStep(getNextIncompleteStep(1));
       }
     }
   };
@@ -959,9 +965,9 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   <button
                     type="button"
                     className="continue-button proceed-button"
-                    onClick={() => goToStep(3)}
+                    onClick={() => goToStep(getNextIncompleteStep(2, 2))}
                   >
-                    Continue to Bank Details
+                    Continue
                   </button>
                 </div>
               )}
@@ -1126,9 +1132,9 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   type="button"
                   className={`continue-button agreement-continue ${bankDetailsReady ? "enabled" : ""}`}
                   disabled={!bankDetailsReady}
-                  onClick={async () => { await saveProgressFlag("bank_details_saved"); setBankDone(true); goToStep(4); }}
+                  onClick={async () => { await saveProgressFlag("bank_details_saved"); setBankDone(true); goToStep(getNextIncompleteStep(3, 3)); }}
                 >
-                  Continue to Mandate
+                  Continue
                 </button>
               </div>
 
@@ -1208,9 +1214,9 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   type="button"
                   className={`continue-button agreement-continue ${agreedMandate && mandateValid ? "enabled" : ""}`}
                   disabled={!agreedMandate || !mandateValid}
-                  onClick={async () => { await saveProgressFlag("mandate_accepted"); setMandateDone(true); goToStep(5); }}
+                  onClick={async () => { await saveProgressFlag("mandate_accepted"); setMandateDone(true); goToStep(getNextIncompleteStep(4, 4)); }}
                 >
-                  Continue to Risk Disclosure
+                  Continue
                 </button>
               </div>
 
@@ -1303,9 +1309,9 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   type="button"
                   className={`continue-button agreement-continue ${agreedRiskDisclosure ? "enabled" : ""}`}
                   disabled={!agreedRiskDisclosure}
-                  onClick={async () => { await saveProgressFlag("risk_disclosure_accepted"); setRiskDone(true); goToStep(6); }}
+                  onClick={async () => { await saveProgressFlag("risk_disclosure_accepted"); setRiskDone(true); goToStep(getNextIncompleteStep(5, 5)); }}
                 >
-                  Continue to Source of Funds
+                  Continue
                 </button>
               </div>
 
@@ -1448,9 +1454,9 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                     type="button"
                     className={`continue-button agreement-continue ${sofReady ? "enabled" : ""}`}
                     disabled={!sofReady}
-                    onClick={async () => { await saveProgressFlag("source_of_funds_accepted"); setSofDone(true); goToStep(7); }}
+                    onClick={async () => { await saveProgressFlag("source_of_funds_accepted"); setSofDone(true); goToStep(getNextIncompleteStep(6, 6)); }}
                   >
-                    Continue to Agreements
+                    Continue
                   </button>
                 </div>
 
