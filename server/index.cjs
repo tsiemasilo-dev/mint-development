@@ -3559,6 +3559,117 @@ app.post("/api/sumsub/sync", async (req, res) => {
 // Onboarding Endpoints (server-side for RLS bypass)
 // ============================================================
 
+function hasMatchingPackIdNumber(value, idNumber) {
+  if (value == null) return false;
+
+  if (Array.isArray(value)) {
+    return value.some((item) => hasMatchingPackIdNumber(item, idNumber));
+  }
+
+  if (typeof value === "object") {
+    for (const [key, nestedValue] of Object.entries(value)) {
+      if (key === "number" && String(nestedValue) === idNumber) {
+        return true;
+      }
+      if (hasMatchingPackIdNumber(nestedValue, idNumber)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function maskEmailAddress(email) {
+  const normalized = String(email || "").trim();
+  const atIndex = normalized.indexOf("@");
+  if (!normalized || atIndex <= 0) return "";
+
+  const localPart = normalized.slice(0, atIndex);
+  const domainPart = normalized.slice(atIndex);
+  const visiblePrefix = localPart.slice(0, 4);
+  const maskedCount = Math.max(localPart.length - visiblePrefix.length, 5);
+  return `${visiblePrefix}${"*".repeat(maskedCount)}${domainPart}`;
+}
+
+app.post("/api/onboarding/check-id-number", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (!token) return res.status(401).json({ success: false, error: "Missing token" });
+
+    const authClient = supabaseAdmin || supabase;
+    const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
+    if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
+
+    const idNumber = String(req.body?.id_number || "").replace(/\D/g, "");
+    if (!/^\d{13}$/.test(idNumber)) {
+      return res.status(400).json({ success: false, error: "A valid 13-digit id_number is required" });
+    }
+
+    let exists = false;
+    let matchedUserId = null;
+    let matchedEmail = null;
+
+    if (pgPool) {
+      const client = await pgPool.connect();
+      try {
+        const query = `
+          SELECT user_id
+          FROM user_onboarding_pack_details
+          WHERE jsonb_path_exists(
+            pack_details,
+            '$.**.number ? (@ == $id)',
+            jsonb_build_object('id', to_jsonb($1::text))
+          )
+          LIMIT 1
+        `;
+        const result = await client.query(query, [idNumber]);
+        exists = result.rows.length > 0;
+        if (exists) {
+          matchedUserId = result.rows[0].user_id || null;
+        }
+      } finally {
+        client.release();
+      }
+    }
+
+    if (!exists) {
+      const db = getAuthenticatedDb(token);
+      const { data: rows, error } = await db
+        .from("user_onboarding_pack_details")
+        .select("user_id, pack_details");
+
+      if (error) {
+        return res.status(500).json({ success: false, error: error.message });
+      }
+
+      const matchedRow = (rows || []).find((row) => hasMatchingPackIdNumber(row?.pack_details, idNumber));
+      exists = Boolean(matchedRow);
+      if (matchedRow?.user_id) {
+        matchedUserId = matchedRow.user_id;
+      }
+    }
+
+    if (exists && matchedUserId) {
+      const db = supabaseAdmin || getAuthenticatedDb(token);
+      if (db) {
+        const { data: profile } = await db
+          .from("profiles")
+          .select("email")
+          .eq("id", matchedUserId)
+          .maybeSingle();
+        matchedEmail = profile?.email || null;
+      }
+    }
+
+    return res.json({ success: true, exists, masked_email: maskEmailAddress(matchedEmail) || null });
+  } catch (error) {
+    console.error("[Onboarding] ID precheck error:", error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.post("/api/onboarding/save-employment", async (req, res) => {
   try {
     const authHeader = req.headers.authorization || "";
