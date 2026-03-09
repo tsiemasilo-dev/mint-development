@@ -21,6 +21,18 @@ function hasMatchingPackIdNumber(value, idNumber) {
   return false;
 }
 
+function maskEmailAddress(email) {
+  const normalized = String(email || "").trim();
+  const atIndex = normalized.indexOf("@");
+  if (!normalized || atIndex <= 0) return "";
+
+  const localPart = normalized.slice(0, atIndex);
+  const domainPart = normalized.slice(atIndex);
+  const visiblePrefix = localPart.slice(0, 4);
+  const maskedCount = Math.max(localPart.length - visiblePrefix.length, 5);
+  return `${visiblePrefix}${"*".repeat(maskedCount)}${domainPart}`;
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ success: false, error: "Method not allowed" });
@@ -64,7 +76,7 @@ export default async function handler(req, res) {
       email = profile?.email || null;
     }
 
-    return res.status(200).json({ success: true, exists, email });
+    return res.status(200).json({ success: true, exists, masked_email: maskEmailAddress(email) || null });
   } catch (error) {
     console.error("[Onboarding] ID precheck error:", error);
     return res.status(500).json({ success: false, error: error.message });

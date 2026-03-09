@@ -3580,6 +3580,18 @@ function hasMatchingPackIdNumber(value, idNumber) {
   return false;
 }
 
+function maskEmailAddress(email) {
+  const normalized = String(email || "").trim();
+  const atIndex = normalized.indexOf("@");
+  if (!normalized || atIndex <= 0) return "";
+
+  const localPart = normalized.slice(0, atIndex);
+  const domainPart = normalized.slice(atIndex);
+  const visiblePrefix = localPart.slice(0, 4);
+  const maskedCount = Math.max(localPart.length - visiblePrefix.length, 5);
+  return `${visiblePrefix}${"*".repeat(maskedCount)}${domainPart}`;
+}
+
 app.post("/api/onboarding/check-id-number", async (req, res) => {
   try {
     const authHeader = req.headers.authorization || "";
@@ -3651,7 +3663,7 @@ app.post("/api/onboarding/check-id-number", async (req, res) => {
       }
     }
 
-    return res.json({ success: true, exists, email: matchedEmail });
+    return res.json({ success: true, exists, masked_email: maskEmailAddress(matchedEmail) || null });
   } catch (error) {
     console.error("[Onboarding] ID precheck error:", error);
     return res.status(500).json({ success: false, error: error.message });
