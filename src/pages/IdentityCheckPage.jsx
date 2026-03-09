@@ -4,6 +4,7 @@ import UserOnboardingPage from "./UserOnboardingPage";
 import SumsubVerification from "../components/SumsubVerification";
 import { useSumsubStatus } from "../lib/useSumsubStatus";
 import { supabase } from "../lib/supabase";
+import { parseOnboardingFlags } from "../lib/checkOnboardingComplete";
 
 const IdentityCheckPage = ({ onBack, onComplete }) => {
   const { kycVerified, kycPending, kycNeedsResubmission, loading, refetch } = useSumsubStatus();
@@ -31,21 +32,8 @@ const IdentityCheckPage = ({ onBack, onComplete }) => {
           .order("created_at", { ascending: false })
           .limit(1);
         const record = data?.[0];
-        const kycDone = record?.kyc_status === "onboarding_complete" || record?.kyc_status === "verified";
-        let bankDone = false;
-        let mandateAgreed = false;
-        let riskDone = false;
-        let sofDone = false;
-        if (record?.sumsub_raw) {
-          try {
-            const raw = typeof record.sumsub_raw === "string" ? JSON.parse(record.sumsub_raw) : record.sumsub_raw;
-            bankDone = !!raw?.bank_details_saved;
-            mandateAgreed = !!raw?.mandate_data?.agreedMandate || !!raw?.mandate_accepted;
-            riskDone = !!raw?.risk_disclosure_accepted;
-            sofDone = !!raw?.source_of_funds_accepted;
-          } catch {}
-        }
-        if (kycDone && bankDone && mandateAgreed && riskDone && sofDone) {
+        const { allComplete } = parseOnboardingFlags(record);
+        if (allComplete) {
           setOnboardingComplete(true);
         }
       } catch {
