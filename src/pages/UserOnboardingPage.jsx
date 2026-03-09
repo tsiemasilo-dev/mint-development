@@ -227,7 +227,9 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   };
 
   const getNextIncompleteStep = (afterStep, justCompletedStep) => {
+    const identityCheckDone = !!existingOnboardingId || kycAlreadyVerified;
     const steps = [
+      { step: 1, done: identityCheckDone },
       { step: 2, done: kycAlreadyVerified },
       { step: 3, done: bankDone },
       { step: 4, done: mandateDone },
@@ -242,7 +244,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
   const handleContinue = async () => {
     if (step === 0) {
-      goToStep(1);
+      await ensureOnboardingRecord();
+      goToStep(getNextIncompleteStep(0));
     }
   };
 
