@@ -682,8 +682,8 @@ const HomePage = ({
 
   const actionsData = [
     {
-      id: "identity",
-      title: "Complete identity",
+      id: "onboarding",
+      title: "Complete onboarding",
       description: getIdentityDescription(),
       priority: 1,
       status: identityStatusHome.text,
