@@ -63,21 +63,21 @@ const BankIcon = (props) => (
 );
 
 const southAfricanBanks = [
-  { value: "", label: "Select your bank", logo: null },
-  { value: "absa", label: "Absa Bank", logo: "https://logo.clearbit.com/absa.co.za" },
-  { value: "african_bank", label: "African Bank", logo: "https://logo.clearbit.com/africanbank.co.za" },
-  { value: "bidvest_bank", label: "Bidvest Bank", logo: "https://logo.clearbit.com/bidvestbank.co.za" },
-  { value: "capitec", label: "Capitec Bank", logo: "https://logo.clearbit.com/capitecbank.co.za" },
-  { value: "discovery_bank", label: "Discovery Bank", logo: "https://logo.clearbit.com/discovery.co.za" },
-  { value: "fnb", label: "First National Bank (FNB)", logo: "https://logo.clearbit.com/fnb.co.za" },
-  { value: "investec", label: "Investec", logo: "https://logo.clearbit.com/investec.com" },
-  { value: "nedbank", label: "Nedbank", logo: "https://logo.clearbit.com/nedbank.co.za" },
-  { value: "old_mutual", label: "Old Mutual", logo: "https://logo.clearbit.com/oldmutual.co.za" },
-  { value: "sasfin", label: "Sasfin Bank", logo: "https://logo.clearbit.com/sasfin.com" },
-  { value: "standard_bank", label: "Standard Bank", logo: "https://logo.clearbit.com/standardbank.co.za" },
-  { value: "tyme_bank", label: "TymeBank", logo: "https://logo.clearbit.com/tymebank.co.za" },
-  { value: "zero", label: "Bank Zero", logo: "https://logo.clearbit.com/bankzero.co.za" },
-  { value: "other", label: "Other", logo: null },
+  { value: "", label: "Select your bank", logo: null, branchCode: "" },
+  { value: "absa", label: "Absa Bank", logo: "https://logo.clearbit.com/absa.co.za", branchCode: "632005" },
+  { value: "african_bank", label: "African Bank", logo: "https://logo.clearbit.com/africanbank.co.za", branchCode: "" },
+  { value: "bidvest_bank", label: "Bidvest Bank", logo: "https://logo.clearbit.com/bidvestbank.co.za", branchCode: "462005" },
+  { value: "capitec", label: "Capitec Bank", logo: "https://logo.clearbit.com/capitecbank.co.za", branchCode: "470010" },
+  { value: "discovery_bank", label: "Discovery Bank", logo: "https://logo.clearbit.com/discovery.co.za", branchCode: "" },
+  { value: "fnb", label: "First National Bank (FNB)", logo: "https://logo.clearbit.com/fnb.co.za", branchCode: "250655" },
+  { value: "investec", label: "Investec", logo: "https://logo.clearbit.com/investec.com", branchCode: "580105" },
+  { value: "nedbank", label: "Nedbank", logo: "https://logo.clearbit.com/nedbank.co.za", branchCode: "198765" },
+  { value: "old_mutual", label: "Old Mutual", logo: "https://logo.clearbit.com/oldmutual.co.za", branchCode: "" },
+  { value: "sasfin", label: "Sasfin Bank", logo: "https://logo.clearbit.com/sasfin.com", branchCode: "" },
+  { value: "standard_bank", label: "Standard Bank", logo: "https://logo.clearbit.com/standardbank.co.za", branchCode: "051001" },
+  { value: "tyme_bank", label: "TymeBank", logo: "https://logo.clearbit.com/tymebank.co.za", branchCode: "" },
+  { value: "zero", label: "Bank Zero", logo: "https://logo.clearbit.com/bankzero.co.za", branchCode: "" },
+  { value: "other", label: "Other", logo: null, branchCode: "" },
 ];
 
 const employmentOptions = [
@@ -179,6 +179,12 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const handleBankSelect = (value) => {
     setBankName(value);
     setBankDropdownOpen(false);
+    const selected = southAfricanBanks.find((b) => b.value === value);
+    if (selected?.branchCode) {
+      setBankBranchCode(selected.branchCode);
+    } else {
+      setBankBranchCode("");
+    }
   };
 
   const bankDetailsReady = bankName && bankAccountNumber && bankBranchCode;
