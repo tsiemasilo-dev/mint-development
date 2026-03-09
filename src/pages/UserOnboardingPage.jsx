@@ -316,15 +316,11 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
     } else if (step === 4) {
       goToStep(3);
     } else if (step === 3) {
-<<<<<<< HEAD
-      goToStep(0);
-=======
       if (kycAlreadyVerified) {
         goToStep(1);
       } else {
         goToStep(2);
       }
->>>>>>> a86cac23f75b1a15d4e7d8a6606a8839bc07fb71
     } else if (step === 2) {
       goToStep(1);
     } else if (step === 1) {
@@ -687,7 +683,6 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 </p>
               </div>
 
-<<<<<<< HEAD
               {(() => {
                 const tick = (
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="16" height="16">
@@ -699,7 +694,9 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                   </svg>
                 );
+                const identityCheckDone = !!existingOnboardingId || kycAlreadyVerified;
                 const steps = [
+                  { done: identityCheckDone, title: "Identity Check", doneDesc: "ID number confirmed", pendingDesc: "Confirm your ID number is unique in our records", badge: "Confirmed" },
                   { done: kycAlreadyVerified, title: "Identification", doneDesc: "Identity verification complete", pendingDesc: "Verify your identity for security purposes", badge: "Verified" },
                   { done: bankDone, title: "Bank Account", doneDesc: "Bank details saved", pendingDesc: "Add your bank account details", badge: "Saved" },
                   { done: mandateDone, title: "Discretionary Mandate", doneDesc: "Mandate accepted", pendingDesc: "Review and accept the FSP investment mandate", badge: "Accepted" },
@@ -718,47 +715,6 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                           {i < steps.length - 1 && <div className={`step-line ${s.done ? 'step-line-complete' : ''}`}></div>}
                         </React.Fragment>
                       ))}
-=======
-              <div className="steps-container animate-fade-in delay-2">
-                <div className="step-circle">1</div>
-                <div className="step-line"></div>
-                <div className="step-circle">2</div>
-                <div className="step-line"></div>
-                <div className="step-circle">3</div>
-                <div className="step-line"></div>
-                <div className="step-circle">4</div>
-                <div className="step-line"></div>
-                <div className="step-circle">5</div>
-                <div className="step-line"></div>
-                <div className="step-circle">6</div>
-                <div className="step-line"></div>
-                <div className="step-circle">7</div>
-              </div>
-
-              <div className="step-info animate-fade-in delay-3">
-                <div className="step-item">
-                  <div className="step-number">1</div>
-                  <div className="step-content">
-                    <div className="step-title">Identity Check</div>
-                    <div className="step-description">
-                      Confirm your ID number is unique in our records
-                    </div>
-                  </div>
-                </div>
-
-                <div className={`step-item ${kycAlreadyVerified ? 'step-item-complete' : ''}`}>
-                  <div className={`step-number ${kycAlreadyVerified ? 'step-number-complete' : ''}`}>
-                    {kycAlreadyVerified ? (
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="14" height="14">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                      </svg>
-                    ) : '2'}
-                  </div>
-                  <div className="step-content">
-                    <div className="step-title">
-                      Identification
-                      {kycAlreadyVerified && <span className="step-verified-badge">Verified</span>}
->>>>>>> a86cac23f75b1a15d4e7d8a6606a8839bc07fb71
                     </div>
                     <div className="step-info animate-fade-in delay-3">
                       {steps.map((s, i) => (
@@ -778,65 +734,9 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                         </div>
                       ))}
                     </div>
-<<<<<<< HEAD
                   </>
                 );
               })()}
-=======
-                  </div>
-                </div>
-
-                <div className="step-item">
-                  <div className="step-number">3</div>
-                  <div className="step-content">
-                    <div className="step-title">Bank Account</div>
-                    <div className="step-description">
-                      Add your bank account details
-                    </div>
-                  </div>
-                </div>
-
-                <div className="step-item">
-                  <div className="step-number">4</div>
-                  <div className="step-content">
-                    <div className="step-title">Discretionary Mandate</div>
-                    <div className="step-description">
-                      Review and accept the FSP investment mandate
-                    </div>
-                  </div>
-                </div>
-
-                <div className="step-item">
-                  <div className="step-number">5</div>
-                  <div className="step-content">
-                    <div className="step-title">Risk Disclosure</div>
-                    <div className="step-description">
-                      Review investment risk disclosure
-                    </div>
-                  </div>
-                </div>
-
-                <div className="step-item">
-                  <div className="step-number">6</div>
-                  <div className="step-content">
-                    <div className="step-title">Source of Funds</div>
-                    <div className="step-description">
-                      Declare the origin of your investment funds
-                    </div>
-                  </div>
-                </div>
-
-                <div className="step-item">
-                  <div className="step-number">7</div>
-                  <div className="step-content">
-                    <div className="step-title">Agreements</div>
-                    <div className="step-description">
-                      Review and accept terms and conditions
-                    </div>
-                  </div>
-                </div>
-              </div>
->>>>>>> a86cac23f75b1a15d4e7d8a6606a8839bc07fb71
 
               <div className="text-center mt-8 animate-fade-in delay-4">
                 <button
