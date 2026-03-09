@@ -244,15 +244,15 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
   const handleBack = () => {
     if (step === 7) {
-      goToStep(sofDone ? 0 : 6);
+      goToStep(6);
     } else if (step === 6) {
-      goToStep(riskDone ? 0 : 5);
+      goToStep(5);
     } else if (step === 5) {
-      goToStep(mandateDone ? 0 : 4);
+      goToStep(4);
     } else if (step === 4) {
-      goToStep(bankDone ? 0 : 3);
+      goToStep(3);
     } else if (step === 3) {
-      goToStep(kycAlreadyVerified ? 0 : 2);
+      goToStep(0);
     } else if (step === 2) {
       goToStep(0);
     } else if (onBack) {
@@ -415,6 +415,9 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
         if (record) {
           if (record.bank_name && record.bank_account_number && record.bank_branch_code) {
             setBankDone(true);
+            setBankName(record.bank_name);
+            setBankAccountNumber(record.bank_account_number);
+            setBankBranchCode(record.bank_branch_code);
           }
           let raw = {};
           try { raw = typeof record.sumsub_raw === "string" ? JSON.parse(record.sumsub_raw) : (record.sumsub_raw || {}); } catch {}
