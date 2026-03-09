@@ -44,15 +44,27 @@ export default async function handler(req, res) {
 
     const { data: rows, error } = await db
       .from("user_onboarding_pack_details")
-      .select("pack_details");
+      .select("user_id, pack_details");
 
     if (error) {
       return res.status(500).json({ success: false, error: error.message });
     }
 
-    const exists = (rows || []).some((row) => hasMatchingPackIdNumber(row?.pack_details, idNumber));
+    const matchedRow = (rows || []).find((row) => hasMatchingPackIdNumber(row?.pack_details, idNumber));
+    const exists = Boolean(matchedRow);
+    let email = null;
 
-    return res.status(200).json({ success: true, exists });
+    if (exists && matchedRow?.user_id) {
+      const profileClient = supabaseAdmin || db;
+      const { data: profile } = await profileClient
+        .from("profiles")
+        .select("email")
+        .eq("id", matchedRow.user_id)
+        .maybeSingle();
+      email = profile?.email || null;
+    }
+
+    return res.status(200).json({ success: true, exists, email });
   } catch (error) {
     console.error("[Onboarding] ID precheck error:", error);
     return res.status(500).json({ success: false, error: error.message });

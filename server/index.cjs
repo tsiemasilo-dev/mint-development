@@ -3596,6 +3596,8 @@ app.post("/api/onboarding/check-id-number", async (req, res) => {
     }
 
     let exists = false;
+    let matchedUserId = null;
+    let matchedEmail = null;
 
     if (pgPool) {
       const client = await pgPool.connect();
@@ -3612,6 +3614,9 @@ app.post("/api/onboarding/check-id-number", async (req, res) => {
         `;
         const result = await client.query(query, [idNumber]);
         exists = result.rows.length > 0;
+        if (exists) {
+          matchedUserId = result.rows[0].user_id || null;
+        }
       } finally {
         client.release();
       }
@@ -3621,16 +3626,32 @@ app.post("/api/onboarding/check-id-number", async (req, res) => {
       const db = getAuthenticatedDb(token);
       const { data: rows, error } = await db
         .from("user_onboarding_pack_details")
-        .select("pack_details");
+        .select("user_id, pack_details");
 
       if (error) {
         return res.status(500).json({ success: false, error: error.message });
       }
 
-      exists = (rows || []).some((row) => hasMatchingPackIdNumber(row?.pack_details, idNumber));
+      const matchedRow = (rows || []).find((row) => hasMatchingPackIdNumber(row?.pack_details, idNumber));
+      exists = Boolean(matchedRow);
+      if (matchedRow?.user_id) {
+        matchedUserId = matchedRow.user_id;
+      }
     }
 
-    return res.json({ success: true, exists });
+    if (exists && matchedUserId) {
+      const db = supabaseAdmin || getAuthenticatedDb(token);
+      if (db) {
+        const { data: profile } = await db
+          .from("profiles")
+          .select("email")
+          .eq("id", matchedUserId)
+          .maybeSingle();
+        matchedEmail = profile?.email || null;
+      }
+    }
+
+    return res.json({ success: true, exists, email: matchedEmail });
   } catch (error) {
     console.error("[Onboarding] ID precheck error:", error);
     return res.status(500).json({ success: false, error: error.message });

@@ -252,7 +252,12 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
       }
 
       if (result.exists) {
-        setIdentityCheckError("ID already exists");
+        const existingEmail = typeof result.email === "string" ? result.email.trim() : "";
+        if (existingEmail) {
+          setIdentityCheckError(`ID already exists, please sign in on ${existingEmail} to continue.`);
+        } else {
+          setIdentityCheckError("ID already exists");
+        }
         return;
       }
 
