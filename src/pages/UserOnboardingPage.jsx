@@ -118,7 +118,7 @@ const monthlyInvestmentOptions = [
 
 const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const { profile } = useProfile();
-  const [step, setStep] = useState(7);
+  const [step, setStep] = useState(0);
   const [isFading, setIsFading] = useState(false);
   const [employmentStatus, setEmploymentStatus] = useState("");
   const [employerName, setEmployerName] = useState("");
