@@ -2,56 +2,33 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
+import Skeleton from "./Skeleton";
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
   import.meta.url
 ).toString();
 
-function PdfSkeleton({ width }) {
-  const blockStyle = {
-    background: "linear-gradient(90deg, #ede9f7 25%, #d8d0f0 50%, #ede9f7 75%)",
-    backgroundSize: "200% 100%",
-    animation: "pdf-shimmer 1.4s ease-in-out infinite",
-    borderRadius: 4,
-  };
-
+function PdfSkeleton() {
   return (
-    <>
-      <style>{`
-        @keyframes pdf-shimmer {
-          0% { background-position: 200% 0; }
-          100% { background-position: -200% 0; }
-        }
-      `}</style>
-      <div style={{ padding: "12px 0" }}>
-        {[1, 2, 3].map((page) => (
-          <div
-            key={page}
-            style={{
-              width: width || "100%",
-              marginBottom: 4,
-              padding: 16,
-              background: "#f5f3fb",
-              borderRadius: 4,
-            }}
-          >
-            <div style={{ ...blockStyle, height: 12, width: "60%", marginBottom: 10 }} />
-            <div style={{ ...blockStyle, height: 10, width: "100%", marginBottom: 6 }} />
-            <div style={{ ...blockStyle, height: 10, width: "95%", marginBottom: 6 }} />
-            <div style={{ ...blockStyle, height: 10, width: "88%", marginBottom: 6 }} />
-            <div style={{ ...blockStyle, height: 10, width: "92%", marginBottom: 6 }} />
-            <div style={{ ...blockStyle, height: 10, width: "75%", marginBottom: 16 }} />
-            <div style={{ ...blockStyle, height: 10, width: "100%", marginBottom: 6 }} />
-            <div style={{ ...blockStyle, height: 10, width: "97%", marginBottom: 6 }} />
-            <div style={{ ...blockStyle, height: 10, width: "83%", marginBottom: 16 }} />
-            <div style={{ ...blockStyle, height: 10, width: "100%", marginBottom: 6 }} />
-            <div style={{ ...blockStyle, height: 10, width: "90%", marginBottom: 6 }} />
-            <div style={{ ...blockStyle, height: 10, width: "70%", marginBottom: 6 }} />
-          </div>
-        ))}
-      </div>
-    </>
+    <div className="flex flex-col gap-1 p-3">
+      {[1, 2, 3].map((page) => (
+        <div key={page} className="flex flex-col gap-2 p-4 mb-1 rounded-md bg-slate-50">
+          <Skeleton className="h-3 w-2/5" />
+          <Skeleton className="h-2.5 w-full" />
+          <Skeleton className="h-2.5 w-[95%]" />
+          <Skeleton className="h-2.5 w-[88%]" />
+          <Skeleton className="h-2.5 w-[92%]" />
+          <Skeleton className="h-2.5 w-3/4 mb-2" />
+          <Skeleton className="h-2.5 w-full" />
+          <Skeleton className="h-2.5 w-[97%]" />
+          <Skeleton className="h-2.5 w-[83%] mb-2" />
+          <Skeleton className="h-2.5 w-full" />
+          <Skeleton className="h-2.5 w-[90%]" />
+          <Skeleton className="h-2.5 w-[70%]" />
+        </div>
+      ))}
+    </div>
   );
 }
 
