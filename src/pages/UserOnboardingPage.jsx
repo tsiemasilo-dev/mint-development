@@ -1427,7 +1427,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
               <div className="agreement-card animate-fade-in delay-2" style={{padding: 0, overflow: 'hidden'}}>
                 <iframe
-                  src="/strategy-disclosures.pdf"
+                  src="/strategy-disclosures.pdf#toolbar=0&navpanes=0&scrollbar=0&view=FitH"
                   title="Strategy Disclosures"
                   style={{width: '100%', height: '70vh', border: 'none', display: 'block'}}
                 />
