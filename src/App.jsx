@@ -247,6 +247,30 @@ const App = () => {
     };
   }, [currentPage]);
 
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) return;
+
+    window.history.pushState({ mintGuard: true }, '');
+
+    const handlePopState = () => {
+      window.history.pushState({ mintGuard: true }, '');
+
+      if (navigationHistory.current.length > 0) {
+        const prevPage = navigationHistory.current.pop();
+        const newPreviousPage = navigationHistory.current.length > 0
+          ? navigationHistory.current[navigationHistory.current.length - 1]
+          : null;
+        setPreviousPageName(newPreviousPage);
+        setCurrentPage(prevPage);
+      } else if (!mainTabs.includes(currentPageRef.current)) {
+        setPreviousPageName(null);
+        setCurrentPage('home');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
