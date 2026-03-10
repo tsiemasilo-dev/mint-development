@@ -158,6 +158,8 @@ const App = () => {
     };
   }, [currentPage, selectedSecurity, selectedStrategy, selectedArticleId, investmentAmount, stockCheckout, notificationReturnPage]);
 
+  const pendingProgrammaticBacks = useRef(0);
+
   const navigateTo = useCallback((page) => {
     if (page === currentPage) return;
     
@@ -168,6 +170,10 @@ const App = () => {
         navigationHistory.current = navigationHistory.current.slice(-20);
       }
       setPreviousPageName(currentPage);
+
+      if (!Capacitor.isNativePlatform()) {
+        window.history.pushState({ mintPage: page }, '');
+      }
     } else {
       navigationHistory.current = [];
       setPreviousPageName(null);
@@ -194,12 +200,22 @@ const App = () => {
         : null;
       setPreviousPageName(newPreviousPage);
       setCurrentPage(prevPage);
+
+      if (!Capacitor.isNativePlatform()) {
+        pendingProgrammaticBacks.current++;
+        window.history.back();
+      }
       return true;
     }
     
     if (!mainTabs.includes(currentPage)) {
       setPreviousPageName(null);
       setCurrentPage('home');
+
+      if (!Capacitor.isNativePlatform()) {
+        pendingProgrammaticBacks.current++;
+        window.history.back();
+      }
       return true;
     }
     
@@ -250,10 +266,13 @@ const App = () => {
   useEffect(() => {
     if (Capacitor.isNativePlatform()) return;
 
-    window.history.pushState({ mintGuard: true }, '');
+    window.history.replaceState({ mintPage: 'root' }, '');
 
     const handlePopState = () => {
-      window.history.pushState({ mintGuard: true }, '');
+      if (pendingProgrammaticBacks.current > 0) {
+        pendingProgrammaticBacks.current--;
+        return;
+      }
 
       if (navigationHistory.current.length > 0) {
         const prevPage = navigationHistory.current.pop();
@@ -265,6 +284,8 @@ const App = () => {
       } else if (!mainTabs.includes(currentPageRef.current)) {
         setPreviousPageName(null);
         setCurrentPage('home');
+      } else {
+        window.history.pushState({ mintPage: 'root' }, '');
       }
     };
 

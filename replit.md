@@ -16,7 +16,8 @@ Mint Auth is a React authentication application built with Vite, Tailwind CSS, a
 - **Design Language**: iOS-style UI with a "glassmorphism" design approach for a modern and sleek aesthetic.
 - **Animations**: Smooth transitions and animations are implemented using Framer Motion for an enhanced user experience.
 - **Theming**: Tailwind CSS is used for utility-first styling, enabling rapid and consistent UI development.
-- **Navigation**: Implements an iOS-style "swipe-back" navigation system for intuitive backward navigation on non-main-tab pages, complete with previous page preview, scaling effects, and haptic feedback.
+- **Navigation**: Implements an iOS-style "swipe-back" navigation system for intuitive backward navigation on non-main-tab pages, complete with previous page preview, scaling effects, and haptic feedback. SwipeBackWrapper is disabled on iOS web browsers (non-standalone) to avoid conflicting with Safari's native edge swipe gesture.
+- **Browser Back Prevention**: On mobile web browsers, browser history is synced with the app's internal navigation stack via `pushState`/`popstate`. A counter-based `pendingProgrammaticBacks` ref prevents double-back races. On main tabs, a sentinel history entry is pushed to prevent the browser from navigating away from the app. PWA meta tags (`apple-mobile-web-app-capable`, `mobile-web-app-capable`) enable standalone mode when installed to home screen, which fully disables Safari's navigation gestures.
 
 ### Technical Implementations
 - **Frontend Framework**: React 18 with Vite for fast development and optimized builds.

@@ -16,7 +16,6 @@ const triggerHaptic = async () => {
   }
 };
 
-// Detect Android web browser (not native app)
 const isAndroidWeb = () => {
   if (typeof navigator === 'undefined') return false;
   const ua = navigator.userAgent.toLowerCase();
@@ -25,15 +24,25 @@ const isAndroidWeb = () => {
   return isAndroid && !isNative;
 };
 
+const isIOSWeb = () => {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent.toLowerCase();
+  const isIOS = /iphone|ipad|ipod/.test(ua) || (ua.includes('macintosh') && 'ontouchend' in document);
+  const isNative = Capacitor.isNativePlatform();
+  const isStandalone = window.navigator.standalone === true;
+  return isIOS && !isNative && !isStandalone;
+};
+
 const SwipeBackWrapper = ({ 
   children, 
   onBack, 
   enabled = true,
   previousPage = null 
 }) => {
-  // On Android web: swipe works but skip iOS-style visual effects
   const isAndroid = isAndroidWeb();
-  const showVisualEffects = !isAndroid;
+  const iosWeb = isIOSWeb();
+  const gestureDisabled = iosWeb;
+  const showVisualEffects = !isAndroid && !iosWeb;
   const containerRef = useRef(null);
   const [swipeProgress, setSwipeProgress] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -56,7 +65,7 @@ const SwipeBackWrapper = ({
   const progressThreshold = 0.5;
 
   const handleTouchStart = useCallback((e) => {
-    if (!enabled || isAnimating) return;
+    if (!enabled || isAnimating || gestureDisabled) return;
     
     const touch = e.touches[0];
     touchStartX.current = touch.clientX;
@@ -76,7 +85,7 @@ const SwipeBackWrapper = ({
   }, [enabled, isAnimating]);
 
   const handleTouchMove = useCallback((e) => {
-    if (!enabled || !isSwiping.current || !startedFromEdge.current || isAnimating) return;
+    if (!enabled || !isSwiping.current || !startedFromEdge.current || isAnimating || gestureDisabled) return;
     
     const touch = e.touches[0];
     const deltaX = touch.clientX - touchStartX.current;
@@ -114,7 +123,7 @@ const SwipeBackWrapper = ({
   }, [enabled, isAnimating, screenWidth]);
 
   const handleTouchEnd = useCallback(() => {
-    if (!enabled || !startedFromEdge.current || isAnimating) {
+    if (!enabled || !startedFromEdge.current || isAnimating || gestureDisabled) {
       setSwipeProgress(0);
       return;
     }
