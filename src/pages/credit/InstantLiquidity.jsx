@@ -2,7 +2,6 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { 
   Zap, 
-  ChevronRight, 
   Info, 
   Search, 
   SlidersHorizontal, 
@@ -14,26 +13,22 @@ import {
   Check
 } from "lucide-react";
 import { Line, LineChart, ResponsiveContainer, YAxis } from 'recharts';
-import { motion, AnimatePresence } from "framer-motion";
 import { formatZar } from "../lib/formatCurrency";
 import NotificationBell from "../components/NotificationBell";
 
 const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
-  const [draftFilter, setDraftFilter] = useState("all");
+  const [draftFilter, setDraftFilter] = useState("all"); // Used for the "Apply" logic
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [portalTarget, setPortalTarget] = useState(null);
-  
-  // Sheet Drag State
+
+  // --- Sheet Drag Logic from MarketsPage.jsx ---
   const [sheetOffset, setSheetOffset] = useState(0);
   const dragStartY = useRef(null);
   const isDragging = useRef(false);
 
   useEffect(() => { setPortalTarget(document.body); }, []);
-
-  const displayName = [profile?.firstName, profile?.lastName].filter(Boolean).join(" ");
-  const initials = displayName.split(" ").filter(Boolean).slice(0, 2).map(p => p[0]).join("").toUpperCase() || "MN";
 
   const fonts = {
     display: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
@@ -58,38 +53,41 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
 
   const sparklineData = [{ v: 40 }, { v: 35 }, { v: 55 }, { v: 45 }, { v: 60 }, { v: 50 }, { v: 75 }];
 
-  // Sheet Logic
+  // --- Sheet Interaction Handlers ---
   const resetSheetPosition = () => {
     setSheetOffset(0);
     dragStartY.current = null;
     isDragging.current = false;
   };
 
-  const handleSheetPointerDown = (e) => {
-    dragStartY.current = e.clientY;
+  const handleSheetPointerDown = (event) => {
+    dragStartY.current = event.clientY;
     isDragging.current = true;
   };
 
-  const handleSheetPointerMove = (e) => {
+  const handleSheetPointerMove = (event) => {
     if (!isDragging.current || dragStartY.current === null) return;
-    const delta = e.clientY - dragStartY.current;
+    const delta = event.clientY - dragStartY.current;
     setSheetOffset(delta > 0 ? delta : 0);
   };
 
   const handleSheetPointerUp = () => {
     if (!isDragging.current) return;
-    if (sheetOffset > 100) setIsFilterOpen(false);
+    if (sheetOffset > 80) setIsFilterOpen(false);
     resetSheetPosition();
   };
 
   const applyFilters = () => {
     setActiveFilter(draftFilter);
     setIsFilterOpen(false);
+    resetSheetPosition();
   };
+
+  const initials = [profile?.firstName, profile?.lastName]
+    .filter(Boolean).map(p => p[0]).join("").toUpperCase() || "MN";
 
   return (
     <div className="min-h-screen pb-32 relative overflow-x-hidden text-slate-900">
-      {/* Background Gradient */}
       <div className="absolute inset-x-0 top-0 -z-10 h-full">
         <div 
           className="absolute inset-x-0 top-0"
@@ -104,17 +102,13 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
       <div className="px-5 pt-12 pb-8">
         <header className="relative flex items-center justify-between mb-10 text-white">
           <div className="flex items-center gap-3">
-            {profile?.avatarUrl ? (
-              <img src={profile.avatarUrl} alt="Profile" className="h-10 w-10 rounded-full border border-white/40 object-cover" />
-            ) : (
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 border border-white/30 text-xs font-semibold">{initials}</div>
-            )}
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 border border-white/30 text-xs font-semibold">{initials}</div>
           </div>
 
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
             <div className="flex items-center rounded-full bg-white/10 p-1 backdrop-blur-md">
               <button 
-                onClick={() => onTabChange("home")}
+                onClick={() => onTabChange("home")} // FIXED: Redirects to HomePage
                 className="rounded-full px-3 py-1.5 text-xs font-semibold text-white/70 hover:bg-white/10 transition-all"
               >
                 Wealth
@@ -129,11 +123,11 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
           <NotificationBell onClick={onOpenNotifications} />
         </header>
 
-        {/* Top Tab - Updated to White Glass */}
-        <div className="bg-white/30 backdrop-blur-3xl rounded-[36px] p-6 shadow-xl border border-white/60 mb-8 relative overflow-hidden">
+        {/* Top Tab - FIXED: White Glass Aesthetic */}
+        <div className="bg-white/40 backdrop-blur-3xl rounded-[36px] p-6 shadow-xl border border-white/80 mb-8 relative overflow-hidden">
           <div className="flex justify-between items-start mb-6">
             <div className="max-w-[200px]">
-              <p className="text-slate-700 text-[12px] leading-tight font-medium" style={{ fontFamily: fonts.text }}>
+              <p className="text-slate-600 text-[12px] leading-tight font-medium" style={{ fontFamily: fonts.text }}>
                 Pledge qualifying strategies and assets to unlock <span className="text-slate-900 font-bold">instant liquidity</span>.
               </p>
             </div>
@@ -165,7 +159,7 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
           </div>
         </div>
 
-        {/* Quick Actions */}
+        {/* Action Grid */}
         <div className="grid grid-cols-4 gap-4 mb-10 px-1">
           {[
             { label: "Apply", icon: Plus },
@@ -182,7 +176,7 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
           ))}
         </div>
 
-        {/* Search & Filter */}
+        {/* Search & Filter Bar */}
         <div className="flex gap-2 mb-8">
           <div className="relative flex-1">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -192,13 +186,12 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-white/50 backdrop-blur-xl border border-white/60 rounded-2xl py-3.5 pl-11 pr-4 text-sm focus:outline-none"
-              style={{ fontFamily: fonts.text }}
             />
           </div>
           <button 
             onClick={() => {
-                setIsFilterOpen(true);
                 setDraftFilter(activeFilter);
+                setIsFilterOpen(true);
             }}
             className="h-12 w-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center shadow-lg transition active:scale-95"
           >
@@ -206,35 +199,23 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
           </button>
         </div>
 
-        {/* Assets List */}
+        {/* Asset List Content */}
         <div className="space-y-4">
-          <div className="flex items-center gap-2 px-1 mb-4">
-            <p className="text-sm font-semibold text-slate-900" style={{ fontFamily: fonts.text }}>Qualifying Assets</p>
-            <div className="h-4 w-4 rounded-full bg-slate-200 flex items-center justify-center text-[9px] font-bold text-slate-500">
-              {filteredItems.length}
-            </div>
-          </div>
-
           {filteredItems.map((item) => (
             <div key={item.id} className="bg-white/60 backdrop-blur-2xl rounded-[32px] p-6 shadow-sm border border-white/80 transition active:scale-[0.98]">
               <div className="flex justify-between items-center mb-4">
                  <div className="flex items-center gap-4">
                    <div className="h-12 w-12 rounded-2xl bg-white border border-slate-100 shadow-sm overflow-hidden flex items-center justify-center">
-                     {item.logo ? (
-                       <img src={item.logo} alt={item.name} className="h-8 w-8 object-contain" />
-                     ) : (
-                       <div className="text-[10px] font-black text-slate-400">{item.code.slice(0,2)}</div>
-                     )}
+                     {item.logo ? <img src={item.logo} alt={item.name} className="h-8 w-8 object-contain" /> : <div className="text-[10px] font-black text-slate-400">{item.code.slice(0,2)}</div>}
                    </div>
                    <div>
-                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1" style={{ fontFamily: fonts.text }}>{item.name}</p>
+                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{item.name}</p>
                      <div className="flex items-baseline tracking-tight" style={{ fontFamily: fonts.display }}>
                         <span className="text-2xl font-bold text-slate-900">R{Math.floor(item.balance).toLocaleString()}</span>
                         <span className="text-lg font-bold text-slate-300">.{(item.balance % 1).toFixed(2).split('.')[1]}</span>
                      </div>
                    </div>
                  </div>
-
                  <div className="h-10 w-20">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={sparklineData}>
@@ -244,11 +225,8 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
                     </ResponsiveContainer>
                  </div>
               </div>
-
               <div className="flex justify-between items-center pt-5 border-t border-slate-100/50">
-                 <p className="text-[12px] font-bold text-slate-500" style={{ fontFamily: fonts.text }}>
-                    {formatZar(item.available)} <span className="text-slate-300 font-medium">Available</span>
-                 </p>
+                 <p className="text-[12px] font-bold text-slate-500">{formatZar(item.available)} <span className="text-slate-300 font-medium">Available</span></p>
                  <div className="text-right">
                     <p className="text-[10px] font-black text-slate-900 uppercase">LTV {item.ltv}</p>
                     <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest">{item.code}</p>
@@ -259,7 +237,7 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
         </div>
       </div>
 
-      {/* Sheet-Style Filter Portal */}
+      {/* FIXED: Filter Sheet (Exact logic/UI from MarketsPage.jsx) */}
       {isFilterOpen && portalTarget && createPortal(
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-900/40 backdrop-blur-sm px-4 pb-6">
           <button
@@ -272,10 +250,10 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
             }}
           />
           <div
-            className="relative z-10 flex h-[50vh] w-full max-w-sm flex-col overflow-hidden rounded-[32px] bg-white shadow-2xl"
+            className="relative z-10 flex h-[55vh] w-full max-w-sm flex-col overflow-hidden rounded-[32px] bg-white shadow-2xl"
             style={{ 
-                transform: `translateY(${sheetOffset}px)`,
-                transition: isDragging.current ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)'
+              transform: `translateY(${sheetOffset}px)`,
+              transition: isDragging.current ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)'
             }}
             onPointerDown={handleSheetPointerDown}
             onPointerMove={handleSheetPointerMove}
@@ -287,44 +265,45 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
               <div className="h-1.5 w-12 rounded-full bg-slate-200" />
             </div>
 
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-slate-100 px-6 pb-4 pt-3">
+            {/* Sticky Header */}
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-6 pb-4 pt-3">
               <h3 className="text-lg font-bold text-slate-900" style={{ fontFamily: fonts.display }}>Filters</h3>
               <button
                 type="button"
                 onClick={() => setDraftFilter("all")}
                 className="text-sm font-semibold text-slate-500"
               >
-                Reset
+                Clear all
               </button>
             </div>
 
             {/* Filter Options */}
             <div className="flex-1 overflow-y-auto px-6 py-6">
-              <div className="space-y-4">
-                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Asset Type</p>
-                <div className="space-y-3">
-                  {["all", "strategy", "stock"].map((filter) => (
-                    <button
-                      key={filter}
-                      type="button"
-                      onClick={() => setDraftFilter(filter)}
-                      className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all ${
-                        draftFilter === filter 
-                          ? "border-violet-500 bg-violet-50 text-violet-700 shadow-sm" 
-                          : "border-slate-100 bg-slate-50 text-slate-600"
-                      }`}
-                    >
-                      <span className="text-sm font-bold capitalize">{filter}s</span>
-                      {draftFilter === filter && <Check size={18} className="text-violet-600" />}
-                    </button>
-                  ))}
+              <div className="space-y-6">
+                <div>
+                  <h4 className="mb-4 text-xs font-black text-slate-400 uppercase tracking-widest">Asset Category</h4>
+                  <div className="space-y-3">
+                    {["all", "strategy", "stock"].map((option) => (
+                      <button
+                        key={option}
+                        onClick={() => setDraftFilter(option)}
+                        className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                          draftFilter === option
+                            ? "border-violet-500 bg-violet-50 text-violet-700 shadow-sm"
+                            : "border-slate-100 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                        }`}
+                      >
+                        <span className="text-sm font-bold capitalize">{option === 'all' ? 'All Assets' : option + 's'}</span>
+                        {draftFilter === option && <Check size={18} className="text-violet-600" />}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Apply Button */}
-            <div className="border-t border-slate-100 bg-white px-6 pb-8 pt-4">
+            {/* Fixed Apply Button */}
+            <div className="sticky bottom-0 border-t border-slate-100 bg-white px-6 pb-8 pt-4">
               <button
                 type="button"
                 onClick={applyFilters}
