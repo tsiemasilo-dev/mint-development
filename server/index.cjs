@@ -13,39 +13,50 @@ function getResendClient() {
   return _resendClient;
 }
 
-function buildOrderFillEmailHtml({ assetName, assetSymbol, strategyName, amountCents, quantity, fillPriceCents, reference, orderDate, fillDate }) {
-  const Fn = "Inter,Segoe UI,Arial,sans-serif";
-  const isStrategy = !!strategyName;
-  const displayName = isStrategy ? strategyName : (assetName || assetSymbol || "Unknown Asset");
-  const typeLabel = isStrategy ? "Strategy Investment" : "Stock Purchase";
+const _OE_F = "-apple-system,BlinkMacSystemFont,'Segoe UI','Roboto','Helvetica Neue',sans-serif";
 
-  function fmtZar(cents) {
-    const r = typeof cents === "number" ? cents / 100 : Number(cents) / 100;
-    if (isNaN(r)) return "R0.00";
-    return "R" + r.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  }
-  function fmtDate(d) {
-    return new Date(d).toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Africa/Johannesburg" });
-  }
-  function row(label, value) {
-    return `<tr><td style="padding:8px 0;font-family:${Fn};font-size:14px;color:#7B8194;border-bottom:1px solid #F0F1F6;">${label}</td><td style="padding:8px 0;font-family:${Fn};font-size:14px;color:#121526;font-weight:600;text-align:right;border-bottom:1px solid #F0F1F6;">${value}</td></tr>`;
-  }
-
-  let rows = "";
-  rows += row("Order Type", typeLabel);
-  rows += row(isStrategy ? "Strategy" : "Asset", displayName);
-  if (assetSymbol && !isStrategy) rows += row("Symbol", assetSymbol);
-  rows += row("Amount", fmtZar(amountCents));
-  if (quantity) rows += row("Quantity Filled", Number(quantity).toFixed(4));
-  if (fillPriceCents) rows += row("Fill Price", fmtZar(fillPriceCents));
-  rows += row("Reference", reference || "\u2014");
-  if (orderDate) rows += row("Order Date", fmtDate(orderDate));
-  rows += row("Settlement Date", fmtDate(fillDate || new Date().toISOString()));
-  rows += row("Status", '<span style="color:#10B981;font-weight:700;">Confirmed</span>');
-
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="x-apple-disable-message-reformatting"/><title>Order Filled \u2014 Mint</title><style>@media(max-width:620px){.container{width:100%!important}.px{padding-left:16px!important;padding-right:16px!important}.card{border-radius:20px!important}.h1{font-size:22px!important;line-height:28px!important}}</style></head><body style="margin:0;padding:0;background:#F6F7FB;"><div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">Order filled \u2014 ${displayName}</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#F6F7FB;"><tr><td align="center" style="padding:24px 12px;"><table role="presentation" class="container" width="600" cellspacing="0" cellpadding="0" border="0" style="width:600px;max-width:600px;"><tr><td class="px" style="padding:6px 24px 14px 24px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td align="left" style="padding:0;"><img src="https://www.mymint.co.za/assets/mint-logo.svg" width="110" alt="Mint" style="display:block;border:0;outline:none;text-decoration:none;height:auto;"/></td><td align="right" style="padding:0;"><span style="font-family:${Fn};font-size:13px;color:#7B8194;">Trade Notification</span></td></tr></table></td></tr><tr><td class="px" style="padding:0 24px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" class="card" style="background:#FFFFFF;border-radius:26px;box-shadow:0 14px 38px rgba(28,22,58,0.10);overflow:hidden;"><tr><td style="padding:28px 20px 8px 20px;text-align:center;"><div style="display:inline-block;width:48px;height:48px;border-radius:50%;background:#10B9811A;line-height:48px;text-align:center;"><span style="font-size:24px;">&#10003;</span></div><div class="h1" style="margin-top:14px;font-family:${Fn};font-size:26px;line-height:32px;color:#121526;font-weight:800;">Order Filled</div><div style="margin-top:8px;font-family:${Fn};font-size:14px;line-height:20px;color:#7B8194;">Your ${typeLabel.toLowerCase()} has been settled and confirmed.</div></td></tr><tr><td style="padding:20px 20px 4px 20px;"><div style="display:inline-block;padding:4px 12px;border-radius:20px;background:#10B9811A;font-family:${Fn};font-size:12px;font-weight:700;color:#10B981;">Settlement Complete</div></td></tr><tr><td style="padding:16px 20px 24px 20px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">${rows}</table></td></tr></table></td></tr><tr><td class="px" style="padding:18px 24px 0 24px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" class="card" style="background:#FFFFFF;border-radius:26px;box-shadow:0 14px 38px rgba(28,22,58,0.08);overflow:hidden;"><tr><td style="padding:18px 20px;"><div style="font-family:${Fn};font-size:14px;line-height:20px;color:#4B5166;">Your investment is now reflected in your portfolio. Open the Mint app to view your updated holdings.</div><div style="margin-top:16px;"><a href="https://www.mymint.co.za" class="btn" style="background:#6D28FF;border-radius:14px;color:#FFFFFF;display:inline-block;font-family:${Fn};font-size:14px;font-weight:700;line-height:16px;padding:12px 16px;text-decoration:none;">Open Mint</a></div></td></tr></table></td></tr><tr><td class="px" style="padding:18px 24px 28px 24px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td style="padding:16px 18px;background:#FFFFFF;border:1px solid #F0F1F6;border-radius:22px;"><div style="font-family:${Fn};font-size:12px;line-height:17px;color:#7B8194;">This is an automated notification from Mint. If you did not make this transaction, please contact us immediately.<br/><br/>&copy; ${new Date().getFullYear()} Mint. All rights reserved.</div><div style="margin-top:12px;font-family:${Fn};font-size:12px;color:#7B8194;"><a href="https://www.mymint.co.za" style="color:#6D28FF;text-decoration:none;font-weight:700;">www.mymint.co.za</a></div></td></tr></table></td></tr></table></td></tr></table></body></html>`;
+function _oeZar(cents) {
+  const r = typeof cents === 'number' ? cents / 100 : Number(cents) / 100;
+  if (isNaN(r)) return 'R0.00';
+  return 'R\u202f' + r.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function _oeDate(d) {
+  return new Date(d).toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Johannesburg' });
+}
+function _oeCard(label, value) {
+  return '<div style="margin:0 0 10px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;overflow:hidden;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td style="padding:11px 16px;font-family:' + _OE_F + ';font-size:13px;color:#64748b;width:50%;">' + label + '</td><td style="padding:11px 16px;font-family:' + _OE_F + ';font-size:13px;color:#0f172a;font-weight:600;text-align:right;">' + value + '</td></tr></table></div>';
+}
+function _oeShell({ preheader, eyebrow, heroTitle, heroSubtitle, headerGradient, cards, ctaLabel, footerNote }) {
+  const yr = new Date().getFullYear();
+  return '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html dir="ltr" lang="en"><head><meta content="width=device-width" name="viewport"/><meta content="text/html; charset=UTF-8" http-equiv="Content-Type"/><meta name="x-apple-disable-message-reformatting"/><title>' + heroTitle + ' — Mint</title></head><body style="margin:0;padding:0;background:#f4f7f8;"><div style="display:none;overflow:hidden;line-height:1px;opacity:0;max-height:0;max-width:0;">' + preheader + '</div><table border="0" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:#f4f7f8;"><tr><td align="center" style="padding:24px 12px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:620px;margin:0 auto;"><tr><td style="padding:0 0 16px 0;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td align="left"><img src="https://www.mymint.co.za/assets/mint-logo.svg" width="90" alt="Mint" style="display:block;border:0;height:auto;"/></td><td align="right" style="font-family:' + _OE_F + ';font-size:12px;letter-spacing:0.06em;color:#64748b;text-transform:uppercase;font-weight:600;">' + eyebrow + '</td></tr></table></td></tr><tr><td style="background:#ffffff;border-radius:18px;border:1px solid #e2e8f0;overflow:hidden;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td style="background:' + headerGradient + ';padding:32px 28px;"><div style="font-family:' + _OE_F + ';font-size:11px;letter-spacing:0.14em;font-weight:700;text-transform:uppercase;color:#e9d5ff;margin-bottom:12px;">Mint · Trade Confirmation</div><div style="font-family:' + _OE_F + ';font-size:28px;line-height:1.2;font-weight:800;color:#ffffff;margin:0 0 8px;">' + heroTitle + '</div><div style="font-family:' + _OE_F + ';font-size:14px;line-height:1.6;color:#e2e8f0;">' + heroSubtitle + '</div></td></tr><tr><td style="padding:24px 28px 8px;background:#ffffff;"><p style="margin:0 0 18px;font-family:' + _OE_F + ';font-size:14px;line-height:1.7;color:#1e293b;">Dear Mint Investor,</p><p style="margin:0 0 22px;font-family:' + _OE_F + ';font-size:14px;line-height:1.7;color:#334155;">Below is a summary of your order. Please review the details and keep this email for your records.</p>' + cards + '<div style="margin:24px 0 8px;"><a href="https://www.mymint.co.za" style="display:inline-block;background:#4a1d96;color:#ffffff;font-family:' + _OE_F + ';font-size:14px;font-weight:700;text-decoration:none;padding:13px 28px;border-radius:10px;letter-spacing:0.02em;">' + ctaLabel + ' →</a></div><p style="margin:24px 0 0;font-family:' + _OE_F + ';font-size:13px;color:#0f172a;font-weight:600;">Warm regards,<br/>The Mint Team</p></td></tr><tr><td style="padding:20px 28px 24px;background:#f8fafc;border-top:1px solid #e2e8f0;"><p style="margin:0;font-family:' + _OE_F + ';font-size:13px;line-height:1.6;color:#475569;">' + footerNote + '</p></td></tr><tr><td style="padding:16px 28px 26px;background:#ffffff;border-top:1px solid #e2e8f0;"><p style="margin:0 0 6px;font-family:' + _OE_F + ';font-size:11px;line-height:1.6;color:#94a3b8;">This is an automated notification from Mint. If you did not place this trade, contact us at <a href="mailto:support@mymint.co.za" style="color:#6d28d9;text-decoration:none;">support@mymint.co.za</a>.</p><p style="margin:0;font-family:' + _OE_F + ';font-size:11px;color:#94a3b8;">&copy; ' + yr + ' Mint. All rights reserved. &nbsp;&middot;&nbsp; <a href="https://www.mymint.co.za" style="color:#6d28d9;text-decoration:none;font-weight:600;">www.mymint.co.za</a></p></td></tr></table></td></tr></table></td></tr></table></body></html>';
 }
 
+function buildOrderFillEmailHtml({ assetName, assetSymbol, strategyName, amountCents, quantity, fillPriceCents, reference, orderDate, fillDate }) {
+  const isStrategy = !!strategyName;
+  const displayName = isStrategy ? strategyName : (assetName || assetSymbol || 'Unknown Asset');
+  const typeLabel = isStrategy ? 'Strategy Investment' : 'Stock Purchase';
+  let cards = '';
+  cards += _oeCard('Order Type', typeLabel);
+  cards += _oeCard(isStrategy ? 'Strategy' : 'Asset', '<strong>' + displayName + '</strong>');
+  if (assetSymbol && !isStrategy) cards += _oeCard('Symbol', assetSymbol);
+  cards += _oeCard('Amount Settled', '<strong>' + _oeZar(amountCents) + '</strong>');
+  if (quantity) cards += _oeCard('Shares Filled', Number(quantity).toFixed(4) + ' shares');
+  if (fillPriceCents) cards += _oeCard('Fill Price per Share', _oeZar(fillPriceCents));
+  cards += _oeCard('Reference', '<span style="font-size:12px;font-family:monospace;color:#475569;">' + (reference || '—') + '</span>');
+  if (orderDate) cards += _oeCard('Order Date', _oeDate(orderDate));
+  cards += _oeCard('Settlement Date', _oeDate(fillDate || new Date().toISOString()));
+  cards += _oeCard('Status', '<span style="color:#059669;font-weight:700;background:#d1fae5;padding:2px 10px;border-radius:20px;font-size:12px;">Settled ✓</span>');
+  return _oeShell({
+    preheader: 'Order filled — ' + displayName + ' · ' + _oeZar(amountCents),
+    eyebrow: 'Settlement Notification',
+    heroTitle: 'Order Filled',
+    heroSubtitle: 'Your ' + typeLabel.toLowerCase() + ' for <strong>' + displayName + '</strong> has been settled. The shares are now in your portfolio.',
+    headerGradient: 'linear-gradient(135deg,#052e16 0%,#065f46 55%,#047857 100%)',
+    cards,
+    ctaLabel: 'View My Portfolio',
+    footerNote: 'Your investment is now reflected in your Mint portfolio. Log in to the app to view your updated holdings, performance and statements.',
+  });
+}
 async function sendOrderFillEmail(db, { transactionId, holdingId }) {
   try {
     const resend = getResendClient();
@@ -168,37 +179,30 @@ async function sendOrderFillEmail(db, { transactionId, holdingId }) {
 }
 
 function buildOrderConfirmationEmailHtml({ assetName, assetSymbol, strategyName, amountCents, quantity, priceCents, reference, orderDate }) {
-  const Fn = "Inter,Segoe UI,Arial,sans-serif";
   const isStrategy = !!strategyName;
-  const displayName = isStrategy ? strategyName : (assetName || assetSymbol || "Unknown Asset");
-  const typeLabel = isStrategy ? "Strategy Investment" : "Stock Purchase";
-
-  function fmtZar(cents) {
-    const r = typeof cents === "number" ? cents / 100 : Number(cents) / 100;
-    if (isNaN(r)) return "R0.00";
-    return "R" + r.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  }
-  function fmtDate(d) {
-    return new Date(d).toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Africa/Johannesburg" });
-  }
-  function row(label, value) {
-    return `<tr><td style="padding:8px 0;font-family:${Fn};font-size:14px;color:#7B8194;border-bottom:1px solid #F0F1F6;">${label}</td><td style="padding:8px 0;font-family:${Fn};font-size:14px;color:#121526;font-weight:600;text-align:right;border-bottom:1px solid #F0F1F6;">${value}</td></tr>`;
-  }
-
-  let rows = "";
-  rows += row("Order Type", typeLabel);
-  rows += row(isStrategy ? "Strategy" : "Asset", displayName);
-  if (assetSymbol && !isStrategy) rows += row("Symbol", assetSymbol);
-  rows += row("Amount", fmtZar(amountCents));
-  if (quantity) rows += row("Quantity", Number(quantity).toFixed(4));
-  if (priceCents) rows += row("Price per unit", fmtZar(priceCents));
-  rows += row("Reference", reference || "\u2014");
-  rows += row("Date", fmtDate(orderDate || new Date().toISOString()));
-  rows += row("Status", '<span style="color:#F59E0B;font-weight:700;">Pending</span>');
-
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="x-apple-disable-message-reformatting"/><title>Order Confirmed \u2014 Mint</title><style>@media(max-width:620px){.container{width:100%!important}.px{padding-left:16px!important;padding-right:16px!important}.card{border-radius:20px!important}.h1{font-size:22px!important;line-height:28px!important}}</style></head><body style="margin:0;padding:0;background:#F6F7FB;"><div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">Order confirmed \u2014 ${displayName}</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#F6F7FB;"><tr><td align="center" style="padding:24px 12px;"><table role="presentation" class="container" width="600" cellspacing="0" cellpadding="0" border="0" style="width:600px;max-width:600px;"><tr><td class="px" style="padding:6px 24px 14px 24px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td align="left" style="padding:0;"><img src="https://www.mymint.co.za/assets/mint-logo.svg" width="110" alt="Mint" style="display:block;border:0;outline:none;text-decoration:none;height:auto;"/></td><td align="right" style="padding:0;"><span style="font-family:${Fn};font-size:13px;color:#7B8194;">Trade Notification</span></td></tr></table></td></tr><tr><td class="px" style="padding:0 24px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" class="card" style="background:#FFFFFF;border-radius:26px;box-shadow:0 14px 38px rgba(28,22,58,0.10);overflow:hidden;"><tr><td style="padding:28px 20px 8px 20px;text-align:center;"><div style="display:inline-block;width:48px;height:48px;border-radius:50%;background:#F59E0B1A;line-height:48px;text-align:center;"><span style="font-size:24px;">&#9202;</span></div><div class="h1" style="margin-top:14px;font-family:${Fn};font-size:26px;line-height:32px;color:#121526;font-weight:800;">Order Confirmed</div><div style="margin-top:8px;font-family:${Fn};font-size:14px;line-height:20px;color:#7B8194;">Your ${typeLabel.toLowerCase()} has been received and is being processed.</div></td></tr><tr><td style="padding:20px 20px 4px 20px;"><div style="display:inline-block;padding:4px 12px;border-radius:20px;background:#F59E0B1A;font-family:${Fn};font-size:12px;font-weight:700;color:#F59E0B;">Pending Settlement</div></td></tr><tr><td style="padding:16px 20px 24px 20px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">${rows}</table></td></tr></table></td></tr><tr><td class="px" style="padding:18px 24px 0 24px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" class="card" style="background:#FFFFFF;border-radius:26px;box-shadow:0 14px 38px rgba(28,22,58,0.08);overflow:hidden;"><tr><td style="padding:18px 20px;"><div style="font-family:${Fn};font-size:14px;line-height:20px;color:#4B5166;">Your order is now pending settlement. You will receive another email once your order has been filled by the broker and confirmed by the CSDP.</div><div style="margin-top:16px;"><a href="https://www.mymint.co.za" class="btn" style="background:#6D28FF;border-radius:14px;color:#FFFFFF;display:inline-block;font-family:${Fn};font-size:14px;font-weight:700;line-height:16px;padding:12px 16px;text-decoration:none;">Open Mint</a></div></td></tr></table></td></tr><tr><td class="px" style="padding:18px 24px 28px 24px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td style="padding:16px 18px;background:#FFFFFF;border:1px solid #F0F1F6;border-radius:22px;"><div style="font-family:${Fn};font-size:12px;line-height:17px;color:#7B8194;">This is an automated notification from Mint. If you did not make this transaction, please contact us immediately.<br/><br/>&copy; ${new Date().getFullYear()} Mint. All rights reserved.</div><div style="margin-top:12px;font-family:${Fn};font-size:12px;color:#7B8194;"><a href="https://www.mymint.co.za" style="color:#6D28FF;text-decoration:none;font-weight:700;">www.mymint.co.za</a></div></td></tr></table></td></tr></table></td></tr></table></body></html>`;
+  const displayName = isStrategy ? strategyName : (assetName || assetSymbol || 'Unknown Asset');
+  const typeLabel = isStrategy ? 'Strategy Investment' : 'Stock Purchase';
+  let cards = '';
+  cards += _oeCard('Order Type', typeLabel);
+  cards += _oeCard(isStrategy ? 'Strategy' : 'Asset', '<strong>' + displayName + '</strong>');
+  if (assetSymbol && !isStrategy) cards += _oeCard('Symbol', assetSymbol);
+  cards += _oeCard('Amount Invested', '<strong>' + _oeZar(amountCents) + '</strong>');
+  if (quantity) cards += _oeCard('Quantity', Number(quantity).toFixed(4) + ' shares');
+  if (priceCents) cards += _oeCard('Price per Share', _oeZar(priceCents));
+  cards += _oeCard('Reference', '<span style="font-size:12px;font-family:monospace;color:#475569;">' + (reference || '—') + '</span>');
+  cards += _oeCard('Order Date', _oeDate(orderDate || new Date().toISOString()));
+  cards += _oeCard('Status', '<span style="color:#d97706;font-weight:700;background:#fef3c7;padding:2px 10px;border-radius:20px;font-size:12px;">Pending Settlement</span>');
+  return _oeShell({
+    preheader: 'Order confirmed — ' + displayName + ' · ' + _oeZar(amountCents),
+    eyebrow: 'Trade Notification',
+    heroTitle: 'Order Confirmed',
+    heroSubtitle: 'Your ' + typeLabel.toLowerCase() + ' for <strong>' + displayName + '</strong> has been received and is being processed.',
+    headerGradient: 'linear-gradient(135deg,#140a2e 0%,#2a0f5e 55%,#4a1d96 100%)',
+    cards,
+    ctaLabel: 'Track Your Order',
+    footerNote: 'Your order is pending settlement with our broker. You will receive a second email once the trade is filled and confirmed — typically within 1–3 business days.',
+  });
 }
-
 async function sendOrderConfirmationEmail(db, { userId, userEmail, assetName, assetSymbol, strategyName, amountCents, quantity, priceCents, reference, orderDate }) {
   try {
     const resend = getResendClient();
