@@ -187,7 +187,6 @@ export default function generateFactsheetPdf({
   fc(doc, P_MID); doc.rect(0, HDR, PW, 0.7, "F"); // bottom accent stripe
 
   // ── Logo — right-aligned, vertically centred in header ───────────────────
-  // Icon aspect ratio: 2000×791 → 2.529:1
   const ICON_H = 9;
   const ICON_W = ICON_H * (2000 / 791);
   const ICON_X = PW - MR - ICON_W;
@@ -195,22 +194,18 @@ export default function generateFactsheetPdf({
   doc.addImage(mintLogo, "PNG", ICON_X, ICON_Y, ICON_W, ICON_H);
 
   // ── Left side: MINT name + tagline + strategy name ────────────────────────
-  // Row 1 — "MINT" wordmark
   doc.setFont("helvetica", "bold");
   doc.setFontSize(13);
   tc(doc, WHITE);
   doc.text("MINT", ML, 10);
 
-  // Row 2 — tagline "Money in Transit"
   doc.setFont("helvetica", "normal");
   doc.setFontSize(6.5);
   tc(doc, [185, 155, 230]);
   doc.text("Money in Transit", ML, 15.5);
 
-  // Thin separator line between tagline and strategy name
   hl(doc, ML, 18, ML + 60, 18, [120, 90, 180], 0.25);
 
-  // Row 3 — strategy name
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7.5);
   tc(doc, WHITE);
@@ -218,7 +213,6 @@ export default function generateFactsheetPdf({
   const maxNameW = ICON_X - 4 - ML;
   doc.text(sn, ML, 23, { maxWidth: maxNameW });
 
-  // Row 4 — "STRATEGY FACTSHEET · date" sub-line
   doc.setFont("helvetica", "normal");
   doc.setFontSize(5.5);
   tc(doc, [160, 130, 210]);
@@ -234,7 +228,6 @@ export default function generateFactsheetPdf({
   //  LEFT COLUMN
   // ─────────────────────────────────────────────────────────────────────────
 
-  // Investment Objective
   ly = secHead(doc, "Investment Objective", ML, ly, LW) + 2;
 
   const objective  = strategy?.objective || strategy?.description || "Investment objective not available.";
@@ -254,7 +247,6 @@ export default function generateFactsheetPdf({
     ly += dl.length * 3.0 + 3;
   }
 
-  // Cumulative Performance
   ly = secHead(doc, "Cumulative Performance", ML, ly, LW) + 2;
 
   const curves     = analytics?.curves || {};
@@ -269,7 +261,6 @@ export default function generateFactsheetPdf({
     ly += 4;
   }
 
-  // Return Analysis
   ly = secHead(doc, "Return Analysis", ML, ly, LW) + 1;
 
   const summary = analytics?.summary || {};
@@ -309,7 +300,6 @@ export default function generateFactsheetPdf({
   });
   ly = doc.lastAutoTable.finalY + 4;
 
-  // Risk Analysis
   ly = secHead(doc, "Risk Analysis", ML, ly, LW) + 1;
 
   const riskRows = [
@@ -349,7 +339,6 @@ export default function generateFactsheetPdf({
   const VX  = RX + RW - 3;
   const ROW = 6;
 
-  // Strategy Details card
   const detailData = [
     ["Risk Profile",   strategy?.risk_level || "—"],
     ["Manager",        strategy?.provider_name || "Mint Investments"],
@@ -375,7 +364,6 @@ export default function generateFactsheetPdf({
   });
   ry += 6;
 
-  // Fees card
   const feesData = [
     ["Performance Fee",    "20% of profits"],
     ["Transaction Fee",    "0.25% / trade"],
@@ -397,7 +385,6 @@ export default function generateFactsheetPdf({
   });
   ry += 6;
 
-  // Asset Allocation
   ry = subHead(doc, "Asset Allocation", LX, ry, RW - 6) + 1;
 
   const holdings  = Array.isArray(strategy?.holdings) ? strategy.holdings : [];
@@ -415,7 +402,6 @@ export default function generateFactsheetPdf({
     ry += 8;
   }
 
-  // Portfolio Holdings table
   ry = subHead(doc, "Portfolio Holdings", LX, ry, RW - 6) + 1;
 
   const holdRows = (holdingsWithMetrics || [])
@@ -448,7 +434,6 @@ export default function generateFactsheetPdf({
     ry = doc.lastAutoTable.finalY + 4;
   }
 
-  // Your Investment card (conditional)
   if (userPosition?.invested > 0) {
     const posData = [
       ["Amount Invested", fmtR(userPosition.invested)],
@@ -560,14 +545,14 @@ export default function generateFactsheetPdf({
   doc.text("Page 1 of 1",         PW - MR, FY + 4,   { align: "right" });
   doc.text(`Generated ${isoDate}`, PW - MR, FY + 9.5, { align: "right" });
 
-  // ─── Output ──────────────────────────────────────────────────────────────
-  try {
-    const blob = doc.output("blob");
-    const url  = URL.createObjectURL(blob);
-    window.open(url, "_blank");
-    setTimeout(() => URL.revokeObjectURL(url), 12000);
-  } catch (e) {
-    console.error("PDF open failed:", e);
-    doc.save(`${name.replace(/[^a-zA-Z0-9]/g, "_")}_Factsheet_${isoDate}.pdf`);
-  }
+  // ─── Output — mobile + desktop friendly download ─────────────────────────
+  const blob = doc.output("blob");
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = `${name.replace(/[^a-zA-Z0-9]/g, "_")}_Factsheet_${isoDate}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 12000);
 }
