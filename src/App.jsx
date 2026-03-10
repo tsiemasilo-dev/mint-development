@@ -963,6 +963,8 @@ const App = () => {
     );
   }
 
+  // --- In App.jsx ---
+
   if (currentPage === "instantLiquidity") {
     return (
       <AppLayout
@@ -976,6 +978,11 @@ const App = () => {
         <InstantLiquidityPage 
           profile={profile} 
           onBack={goBack} 
+          onTabChange={handleTabChange} 
+          onOpenNotifications={() => {
+            setNotificationReturnPage("instantLiquidity");
+            navigateTo("notifications");
+          }}
         />
       </AppLayout>
     );
