@@ -28,11 +28,13 @@
   html {
     scrollbar-width: none;
     -ms-overflow-style: none;
+    overscroll-behavior-x: none;
   }
 
   body {
     scrollbar-width: none;
     -ms-overflow-style: none;
+    overscroll-behavior-x: none;
   }
 
   html::-webkit-scrollbar,
@@ -50,6 +52,12 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+}
+
+.app-shell,
+.app-content {
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
 }
 
 .recharts-wrapper,
