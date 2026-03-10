@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { 
   Zap, 
@@ -16,26 +16,24 @@ import {
   Lock,
   ChevronRight,
   Star,
-  ArrowUpRight,
-  ArrowDownLeft,
   ShieldCheck,
-  Wallet,
-  Landmark,
-  TrendingDown,
-  AlertCircle,
   HelpCircle
 } from "lucide-react";
-import { Line, LineChart, ResponsiveContainer, Area, AreaChart, ReferenceLine, YAxis, XAxis } from 'recharts';
+import { Line, LineChart, ResponsiveContainer, YAxis } from 'recharts';
 import { formatZar } from "../../lib/formatCurrency";
 import NotificationBell from "../../components/NotificationBell";
 import NavigationPill from "../../components/NavigationPill";
 
-// --- CONSTANTS FOR THE MEGA FILTER ---
+// --- IMPORT SUB-PAGES ---
+// These ensure you are routing to your separate, updated files
+import LiquidityHistory from "./LiquidityHistory";
+import ActiveLiquidity from "./ActiveLiquidity";
+import RepayLiquidity from "./RepayLiquidity";
+import ApplyLiquidity from "./ApplyLiquidity";
+
+// --- CONSTANTS FOR MEGA FILTER ---
 const sortOptions = ["Balance (High)", "Score (High)", "Market Cap", "Dividend Yield"];
 const riskOptions = ["Low risk", "Balanced", "Growth", "High risk"];
-const minInvestmentOptions = ["R500+", "R2,500+", "R10,000+"];
-const exposureOptions = ["Local", "Global", "Mixed", "Equities", "ETFs"];
-const timeHorizonOptions = ["Short", "Medium", "Long"];
 const sectorOptions = ["Technology", "Financials", "Consumer", "Healthcare", "Energy", "Materials"];
 const exchangeOptions = ["JSE", "NYSE", "NASDAQ"];
 
@@ -51,168 +49,28 @@ const AssetMiniChart = ({ data, color = "#7c3aed" }) => (
   </div>
 );
 
-// --- SUB-COMPONENTS ---
-
-const LiquidityHistory = ({ onBack, fonts }) => {
-  const historyData = [
-    { id: 1, type: 'pledge', asset: 'Naspers Ltd', amount: 450000, date: '2026-03-08', status: 'completed' },
-    { id: 2, type: 'repayment', asset: 'Standard Bank', amount: 120000, date: '2026-03-05', status: 'completed' }
-  ];
-
-  return (
-    <div className="min-h-screen bg-slate-50 flex flex-col animate-in slide-in-from-right duration-300">
-      <div className="px-6 pt-12 pb-6 flex items-center justify-between bg-white border-b border-slate-100 sticky top-0 z-10">
-        <button onClick={onBack} className="h-10 w-10 rounded-full bg-slate-50 flex items-center justify-center active:scale-95"><ChevronLeft size={20} /></button>
-        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">History</h3>
-        <div className="w-10" />
-      </div>
-      <div className="flex-1 overflow-y-auto p-6 pb-32">
-        <div className="bg-slate-900 rounded-[32px] p-6 text-white shadow-xl mb-8 relative overflow-hidden">
-            <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">Total Life-cycle Interest</p>
-            <h2 className="text-3xl font-light" style={{ fontFamily: fonts.display }}>{formatZar(6535.40)}</h2>
-            <div className="absolute -right-4 -bottom-4 opacity-10"><HandCoins size={100} /></div>
-        </div>
-        <div className="space-y-3">
-            {historyData.map((item) => (
-                <div key={item.id} className="bg-white rounded-[24px] p-4 border border-slate-100 shadow-sm flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <div className="h-10 w-10 rounded-2xl bg-slate-50 flex items-center justify-center">
-                            {item.type === 'pledge' ? <ArrowUpRight className="h-4 w-4 text-rose-500" /> : <ArrowDownLeft className="h-4 w-4 text-emerald-500" />}
-                        </div>
-                        <div><p className="text-xs font-bold text-slate-900">{item.asset}</p><p className="text-[9px] text-slate-400 uppercase font-bold">{item.type}</p></div>
-                    </div>
-                    <div className="text-right">
-                        <p className={`text-sm font-bold ${item.type === 'pledge' ? 'text-slate-900' : 'text-emerald-600'}`}>{formatZar(item.amount)}</p>
-                        <p className="text-[8px] text-slate-400 uppercase font-black">{item.date}</p>
-                    </div>
-                </div>
-            ))}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const ActiveLiquidity = ({ onBack, fonts }) => {
-  const activeDebt = { total: 256450.00, ltv: 58.4, daily: 72.45 };
-  const ltvTrend = [{ v: 52 }, { v: 54 }, { v: 58 }, { v: 57 }, { v: 61 }, { v: 59 }, { v: 58.4 }];
-
-  return (
-    <div className="min-h-screen bg-slate-50 flex flex-col animate-in slide-in-from-right duration-300">
-      <div className="px-6 pt-12 pb-6 flex items-center justify-between bg-white border-b border-slate-100 sticky top-0 z-10">
-        <button onClick={onBack} className="h-10 w-10 rounded-full bg-slate-50 flex items-center justify-center active:scale-95"><ChevronLeft size={20} /></button>
-        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Active Debt</h3>
-        <ShieldCheck className="text-emerald-500" size={20} />
-      </div>
-      <div className="flex-1 overflow-y-auto p-6 pb-32">
-        <div className="bg-slate-900 rounded-[36px] p-8 text-white shadow-2xl mb-8 overflow-hidden">
-            <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">Outstanding Balance</p>
-            <h2 className="text-4xl font-light mb-6" style={{ fontFamily: fonts.display }}>{formatZar(activeDebt.total)}</h2>
-            <div className="flex justify-between pt-6 border-t border-white/10">
-                <div><p className="text-[9px] text-white/40 uppercase font-black">LTV Ratio</p><p className="font-bold text-amber-500">{activeDebt.ltv}%</p></div>
-                <div className="text-right"><p className="text-[9px] text-white/40 uppercase font-black">Daily Cost</p><p className="font-bold text-white">{formatZar(activeDebt.daily)}</p></div>
-            </div>
-        </div>
-        <div className="bg-white rounded-[32px] p-6 border border-slate-100 shadow-sm">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Risk Trend (7D)</p>
-            <div className="h-32 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={ltvTrend}>
-                        <defs><linearGradient id="activeGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#7c3aed" stopOpacity={0.2}/><stop offset="100%" stopColor="#7c3aed" stopOpacity={0}/></linearGradient></defs>
-                        <ReferenceLine y={65} stroke="#fbbf24" strokeDasharray="3 3" />
-                        <Area type="monotone" dataKey="v" stroke="#7c3aed" strokeWidth={3} fill="url(#activeGrad)" />
-                    </AreaChart>
-                </ResponsiveContainer>
-            </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const RepayLiquidity = ({ onBack, fonts, totalDebt }) => {
-  const [repayAmount, setRepayAmount] = useState("");
-  const [method, setMethod] = useState("bank");
-  const [isSuccess, setIsSuccess] = useState(false);
-
-  if (isSuccess) return (
-    <div className="min-h-screen bg-white flex flex-col items-center justify-center p-8 text-center animate-in fade-in">
-        <div className="h-20 w-20 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center mb-6"><Check size={40} strokeWidth={3} /></div>
-        <h2 className="text-2xl font-bold text-slate-900 mb-8" style={{ fontFamily: fonts.display }}>Settlement Received</h2>
-        <button onClick={onBack} className="w-full h-14 bg-slate-900 text-white rounded-2xl font-bold uppercase tracking-widest text-xs">Back to Dashboard</button>
-    </div>
-  );
-
-  return (
-    <div className="min-h-screen bg-slate-50 flex flex-col animate-in slide-in-from-right duration-300">
-      <div className="px-6 pt-12 pb-6 flex items-center justify-between bg-white border-b border-slate-100 sticky top-0 z-10">
-        <button onClick={onBack} className="h-10 w-10 rounded-full bg-slate-50 flex items-center justify-center active:scale-95"><ChevronLeft size={20} /></button>
-        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Settle Debt</h3>
-        <div className="w-10" />
-      </div>
-      <div className="flex-1 overflow-y-auto px-6 pt-8 pb-32">
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Outstanding</p>
-        <h2 className="text-4xl font-light text-slate-900 mb-8" style={{ fontFamily: fonts.display }}>{formatZar(totalDebt)}</h2>
-        <div className="bg-white rounded-[32px] p-6 border border-slate-100 shadow-sm mb-6">
-            <div className="flex justify-between items-center mb-4">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Amount to Repay</span>
-                <button onClick={() => setRepayAmount(totalDebt)} className="text-[10px] font-bold text-violet-600 uppercase">Max</button>
-            </div>
-            <input type="number" value={repayAmount} onChange={(e) => setRepayAmount(e.target.value)} placeholder="0.00" className="w-full text-3xl font-bold text-slate-900 outline-none" />
-        </div>
-        <div className="space-y-3">
-            {[{ id: 'bank', label: 'Linked Bank', sub: 'Standard Bank ••• 429', icon: Landmark }, { id: 'wallet', label: 'Mint Wallet', sub: 'Available: R12,450', icon: Wallet }].map(m => (
-                <button key={m.id} onClick={() => setMethod(m.id)} className={`w-full flex items-center justify-between p-5 rounded-[24px] border transition-all ${method === m.id ? 'bg-slate-900 border-slate-900 text-white shadow-lg' : 'bg-white border-slate-100 text-slate-900'}`}>
-                    <div className="flex items-center gap-4 text-left">
-                        <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${method === m.id ? 'bg-white/10' : 'bg-slate-50'}`}><m.icon size={20} /></div>
-                        <div><p className="text-xs font-bold">{m.label}</p><p className="text-[10px] opacity-50">{m.sub}</p></div>
-                    </div>
-                    {method === m.id && <Check size={18} className="text-emerald-400" />}
-                </button>
-            ))}
-        </div>
-      </div>
-      <div className="p-6 bg-white border-t border-slate-100 pb-28">
-        <button onClick={() => setIsSuccess(true)} disabled={!repayAmount} className="w-full h-14 bg-gradient-to-r from-[#111111] via-[#3b1b7a] to-[#5b21b6] text-white rounded-2xl font-bold uppercase tracking-widest text-xs shadow-xl active:scale-95 disabled:opacity-30">Confirm Repayment</button>
-      </div>
-    </div>
-  );
-};
-
-// --- MAIN COMPONENT ---
-
 const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
   const [view, setView] = useState("main");
   const [searchQuery, setSearchQuery] = useState("");
   const [portalTarget, setPortalTarget] = useState(null);
 
-  // --- THE MEGA FILTER STATES (COMBINED) ---
+  // --- MEGA FILTER STATES ---
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  
-  // Applied States
   const [selectedSort, setSelectedSort] = useState("Balance (High)");
   const [selectedTypes, setSelectedTypes] = useState(new Set());
   const [selectedRisks, setSelectedRisks] = useState(new Set());
   const [selectedSectors, setSelectedSectors] = useState(new Set());
   const [selectedExchanges, setSelectedExchanges] = useState(new Set());
-  const [selectedMinInvestment, setSelectedMinInvestment] = useState(null);
-  const [selectedExposure, setSelectedExposure] = useState(new Set());
-  const [selectedTimeHorizon, setSelectedTimeHorizon] = useState(new Set());
 
-  // Draft States
+  // Draft States for the Filter Sheet
   const [draftSort, setDraftSort] = useState("Balance (High)");
   const [draftTypes, setDraftTypes] = useState(new Set());
   const [draftRisks, setDraftRisks] = useState(new Set());
   const [draftSectors, setDraftSectors] = useState(new Set());
   const [draftExchanges, setDraftExchanges] = useState(new Set());
-  const [draftMinInvestment, setDraftMinInvestment] = useState(null);
-  const [draftExposure, setDraftExposure] = useState(new Set());
-  const [draftTimeHorizon, setDraftTimeHorizon] = useState(new Set());
 
-  // Info Modal States
+  // Info Modal & Workflow States
   const [infoModal, setInfoModal] = useState(null);
-
-  // Workflow States
   const [selectedItem, setSelectedItem] = useState(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [pledgeAmount, setPledgeAmount] = useState("");
@@ -227,12 +85,11 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
     text: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif"
   };
 
-  // --- Portfolio Engine ---
+  // --- PORTFOLIO ENGINE (Mock Data & Calculations) ---
   const portfolioItems = useMemo(() => [
-    { id: 1, name: "Naspers Ltd", balance: 600000, type: "stock", code: "NPN", marketCap: 1500e9, advt: 120e6, volatility: 0.22, sector: "Technology", exchange: "JSE", spark: [45, 48, 52, 49, 55, 58, 62], dividendYield: 1.2, pe: 24.5 },
-    { id: 2, name: "Standard Bank", balance: 250000, type: "stock", code: "SBK", marketCap: 320e9, advt: 45e6, volatility: 0.18, sector: "Financials", exchange: "JSE", spark: [30, 32, 31, 35, 34, 38, 36], dividendYield: 4.8, pe: 12.1 },
-    { id: 3, name: "Global Equity Strategy", balance: 150000, type: "strategy", code: "GES", marketCap: 210e9, advt: 30e6, volatility: 0.25, sector: "Diversified", risk_level: "Balanced", exposure: "Global", timeHorizon: "Long", spark: [12, 14, 13, 16, 15, 18, 17] },
-    { id: 4, name: "Speculative Mining", balance: 50000, type: "stock", code: "SPM", marketCap: 2e9, advt: 1e6, volatility: 0.65, sector: "Materials", exchange: "JSE", spark: [10, 8, 5, 12, 7, 9, 6] },
+    { id: 1, name: "Naspers Ltd", balance: 600000, type: "stock", code: "NPN", marketCap: 1500e9, advt: 120e6, volatility: 0.22, sector: "Technology", exchange: "JSE", spark: [45, 48, 52, 49, 55, 58, 62], dividendYield: 1.2 },
+    { id: 2, name: "Standard Bank", balance: 250000, type: "stock", code: "SBK", marketCap: 320e9, advt: 45e6, volatility: 0.18, sector: "Financials", exchange: "JSE", spark: [30, 32, 31, 35, 34, 38, 36], dividendYield: 4.8 },
+    { id: 3, name: "Global Equity Strategy", balance: 150000, type: "strategy", code: "GES", marketCap: 210e9, advt: 30e6, volatility: 0.25, sector: "Diversified", risk_level: "Balanced", spark: [12, 14, 13, 16, 15, 18, 17] },
   ], []);
 
   const totalPortfolioValue = portfolioItems.reduce((acc, item) => acc + item.balance, 0);
@@ -240,51 +97,39 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
 
   const enrichedItems = useMemo(() => portfolioItems.map(item => {
     const isEligible = item.marketCap >= 10e9 && item.advt >= 10e6 && item.volatility <= 0.5;
-    const isTier1 = item.advt >= 10e6 && (item.advt / (item.freeFloat || 1e9) >= 0.004);
-    
     const liqScore = Math.min(item.advt / 100e6, 1);
     const volScore = 1 - (item.volatility / 0.5);
     const capScore = Math.min(item.marketCap / 200e9, 1);
     const score = (0.4 * liqScore) + (0.4 * volScore) + (0.2 * capScore);
-
-    let ltv = 0;
-    if (score >= 0.8) ltv = 0.55;
-    else if (score >= 0.5) ltv = 0.50;
-    else if (score >= 0.3) ltv = 0.30;
-
+    const ltv = score >= 0.8 ? 0.55 : score >= 0.5 ? 0.50 : 0.30;
+    
     const recognizedValue = Math.min(item.balance, maxPerCounter);
     const available = isEligible ? recognizedValue * ltv : 0;
-
-    return { ...item, isEligible, isTier1, score, ltv, recognizedValue, available, isCapped: item.balance > maxPerCounter };
+    
+    return { ...item, isEligible, score, ltv, recognizedValue, available, isCapped: item.balance > maxPerCounter };
   }), [portfolioItems, maxPerCounter]);
 
   const totalAvailable = enrichedItems.reduce((acc, item) => acc + item.available, 0);
-  const eligibleCount = enrichedItems.filter(i => i.isEligible).length;
+  const qualifyingCount = enrichedItems.filter(i => i.isEligible).length;
 
-  // --- MEGA FILTER LOGIC ---
   const filteredItems = useMemo(() => {
     let results = enrichedItems.filter(item => {
       const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                             item.code.toLowerCase().includes(searchQuery.toLowerCase());
-      
       const matchesType = selectedTypes.size === 0 || selectedTypes.has(item.type);
       const matchesRisk = selectedRisks.size === 0 || selectedRisks.has(item.risk_level);
       const matchesSector = selectedSectors.size === 0 || selectedSectors.has(item.sector);
       const matchesExchange = selectedExchanges.size === 0 || selectedExchanges.has(item.exchange);
-      const matchesExposure = selectedExposure.size === 0 || selectedExposure.has(item.exposure);
-      const matchesHorizon = selectedTimeHorizon.size === 0 || selectedTimeHorizon.has(item.timeHorizon);
-
-      return matchesSearch && matchesType && matchesRisk && matchesSector && matchesExchange && matchesExposure && matchesHorizon;
+      return matchesSearch && matchesType && matchesRisk && matchesSector && matchesExchange;
     });
 
-    // Sort Results
     if (selectedSort === "Balance (High)") results.sort((a, b) => b.balance - a.balance);
     if (selectedSort === "Score (High)") results.sort((a, b) => b.score - a.score);
-    if (selectedSort === "Market Cap") results.sort((a, b) => b.marketCap - a.marketCap);
+    if (selectedSort === "Market Cap") results.sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0));
     if (selectedSort === "Dividend Yield") results.sort((a, b) => (b.dividendYield || 0) - (a.dividendYield || 0));
-
+    
     return results;
-  }, [searchQuery, selectedSort, selectedTypes, selectedRisks, selectedSectors, selectedExchanges, selectedExposure, selectedTimeHorizon, enrichedItems]);
+  }, [searchQuery, selectedSort, selectedTypes, selectedRisks, selectedSectors, selectedExchanges, enrichedItems]);
 
   const handleOpenDetail = (item) => {
     if (item !== 'all' && !item.isEligible) return;
@@ -309,8 +154,6 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
     setDraftRisks(new Set(selectedRisks));
     setDraftSectors(new Set(selectedSectors));
     setDraftExchanges(new Set(selectedExchanges));
-    setDraftExposure(new Set(selectedExposure));
-    setDraftTimeHorizon(new Set(selectedTimeHorizon));
     setIsFilterOpen(true);
   };
 
@@ -320,19 +163,7 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
     setSelectedRisks(new Set(draftRisks));
     setSelectedSectors(new Set(draftSectors));
     setSelectedExchanges(new Set(draftExchanges));
-    setSelectedExposure(new Set(draftExposure));
-    setSelectedTimeHorizon(new Set(draftTimeHorizon));
     setIsFilterOpen(false);
-  };
-
-  const clearAllFilters = () => {
-    setDraftSort("Balance (High)");
-    setDraftTypes(new Set());
-    setDraftRisks(new Set());
-    setDraftSectors(new Set());
-    setDraftExchanges(new Set());
-    setDraftExposure(new Set());
-    setDraftTimeHorizon(new Set());
   };
 
   const toggleDraftSet = (set, setter, val) => {
@@ -341,20 +172,30 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
     setter(next);
   };
 
-  // Router Logic
+  const clearAllFilters = () => {
+    setDraftSort("Balance (High)");
+    setDraftTypes(new Set());
+    setDraftRisks(new Set());
+    setDraftSectors(new Set());
+    setDraftExchanges(new Set());
+  };
+
+  // --- ROUTER LOGIC ---
   if (view === "history") return <LiquidityHistory onBack={() => setView("main")} fonts={fonts} />;
   if (view === "active") return <ActiveLiquidity onBack={() => setView("main")} fonts={fonts} />;
-  if (view === "repay") return <RepayLiquidity onBack={() => setView("main")} fonts={fonts} totalDebt={256450.00} />;
+  if (view === "repay") return <RepayLiquidity onBack={() => setView("main")} fonts={fonts} totalDebt={256450} />;
+  if (view === "apply_manual") return <ApplyLiquidity onBack={() => setView("main")} totalPortfolioValue={totalPortfolioValue} fonts={fonts} onNavigateToMarkets={() => onTabChange("markets")} />;
 
+  // --- MAIN DASHBOARD RENDER ---
   return (
     <div className="min-h-screen pb-32 relative overflow-x-hidden text-slate-900">
       <div className="absolute inset-x-0 top-0 -z-10 h-full">
-        <div className="absolute inset-x-0 top-0" style={{ height: '100vh', background: 'linear-gradient(180deg, #0d0d12 0%, #0e0a14 0.5%, #100b18 1%, #120c1c 1.5%, #150e22 2%, #181028 2.5%, #1c122f 3%, #201436 3.5%, #25173e 4%, #2a1a46 5%, #301d4f 6%, #362158 7%, #3d2561 8%, #44296b 9%, #4c2e75 10%, #54337f 11%, #5d3889 12%, #663e93 13%, #70449d 14%, #7a4aa7 15%, #8451b0 16%, #8e58b9 17%, #9860c1 18%, #a268c8 19%, #ac71ce 20%, #b57ad3 21%, #be84d8 22%, #c68edc 23%, #cd98e0 24%, #d4a2e3 25%, #daace6 26%, #dfb6e9 27%, #e4c0eb 28%, #e8c9ed 29%, #ecd2ef 30%, #efdaf1 31%, #f2e1f3 32%, #f4e7f5 33%, #f6ecf7 34%, #f8f0f9 35%, #f9f3fa 36%, #faf5fb 38%, #fbf7fc 40%, #fcf9fd 42%, #fdfafd 45%, #faf8fc 55%, #f8f6fa 100%)' }} />
+        <div className="absolute inset-x-0 top-0" style={{ height: '100vh', background: 'linear-gradient(180deg, #0d0d12 0%, #0e0a14 0.5%, #100b18 1%, #120c1c 1.5%, #3b1b7a 10%, #f8f6fa 100%)' }} />
       </div>
 
       <div className="px-5 pt-12 pb-8">
         <header className="relative flex items-center justify-between mb-10 text-white">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 border border-white/30 text-xs font-semibold uppercase">{profile?.firstName?.[0]}{profile?.lastName?.[0]}</div>
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 border border-white/30 text-xs font-semibold uppercase">{profile?.firstName?.[0] || 'U'}{profile?.lastName?.[0] || 'S'}</div>
           <NavigationPill activeTab="credit" onTabChange={(tab) => tab === "home" ? onTabChange("home") : null} />
           <NotificationBell onClick={onOpenNotifications} />
         </header>
@@ -363,7 +204,7 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
         <div className="bg-white/40 backdrop-blur-3xl rounded-[36px] p-6 shadow-xl border border-white/80 mb-8 overflow-hidden relative">
           <div className="flex justify-between items-start mb-6">
             <p className="text-slate-600 text-[12px] leading-tight font-medium max-w-[200px]">Unlock <span className="text-slate-900 font-bold">instant liquidity</span> using your portfolio as collateral.</p>
-            <div className="text-6xl font-black text-slate-900/5" style={{ fontFamily: fonts.display }}>{eligibleCount}</div>
+            <div className="text-6xl font-black text-slate-900/5" style={{ fontFamily: fonts.display }}>{qualifyingCount}</div>
           </div>
           <div className="bg-gradient-to-br from-violet-600 to-purple-900 rounded-[32px] p-6 shadow-xl relative min-h-[160px] flex flex-col justify-between">
             <div>
@@ -376,14 +217,14 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
                 <span className="text-xl font-medium opacity-60">.00</span>
               </div>
             </div>
-            <button onClick={() => handleOpenDetail('all')} className="w-full bg-white text-slate-900 text-[10px] uppercase tracking-[0.2em] font-black py-4 rounded-xl active:scale-[0.97] transition-all mt-5">Pledge All</button>
+            <button onClick={() => handleOpenDetail('all')} className="w-full bg-white text-slate-900 text-[10px] uppercase tracking-[0.2em] font-black py-4 rounded-xl active:scale-[0.97] transition-all mt-5 shadow-xl">Pledge All Available</button>
           </div>
         </div>
 
-        {/* Quick Actions Grid */}
+        {/* Quick Actions */}
         <div className="grid grid-cols-4 gap-3 mb-10 text-[11px] font-medium">
           {[
-            { label: "Apply", icon: Plus, onClick: () => handleOpenDetail('all') },
+            { label: "Apply", icon: Plus, onClick: () => setView("apply_manual") },
             { label: "Active", icon: FileSignature, onClick: () => setView("active") },
             { label: "Pay", icon: HandCoins, onClick: () => setView("repay") },
             { label: "History", icon: History, onClick: () => setView("history") }
@@ -395,7 +236,7 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
           ))}
         </div>
 
-        {/* Search & Mega Filter Trigger */}
+        {/* Search & Filter */}
         <div className="flex gap-2 mb-8 px-1">
           <div className="relative flex-1">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -414,8 +255,7 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
                    <div className="h-11 w-11 rounded-2xl bg-slate-50 flex items-center justify-center font-black text-slate-400 text-[10px]">{item.code}</div>
                    <div>
                      <div className="flex items-center gap-2 mb-1">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{item.name}</p>
-                        {item.isTier1 && <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />}
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">{item.name}</p>
                      </div>
                      <p className="text-xl font-bold text-slate-900" style={{ fontFamily: fonts.display }}>R{item.balance.toLocaleString()}</p>
                    </div>
@@ -425,7 +265,7 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
               <div className="flex justify-between items-center pt-4 border-t border-slate-50">
                  <div>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Recognized</p>
-                    <p className={`text-xs font-bold ${item.isCapped ? 'text-amber-600' : 'text-slate-900'}`}>{formatZar(item.recognizedValue)} {item.isCapped && <span className="text-[8px] opacity-40">(CAP)</span>}</p>
+                    <p className={`text-xs font-bold ${item.isCapped ? 'text-amber-600' : 'text-slate-900'}`}>{formatZar(item.recognizedValue)}</p>
                  </div>
                  
                  <AssetMiniChart data={item.spark} />
@@ -440,23 +280,22 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
         </div>
       </div>
 
-      {/* Info Modals */}
+      {/* --- INFO MODALS --- */}
       {infoModal && portalTarget && createPortal(
           <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/60 px-6 backdrop-blur-sm">
               <div className="bg-white rounded-[32px] p-8 w-full max-w-xs shadow-2xl animate-in zoom-in-95">
                   <div className="h-12 w-12 rounded-2xl bg-violet-50 text-violet-600 flex items-center justify-center mb-6"><HelpCircle size={24} /></div>
-                  <h3 className="text-lg font-bold text-slate-900 mb-3">{infoModal === 'collateral' ? 'Recognized Collateral' : infoModal === 'score' ? 'Collateral Score' : 'LTV Calculation'}</h3>
+                  <h3 className="text-lg font-bold text-slate-900 mb-3">{infoModal === 'collateral' ? 'Recognized Collateral' : 'Collateral Score'}</h3>
                   <p className="text-sm text-slate-500 leading-relaxed mb-8">
-                      {infoModal === 'collateral' ? "To protect the loan book, exposure to a single counter is capped at 45% of total collateral." : 
-                       infoModal === 'score' ? "Your score is a weighted combination of Liquidity (40%), Volatility (40%), and Market Cap (20%)." : 
-                       "LTV determines how much you can borrow against your assets."}
+                      {infoModal === 'collateral' ? "Exposure to a single counter is capped at 45% of total collateral. Any value above this is excluded from lending." : 
+                       "Your score is a weighted combination of Liquidity (40%), Volatility (40%), and Market Cap (20%)."}
                   </p>
                   <button onClick={() => setInfoModal(null)} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold uppercase tracking-widest text-[10px]">Got it</button>
               </div>
           </div>
       , portalTarget)}
 
-      {/* --- THE MEGA FILTER SHEET Ported from Markets & OpenStrategies --- */}
+      {/* --- MEGA FILTER SHEET --- */}
       {isFilterOpen && portalTarget && createPortal(
         <div className="fixed inset-0 z-[200] flex items-end justify-center bg-slate-900/40 backdrop-blur-sm px-4 pb-28">
            <button className="absolute inset-0" onClick={() => setIsFilterOpen(false)} />
@@ -468,7 +307,6 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
               </div>
               
               <div className="flex-1 overflow-y-auto px-8 py-6 space-y-8">
-                  {/* Sort Section */}
                   <div>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Sort By</p>
                       <div className="flex flex-wrap gap-2">
@@ -477,8 +315,6 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
                         ))}
                       </div>
                   </div>
-
-                  {/* Asset Type */}
                   <div>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Asset Category</p>
                       <div className="flex flex-wrap gap-2">
@@ -487,33 +323,11 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
                         ))}
                       </div>
                   </div>
-
-                  {/* Risk (Strategies) */}
-                  <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Risk Tolerance</p>
-                      <div className="flex flex-wrap gap-2">
-                        {riskOptions.map(r => (
-                           <button key={r} onClick={() => toggleDraftSet(draftRisks, setDraftRisks, r)} className={`rounded-full px-4 py-2 text-xs font-bold border transition-all ${draftRisks.has(r) ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200"}`}>{r}</button>
-                        ))}
-                      </div>
-                  </div>
-
-                  {/* Sector (Combined) */}
                   <div>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Industry Sector</p>
                       <div className="flex flex-wrap gap-2">
                         {sectorOptions.map(s => (
                            <button key={s} onClick={() => toggleDraftSet(draftSectors, setDraftSectors, s)} className={`rounded-full px-4 py-2 text-xs font-bold border transition-all ${draftSectors.has(s) ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200"}`}>{s}</button>
-                        ))}
-                      </div>
-                  </div>
-
-                  {/* Exchanges (Stocks) */}
-                  <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Exchange Listing</p>
-                      <div className="flex flex-wrap gap-2">
-                        {exchangeOptions.map(e => (
-                           <button key={e} onClick={() => toggleDraftSet(draftExchanges, setDraftExchanges, e)} className={`rounded-full px-4 py-2 text-xs font-bold border transition-all ${draftExchanges.has(e) ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200"}`}>{e}</button>
                         ))}
                       </div>
                   </div>
@@ -526,7 +340,7 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
         </div>
       , portalTarget)}
 
-      {/* Asset Detail / Pledge Flow */}
+      {/* --- PLEDGE WORKFLOW / DETAIL VIEW --- */}
       {isDetailOpen && portalTarget && createPortal(
         <div className="fixed inset-0 z-[150] bg-white flex flex-col animate-in slide-in-from-right">
             <div className="px-6 pt-12 pb-6 flex items-center justify-between border-b border-slate-100 sticky top-0 bg-white z-10">
@@ -538,7 +352,7 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
                 <div className="mb-8 flex justify-between items-start">
                     <div>
                          <h1 className="text-2xl font-bold tracking-tight text-slate-900 mb-1" style={{ fontFamily: fonts.display }}>{selectedItem === 'all' ? "Recognized Portfolio" : selectedItem?.name}</h1>
-                         <p className="text-slate-500 text-[11px] font-semibold uppercase tracking-wider">LTV Cap: {(selectedItem?.ltv * 100 || 50)}%</p>
+                         <p className="text-slate-500 text-[11px] font-semibold uppercase tracking-wider">LTV Limit: {(selectedItem?.ltv * 100 || 50)}%</p>
                     </div>
                     <div className="h-14 w-14 rounded-full border-4 border-violet-600 flex items-center justify-center font-black text-xs text-violet-600">{(selectedItem?.score || 0.85).toFixed(2)}</div>
                 </div>
@@ -548,9 +362,6 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
                     <div className="relative h-4 w-full bg-slate-200 rounded-full overflow-hidden flex">
                         <div className="h-full bg-emerald-500" style={{ width: '55%' }} /><div className="h-full bg-amber-400" style={{ width: '10%' }} /><div className="h-full bg-rose-500" style={{ width: '35%' }} />
                         <div className="absolute top-0 bottom-0 w-1 bg-white shadow-xl" style={{ left: `${(selectedItem?.ltv || 0.5) * 100}%` }} />
-                    </div>
-                    <div className="flex justify-between mt-3 text-[8px] font-black uppercase text-slate-400 tracking-tighter">
-                        <span>Current: {(selectedItem?.ltv * 100 || 0)}%</span><span className="text-amber-500">Call: 65%</span><span className="text-rose-500">Liquidation: 70%</span>
                     </div>
                 </div>
 
@@ -577,12 +388,12 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
                 </div>
             </div>
             <div className="p-6 bg-white border-t border-slate-100 pb-28">
-                <button disabled={!pledgeAmount} onClick={() => setWorkflowStep("contract")} className="w-full h-14 rounded-2xl bg-slate-900 text-white font-bold uppercase tracking-widest text-xs shadow-xl active:scale-95 transition-all">Review Agreement</button>
+                <button disabled={!pledgeAmount} onClick={() => setWorkflowStep("contract")} className="w-full h-14 rounded-2xl bg-slate-900 text-white font-bold uppercase tracking-widest text-xs shadow-xl active:scale-95 transition-all disabled:opacity-30">Review Agreement</button>
             </div>
         </div>
       , portalTarget)}
 
-      {/* Workflow Modals */}
+      {/* --- DRAWDOWN AUTHORIZATION MODALS --- */}
       {workflowStep !== "idle" && portalTarget && createPortal(
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/40 backdrop-blur-md px-6 pb-20">
             {workflowStep === "contract" && (
