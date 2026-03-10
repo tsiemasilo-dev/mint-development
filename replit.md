@@ -103,6 +103,12 @@ Mint Auth is a React authentication application built with Vite, Tailwind CSS, a
 - **Data sources**: `strategies` table (objective, fees, benchmark, inception via `created_at`), `strategy_analytics` (curves, summary, calendar_returns), `securities` (sector data for holdings)
 - **Fees**: FactsheetPage fees section now reads from `management_fee_bps` database column instead of hardcoded values
 
+### Order Email Notifications
+- **Confirmation Email**: Sent immediately after a successful payment/investment via `api/record-investment.js`. Uses Resend (`orders@mymint.co.za`). Template from `api/_lib/order-email-templates.js` with glassmorphism design matching Mint Mornings. Status shown as "Pending" since settlement hasn't occurred yet.
+- **Fill Email**: Sent when CSDP or broker webhook confirms settlement (status = confirmed/filled/executed). Built inline in `server/index.cjs` via `sendOrderFillEmail()`. Status shown as "Confirmed" with green checkmark.
+- **Database Logging**: All order emails logged to `order_emails` table in Supabase with columns: user_id, email, email_type (order_confirmation/order_fill), asset details, amount/quantity/price, reference, dates, resend_id, status.
+- **Graceful Degradation**: If `RESEND_API_KEY` is not set, email sending is silently skipped (logged but no error thrown). Email failures never block the main transaction flow.
+
 ### Vercel Serverless API Endpoints
 - **`api/onboarding/status.js`** — GET, returns user's latest onboarding record (id, kyc_status, employment_status). Mirrors Express server endpoint.
 - **`api/onboarding/complete.js`** — POST, marks onboarding complete, saves bank details to sumsub_raw.

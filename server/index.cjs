@@ -3,6 +3,150 @@ const cors = require("cors");
 const crypto = require("crypto");
 const { Pool } = require("pg");
 const truIDClient = require("./truidClient.cjs");
+const { Resend } = require("resend");
+
+let _resendClient = null;
+function getResendClient() {
+  if (!_resendClient && process.env.RESEND_API_KEY) {
+    _resendClient = new Resend(process.env.RESEND_API_KEY);
+  }
+  return _resendClient;
+}
+
+function buildOrderFillEmailHtml({ assetName, assetSymbol, strategyName, amountCents, quantity, fillPriceCents, reference, orderDate, fillDate }) {
+  const Fn = "Inter,Segoe UI,Arial,sans-serif";
+  const isStrategy = !!strategyName;
+  const displayName = isStrategy ? strategyName : (assetName || assetSymbol || "Unknown Asset");
+  const typeLabel = isStrategy ? "Strategy Investment" : "Stock Purchase";
+
+  function fmtZar(cents) {
+    const r = typeof cents === "number" ? cents / 100 : Number(cents) / 100;
+    if (isNaN(r)) return "R0.00";
+    return "R" + r.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function fmtDate(d) {
+    return new Date(d).toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Africa/Johannesburg" });
+  }
+  function row(label, value) {
+    return `<tr><td style="padding:8px 0;font-family:${Fn};font-size:14px;color:#7B8194;border-bottom:1px solid #F0F1F6;">${label}</td><td style="padding:8px 0;font-family:${Fn};font-size:14px;color:#121526;font-weight:600;text-align:right;border-bottom:1px solid #F0F1F6;">${value}</td></tr>`;
+  }
+
+  let rows = "";
+  rows += row("Order Type", typeLabel);
+  rows += row(isStrategy ? "Strategy" : "Asset", displayName);
+  if (assetSymbol && !isStrategy) rows += row("Symbol", assetSymbol);
+  rows += row("Amount", fmtZar(amountCents));
+  if (quantity) rows += row("Quantity Filled", Number(quantity).toFixed(4));
+  if (fillPriceCents) rows += row("Fill Price", fmtZar(fillPriceCents));
+  rows += row("Reference", reference || "\u2014");
+  if (orderDate) rows += row("Order Date", fmtDate(orderDate));
+  rows += row("Settlement Date", fmtDate(fillDate || new Date().toISOString()));
+  rows += row("Status", '<span style="color:#10B981;font-weight:700;">Confirmed</span>');
+
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="x-apple-disable-message-reformatting"/><title>Order Filled \u2014 Mint</title><style>@media(max-width:620px){.container{width:100%!important}.px{padding-left:16px!important;padding-right:16px!important}.card{border-radius:20px!important}.h1{font-size:22px!important;line-height:28px!important}}</style></head><body style="margin:0;padding:0;background:#F6F7FB;"><div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">Order filled \u2014 ${displayName}</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#F6F7FB;"><tr><td align="center" style="padding:24px 12px;"><table role="presentation" class="container" width="600" cellspacing="0" cellpadding="0" border="0" style="width:600px;max-width:600px;"><tr><td class="px" style="padding:6px 24px 14px 24px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td align="left" style="padding:0;"><img src="https://www.mymint.co.za/assets/mint-logo.svg" width="110" alt="Mint" style="display:block;border:0;outline:none;text-decoration:none;height:auto;"/></td><td align="right" style="padding:0;"><span style="font-family:${Fn};font-size:13px;color:#7B8194;">Trade Notification</span></td></tr></table></td></tr><tr><td class="px" style="padding:0 24px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" class="card" style="background:#FFFFFF;border-radius:26px;box-shadow:0 14px 38px rgba(28,22,58,0.10);overflow:hidden;"><tr><td style="padding:28px 20px 8px 20px;text-align:center;"><div style="display:inline-block;width:48px;height:48px;border-radius:50%;background:#10B9811A;line-height:48px;text-align:center;"><span style="font-size:24px;">&#10003;</span></div><div class="h1" style="margin-top:14px;font-family:${Fn};font-size:26px;line-height:32px;color:#121526;font-weight:800;">Order Filled</div><div style="margin-top:8px;font-family:${Fn};font-size:14px;line-height:20px;color:#7B8194;">Your ${typeLabel.toLowerCase()} has been settled and confirmed.</div></td></tr><tr><td style="padding:20px 20px 4px 20px;"><div style="display:inline-block;padding:4px 12px;border-radius:20px;background:#10B9811A;font-family:${Fn};font-size:12px;font-weight:700;color:#10B981;">Settlement Complete</div></td></tr><tr><td style="padding:16px 20px 24px 20px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">${rows}</table></td></tr></table></td></tr><tr><td class="px" style="padding:18px 24px 0 24px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" class="card" style="background:#FFFFFF;border-radius:26px;box-shadow:0 14px 38px rgba(28,22,58,0.08);overflow:hidden;"><tr><td style="padding:18px 20px;"><div style="font-family:${Fn};font-size:14px;line-height:20px;color:#4B5166;">Your investment is now reflected in your portfolio. Open the Mint app to view your updated holdings.</div><div style="margin-top:16px;"><a href="https://www.mymint.co.za" class="btn" style="background:#6D28FF;border-radius:14px;color:#FFFFFF;display:inline-block;font-family:${Fn};font-size:14px;font-weight:700;line-height:16px;padding:12px 16px;text-decoration:none;">Open Mint</a></div></td></tr></table></td></tr><tr><td class="px" style="padding:18px 24px 28px 24px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td style="padding:16px 18px;background:#FFFFFF;border:1px solid #F0F1F6;border-radius:22px;"><div style="font-family:${Fn};font-size:12px;line-height:17px;color:#7B8194;">This is an automated notification from Mint. If you did not make this transaction, please contact us immediately.<br/><br/>&copy; ${new Date().getFullYear()} Mint. All rights reserved.</div><div style="margin-top:12px;font-family:${Fn};font-size:12px;color:#7B8194;"><a href="https://www.mymint.co.za" style="color:#6D28FF;text-decoration:none;font-weight:700;">www.mymint.co.za</a></div></td></tr></table></td></tr></table></td></tr></table></body></html>`;
+}
+
+async function sendOrderFillEmail(db, { transactionId, holdingId }) {
+  try {
+    const resend = getResendClient();
+    if (!resend) return;
+
+    const dedupKey = transactionId || holdingId;
+    if (dedupKey) {
+      const { data: existing } = await db.from("order_emails")
+        .select("id")
+        .eq("email_type", "order_fill")
+        .or(`transaction_id.eq.${dedupKey},holding_id.eq.${dedupKey}`)
+        .eq("status", "sent")
+        .limit(1)
+        .maybeSingle();
+      if (existing) {
+        console.log(`[order-fill-email] Already sent for tx:${transactionId} holding:${holdingId} — skipping`);
+        return;
+      }
+    }
+
+    let userId = null;
+    let txData = null;
+    let holdingData = null;
+
+    if (transactionId) {
+      const { data } = await db.from("transactions").select("user_id, name, amount, store_reference, transaction_date").eq("id", transactionId).maybeSingle();
+      if (data) { txData = data; userId = data.user_id; }
+    }
+    if (holdingId) {
+      const { data } = await db.from("stock_holdings").select("user_id, security_id, quantity, avg_fill, market_value").eq("id", holdingId).maybeSingle();
+      if (data) { holdingData = data; if (!userId) userId = data.user_id; }
+    }
+    if (!userId) return;
+
+    let userEmail = null;
+    const { data: userData } = await db.auth.admin.getUserById(userId);
+    if (userData?.user?.email) userEmail = userData.user.email;
+    if (!userEmail) return;
+
+    let assetName = null;
+    let assetSymbol = null;
+    let strategyName = null;
+    const txName = txData?.name || "";
+    if (txName.startsWith("Strategy Investment:")) {
+      strategyName = txName.replace("Strategy Investment: ", "");
+    } else {
+      assetName = txName.replace("Purchased ", "");
+    }
+
+    if (holdingData?.security_id) {
+      const { data: sec } = await db.from("securities").select("name, symbol").eq("id", holdingData.security_id).maybeSingle();
+      if (sec) { assetName = sec.name; assetSymbol = sec.symbol; }
+    }
+
+    const amountCents = txData?.amount || (holdingData?.market_value) || 0;
+    const fillPriceCents = holdingData?.avg_fill || null;
+    const quantity = holdingData?.quantity || null;
+    const reference = txData?.store_reference || null;
+    const orderDate = txData?.transaction_date || null;
+    const fillDate = new Date().toISOString();
+
+    const displayName = strategyName || assetName || assetSymbol || "Asset";
+    const subject = `Order Filled \u2014 ${displayName}`;
+
+    const html = buildOrderFillEmailHtml({
+      assetName, assetSymbol, strategyName,
+      amountCents, quantity, fillPriceCents,
+      reference, orderDate, fillDate,
+    });
+
+    const resp = await resend.emails.send({
+      from: "Mint <orders@mymint.co.za>",
+      to: [userEmail],
+      subject,
+      html,
+    });
+
+    const resendId = resp?.data?.id || null;
+
+    await db.from("order_emails").insert({
+      user_id: userId,
+      email: userEmail,
+      email_type: "order_fill",
+      asset_name: assetName || null,
+      asset_symbol: assetSymbol || null,
+      strategy_name: strategyName || null,
+      amount_cents: amountCents,
+      quantity, fill_price_cents: fillPriceCents,
+      reference, order_date: orderDate,
+      fill_date: fillDate,
+      transaction_id: transactionId || null,
+      holding_id: holdingId || null,
+      resend_id: resendId,
+      status: resp.error ? "failed" : "sent",
+    }).then(() => {}).catch((err) => console.warn("[order-fill-email] Log write error:", err?.message));
+
+    console.log(`[order-fill-email] Sent to ${userEmail} for ${displayName}`);
+  } catch (err) {
+    console.error("[order-fill-email] Failed:", err.message);
+  }
+}
 
 const pgPool = process.env.DATABASE_URL ? new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -4088,6 +4232,10 @@ app.post("/api/webhooks/csdp", async (req, res) => {
       }
 
       console.log(`[CSDP Webhook] Updated settlement_status to ${newStatus} for tx:${transactionId} holding:${holdingId}`);
+
+      if (newStatus === SETTLEMENT_STATUSES.CONFIRMED) {
+        sendOrderFillEmail(db, { transactionId, holdingId }).catch(() => {});
+      }
     } else if (status === "rejected" || status === "failed") {
       if (transactionId) {
         await db.from("transactions").update({ settlement_status: SETTLEMENT_STATUSES.FAILED }).eq("id", transactionId);
@@ -4143,6 +4291,7 @@ app.post("/api/webhooks/broker", async (req, res) => {
       }
 
       console.log(`[Broker Webhook] Settlement CONFIRMED for tx:${transactionId} holding:${holdingId}`);
+      sendOrderFillEmail(db, { transactionId, holdingId }).catch(() => {});
     } else if (status === "rejected" || status === "failed") {
       if (transactionId) {
         await db.from("transactions").update({ settlement_status: SETTLEMENT_STATUSES.FAILED }).eq("id", transactionId);

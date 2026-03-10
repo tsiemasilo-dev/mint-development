@@ -1,6 +1,13 @@
 import { supabase, supabaseAdmin, authenticateUser } from "./_lib/supabase.js";
+import { buildOrderConfirmationHtml } from "./_lib/order-email-templates.js";
+import { Resend } from "resend";
 
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
+
+function getResend() {
+  if (!process.env.RESEND_API_KEY) return null;
+  return new Resend(process.env.RESEND_API_KEY);
+}
 
 async function verifyPaystackPayment(reference) {
   if (!PAYSTACK_SECRET_KEY) {
@@ -17,6 +24,70 @@ async function verifyPaystackPayment(reference) {
     return { verified: false, error: "Payment not successful", data: result.data };
   }
   return { verified: true, data: result.data };
+}
+
+async function sendOrderConfirmationEmail(db, { userId, userEmail, assetName, assetSymbol, strategyName, amountCents, quantity, priceCents, reference, orderDate }) {
+  try {
+    const resend = getResend();
+    if (!resend) {
+      console.log("[order-email] RESEND_API_KEY not set — skipping confirmation email");
+      return;
+    }
+
+    const isStrategy = !!strategyName;
+    const subject = isStrategy
+      ? `Order Confirmed — ${strategyName}`
+      : `Order Confirmed — ${assetName || assetSymbol || "Stock"}`;
+
+    const html = buildOrderConfirmationHtml({
+      assetName,
+      assetSymbol,
+      strategyName,
+      amountCents,
+      quantity,
+      priceCents,
+      reference,
+      orderDate,
+    });
+
+    const resp = await resend.emails.send({
+      from: "Mint <orders@mymint.co.za>",
+      to: [userEmail],
+      subject,
+      html,
+    });
+
+    const resendId = resp?.data?.id || null;
+    if (resp.error) {
+      console.error("[order-email] Resend error:", resp.error.message);
+    }
+
+    await db.from("order_emails").insert({
+      user_id: userId,
+      email: userEmail,
+      email_type: "order_confirmation",
+      asset_name: assetName || null,
+      asset_symbol: assetSymbol || null,
+      strategy_name: strategyName || null,
+      amount_cents: amountCents,
+      quantity: quantity || null,
+      fill_price_cents: priceCents || null,
+      reference: reference || null,
+      order_date: orderDate,
+      resend_id: resendId,
+      status: resp.error ? "failed" : "sent",
+    }).then(() => {}).catch((err) => {
+      console.warn("[order-email] Failed to log email:", err?.message);
+    });
+
+    console.log(`[order-email] Confirmation sent to ${userEmail} for ${displayNameFor(assetName, assetSymbol, strategyName)}`);
+  } catch (err) {
+    console.error("[order-email] Failed to send confirmation:", err.message);
+  }
+}
+
+function displayNameFor(assetName, assetSymbol, strategyName) {
+  return strategyName || assetName || assetSymbol || "Unknown";
 }
 
 export default async function handler(req, res) {
@@ -76,9 +147,10 @@ export default async function handler(req, res) {
       .maybeSingle();
 
     let holdingResult = { data: null, error: null };
+    let currentPriceCents = null;
+    let quantity = null;
 
     if (securityCheck) {
-      let currentPriceCents = null;
       const { data: securityData, error: secError } = await db
         .from("securities")
         .select("last_price")
@@ -102,7 +174,7 @@ export default async function handler(req, res) {
       }
 
       const currentPriceRands = currentPriceCents ? currentPriceCents / 100 : amount;
-      const quantity = currentPriceRands > 0 ? amount / currentPriceRands : 1;
+      quantity = currentPriceRands > 0 ? amount / currentPriceRands : 1;
       const avgFillCents = currentPriceCents || Math.round(amount * 100);
       const marketValueCents = Math.round(quantity * (currentPriceCents || amount * 100));
 
@@ -162,6 +234,8 @@ export default async function handler(req, res) {
       ? `Invested in strategy ${name || "Strategy"}`
       : `Purchased ${(holdingResult.data ? "shares" : "units")} of ${name || symbol || "Unknown"}`;
 
+    const orderDate = new Date().toISOString();
+
     const { error: txError } = await db
       .from("transactions")
       .insert({
@@ -173,14 +247,28 @@ export default async function handler(req, res) {
         store_reference: paymentReference || null,
         currency: "ZAR",
         status: "posted",
-        transaction_date: new Date().toISOString(),
-        created_at: new Date().toISOString(),
+        transaction_date: orderDate,
+        created_at: orderDate,
       })
       .select();
 
     if (txError) {
       console.error("[record-investment] Transaction insert error:", txError);
+      return res.status(500).json({ success: false, error: "Failed to record transaction" });
     }
+
+    sendOrderConfirmationEmail(db, {
+      userId,
+      userEmail: user.email,
+      assetName: name || null,
+      assetSymbol: symbol || null,
+      strategyName: isStrategyInvestment ? (name || symbol || "Strategy") : null,
+      amountCents: Math.round(amount * 100),
+      quantity: quantity,
+      priceCents: currentPriceCents,
+      reference: paymentReference,
+      orderDate,
+    }).catch(() => {});
 
     return res.status(200).json({ success: true, holding: holdingResult.data });
   } catch (error) {
