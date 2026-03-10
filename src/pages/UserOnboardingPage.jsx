@@ -159,6 +159,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const [mandateDone, setMandateDone] = useState(false);
   const [riskDone, setRiskDone] = useState(false);
   const [sofDone, setSofDone] = useState(false);
+  const [termsDone, setTermsDone] = useState(false);
   const [authStatus, setAuthStatus] = useState({
     isChecked: false,
     isAuthenticated: false,
@@ -244,11 +245,12 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
       { step: 4, done: mandateDone },
       { step: 5, done: riskDone },
       { step: 6, done: sofDone },
+      { step: 7, done: termsDone },
     ];
     for (const s of steps) {
       if (s.step > afterStep && !s.done && s.step !== justCompletedStep) return s.step;
     }
-    return 7;
+    return 8;
   };
 
   const handleContinue = async () => {
@@ -507,6 +509,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
           if (raw.risk_disclosure_accepted === true) setRiskDone(true);
           if (raw.source_of_funds_accepted === true) setSofDone(true);
           if (raw.bank_details_saved === true) setBankDone(true);
+          if (raw.terms_accepted === true) setTermsDone(true);
         }
       } catch (err) {
         // ignore; user can still proceed normally
@@ -563,6 +566,9 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
       if (onComplete) onComplete();
       return;
     }
+
+    await saveProgressFlag("terms_accepted");
+    setTermsDone(true);
 
     let completionSuccess = false;
 

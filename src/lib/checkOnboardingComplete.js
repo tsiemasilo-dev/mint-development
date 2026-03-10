@@ -7,6 +7,7 @@ export function parseOnboardingFlags(record) {
   let mandateAgreed = false;
   let riskDone = false;
   let sofDone = false;
+  let termsDone = false;
 
   if (record?.sumsub_raw) {
     try {
@@ -15,12 +16,13 @@ export function parseOnboardingFlags(record) {
       mandateAgreed = !!raw?.mandate_data?.agreedMandate || !!raw?.mandate_accepted;
       riskDone = !!raw?.risk_disclosure_accepted;
       sofDone = !!raw?.source_of_funds_accepted;
+      termsDone = !!raw?.terms_accepted;
     } catch {}
   }
 
-  const allComplete = kycDone && bankDone && mandateAgreed && riskDone && sofDone;
+  const allComplete = kycDone && bankDone && mandateAgreed && riskDone && sofDone && termsDone;
 
-  return { kycDone, bankDone, mandateAgreed, riskDone, sofDone, allComplete };
+  return { kycDone, bankDone, mandateAgreed, riskDone, sofDone, termsDone, allComplete };
 }
 
 export async function checkOnboardingComplete() {
