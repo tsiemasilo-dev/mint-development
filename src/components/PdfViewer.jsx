@@ -8,8 +8,56 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url
 ).toString();
 
-export default function PdfViewer({ file, style = {} }) {
+function PdfSkeleton({ width }) {
+  const blockStyle = {
+    background: "linear-gradient(90deg, #ede9f7 25%, #d8d0f0 50%, #ede9f7 75%)",
+    backgroundSize: "200% 100%",
+    animation: "pdf-shimmer 1.4s ease-in-out infinite",
+    borderRadius: 4,
+  };
+
+  return (
+    <>
+      <style>{`
+        @keyframes pdf-shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+      `}</style>
+      <div style={{ padding: "12px 0" }}>
+        {[1, 2, 3].map((page) => (
+          <div
+            key={page}
+            style={{
+              width: width || "100%",
+              marginBottom: 4,
+              padding: 16,
+              background: "#f5f3fb",
+              borderRadius: 4,
+            }}
+          >
+            <div style={{ ...blockStyle, height: 12, width: "60%", marginBottom: 10 }} />
+            <div style={{ ...blockStyle, height: 10, width: "100%", marginBottom: 6 }} />
+            <div style={{ ...blockStyle, height: 10, width: "95%", marginBottom: 6 }} />
+            <div style={{ ...blockStyle, height: 10, width: "88%", marginBottom: 6 }} />
+            <div style={{ ...blockStyle, height: 10, width: "92%", marginBottom: 6 }} />
+            <div style={{ ...blockStyle, height: 10, width: "75%", marginBottom: 16 }} />
+            <div style={{ ...blockStyle, height: 10, width: "100%", marginBottom: 6 }} />
+            <div style={{ ...blockStyle, height: 10, width: "97%", marginBottom: 6 }} />
+            <div style={{ ...blockStyle, height: 10, width: "83%", marginBottom: 16 }} />
+            <div style={{ ...blockStyle, height: 10, width: "100%", marginBottom: 6 }} />
+            <div style={{ ...blockStyle, height: 10, width: "90%", marginBottom: 6 }} />
+            <div style={{ ...blockStyle, height: 10, width: "70%", marginBottom: 6 }} />
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+export default function PdfViewer({ file, style = {}, onLoadComplete }) {
   const [numPages, setNumPages] = useState(null);
+  const [loaded, setLoaded] = useState(false);
   const [containerWidth, setContainerWidth] = useState(null);
   const containerRef = useRef(null);
 
@@ -26,6 +74,12 @@ export default function PdfViewer({ file, style = {} }) {
     return () => observer.disconnect();
   }, [updateWidth]);
 
+  const handleLoadSuccess = ({ numPages }) => {
+    setNumPages(numPages);
+    setLoaded(true);
+    if (onLoadComplete) onLoadComplete();
+  };
+
   return (
     <div
       ref={containerRef}
@@ -37,14 +91,11 @@ export default function PdfViewer({ file, style = {} }) {
         ...style,
       }}
     >
+      {!loaded && <PdfSkeleton width={containerWidth} />}
       <Document
         file={file}
-        onLoadSuccess={({ numPages }) => setNumPages(numPages)}
-        loading={
-          <div style={{ padding: "2rem", textAlign: "center", color: "#888" }}>
-            Loading document...
-          </div>
-        }
+        onLoadSuccess={handleLoadSuccess}
+        loading={null}
         error={
           <div style={{ padding: "2rem", textAlign: "center", color: "#888" }}>
             Unable to load document.

@@ -137,6 +137,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const [showProceed, setShowProceed] = useState(false);
   const [agreedTerms, setAgreedTerms] = useState(false);
   const [agreedPrivacy, setAgreedPrivacy] = useState(false);
+  const [pdfLoaded, setPdfLoaded] = useState(false);
   const [existingOnboardingId, setExistingOnboardingId] = useState(null);
   const [agreedRiskDisclosure, setAgreedRiskDisclosure] = useState(false);
   const [agreedMandate, setAgreedMandate] = useState(false);
@@ -1436,6 +1437,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <PdfViewer
                   file="/strategy-disclosures.pdf"
                   style={{ height: '65vh' }}
+                  onLoadComplete={() => setPdfLoaded(true)}
                 />
               </div>
 
@@ -1584,11 +1586,18 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 </div>
               </div>
 
-              <div className="checkbox-container animate-fade-in delay-3">
+              {!pdfLoaded && (
+                <p className="text-xs text-center mt-3 animate-fade-in" style={{ color: "hsl(270 20% 60%)" }}>
+                  Please wait for the document to load before agreeing
+                </p>
+              )}
+
+              <div className="checkbox-container animate-fade-in delay-3" style={{ opacity: pdfLoaded ? 1 : 0.4, pointerEvents: pdfLoaded ? "auto" : "none", transition: "opacity 0.4s ease" }}>
                 <label className="checkbox-item">
                   <input
                     type="checkbox"
                     checked={agreedTerms}
+                    disabled={!pdfLoaded}
                     onChange={(event) => setAgreedTerms(event.target.checked)}
                   />
                   <span className="checkbox-label">
@@ -1600,6 +1609,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   <input
                     type="checkbox"
                     checked={agreedPrivacy}
+                    disabled={!pdfLoaded}
                     onChange={(event) => setAgreedPrivacy(event.target.checked)}
                   />
                   <span className="checkbox-label">
