@@ -2,12 +2,31 @@ import jsPDF from "jspdf";
 import { applyPlugin } from "jspdf-autotable";
 applyPlugin(jsPDF);
 
-// ─── Embedded MINT SVG logo (white, base64) ───────────────────────────────────
-// Logo aspect ratio: 6293.27 × 2757.71  →  ~2.283 : 1
-const MINT_LOGO_B64 =
-  "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyBpZD0iTGF5ZXJfMiIgZGF0YS1uYW1lPSJMYXllciAyIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2MjkzLjI3IDI3NTcuNzEiPgogIDxkZWZzPgogICAgPHN0eWxlPgogICAgICAuY2xzLTEgewogICAgICAgIGZpbGw6ICNmZmY7CiAgICAgIH0KICAgIDwvc3R5bGU+CiAgPC9kZWZzPgogIDxnIGlkPSJMYXllcl8xLTIiIGRhdGEtbmFtZT0iTGF5ZXIgMSI+CiAgICA8Zz4KICAgICAgPGc+CiAgICAgICAgPHBhdGggY2xhc3M9ImNscy0xIiBkPSJNMzMzMy4xOSwyODAuOGMyNi43OSwxMy4wNywxNy42OCw1My4zNS0xMi4xMyw1My42Mmgwcy01NDIuNjMsMC01NDIuNjMsMGMtMTUuNiwwLTI4LjI0LDEyLjY0LTI4LjI0LDI4LjI0djI0MS40YzAsMTUuNi0xMi42NCwyOC4yNC0yOC4yNCwyOC4yNGgtNTE0LjM2Yy0xNS42LDAtMjguMjQtMTIuNjQtMjguMjQtMjguMjR2LTI2My4yM2MwLTEwLjExLDUuNC0xOS40NSwxNC4xNy0yNC40OEwyNzM3LjIzLDMuNzZjOC4xMy00LjY3LDE4LjA0LTUuMDEsMjYuNDYtLjlsNTY5LjUsMjc3Ljk0WiIvPgogICAgICAgIDxwYXRoIGNsYXNzPSJjbHMtMSIgZD0iTTI5NjAuMDcsNDg0LjYyYy0yNi43OS0xMy4wNy0xNy42OC01My4zNSwxMi4xMy01My42MmgwczU0Mi42MywwLDU0Mi42MywwYzE1LjYsMCwyOC4yNC0xMi42NCwyOC4yNC0yOC4yNHYtMjQxLjRjMC0xNS42LDEyLjY0LTI4LjI0LDI4LjI0LTI4LjI0aDUxNC4zNmMxNS42LDAsMjguMjQsMTIuNjQsMjguMjQsMjguMjR2MjYzLjIzYzAsMTAuMTEtNS40LDE5LjQ1LTE0LjE3LDI0LjQ4bC01NDMuNzEsMzEyLjU5Yy04LjEzLDQuNjctMTguMDQsNS4wMS0yNi40Ni45bC01NjkuNS0yNzcuOTRaIi8+CiAgICAgIDwvZz4KICAgICAgPGc+CiAgICAgICAgPHBhdGggY2xhc3M9ImNscy0xIiBkPSJNMCwyMzM3LjM2di05MjYuMjNjMC05MS4yOSwzMi4yOC0xNjkuNTgsOTYuODUtMjM0LjksNjUuMy02NC41NywxNDMuNjEtOTYuODUsMjM0LjktOTYuODVoMjQuNDljMTA0LjY1LDAsMTk0LjA3LDM3LjEzLDI2OC4yOSwxMTEuMzMsNDAuODEsNDAuODMsNzAuNSw4Ni40Nyw4OS4wNiwxMzYuOTNsMzMwLjYzLDY2Mi4zOCwzMzAuNjQtNjYyLjM4YzE4LjU0LTUwLjQ2LDQ4LjYtOTYuMSw5MC4xOC0xMzYuOTMsNzQuMjEtNzQuMiwxNjMuNjUtMTExLjMzLDI2OC4yOS0xMTEuMzNoMjMuMzhjOTIuMDIsMCwxNzAuMzMsMzIuMjgsMjM0LjksOTYuODUsNjUuMyw2NS4zMiw5Ny45NywxNDMuNjIsOTcuOTcsMjM0Ljl2OTI2LjIzaC0zNzkuNjJ2LTc4My43M2MwLTEyLjYxLTQuODQtMjMuNzQtMTQuNDctMzMuNC05LjY1LTguOS0yMC43OS0xMy4zNi0zMy40LTEzLjM2LTYuNjgsMC0xMi45OSwxLjEyLTE4LjkyLDMuMzQtNS4yMSwyLjIyLTEwLjAyLDUuNTctMTQuNDgsMTAuMDJoLTEuMTFsLTQwOC41Nyw4MTcuMTRoLTM0OC40NWwtMTkwLjM3LTM3OS42My0yMTkuMzEtNDM3LjUxYy00LjQ2LTQuNDUtOS42NS03Ljc5LTE1LjU5LTEwLjAyLTUuOTQtMi4yMi0xMS44OC0zLjM0LTE3LjgxLTMuMzQtMTMuMzYsMC0yNC44OCw0LjQ2LTM0LjUyLDEzLjM2LTguOSw5LjY2LTEzLjM2LDIwLjgtMTMuMzYsMzMuNHY3ODMuNzNIMFoiLz4KICAgICAgICA8cGF0aCBjbGFzcz0iY2xzLTEiIGQ9Ik0yMjc5Ljk2LDIzMzcuMzZ2LTEyMzQuNmgzNzkuNjJ2MTIzNC42aC0zNzkuNjJaIi8+CiAgICAgICAgPHBhdGggY2xhc3M9ImNscy0xIiBkPSJNNDIyNy4wNiwyMzYwLjczYy0xMDQuNjYsMC0xOTQuMDktMzYuNzMtMjY4LjMxLTExMC4yMS0yLjk4LTIuMjItNS41NS00LjgyLTcuNzktNy43OWgtMS4xMmwtMTMuMzQtMTYuN2MtMi45OC0yLjk1LTUuNTctNS45Mi03LjgxLTguOWwtNDU0LjItNTQ0LjM5LTE3MS40NC0yMDUuOTVjLTIuMjQtMS40Ny00Ljg1LTIuOTYtNy44MS00LjQ1LTUuOTQtMi4yMi0xMS44OC0zLjM0LTE3LjgxLTMuMzQtMTMuMzYsMC0yNC44OCw0LjgzLTM0LjUyLDE0LjQ4LTguOSw4LjktMTMuMzYsMjAuMDMtMTMuMzYsMzMuMzl2ODMwLjVoLTM3OS42MnYtOTI2LjIzYzAtOTEuMjksMzIuMjgtMTY5LjU4LDk2Ljg1LTIzNC45LDY1LjMtNjQuNTcsMTQzLjYxLTk2Ljg1LDIzNC45LTk2Ljg1aDI0LjQ5YzEwNC42NCwwLDE5NC4wNywzNy4xMywyNjguMywxMTEuMzMsMi4yMSwyLjIyLDQuNDUsNC40NSw2LjY3LDYuNjdoMS4xbDE0LjQ4LDE2LjdjMi4yMiwyLjk4LDQuNDYsNS45NSw2LjY3LDguOTFsNjI1LjY3LDc1MC4zNGMyLjIyLDIuMjIsNC44MiwzLjcxLDcuNzksNC40NSw1Ljk0LDIuMjIsMTIuMjQsMy4zNCwxOC45MywzLjM0LDEyLjYxLDAsMjMuNzQtNC40NiwzMy40LTEzLjM2LDkuNjMtOS42NSwxNC40Ni0yMC43OCwxNC40Ni0zMy40di04MzEuNmgzNzkuNjF2OTI2LjIzYzAsOTIuMDQtMzIuNjcsMTcwLjMyLTk3Ljk2LDIzNC44OS02NC41Nyw2NC41Ny0xNDIuODgsOTYuODUtMjM0LjksOTYuODVoLTIzLjM2WiIvPgogICAgICAgIDxwYXRoIGNsYXNzPSJjbHMtMSIgZD0iTTUyOTUuNzksMjMzNy4zNnYtOTQ5LjYxaC02MTYuNzZ2LTI4NWgxNjE0LjIzdjI4NWgtNjE3Ljg2djk0OS42MWgtMzc5LjYxWiIvPgogICAgICA8L2c+CiAgICAgIDxnPgogICAgICAgIDxwYXRoIGNsYXNzPSJjbHMtMSIgZD0iTTAsMjc1NC40NnYtMTU1LjdoMjAuNDRsNTYuNDQsMTE3LjA5LDU2LjExLTExNy4wOWgyMC42NXYxNTUuNTloLTIxLjQxdi0xMDYuNTFsLTUwLjI4LDEwNi42MWgtMTAuMjdsLTUwLjM4LTEwNi42MXYxMDYuNjFIMFoiLz4KICAgICAgICA8cGF0aCBjbGFzcz0iY2xzLTEiIGQ9Ik01NDAuODQsMjc1Ny43MWMtMTUuNTcsMC0yOC44NC0zLjQxLTM5Ljc5LTEwLjIyLTEwLjk2LTYuODEtMTkuMzQtMTYuMy0yNS4xNC0yOC40OS01LjgtMTIuMTgtOC43LTI2LjMxLTguNy00Mi4zOHMyLjktMzAuMjEsOC43LTQyLjM4YzUuOC0xMi4xOSwxNC4xOC0yMS42OCwyNS4xNC0yOC41LDEwLjk1LTYuODEsMjQuMjItMTAuMjEsMzkuNzktMTAuMjFzMjguNzQsMy40MSwzOS43MywxMC4yMWMxMC45OSw2LjgxLDE5LjM3LDE2LjMxLDI1LjE0LDI4LjUsNS43NywxMi4xOCw4LjY1LDI2LjMxLDguNjUsNDIuMzhzLTIuODgsMzAuMjEtOC42NSw0Mi4zOGMtNS43NywxMi4xOS0xNC4xNSwyMS42OC0yNS4xNCwyOC40OS0xMC45OSw2LjgxLTI0LjI0LDEwLjIyLTM5LjczLDEwLjIyWk01NDAuODQsMjczNi4xOWMxMS4wMy4xNSwyMC4yLTIuMjksMjcuNTItNy4zLDcuMzEtNSwxMi44MS0xMiwxNi40OS0yMC45NywzLjY3LTguOTgsNS41MS0xOS40MSw1LjUxLTMxLjNzLTEuODQtMjIuMjktNS41MS0zMS4yYy0zLjY4LTguOS05LjE4LTE1Ljg0LTE2LjQ5LTIwLjgxLTcuMzItNC45OC0xNi40OS03LjUtMjcuNTItNy41Ny0xMS4wMy0uMTQtMjAuMiwyLjI3LTI3LjUyLDcuMjUtNy4zMiw0Ljk3LTEyLjgxLDExLjk2LTE2LjQ5LDIwLjk3LTMuNjcsOS4wMi01LjU1LDE5LjQ2LTUuNjIsMzEuMzYtLjA3LDExLjg5LDEuNzMsMjIuMjksNS40MSwzMS4xOSwzLjY4LDguOSw5LjIxLDE1Ljg0LDE2LjYsMjAuODIsNy4zOSw0Ljk4LDE2LjYsNy41LDI3LjYzLDcuNTdaIi8+CiAgICAgICAgPHBhdGggY2xhc3M9ImNscy0xIiBkPSJNOTI3LjkyLDI3NTQuNDZ2LTE1NS43aDIyLjkybDc2LjY2LDExNS42OXYtMTE1LjY5aDIyLjkydjE1NS43aC0yMi45MmwtNzYuNjYtMTE1Ljh2MTE1LjhoLTIyLjkyWiIvPgogICAgICAgIDxwYXRoIGNsYXNzPSJjbHMtMSIgZD0iTTEzNzIuNjQsMjc1NC40NnYtMTU1LjdoOTkuNDd2MjEuM2gtNzYuODh2NDMuNjhoNjMuOXYyMS4zaC02My45djQ4LjExaDc2Ljg4djIxLjNoLTk5LjQ3WiIvPgogICAgICAgIDxwYXRoIGNsYXNzPSJjbHMtMSIgZD0iTTE4MjcuNTIsMjc1NC40NnYtNjQuMzNsLTUyLjY2LTkxLjM2aDI2LjM4bDM3LjczLDY1LjQxLDM3LjczLTY1LjQxaDI2LjM4bC01Mi42Niw5MS4zNnY2NC4zM2gtMjIuOTJaIi8+CiAgICAgICAgPHBhdGggY2xhc3M9ImNscy0xIiBkPSJNMjUzOC44NywyNzU0LjQ2di0xNTUuN2gyMi42djE1NS43aC0yMi42WiIvPgogICAgICAgIDxwYXRoIGNsYXNzPSJjbHMtMSIgZD0iTTI4ODUuODQsMjc1NC40NnYtMTU1LjdoMjIuOTJsNzYuNjYsMTE1LjY5di0xMTUuNjloMjIuOTJ2MTU1LjdoLTIyLjkybC03Ni42Ni0xMTUuOHYxMTUuOGgtMjIuOTJaIi8+CiAgICAgICAgPHBhdGggY2xhc3M9ImNscy0xIiBkPSJNMzcwNC41NiwyNzU0LjQ2di0xMzQuNGgtNTEuOHYtMjEuM2gxMjYuMTh2MjEuM2gtNTEuNzl2MTM0LjRoLTIyLjZaIi8+CiAgICAgICAgPHBhdGggY2xhc3M9ImNscy0xIiBkPSJNNDA4OC4xOCwyNzU0LjQ2di0xNTUuN2g2Mi45M2MxLjUxLDAsMy4zOS4wNSw1LjYyLjE2LDIuMjMuMTEsNC4zNi4zNCw2LjM4LjcsOC42NSwxLjM3LDE1Ljg3LDQuMzMsMjEuNjgsOC44Nyw1LjgsNC41NCwxMC4xNCwxMC4yNywxMy4wMiwxNy4xOSwyLjg5LDYuOTIsNC4zMywxNC41Niw0LjMzLDIyLjkzLDAsMTIuNC0zLjE3LDIzLjA4LTkuNTIsMzIuMDYtNi4zNCw4Ljk4LTE1Ljg2LDE0LjU4LTI4LjU0LDE2LjgxbC05LjE5LDEuMDhoLTQ0LjEydjU1LjloLTIyLjZaTTQxMTAuNzgsMjY3Ny4xNmgzOS40NmMxLjQ0LDAsMy4wNS0uMDcsNC44MS0uMjIsMS43Ni0uMTUsMy40NC0uMzksNS4wMy0uNzYsNC42MS0xLjA4LDguMzMtMy4wOCwxMS4xNC02LDIuODEtMi45Miw0LjgzLTYuMjksNi4wNS0xMC4xMSwxLjIyLTMuODIsMS44NC03LjY0LDEuODQtMTEuNDZzLS42MS03LjYyLTEuODQtMTEuNDFjLTEuMjItMy43OS0zLjI1LTcuMTQtNi4wNS0xMC4wNS0yLjgxLTIuOTItNi41My00LjkyLTExLjE0LTYtMS41OS0uNDMtMy4yNy0uNzItNS4wMy0uODctMS43Ny0uMTQtMy4zNy0uMjEtNC44MS0uMjFoLTM5LjQ2djU3LjA5Wk00MTc5LjIyLDI3NTQuNDZsLTMwLjcxLTYzLjM2LDIyLjgxLTUuODQsMzMuNzQsNjkuMmgtMjUuODRaIi8+CiAgICAgICAgPHBhdGggY2xhc3M9ImNscy0xIiBkPSJNNDUwOS45NywyNzU0LjQ2bDUwLjYxLTE1NS43aDMyLjU0bDUwLjYxLDE1NS43aC0yMy40NmwtNDYuNjEtMTQyLjA4aDUuODRsLTQ2LjA2LDE0Mi4wOGgtMjMuNDdaTTQ1MzYuMjUsMjcxOS4zMnYtMjEuMmg4MS4zMXYyMS4yaC04MS4zMVoiLz4KICAgICAgICA8cGF0aCBjbGFzcz0iY2xhc3M9ImNscy0xIiBkPSJNNDk1NS4xMiwyNzU0LjQ2di0xNTUuN2gyMi45M2w3Ni42NiwxMTUuNjl2LTExNS42OWgyMi45MnYxNTUuN2gtMjIuOTJsLTc2LjY2LTExNS44djExNS44aC0yMi45M1oiLz4KICAgICAgICA8cGF0aCBjbGFzcz0iY2xzLTEiIGQ9Ik01NDU2LjI4LDI3NTcuNzFjLTExLjE3LDAtMjEuMjQtMS45My0zMC4yMi01Ljc5LTguOTgtMy44Ni0xNi4zNi05LjM3LTIyLjE3LTE2LjU0LTUuOC03LjE3LTkuNTctMTUuNy0xMS4zLTI1LjU3bDIzLjU3LTMuNTdjMi4zOCw5LjUyLDcuMzUsMTYuOTIsMTQuOTIsMjIuMjIsNy41Nyw1LjMsMTYuNCw3Ljk1LDI2LjUsNy45NSw2LjI3LDAsMTIuMDQtLjk5LDE3LjMtMi45OCw1LjI3LTEuOTgsOS41LTQuODIsMTIuNzEtOC41NCwzLjIxLTMuNzEsNC44MS04LjE3LDQuODEtMTMuMzUsMC0yLjgxLS40OS01LjMtMS40Ni03LjQ2LS45Ny0yLjE2LTIuMzEtNC4wNS00LTUuNjctMS43LTEuNjMtMy43NS0zLjAzLTYuMTctNC4yMi0yLjQxLTEuMTktNS4wNi0yLjIyLTcuOTUtMy4wOGwtMzkuODktMTEuNzhjLTMuODktMS4xNS03Ljg2LTIuNjUtMTEuOS00LjQ5LTQuMDQtMS44NC03LjczLTQuMjUtMTEuMDgtNy4yNC0zLjM2LTIuOTktNi4wNy02LjctOC4xNy0xMS4xNC0yLjA5LTQuNDMtMy4xNC05LjgyLTMuMTQtMTYuMTYsMC05LjU5LDIuNDctMTcuNzIsNy40MS0yNC4zOCw0LjkzLTYuNjcsMTEuNjItMTEuNzEsMjAuMDYtMTUuMTMsOC40My0zLjQyLDE3Ljg3LTUuMTQsMjguMzMtNS4xNCwxMC41Mi4xNSwxOS45NSwyLjAyLDI4LjI4LDUuNjIsOC4zMywzLjYsMTUuMjUsOC43OCwyMC43NiwxNS41MSw1LjUxLDYuNzQsOS4zMSwxNC45LDExLjQsMjQuNDlsLTI0LjIyLDQuMTFjLTEuMDgtNS44NC0zLjM5LTEwLjg3LTYuOTItMTUuMDktMy41My00LjIyLTcuODYtNy40Ni0xMi45Ny05LjczLTUuMTItMi4yNy0xMC42Ny0zLjQ0LTE2LjY2LTMuNTItNS43Ny0uMTQtMTEuMDQuNzMtMTUuODQsMi42LTQuNzksMS44Ny04LjYyLDQuNTEtMTEuNDYsNy44OS0yLjg1LDMuMzktNC4yNyw3LjI5LTQuMjcsMTEuNjhzMS4yNiw3LjgyLDMuNzksMTAuNDljMi41MiwyLjY3LDUuNjQsNC43OCw5LjM1LDYuMzMsMy43MiwxLjU1LDcuNDEsMi44MywxMS4wOSwzLjg0bDI4Ljc2LDguMTFjMy42LDEuMDEsNy42OSwyLjM3LDEyLjI4LDQuMDUsNC41OCwxLjcsOS4wMSw0LjA1LDEzLjMsNy4wOCw0LjI5LDMuMDMsNy44NCw3LjA1LDEwLjY1LDEyLjA2LDIuODEsNS4wMSw0LjIyLDExLjMsNC4yMiwxOC44N3MtMS41OCwxNC43Ni00Ljc2LDIwLjdjLTMuMTcsNS45NS03LjUxLDEwLjkzLTEzLjAzLDE0LjkyLTUuNTEsNC0xMS44OCw3LjAxLTE5LjA4LDkuMDMtNy4yMSwyLjAxLTE0LjgxLDMuMDMtMjIuODEsMy4wM1oiLz4KICAgICAgICA8cGF0aCBjbGFzcz0iY2xzLTEiIGQ9Ik01ODMzLjA5LDI3NTQuNDZ2LTE1NS43aDIyLjZ2MTU1LjdoLTIyLjZaIi8+CiAgICAgICAgPHBhdGggY2xhc3M9ImNscy0xIiBkPSJNNjIxOC44OCwyNzU0LjQ2di0xMzQuNGgtNTEuOHYtMjEuM2gxMjYuMTh2MjEuM2gtNTEuNzl2MTM0LjRoLTIyLjZaIi8+CiAgICAgIDwvZz4KICAgIDwvZz4KICA8L2c+Cjwvc3ZnPg==";
+// ─── drawMintLogo — pure jsPDF vector logo (no addImage required) ────────────
+// Draws chevrons + "MINT" text using only jsPDF primitives.
+// x, y = top-left; h = height in mm; col = RGB array
+function drawMintLogo(doc, x, y, h, col = [255, 255, 255]) {
+  const cw = h * 0.73;
+  doc.setFillColor(...col);
+  // Upper chevron
+  doc.triangle(x, y, x + cw * 0.6, y, x + cw, y + h * 0.38, "F");
+  doc.triangle(x, y, x + cw, y + h * 0.38, x, y + h * 0.22, "F");
+  doc.triangle(x, y + h * 0.22, x + cw, y + h * 0.38, x + cw * 0.6, y + h * 0.38, "F");
+  doc.rect(x, y, cw * 0.6, h * 0.22, "F");
+  // Lower chevron
+  doc.triangle(x + cw, y + h * 0.62, x, y + h, x + cw * 0.4, y + h * 0.62, "F");
+  doc.triangle(x + cw, y + h * 0.62, x + cw, y + h * 0.78, x, y + h, "F");
+  doc.triangle(x + cw, y + h * 0.78, x + cw * 0.4, y + h * 0.78, x, y + h, "F");
+  doc.rect(x + cw * 0.4, y + h * 0.62, cw * 0.6, h * 0.38, "F");
+  // Wordmark
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(h * 2.9);
+  doc.setTextColor(...col);
+  doc.text("MINT", x + cw + h * 0.18, y + h * 0.76);
+  doc.setFontSize(10);
+}
 
-const LOGO_ASPECT = 6293.27 / 2757.71; // ~2.283
+const LOGO_ASPECT = 2.283;
 
 // ─── Palette (matches factsheet exactly) ─────────────────────────────────────
 const P        = [59,  27,  122];
@@ -112,7 +131,7 @@ function carryHeader(doc, clientName, accountNo, pageNum, totalPages) {
   fc(doc, P_MID); doc.rect(0, 0, PW, 1.5, "F");
 
   // Logo left
-  doc.addImage(MINT_LOGO_B64, "SVG", ML, (13 - LOGO_H) / 2, LOGO_W, LOGO_H);
+  drawMintLogo(doc, ML, (13 - LOGO_H) / 2, LOGO_H);
 
   doc.setFont("helvetica", "normal"); doc.setFontSize(5.5); tc(doc, [185, 155, 230]);
   doc.text(`${clientName}  ·  ${accountNo}`, PW / 2, 8.5, { align: "center" });
@@ -130,7 +149,7 @@ function pageFooter(doc, accountNo, isoDate, pageNum, totalPages) {
   fc(doc, P_MID); doc.rect(0, FY, PW, 1,  "F");
 
   // Logo in footer
-  doc.addImage(MINT_LOGO_B64, "SVG", ML, FY + 2.5, LOGO_W, LOGO_H);
+  drawMintLogo(doc, ML, FY + 2.5, LOGO_H);
 
   doc.setFont("helvetica", "normal"); doc.setFontSize(5.5); tc(doc, [185, 160, 225]);
   doc.text(`Investment Statement  ·  ${accountNo}`, ML + LOGO_W + 4, FY + 5.5);
@@ -166,14 +185,17 @@ function onNewPage(doc, clientName, accountNo) {
 // ═══════════════════════════════════════════════════════════════════════════════
 //  MAIN EXPORT
 // ═══════════════════════════════════════════════════════════════════════════════
+// preOpenedWindow: caller must do `const w = window.open("", "_blank")` BEFORE
+// awaiting this function so mobile browsers don't block the popup.
 export const generateMintStatement = async (
   profile,
   displayName,
-  holdingsRows  = [],
-  strategyRows  = [],
-  activityItems = [],
-  dateFrom      = null,
-  dateTo        = null,
+  holdingsRows     = [],
+  strategyRows     = [],
+  activityItems    = [],
+  dateFrom         = null,
+  dateTo           = null,
+  preOpenedWindow  = null,
 ) => {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
@@ -206,7 +228,7 @@ export const generateMintStatement = async (
 
   // SVG logo — right-aligned in header
   const HDR_LOGO_H = 8, HDR_LOGO_W = HDR_LOGO_H * LOGO_ASPECT;
-  doc.addImage(MINT_LOGO_B64, "SVG", PW - MR - HDR_LOGO_W, (HDR_H - HDR_LOGO_H) / 2, HDR_LOGO_W, HDR_LOGO_H);
+  drawMintLogo(doc, PW - MR - HDR_LOGO_W, (HDR_H - HDR_LOGO_H) / 2, HDR_LOGO_H);
 
   // Title block
   doc.setFont("helvetica", "bold"); doc.setFontSize(9.5); tc(doc, WHITE);
@@ -608,25 +630,37 @@ export const generateMintStatement = async (
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  //  OUTPUT
+  //  OUTPUT — mobile-safe
+  //  On mobile, window.open() is blocked if called after an await.
+  //  Solution: caller opens a blank window BEFORE awaiting this function,
+  //  passes it in as `preOpenedWindow`, and we write the blob URL into it.
   // ═══════════════════════════════════════════════════════════════════════════
   const safeName = clientName.replace(/[^a-zA-Z0-9]/g, "_");
   const safeAcct = accountNo.replace(/[^A-Z0-9\-]/gi, "");
   const filename = `MINT_Statement_${safeName}_${safeAcct}_${isoDate}.pdf`;
 
   try {
-    const blob   = doc.output("blob");
-    const url    = URL.createObjectURL(blob);
-    const newTab = window.open(url, "_blank");
-    if (!newTab || newTab.closed || typeof newTab.closed === "undefined") {
-      const a    = document.createElement("a");
-      a.href     = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+    const blob = doc.output("blob");
+    const url  = URL.createObjectURL(blob);
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+
+    // 1. Use the pre-opened window if the caller provided one (mobile path)
+    if (preOpenedWindow && !preOpenedWindow.closed) {
+      preOpenedWindow.location.href = url;
+      return;
     }
-    setTimeout(() => URL.revokeObjectURL(url), 30_000);
+
+    // 2. Try opening a new tab (works on desktop, blocked on mobile without pre-open)
+    const newTab = window.open(url, "_blank");
+    if (newTab && !newTab.closed) return;
+
+    // 3. Final fallback: force a download via hidden <a>
+    const a = document.createElement("a");
+    a.href     = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   } catch (err) {
     console.error("[Statement PDF] fallback triggered:", err);
     doc.save(filename);
