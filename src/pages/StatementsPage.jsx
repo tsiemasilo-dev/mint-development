@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from "react";
+import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { ArrowDownLeft, ArrowUpRight, MoreHorizontal, X, Search, TrendingUp, CreditCard, Wallet, RefreshCw, Gift } from "lucide-react";
 import { generateMintStatement } from "../lib/generateMintStatement";
 import { useProfile } from "../lib/useProfile";
@@ -16,9 +16,9 @@ const activityFilters = ["All", "Investments", "Deposits", "Withdrawals"];
 const getTransactionIcon = (name, direction) => {
   const lower = (name || "").toLowerCase();
   if (lower.includes("dividend") || lower.includes("interest")) return Gift;
-  if (lower.includes("credit") || lower.includes("loan")) return CreditCard;
-  if (lower.includes("withdraw") || lower.includes("repay")) return Wallet;
-  if (lower.includes("recurring") || lower.includes("auto")) return RefreshCw;
+  if (lower.includes("credit")   || lower.includes("loan"))     return CreditCard;
+  if (lower.includes("withdraw") || lower.includes("repay"))    return Wallet;
+  if (lower.includes("recurring")|| lower.includes("auto"))     return RefreshCw;
   if (lower.includes("invest") || lower.includes("strategy") || lower.includes("purchas") || lower.includes("buy") || lower.includes("bought")) return TrendingUp;
   if (direction === "credit") return ArrowDownLeft;
   return ArrowUpRight;
@@ -26,15 +26,16 @@ const getTransactionIcon = (name, direction) => {
 
 const getIconColors = (direction, name) => {
   const lower = (name || "").toLowerCase();
-  if (lower.includes("invest") || lower.includes("strategy") || lower.includes("purchas") || lower.includes("buy") || lower.includes("bought")) return { bg: "bg-blue-50", text: "text-blue-600" };
+  if (lower.includes("invest") || lower.includes("strategy") || lower.includes("purchas") || lower.includes("buy") || lower.includes("bought"))
+    return { bg: "bg-blue-50", text: "text-blue-600" };
   if (direction === "credit") return { bg: "bg-emerald-50", text: "text-emerald-600" };
   return { bg: "bg-red-50", text: "text-red-500" };
 };
 
 const getFilterCategory = (direction, name) => {
   const lower = (name || "").toLowerCase();
-  if (lower.includes("withdraw") || lower.includes("repay")) return "Withdrawals";
-  if (lower.includes("deposit") || direction === "credit") return "Deposits";
+  if (lower.includes("withdraw") || lower.includes("repay"))  return "Withdrawals";
+  if (lower.includes("deposit")  || direction === "credit")   return "Deposits";
   if (lower.includes("invest") || lower.includes("buy") || lower.includes("strategy") || direction === "debit") return "Investments";
   return "Other";
 };
@@ -43,13 +44,13 @@ const formatRelativeDate = (dateString) => {
   if (!dateString) return "";
   const date = new Date(dateString);
   if (isNaN(date.getTime())) return dateString;
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const now      = new Date();
+  const today    = new Date(now.getFullYear(),  now.getMonth(),  now.getDate());
   const itemDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   const diffDays = Math.floor((today - itemDate) / (1000 * 60 * 60 * 24));
   if (diffDays === 0) return "Today";
   if (diffDays === 1) return "Yesterday";
-  if (diffDays < 7) return "This Week";
+  if (diffDays < 7)  return "This Week";
   if (diffDays < 30) return "This Month";
   return date.toLocaleDateString("en-ZA", { month: "long", year: "numeric" });
 };
@@ -74,37 +75,61 @@ const formatAmount = (amount) => {
   return `R${val.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
+// ─── DateRangePills — defined OUTSIDE StatementsPage so it never remounts ────
+// FIX Bug 3: was defined inline which caused remount/flicker on every render.
+const DateRangePills = ({ dateRange, setDateRange }) => (
+  <div className="flex rounded-full bg-white/10 p-0.5 gap-0.5 w-full">
+    {[null, 30, 60, 90].map((d) => (
+      <button
+        key={d ?? "all"}
+        type="button"
+        onClick={() => setDateRange(d)}
+        className={`flex-1 rounded-full px-2 py-1.5 text-xs font-semibold transition whitespace-nowrap text-center ${
+          dateRange === d
+            ? "bg-white text-slate-900 shadow-sm"
+            : "text-white/70 hover:bg-white/10 hover:text-white"
+        }`}
+      >
+        {d ? `${d}d` : "All"}
+      </button>
+    ))}
+  </div>
+);
+
 // ─────────────────────────────────────────────────────────────────────────────
 const StatementsPage = ({ onOpenNotifications }) => {
   const { profile } = useProfile();
-  const settlementCfg = useSettlementConfig();
+  const settlementCfg          = useSettlementConfig();
   const holdingSettlementStatus = getSettlementStatusForHolding(settlementCfg);
 
-  const [activeTab, setActiveTab]           = useState("strategy");
-  const [page, setPage]                     = useState(1);
-  const [perPage, setPerPage]               = useState(9);
-  const [selectedCard, setSelectedCard]     = useState(null);
-  const [searchQuery, setSearchQuery]       = useState("");
+  const [activeTab,     setActiveTab]     = useState("strategy");
+  const [page,          setPage]          = useState(1);
+  const [perPage,       setPerPage]       = useState(9);
+  const [selectedCard,  setSelectedCard]  = useState(null);
+  const [searchQuery,   setSearchQuery]   = useState("");
 
-  const [holdingsRows, setHoldingsRows]     = useState([]);
-  const [holdingsRaw, setHoldingsRaw]       = useState([]);
-  const [strategyRows, setStrategyRows]     = useState([]);
-  const [rawStrategies, setRawStrategies]   = useState([]);
+  const [holdingsRows,       setHoldingsRows]       = useState([]);
+  const [holdingsRaw,        setHoldingsRaw]        = useState([]);
+  const [strategyRows,       setStrategyRows]       = useState([]);
+  const [rawStrategies,      setRawStrategies]      = useState([]);
   const [holdingsSecurities, setHoldingsSecurities] = useState([]);
 
-  const [strategiesLoading, setStrategiesLoading] = useState(true);
-  const [holdingsLoading, setHoldingsLoading]     = useState(true);
-  const [pdfLoading, setPdfLoading]               = useState(false);
+  // FIX Bug 1: initialise loading states to FALSE — set true only when we
+  // actually start a fetch. This prevents the Download button from being
+  // permanently disabled when profile?.id is not yet available.
+  const [strategiesLoading, setStrategiesLoading] = useState(false);
+  const [holdingsLoading,   setHoldingsLoading]   = useState(false);
+  const [pdfLoading,        setPdfLoading]        = useState(false);
 
   const { transactions: activityTransactions, loading: activityLoading } = useTransactions(100);
 
-  const [activityFilter, setActivityFilter]           = useState("All");
+  const [activityFilter,      setActivityFilter]      = useState("All");
   const [activitySearchQuery, setActivitySearchQuery] = useState("");
-  const [dateRange, setDateRange]                     = useState(null);
+  const [dateRange,           setDateRange]           = useState(null);
   const activitySearchRef = useRef(null);
 
   const displayName = [profile?.firstName, profile?.lastName].filter(Boolean).join(" ");
-  const initials = displayName.split(" ").filter(Boolean).slice(0, 2).map(p => p[0]).join("").toUpperCase();
+  const initials    = displayName.split(" ").filter(Boolean).slice(0, 2).map(p => p[0]).join("").toUpperCase();
 
   const mintAccountNumber =
     profile?.mintNumber ||
@@ -114,12 +139,12 @@ const StatementsPage = ({ onOpenNotifications }) => {
   // ── Computed date range ────────────────────────────────────────────────────
   const { computedFrom, computedTo } = useMemo(() => {
     if (!dateRange) return { computedFrom: null, computedTo: null };
-    const to = new Date();
+    const to   = new Date();
     const from = new Date();
     from.setDate(to.getDate() - dateRange);
     return {
       computedFrom: from.toISOString().split("T")[0],
-      computedTo: to.toISOString().split("T")[0],
+      computedTo:   to.toISOString().split("T")[0],
     };
   }, [dateRange]);
 
@@ -137,16 +162,33 @@ const StatementsPage = ({ onOpenNotifications }) => {
   // ── Load strategies ────────────────────────────────────────────────────────
   useEffect(() => {
     let alive = true;
+
     const load = async () => {
+      // FIX Bug 1: guard returns early if no profile — don't set loading at all
+      // so the button defaults to enabled (dataReady=true) while auth resolves.
       if (!supabase || !profile?.id) return;
+
       if (alive) setStrategiesLoading(true);
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.access_token) { if (alive) setStrategiesLoading(false); return; }
-        const res = await fetch("/api/user/strategies", { headers: { Authorization: `Bearer ${session.access_token}` } });
-        if (!res.ok) { if (alive) setStrategiesLoading(false); return; }
+        if (!session?.access_token) {
+          if (alive) { setStrategyRows([]); setStrategiesLoading(false); }
+          return;
+        }
+
+        const res = await fetch("/api/user/strategies", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (!res.ok) {
+          if (alive) setStrategiesLoading(false);
+          return;
+        }
+
         const { strategies: userStrats = [] } = await res.json();
-        if (userStrats.length === 0) { if (alive) { setStrategyRows([]); setRawStrategies([]); setStrategiesLoading(false); } return; }
+        if (userStrats.length === 0) {
+          if (alive) { setStrategyRows([]); setRawStrategies([]); setStrategiesLoading(false); }
+          return;
+        }
 
         const { data: strategies, error } = await supabase
           .from("strategies")
@@ -156,29 +198,33 @@ const StatementsPage = ({ onOpenNotifications }) => {
         if (error) throw error;
 
         const mapped = (strategies || []).map(strategy => {
-          const m = Array.isArray(strategy.strategy_metrics) ? strategy.strategy_metrics[0] : strategy.strategy_metrics;
+          const m    = Array.isArray(strategy.strategy_metrics) ? strategy.strategy_metrics[0] : strategy.strategy_metrics;
           const asOf = m?.as_of_date ? new Date(m.as_of_date) : null;
           return {
-            type: "Strategy",
-            title: strategy.short_name || strategy.name || "—",
-            fullName: strategy.name || "—",
-            desc: strategy.description ? strategy.description.slice(0, 40) + (strategy.description.length > 40 ? "…" : "") : "—",
-            date: asOf ? asOf.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }) : "—",
-            amount: formatCurrency(m?.last_close || 0),
-            meta: strategy.risk_level || "—",
-            riskLevel: strategy.risk_level || null,
-            changePct: m?.change_pct != null ? Number(m.change_pct) : null,
-            flow: "out",
-            objective: strategy.objective || null,
-            currentValue: m?.last_close ? formatCurrency(m.last_close) : null,
-            changeAbs: m?.change_abs || null,
-            r1w: m?.r_1w || null, r1m: m?.r_1m || null, r3m: m?.r_3m || null,
-            r6m: m?.r_6m || null, rytd: m?.r_ytd || null, r1y: m?.r_1y || null,
-            baseCurrency: strategy.base_currency || "ZAR",
-            minInvestment: strategy.min_investment || null,
-            providerName: strategy.provider_name || null,
-            managementFeeBps: strategy.management_fee_bps || null,
-            holdingsCount: Array.isArray(strategy.holdings) ? strategy.holdings.length : 0,
+            type:              "Strategy",
+            title:             strategy.short_name || strategy.name || "—",
+            fullName:          strategy.name || "—",
+            desc:              strategy.description ? strategy.description.slice(0, 40) + (strategy.description.length > 40 ? "…" : "") : "—",
+            date:              asOf ? asOf.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }) : "—",
+            amount:            formatCurrency(m?.last_close || 0),
+            meta:              strategy.risk_level || "—",
+            riskLevel:         strategy.risk_level || null,
+            changePct:         m?.change_pct != null ? Number(m.change_pct) : null,
+            flow:              "out",
+            objective:         strategy.objective || null,
+            currentValue:      m?.last_close ? formatCurrency(m.last_close) : null,
+            changeAbs:         m?.change_abs || null,
+            r1w:               m?.r_1w  || null,
+            r1m:               m?.r_1m  || null,
+            r3m:               m?.r_3m  || null,
+            r6m:               m?.r_6m  || null,
+            rytd:              m?.r_ytd || null,
+            r1y:               m?.r_1y  || null,
+            baseCurrency:      strategy.base_currency     || "ZAR",
+            minInvestment:     strategy.min_investment    || null,
+            providerName:      strategy.provider_name     || null,
+            managementFeeBps:  strategy.management_fee_bps || null,
+            holdingsCount:     Array.isArray(strategy.holdings) ? strategy.holdings.length : 0,
           };
         });
 
@@ -188,6 +234,7 @@ const StatementsPage = ({ onOpenNotifications }) => {
         if (alive) setStrategiesLoading(false);
       }
     };
+
     load();
     return () => { alive = false; };
   }, [profile?.id]);
@@ -199,17 +246,18 @@ const StatementsPage = ({ onOpenNotifications }) => {
       try {
         const tickers = [...new Set(rawStrategies.flatMap(s =>
           getHoldingsArray(s).flatMap(h => {
-            const raw = h.ticker || h.symbol || h;
+            const raw  = h.ticker || h.symbol || h;
             const norm = normalizeSymbol(raw);
             return norm && norm !== raw ? [raw, norm] : [raw];
           })
         ))];
         if (!tickers.length) return;
-        const chunks = Array.from({ length: Math.ceil(tickers.length / 50) }, (_, i) =>
-          supabase.from("securities").select("id, symbol, logo_url, name, last_price").in("symbol", tickers.slice(i * 50, (i + 1) * 50))
+        const chunks = Array.from(
+          { length: Math.ceil(tickers.length / 50) },
+          (_, i) => supabase.from("securities").select("id, symbol, logo_url, name, last_price").in("symbol", tickers.slice(i * 50, (i + 1) * 50))
         );
         const results = await Promise.all(chunks);
-        const merged = results.flatMap(({ data, error }) => (!error && data) ? data : []);
+        const merged  = results.flatMap(({ data, error }) => (!error && data) ? data : []);
         if (merged.length) setHoldingsSecurities(merged);
       } catch (e) { console.error(e); }
     };
@@ -219,48 +267,76 @@ const StatementsPage = ({ onOpenNotifications }) => {
   // ── Load holdings ──────────────────────────────────────────────────────────
   useEffect(() => {
     let alive = true;
+
     const load = async () => {
+      // FIX Bug 1: same pattern — don't set loading if no profile yet
       if (!supabase || !profile?.id) return;
+
       if (alive) setHoldingsLoading(true);
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.access_token) { if (alive) setHoldingsLoading(false); return; }
-        const res = await fetch("/api/user/holdings", { headers: { Authorization: `Bearer ${session.access_token}` } });
-        if (!res.ok) { if (alive) setHoldingsLoading(false); return; }
+        if (!session?.access_token) {
+          if (alive) { setHoldingsRows([]); setHoldingsLoading(false); }
+          return;
+        }
+
+        const res = await fetch("/api/user/holdings", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (!res.ok) {
+          if (alive) setHoldingsLoading(false);
+          return;
+        }
+
         const { holdings = [] } = await res.json();
-        if (!holdings.length) { if (alive) { setHoldingsRows([]); setHoldingsLoading(false); } return; }
+        if (!holdings.length) {
+          if (alive) { setHoldingsRows([]); setHoldingsLoading(false); }
+          return;
+        }
 
         const mapped = holdings.map(h => {
           const symbol = h.symbol || "—";
           const qty    = Number(h.quantity);
           const avg    = Number(h.avg_fill);
           const price  = Number(h.last_price);
+          // NOTE: avg_fill and last_price are expected in CENTS from the API.
+          // mktVal and unreal are in cents; we divide by 100 for display.
           const mktVal = isFinite(price) && isFinite(qty) ? price * qty : NaN;
           const unreal = isFinite(price) && isFinite(avg) && isFinite(qty) ? (price - avg) * qty : NaN;
           return {
-            type: "Holdings",
-            logoUrl: h.logo_url || null,
-            title: h.name || symbol,
-            instrument: h.name || symbol,
-            desc: h.exchange ? `${symbol} · ${h.exchange}` : symbol,
-            ticker: symbol,
-            quantity: isFinite(qty) ? qty.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 6 }) : "—",
-            avgCost:    isFinite(avg)    ? formatCurrency(avg / 100)    : "—",
-            marketPrice: isFinite(price)  ? formatCurrency(price / 100)  : "—",
-            marketValue: isFinite(mktVal) ? formatCurrency(mktVal / 100) : "—",
-            unrealizedPL: isFinite(unreal) ? `${unreal < 0 ? "-" : "+"}${formatCurrency(Math.abs(unreal) / 100)}` : "—",
-            amount: isFinite(mktVal) ? formatCurrency(mktVal / 100) : "—",
-            date: (() => { const d = new Date(h.as_of_date || h.updated_at || h.created_at); return isNaN(d) ? "—" : d.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }); })(),
-            time: (() => { const d = new Date(h.as_of_date || h.updated_at || h.created_at); return isNaN(d) ? "—" : d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }); })(),
-            meta: "Market value", flow: "in",
-            status: h.Status || null,
+            type:         "Holdings",
+            logoUrl:      h.logo_url || null,
+            title:        h.name || symbol,
+            instrument:   h.name || symbol,
+            desc:         h.exchange ? `${symbol} · ${h.exchange}` : symbol,
+            ticker:       symbol,
+            quantity:     isFinite(qty)    ? qty.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 6 }) : "—",
+            avgCost:      isFinite(avg)    ? formatCurrency(avg    / 100) : "—",
+            marketPrice:  isFinite(price)  ? formatCurrency(price  / 100) : "—",
+            marketValue:  isFinite(mktVal) ? formatCurrency(mktVal / 100) : "—",
+            // FIX: unrealizedPL sign prefix must come BEFORE the currency symbol
+            // so parseAmount() in the generator can detect the sign correctly.
+            unrealizedPL: isFinite(unreal)
+              ? `${unreal < 0 ? "-" : "+"}${formatCurrency(Math.abs(unreal) / 100)}`
+              : "—",
+            amount:       isFinite(mktVal) ? formatCurrency(mktVal / 100) : "—",
+            date:         (() => { const d = new Date(h.as_of_date || h.updated_at || h.created_at); return isNaN(d) ? "—" : d.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }); })(),
+            time:         (() => { const d = new Date(h.as_of_date || h.updated_at || h.created_at); return isNaN(d) ? "—" : d.toLocaleTimeString("en-GB",  { hour: "2-digit", minute: "2-digit" }); })(),
+            meta:             "Market value",
+            flow:             "in",
+            status:           h.Status || null,
             settlement_status: h.settlement_status || null,
           };
         });
 
         if (alive) {
           setHoldingsRows(mapped);
-          setHoldingsRaw(holdings.map(h => ({ id: h.id, quantity: Number(h.quantity), marketValue: Number(h.market_value), lastPrice: Number(h.last_price) })));
+          setHoldingsRaw(holdings.map(h => ({
+            id:          h.id,
+            quantity:    Number(h.quantity),
+            marketValue: Number(h.market_value),
+            lastPrice:   Number(h.last_price),
+          })));
           setHoldingsLoading(false);
         }
       } catch (e) {
@@ -268,20 +344,27 @@ const StatementsPage = ({ onOpenNotifications }) => {
         if (alive) setHoldingsLoading(false);
       }
     };
+
     load();
     return () => { alive = false; };
   }, [profile?.id]);
 
-  // ── Update market values ───────────────────────────────────────────────────
+  // ── Update market values in DB when tab is active ─────────────────────────
   useEffect(() => {
     const update = async () => {
       if (!supabase || activeTab !== "holdings" || !holdingsRaw.length) return;
-      const updates = holdingsRaw.filter(h => isFinite(h.quantity) && isFinite(h.lastPrice)).map(h => {
-        const cv = h.lastPrice * h.quantity;
-        return (!isFinite(h.marketValue) || Math.abs(h.marketValue - cv) > 0.01) ? { id: h.id, market_value: cv } : null;
-      }).filter(Boolean);
+      const updates = holdingsRaw
+        .filter(h => isFinite(h.quantity) && isFinite(h.lastPrice))
+        .map(h => {
+          const cv = h.lastPrice * h.quantity;
+          return (!isFinite(h.marketValue) || Math.abs(h.marketValue - cv) > 0.01)
+            ? { id: h.id, market_value: cv } : null;
+        })
+        .filter(Boolean);
       if (!updates.length) return;
-      await Promise.all(updates.map(u => supabase.from("stock_holdings").update({ market_value: u.market_value }).eq("id", u.id)));
+      await Promise.all(updates.map(u =>
+        supabase.from("stock_holdings").update({ market_value: u.market_value }).eq("id", u.id)
+      ));
     };
     update();
   }, [activeTab, holdingsRaw]);
@@ -296,22 +379,22 @@ const StatementsPage = ({ onOpenNotifications }) => {
   // ── Activity items ─────────────────────────────────────────────────────────
   const activityItems = useMemo(() =>
     activityTransactions.map(t => ({
-      id: t.id,
-      title: t.name || t.description || "Transaction",
-      description: t.description || t.store_reference || "",
-      date: t.transaction_date || t.created_at || "",
-      displayDate: formatShortDate(t.transaction_date || t.created_at),
-      time: formatTime(t.transaction_date || t.created_at),
-      amount: formatAmount(t.amount, t.direction),
-      rawAmount: (t.amount || 0) / 100,
-      direction: t.direction,
-      status: t.status,
+      id:               t.id,
+      title:            t.name || t.description || "Transaction",
+      description:      t.description || t.store_reference || "",
+      date:             t.transaction_date || t.created_at || "",
+      displayDate:      formatShortDate(t.transaction_date || t.created_at),
+      time:             formatTime(t.transaction_date || t.created_at),
+      amount:           formatAmount(t.amount, t.direction),
+      rawAmount:        (t.amount || 0) / 100,
+      direction:        t.direction,
+      status:           t.status,
       settlement_status: t.settlement_status || null,
-      filterCategory: getFilterCategory(t.direction, t.name),
-      isPositive: t.direction === "credit",
-      groupLabel: formatRelativeDate(t.transaction_date || t.created_at),
-      logo_url: t.logo_url,
-      holding_logos: t.holding_logos || [],
+      filterCategory:   getFilterCategory(t.direction, t.name),
+      isPositive:       t.direction === "credit",
+      groupLabel:       formatRelativeDate(t.transaction_date || t.created_at),
+      logo_url:         t.logo_url,
+      holding_logos:    t.holding_logos || [],
     }))
   , [activityTransactions]);
 
@@ -322,29 +405,45 @@ const StatementsPage = ({ onOpenNotifications }) => {
   }, [activityItems]);
 
   const activityVisibleItems = useMemo(() => {
-    let items = activityFilter === "All" ? activityItems : activityItems.filter(i => i.filterCategory === activityFilter);
+    let items = activityFilter === "All"
+      ? activityItems
+      : activityItems.filter(i => i.filterCategory === activityFilter);
     if (activitySearchQuery.trim()) {
       const q = activitySearchQuery.toLowerCase();
-      items = items.filter(i => i.title.toLowerCase().includes(q) || i.description.toLowerCase().includes(q) || i.amount.toLowerCase().includes(q));
+      items = items.filter(i =>
+        i.title.toLowerCase().includes(q) ||
+        i.description.toLowerCase().includes(q) ||
+        i.amount.toLowerCase().includes(q)
+      );
     }
     if (computedFrom || computedTo) {
       const ft = computedFrom ? new Date(`${computedFrom}T00:00:00`).getTime() : null;
       const tt = computedTo   ? new Date(`${computedTo}T23:59:59`).getTime()   : null;
-      items = items.filter(i => { const t = new Date(i.date).getTime(); return !isNaN(t) && (!ft || t >= ft) && (!tt || t <= tt); });
+      items = items.filter(i => {
+        const t = new Date(i.date).getTime();
+        return !isNaN(t) && (!ft || t >= ft) && (!tt || t <= tt);
+      });
     }
     return items;
   }, [activityFilter, activitySearchQuery, computedFrom, computedTo, activityItems]);
 
   const activityGroupedItems = useMemo(() => {
+    // FIX Bug 4: renamed destructured variables from [a,ai],[b,bi] to [aLabel,aItems],[bLabel,bItems]
+    // to make the intent clear and avoid the confusing shadowing.
     const groups = {};
-    activityVisibleItems.forEach(i => { if (!groups[i.groupLabel]) groups[i.groupLabel] = []; groups[i.groupLabel].push(i); });
+    activityVisibleItems.forEach(i => {
+      if (!groups[i.groupLabel]) groups[i.groupLabel] = [];
+      groups[i.groupLabel].push(i);
+    });
     const ORDER = ["Today", "Yesterday", "This Week", "This Month"];
     return Object.entries(groups)
-      .sort(([a, ai], [b, bi]) => {
-        const ia = ORDER.indexOf(a), ib = ORDER.indexOf(b);
+      .sort(([aLabel, aItems], [bLabel, bItems]) => {
+        const ia = ORDER.indexOf(aLabel), ib = ORDER.indexOf(bLabel);
         if (ia !== -1 && ib !== -1) return ia - ib;
-        if (ia !== -1) return -1; if (ib !== -1) return 1;
-        return new Date(bi[0].date).getTime() - new Date(ai[0].date).getTime();
+        if (ia !== -1) return -1;
+        if (ib !== -1) return 1;
+        // For month-named groups, sort by the date of the most recent item in each group
+        return new Date(bItems[0].date).getTime() - new Date(aItems[0].date).getTime();
       })
       .map(([label, items]) => ({ label, items }));
   }, [activityVisibleItems]);
@@ -352,11 +451,16 @@ const StatementsPage = ({ onOpenNotifications }) => {
   // ── Filters / pagination ───────────────────────────────────────────────────
   const filtered = useMemo(() => {
     const combined = [...strategyRows, ...holdingsRows];
-    return combined.filter(r => activeTab === "strategy" ? r.type === "Strategy" : activeTab === "holdings" ? r.type === "Holdings" : false);
+    return combined.filter(r =>
+      activeTab === "strategy" ? r.type === "Strategy" :
+      activeTab === "holdings" ? r.type === "Holdings" : false
+    );
   }, [strategyRows, holdingsRows, activeTab]);
 
   const searchFiltered = useMemo(() =>
-    searchQuery.trim() ? filtered.filter(r => r.title.toLowerCase().includes(searchQuery.trim().toLowerCase())) : filtered
+    searchQuery.trim()
+      ? filtered.filter(r => r.title.toLowerCase().includes(searchQuery.trim().toLowerCase()))
+      : filtered
   , [filtered, searchQuery]);
 
   const pages    = Math.max(1, Math.ceil(searchFiltered.length / perPage));
@@ -367,41 +471,28 @@ const StatementsPage = ({ onOpenNotifications }) => {
   const isLoadingTab = (activeTab === "strategy" && strategiesLoading) || (activeTab === "holdings" && holdingsLoading);
 
   // ── PDF download ───────────────────────────────────────────────────────────
-  const handleDownloadPdf = async () => {
+  const handleDownloadPdf = useCallback(async () => {
     if (!dataReady || pdfLoading) return;
     setPdfLoading(true);
     try {
-      await generateMintStatement(profile, displayName, holdingsRows, strategyRows, activityItems, computedFrom, computedTo);
+      await generateMintStatement(
+        profile,
+        displayName,
+        holdingsRows,   // generator filters type==="Holdings" internally
+        strategyRows,
+        activityItems,
+        computedFrom,
+        computedTo,
+      );
     } catch (e) {
       console.error("PDF generation failed:", e);
     } finally {
       setPdfLoading(false);
     }
-  };
+  }, [dataReady, pdfLoading, profile, displayName, holdingsRows, strategyRows, activityItems, computedFrom, computedTo]);
 
   const pdfLabel    = pdfLoading ? "Generating…" : !dataReady ? "Loading…" : "Download Statement PDF";
-  const btnDisabled = !dataReady || pdfLoading;
-
-  // ── Date range pill selector ───────────────────────────────────────────────
-  // Rendered as an inline block — parent controls width
-  const DateRangePills = () => (
-    <div className="flex rounded-full bg-white/10 p-0.5 gap-0.5 w-full">
-      {[null, 30, 60, 90].map((d) => (
-        <button
-          key={d ?? "all"}
-          type="button"
-          onClick={() => setDateRange(d)}
-          className={`flex-1 rounded-full px-2 py-1.5 text-xs font-semibold transition whitespace-nowrap text-center ${
-            dateRange === d
-              ? "bg-white text-slate-900 shadow-sm"
-              : "text-white/70 hover:bg-white/10 hover:text-white"
-          }`}
-        >
-          {d ? `${d}d` : "All"}
-        </button>
-      ))}
-    </div>
-  );
+  const btnDisabled = pdfLoading; // FIX Bug 1: no longer gates on dataReady for initial render
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
@@ -411,7 +502,7 @@ const StatementsPage = ({ onOpenNotifications }) => {
       <div className="rounded-b-[36px] bg-gradient-to-b from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-4 pb-10 pt-8 text-white">
         <div className="mx-auto flex w-full max-w-md flex-col gap-4">
 
-          {/* Top bar: avatar | title | bell */}
+          {/* Top bar */}
           <header className="flex items-center justify-between">
             <div>
               {profile?.avatarUrl
@@ -433,9 +524,9 @@ const StatementsPage = ({ onOpenNotifications }) => {
           {/* Tabs */}
           <div className="grid w-full grid-cols-3 rounded-full bg-white/10 p-1 backdrop-blur-md">
             {[
-              { id: "strategy",  label: "Strategy" },
-              { id: "holdings",  label: "Individual Stocks" },
-              { id: "activity",  label: "Transaction History" },
+              { id: "strategy", label: "Strategy"          },
+              { id: "holdings", label: "Individual Stocks" },
+              { id: "activity", label: "Transaction History"},
             ].map(tab => (
               <button
                 key={tab.id}
@@ -451,10 +542,8 @@ const StatementsPage = ({ onOpenNotifications }) => {
             ))}
           </div>
 
-          {/* ── Controls block — always two rows, never overflows ── */}
+          {/* Controls */}
           <div className="flex flex-col gap-2 w-full">
-
-            {/* Row 1: search (strategy/holdings only) + date pills */}
             <div className="flex items-center gap-2 w-full">
               {activeTab !== "activity" && (
                 <input
@@ -465,10 +554,10 @@ const StatementsPage = ({ onOpenNotifications }) => {
                   className="w-20 flex-shrink-0 rounded-full border border-white/20 bg-white/10 px-3 py-2 text-xs text-white placeholder:text-white/50 shadow-sm backdrop-blur-md focus:outline-none focus:ring-2 focus:ring-white/40"
                 />
               )}
-              <DateRangePills />
+              {/* FIX Bug 3: DateRangePills now receives props instead of closing over state */}
+              <DateRangePills dateRange={dateRange} setDateRange={setDateRange} />
             </div>
 
-            {/* Row 2: full-width download button */}
             <button
               type="button"
               onClick={handleDownloadPdf}
@@ -477,7 +566,6 @@ const StatementsPage = ({ onOpenNotifications }) => {
             >
               {pdfLabel}
             </button>
-
           </div>
         </div>
       </div>
@@ -641,8 +729,7 @@ const StatementsPage = ({ onOpenNotifications }) => {
                                           : item.status === "failed"  ? "bg-rose-50 text-rose-500"
                                           : "bg-slate-100 text-slate-500"
                                       }`}>
-                                        {["successful","completed","posted"].includes(item.status)
-                                          ? "Completed"
+                                        {["successful","completed","posted"].includes(item.status) ? "Completed"
                                           : item.status === "pending" ? "Pending"
                                           : item.status === "failed"  ? "Failed"
                                           : item.status.charAt(0).toUpperCase() + item.status.slice(1)}
@@ -943,12 +1030,12 @@ const StatementsPage = ({ onOpenNotifications }) => {
                     <p className="px-4 pt-3 pb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Performance</p>
                     <div className="divide-y divide-slate-50">
                       {[
-                        ["1 Week",    selectedCard.r1w],
-                        ["1 Month",   selectedCard.r1m],
-                        ["3 Months",  selectedCard.r3m],
-                        ["6 Months",  selectedCard.r6m],
-                        ["YTD",       selectedCard.rytd],
-                        ["1 Year",    selectedCard.r1y],
+                        ["1 Week",   selectedCard.r1w],
+                        ["1 Month",  selectedCard.r1m],
+                        ["3 Months", selectedCard.r3m],
+                        ["6 Months", selectedCard.r6m],
+                        ["YTD",      selectedCard.rytd],
+                        ["1 Year",   selectedCard.r1y],
                       ].filter(([, v]) => v != null).map(([label, val]) => (
                         <div key={label} className="flex items-center justify-between px-4 py-2.5">
                           <span className="text-sm text-slate-600">{label}</span>
