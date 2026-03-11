@@ -55,24 +55,28 @@ function fmtR(v) {
 }
 
 // ─── Section pill heading ─────────────────────────────────────────────────────
+// FIX: taller pill (6.5 → was 5.5), text baseline centred inside, returns y
+//      positioned 5 mm below the pill bottom so content has clear breathing room.
 function secHead(doc, label, x, y, w) {
+  const PILL_H = 6.5;                  // was 5.5
   fc(doc, P);
-  doc.rect(x, y - 4, w, 5.5, "F");
+  doc.rect(x, y - 4.5, w, PILL_H, "F");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7);
   tc(doc, WHITE);
-  doc.text(label.toUpperCase(), x + 3, y);
-  return y + 3;
+  doc.text(label.toUpperCase(), x + 3, y);   // baseline stays at y
+  return y + (PILL_H - 4.5) + 4;             // bottom of pill + 4 mm gap  (was y+3)
 }
 
 // ─── Sub-heading for right-column cards ──────────────────────────────────────
+// FIX: rule sits a touch lower, return adds 5 mm instead of 3.5 mm.
 function subHead(doc, label, x, y, w) {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(6);
   tc(doc, P_MID);
   doc.text(label.toUpperCase(), x, y);
-  hl(doc, x, y + 1.2, x + w, y + 1.2, DIV, 0.18);
-  return y + 3.5;
+  hl(doc, x, y + 1.5, x + w, y + 1.5, DIV, 0.18);   // was y+1.2
+  return y + 5;                                        // was y+3.5
 }
 
 // ─── Performance line chart ───────────────────────────────────────────────────
@@ -187,10 +191,11 @@ function addDisclosurePage(doc, name, dateStr, monthStr, isoDate) {
   // ── Page background ─────────────────────────────────────────────────────────
   fc(doc, [252, 250, 255]); doc.rect(0, HDR + 0.7, PW, PH - HDR - 0.7, "F");
 
-  const COL_W   = (PW - ML - MR - 6) / 2;
-  const COL2_X  = ML + COL_W + 6;
-  const LINE_H  = 2.6;
-  const SECTION_GAP = 4;
+  const COL_W       = (PW - ML - MR - 6) / 2;
+  const COL2_X      = ML + COL_W + 6;
+  // FIX: increased line height and section gap so text never crowds the pill
+  const LINE_H      = 2.9;    // was 2.6
+  const SECTION_GAP = 5.5;    // was 4
 
   // All disclosure sections
   const sections = [
@@ -260,7 +265,8 @@ function addDisclosurePage(doc, name, dateStr, monthStr, isoDate) {
   const leftSections  = sections.filter((_, i) => i % 2 === 0);
   const rightSections = sections.filter((_, i) => i % 2 === 1);
 
-  let startY = HDR + 8;
+  // FIX: start content further below the header band
+  let startY = HDR + 10;   // was HDR + 8
 
   function renderSectionColumn(secList, colX, colW, startY) {
     let y = startY;
@@ -269,12 +275,15 @@ function addDisclosurePage(doc, name, dateStr, monthStr, isoDate) {
       const headerBg  = isDiamond ? [232, 226, 252] : P;
       const headerTc  = isDiamond ? P                : WHITE;
 
-      // Section header pill
+      // FIX: taller pill (6.5, was 5.5) + text baseline centred inside
+      const PILL_H = 6.5;
       fc(doc, headerBg);
-      doc.roundedRect(colX, y, colW, 5.5, 1, 1, "F");
+      doc.roundedRect(colX, y, colW, PILL_H, 1, 1, "F");
       doc.setFont("helvetica", "bold"); doc.setFontSize(6.2); tc(doc, headerTc);
-      doc.text(`${sec.icon}  ${sec.title.toUpperCase()}`, colX + 3, y + 3.8);
-      y += 7;
+      doc.text(`${sec.icon}  ${sec.title.toUpperCase()}`, colX + 3, y + 4.2);  // was y+3.8
+
+      // FIX: body starts 3 mm below pill bottom (was a hard y+=7)
+      y += PILL_H + 3;   // was y += 7
 
       // Body text
       doc.setFont("helvetica", "normal"); doc.setFontSize(5.8); tc(doc, BODY);
@@ -289,12 +298,13 @@ function addDisclosurePage(doc, name, dateStr, monthStr, isoDate) {
   const rightEnd = renderSectionColumn(rightSections, COL2_X,  COL_W, startY);
 
   // ── Disclaimer box ──────────────────────────────────────────────────────────
-  const disclaimerY = Math.max(leftEnd, rightEnd) + 4;
+  const disclaimerY = Math.max(leftEnd, rightEnd) + 5;   // was +4
   const disclaimerText =
     "This document is confidential and issued for the information of addressees and clients of Mint Platforms (Pty) Ltd only. Subject to copyright; may not be reproduced without prior written permission. Information and opinions are provided for informational purposes only and are not statements of fact. No representation or warranty is made that any strategy will achieve its objectives or generate profits. All investments carry risk; investors may lose part or all of invested capital. This document may include simulated or back-tested results which are hypothetical, constructed with hindsight, and do not represent actual trading. Performance is gross of fees unless stated. Strategies referenced are not collective investment schemes unless explicitly stated. This document does not constitute financial advice, an offer to sell, or a solicitation under FAIS Act No. 37 of 2002. The Manager accepts no liability for direct, indirect or consequential loss arising from use of, or reliance on, this document. Strategies may be modified or withdrawn at the Manager's discretion without prior notice.";
 
   const disclaimerLines = doc.splitTextToSize(disclaimerText, PW - ML - MR - 6);
-  const disclaimerH     = disclaimerLines.length * 2.4 + 10;
+  // FIX: slightly more vertical padding inside disclaimer box
+  const disclaimerH = disclaimerLines.length * 2.4 + 13;   // was +10
 
   fc(doc, [240, 236, 255]);
   doc.roundedRect(ML, disclaimerY, PW - ML - MR, disclaimerH, 2, 2, "F");
@@ -302,24 +312,24 @@ function addDisclosurePage(doc, name, dateStr, monthStr, isoDate) {
   doc.roundedRect(ML, disclaimerY, PW - ML - MR, disclaimerH, 2, 2, "S");
 
   doc.setFont("helvetica", "bold"); doc.setFontSize(6.5); tc(doc, P);
-  doc.text("DISCLAIMER & LEGAL NOTICE", ML + 3, disclaimerY + 5);
-  hl(doc, ML + 3, disclaimerY + 6.5, PW - MR - 3, disclaimerY + 6.5, DIV, 0.2);
+  doc.text("DISCLAIMER & LEGAL NOTICE", ML + 3, disclaimerY + 5.5);  // was +5
+  hl(doc, ML + 3, disclaimerY + 7.5, PW - MR - 3, disclaimerY + 7.5, DIV, 0.2);  // was +6.5
   doc.setFont("helvetica", "normal"); doc.setFontSize(5.2); tc(doc, BODY);
-  doc.text(disclaimerLines, ML + 3, disclaimerY + 9);
+  doc.text(disclaimerLines, ML + 3, disclaimerY + 11);   // was +9
 
   // ── Additional info box ─────────────────────────────────────────────────────
   const addInfoY = disclaimerY + disclaimerH + 5;
-  if (addInfoY + 18 < PH - 16) {
+  if (addInfoY + 20 < PH - 16) {   // was +18
     fc(doc, P_LITE);
-    doc.roundedRect(ML, addInfoY, PW - ML - MR, 18, 2, 2, "F");
+    doc.roundedRect(ML, addInfoY, PW - ML - MR, 20, 2, 2, "F");   // was 18
     doc.setFont("helvetica", "bold"); doc.setFontSize(6.5); tc(doc, P);
-    doc.text("ADDITIONAL INFORMATION", ML + 3, addInfoY + 5);
+    doc.text("ADDITIONAL INFORMATION", ML + 3, addInfoY + 5.5);    // was +5
     doc.setFont("helvetica", "normal"); doc.setFontSize(5.8); tc(doc, BODY);
     const addLines = doc.splitTextToSize(
       "Additional information regarding Mint's investment strategies — including strategy descriptions, risk disclosures, fee schedules, investment methodology, and portfolio construction framework — is available on request from Mint Platforms (Pty) Ltd. Contact us at: info@mymint.co.za  ·  +27 10 276 0531  ·  www.mymint.co.za  ·  3 Gwen Lane, Sandown, Sandton, Johannesburg.",
       PW - ML - MR - 6
     );
-    doc.text(addLines, ML + 3, addInfoY + 9);
+    doc.text(addLines, ML + 3, addInfoY + 10);   // was +9
   }
 
   // ── Footer ──────────────────────────────────────────────────────────────────
@@ -388,7 +398,9 @@ export default function generateFactsheetPdf({
 
   // ── LEFT COLUMN ───────────────────────────────────────────────────────────────
 
-  ly = secHead(doc, "Investment Objective", ML, ly, LW) + 2;
+  // FIX: secHead now returns a y value 4 mm below pill bottom; add 3 mm on top
+  // of that for a comfortable content start (was + 2).
+  ly = secHead(doc, "Investment Objective", ML, ly, LW) + 3;
 
   const objective  = strategy?.objective || strategy?.description || "Investment objective not available.";
   const hasProfile = !!(strategy?.description && strategy?.objective && strategy.description !== strategy.objective);
@@ -396,32 +408,34 @@ export default function generateFactsheetPdf({
   doc.setFont("helvetica", "normal"); doc.setFontSize(6.8); tc(doc, BODY);
   const objLines = doc.splitTextToSize(objective.substring(0, hasProfile ? 200 : 300), LW);
   doc.text(objLines, ML, ly);
-  ly += objLines.length * 3.0 + 3;
+  ly += objLines.length * 3.0 + 4;   // was +3
 
   if (hasProfile) {
     doc.setFont("helvetica", "bold"); doc.setFontSize(6.8); tc(doc, P_MID);
-    doc.text("Strategy Profile", ML, ly); ly += 3.5;
+    doc.text("Strategy Profile", ML, ly); ly += 4;   // was 3.5
     doc.setFont("helvetica", "normal"); tc(doc, BODY);
     const dl = doc.splitTextToSize(strategy.description.substring(0, 250), LW);
     doc.text(dl, ML, ly);
-    ly += dl.length * 3.0 + 3;
+    ly += dl.length * 3.0 + 4;   // was +3
   }
 
-  ly = secHead(doc, "Cumulative Performance", ML, ly, LW) + 2;
+  // FIX: same +3 after secHead, was +2
+  ly = secHead(doc, "Cumulative Performance", ML, ly, LW) + 3;
 
   const curves     = analytics?.curves || {};
   const longestKey = ["YTD","6M","3M","1M","1W"].find(k => Array.isArray(curves[k]) && curves[k].length > 1);
   const CHART_H    = 46;
   drawChart(doc, longestKey ? curves[longestKey] : [], ML, ly, LW, CHART_H);
-  ly += CHART_H + 3;
+  ly += CHART_H + 4;   // was +3
 
   if (longestKey) {
     doc.setFont("helvetica", "italic"); doc.setFontSize(5.2); tc(doc, P_DIM);
     doc.text(`Showing ${longestKey} performance curve`, ML, ly);
-    ly += 4;
+    ly += 5;   // was +4
   }
 
-  ly = secHead(doc, "Return Analysis", ML, ly, LW) + 1;
+  // FIX: +2 after secHead instead of +1
+  ly = secHead(doc, "Return Analysis", ML, ly, LW) + 2;
 
   const summary = analytics?.summary || {};
   const ytdVal  = summary.ytd_return ?? analytics?.ytd_return;
@@ -458,9 +472,10 @@ export default function generateFactsheetPdf({
     tableWidth: 67,
     didParseCell: d => pctHook(d, 1),
   });
-  ly = doc.lastAutoTable.finalY + 4;
+  ly = doc.lastAutoTable.finalY + 5;   // was +4
 
-  ly = secHead(doc, "Risk Analysis", ML, ly, LW) + 1;
+  // FIX: +2 after secHead instead of +1
+  ly = secHead(doc, "Risk Analysis", ML, ly, LW) + 2;
 
   const riskRows = [
     ["Best Day",         fmtPct(summary.best_day)],
@@ -509,6 +524,7 @@ export default function generateFactsheetPdf({
   const detailCardH = 4.5 + 5 + detailData.length * ROW + 3;
   fc(doc, P_LITE); doc.roundedRect(RX, ry,       RW, detailCardH, 2, 2, "F");
   fc(doc, P);      doc.roundedRect(RX, ry,       RW, 4.5,         2, 2, "F");
+  // FIX: subHead now returns y+5 instead of y+3.5, giving rows more air
   ry = subHead(doc, "Strategy Details", LX, ry + 7, RW - 6) + 1;
 
   detailData.forEach(([label, value], i) => {
@@ -520,7 +536,7 @@ export default function generateFactsheetPdf({
     doc.text(v.length > 16 ? v.slice(0, 16) + "…" : v, VX, ry + 2.2, { align: "right" });
     ry += ROW;
   });
-  ry += 6;
+  ry += 7;   // was +6
 
   const feesData = [
     ["Performance Fee",    "20% of profits"],
@@ -541,10 +557,11 @@ export default function generateFactsheetPdf({
     doc.text(value, VX, ry + 2.2, { align: "right" });
     ry += ROW;
   });
-  ry += 6;
+  ry += 7;   // was +6
 
   // ── Sector Allocation ─────────────────────────────────────────────────────────
-  ry = subHead(doc, "Sector Allocation", LX, ry, RW - 6) + 1;
+  // FIX: +2 after subHead instead of +1
+  ry = subHead(doc, "Sector Allocation", LX, ry, RW - 6) + 2;
 
   const sectorMap = {};
   (holdingsWithMetrics || []).forEach(h => {
@@ -559,15 +576,16 @@ export default function generateFactsheetPdf({
     .slice(0, 8);
 
   if (sectorBars.length) {
-    ry = drawBars(doc, sectorBars, LX, ry, RW - 6) + 4;
+    ry = drawBars(doc, sectorBars, LX, ry, RW - 6) + 5;   // was +4
   } else {
     doc.setFontSize(6); tc(doc, P_DIM);
     doc.text("Sector data unavailable", LX, ry + 3);
-    ry += 8;
+    ry += 9;   // was +8
   }
 
   // ── Portfolio Holdings ────────────────────────────────────────────────────────
-  ry = subHead(doc, "Portfolio Holdings", LX, ry, RW - 6) + 1;
+  // FIX: +2 after subHead instead of +1
+  ry = subHead(doc, "Portfolio Holdings", LX, ry, RW - 6) + 2;
 
   const holdRows = (holdingsWithMetrics || [])
     .filter(h => String(h.symbol || "").toUpperCase() !== "CASH")
@@ -596,7 +614,7 @@ export default function generateFactsheetPdf({
       tableWidth: RW - 2,
       didParseCell: d => pctHook(d, 2),
     });
-    ry = doc.lastAutoTable.finalY + 4;
+    ry = doc.lastAutoTable.finalY + 5;   // was +4
   }
 
   // ── User Position (if invested) ───────────────────────────────────────────────
@@ -623,7 +641,7 @@ export default function generateFactsheetPdf({
   }
 
   // ── Compact summary disclosures (bottom of page 1) ───────────────────────────
-  const DISC_TOP  = Math.max(leftBottomY, ry) + 6;
+  const DISC_TOP  = Math.max(leftBottomY, ry) + 7;   // was +6
   const DISC_COLW = (PW - ML - MR - 8) / 2;
   const DISC_RX   = ML + DISC_COLW + 8;
 
@@ -659,19 +677,20 @@ export default function generateFactsheetPdf({
     ...d,
     lines: doc.splitTextToSize(d.body, DISC_COLW),
   }));
-  const leftH  = measured.slice(0, 3).reduce((s, m) => s + 3 + m.lines.length * 2.5 + 3.5, 0);
-  const rightH = measured.slice(3).reduce((s, m)    => s + 3 + m.lines.length * 2.5 + 3.5, 0);
-  const DISC_H = Math.max(leftH, rightH) + 14;
+  const leftH  = measured.slice(0, 3).reduce((s, m) => s + 4 + m.lines.length * 2.5 + 4, 0);   // was 3+…+3.5
+  const rightH = measured.slice(3).reduce((s, m)    => s + 4 + m.lines.length * 2.5 + 4, 0);
+  const DISC_H = Math.max(leftH, rightH) + 16;   // was +14
 
   fc(doc, P_PALE); doc.rect(0, DISC_TOP,     PW, DISC_H, "F");
   fc(doc, P);      doc.rect(0, DISC_TOP,     PW, 3,      "F");
   hl(doc, 0, DISC_TOP + DISC_H - 0.5, PW, DISC_TOP + DISC_H - 0.5, DIV, 0.2);
 
   doc.setFont("helvetica", "bold"); doc.setFontSize(7); tc(doc, P);
-  doc.text("KEY DISCLOSURES & RISK SUMMARY  ·  Full disclosures and legal notices on Page 2", ML, DISC_TOP + 8);
+  doc.text("KEY DISCLOSURES & RISK SUMMARY  ·  Full disclosures and legal notices on Page 2", ML, DISC_TOP + 9);  // was +8
 
-  let dly = DISC_TOP + 12;
-  let dry = DISC_TOP + 12;
+  // FIX: start disc items 2 mm lower inside the band
+  let dly = DISC_TOP + 14;   // was +12
+  let dry = DISC_TOP + 14;
 
   measured.forEach((item, i) => {
     const isRight = i >= 3;
@@ -680,10 +699,10 @@ export default function generateFactsheetPdf({
 
     doc.setFont("helvetica", "bold");   doc.setFontSize(5.8); tc(doc, P_MID);
     doc.text(item.title, x, y);
-    y += 3;
+    y += 4;   // was +3
     doc.setFont("helvetica", "normal"); tc(doc, BODY);
     doc.text(item.lines, x, y);
-    y += item.lines.length * 2.5 + 3.5;
+    y += item.lines.length * 2.5 + 4;   // gap was 3.5
 
     if (isRight) dry = y; else dly = y;
   });
@@ -714,7 +733,6 @@ export default function generateFactsheetPdf({
     const pdfBlob = doc.output("blob");
     const blobUrl = URL.createObjectURL(pdfBlob);
     const newTab  = window.open(blobUrl, "_blank");
-    // Fallback: if popup was blocked, trigger download
     if (!newTab || newTab.closed || typeof newTab.closed === "undefined") {
       const a    = document.createElement("a");
       a.href     = blobUrl;
