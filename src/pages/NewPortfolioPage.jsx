@@ -590,15 +590,18 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
               const isPnlPos = totalPnl >= 0;
               if (!balanceVisible) return <p className="mt-1 text-sm text-white/60">Account Value</p>;
               return (
-                <div className="mt-1 flex items-center gap-2">
-                  <span className={`text-sm font-semibold ${isPnlPos ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {isPnlPos ? '+' : '-'}R{Math.abs(totalPnl).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${isPnlPos ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
-                    {isPnlPos ? '+' : ''}{totalPnlPct.toFixed(1)}%
-                  </span>
-                  <span className="text-xs text-white/50">Account Value</span>
-                </div>
+                <>
+                  <div className="mt-1 flex items-center gap-2.5">
+                    <span className="text-lg font-bold text-white">
+                      {isPnlPos ? '+' : '-'}R{Math.abs(totalPnl).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-xs font-bold"
+                      style={{ backdropFilter: 'blur(4px)', background: 'rgba(255,255,255,0.12)', border: `1px solid ${isPnlPos ? 'rgba(52,211,153,0.6)' : 'rgba(251,113,133,0.6)'}`, color: isPnlPos ? '#6ee7b7' : '#fca5a5' }}>
+                      {isPnlPos ? '▲' : '▼'} {isPnlPos ? '+' : ''}{totalPnlPct.toFixed(1)}%
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-xs text-white/50">Account Value</p>
+                </>
               );
             })()}
           </section>
