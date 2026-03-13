@@ -667,6 +667,12 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
                         >
                             Authorize Capital
                         </button>
+                        <button 
+                          onClick={closeDetail} 
+                          className="w-full py-2 mt-2 text-[9px] font-black text-rose-500 uppercase tracking-[0.2em] hover:bg-rose-50 rounded-xl transition-all"
+                        >
+                          Cancel Application
+                        </button>
                         <button onClick={() => setWorkflowStep("idle")} className="w-full py-2 text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Go Back</button>
                     </div>
                 </div>
@@ -679,6 +685,12 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-8">Set a 5-digit code for loans</p>
                     <input type="password" maxLength={5} value={newPin} onChange={(e) => setNewPin(e.target.value)} placeholder="00000" className="w-full h-14 bg-slate-50 rounded-2xl text-center text-2xl font-black tracking-[0.5em] mb-8 outline-none border border-slate-100" />
                     <button onClick={handleSetupPin} disabled={newPin.length !== 5 || isProcessing} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl">Secure My Account</button>
+                    <button 
+                      onClick={closeDetail} 
+                      className="w-full py-2 mt-4 text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]"
+                    >
+                      Exit & Cancel
+                    </button>
                 </div>
             )}
 
@@ -690,6 +702,12 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange }) => {
                     <input type="password" maxLength={5} value={pinInput} onChange={(e) => setPinInput(e.target.value)} placeholder="•••••" className="w-full h-14 bg-slate-50 rounded-2xl text-center text-2xl font-black tracking-[0.5em] mb-8 outline-none border border-slate-100" />
                     <button onClick={handleConfirmPledge} disabled={pinInput.length !== 5 || isProcessing} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl">
                         {isProcessing ? "Transacting..." : "Confirm Release"}
+                    </button>
+                    <button 
+                      onClick={closeDetail} 
+                      className="w-full py-2 mt-4 text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]"
+                    >
+                      Cancel Transaction
                     </button>
                 </div>
             )}
