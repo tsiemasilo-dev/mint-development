@@ -4,7 +4,7 @@ import generateFactsheetPdf from "../lib/generateFactsheetPdf";
 import { supabase } from "../lib/supabase";
 import { checkOnboardingComplete } from "../lib/checkOnboardingComplete";
 import { formatChangePct, getChangeColor } from "../lib/strategyData.js";
-import { buildHoldingsBySymbol, calculateMinInvestment, getAdjustedShares } from "../lib/strategyUtils";
+import { buildHoldingsBySymbol, calculateMinInvestment, getAdjustedShares, computeExtendedSummary } from "../lib/strategyUtils";
 import {
   Area,
   Line,
@@ -355,6 +355,8 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
         weightNorm,
         logoUrl: security?.logo_url,
         dailyChange: securityDailyChange,
+        // ── FIX: forward sector from securities table so PDF pie chart works ──
+        sector: security?.sector || null,
       };
     });
 
@@ -370,6 +372,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
       weightNorm: null,
       logoUrl: null,
       dailyChange: null,
+      sector: null,
     });
 
     return nonCashHoldings;
@@ -444,13 +447,29 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
                     if (totalInvested > 0 && analytics?.latest_value != null) {
                       const navRatio = Number(analytics.latest_value) / 100;
                       const currentValue = totalInvested * navRatio;
-                      const returnPct = ((currentValue - totalInvested) / totalInvested) * 100;
+                      const returnPct = (currentValue - totalInvested) / totalInvested;
                       userPosition = { invested: totalInvested / 100, currentValue: currentValue / 100, returnPct };
                     }
                   }
+
+                  // Enrich analytics with computed stats.
+                  // Uses DB values when present (after compute job runs),
+                  // falls back to client-side calculation from curve data.
+                  const extendedStats = computeExtendedSummary(analytics);
+                  const enrichedAnalytics = {
+                    ...analytics,
+                    summary: {
+                      ...analytics?.summary,
+                      volatility:           analytics?.summary?.volatility           ?? extendedStats.volatility,
+                      sharpe_ratio:         analytics?.summary?.sharpe_ratio         ?? extendedStats.sharpe_ratio,
+                      max_drawdown:         analytics?.summary?.max_drawdown         ?? extendedStats.max_drawdown,
+                      pct_positive_months:  analytics?.summary?.pct_positive_months  ?? extendedStats.pct_positive_months,
+                    },
+                  };
+
                   generateFactsheetPdf({
                     strategy: currentStrategy,
-                    analytics,
+                    analytics: enrichedAnalytics,
                     holdingsWithMetrics,
                     holdingsSecurities,
                     userPosition,

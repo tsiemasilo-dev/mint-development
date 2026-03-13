@@ -127,3 +127,40 @@ export const getStrategyReturnPct = (metrics) => {
   const bestReturn = metrics.r_ytd ?? metrics.r_1y ?? metrics.r_3m ?? metrics.r_1m ?? 0;
   return bestReturn * 100;
 };
+
+export const computeExtendedSummary = (analytics) => {
+  const curves = analytics?.curves || {};
+  const allPoints = Object.values(curves).flat().map(p => p?.v).filter(v => v != null);
+
+  if (allPoints.length < 2) {
+    return { volatility: null, sharpe_ratio: null, max_drawdown: null, pct_positive_months: null };
+  }
+
+  // Daily returns from index values
+  const returns = [];
+  for (let i = 1; i < allPoints.length; i++) {
+    returns.push((allPoints[i] - allPoints[i - 1]) / allPoints[i - 1]);
+  }
+
+  const mean = returns.reduce((s, r) => s + r, 0) / returns.length;
+  const variance = returns.reduce((s, r) => s + (r - mean) ** 2, 0) / returns.length;
+  const volatility = Math.sqrt(variance * 252); // annualised
+
+  const sharpe_ratio = volatility > 0 ? (mean * 252) / volatility : null;
+
+  // Max drawdown
+  let peak = allPoints[0];
+  let max_drawdown = 0;
+  for (const v of allPoints) {
+    if (v > peak) peak = v;
+    const dd = (v - peak) / peak;
+    if (dd < max_drawdown) max_drawdown = dd;
+  }
+
+  // % positive months from calendar_returns
+  const calReturns = analytics?.calendar_returns || [];
+  const positiveMonths = calReturns.filter(r => r?.return > 0).length;
+  const pct_positive_months = calReturns.length > 0 ? positiveMonths / calReturns.length : null;
+
+  return { volatility, sharpe_ratio, max_drawdown, pct_positive_months };
+};
