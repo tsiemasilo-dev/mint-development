@@ -342,7 +342,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     }
   }, [myStocks, stocksList]);
 
-  if (strategiesLoading && holdingsLoading) {
+  if (strategiesLoading || holdingsLoading) {
     return <PortfolioSkeleton />;
   }
 
