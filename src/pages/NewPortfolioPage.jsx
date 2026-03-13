@@ -1203,9 +1203,21 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                           axisLine={false}
                           tickLine={false}
                           tickMargin={8}
-                          interval={stockChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(stockChartData.length / 6) - 1)}
+                          interval={stockTimeFilter === 'D'
+                            ? Math.max(0, Math.ceil(stockChartData.length / 4) - 1)
+                            : stockChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(stockChartData.length / 6) - 1)}
                           tick={({ x, y, payload }) => {
                             if (!payload.value) return null;
+                            const val = String(payload.value);
+                            if (stockTimeFilter === 'D' && val.includes('|')) {
+                              const [dayPart, timePart] = val.split('|');
+                              return (
+                                <text x={x} y={y} textAnchor="middle" fill="#64748b" fontSize={10} fontWeight={500}>
+                                  <tspan x={x} dy={10}>{dayPart}</tspan>
+                                  <tspan x={x} dy={13}>{timePart}</tspan>
+                                </text>
+                              );
+                            }
                             return <text x={x} y={y} dy={12} textAnchor="middle" fill="#64748b" fontSize={11} fontWeight={500}>{payload.value}</text>;
                           }}
                         />
@@ -1227,7 +1239,10 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                         <Tooltip
                           content={({ active, payload, label }) => {
                             if (active && payload && payload.length) {
-                              const fullDate = payload[0]?.payload?.fullDate || label;
+                              let fullDate = payload[0]?.payload?.fullDate || label;
+                              if (typeof fullDate === 'string' && fullDate.includes('|')) {
+                                fullDate = fullDate.replace('|', ' ');
+                              }
                               const val = payload[0].value;
                               const isPos = val >= 0;
                               return (

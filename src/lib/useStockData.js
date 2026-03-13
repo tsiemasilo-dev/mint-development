@@ -82,7 +82,9 @@ export function useStockChart(securityId, timeFilter) {
           let label;
 
           if (timeFilter === 'D') {
-            label = date.toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit', hour12: true });
+            const dayPart = date.toLocaleString('en-US', { weekday: 'short' });
+            const timePart = date.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+            label = dayPart + '|' + timePart;
           } else if (timeFilter === 'W') {
             label = date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
           } else if (timeFilter === 'M') {
