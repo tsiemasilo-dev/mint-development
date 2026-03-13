@@ -344,7 +344,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
         if (!latestNav || latestNav <= 0) return [];
         const scaleFactor = currentValue / latestNav;
         const points = [];
-        points.push({ ...realChartData[0], day: '', value: 0 });
+        points.push({ ...realChartData[0], day: null, value: 0 });
         realChartData.forEach(d => {
           const marketValueAtDate = d.value * scaleFactor;
           const pnl = marketValueAtDate - costBasis;
@@ -720,12 +720,26 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           </div>
 
           <div className="mb-3 px-1">
-            <div className="flex items-center gap-2 mb-0.5">
-              <p className="text-3xl font-bold text-slate-900">R{(currentStrategy.currentValue || 0).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}</p>
-            </div>
-            <p className="text-sm text-emerald-500">
-              ({currentStrategy.previousMonthChange || 0}% Previous Month)
-            </p>
+            {(() => {
+              const cv = currentStrategy.currentValue || 0;
+              const ia = currentStrategy.investedAmount || 0;
+              const pnl = cv - ia;
+              const pnlPct = ia > 0 ? (pnl / ia) * 100 : 0;
+              const isPos = pnl >= 0;
+              return (
+                <>
+                  <p className="text-3xl font-bold text-slate-900">R{cv.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className={`text-sm font-semibold ${isPos ? 'text-emerald-500' : 'text-rose-500'}`}>
+                      {isPos ? '+' : '-'}R{Math.abs(pnl).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${isPos ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-500'}`}>
+                      {isPos ? '+' : ''}{pnlPct.toFixed(1)}%
+                    </span>
+                  </div>
+                </>
+              );
+            })()}
           </div>
 
           <div style={{ width: '100%', height: 220, marginBottom: 8 }}>
@@ -752,8 +766,11 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                     axisLine={false}
                     tickLine={false}
                     tickMargin={8}
-                    interval={currentChartData.length <= 7 ? 0 : Math.max(0, Math.ceil(currentChartData.length / 6) - 1)}
-                    tick={{ fill: '#64748b', fontSize: 11, fontWeight: 500 }}
+                    interval={currentChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(currentChartData.length / 6) - 1)}
+                    tick={({ x, y, payload }) => {
+                      if (!payload.value) return null;
+                      return <text x={x} y={y} dy={12} textAnchor="middle" fill="#64748b" fontSize={11} fontWeight={500}>{payload.value}</text>;
+                    }}
                   />
 
                   <YAxis
@@ -1003,7 +1020,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
         const stockChartData = liveStockChartData.length > 0
           ? (showStockPnl
               ? (() => {
-                  const pts = [{ ...liveStockChartData[0], day: '', value: 0 }];
+                  const pts = [{ ...liveStockChartData[0], day: null, value: 0 }];
                   liveStockChartData.forEach(d => {
                     pts.push({ ...d, value: Number(((d.value * userQuantity) - costBasisStock).toFixed(2)) });
                   });
@@ -1161,8 +1178,11 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                           axisLine={false}
                           tickLine={false}
                           tickMargin={8}
-                          interval={stockChartData.length <= 7 ? 0 : Math.max(0, Math.ceil(stockChartData.length / 6) - 1)}
-                          tick={{ fill: '#64748b', fontSize: 11, fontWeight: 500 }}
+                          interval={stockChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(stockChartData.length / 6) - 1)}
+                          tick={({ x, y, payload }) => {
+                            if (!payload.value) return null;
+                            return <text x={x} y={y} dy={12} textAnchor="middle" fill="#64748b" fontSize={11} fontWeight={500}>{payload.value}</text>;
+                          }}
                         />
 
                         <YAxis
