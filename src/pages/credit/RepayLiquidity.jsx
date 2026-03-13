@@ -1,52 +1,74 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { 
   Check, 
   ChevronLeft, 
   Landmark, 
   Calendar,
-  TrendingDown
+  TrendingDown,
+  Clock
 } from "lucide-react";
 import { formatZar } from "../../lib/formatCurrency";
+import { supabase } from "../../lib/supabase";
 
-const RepayLiquidity = ({ onBack, fonts }) => {
+/**
+ * RepayLiquidity Component
+ * Handles early settlement of debt to release collateral and improve LTV buffer[cite: 93, 96].
+ */
+const RepayLiquidity = ({ onBack, fonts, profile }) => {
+  const [activeLoans, setActiveLoans] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [selectedLoanId, setSelectedLoanId] = useState(null);
   const [repayAmount, setRepayAmount] = useState("");
   const [method, setMethod] = useState("bank");
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
-  // --- Active Loans Available for Early Repayment ---
-  const activeLoans = useMemo(() => [
-    { 
-      id: "LN-8821", 
-      asset: "Naspers Ltd", 
-      code: "NPN", 
-      principal: 150000, 
-      interestAccrued: 1250.40, 
-      nextPayment: "2026-03-15",
-      projectedMonthlyInterest: 1312.50
-    },
-    { 
-      id: "LN-9042", 
-      asset: "Standard Bank", 
-      code: "SBK", 
-      principal: 85000, 
-      interestAccrued: 420.15, 
-      nextPayment: "2026-04-01",
-      projectedMonthlyInterest: 743.75
-    },
-    { 
-      id: "LN-9211", 
-      asset: "Capitec Bank", 
-      code: "CPI", 
-      principal: 21450, 
-      interestAccrued: 88.50, 
-      nextPayment: "2026-04-10",
-      projectedMonthlyInterest: 187.68
-    }
-  ], []);
+  // --- LIVE DATA FETCHING (Supabase) ---
+  useEffect(() => {
+    async function fetchLoans() {
+      if (!profile?.id) return;
+      setLoading(true);
 
-  const totalOutstanding = activeLoans.reduce((sum, loan) => sum + loan.principal + loan.interestAccrued, 0);
+      // Fetch active loans and join with pledges to show asset names [cite: 1]
+      const { data, error } = await supabase
+        .from('loan_application')
+        .select(`
+          id,
+          principal_amount,
+          amount_repayable,
+          interest_rate,
+          first_repayment_date,
+          status,
+          pbc_collateral_pledges (
+            symbol
+          )
+        `)
+        .eq('user_id', profile.id)
+        .in('status', ['approved', 'active', 'partially_paid'])
+        .order('created_at', { ascending: false });
+
+      if (!error && data) {
+        const formatted = data.map(loan => ({
+          id: `LN-${loan.id.toString().slice(-4)}`,
+          dbId: loan.id,
+          asset: loan.pbc_collateral_pledges?.[0]?.symbol || "Portfolio Pool",
+          code: loan.pbc_collateral_pledges?.[0]?.symbol || "AGG",
+          principal: loan.principal_amount,
+          interestAccrued: loan.amount_repayable - loan.principal_amount,
+          nextPayment: loan.first_repayment_date,
+          // Calculate monthly savings based on prime rate [cite: 13, 52]
+          projectedMonthlyInterest: (loan.amount_repayable * (loan.interest_rate / 100)) / 12
+        }));
+        setActiveLoans(formatted);
+      }
+      setLoading(false);
+    }
+    fetchLoans();
+  }, [profile?.id]);
+
+  const totalOutstanding = useMemo(() => 
+    activeLoans.reduce((sum, loan) => sum + loan.principal + loan.interestAccrued, 0), 
+  [activeLoans]);
 
   // Handler for selecting a specific loan to pay early
   const handleSelectLoan = (loan) => {
@@ -55,16 +77,48 @@ const RepayLiquidity = ({ onBack, fonts }) => {
         setRepayAmount("");
     } else {
         setSelectedLoanId(loan.id);
-        setRepayAmount((loan.principal + loan.interestAccrued).toString());
+        const settlementValue = (loan.principal + loan.interestAccrued).toFixed(2);
+        setRepayAmount(settlementValue);
     }
   };
 
-  const handleConfirm = () => {
+  // --- SETTLEMENT TRANSACTION ---
+  const handleConfirm = async () => {
+    if (!repayAmount || isProcessing) return;
     setIsProcessing(true);
-    setTimeout(() => {
-      setIsProcessing(false);
+
+    try {
+      const amount = parseFloat(repayAmount);
+
+      // 1. Update Credit Account (Reduce Debt Balance)
+      const { data: account } = await supabase
+        .from('credit_accounts')
+        .select('loan_balance')
+        .eq('user_id', profile.id)
+        .single();
+
+      await supabase.from('credit_accounts').update({
+        loan_balance: Math.max(0, (account?.loan_balance || 0) - amount),
+        updated_at: new Date().toISOString()
+      }).eq('user_id', profile.id);
+
+      // 2. Update specific loan if selected
+      if (selectedLoanId) {
+        const loan = activeLoans.find(l => l.id === selectedLoanId);
+        const remaining = (loan.principal + loan.interestAccrued) - amount;
+
+        await supabase.from('loan_application').update({
+          amount_repayable: Math.max(0, remaining),
+          status: remaining <= 0 ? 'completed' : 'partially_paid'
+        }).eq('id', loan.dbId);
+      }
+
       setIsSuccess(true);
-    }, 1500);
+    } catch (err) {
+      alert("Payment failed. Please check your bank connection.");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   if (isSuccess) {
@@ -75,7 +129,7 @@ const RepayLiquidity = ({ onBack, fonts }) => {
           </div>
           <h2 className="text-3xl font-bold text-slate-900 mb-4" style={{ fontFamily: fonts?.display }}>Early Settlement Received</h2>
           <p className="text-sm text-slate-500 mb-10 font-medium leading-relaxed">
-              Your payment of <span className="font-bold text-slate-900">{formatZar(parseFloat(repayAmount))}</span> has been successfully processed. The locked collateral has been released back into your available portfolio.
+              Your payment of <span className="font-bold text-slate-900">{formatZar(parseFloat(repayAmount))}</span> has been successfully processed. {selectedLoanId ? "Your collateral position has been adjusted accordingly." : "Your global debt balance has been updated."}
           </p>
           <button 
               onClick={onBack} 
@@ -106,12 +160,16 @@ const RepayLiquidity = ({ onBack, fonts }) => {
         {/* Total Outstanding Header */}
         <div className="px-6 pt-8 pb-4">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Debt Outstanding</p>
-            <h2 className="text-4xl font-light text-slate-900 tracking-tight" style={{ fontFamily: fonts?.display }}>
-                {formatZar(totalOutstanding)}
-            </h2>
+            {loading ? (
+                <div className="h-10 w-48 bg-slate-200 animate-pulse rounded-lg" />
+            ) : (
+                <h2 className="text-4xl font-light text-slate-900 tracking-tight" style={{ fontFamily: fonts?.display }}>
+                    {formatZar(totalOutstanding)}
+                </h2>
+            )}
         </div>
 
-        {/* Sleek Custom Input Card (Moved Up) */}
+        {/* Repayment Amount Input */}
         <div className="px-6 mb-6">
             <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm">
                 <div className="flex justify-between items-center mb-4">
@@ -121,7 +179,7 @@ const RepayLiquidity = ({ onBack, fonts }) => {
                             const max = selectedLoanId 
                                 ? activeLoans.find(l => l.id === selectedLoanId).principal + activeLoans.find(l => l.id === selectedLoanId).interestAccrued 
                                 : totalOutstanding;
-                            setRepayAmount(max.toString()); 
+                            setRepayAmount(max.toFixed(2)); 
                         }} 
                         className="text-[10px] font-bold text-violet-600 uppercase tracking-wider bg-violet-50 px-3 py-1 rounded-full active:scale-95 transition-all"
                     >
@@ -141,7 +199,7 @@ const RepayLiquidity = ({ onBack, fonts }) => {
             </div>
         </div>
 
-        {/* Payment Methods (Moved Up, Sleek Light Mode, No Mint Wallet) */}
+        {/* Funds Source Selection */}
         <div className="px-6 mb-8 space-y-3">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-2">Source of Funds</p>
             {[
@@ -168,21 +226,27 @@ const RepayLiquidity = ({ onBack, fonts }) => {
             ))}
         </div>
 
-        {/* Action Button (Moved Up) */}
+        {/* Action Button */}
         <div className="px-6 mb-10">
             <button 
                 onClick={handleConfirm} 
-                disabled={!repayAmount || isProcessing} 
-                className="w-full h-14 bg-gradient-to-r from-[#111111] via-[#3b1b7a] to-[#5b21b6] text-white rounded-2xl font-bold uppercase tracking-widest text-xs shadow-xl active:scale-[0.98] transition-all disabled:opacity-30 disabled:grayscale"
+                disabled={!repayAmount || isProcessing || loading} 
+                className="w-full h-14 bg-gradient-to-r from-[#111111] via-[#3b1b7a] to-[#5b21b6] text-white rounded-2xl font-bold uppercase tracking-widest text-xs shadow-xl active:scale-95 transition-all disabled:opacity-30"
             >
-                {isProcessing ? "Processing..." : selectedLoanId ? "Settle Loan Early" : "Confirm Repayment"}
+                {isProcessing ? "Authorizing Transfer..." : selectedLoanId ? "Settle Loan Early" : "Confirm Repayment"}
             </button>
         </div>
 
-        {/* Loan Selection List (Moved Down) */}
+        {/* Active Loan Selection List */}
         <div className="px-6 space-y-3">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1 mt-4">Select Loan to Settle</p>
-            {activeLoans.map((loan) => {
+            {loading && <div className="text-center py-10 opacity-40 text-[10px] font-black uppercase tracking-widest animate-pulse">Scanning Active Loans...</div>}
+            
+            {!loading && activeLoans.length === 0 && (
+                <p className="text-center py-10 text-xs font-bold text-slate-300 uppercase tracking-widest border border-dashed border-slate-200 rounded-3xl">No Active Debt Found</p>
+            )}
+
+            {!loading && activeLoans.map((loan) => {
                 const isSelected = selectedLoanId === loan.id;
                 const settlementValue = loan.principal + loan.interestAccrued;
 
@@ -204,7 +268,7 @@ const RepayLiquidity = ({ onBack, fonts }) => {
 
                         <div className="flex justify-between items-end">
                             <div>
-                                <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Next Payment Date</p>
+                                <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Repayment Date</p>
                                 <div className="flex items-center gap-1.5 text-slate-600">
                                     <Calendar size={12} />
                                     <p className="text-xs font-bold">{new Date(loan.nextPayment).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })}</p>
@@ -216,7 +280,6 @@ const RepayLiquidity = ({ onBack, fonts }) => {
                             </div>
                         </div>
 
-                        {/* Early Repayment Benefit Banner (Shows only when selected) */}
                         {isSelected && (
                             <div className="mt-4 pt-4 border-t border-violet-100 flex items-center gap-3 animate-in slide-in-from-top-2">
                                 <div className="h-8 w-8 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center shrink-0">
@@ -224,7 +287,7 @@ const RepayLiquidity = ({ onBack, fonts }) => {
                                 </div>
                                 <div>
                                     <p className="text-[10px] font-bold text-emerald-600 uppercase">Early Settlement Benefit</p>
-                                    <p className="text-[10px] text-slate-500 font-medium">Saves ~{formatZar(loan.projectedMonthlyInterest)} in projected future interest.</p>
+                                    <p className="text-[10px] text-slate-500 font-medium leading-tight">Saves ~{formatZar(loan.projectedMonthlyInterest)} in projected future interest costs.</p>
                                 </div>
                             </div>
                         )}
