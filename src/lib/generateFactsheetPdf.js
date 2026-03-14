@@ -84,7 +84,7 @@ function fmtR(v) {
   const n = +v;
   if (n >= 1e9) return `R ${(n / 1e9).toFixed(2)}bn`;
   if (n >= 1e6) return `R ${(n / 1e6).toFixed(2)}m`;
-  return `R ${n.toLocaleString("en-ZA", { minimumFractionDigits: 2 })}`;
+  return `R ${n.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function secHead(doc, label, x, y, w) {

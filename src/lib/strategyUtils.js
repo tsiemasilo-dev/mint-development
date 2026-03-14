@@ -116,13 +116,22 @@ export const getStrategyHoldingsSnapshot = (strategy, holdingsBySymbol) => {
 export const getStrategyCurrentValue = (investedAmount, metrics) => {
   if (!investedAmount || investedAmount <= 0) return 0;
   if (!metrics) return investedAmount;
-  const bestReturn = metrics.r_ytd ?? metrics.r_1y ?? metrics.r_3m ?? metrics.r_1m ?? 0;
-  return investedAmount * (1 + bestReturn);
+  const raw = metrics.r_ytd ?? metrics.r_1y ?? metrics.r_3m ?? metrics.r_1m ?? 0;
+  // Sanity check: returns must be a decimal fraction (e.g. 0.10 = 10%).
+  // If the value is stored as a whole-number percentage (e.g. 10 instead of 0.10),
+  // or is otherwise corrupted, cap to a safe range to prevent absurd portfolio values.
+  const bestReturn = (typeof raw === "number" && isFinite(raw) && raw > -1 && raw < 5)
+    ? raw
+    : 0;
+  return Number((investedAmount * (1 + bestReturn)).toFixed(2));
 };
 
 export const getStrategyReturnPct = (metrics) => {
   if (!metrics) return 0;
-  const bestReturn = metrics.r_ytd ?? metrics.r_1y ?? metrics.r_3m ?? metrics.r_1m ?? 0;
+  const raw = metrics.r_ytd ?? metrics.r_1y ?? metrics.r_3m ?? metrics.r_1m ?? 0;
+  const bestReturn = (typeof raw === "number" && isFinite(raw) && raw > -1 && raw < 5)
+    ? raw
+    : 0;
   return bestReturn * 100;
 };
 

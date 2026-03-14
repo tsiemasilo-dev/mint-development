@@ -129,8 +129,8 @@ export const generateMintStatement = async (
         tableWidth: PW - M * 2,
         head: [['Metric', 'Value (ZAR)']],
         body: [
-            ['Total Holdings Market Value', `R ${totalValue.toLocaleString('en-ZA', { minimumFractionDigits: 2 })}`],
-            ['Total Unrealised P/L',        `${totalPL >= 0 ? '+' : '−'}R ${Math.abs(totalPL).toLocaleString('en-ZA', { minimumFractionDigits: 2 })}`],
+            ['Total Holdings Market Value', `R ${totalValue.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
+            ['Total Unrealised P/L',        `${totalPL >= 0 ? '+' : '−'}R ${Math.abs(totalPL).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
             ['Holdings Count',              `${holdingsForPdf.length}`],
             ['Active Strategies',           `${strategyRows.length}`],
             ['Transactions in Period',      `${activityItems.length}`],

@@ -715,7 +715,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                         <p className="font-medium text-slate-800 text-sm tracking-tight">{strategy.name}</p>
                       </div>
                       <p className="text-xs text-slate-400 mt-0.5 font-medium tabular-nums">
-                        R{(strategy.currentValue || 0).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}
+                        R{(strategy.currentValue || 0).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </p>
                     </button>
                   ))}
