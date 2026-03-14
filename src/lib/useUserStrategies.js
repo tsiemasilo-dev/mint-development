@@ -57,17 +57,32 @@ export const useUserStrategies = () => {
             const priceHistory = await getStrategyPriceHistory(strategy.id, "1Y");
             if (priceHistory && priceHistory.length >= 1) {
               const purchaseDateStr = purchaseDate ? purchaseDate.slice(0, 10) : null;
-              const filteredHistory = purchaseDateStr
-                ? priceHistory.filter(p => p.ts.split("T")[0] >= purchaseDateStr)
-                : priceHistory;
-              if (filteredHistory.length >= 1) {
-                const firstNav = filteredHistory[0].nav;
-                const lastNav = filteredHistory[filteredHistory.length - 1].nav;
-                if (firstNav > 0) {
-                  const navReturn = (lastNav - firstNav) / firstNav;
-                  currentVal = Number((invested * (1 + navReturn)).toFixed(2));
-                  changePct = navReturn * 100;
+              let baselineNav = null;
+              let latestNav = null;
+
+              if (purchaseDateStr) {
+                const afterPurchase = priceHistory.filter(p => p.ts.split("T")[0] >= purchaseDateStr);
+                const beforePurchase = priceHistory.filter(p => p.ts.split("T")[0] < purchaseDateStr);
+                const onPurchaseDate = priceHistory.filter(p => p.ts.split("T")[0] === purchaseDateStr);
+
+                if (afterPurchase.length >= 2) {
+                  baselineNav = onPurchaseDate.length > 0
+                    ? onPurchaseDate[0].nav
+                    : (beforePurchase.length > 0 ? beforePurchase[beforePurchase.length - 1].nav : afterPurchase[0].nav);
+                  latestNav = afterPurchase[afterPurchase.length - 1].nav;
+                } else {
+                  baselineNav = null;
+                  latestNav = null;
                 }
+              } else {
+                baselineNav = priceHistory[0].nav;
+                latestNav = priceHistory[priceHistory.length - 1].nav;
+              }
+
+              if (baselineNav && latestNav && baselineNav > 0) {
+                const navReturn = (latestNav - baselineNav) / baselineNav;
+                currentVal = Number((invested * (1 + navReturn)).toFixed(2));
+                changePct = navReturn * 100;
               }
             }
           } catch (e) {
@@ -160,7 +175,7 @@ export const useStrategyChartData = (strategyId, timeFilter = "W", purchaseDate 
         if (purchaseDate) {
           const purchaseDateStr = purchaseDate.slice(0, 10);
           const afterPurchase = priceHistory.filter(p => p.ts.split("T")[0] >= purchaseDateStr);
-          if (afterPurchase.length >= 1) filteredHistory = afterPurchase;
+          filteredHistory = afterPurchase.length >= 1 ? afterPurchase : [];
         }
 
         const formattedData = formatChartData(filteredHistory, timeFilter);

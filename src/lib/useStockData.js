@@ -49,7 +49,7 @@ export function useStockQuotes(enabled = true) {
   return { quotes, securities, loading, error, refetch: fetchSecurities };
 }
 
-export function useStockChart(securityId, timeFilter) {
+export function useStockChart(securityId, timeFilter, purchaseDate = null) {
   const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -75,7 +75,13 @@ export function useStockChart(securityId, timeFilter) {
       try {
         setLoading(true);
         const timeframe = getTimeframe(timeFilter);
-        const prices = await getSecurityPrices(securityId, timeframe);
+        let prices = await getSecurityPrices(securityId, timeframe);
+
+        if (purchaseDate && prices && prices.length > 0) {
+          const purchaseDateStr = purchaseDate.slice(0, 10);
+          const afterPurchase = prices.filter(p => p.ts.split("T")[0] >= purchaseDateStr);
+          prices = afterPurchase.length >= 1 ? afterPurchase : [];
+        }
 
         const formatted = (prices || []).map(p => {
           const date = new Date(p.ts);
@@ -111,7 +117,7 @@ export function useStockChart(securityId, timeFilter) {
     };
 
     fetchChart();
-  }, [securityId, timeFilter]);
+  }, [securityId, timeFilter, purchaseDate]);
 
   return { chartData, loading, error };
 }

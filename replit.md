@@ -93,6 +93,12 @@ Mint Auth is a React authentication application built with Vite, Tailwind CSS, a
   - Fallback: if < 2 data points in timeframe, fetches last 30 available prices
   - Forward-fills prices across gaps for smooth curves
   - Tooltip shows date and P&L value on hover
+- **Purchase Date Anchoring** (Portfolio tab charts):
+  - Both strategy and stock charts on the portfolio page filter data to start from the user's actual purchase date
+  - Strategy P&L uses NAV on purchase date as baseline (falls back to last pre-purchase NAV for weekend/holiday buys); requires ≥2 post-purchase data points to show return
+  - Stock chart in `useStockChart` accepts optional `purchaseDate` param; filters price data to `>= purchaseDate`
+  - If no post-purchase data exists yet (e.g., bought on weekend), chart shows empty/"No data available" instead of pre-purchase history
+  - Purchase date for stocks sourced from `stock_holdings.created_at`; for strategies from `firstInvestedDate` (earliest transaction date)
 
 ### PDF Factsheet Generation
 - **File**: `src/lib/generateFactsheetPdf.js` — client-side PDF generation using jsPDF + jspdf-autotable

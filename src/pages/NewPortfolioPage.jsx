@@ -124,7 +124,6 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     const match = liveQuotes[selectedStock.ticker];
     return match?.id || null;
   }, [selectedStock?.ticker, liveQuotes]);
-  const { chartData: liveStockChartData, loading: stockChartLoading } = useStockChart(selectedSecurityId, stockTimeFilter);
   const dropdownRef = useRef(null);
   const stockDropdownRef = useRef(null);
   const { profile } = useProfile();
@@ -217,6 +216,13 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   };
 
   const { holdings: rawHoldings, loading: holdingsLoading, goals: investmentGoals, refetch: refetchInvestments } = useInvestments();
+
+  const selectedStockPurchaseDate = useMemo(() => {
+    if (!selectedSecurityId || !rawHoldings) return null;
+    const holding = rawHoldings.find(h => String(h.security_id) === String(selectedSecurityId));
+    return holding?.created_at || holding?.as_of_date || null;
+  }, [selectedSecurityId, rawHoldings]);
+  const { chartData: liveStockChartData, loading: stockChartLoading } = useStockChart(selectedSecurityId, stockTimeFilter, selectedStockPurchaseDate);
 
   useEffect(() => {
     if (pricesLastUpdated) {
