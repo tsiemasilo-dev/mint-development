@@ -140,6 +140,8 @@ export default async function handler(req, res) {
       return res.status(400).json({ success: false, error: `Amount mismatch: paid ${paidAmount}, expected ${amount}` });
     }
 
+    const isStrategyInvestment = !!strategyId;
+
     const { data: securityCheck } = await db
       .from("securities")
       .select("id")
@@ -150,7 +152,7 @@ export default async function handler(req, res) {
     let currentPriceCents = null;
     let quantity = null;
 
-    if (securityCheck) {
+    if (securityCheck && !isStrategyInvestment) {
       const { data: securityData, error: secError } = await db
         .from("securities")
         .select("last_price")
@@ -230,7 +232,6 @@ export default async function handler(req, res) {
       }
     }
 
-    const isStrategyInvestment = strategyId && !securityCheck;
     const descriptionText = isStrategyInvestment
       ? `Invested in strategy ${name || "Strategy"}`
       : `Purchased ${(holdingResult.data ? "shares" : "units")} of ${name || symbol || "Unknown"}`;
