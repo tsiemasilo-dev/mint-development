@@ -18,10 +18,6 @@ import {
 } from "recharts";
 import { supabase } from "../lib/supabase";
 import { getStrategyPriceHistory } from "../lib/strategyData";
-import {
-  getStrategyCurrentValue,
-  getStrategyReturnPct,
-} from "../lib/strategyUtils";
 import { useRealtimePrices } from "../lib/useRealtimePrices";
 import Skeleton from "./Skeleton";
 import SettlementBadge from "./PendingBadge";
@@ -190,17 +186,52 @@ const SwipeableBalanceCard = ({
         : [{ holdings: [] }, { strategies: [] }];
 
       const stockHoldings = holdingsRes.holdings || [];
-      const strategyItems = (strategiesRes.strategies || []).map((s) => {
+      const strategyItems = await Promise.all((strategiesRes.strategies || []).map(async (s) => {
         const holdingsArr = s.holdings || [];
         const topLogos = holdingsArr
           .sort((a, b) => (b.weight || 0) - (a.weight || 0))
           .slice(0, 3)
           .map((h) => h.logo_url || null)
           .filter(Boolean);
-        const metrics = s.metrics || {};
         const investedRands = s.investedAmount || 0;
-        const currentRands = getStrategyCurrentValue(investedRands, metrics);
-        const changePct = getStrategyReturnPct(metrics);
+        const purchaseDate = s.firstInvestedDate;
+        let currentRands = investedRands;
+        let changePct = 0;
+
+        if (investedRands > 0) {
+          try {
+            const priceHistory = await getStrategyPriceHistory(s.id, "1Y");
+            if (priceHistory && priceHistory.length >= 1) {
+              const purchaseDateStr = purchaseDate ? purchaseDate.slice(0, 10) : null;
+              let baselineNav = null;
+              let latestNav = null;
+
+              if (purchaseDateStr) {
+                const afterPurchase = priceHistory.filter(p => p.ts.split("T")[0] >= purchaseDateStr);
+                const beforePurchase = priceHistory.filter(p => p.ts.split("T")[0] < purchaseDateStr);
+                const onPurchaseDate = priceHistory.filter(p => p.ts.split("T")[0] === purchaseDateStr);
+
+                if (afterPurchase.length >= 2) {
+                  baselineNav = onPurchaseDate.length > 0
+                    ? onPurchaseDate[0].nav
+                    : (beforePurchase.length > 0 ? beforePurchase[beforePurchase.length - 1].nav : afterPurchase[0].nav);
+                  latestNav = afterPurchase[afterPurchase.length - 1].nav;
+                }
+              } else {
+                baselineNav = priceHistory[0].nav;
+                latestNav = priceHistory[priceHistory.length - 1].nav;
+              }
+
+              if (baselineNav && latestNav && baselineNav > 0) {
+                const navReturn = (latestNav - baselineNav) / baselineNav;
+                currentRands = Number((investedRands * (1 + navReturn)).toFixed(2));
+                changePct = navReturn * 100;
+              }
+            }
+          } catch (e) {
+          }
+        }
+
         const investedCents = investedRands * 100;
         const currentCents = currentRands * 100;
         return {
@@ -216,8 +247,9 @@ const SwipeableBalanceCard = ({
           topLogos: topLogos,
           changePct: changePct,
           holdings: holdingsArr,
+          firstInvestedDate: purchaseDate,
         };
-      });
+      }));
       const enrichedHoldings = [...stockHoldings, ...strategyItems];
 
       const mValue = enrichedHoldings.reduce(
@@ -258,10 +290,15 @@ const SwipeableBalanceCard = ({
       if (selectedAsset?.isStrategy && selectedAsset?.strategyId) {
         const timeframeMap = { d: "1W", w: "1M", m: "3M" };
         const tf = timeframeMap[activeTab] || "1M";
-        const priceHistory = await getStrategyPriceHistory(
+        let priceHistory = await getStrategyPriceHistory(
           selectedAsset.strategyId,
           tf,
         );
+        const purchaseDateStr = selectedAsset.firstInvestedDate ? selectedAsset.firstInvestedDate.slice(0, 10) : null;
+        if (purchaseDateStr && priceHistory && priceHistory.length > 0) {
+          const afterPurchase = priceHistory.filter(p => p.ts.split("T")[0] >= purchaseDateStr);
+          priceHistory = afterPurchase.length >= 1 ? afterPurchase : [];
+        }
         if (priceHistory && priceHistory.length > 0) {
           const latestNav = priceHistory[priceHistory.length - 1].nav;
           const currentMarketValue = Number(selectedAsset.market_value || 0) / 100;
