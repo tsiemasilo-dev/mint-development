@@ -2526,7 +2526,9 @@ app.post("/api/record-investment", async (req, res) => {
       return res.status(400).json({ success: false, error: `Amount mismatch: paid ${paidAmount}, expected ${amount}` });
     }
 
-    if (strategyId) {
+    const isStrategyInvestment = !!strategyId;
+
+    if (isStrategyInvestment) {
       console.log("[record-investment] Strategy investment detected - strategyId:", strategyId, "- strategy subscriptions are derived from transactions");
     }
 
@@ -2542,7 +2544,7 @@ app.post("/api/record-investment", async (req, res) => {
     let currentPriceCents = null;
     let calcQuantity = null;
 
-    if (securityCheck) {
+    if (securityCheck && !isStrategyInvestment) {
       console.log("[record-investment] Security exists - will create/update stock_holdings");
       const { data: securityData, error: secError } = await db
         .from("securities")
@@ -2640,7 +2642,6 @@ app.post("/api/record-investment", async (req, res) => {
       console.log("[record-investment] Security NOT in securities table (likely strategy-only investment). No stock_holdings will be created.");
     }
 
-    const isStrategyInvestment = strategyId && !securityCheck;
     console.log("[record-investment] isStrategyInvestment:", isStrategyInvestment);
     const descriptionText = isStrategyInvestment
       ? `Invested in strategy ${name || "Strategy"}`
