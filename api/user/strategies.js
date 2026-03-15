@@ -83,12 +83,31 @@ export default async function handler(req, res) {
 
     const allSecurityIds = (userHoldings || []).map(h => h.security_id).filter(Boolean);
     let livePriceMap = {};
+    let symbolMap = {};
     if (allSecurityIds.length > 0) {
       const { data: secs } = await db
         .from("securities")
-        .select("id, last_price")
+        .select("id, symbol, last_price")
         .in("id", allSecurityIds);
-      (secs || []).forEach(s => { livePriceMap[s.id] = s.last_price || 0; });
+      (secs || []).forEach(s => {
+        livePriceMap[s.id] = s.last_price || 0;
+        symbolMap[s.id] = s.symbol;
+      });
+    }
+
+    const symbolPnlMap = {};
+    for (const h of (userHoldings || [])) {
+      const sym = symbolMap[h.security_id];
+      if (!sym) continue;
+      const qty = Number(h.quantity || 0);
+      const avgFill = Number(h.avg_fill || 0);
+      const livePrice = livePriceMap[h.security_id] || avgFill;
+      symbolPnlMap[sym] = {
+        pnlRands: ((livePrice - avgFill) * qty) / 100,
+        pnlPct: avgFill > 0 ? ((livePrice - avgFill) / avgFill) * 100 : 0,
+        currentValue: (livePrice * qty) / 100,
+        costBasis: (avgFill * qty) / 100,
+      };
     }
 
     const [allStrategiesResult, allHoldingSymbolsResult] = await Promise.all([
@@ -136,11 +155,18 @@ export default async function handler(req, res) {
       if (matchKey) {
         const metrics = strategy.strategy_metrics;
         const latestMetric = Array.isArray(metrics) ? metrics[0] : metrics;
-        const enrichedHoldings = (strategy.holdings || []).map(h => ({
-          ...h,
-          logo_url: h.logo_url || securitiesMap[h.symbol]?.logo_url || null,
-          name: h.name || securitiesMap[h.symbol]?.name || h.symbol,
-        }));
+        const enrichedHoldings = (strategy.holdings || []).map(h => {
+          const pnlData = symbolPnlMap[h.symbol] || null;
+          return {
+            ...h,
+            logo_url: h.logo_url || securitiesMap[h.symbol]?.logo_url || null,
+            name: h.name || securitiesMap[h.symbol]?.name || h.symbol,
+            pnlRands: pnlData ? pnlData.pnlRands : null,
+            pnlPct: pnlData ? pnlData.pnlPct : null,
+            currentValue: pnlData ? pnlData.currentValue : null,
+            costBasis: pnlData ? pnlData.costBasis : null,
+          };
+        });
 
         const stratHoldings = holdingsByStrategyId[strategy.id] || [];
         let investedAmount = 0;
