@@ -581,7 +581,11 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
   const showStudentSection = employmentStatus === "student";
   const agreementReady = agreedTerms && agreedPrivacy;
-  const sofReady = sourceOfFunds && agreedSourceOfFunds;
+  const sofReady =
+    sourceOfFunds &&
+    (sourceOfFunds !== "other" || sourceOfFundsOther.trim().length > 0) &&
+    expectedMonthlyInvestment &&
+    agreedSourceOfFunds;
 
   const handleFinalComplete = async () => {
     if (!supabase) {
