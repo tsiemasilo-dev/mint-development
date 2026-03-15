@@ -905,6 +905,14 @@ const HomePage = ({
           })}
         </section>
 
+        {onboardingChecked && outstandingActions.length > 0 ? (
+          <OutstandingActionsSection
+            actions={outstandingActions}
+            onViewAll={onOpenActions}
+            onSelectAction={handleActionNavigation}
+          />
+        ) : null}
+
         {/* Market Insights */}
         <section>
           <div className="flex items-end justify-between px-5 mb-3">
@@ -973,14 +981,6 @@ const HomePage = ({
             )}
           </div>
         </section>
-
-        {onboardingChecked && outstandingActions.length > 0 ? (
-          <OutstandingActionsSection
-            actions={outstandingActions}
-            onViewAll={onOpenActions}
-            onSelectAction={handleActionNavigation}
-          />
-        ) : null}
 
         {/* Best Performing Assets */}
         <section>
