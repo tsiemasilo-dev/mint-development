@@ -194,46 +194,12 @@ const SwipeableBalanceCard = ({
           .map((h) => h.logo_url || null)
           .filter(Boolean);
         const investedRands = s.investedAmount || 0;
+        const liveRands = s.currentMarketValue != null ? s.currentMarketValue : investedRands;
         const purchaseDate = s.firstInvestedDate;
-        let currentRands = investedRands;
-        let changePct = 0;
+        let changePct = investedRands > 0 ? ((liveRands - investedRands) / investedRands) * 100 : 0;
 
-        if (investedRands > 0) {
-          try {
-            const priceHistory = await getStrategyPriceHistory(s.id, "1Y");
-            if (priceHistory && priceHistory.length >= 1) {
-              const purchaseDateStr = purchaseDate ? purchaseDate.slice(0, 10) : null;
-              let baselineNav = null;
-              let latestNav = null;
-
-              if (purchaseDateStr) {
-                const afterPurchase = priceHistory.filter(p => p.ts.split("T")[0] >= purchaseDateStr);
-                const beforePurchase = priceHistory.filter(p => p.ts.split("T")[0] < purchaseDateStr);
-                const onPurchaseDate = priceHistory.filter(p => p.ts.split("T")[0] === purchaseDateStr);
-
-                if (afterPurchase.length >= 2) {
-                  baselineNav = onPurchaseDate.length > 0
-                    ? onPurchaseDate[0].nav
-                    : (beforePurchase.length > 0 ? beforePurchase[beforePurchase.length - 1].nav : afterPurchase[0].nav);
-                  latestNav = afterPurchase[afterPurchase.length - 1].nav;
-                }
-              } else {
-                baselineNav = priceHistory[0].nav;
-                latestNav = priceHistory[priceHistory.length - 1].nav;
-              }
-
-              if (baselineNav && latestNav && baselineNav > 0) {
-                const navReturn = (latestNav - baselineNav) / baselineNav;
-                currentRands = Number((investedRands * (1 + navReturn)).toFixed(2));
-                changePct = navReturn * 100;
-              }
-            }
-          } catch (e) {
-          }
-        }
-
-        const investedCents = investedRands * 100;
-        const currentCents = currentRands * 100;
+        const investedCents = Math.round(investedRands * 100);
+        const currentCents = Math.round(liveRands * 100);
         return {
           symbol: s.shortName || s.name || "Strategy",
           name: s.name || "Strategy",

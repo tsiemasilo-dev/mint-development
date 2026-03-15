@@ -32,7 +32,6 @@ import { parseOnboardingFlags } from "../lib/checkOnboardingComplete";
 import { useFinancialData, useInvestments } from "../lib/useFinancialData";
 import { useRealtimePrices } from "../lib/useRealtimePrices";
 import { getHoldingsArray, normalizeSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot } from "../lib/strategyUtils";
-import { getStrategyPriceHistory } from "../lib/strategyData";
 import { formatZar } from "../lib/formatCurrency";
 import HomeSkeleton from "../components/HomeSkeleton";
 import Skeleton from "../components/Skeleton";
@@ -450,49 +449,12 @@ const HomePage = ({
           return;
         }
 
-        const formatted = await Promise.all(serverStrategies.map(async (s) => {
+        const formatted = serverStrategies.map((s) => {
           const invested = s.investedAmount || 0;
-          const metrics = s.metrics || {};
-          const purchaseDate = s.firstInvestedDate;
-          let currentValue = invested;
-          let changePctVal = 0;
-
-          if (invested > 0) {
-            try {
-              const priceHistory = await getStrategyPriceHistory(s.id, "1Y");
-              if (priceHistory && priceHistory.length >= 1) {
-                const purchaseDateStr = purchaseDate ? purchaseDate.slice(0, 10) : null;
-                let baselineNav = null;
-                let latestNav = null;
-
-                if (purchaseDateStr) {
-                  const afterPurchase = priceHistory.filter(p => p.ts.split("T")[0] >= purchaseDateStr);
-                  const beforePurchase = priceHistory.filter(p => p.ts.split("T")[0] < purchaseDateStr);
-                  const onPurchaseDate = priceHistory.filter(p => p.ts.split("T")[0] === purchaseDateStr);
-
-                  if (afterPurchase.length >= 2) {
-                    baselineNav = onPurchaseDate.length > 0
-                      ? onPurchaseDate[0].nav
-                      : (beforePurchase.length > 0 ? beforePurchase[beforePurchase.length - 1].nav : afterPurchase[0].nav);
-                    latestNav = afterPurchase[afterPurchase.length - 1].nav;
-                  }
-                } else {
-                  baselineNav = priceHistory[0].nav;
-                  latestNav = priceHistory[priceHistory.length - 1].nav;
-                }
-
-                if (baselineNav && latestNav && baselineNav > 0) {
-                  const navReturn = (latestNav - baselineNav) / baselineNav;
-                  currentValue = Number((invested * (1 + navReturn)).toFixed(2));
-                  changePctVal = navReturn * 100;
-                }
-              }
-            } catch (e) {
-            }
-          }
-
+          const currentValue = s.currentMarketValue != null ? Number(s.currentMarketValue.toFixed(2)) : invested;
           const stratPnlRands = currentValue - invested;
-          const stratPnlPct = invested > 0 ? ((stratPnlRands / invested) * 100) : 0;
+          const changePctVal = invested > 0 ? (stratPnlRands / invested) * 100 : 0;
+          const stratPnlPct = changePctVal;
           return {
             id: s.id,
             name: s.name,
@@ -510,7 +472,7 @@ const HomePage = ({
             pnlPct: stratPnlPct,
             strategy_metrics: s.metrics ? [s.metrics] : [],
           };
-        }));
+        });
 
         const sorted = formatted
           .sort((a, b) => (b.change_pct || 0) - (a.change_pct || 0))
