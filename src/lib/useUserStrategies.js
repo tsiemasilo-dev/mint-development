@@ -70,6 +70,13 @@ export const useUserStrategies = () => {
                     ? onPurchaseDate[0].nav
                     : (beforePurchase.length > 0 ? beforePurchase[beforePurchase.length - 1].nav : afterPurchase[0].nav);
                   latestNav = afterPurchase[afterPurchase.length - 1].nav;
+                } else if (afterPurchase.length === 1) {
+                  baselineNav = afterPurchase[0].nav;
+                  latestNav = afterPurchase[0].nav;
+                } else if (beforePurchase.length > 0) {
+                  const lastKnown = beforePurchase[beforePurchase.length - 1].nav;
+                  baselineNav = lastKnown;
+                  latestNav = lastKnown;
                 } else {
                   baselineNav = null;
                   latestNav = null;
@@ -175,7 +182,17 @@ export const useStrategyChartData = (strategyId, timeFilter = "W", purchaseDate 
         if (purchaseDate) {
           const purchaseDateStr = purchaseDate.slice(0, 10);
           const afterPurchase = priceHistory.filter(p => p.ts.split("T")[0] >= purchaseDateStr);
-          filteredHistory = afterPurchase.length >= 1 ? afterPurchase : [];
+          if (afterPurchase.length >= 1) {
+            filteredHistory = afterPurchase;
+          } else {
+            const beforePurchase = priceHistory.filter(p => p.ts.split("T")[0] < purchaseDateStr);
+            if (beforePurchase.length > 0) {
+              const lastKnown = beforePurchase[beforePurchase.length - 1];
+              filteredHistory = [lastKnown, { ...lastKnown, ts: purchaseDateStr + "T00:00:00Z" }];
+            } else {
+              filteredHistory = priceHistory.slice(-1);
+            }
+          }
         }
 
         const formattedData = formatChartData(filteredHistory, timeFilter);
