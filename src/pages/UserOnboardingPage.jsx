@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import SumsubVerification from "../components/SumsubVerification";
 import MandateViewer from "../components/MandateViewer";
+import AccountAgreementStep from "../components/AccountAgreementStep";
 import { supabase } from "../lib/supabase";
 import { useProfile } from "../lib/useProfile";
 import "../styles/onboarding-process.css";
@@ -337,6 +338,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const getPrevIncompleteStep = (beforeStep) => {
     const identityCheckDone = !!existingOnboardingId || kycAlreadyVerified;
     const steps = [
+      { step: 8, done: termsDone },
       { step: 7, done: sofDone },
       { step: 6, done: riskDone },
       { step: 5, done: mandateDone },
@@ -748,7 +750,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   { done: mandateDone, title: "Discretionary Mandate", doneDesc: "Mandate accepted", pendingDesc: "Review and accept the FSP investment mandate", badge: "Accepted" },
                   { done: riskDone, title: "Risk Disclosure", doneDesc: "Risk disclosure acknowledged", pendingDesc: "Review investment risk disclosure", badge: "Acknowledged" },
                   { done: sofDone, title: "Source of Funds", doneDesc: "Source of funds declared", pendingDesc: "Declare the origin of your investment funds", badge: "Declared" },
-                  { done: false, title: "Agreements", doneDesc: "Agreements accepted", pendingDesc: "Review and accept terms and conditions", badge: "Accepted" },
+                  { done: termsDone, title: "General Terms", doneDesc: "Terms and conditions accepted", pendingDesc: "Review and accept terms and conditions", badge: "Accepted" },
+                  { done: false, title: "Account Agreement", doneDesc: "Agreement signed", pendingDesc: "Review and sign the formal account agreement", badge: "Signed" },
                 ];
                 return (
                   <>
@@ -796,7 +799,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
               <div className="text-center mt-6 animate-fade-in delay-4">
                 <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  You'll be taken through our eight-step process
+                  You'll be taken through our nine-step process
                 </p>
               </div>
             </div>
@@ -807,7 +810,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   className="text-xs uppercase tracking-[0.2em] mb-2"
                   style={{ color: "hsl(270 20% 55%)" }}
                 >
-                  Step 1 of 8
+                  Step 1 of 9
                 </p>
                 <h2
                   className="text-3xl font-light tracking-tight mb-2"
@@ -864,7 +867,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   className="text-xs uppercase tracking-[0.2em] mb-2"
                   style={{ color: "hsl(270 20% 55%)" }}
                 >
-                  Step 2 of 8
+                  Step 2 of 9
                 </p>
                 <h2
                   className="text-3xl font-light tracking-tight mb-2"
@@ -931,7 +934,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
             <div className="w-full max-w-xl mx-auto">
               <div className="text-center mb-8 animate-fade-in delay-1">
                 <p className="text-xs uppercase tracking-[0.2em] mb-2" style={{ color: "hsl(270 20% 55%)" }}>
-                  Step 3 of 8
+                  Step 3 of 9
                 </p>
                 <div className="hero-icon">
                   <FileContractIcon width={48} height={48} />
@@ -1004,6 +1007,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
+                <div className="progress-step active"></div>
+                <div className="progress-step"></div>
                 <div className="progress-step"></div>
                 <div className="progress-step"></div>
                 <div className="progress-step"></div>
@@ -1169,7 +1174,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
               <div className="text-center mt-6 animate-fade-in delay-4 hide-when-dropdown-open">
                 <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  Step 3 of 7
+                  Step 4 of 9
                 </p>
               </div>
             </div>
@@ -1195,6 +1200,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
+                <div className="progress-step active"></div>
+                <div className="progress-step"></div>
                 <div className="progress-step"></div>
                 <div className="progress-step"></div>
                 <div className="progress-step"></div>
@@ -1311,7 +1318,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
               <div className="text-center mt-6 animate-fade-in delay-4">
                 <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  Step 4 of 7
+                  Step 5 of 9
                 </p>
               </div>
             </div>
@@ -1338,6 +1345,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
+                <div className="progress-step active"></div>
+                <div className="progress-step"></div>
                 <div className="progress-step"></div>
                 <div className="progress-step"></div>
               </div>
@@ -1407,7 +1416,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
               <div className="text-center mt-6 animate-fade-in delay-4">
                 <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  Step 5 of 7
+                  Step 6 of 9
                 </p>
               </div>
             </div>
@@ -1435,6 +1444,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
+                <div className="progress-step active"></div>
+                <div className="progress-step"></div>
                 <div className="progress-step"></div>
               </div>
 
@@ -1553,12 +1564,12 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
                 <div className="text-center mt-6 animate-fade-in delay-4 hide-when-dropdown-open">
                   <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                    Step 6 of 7
+                    Step 7 of 9
                   </p>
                 </div>
               </div>
             </div>
-          ) : (
+          ) : step === 8 ? (
             <div className="w-full max-w-3xl mx-auto">
               <div className="text-center animate-fade-in delay-1">
                 <div className="hero-icon">
@@ -1583,6 +1594,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
+                <div className="progress-step active"></div>
+                <div className="progress-step"></div>
               </div>
 
               <div className="agreement-card animate-fade-in delay-2">
@@ -1598,42 +1611,28 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <div className="agreement-section">
                   <div className="section-title">2. User Account</div>
                   <div className="agreement-text">
-                    You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account. You must provide accurate, current, and complete information during the registration process and keep your information updated.
+                    To use MINT, you must create an account. You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account. You agree to provide accurate and complete information during the onboarding process.
                   </div>
                 </div>
 
                 <div className="agreement-section">
-                  <div className="section-title">3. Privacy and Data Protection</div>
+                  <div className="section-title">3. Investment Services</div>
                   <div className="agreement-text">
-                    We collect, process, and store your personal data in accordance with our Privacy Policy. By using our services, you consent to such processing and warrant that all data provided by you is accurate. We implement industry-standard security measures to protect your information.
+                    MINT provides a platform for fractional investment in various assets. We are not a financial advisor, and the information provided through our platform does not constitute financial, investment, or tax advice. You should perform your own research or consult with a qualified advisor.
                   </div>
                 </div>
 
                 <div className="agreement-section">
-                  <div className="section-title">4. Use of Services</div>
+                  <div className="section-title">4. Fees and Charges</div>
                   <div className="agreement-text">
-                    You agree to use our services only for lawful purposes and in accordance with these Terms. You must not use our services in any way that could damage, disable, or impair our platform, or interfere with any other party's use of our services.
+                    MINT may charge fees for its services. These fees will be clearly disclosed to you. You agree to pay all fees associated with your use of our platform. We reserve the right to change our fee structure with prior notice to you.
                   </div>
                 </div>
 
                 <div className="agreement-section">
-                  <div className="section-title">5. Intellectual Property</div>
+                  <div className="section-title">5. Privacy and Security</div>
                   <div className="agreement-text">
-                    All content, features, and functionality of our services, including but not limited to text, graphics, logos, and software, are the exclusive property of MINT and are protected by international copyright, trademark, and other intellectual property laws.
-                  </div>
-                </div>
-
-                <div className="agreement-section">
-                  <div className="section-title">6. Limitation of Liability</div>
-                  <div className="agreement-text">
-                    MINT shall not be liable for any indirect, incidental, special, consequential, or punitive damages resulting from your use or inability to use our services. Our total liability shall not exceed the amount paid by you, if any, for accessing our services.
-                  </div>
-                </div>
-
-                <div className="agreement-section">
-                  <div className="section-title">7. Modifications</div>
-                  <div className="agreement-text">
-                    We reserve the right to modify these Terms at any time. We will notify users of any material changes via email or through our platform. Your continued use of our services after such modifications constitutes acceptance of the updated Terms.
+                    Your privacy is important to us. We collect and process your personal information in accordance with our Privacy Policy. We use industry-standard security measures to protect your data, but we cannot guarantee absolute security.
                   </div>
                 </div>
               </div>
@@ -1646,10 +1645,9 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                     onChange={(event) => setAgreedTerms(event.target.checked)}
                   />
                   <span className="checkbox-label">
-                    I have read and agree to the Terms and Conditions
+                    I agree to the Terms and Conditions
                   </span>
                 </label>
-
                 <label className="checkbox-item">
                   <input
                     type="checkbox"
@@ -1657,7 +1655,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                     onChange={(event) => setAgreedPrivacy(event.target.checked)}
                   />
                   <span className="checkbox-label">
-                    I consent to the Privacy Policy and data processing
+                    I agree to the Privacy Policy
                   </span>
                 </label>
               </div>
@@ -1667,19 +1665,39 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   type="button"
                   className={`continue-button agreement-continue ${agreementReady ? "enabled" : ""}`}
                   disabled={!agreementReady}
-                  onClick={handleFinalComplete}
+                  onClick={async () => {
+                    await saveProgressFlag("terms_accepted");
+                    setTermsDone(true);
+                    goToStep(getNextIncompleteStep(8, 8));
+                  }}
                 >
-                  Accept and Continue
+                  Continue
                 </button>
               </div>
 
               <div className="text-center mt-6 animate-fade-in delay-4">
                 <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  Step 7 of 7 - Final step to complete your onboarding
+                  Step 8 of 9
                 </p>
               </div>
             </div>
-          )}
+          ) : step === 9 ? (
+            <AccountAgreementStep
+              profile={profile}
+              onboardingData={{
+                bankName,
+                bankAccountNumber,
+                bankBranchCode,
+                taxNumber,
+                identityNumber,
+                sourceOfFunds,
+                sourceOfFundsOther,
+                expectedMonthlyInvestment,
+              }}
+              existingOnboardingId={existingOnboardingId}
+              onComplete={handleFinalComplete}
+            />
+          ) : null}
         </div>
       </div>
     </div>
