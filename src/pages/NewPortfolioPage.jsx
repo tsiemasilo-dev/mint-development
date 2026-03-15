@@ -270,14 +270,23 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       options.push({ id: s.strategyId, label: s.shortName || s.name, type: "strategy" });
     });
     if (rawHoldings && rawHoldings.length > 0) {
-      rawHoldings.forEach(h => {
-        if (h.security_id) {
-          options.push({ id: h.security_id, label: h.symbol || h.name, type: "stock" });
-        }
+      rawHoldings.filter(h => h.security_id && !h.strategy_id).forEach(h => {
+        options.push({ id: h.security_id, label: h.symbol || h.name, type: "stock" });
       });
     }
     return options;
   }, [strategies, rawHoldings]);
+
+  useEffect(() => {
+    const validIds = calendarFilterOptions.map(o => o.id);
+    if (!validIds.includes(calendarFilter)) {
+      setCalendarFilter("overall");
+    }
+  }, [calendarFilterOptions]);
+
+  const individualHoldingSecurityIds = useMemo(() => {
+    return (rawHoldings || []).filter(h => h.security_id && !h.strategy_id).map(h => h.security_id);
+  }, [rawHoldings]);
 
   useEffect(() => {
     let cancelled = false;
@@ -286,16 +295,16 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       if (calendarFilter === "overall") {
         data = await getOverallPortfolioMonthlyReturns(
           strategies.map(s => s.strategyId).filter(Boolean),
-          (rawHoldings || []).filter(h => h.security_id).map(h => h.security_id),
+          individualHoldingSecurityIds,
           strategies,
-          rawHoldings || []
+          (rawHoldings || []).filter(h => !h.strategy_id)
         );
       } else {
         const matchedStrategy = strategies.find(s => s.strategyId === calendarFilter);
         if (matchedStrategy) {
           data = await getMonthlyReturns(calendarFilter, matchedStrategy.firstInvestedDate || null);
         } else {
-          const matchedHolding = (rawHoldings || []).find(h => h.security_id === calendarFilter);
+          const matchedHolding = (rawHoldings || []).find(h => h.security_id === calendarFilter && !h.strategy_id);
           data = await getStockMonthlyReturns(calendarFilter, matchedHolding?.created_at || null);
         }
       }
@@ -309,7 +318,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     };
     fetchCalendarData();
     return () => { cancelled = true; };
-  }, [calendarFilter, strategies, rawHoldings]);
+  }, [calendarFilter, strategies, rawHoldings, individualHoldingSecurityIds]);
 
   const liveHoldingValue = (h) => {
     if (h.last_price != null && h.quantity != null) return (h.last_price * h.quantity) / 100;
