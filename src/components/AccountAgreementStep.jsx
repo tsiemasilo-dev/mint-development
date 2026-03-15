@@ -558,8 +558,7 @@ export default function AccountAgreementStep({
         }
       } catch (storageErr) {
         console.warn("PDF storage skipped:", storageErr?.message);
-      }
-      setPdfUrl(publicUrl);
+      }      setPdfUrl(publicUrl);
 
       // Merge signing details + all required flags into sumsub_raw
       try {
