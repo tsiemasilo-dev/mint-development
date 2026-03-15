@@ -117,7 +117,7 @@ const monthlyInvestmentOptions = [
 ];
 
 const OnboardingProcessPage = ({ onBack, onComplete }) => {
-  const { profile } = useProfile();
+  const { profile, loading: profileLoading } = useProfile();
   const [step, setStep] = useState(0);
   const [isFading, setIsFading] = useState(false);
   const [employmentStatus, setEmploymentStatus] = useState("");
@@ -1196,6 +1196,44 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <div className="progress-step"></div>
               </div>
 
+              {(() => {
+                if (profileLoading) return null;
+                const missingFields = [
+                  !profile?.firstName?.trim() && "First Name",
+                  !profile?.lastName?.trim() && "Surname",
+                  !profile?.idNumber?.trim() && "ID Number",
+                  !profile?.address?.trim() && "Address",
+                  !profile?.phoneNumber?.trim() && "Cell Number",
+                  !profile?.email?.trim() && "Email Address",
+                ].filter(Boolean);
+                if (missingFields.length === 0) return null;
+                return (
+                  <div className="animate-fade-in delay-2" style={{
+                    background: "hsl(38 100% 97%)",
+                    border: "1px solid hsl(38 80% 75%)",
+                    borderRadius: "12px",
+                    padding: "14px 18px",
+                    marginBottom: "16px",
+                  }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="hsl(38 90% 45%)" strokeWidth="2" width="18" height="18" style={{ flexShrink: 0, marginTop: "1px" }}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                      </svg>
+                      <div>
+                        <p style={{ fontSize: "12px", fontWeight: "600", color: "hsl(38 70% 30%)", marginBottom: "6px" }}>
+                          Your profile is missing the following required fields. Please fill them in on the first tab of the mandate document below before you can continue:
+                        </p>
+                        <ul style={{ margin: 0, paddingLeft: "16px", listStyleType: "disc" }}>
+                          {missingFields.map((field) => (
+                            <li key={field} style={{ fontSize: "12px", color: "hsl(38 70% 30%)", marginBottom: "2px" }}>{field}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               <div className="animate-fade-in delay-2" style={{
                 borderRadius: '16px',
                 overflow: 'hidden',
@@ -1224,9 +1262,30 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               </div>
 
               {!mandateValid && agreedMandate && (
-                <p className="text-center animate-fade-in" style={{ color: "#ef4444", fontSize: "12px", marginTop: "8px" }}>
-                  Please fill in all required client details (name, surname, ID, address, email, cell number), enter your initials, and select at least one option under each checkbox group in the Schedules section before continuing.
-                </p>
+                <div className="animate-fade-in" style={{ marginTop: "10px" }}>
+                  {(() => {
+                    const missing = [
+                      !profile?.firstName?.trim() && "First Name",
+                      !profile?.lastName?.trim() && "Surname",
+                      !profile?.idNumber?.trim() && "ID Number",
+                      !profile?.address?.trim() && "Address",
+                      !profile?.phoneNumber?.trim() && "Cell Number",
+                      !profile?.email?.trim() && "Email Address",
+                    ].filter(Boolean);
+                    if (missing.length > 0) {
+                      return (
+                        <p style={{ color: "#ef4444", fontSize: "12px", textAlign: "center" }}>
+                          Cannot continue — the following required fields are still empty in the mandate: <strong>{missing.join(", ")}</strong>. Please fill them in on Tab 1 of the mandate document above.
+                        </p>
+                      );
+                    }
+                    return (
+                      <p style={{ color: "#ef4444", fontSize: "12px", textAlign: "center" }}>
+                        Please enter your initials and complete all checkbox selections on the Schedules tab before continuing.
+                      </p>
+                    );
+                  })()}
+                </div>
               )}
 
               {submitError && (
