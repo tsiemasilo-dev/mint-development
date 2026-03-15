@@ -22,6 +22,12 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
   const [agreementChecked, setAgreementChecked] = useState(false);
   const [showMandateModal, setShowMandateModal] = useState(false);
   const [feeExpanded, setFeeExpanded] = useState(false);
+
+  useEffect(() => {
+    if (minimumInvestment && minimumInvestment > 0) {
+      setAmount(minimumInvestment);
+    }
+  }, [minimumInvestment]);
   
   const [isFullyOnboarded, setIsFullyOnboarded] = useState(false);
   const [isLoadingStatus, setIsLoadingStatus] = useState(true);
