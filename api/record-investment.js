@@ -115,7 +115,10 @@ export default async function handler(req, res) {
 
     const db = supabaseAdmin || supabase;
     const userId = user.id;
-    const { securityId, symbol, name, amount, strategyId, paymentReference } = req.body;
+    const { securityId, symbol, name, amount, baseAmount, strategyId, paymentReference } = req.body;
+    // baseAmount = investment amount excluding fees (used for holdings/quantity calculations)
+    // amount = total charged including fees (used for transaction records)
+    const investAmount = (baseAmount && baseAmount > 0) ? baseAmount : amount;
 
     if (!securityId || !amount || !paymentReference) {
       return res.status(400).json({ success: false, error: "Missing required fields: securityId, amount, paymentReference" });
@@ -290,10 +293,10 @@ export default async function handler(req, res) {
         }
       }
 
-      const currentPriceRands = currentPriceCents ? currentPriceCents / 100 : amount;
-      quantity = currentPriceRands > 0 ? amount / currentPriceRands : 1;
-      const avgFillCents = currentPriceCents || Math.round(amount * 100);
-      const marketValueCents = Math.round(quantity * (currentPriceCents || amount * 100));
+      const currentPriceRands = currentPriceCents ? currentPriceCents / 100 : investAmount;
+      quantity = currentPriceRands > 0 ? investAmount / currentPriceRands : 1;
+      const avgFillCents = currentPriceCents || Math.round(investAmount * 100);
+      const marketValueCents = Math.round(quantity * (currentPriceCents || investAmount * 100));
 
       const { data: existing, error: fetchError } = await db
         .from("stock_holdings")
@@ -364,8 +367,8 @@ export default async function handler(req, res) {
             .in("symbol", holdingSymbols);
             
           if (secs && secs.length > 0) {
-            const amountPerSecurityCents = Math.round((amount * 100) / secs.length);
-            const amountPerSecurityRands = amount / secs.length;
+            const amountPerSecurityCents = Math.round((investAmount * 100) / secs.length);
+            const amountPerSecurityRands = investAmount / secs.length;
             
             for (const sec of secs) {
               const secId = sec.id;

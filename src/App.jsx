@@ -90,7 +90,8 @@ const App = () => {
   const [selectedArticleId, setSelectedArticleId] = useState(null);
   const [marketsInitialView, setMarketsInitialView] = useState(null);
   const [investmentAmount, setInvestmentAmount] = useState(0);
-  const [stockCheckout, setStockCheckout] = useState({ security: null, amount: 0 });
+  const [baseInvestmentAmount, setBaseInvestmentAmount] = useState(0);
+  const [stockCheckout, setStockCheckout] = useState({ security: null, amount: 0, baseAmount: 0 });
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [pendingGoalFlow, setPendingGoalFlow] = useState(null);
   const [selectedGoalId, setSelectedGoalId] = useState(null);
@@ -1135,7 +1136,7 @@ const App = () => {
           security={selectedSecurity}
           onBack={goBack}
           onContinue={(amount, security, baseAmount, shareCount) => {
-            setStockCheckout({ security, amount, shareCount });
+            setStockCheckout({ security, amount, baseAmount: baseAmount || amount, shareCount });
             setPendingGoalFlow({
               type: "stock",
               amount,
@@ -1176,6 +1177,7 @@ const App = () => {
           onBack={goBack}
           strategy={paymentItem}
           amount={stockCheckout.amount}
+          baseAmount={stockCheckout.baseAmount}
           shareCount={stockCheckout.shareCount}
           onSuccess={async (response) => {
             console.log("Payment successful:", response);
@@ -1272,6 +1274,7 @@ const App = () => {
           strategy={selectedStrategy}
           onContinue={(amount, baseAmount) => {
             setInvestmentAmount(amount);
+            setBaseInvestmentAmount(baseAmount || amount);
             setPendingGoalFlow({
               type: "strategy",
               amount,
@@ -1307,6 +1310,7 @@ const App = () => {
           onBack={goBack}
           strategy={selectedStrategy}
           amount={investmentAmount}
+          baseAmount={baseInvestmentAmount}
           onSuccess={async (response) => {
             console.log("Payment successful:", response);
             const goalId = selectedGoalIdRef.current;
