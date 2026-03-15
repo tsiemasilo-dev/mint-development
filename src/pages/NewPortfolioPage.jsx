@@ -332,18 +332,15 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   };
 
   const displayAccountValue = useMemo(() => {
-    // Use live-enriched rawHoldings (covers both strategy and individual holdings)
-    // rawHoldings come from the holdings API which enriches last_price from security_prices
-    const rawTotal = (rawHoldings || []).reduce((sum, h) => sum + liveHoldingValue(h), 0);
-    if (rawTotal > 0) return rawTotal;
-    // Fallback to strategies API data while rawHoldings is still loading
-    return strategies.reduce((sum, s) => sum + (s.currentValue || s.investedAmount || 0), 0);
+    const holdingsValue = (rawHoldings || []).filter(h => !h.strategy_id).reduce((sum, h) => sum + liveHoldingValue(h), 0);
+    const strategiesValue = strategies.reduce((sum, s) => sum + (s.currentValue || s.investedAmount || 0), 0);
+    return holdingsValue + strategiesValue;
   }, [rawHoldings, strategies]);
 
   const displayTotalCostBasis = useMemo(() => {
-    const rawBasis = (rawHoldings || []).reduce((sum, h) => sum + ((h.avg_fill || 0) * (h.quantity || 0)) / 100, 0);
-    if (rawBasis > 0) return rawBasis;
-    return strategies.reduce((sum, s) => sum + (s.investedAmount || 0), 0);
+    const holdingsBasis = (rawHoldings || []).filter(h => !h.strategy_id).reduce((sum, h) => sum + ((h.avg_fill || 0) * (h.quantity || 0)) / 100, 0);
+    const strategiesBasis = strategies.reduce((sum, s) => sum + (s.investedAmount || 0), 0);
+    return holdingsBasis + strategiesBasis;
   }, [rawHoldings, strategies]);
 
   const allStrategyHoldings = useMemo(() => {
