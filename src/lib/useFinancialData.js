@@ -61,12 +61,10 @@ export const useFinancialData = () => {
       const token = session.access_token;
 
       const [
-        balanceResult,
         holdings,
         allServerTransactions,
         creditResult,
       ] = await Promise.all([
-        supabase.from("user_balances").select("*").eq("user_id", userId).maybeSingle(),
         fetchServerHoldings(token),
         fetchServerTransactions(token, 100),
         supabase.from("credit_accounts").select("*").eq("user_id", userId).maybeSingle(),
@@ -165,8 +163,7 @@ export const useMintBalance = () => {
         const userId = session.user.id;
         const token = session.access_token;
 
-        const [balanceResult, holdings, allServerTransactions] = await Promise.all([
-          supabase.from("user_balances").select("*").eq("user_id", userId).maybeSingle(),
+        const [holdings, allServerTransactions] = await Promise.all([
           fetchServerHoldings(token),
           fetchServerTransactions(token, 100),
         ]);

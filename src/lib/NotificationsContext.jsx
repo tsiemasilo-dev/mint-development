@@ -28,11 +28,11 @@ export const NotificationsProvider = ({ children }) => {
     try {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("notification_preferences")
+        .select("id, notifications_enabled")
         .eq("id", userId)
         .single();
       
-      return profile?.notification_preferences || {};
+      return {};
     } catch (err) {
       console.error("Error loading notification preferences:", err);
       return {};
