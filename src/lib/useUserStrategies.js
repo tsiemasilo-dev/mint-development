@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "./supabase";
-import { getStrategyPriceHistory } from "./strategyData";
 
 export const useUserStrategies = () => {
   const [data, setData] = useState({
@@ -44,58 +43,13 @@ export const useUserStrategies = () => {
         return;
       }
 
-      const formattedStrategies = await Promise.all(serverStrategies.map(async (strategy) => {
+      const formattedStrategies = serverStrategies.map((strategy) => {
         const latestMetric = strategy.metrics;
         const invested = strategy.investedAmount || 0;
-        const purchaseDate = strategy.firstInvestedDate;
-
-        let currentVal = invested;
-        let changePct = 0;
-
-        if (invested > 0) {
-          try {
-            const priceHistory = await getStrategyPriceHistory(strategy.id, "1Y");
-            if (priceHistory && priceHistory.length >= 1) {
-              const purchaseDateStr = purchaseDate ? purchaseDate.slice(0, 10) : null;
-              let baselineNav = null;
-              let latestNav = null;
-
-              if (purchaseDateStr) {
-                const afterPurchase = priceHistory.filter(p => p.ts.split("T")[0] >= purchaseDateStr);
-                const beforePurchase = priceHistory.filter(p => p.ts.split("T")[0] < purchaseDateStr);
-                const onPurchaseDate = priceHistory.filter(p => p.ts.split("T")[0] === purchaseDateStr);
-
-                if (afterPurchase.length >= 2) {
-                  baselineNav = onPurchaseDate.length > 0
-                    ? onPurchaseDate[0].nav
-                    : (beforePurchase.length > 0 ? beforePurchase[beforePurchase.length - 1].nav : afterPurchase[0].nav);
-                  latestNav = afterPurchase[afterPurchase.length - 1].nav;
-                } else if (afterPurchase.length === 1) {
-                  baselineNav = afterPurchase[0].nav;
-                  latestNav = afterPurchase[0].nav;
-                } else if (beforePurchase.length > 0) {
-                  const lastKnown = beforePurchase[beforePurchase.length - 1].nav;
-                  baselineNav = lastKnown;
-                  latestNav = lastKnown;
-                } else {
-                  baselineNav = null;
-                  latestNav = null;
-                }
-              } else {
-                baselineNav = priceHistory[0].nav;
-                latestNav = priceHistory[priceHistory.length - 1].nav;
-              }
-
-              if (baselineNav && latestNav && baselineNav > 0) {
-                const navReturn = (latestNav - baselineNav) / baselineNav;
-                currentVal = Number((invested * (1 + navReturn)).toFixed(2));
-                changePct = navReturn * 100;
-              }
-            }
-          } catch (e) {
-            // fallback: currentVal stays as invested
-          }
-        }
+        const currentVal = strategy.currentMarketValue != null
+          ? Number(strategy.currentMarketValue.toFixed(2))
+          : invested;
+        const changePct = invested > 0 ? ((currentVal - invested) / invested) * 100 : 0;
 
         return {
           id: strategy.id,
@@ -115,9 +69,9 @@ export const useUserStrategies = () => {
           lastUpdated: latestMetric?.as_of_date,
           previousMonthChange: parseFloat(changePct.toFixed(1)),
           metrics: latestMetric,
-          firstInvestedDate: purchaseDate || null,
+          firstInvestedDate: strategy.firstInvestedDate || null,
         };
-      }));
+      });
 
       setData({
         strategies: formattedStrategies,

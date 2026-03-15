@@ -3128,9 +3128,9 @@ app.get("/api/user/strategies", async (req, res) => {
       return res.status(500).json({ success: false, error: txError.message });
     }
 
-    // Extract strategy names from transactions
-    const strategyInvestments = {};
+    // Extract strategy names from transactions (for matching and first-date only)
     const strategyFirstDate = {};
+    const strategyTxNames = new Set();
     for (const tx of (transactions || [])) {
       const txName = (tx.name || "").trim();
       let strategyName = null;
@@ -3140,10 +3140,7 @@ app.get("/api/user/strategies", async (req, res) => {
         strategyName = txName.replace("Purchased ", "").trim();
       }
       if (strategyName) {
-        if (!strategyInvestments[strategyName]) {
-          strategyInvestments[strategyName] = 0;
-        }
-        strategyInvestments[strategyName] += Math.abs(tx.amount || 0);
+        strategyTxNames.add(strategyName);
         if (tx.transaction_date) {
           if (!strategyFirstDate[strategyName] || tx.transaction_date < strategyFirstDate[strategyName]) {
             strategyFirstDate[strategyName] = tx.transaction_date;
@@ -3152,9 +3149,33 @@ app.get("/api/user/strategies", async (req, res) => {
       }
     }
 
-    const strategyNames = Object.keys(strategyInvestments);
+    const strategyNames = Array.from(strategyTxNames);
     if (strategyNames.length === 0) {
       return res.status(200).json({ success: true, strategies: [] });
+    }
+
+    // Fetch user's holdings with strategy_id to compute cost basis and live value
+    const { data: userStratHoldings } = await db
+      .from("stock_holdings")
+      .select("id, security_id, strategy_id, quantity, avg_fill")
+      .eq("user_id", userId)
+      .not("strategy_id", "is", null);
+
+    const stratHoldingsByStratId = {};
+    for (const h of (userStratHoldings || [])) {
+      if (!stratHoldingsByStratId[h.strategy_id]) stratHoldingsByStratId[h.strategy_id] = [];
+      stratHoldingsByStratId[h.strategy_id].push(h);
+    }
+
+    // Fetch live prices for those securities
+    const stratSecIds = (userStratHoldings || []).map(h => h.security_id).filter(Boolean);
+    let stratLivePriceMap = {};
+    if (stratSecIds.length > 0) {
+      const { data: stratSecs } = await db
+        .from("securities")
+        .select("id, last_price")
+        .in("id", stratSecIds);
+      (stratSecs || []).forEach(s => { stratLivePriceMap[s.id] = s.last_price || 0; });
     }
 
     // Get all active strategies
@@ -3208,6 +3229,17 @@ app.get("/api/user/strategies", async (req, res) => {
           logo_url: h.logo_url || securitiesMap[h.symbol]?.logo_url || null,
           name: h.name || securitiesMap[h.symbol]?.name || h.symbol,
         }));
+        const stratHoldings = stratHoldingsByStratId[strategy.id] || [];
+        let investedAmount = 0;
+        let currentMarketValue = 0;
+        for (const h of stratHoldings) {
+          const qty = Number(h.quantity || 0);
+          const avgFill = Number(h.avg_fill || 0);
+          const livePrice = stratLivePriceMap[h.security_id] || avgFill;
+          investedAmount += (avgFill * qty) / 100;
+          currentMarketValue += (livePrice * qty) / 100;
+        }
+
         matchedStrategies.push({
           id: strategy.id,
           name: strategy.name,
@@ -3218,7 +3250,8 @@ app.get("/api/user/strategies", async (req, res) => {
           iconUrl: strategy.icon_url,
           imageUrl: strategy.image_url,
           holdings: enrichedHoldings,
-          investedAmount: strategyInvestments[matchKey] / 100,
+          investedAmount,
+          currentMarketValue,
           metrics: latestMetric || null,
           firstInvestedDate: strategyFirstDate[matchKey] || null,
         });
