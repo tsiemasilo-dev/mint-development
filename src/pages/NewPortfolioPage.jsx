@@ -1436,6 +1436,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           strategyId: h.strategyId || null,
           strategyHoldings: h.strategyHoldings || [],
           currentValue: h.currentValue || 0,
+          investedAmount: h.investedAmount || 0,
           change: h.change || 0,
         })).sort((a, b) => b.currentValue - a.currentValue);
 
@@ -1755,12 +1756,18 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                           const matchedHolding = (rawHoldings || []).find(h => h.symbol === c.symbol);
                           const matchedStock = stocksList?.find(s => s.ticker === c.symbol);
                           const logo = matchedHolding?.logo || matchedStock?.logo || null;
-                          const totalW = stock.strategyHoldings.reduce((s, x) => s + (x.weight || 0), 0) || 100;
-                          const fraction = (c.weight || 0) / totalW;
-                          const constituentCurrentVal = stock.currentValue * fraction;
-                          const constituentCostBasis = (stock.investedAmount || stock.currentValue) * fraction;
-                          const pnlRands = constituentCurrentVal - constituentCostBasis;
-                          const pnlPct = constituentCostBasis > 0 ? (pnlRands / constituentCostBasis) * 100 : 0;
+                          let pnlRands, pnlPct;
+                          if (c.pnlRands != null) {
+                            pnlRands = c.pnlRands;
+                            pnlPct = c.pnlPct ?? 0;
+                          } else {
+                            const totalW = stock.strategyHoldings.reduce((s, x) => s + (x.weight || 0), 0) || 100;
+                            const fraction = (c.weight || 0) / totalW;
+                            const constituentCurrentVal = stock.currentValue * fraction;
+                            const constituentCostBasis = (stock.investedAmount || stock.currentValue) * fraction;
+                            pnlRands = constituentCurrentVal - constituentCostBasis;
+                            pnlPct = constituentCostBasis > 0 ? (pnlRands / constituentCostBasis) * 100 : 0;
+                          }
                           const isGain = pnlRands >= 0;
                           return (
                             <div key={ci} className="rounded-xl bg-white/80 backdrop-blur-sm p-3 border border-slate-100/50 flex items-center gap-3">

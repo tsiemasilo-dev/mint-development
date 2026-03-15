@@ -3170,12 +3170,28 @@ app.get("/api/user/strategies", async (req, res) => {
     // Fetch live prices for those securities
     const stratSecIds = (userStratHoldings || []).map(h => h.security_id).filter(Boolean);
     let stratLivePriceMap = {};
+    const symbolPnlMap = {};
     if (stratSecIds.length > 0) {
       const { data: stratSecs } = await db
         .from("securities")
-        .select("id, last_price")
+        .select("id, symbol, last_price")
         .in("id", stratSecIds);
       (stratSecs || []).forEach(s => { stratLivePriceMap[s.id] = s.last_price || 0; });
+
+      // Build per-symbol P&L from actual user holdings
+      for (const h of (userStratHoldings || [])) {
+        const sec = (stratSecs || []).find(s => s.id === h.security_id);
+        if (!sec) continue;
+        const qty = Number(h.quantity || 0);
+        const avgFill = Number(h.avg_fill || 0);
+        const livePrice = sec.last_price || avgFill;
+        symbolPnlMap[sec.symbol] = {
+          pnlRands: ((livePrice - avgFill) * qty) / 100,
+          pnlPct: avgFill > 0 ? ((livePrice - avgFill) / avgFill) * 100 : 0,
+          currentValue: (livePrice * qty) / 100,
+          costBasis: (avgFill * qty) / 100,
+        };
+      }
     }
 
     // Get all active strategies
@@ -3224,11 +3240,18 @@ app.get("/api/user/strategies", async (req, res) => {
       if (matchKey) {
         const metrics = strategy.strategy_metrics;
         const latestMetric = Array.isArray(metrics) ? metrics[0] : metrics;
-        const enrichedHoldings = (strategy.holdings || []).map(h => ({
-          ...h,
-          logo_url: h.logo_url || securitiesMap[h.symbol]?.logo_url || null,
-          name: h.name || securitiesMap[h.symbol]?.name || h.symbol,
-        }));
+        const enrichedHoldings = (strategy.holdings || []).map(h => {
+          const pnlData = symbolPnlMap[h.symbol] || null;
+          return {
+            ...h,
+            logo_url: h.logo_url || securitiesMap[h.symbol]?.logo_url || null,
+            name: h.name || securitiesMap[h.symbol]?.name || h.symbol,
+            pnlRands: pnlData ? pnlData.pnlRands : null,
+            pnlPct: pnlData ? pnlData.pnlPct : null,
+            currentValue: pnlData ? pnlData.currentValue : null,
+            costBasis: pnlData ? pnlData.costBasis : null,
+          };
+        });
         const stratHoldings = stratHoldingsByStratId[strategy.id] || [];
         let investedAmount = 0;
         let currentMarketValue = 0;
