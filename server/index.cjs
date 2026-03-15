@@ -4544,20 +4544,31 @@ app.get("/api/onboarding/status", async (req, res) => {
 
     let is_fully_onboarded = false;
     if (data) {
-      const kycDone = ["approved", "onboarding_complete", "verified"].includes(data.kyc_status);
-      let taxDone = false, bankDone = false, mandateAgreed = false, riskDone = false, sofDone = false, termsDone = false;
-      if (data.sumsub_raw) {
-        try {
-          const raw = typeof data.sumsub_raw === "string" ? JSON.parse(data.sumsub_raw) : data.sumsub_raw;
-          taxDone = !!raw?.tax_details_saved;
-          bankDone = !!raw?.bank_details_saved;
-          mandateAgreed = !!raw?.mandate_data?.agreedMandate || !!raw?.mandate_accepted;
-          riskDone = !!raw?.risk_disclosure_accepted;
-          sofDone = !!raw?.source_of_funds_accepted;
-          termsDone = !!raw?.terms_accepted;
-        } catch {}
+      // "onboarding_complete" is only ever written by AccountAgreementStep.handleSign()
+      // after the user physically signs — it is definitive proof of full completion.
+      if (data.kyc_status === "onboarding_complete") {
+        is_fully_onboarded = true;
+      } else {
+        const kycDone = data.kyc_status === "approved" || data.kyc_status === "verified";
+        let taxDone = false, bankDone = false, mandateAgreed = false, riskDone = false, sofDone = false, termsDone = false;
+        if (data.sumsub_raw) {
+          try {
+            const raw = typeof data.sumsub_raw === "string" ? JSON.parse(data.sumsub_raw) : data.sumsub_raw;
+            if (kycDone && raw?.signed_at) {
+              taxDone = true; bankDone = true; mandateAgreed = true;
+              riskDone = true; sofDone = true; termsDone = true;
+            } else {
+              taxDone = !!raw?.tax_details_saved;
+              bankDone = !!raw?.bank_details_saved;
+              mandateAgreed = !!raw?.mandate_data?.agreedMandate || !!raw?.mandate_accepted;
+              riskDone = !!raw?.risk_disclosure_accepted;
+              sofDone = !!raw?.source_of_funds_accepted;
+              termsDone = !!raw?.terms_accepted;
+            }
+          } catch {}
+        }
+        is_fully_onboarded = kycDone && taxDone && bankDone && mandateAgreed && riskDone && sofDone && termsDone;
       }
-      is_fully_onboarded = kycDone && taxDone && bankDone && mandateAgreed && riskDone && sofDone && termsDone;
     }
 
     res.json({

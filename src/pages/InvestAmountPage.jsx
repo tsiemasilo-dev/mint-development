@@ -23,7 +23,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
   const [showMandateModal, setShowMandateModal] = useState(false);
   const [feeExpanded, setFeeExpanded] = useState(false);
   
-  const [kycStatus, setKycStatus] = useState(null);
+  const [isFullyOnboarded, setIsFullyOnboarded] = useState(false);
   const [isLoadingStatus, setIsLoadingStatus] = useState(true);
 
   useEffect(() => {
@@ -41,7 +41,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
         if (res.ok) {
           const json = await res.json();
           if (isMounted) {
-            setKycStatus(json.onboarding?.kyc_status || 'unverified');
+            setIsFullyOnboarded(json.is_fully_onboarded === true);
           }
         }
       } catch (err) {
@@ -165,7 +165,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
               <button
                 type="button"
                 onClick={handleDecrement}
-                disabled={!minimumInvestment || amount <= minimumInvestment || kycStatus !== 'approved'}
+                disabled={!minimumInvestment || amount <= minimumInvestment || !isFullyOnboarded}
                 className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:enabled:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition"
               >
                 <Minus className="h-5 w-5" />
@@ -179,7 +179,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
               <button
                 type="button"
                 onClick={handleIncrement}
-                disabled={kycStatus !== 'approved'}
+                disabled={!isFullyOnboarded}
                 className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] text-white hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition"
               >
                 <Plus className="h-5 w-5" />
@@ -279,7 +279,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
         </div>
 
         {/* Continue Button or Block */}
-        {!isLoadingStatus && kycStatus !== 'approved' ? (
+        {!isLoadingStatus && !isFullyOnboarded ? (
           <div className="w-full rounded-2xl border border-rose-200 bg-rose-50 p-4 text-center">
             <h3 className="text-sm font-semibold text-rose-800 mb-2">Onboarding Required</h3>
             <p className="text-xs text-rose-700 mb-4">

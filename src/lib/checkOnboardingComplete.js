@@ -19,15 +19,24 @@ export function parseOnboardingFlags(record) {
   let sofDone = false;
   let termsDone = false;
 
-  if (record?.sumsub_raw) {
+  // "onboarding_complete" is only written by the signing step — definitive proof of full completion.
+  if (record?.kyc_status === "onboarding_complete") {
+    taxDone = true; bankDone = true; mandateAgreed = true;
+    riskDone = true; sofDone = true; termsDone = true;
+  } else if (record?.sumsub_raw) {
     try {
       const raw = typeof record.sumsub_raw === "string" ? JSON.parse(record.sumsub_raw) : record.sumsub_raw;
-      taxDone = !!raw?.tax_details_saved;
-      bankDone = !!raw?.bank_details_saved;
-      mandateAgreed = !!raw?.mandate_data?.agreedMandate || !!raw?.mandate_accepted;
-      riskDone = !!raw?.risk_disclosure_accepted;
-      sofDone = !!raw?.source_of_funds_accepted;
-      termsDone = !!raw?.terms_accepted;
+      if (kycDone && raw?.signed_at) {
+        taxDone = true; bankDone = true; mandateAgreed = true;
+        riskDone = true; sofDone = true; termsDone = true;
+      } else {
+        taxDone = !!raw?.tax_details_saved;
+        bankDone = !!raw?.bank_details_saved;
+        mandateAgreed = !!raw?.mandate_data?.agreedMandate || !!raw?.mandate_accepted;
+        riskDone = !!raw?.risk_disclosure_accepted;
+        sofDone = !!raw?.source_of_funds_accepted;
+        termsDone = !!raw?.terms_accepted;
+      }
     } catch {}
   }
 
