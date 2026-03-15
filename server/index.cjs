@@ -2624,6 +2624,7 @@ app.post("/api/record-investment", async (req, res) => {
           unrealized_pnl: 0,
           as_of_date: new Date().toISOString().split("T")[0],
           Status: "active",
+          strategy_id: strategyId || null,
         };
         console.log("[record-investment] Insert data:", JSON.stringify(holdingData));
         const { data, error } = await db
@@ -2638,8 +2639,76 @@ app.post("/api/record-investment", async (req, res) => {
         console.error("[record-investment] HOLDING UPSERT FAILED:", JSON.stringify(holdingResult.error));
         return res.status(500).json({ success: false, error: holdingResult.error.message });
       }
-    } else {
-      console.log("[record-investment] Security NOT in securities table (likely strategy-only investment). No stock_holdings will be created.");
+    } else if (isStrategyInvestment) {
+      console.log("[record-investment] Strategy selected. Breaking down and allocating constituent holdings.");
+      
+      const { data: stratData, error: stratError } = await db
+        .from("strategies")
+        .select("holdings")
+        .eq("id", strategyId)
+        .maybeSingle();
+
+      if (!stratError && stratData?.holdings && Array.isArray(stratData.holdings) && stratData.holdings.length > 0) {
+        const holdingsArr = stratData.holdings;
+        const holdingSymbols = holdingsArr.map(h => h.symbol).filter(Boolean);
+        
+        if (holdingSymbols.length > 0) {
+          const { data: secs } = await db
+            .from("securities")
+            .select("id, symbol, last_price")
+            .in("symbol", holdingSymbols);
+            
+          if (secs && secs.length > 0) {
+            const amountPerSecurityCents = Math.round((amount * 100) / secs.length);
+            const amountPerSecurityRands = amount / secs.length;
+            
+            for (const sec of secs) {
+              const secId = sec.id;
+              const secCurrentPriceCents = sec.last_price ? Number(sec.last_price) : null;
+              const secCurrentPriceRands = secCurrentPriceCents ? secCurrentPriceCents / 100 : amountPerSecurityRands;
+              
+              const secQty = secCurrentPriceRands > 0 ? amountPerSecurityRands / secCurrentPriceRands : 1;
+              const secAvgFillCents = secCurrentPriceCents || amountPerSecurityCents;
+              const secMarketValueCents = Math.round(secQty * secAvgFillCents);
+              
+              const { data: existingSecHolding } = await db
+                .from("stock_holdings")
+                .select("id, quantity, avg_fill")
+                .eq("user_id", userId)
+                .eq("security_id", secId)
+                .maybeSingle();
+                
+              if (existingSecHolding) {
+                const oldQty = Number(existingSecHolding.quantity || 0);
+                const oldAvgFill = Number(existingSecHolding.avg_fill || 0);
+                const newQty = oldQty + secQty;
+                const newAvgFill = newQty > 0 ? ((oldAvgFill * oldQty) + (secAvgFillCents * secQty)) / newQty : secAvgFillCents;
+                const newMarketValue = Math.round(newQty * (secCurrentPriceCents || newAvgFill));
+                
+                await db.from("stock_holdings").update({
+                  quantity: newQty,
+                  avg_fill: Math.round(newAvgFill),
+                  market_value: newMarketValue,
+                  as_of_date: new Date().toISOString().split("T")[0],
+                  updated_at: new Date().toISOString(),
+                }).eq("id", existingSecHolding.id);
+              } else {
+                await db.from("stock_holdings").insert({
+                  user_id: userId,
+                  security_id: secId,
+                  quantity: secQty,
+                  avg_fill: secAvgFillCents,
+                  market_value: secMarketValueCents,
+                  unrealized_pnl: 0,
+                  as_of_date: new Date().toISOString().split("T")[0],
+                  Status: "active",
+                  strategy_id: strategyId,
+                });
+              }
+            }
+          }
+        }
+      }
     }
 
     console.log("[record-investment] isStrategyInvestment:", isStrategyInvestment);

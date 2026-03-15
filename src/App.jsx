@@ -264,6 +264,21 @@ const App = () => {
   }, [currentPage]);
 
   useEffect(() => {
+    const handleNavigationEvent = (e) => {
+      const page = e.detail?.page;
+      if (page) {
+        if (page === 'userOnboarding') {
+          setNotificationReturnPage(currentPage);
+        }
+        navigateTo(page);
+      }
+    };
+    
+    window.addEventListener('navigate-within-app', handleNavigationEvent);
+    return () => window.removeEventListener('navigate-within-app', handleNavigationEvent);
+  }, [navigateTo, currentPage]);
+
+  useEffect(() => {
     if (Capacitor.isNativePlatform()) return;
 
     window.history.replaceState({ mintPage: 'root' }, '');

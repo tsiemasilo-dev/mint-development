@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { ArrowLeft, Info, Plus, Minus, ChevronDown, ChevronUp, X } from "lucide-react";
 import { formatCurrency } from "../lib/formatCurrency";
 import PdfViewer from "../components/PdfViewer";
+import { supabase } from "../lib/supabase";
 
 const BROKER_FEE_RATE = 0.0025;
 const ISIN_FEE_PER_ASSET = 62;
@@ -21,6 +22,40 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
   const [agreementChecked, setAgreementChecked] = useState(false);
   const [showMandateModal, setShowMandateModal] = useState(false);
   const [feeExpanded, setFeeExpanded] = useState(false);
+  
+  const [kycStatus, setKycStatus] = useState(null);
+  const [isLoadingStatus, setIsLoadingStatus] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    const checkStatus = async () => {
+      try {
+        if (!supabase) return;
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+
+        const res = await fetch("/api/onboarding/status", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+
+        if (res.ok) {
+          const json = await res.json();
+          if (isMounted) {
+            setKycStatus(json.onboarding?.kyc_status || 'unverified');
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch onboarding status:", err);
+      } finally {
+        if (isMounted) {
+          setIsLoadingStatus(false);
+        }
+      }
+    };
+    
+    checkStatus();
+    return () => { isMounted = false; };
+  }, []);
 
   const holdingsData = currentStrategy.holdingsWithLogos || currentStrategy.holdings || [];
   const numAssets = holdingsData.length || 1;
@@ -130,7 +165,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
               <button
                 type="button"
                 onClick={handleDecrement}
-                disabled={!minimumInvestment || amount <= minimumInvestment}
+                disabled={!minimumInvestment || amount <= minimumInvestment || kycStatus !== 'approved'}
                 className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:enabled:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition"
               >
                 <Minus className="h-5 w-5" />
@@ -144,7 +179,8 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
               <button
                 type="button"
                 onClick={handleIncrement}
-                className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] text-white hover:shadow-lg transition"
+                disabled={kycStatus !== 'approved'}
+                className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] text-white hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition"
               >
                 <Plus className="h-5 w-5" />
               </button>
@@ -242,15 +278,39 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
           </p>
         </div>
 
-        {/* Continue Button */}
-        <button
-          type="button"
-          onClick={() => onContinue?.(fees.totalCost, amount)}
-          disabled={!agreementChecked}
-          className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3 text-sm font-semibold text-white shadow-lg shadow-violet-200/60 disabled:opacity-50 disabled:cursor-not-allowed hover:enabled:-translate-y-0.5 transition"
-        >
-          Continue
-        </button>
+        {/* Continue Button or Block */}
+        {!isLoadingStatus && kycStatus !== 'approved' ? (
+          <div className="w-full rounded-2xl border border-rose-200 bg-rose-50 p-4 text-center">
+            <h3 className="text-sm font-semibold text-rose-800 mb-2">Onboarding Required</h3>
+            <p className="text-xs text-rose-700 mb-4">
+              You must complete your profile setup and verify your identity before investing in strategies.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                // You can emit a custom event or trigger a callback to navigate to onboarding
+                // the previous page wrapper accepts an onNavigateToOnboarding if we need to pass it
+                // but for now, we'll try to trigger a navigation to userOnboarding via a standard event if feasible
+                if (window.location) {
+                   const navEvent = new CustomEvent('navigate-within-app', { detail: { page: 'userOnboarding' } });
+                   window.dispatchEvent(navEvent);
+                }
+              }}
+              className="w-full rounded-xl bg-rose-600 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-rose-700 transition"
+            >
+              Complete Onboarding
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onContinue?.(fees.totalCost, amount)}
+            disabled={!agreementChecked || isLoadingStatus}
+            className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3 text-sm font-semibold text-white shadow-lg shadow-violet-200/60 disabled:opacity-50 disabled:cursor-not-allowed hover:enabled:-translate-y-0.5 transition"
+          >
+            {isLoadingStatus ? "Checking status..." : "Continue"}
+          </button>
+        )}
       </div>
     </div>
   );

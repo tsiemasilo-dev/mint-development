@@ -14,7 +14,7 @@ export default async function handler(req, res) {
     const { data: { user }, error: authErr } = await db.auth.getUser(token);
     if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
 
-    const { existing_onboarding_id, bank_name, bank_account_number, bank_branch_code } = req.body;
+    const { existing_onboarding_id, bank_name, bank_account_number, bank_branch_code, tax_number } = req.body;
     const userId = user.id;
 
     try {
@@ -96,7 +96,7 @@ export default async function handler(req, res) {
       if (inserted?.[0]?.id) onboardingId = inserted[0].id;
     }
 
-    if (bankDetails && onboardingId) {
+    if ((bankDetails || tax_number) && onboardingId) {
       try {
         const { data: current } = await db
           .from("user_onboarding")
@@ -108,14 +108,21 @@ export default async function handler(req, res) {
         if (current?.sumsub_raw) {
           rawData = typeof current.sumsub_raw === "string" ? JSON.parse(current.sumsub_raw) : current.sumsub_raw;
         }
-        rawData.bank_details = bankDetails;
+        
+        if (bankDetails) {
+          rawData.bank_details = bankDetails;
+        }
+        
+        if (tax_number) {
+          rawData.tax_details = { tax_number, savedAt: new Date().toISOString() };
+        }
 
         await db
           .from("user_onboarding")
           .update({ sumsub_raw: JSON.stringify(rawData) })
           .eq("id", onboardingId);
       } catch (rawErr) {
-        console.warn("[Onboarding] Failed to save bank details to sumsub_raw:", rawErr?.message);
+        console.warn("[Onboarding] Failed to save bank/tax details to sumsub_raw:", rawErr?.message);
       }
     }
 

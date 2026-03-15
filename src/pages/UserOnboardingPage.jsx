@@ -159,6 +159,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const [mandateDone, setMandateDone] = useState(false);
   const [riskDone, setRiskDone] = useState(false);
   const [sofDone, setSofDone] = useState(false);
+  const [taxDone, setTaxDone] = useState(false);
+  const [taxNumber, setTaxNumber] = useState("");
   const [termsDone, setTermsDone] = useState(false);
   const [authStatus, setAuthStatus] = useState({
     isChecked: false,
@@ -241,16 +243,17 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
     const steps = [
       { step: 1, done: identityCheckDone },
       { step: 2, done: kycAlreadyVerified },
-      { step: 3, done: bankDone },
-      { step: 4, done: mandateDone },
-      { step: 5, done: riskDone },
-      { step: 6, done: sofDone },
-      { step: 7, done: termsDone },
+      { step: 3, done: taxDone },
+      { step: 4, done: bankDone },
+      { step: 5, done: mandateDone },
+      { step: 6, done: riskDone },
+      { step: 7, done: sofDone },
+      { step: 8, done: termsDone },
     ];
     for (const s of steps) {
       if (s.step > afterStep && !s.done && s.step !== justCompletedStep) return s.step;
     }
-    return 8;
+    return 9;
   };
 
   const handleContinue = async () => {
@@ -323,10 +326,11 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const getPrevIncompleteStep = (beforeStep) => {
     const identityCheckDone = !!existingOnboardingId || kycAlreadyVerified;
     const steps = [
-      { step: 6, done: sofDone },
-      { step: 5, done: riskDone },
-      { step: 4, done: mandateDone },
-      { step: 3, done: bankDone },
+      { step: 7, done: sofDone },
+      { step: 6, done: riskDone },
+      { step: 5, done: mandateDone },
+      { step: 4, done: bankDone },
+      { step: 3, done: taxDone },
       { step: 2, done: kycAlreadyVerified },
       { step: 1, done: identityCheckDone },
     ];
@@ -505,6 +509,10 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
           }
           let raw = {};
           try { raw = typeof record.sumsub_raw === "string" ? JSON.parse(record.sumsub_raw) : (record.sumsub_raw || {}); } catch {}
+          if (raw.tax_details?.tax_number) {
+            setTaxNumber(raw.tax_details.tax_number);
+            setTaxDone(true);
+          }
           if (raw.mandate_data?.agreedMandate === true || raw.mandate_accepted === true) setMandateDone(true);
           if (raw.risk_disclosure_accepted === true) setRiskDone(true);
           if (raw.source_of_funds_accepted === true) setSofDone(true);
@@ -523,7 +531,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
     if (step !== 2) {
       setShowProceed(false);
     }
-    if (step !== 7) {
+    if (step !== 8) {
       setAgreedTerms(false);
       setAgreedPrivacy(false);
     }
@@ -599,6 +607,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
           expected_monthly_investment: expectedMonthlyInvestment || null,
           agreed_terms: agreedTerms || false,
           agreed_privacy: agreedPrivacy || false,
+          tax_number: taxNumber || null,
           bank_name: bankName || null,
           bank_account_number: bankAccountNumber || null,
           bank_branch_code: bankBranchCode || null,
@@ -716,6 +725,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 const steps = [
                   { done: identityCheckDone, title: "Identity Check", doneDesc: "ID number confirmed", pendingDesc: "Confirm your ID number is unique in our records", badge: "Confirmed" },
                   { done: kycAlreadyVerified, title: "Identification", doneDesc: "Identity verification complete", pendingDesc: "Verify your identity for security purposes", badge: "Verified" },
+                  { done: taxDone, title: "Tax Details", doneDesc: "Tax details captured", pendingDesc: "Provide your tax reference number", badge: "Captured" },
                   { done: bankDone, title: "Bank Account", doneDesc: "Bank details saved", pendingDesc: "Add your bank account details", badge: "Saved" },
                   { done: mandateDone, title: "Discretionary Mandate", doneDesc: "Mandate accepted", pendingDesc: "Review and accept the FSP investment mandate", badge: "Accepted" },
                   { done: riskDone, title: "Risk Disclosure", doneDesc: "Risk disclosure acknowledged", pendingDesc: "Review investment risk disclosure", badge: "Acknowledged" },
@@ -768,7 +778,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
               <div className="text-center mt-6 animate-fade-in delay-4">
                 <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  You'll be taken through our seven-step process
+                  You'll be taken through our eight-step process
                 </p>
               </div>
             </div>
@@ -779,7 +789,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   className="text-xs uppercase tracking-[0.2em] mb-2"
                   style={{ color: "hsl(270 20% 55%)" }}
                 >
-                  Step 1 of 7
+                  Step 1 of 8
                 </p>
                 <h2
                   className="text-3xl font-light tracking-tight mb-2"
@@ -836,7 +846,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   className="text-xs uppercase tracking-[0.2em] mb-2"
                   style={{ color: "hsl(270 20% 55%)" }}
                 >
-                  Step 2 of 7
+                  Step 2 of 8
                 </p>
                 <h2
                   className="text-3xl font-light tracking-tight mb-2"
@@ -900,6 +910,59 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               )}
             </div>
           ) : step === 3 ? (
+            <div className="w-full max-w-xl mx-auto">
+              <div className="text-center mb-8 animate-fade-in delay-1">
+                <p className="text-xs uppercase tracking-[0.2em] mb-2" style={{ color: "hsl(270 20% 55%)" }}>
+                  Step 3 of 8
+                </p>
+                <div className="hero-icon">
+                  <FileContractIcon width={48} height={48} />
+                </div>
+                <h2 className="text-3xl font-light tracking-tight mb-2" style={{ color: "hsl(270 30% 25%)" }}>
+                  Tax Information
+                </h2>
+                <p className="text-sm" style={{ color: "hsl(270 20% 50%)" }}>
+                  Please provide your Tax Reference Number for compliance
+                </p>
+              </div>
+
+              <div className="space-y-6">
+                <div className="animate-fade-in delay-2">
+                  <label htmlFor="tax-number">Tax Reference Number</label>
+                  <div className="glass-field">
+                    <input
+                      type="text"
+                      id="tax-number"
+                      placeholder="Enter your 10-digit tax number"
+                      value={taxNumber}
+                      onChange={(event) => setTaxNumber(event.target.value.replace(/\D/g, "").slice(0, 10))}
+                      inputMode="numeric"
+                      autoComplete="off"
+                    />
+                  </div>
+                  <p className="text-xs mt-2" style={{ color: "hsl(270 15% 60%)" }}>
+                    Your tax number is required by SARS for investment reporting.
+                  </p>
+                </div>
+
+                <div className="pt-4 text-center animate-fade-in delay-3">
+                  <button
+                    type="button"
+                    className="continue-button"
+                    onClick={() => {
+                      if (taxNumber && taxNumber.length > 5) {
+                        setTaxDone(true);
+                        goToStep(getNextIncompleteStep(3));
+                      }
+                    }}
+                    disabled={!taxNumber || taxNumber.length < 5}
+                  >
+                    Continue
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : step === 4 ? (
             <div className="w-full max-w-3xl mx-auto bank-step-wrapper">
               <div className="text-center animate-fade-in delay-1">
                 <div className="hero-icon">
