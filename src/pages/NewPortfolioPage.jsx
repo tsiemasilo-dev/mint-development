@@ -1503,6 +1503,8 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           currentValue: h.currentValue || 0,
           investedAmount: h.investedAmount || 0,
           change: h.change || 0,
+          isPending: h.isPending || false,
+          settlement_status: h.settlement_status || null,
         })).sort((a, b) => b.currentValue - a.currentValue);
 
         const flatPieData = (() => {
