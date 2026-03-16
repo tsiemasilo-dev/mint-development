@@ -90,10 +90,9 @@ export default async function handler(req, res) {
       .map(h => {
         const sec = securitiesMap[h.security_id];
         const priceData = latestPricesMap[h.security_id];
-        const livePrice = priceData?.latestPrice ?? sec?.last_price ?? 0;
-        const prevPrice = priceData?.prevPrice ?? livePrice;
-        const dailyChange = livePrice - prevPrice;
-        const dailyChangePct = prevPrice > 0 ? (dailyChange / prevPrice) * 100 : 0;
+        const livePrice = sec?.last_price ?? priceData?.latestPrice ?? 0;
+        const dailyChange = sec?.change_price ?? (livePrice - (priceData?.prevPrice ?? livePrice));
+        const dailyChangePct = sec?.change_percent ?? (priceData?.prevPrice > 0 ? (dailyChange / priceData.prevPrice) * 100 : 0);
         const quantity = h.quantity || 0;
         const avgFill = Number(h.avg_fill || 0);
         const isPending = !avgFill || avgFill === 0;

@@ -56,6 +56,7 @@ export function setupRealtimePrices() {
         if (
           changed.last_price !== undefined ||
           changed.change_price !== undefined ||
+          changed.change_percent !== undefined ||
           changed.change_percentage !== undefined
         ) {
           console.log("[realtime-prices] Security price updated:", changed.symbol || changed.id);
