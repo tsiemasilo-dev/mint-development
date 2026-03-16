@@ -132,6 +132,14 @@ export const useFinancialData = () => {
     fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") fetchData();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [fetchData]);
+
   return { ...data, refetch: fetchData };
 };
 
@@ -209,6 +217,12 @@ export const useMintBalance = () => {
     };
 
     fetchBalance();
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") fetchBalance();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, []);
 
   return data;
@@ -428,6 +442,14 @@ export const useInvestments = () => {
 
   useEffect(() => {
     fetchInvestments();
+  }, [fetchInvestments]);
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") fetchInvestments();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, [fetchInvestments]);
 
   return { ...data, refetch: fetchInvestments };

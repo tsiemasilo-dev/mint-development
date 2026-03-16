@@ -164,6 +164,8 @@ const SwipeableBalanceCard = ({
 
   const isVisible = true;
 
+  const loadDataRef = React.useRef(null);
+
   useEffect(() => {
     const loadData = async () => {
       if (!userId) return;
@@ -236,7 +238,15 @@ const SwipeableBalanceCard = ({
       });
       setLoading(false);
     };
+
+    loadDataRef.current = loadData;
     loadData();
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") loadDataRef.current?.();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, [userId, lastUpdated]);
 
   useEffect(() => {
@@ -613,14 +623,17 @@ const SwipeableBalanceCard = ({
                 <p className="text-[10px] uppercase tracking-widest text-slate-500 font-medium mb-1.5">
                   {selectedAsset ? selectedAsset.symbol : "portfolio value"}
                 </p>
-                <div className="flex items-center gap-2 mb-1.5">
+                <div className="flex items-center gap-2 mb-1">
                   <span className="text-base font-semibold">
                     {isVisible ? formatKMB(displayMarketValue) : masked}
                   </span>
                   <span className="px-1.5 py-0.5 rounded-full bg-slate-100 text-[8px] font-medium uppercase text-slate-500 border border-slate-200">
-                    {isVisible ? formatKMB(displayInvested) : masked}(inv)
+                    {isVisible ? formatKMB(displayInvested) : masked} cost
                   </span>
                 </div>
+                <p className="text-[9px] uppercase tracking-widest text-slate-400 font-medium mb-0.5">
+                  {isLoss ? "Loss" : "Gain"}
+                </p>
                 <div className="flex items-center gap-2">
                   <span
                     className={`text-sm font-semibold ${isLoss ? "text-rose-400" : "text-emerald-400"}`}
