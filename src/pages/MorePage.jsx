@@ -26,9 +26,8 @@ const MorePage = ({ onNavigate }) => {
   const { bankLinked } = useRequiredActions();
   const { kycVerified, kycPending, kycNeedsResubmission } = useSumsubStatus();
 
-  const displayName = [profile?.first_name, profile?.last_name]
-    .filter(Boolean)
-    .join(" ");
+  const displayName = [profile?.first_name || profile?.firstName, profile?.last_name || profile?.lastName]
+    .filter(Boolean).join(" ");
   const displayUsername = profile?.email
     ? `@${profile.email.split("@")[0]}`
     : "";

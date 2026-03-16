@@ -10,8 +10,11 @@ function getSupabaseAdmin() {
 }
 
 function getResend() {
-  if (!process.env.RESEND_API_KEY) throw new Error("RESEND_API_KEY is not set");
-  return new Resend(process.env.RESEND_API_KEY);
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    return null;
+  }
+  return new Resend(apiKey);
 }
 
 function parseArticleSections(bodyText) {
@@ -551,6 +554,11 @@ export default async function handler(req, res) {
     }
 
     const resend = getResend();
+    if (!resend) {
+      console.warn("[MINT MORNINGS] RESEND_API_KEY not set. Cron job will not send emails.");
+      return res.status(503).json({ error: "Email service not configured", sent: 0 });
+    }
+
     const articles = await fetchTodaysArticles(supabaseAdmin);
 
     if (articles.length === 0) {

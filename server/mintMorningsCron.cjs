@@ -3,7 +3,10 @@ const { Resend } = require('resend');
 let _resend = null;
 function getResend() {
   if (!_resend) {
-    if (!process.env.RESEND_API_KEY) throw new Error('RESEND_API_KEY is not set');
+    if (!process.env.RESEND_API_KEY) {
+      // Return null instead of throwing an error to allow the app to run.
+      return null;
+    }
     _resend = new Resend(process.env.RESEND_API_KEY);
   }
   return _resend;
@@ -476,14 +479,14 @@ ${restArticleCards}
 }
 
 async function sendEmailToAllUsers(supabaseAdmin, article) {
-  if (!process.env.RESEND_API_KEY) {
-    console.error('[MINT MORNINGS] No RESEND_API_KEY configured');
+  const resend = getResend();
+  if (!resend) {
+    console.warn('[MINT MORNINGS] No RESEND_API_KEY configured, cannot send emails.');
     return;
   }
 
   const docId = article.doc_id;
   console.log(`[MINT MORNINGS] Sending article doc_id=${docId} "${article.title}" to all users...`);
-
   const html = buildMintMorningsHtml([article]);
 
   const { data: { users }, error: usersError } = await supabaseAdmin.auth.admin.listUsers();
@@ -507,7 +510,7 @@ async function sendEmailToAllUsers(supabaseAdmin, article) {
   for (let i = 0; i < confirmedUsers.length; i++) {
     const user = confirmedUsers[i];
     try {
-      const resp = await getResend().emails.send({
+      const resp = await resend.emails.send({
         from: 'MINT MORNINGS <mornings@mymint.co.za>',
         to: [user.email],
         subject: `MINT MORNINGS — ${article.title}`,
@@ -671,8 +674,8 @@ function startMintMorningsListener(supabaseAdmin) {
     return null;
   }
 
-  if (!process.env.RESEND_API_KEY) {
-    console.error('[MINT MORNINGS] No RESEND_API_KEY — listener not started');
+  if (!getResend()) {
+    console.warn('[MINT MORNINGS] No RESEND_API_KEY configured. Mint Mornings email listener will not start.');
     return null;
   }
 
@@ -699,7 +702,8 @@ async function sendTestEmail(supabaseAdmin, testEmail) {
     console.error('[MINT MORNINGS TEST] No Supabase admin client available');
     return { success: false, error: 'No database connection' };
   }
-  if (!process.env.RESEND_API_KEY) {
+  const resend = getResend();
+  if (!resend) {
     console.error('[MINT MORNINGS TEST] No RESEND_API_KEY configured');
     return { success: false, error: 'No RESEND_API_KEY' };
   }
@@ -726,7 +730,7 @@ async function sendTestEmail(supabaseAdmin, testEmail) {
   const html = buildMintMorningsHtml([article]);
 
   try {
-    const resendResponse = await getResend().emails.send({
+    const resendResponse = await resend.emails.send({
       from: 'MINT MORNINGS <mornings@mymint.co.za>',
       to: [testEmail],
       subject: `MINT MORNINGS — ${article.title}`,

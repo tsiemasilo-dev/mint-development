@@ -149,10 +149,11 @@ async function buildPDF({ profile, onboardingData, signatureDataUrl, signedAt, d
     bankName = "", bankAccountNumber = "", bankBranchCode = "",
     taxNumber = "", identityNumber = "",
     sourceOfFunds = "", sourceOfFundsOther = "",
+    bankAccountType = "",
   } = onboardingData;
 
-  const fullName   = [profile?.first_name, profile?.last_name].filter(Boolean).join(" ")
-                     || profile?.full_name || "—";
+  const fullName = [profile?.first_name || profile?.firstName, profile?.last_name || profile?.lastName]
+    .filter(Boolean).join(" ") || profile?.full_name || "—";
   const address    = profile?.address || profile?.physical_address || "—";
   const email      = profile?.email || "—";
   const cell       = profile?.cell_number || profile?.phone || "—";
@@ -190,7 +191,7 @@ async function buildPDF({ profile, onboardingData, signatureDataUrl, signedAt, d
     ["Bank Account Number",            bankAccountNumber || "—"],
     ["Branch Number",                  bankBranchCode || "—"],
     ["Bank Name",                      (bankName || "—").replace(/_/g, " ").toUpperCase()],
-    ["Account Type",                   "SAVINGS"],
+    ["Account Type",                   (bankAccountType || "SAVINGS").toUpperCase()],
     ["Date Signed",                    formatDateLong(signedAt)],
     ["Date Downloaded",                formatDateLong(downloadedAt)],
   ];
@@ -382,7 +383,7 @@ async function buildPDF({ profile, onboardingData, signatureDataUrl, signedAt, d
   const { day, month, year } = todayParts();
   norm(8.5); color(40, 40, 40);
   doc.text(
-    `Signed at _________________________ on this ${day} day of ${month} 20${year}.`,
+    `Signed at MINT PLATFORMS on this ${day} day of ${month} 20${year}.`,
     MARGIN, y,
   );
   y += 10;
@@ -474,6 +475,7 @@ export default function AccountAgreementStep({
     taxNumber = "", identityNumber = "",
     sourceOfFunds = "", sourceOfFundsOther = "",
     expectedMonthlyInvestment = "",
+    bankAccountType = "",
   } = onboardingData;
 
   const taxNo = taxNumber || profile?.tax_number || "—";
@@ -582,13 +584,15 @@ export default function AccountAgreementStep({
         raw.signed_at = now;
         raw.downloaded_at = now;
         if (publicUrl) raw.signed_agreement_url = publicUrl;
-        await supabase.from("user_onboarding").update({
+        const updatePayload = {
           kyc_status: "onboarding_complete",
           sumsub_raw: JSON.stringify(raw),
-        }).eq("user_id", userId);
+        };
+        if (publicUrl) updatePayload.signed_agreement_url = publicUrl;
+        await supabase.from("user_onboarding").update(updatePayload).eq("user_id", userId);
       } catch (dbErr) {
         console.warn("Onboarding DB update failed (non-critical):", dbErr?.message);
-        await supabase.from("user_onboarding").update({ kyc_status: "onboarding_complete" }).eq("user_id", userId);
+        await supabase.from("user_onboarding").update({ kyc_status: "onboarding_complete", signed_agreement_url: publicUrl || null }).eq("user_id", userId);
       }
 
       const token = session?.access_token;
@@ -653,6 +657,7 @@ export default function AccountAgreementStep({
   // Shows all real client data for confirmation before signing
   // ─────────────────────────────────────────────────────────────────────────
   if (phase === "review") {
+    const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : "—");
     const reviewRows = [
       { label: "Full Name",          value: fullName },
       { label: "ID / Reg Number",    value: identityNumber || "—" },
@@ -663,7 +668,7 @@ export default function AccountAgreementStep({
       { label: "Bank Name",          value: (bankName || "—").replace(/_/g, " ").toUpperCase() },
       { label: "Account Number",     value: bankAccountNumber || "—" },
       { label: "Branch Code",        value: bankBranchCode || "—" },
-      { label: "Account Type",       value: "Savings" },
+      { label: "Account Type",       value: capitalize(bankAccountType) },
       { label: "Source of Funds",    value: sourceLabel },
       { label: "Monthly Investment", value: (expectedMonthlyInvestment || "—").replace(/_/g, " ") },
     ];
@@ -693,7 +698,9 @@ export default function AccountAgreementStep({
         </div>
 
         <div className="progress-bar animate-fade-in delay-1">
-          {[...Array(8)].map((_, i) => <div key={i} className="progress-step active" />)}
+          {[...Array(9)].map((_, i) => (
+            <div key={i} className="progress-step active" />
+          ))}
         </div>
 
         {/* Details card */}
@@ -959,7 +966,7 @@ export default function AccountAgreementStep({
             {/* Clause 8 — Signatures preview (auto-filled) */}
             <p><strong style={{ color: purple }}>8. SIGNATURES</strong></p>
             <p>
-              Signed at _________________________ on this <strong>{day}</strong> day of{" "}
+              Signed at <strong>MINT PLATFORMS</strong> on this <strong>{day}</strong> day of{" "}
               <strong>{month}</strong> 20<strong>{year}</strong>.
             </p>
 

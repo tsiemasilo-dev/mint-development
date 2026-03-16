@@ -325,6 +325,12 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
       }
 
       await ensureOnboardingRecord();
+
+      // Save the ID number to the onboarding record we just ensured exists
+      await saveProgressFlag("identity_details_saved", {
+        identity_details: { identity_number: cleanIdNumber, savedAt: new Date().toISOString() },
+      });
+
       if (!kycAlreadyVerified) {
         goToStep(2);
       } else {
@@ -528,6 +534,9 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
           let raw = {};
           try { raw = typeof record.sumsub_raw === "string" ? JSON.parse(record.sumsub_raw) : (record.sumsub_raw || {}); } catch {}
           if (raw.bank_details?.bank_account_name) setBankAccountName(raw.bank_details.bank_account_name);
+          if (raw.identity_details?.identity_number) {
+            setIdentityNumber(raw.identity_details.identity_number);
+          }
           if (raw.bank_details?.bank_account_type) setBankAccountType(raw.bank_details.bank_account_type);
           if (raw.tax_details?.tax_number) {
             setTaxNumber(raw.tax_details.tax_number);
@@ -536,6 +545,12 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
           if (raw.mandate_data?.agreedMandate === true || raw.mandate_accepted === true) setMandateDone(true);
           if (raw.risk_disclosure_accepted === true) setRiskDone(true);
           if (raw.source_of_funds_accepted === true) setSofDone(true);
+          if (raw.source_of_funds_details) {
+            const { source_of_funds, source_of_funds_other, expected_monthly_investment } = raw.source_of_funds_details;
+            if (source_of_funds) setSourceOfFunds(source_of_funds);
+            if (source_of_funds_other) setSourceOfFundsOther(source_of_funds_other);
+            if (expected_monthly_investment) setExpectedMonthlyInvestment(expected_monthly_investment);
+          }
           if (raw.bank_details_saved === true) setBankDone(true);
           if (raw.terms_accepted === true) setTermsDone(true);
         }
@@ -546,6 +561,16 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
     loadExistingOnboarding();
   }, []);
+
+  useEffect(() => {
+    if (!profileLoading && profile && !bankAccountName) {
+      const nameFromProfile = [profile.first_name || profile.firstName, profile.last_name || profile.lastName]
+        .filter(Boolean).join(" ");
+      if (nameFromProfile) {
+        setBankAccountName(nameFromProfile);
+      }
+    }
+  }, [profile, profileLoading, bankAccountName]);
 
   useEffect(() => {
     if (step !== 2) {
@@ -598,8 +623,6 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
       if (onComplete) onComplete();
       return;
     }
-
-    setTermsDone(true);
 
     let completionSuccess = false;
 
@@ -1262,8 +1285,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               {(() => {
                 if (profileLoading) return null;
                 const missingFields = [
-                  !profile?.firstName?.trim() && "First Name",
-                  !profile?.lastName?.trim() && "Surname",
+                  !(profile?.firstName?.trim() || profile?.first_name?.trim()) && "First Name",
+                  !(profile?.lastName?.trim() || profile?.last_name?.trim()) && "Surname",
                   !profile?.idNumber?.trim() && "ID Number",
                   !profile?.address?.trim() && "Address",
                   !profile?.phoneNumber?.trim() && "Cell Number",
@@ -1328,8 +1351,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <div className="animate-fade-in" style={{ marginTop: "10px" }}>
                   {(() => {
                     const missing = [
-                      !profile?.firstName?.trim() && "First Name",
-                      !profile?.lastName?.trim() && "Surname",
+                      !(profile?.firstName?.trim() || profile?.first_name?.trim()) && "First Name",
+                      !(profile?.lastName?.trim() || profile?.last_name?.trim()) && "Surname",
                       !profile?.idNumber?.trim() && "ID Number",
                       !profile?.address?.trim() && "Address",
                       !profile?.phoneNumber?.trim() && "Cell Number",
@@ -1608,7 +1631,16 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                     type="button"
                     className={`continue-button agreement-continue ${sofReady ? "enabled" : ""}`}
                     disabled={!sofReady}
-                    onClick={async () => { await saveProgressFlag("source_of_funds_accepted"); setSofDone(true); goToStep(getNextIncompleteStep(7, 7)); }}
+                  onClick={async () => {
+                    await saveProgressFlag("source_of_funds_accepted", {
+                      source_of_funds_details: {
+                        source_of_funds: sourceOfFunds,
+                        source_of_funds_other: sourceOfFunds === "other" ? sourceOfFundsOther : null,
+                        expected_monthly_investment: expectedMonthlyInvestment,
+                      },
+                    });
+                    setSofDone(true); goToStep(getNextIncompleteStep(7, 7));
+                  }}
                   >
                     Continue
                   </button>
@@ -1740,6 +1772,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 bankName,
                 bankAccountNumber,
                 bankBranchCode,
+                bankAccountType,
                 taxNumber,
                 identityNumber,
                 sourceOfFunds,

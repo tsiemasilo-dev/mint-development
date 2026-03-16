@@ -126,7 +126,7 @@ const StatementsPage = ({ onOpenNotifications }) => {
   const [dateRange, setDateRange] = useState(null);
   const activitySearchRef = useRef(null);
 
-  const displayName = [profile?.firstName, profile?.lastName].filter(Boolean).join(" ");
+  const displayName = [profile?.firstName || profile?.first_name, profile?.lastName || profile?.last_name].filter(Boolean).join(" ");
   const initials = displayName.split(" ").filter(Boolean).slice(0, 2).map((p) => p[0]).join("").toUpperCase();
 
   const mintAccountNumber =

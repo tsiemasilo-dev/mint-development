@@ -140,8 +140,8 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData })
   }, [isGroupValid, activeGroups]);
 
   const {
-    firstName: profileFirstName = "",
-    lastName: profileLastName = "",
+    firstName: profileFirstName,
+    lastName: profileLastName,
     idNumber: profileIdNumber = "",
     address: profileAddress = "",
     phoneNumber: profilePhoneNumber = "",
@@ -151,8 +151,8 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData })
   const getField = (key, profileValue) => editableFields[key] !== undefined ? editableFields[key] : (profileValue || "");
   const isFieldFromProfile = (profileValue) => !!(profileValue && profileValue.trim());
 
-  const firstName = getField("firstName", profileFirstName);
-  const lastName = getField("lastName", profileLastName);
+  const firstName = getField("firstName", profileFirstName || profile?.first_name || "");
+  const lastName = getField("lastName", profileLastName || profile?.last_name || "");
   const idNumber = getField("idNumber", profileIdNumber);
   const address = getField("address", profileAddress);
   const email = getField("email", profileEmail);

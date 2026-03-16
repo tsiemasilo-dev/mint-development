@@ -7,8 +7,7 @@ const ProfileDetailsPage = ({ onNavigate, onBack }) => {
   const { profile, loading } = useProfile();
 
   const displayName = loading
-    ? ""
-    : [profile.firstName, profile.lastName].filter(Boolean).join(" ");
+    ? "" : [profile?.firstName || profile?.first_name, profile?.lastName || profile?.last_name].filter(Boolean).join(" ");
   const initials = displayName
     .split(" ")
     .filter(Boolean)
@@ -64,14 +63,14 @@ const ProfileDetailsPage = ({ onNavigate, onBack }) => {
           <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
             <p className="text-xs uppercase tracking-wide text-slate-400">First name</p>
             <p className="mt-1 text-base font-semibold text-slate-900">
-              {fieldValue(profile.firstName)}
+              {fieldValue(profile?.firstName || profile?.first_name)}
             </p>
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
             <p className="text-xs uppercase tracking-wide text-slate-400">Last name</p>
             <p className="mt-1 text-base font-semibold text-slate-900">
-              {fieldValue(profile.lastName)}
+              {fieldValue(profile?.lastName || profile?.last_name)}
             </p>
           </div>
 
