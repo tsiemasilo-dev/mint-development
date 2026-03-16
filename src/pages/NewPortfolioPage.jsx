@@ -653,7 +653,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
               const totalPnl = displayAccountValue - displayTotalCostBasis;
               const totalPnlPct = displayTotalCostBasis > 0 ? (totalPnl / displayTotalCostBasis) * 100 : 0;
               const isPnlPos = totalPnl >= 0;
-              const balanceDisplay = displayTotalCostBasis;
+              const balanceDisplay = displayTotalCostBasis + totalPnl;
               return (
                 <>
                   <div className="flex items-center gap-3">
@@ -1643,7 +1643,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
               <div className="flex flex-col gap-3">
                 <div>
                   <p className="text-xs text-slate-500 mb-0.5">Total Portfolio Value</p>
-                  <p className="text-2xl font-bold text-slate-900">{formatCurrency(totalCostBasisValue)}</p>
+                  <p className="text-2xl font-bold text-slate-900">{formatCurrency(totalValue)}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <p className="text-3xl font-bold text-slate-900">{totalDistinct}</p>
