@@ -2038,16 +2038,31 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           const mPnlPct = mShowPnl && mCostBasis > 0 ? (mPnl / mCostBasis) * 100 : 0;
           const mLiveChange = liveQuotes[mHolding.ticker]?.changePercent ?? mHolding.change ?? 0;
 
-          // Show P&L (position value − cost basis) for every point in the selected time window.
-          // No purchase-date clipping — the time filter buttons (D/W/M/All) control the window.
-          const mChartData = modalRawChartData.length > 0
+          // Convert purchase date from UTC ISO string to LOCAL midnight timestamp so the
+          // comparison works correctly regardless of timezone (e.g. 23:11 UTC = 01:11 SAST = next local day).
+          const mPurchaseTs = (() => {
+            if (!modalPurchaseDate) return null;
+            const d = new Date(modalPurchaseDate);
+            return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+          })();
+
+          // Keep only chart points on or after the local purchase date.
+          // Falls back to an empty array if bought today and no close price exists yet (e.g. weekend).
+          const mBaseChartData = (() => {
+            if (!modalRawChartData.length) return [];
+            if (!mPurchaseTs) return modalRawChartData;
+            return modalRawChartData.filter(d => (d.timestamp || 0) >= mPurchaseTs);
+          })();
+
+          const mChartData = mBaseChartData.length > 0
             ? (mShowPnl
-                ? modalRawChartData.map(d => ({
+                ? mBaseChartData.map(d => ({
                     ...d,
                     value: Number(((d.value * mQty) - mCostBasis).toFixed(2)),
                   }))
-                : modalRawChartData)
-            : [];
+                : mBaseChartData)
+            // No closes after purchase yet (e.g. bought on weekend): flat line at current P&L.
+            : (mShowPnl ? [{ day: null, value: 0 }, { day: 'Now', value: Number(mPnl.toFixed(2)) }] : []);
           const mAxisConfig = computePnlAxisConfig(mChartData);
           return (
             <>
