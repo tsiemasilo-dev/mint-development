@@ -464,8 +464,8 @@ export default function AccountAgreementStep({
   const [sigEmpty, setSigEmpty] = useState(true);
 
   // ── derive client info ────────────────────────────────────────────────────
-  const fullName = [profile?.first_name, profile?.last_name].filter(Boolean).join(" ")
-                   || profile?.full_name || "—";
+  const fullName = [profile?.first_name || profile?.firstName, profile?.last_name || profile?.lastName]
+    .filter(Boolean).join(" ") || profile?.full_name || "—";
   const address  = profile?.address || profile?.physical_address || "—";
   const email    = profile?.email || "—";
   const cell     = profile?.cell_number || profile?.phone || "—";
