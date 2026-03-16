@@ -392,7 +392,7 @@ const SwipeableBalanceCard = ({
         }));
         let filteredPrices = allMapped.filter((p) => p.ts >= pDateStr);
         if (filteredPrices.length === 0) {
-          filteredPrices = allMapped.length > 0 ? allMapped.slice(-5) : [{ ts: pDateStr, close: avgFillPrice }];
+          filteredPrices = [{ ts: pDateStr, close: avgFillPrice }];
         }
         const today = new Date().toISOString().split("T")[0];
         const lastDate = filteredPrices[filteredPrices.length - 1]?.ts;
