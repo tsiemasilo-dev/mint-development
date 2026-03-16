@@ -80,6 +80,8 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   const [otherStocksPage, setOtherStocksPage] = useState(0);
   const [holdingsPage, setHoldingsPage] = useState(0);
   const [expandedStrategyId, setExpandedStrategyId] = useState(null);
+  const [modalHolding, setModalHolding] = useState(null);
+  const [modalTimeFilter, setModalTimeFilter] = useState("W");
   const expandedRowRef = useRef(null);
   const [tabRipple, setTabRipple] = useState(null);
   const [tabDirection, setTabDirection] = useState(0);
@@ -254,6 +256,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     return holding?.created_at || holding?.as_of_date || null;
   }, [selectedSecurityId, rawHoldings]);
   const { chartData: liveStockChartData, loading: stockChartLoading } = useStockChart(selectedSecurityId, stockTimeFilter, selectedStockPurchaseDate);
+  const { chartData: modalRawChartData, loading: modalChartLoading } = useStockChart(modalHolding?.securityId || null, modalTimeFilter, null);
 
   useEffect(() => {
     if (pricesLastUpdated) {
@@ -1753,17 +1756,9 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                       onClick={() => {
                         if (stock.isStrategy) {
                           setExpandedStrategyId(isExpanded ? null : stock.strategyId);
-                        } else if (onOpenStockDetail) {
-                          const sec = stocksList?.find(s => s.symbol === stock.ticker);
-                          onOpenStockDetail({
-                            ...(sec || {}),
-                            id: stock.securityId || sec?.id,
-                            symbol: stock.ticker,
-                            name: stock.name,
-                            logo_url: stock.logo,
-                            currentPrice: liveQuotes[stock.ticker]?.price || sec?.currentPrice,
-                            changePct: liveQuotes[stock.ticker]?.changePercent ?? stock.change,
-                          });
+                        } else {
+                          setModalHolding(stock);
+                          setModalTimeFilter("W");
                         }
                       }}
                     >
@@ -2012,6 +2007,246 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       })()}
         </motion.div>
       )}
+      </AnimatePresence>
+
+      {/* Holding Stock Chart Modal */}
+      <AnimatePresence>
+        {modalHolding && (() => {
+          const mHolding = modalHolding;
+          const mRawHolding = (rawHoldings || []).find(h => String(h.security_id) === String(mHolding.securityId));
+          const mQty = mRawHolding ? (mRawHolding.quantity || 0) : 0;
+          const mAvgFill = mRawHolding ? (mRawHolding.avg_fill || 0) / 100 : 0;
+          const mCostBasis = mAvgFill * mQty;
+          const mShowPnl = mQty > 0 && mAvgFill > 0;
+          const mMarketValue = mHolding.currentValue || 0;
+          const mPnl = mShowPnl ? mMarketValue - mCostBasis : 0;
+          const mPnlPct = mShowPnl && mCostBasis > 0 ? (mPnl / mCostBasis) * 100 : 0;
+          const mLiveChange = liveQuotes[mHolding.ticker]?.changePercent ?? mHolding.change ?? 0;
+          const mChartData = modalRawChartData.length > 0
+            ? (mShowPnl
+                ? (() => {
+                    const pts = [{ ...modalRawChartData[0], day: null, value: 0 }];
+                    modalRawChartData.forEach(d => {
+                      pts.push({ ...d, value: Number(((d.value * mQty) - mCostBasis).toFixed(2)) });
+                    });
+                    return pts;
+                  })()
+                : modalRawChartData)
+            : (mShowPnl ? [{ day: null, value: 0 }, { day: "Today", value: 0 }] : []);
+          const mAxisConfig = computePnlAxisConfig(mChartData);
+          return (
+            <>
+              <motion.div
+                key="modal-backdrop"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+                onClick={() => setModalHolding(null)}
+              />
+              <motion.div
+                key="modal-sheet"
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+                className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl bg-white/95 backdrop-blur-2xl shadow-2xl"
+                style={{ maxHeight: '88vh', overflowY: 'auto', fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
+                onClick={e => e.stopPropagation()}
+              >
+                {/* Drag handle */}
+                <div className="flex justify-center pt-3 pb-1">
+                  <div className="w-10 h-1 rounded-full bg-slate-200" />
+                </div>
+
+                {/* Header */}
+                <div className="flex items-center justify-between px-5 pt-2 pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-white border border-slate-200 shadow-sm overflow-hidden flex-shrink-0 flex items-center justify-center">
+                      {mHolding.logo && !failedLogos[mHolding.ticker] ? (
+                        <img
+                          src={mHolding.logo}
+                          alt={mHolding.ticker}
+                          className="h-full w-full object-contain"
+                          onError={() => setFailedLogos(prev => ({ ...prev, [mHolding.ticker]: true }))}
+                        />
+                      ) : (
+                        <span className="text-xs font-bold text-slate-500">{(mHolding.ticker || '').slice(0, 2)}</span>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-base font-semibold text-slate-900 leading-tight">{mHolding.name}</p>
+                      <p className="text-xs font-medium text-slate-400">{mHolding.ticker}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setModalHolding(null)}
+                    className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                      <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Value + P&L */}
+                <div className="px-6 mb-3">
+                  {mShowPnl ? (
+                    <>
+                      <p className="text-3xl font-bold text-slate-900">{formatCurrency(mMarketValue)}</p>
+                      <p className={`text-sm mt-0.5 ${mPnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                        {mPnl >= 0 ? '+' : ''}{formatCurrency(mPnl)} ({mPnlPct >= 0 ? '+' : ''}{mPnlPct.toFixed(2)}%) all-time
+                        {' · '}
+                        <span className={mLiveChange >= 0 ? 'text-emerald-500' : 'text-rose-500'}>
+                          {mLiveChange >= 0 ? '+' : ''}{mLiveChange.toFixed(2)}% today
+                        </span>
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-3xl font-bold text-slate-900">{formatCurrency(mMarketValue)}</p>
+                      <p className={`text-sm mt-0.5 ${mLiveChange >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                        {mLiveChange >= 0 ? '+' : ''}{mLiveChange.toFixed(2)}% today
+                      </p>
+                    </>
+                  )}
+                </div>
+
+                {/* Time filter */}
+                <div className="flex gap-1 px-5 mb-2">
+                  {[{ id: "D", label: "D" }, { id: "W", label: "W" }, { id: "M", label: "M" }, { id: "ALL", label: "All" }].map(f => (
+                    <button
+                      key={f.id}
+                      onClick={() => setModalTimeFilter(f.id)}
+                      className={`px-3 h-9 rounded-full text-sm font-bold transition-all ${
+                        modalTimeFilter === f.id
+                          ? "bg-slate-700/80 text-white shadow-lg backdrop-blur-md border border-white/20"
+                          : "text-slate-400 hover:text-slate-600 hover:bg-slate-200/30"
+                      }`}
+                      style={modalTimeFilter === f.id ? { boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.1), 0 4px 12px rgba(0,0,0,0.15)' } : {}}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Chart */}
+                <div style={{ width: '100%', height: 230, paddingBottom: 8 }}>
+                  {modalChartLoading || mChartData.length === 0 ? (
+                    <div style={{ width: '100%', height: 230, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <div className="text-slate-400 text-sm">{modalChartLoading ? 'Loading chart...' : 'No data available'}</div>
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={230}>
+                      <ComposedChart data={mChartData} margin={{ top: 10, right: 15, left: 5, bottom: 30 }}>
+                        <defs>
+                          <linearGradient id="modalStockGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.4" />
+                            <stop offset="50%" stopColor="#a78bfa" stopOpacity="0.2" />
+                            <stop offset="100%" stopColor="#c4b5fd" stopOpacity="0.02" />
+                          </linearGradient>
+                        </defs>
+                        <XAxis
+                          dataKey="day"
+                          axisLine={false}
+                          tickLine={false}
+                          tickMargin={8}
+                          interval={modalTimeFilter === 'D'
+                            ? Math.max(0, Math.ceil(mChartData.length / 4) - 1)
+                            : mChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(mChartData.length / 6) - 1)}
+                          tick={({ x, y, payload }) => {
+                            if (!payload.value) return null;
+                            const val = String(payload.value);
+                            if (modalTimeFilter === 'D' && val.includes('|')) {
+                              const [dayPart, timePart] = val.split('|');
+                              return (
+                                <text x={x} y={y} textAnchor="middle" fill="#64748b" fontSize={10} fontWeight={500}>
+                                  <tspan x={x} dy={10}>{dayPart}</tspan>
+                                  <tspan x={x} dy={13}>{timePart}</tspan>
+                                </text>
+                              );
+                            }
+                            return <text x={x} y={y} dy={12} textAnchor="middle" fill="#64748b" fontSize={11} fontWeight={500}>{payload.value}</text>;
+                          }}
+                        />
+                        <YAxis
+                          domain={mAxisConfig.domain}
+                          ticks={mAxisConfig.ticks}
+                          tickFormatter={formatPnlAxis}
+                          tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 500 }}
+                          axisLine={false}
+                          tickLine={false}
+                          width={55}
+                        />
+                        {mShowPnl && <ReferenceLine y={0} stroke="#cbd5e1" strokeDasharray="3 3" strokeWidth={1} />}
+                        <Tooltip
+                          content={({ active, payload, label }) => {
+                            if (active && payload && payload.length) {
+                              let fullDate = payload[0]?.payload?.fullDate || label;
+                              if (typeof fullDate === 'string' && fullDate.includes('|')) fullDate = fullDate.replace('|', ' ');
+                              const val = payload[0].value;
+                              const isPos = val >= 0;
+                              return (
+                                <div className="bg-white/95 backdrop-blur-sm border border-slate-200 rounded-lg px-3 py-1.5 shadow-md">
+                                  <div className="text-xs text-slate-500 mb-0.5">{fullDate}</div>
+                                  <div className="text-sm font-bold text-violet-700">
+                                    {mShowPnl ? (isPos ? '+' : '-') + 'R' + Math.abs(val).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : 'R' + val.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </div>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
+                          cursor={false}
+                          wrapperStyle={{ outline: 'none' }}
+                        />
+                        <Area type="monotone" dataKey="value" stroke="none" fill="url(#modalStockGradient)" fillOpacity={1} />
+                        <Line
+                          type="monotone"
+                          dataKey="value"
+                          stroke="#7c3aed"
+                          strokeWidth={2.5}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          dot={false}
+                          activeDot={{ r: 6, fill: '#7c3aed', stroke: '#c4b5fd', strokeWidth: 2 }}
+                        />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+
+                {/* Holdings detail row */}
+                {mShowPnl && (
+                  <div className="mx-5 mb-6 rounded-2xl bg-slate-50 px-4 py-3 flex items-center justify-between">
+                    <div className="text-center">
+                      <p className="text-[10px] text-slate-400 font-medium mb-0.5">Shares</p>
+                      <p className="text-sm font-semibold text-slate-800">{Math.round(mQty)}</p>
+                    </div>
+                    <div className="w-px h-8 bg-slate-200" />
+                    <div className="text-center">
+                      <p className="text-[10px] text-slate-400 font-medium mb-0.5">Avg Price</p>
+                      <p className="text-sm font-semibold text-slate-800">{formatCurrency(mAvgFill)}</p>
+                    </div>
+                    <div className="w-px h-8 bg-slate-200" />
+                    <div className="text-center">
+                      <p className="text-[10px] text-slate-400 font-medium mb-0.5">Cost Basis</p>
+                      <p className="text-sm font-semibold text-slate-800">{formatCurrency(mCostBasis)}</p>
+                    </div>
+                    <div className="w-px h-8 bg-slate-200" />
+                    <div className="text-center">
+                      <p className="text-[10px] text-slate-400 font-medium mb-0.5">Return</p>
+                      <p className={`text-sm font-semibold ${mPnl >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        {mPnl >= 0 ? '+' : ''}{formatCurrency(mPnl)}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            </>
+          );
+        })()}
       </AnimatePresence>
 
     </div>
