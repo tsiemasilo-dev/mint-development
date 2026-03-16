@@ -619,37 +619,20 @@ const SwipeableBalanceCard = ({
         <div className="flex flex-1 min-h-0">
           <div className="w-[50%] p-4 pb-3 flex flex-col border-r border-slate-200">
             <div className="flex flex-col flex-1 min-h-0 gap-2">
-              <div className="shrink-0 flex flex-col gap-1.5">
-                <div>
-                  <p className="text-[9px] uppercase tracking-widest text-slate-400 font-medium mb-0.5">
-                    {selectedAsset ? selectedAsset.symbol : "current value"}
-                  </p>
-                  <span className="text-base font-semibold text-slate-800">
-                    {isVisible ? formatKMB(displayMarketValue) : masked}
+              <div className="shrink-0">
+                <p className="text-[10px] uppercase tracking-widest text-slate-500 font-medium mb-1.5">
+                  {selectedAsset ? selectedAsset.symbol : "account balance"}
+                </p>
+                <p className="text-base font-bold text-slate-900 mb-2">
+                  {isVisible ? formatKMB(displayMarketValue) : masked}
+                </p>
+                <div className="flex items-center gap-2">
+                  <span className={`text-sm font-semibold ${isLoss ? "text-rose-400" : "text-emerald-400"}`}>
+                    {isLoss ? "▼" : "▲"} {isVisible ? formatKMB(Math.abs(displayReturn)) : masked}
                   </span>
-                </div>
-                {displayInvested > 0 && (
-                  <div>
-                    <p className="text-[9px] uppercase tracking-widest text-slate-400 font-medium mb-0.5">
-                      invested
-                    </p>
-                    <span className="text-sm font-semibold text-slate-600">
-                      {isVisible ? formatKMB(displayInvested) : masked}
-                    </span>
-                  </div>
-                )}
-                <div>
-                  <p className="text-[9px] uppercase tracking-widest text-slate-400 font-medium mb-0.5">
-                    {isLoss ? "loss" : "gain"}
-                  </p>
-                  <div className="flex items-center gap-1.5">
-                    <span className={`text-sm font-semibold ${isLoss ? "text-rose-400" : "text-emerald-400"}`}>
-                      {isVisible ? formatKMB(displayReturn) : masked}
-                    </span>
-                    <span className={`px-1.5 py-0.5 rounded-full text-[8px] font-medium uppercase ${isLoss ? "bg-rose-500/20 text-rose-400" : "bg-emerald-500/20 text-emerald-400"}`}>
-                      {isVisible ? `${returnPct}%` : masked}
-                    </span>
-                  </div>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[8px] font-medium uppercase ${isLoss ? "bg-rose-500/20 text-rose-400" : "bg-emerald-500/20 text-emerald-400"}`}>
+                    {isVisible ? `${isLoss ? "-" : "+"}${returnPct}%` : masked}
+                  </span>
                 </div>
               </div>
               {mintNumber && mintNumber.length > 0 && (
