@@ -2038,13 +2038,10 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           const mPnlPct = mShowPnl && mCostBasis > 0 ? (mPnl / mCostBasis) * 100 : 0;
           const mLiveChange = liveQuotes[mHolding.ticker]?.changePercent ?? mHolding.change ?? 0;
 
-          // Convert purchase date from UTC ISO string to LOCAL midnight timestamp so the
-          // comparison works correctly regardless of timezone (e.g. 23:11 UTC = 01:11 SAST = next local day).
-          const mPurchaseTs = (() => {
-            if (!modalPurchaseDate) return null;
-            const d = new Date(modalPurchaseDate);
-            return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-          })();
+          // Use the date string as-is from the DB (no timezone conversion).
+          const mPurchaseTs = modalPurchaseDate
+            ? new Date(modalPurchaseDate.slice(0, 10) + 'T00:00:00').getTime()
+            : null;
 
           // Keep only chart points on or after the local purchase date.
           // Falls back to an empty array if bought today and no close price exists yet (e.g. weekend).
