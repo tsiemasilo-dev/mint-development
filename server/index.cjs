@@ -3135,7 +3135,7 @@ app.get("/api/user/holdings", async (req, res) => {
         const costBasis = avgFill * quantity;
         const liveMarketValue = livePrice * quantity;
         const pnl = liveMarketValue - costBasis;
-        const investedAmount = h.market_value || costBasis;
+        const investedAmount = h.market_value || ((h.avg_fill || 0) * (h.quantity || 0));
         return {
           ...h,
           market_value: liveMarketValue,
