@@ -3135,9 +3135,11 @@ app.get("/api/user/holdings", async (req, res) => {
         const costBasis = avgFill * quantity;
         const liveMarketValue = livePrice * quantity;
         const pnl = liveMarketValue - costBasis;
+        const investedAmount = h.market_value || costBasis;
         return {
           ...h,
           market_value: liveMarketValue,
+          invested_amount: investedAmount,
           unrealized_pnl: pnl,
           settlement_status: settlementStatus,
           symbol: sec?.symbol || "N/A",

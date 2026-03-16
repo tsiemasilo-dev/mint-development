@@ -159,6 +159,7 @@ const SwipeableBalanceCard = ({
     holdings: [],
     totalMarketValue: 0,
     totalInvested: 0,
+    totalInvestedAmount: 0,
     holdingsCount: 0,
   });
 
@@ -206,6 +207,7 @@ const SwipeableBalanceCard = ({
           symbol: s.shortName || s.name || "Strategy",
           name: s.name || "Strategy",
           market_value: currentCents,
+          invested_amount: investedCents,
           avg_fill: investedCents,
           quantity: 1,
           logo_url: null,
@@ -229,11 +231,16 @@ const SwipeableBalanceCard = ({
           acc + (Number(h.avg_fill || 0) * Number(h.quantity || 0)) / 100,
         0,
       );
+      const investedAmount = enrichedHoldings.reduce(
+        (acc, h) => acc + Number(h.invested_amount || h.market_value || 0) / 100,
+        0,
+      );
 
       setDbData({
         holdings: enrichedHoldings,
         totalMarketValue: mValue,
         totalInvested: invested,
+        totalInvestedAmount: investedAmount,
         holdingsCount: enrichedHoldings.length,
       });
       setLoading(false);
@@ -478,7 +485,11 @@ const SwipeableBalanceCard = ({
         Number(selectedAsset.quantity || 0)) /
       100
     : dbData.totalInvested;
+  const displayInvestedAmount = selectedAsset
+    ? Number(selectedAsset.invested_amount || selectedAsset.market_value || 0) / 100
+    : dbData.totalInvestedAmount;
   const displayReturn = displayMarketValue - displayInvested;
+  const displayBalance = displayInvestedAmount + displayReturn;
   const isLoss = displayReturn < 0;
   const returnPct =
     displayInvested > 0
@@ -624,7 +635,7 @@ const SwipeableBalanceCard = ({
                   {selectedAsset ? selectedAsset.symbol : "account balance"}
                 </p>
                 <p className="text-base font-bold text-slate-900 mb-2">
-                  {isVisible ? formatKMB(displayReturn) : masked}
+                  {isVisible ? formatKMB(displayBalance) : masked}
                 </p>
                 <div className="flex items-center gap-2">
                   <span className={`text-sm font-semibold ${isLoss ? "text-rose-400" : "text-emerald-400"}`}>
