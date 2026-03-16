@@ -2037,17 +2037,17 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           const mPnl = mShowPnl ? mMarketValue - mCostBasis : 0;
           const mPnlPct = mShowPnl && mCostBasis > 0 ? (mPnl / mCostBasis) * 100 : 0;
           const mLiveChange = liveQuotes[mHolding.ticker]?.changePercent ?? mHolding.change ?? 0;
+
+          // Show P&L (position value − cost basis) for every point in the selected time window.
+          // No purchase-date clipping — the time filter buttons (D/W/M/All) control the window.
           const mChartData = modalRawChartData.length > 0
             ? (mShowPnl
-                ? (() => {
-                    const pts = [{ ...modalRawChartData[0], day: null, value: 0 }];
-                    modalRawChartData.forEach(d => {
-                      pts.push({ ...d, value: Number(((d.value * mQty) - mCostBasis).toFixed(2)) });
-                    });
-                    return pts;
-                  })()
+                ? modalRawChartData.map(d => ({
+                    ...d,
+                    value: Number(((d.value * mQty) - mCostBasis).toFixed(2)),
+                  }))
                 : modalRawChartData)
-            : (mShowPnl ? [{ day: null, value: 0 }, { day: "Today", value: 0 }] : []);
+            : [];
           const mAxisConfig = computePnlAxisConfig(mChartData);
           return (
             <>
