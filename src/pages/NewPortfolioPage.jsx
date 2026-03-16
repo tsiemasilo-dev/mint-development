@@ -653,7 +653,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
               const totalPnl = displayAccountValue - displayTotalCostBasis;
               const totalPnlPct = displayTotalCostBasis > 0 ? (totalPnl / displayTotalCostBasis) * 100 : 0;
               const isPnlPos = totalPnl >= 0;
-              const balanceDisplay = displayAccountValue + totalPnl;
+              const balanceDisplay = totalPnl;
               return (
                 <>
                   <div className="flex items-center gap-3">
