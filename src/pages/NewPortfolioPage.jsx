@@ -656,10 +656,10 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           <section className="relative">
             <div className="absolute -inset-8 bg-gradient-radial from-[#7c3aed]/20 via-transparent to-transparent rounded-full blur-2xl -z-10" />
             {(() => {
-              const x = displayAccountValue - displayTotalCostBasis;
-              const totalPnlPct = displayTotalCostBasis > 0 ? (x / displayTotalCostBasis) * 100 : 0;
-              const isPnlPos = x >= 0;
-              const balanceDisplay = displayInvestedAmount + x;
+              const totalPnl = displayAccountValue - displayTotalCostBasis;
+              const totalPnlPct = displayTotalCostBasis > 0 ? (totalPnl / displayTotalCostBasis) * 100 : 0;
+              const isPnlPos = totalPnl >= 0;
+              const balanceDisplay = displayInvestedAmount + totalPnl;
               return (
                 <>
                   <div className="flex items-center gap-3">
@@ -683,7 +683,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                     <>
                       <div className="mt-1 flex items-center gap-2.5">
                         <span className="text-lg font-bold" style={{ color: isPnlPos ? '#6ee7b7' : '#fca5a5' }}>
-                          {isPnlPos ? '+' : '-'}R{Math.abs(x).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          {isPnlPos ? '+' : '-'}R{Math.abs(totalPnl).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                         <span className="px-2 py-0.5 rounded-full text-xs font-bold"
                           style={{ backdropFilter: 'blur(4px)', background: 'rgba(255,255,255,0.12)', border: `1px solid ${isPnlPos ? 'rgba(52,211,153,0.6)' : 'rgba(251,113,133,0.6)'}`, color: isPnlPos ? '#6ee7b7' : '#fca5a5' }}>
