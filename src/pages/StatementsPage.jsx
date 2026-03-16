@@ -11,7 +11,7 @@ import { useTransactions } from "../lib/useFinancialData";
 import SettlementBadge from "../components/PendingBadge";
 import { useSettlementConfig, getSettlementStatusForHolding } from "../lib/useSettlementStatus";
 
-const activityFilters = ["All", "Investments", "Deposits", "Withdrawals"];
+const activityFilters = ["All", "Investments", "Fees", "Withdrawals"];
 
 const getTransactionIcon = (name, direction) => {
   const lower = (name || "").toLowerCase();
@@ -34,6 +34,7 @@ const getIconColors = (direction, name) => {
 const getFilterCategory = (direction, name) => {
   const lower = (name || "").toLowerCase();
   if (lower.includes("withdraw") || lower.includes("repay")) return "Withdrawals";
+  if (lower.includes("fee") || lower.includes("commission") || lower.includes("brokerage") || lower.includes("charge") || lower.includes("levy")) return "Fees";
   if (lower.includes("deposit") || direction === "credit") return "Deposits";
   if (lower.includes("invest") || lower.includes("buy") || lower.includes("strategy") || direction === "debit") return "Investments";
   return "Other";
@@ -405,10 +406,10 @@ const StatementsPage = ({ onOpenNotifications }) => {
 
   const activitySummaryStats = useMemo(() => {
     const totalIn = activityItems
-      .filter((i) => !/(withdraw|repay)/i.test(i.title))
+      .filter((i) => i.direction === "credit")
       .reduce((s, i) => s + Math.abs(i.rawAmount), 0);
     const totalOut = activityItems
-      .filter((i) => /(withdraw|repay)/i.test(i.title))
+      .filter((i) => i.direction === "debit")
       .reduce((s, i) => s + Math.abs(i.rawAmount), 0);
     return { totalIn, totalOut, count: activityItems.length };
   }, [activityItems]);
