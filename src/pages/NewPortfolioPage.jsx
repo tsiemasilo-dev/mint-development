@@ -2084,7 +2084,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2 }}
-                className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+                className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[1090]"
                 onClick={() => setModalHolding(null)}
               />
               <motion.div
@@ -2093,8 +2093,8 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                 animate={{ y: 0 }}
                 exit={{ y: '100%' }}
                 transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-                className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl bg-white/95 backdrop-blur-2xl shadow-2xl"
-                style={{ maxHeight: '88vh', overflowY: 'auto', fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
+                className="fixed bottom-0 left-0 right-0 z-[1100] rounded-t-3xl bg-white/95 backdrop-blur-2xl shadow-2xl"
+                style={{ maxHeight: '92vh', overflowY: 'auto', paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))', fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
                 onClick={e => e.stopPropagation()}
               >
                 {/* Drag handle */}
