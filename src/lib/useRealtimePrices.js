@@ -78,6 +78,19 @@ export function setupRealtimePrices() {
         notifyListeners();
       }
     )
+    .on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "stock_holdings",
+      },
+      (payload) => {
+        console.log("[realtime-prices] Holding updated:", payload.new?.id);
+        globalState.lastUpdated = Date.now();
+        notifyListeners();
+      }
+    )
     .subscribe((status) => {
       console.log("[realtime-prices] Subscription status:", status);
       const wasConnected = globalState.isConnected;
