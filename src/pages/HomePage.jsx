@@ -71,15 +71,15 @@ const MintLogoSilver = ({ className = "" }) => (
 );
 
 const CardContent = ({ children, style, variant = "default" }) => {
-  const bg = "linear-gradient(145deg, #cdd0d5 0%, #e4e6ea 28%, #b8bcc2 52%, #dde0e4 76%, #c4c7cc 100%)";
+  const bg = "#ffffff";
 
   return (
     <div
       className="absolute inset-0 rounded-[24px] overflow-hidden"
       style={{
         background: bg,
-        boxShadow: "0 20px 45px -18px rgba(15, 23, 42, 0.35)",
-        border: "1px solid rgba(200,205,210,0.6)",
+        boxShadow: "0 20px 45px -18px rgba(15, 23, 42, 0.2)",
+        border: "1px solid rgba(148,163,184,0.35)",
         backfaceVisibility: "hidden",
         ...style,
       }}
@@ -818,33 +818,25 @@ const HomePage = ({
                   transform: `rotateY(${cardRotation}deg)`,
                   transition: "transform 0.7s ease-out",
                 }}>
-                  <div className="relative h-full p-5 flex flex-col">
-                    <img src="/card-texture.png" alt="" aria-hidden="true" className="absolute inset-0 w-full h-full object-cover rounded-[24px] pointer-events-none select-none" style={{ opacity: 0.45, mixBlendMode: "overlay", maskImage: "radial-gradient(ellipse 22% 32% at 50% 50%, transparent 0%, transparent 55%, black 80%)", WebkitMaskImage: "radial-gradient(ellipse 22% 32% at 50% 50%, transparent 0%, transparent 55%, black 80%)" }} />
+                  <div className="relative h-full p-6 flex flex-col">
                     <div className="flex items-start justify-between">
-                      <div className="flex flex-col gap-0.5">
-                        <MintLogoSlate className="h-6 w-auto opacity-80" />
-                        {profile.mintNumber && (
-                          <p className="text-[11px] tracking-[0.18em] text-slate-500 font-medium uppercase" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>
-                            {profile.mintNumber}
-                          </p>
-                        )}
-                      </div>
+                      <MintLogoSlate className="h-7 w-auto opacity-80" />
                     </div>
-                    <div className="flex-1 flex flex-col items-center justify-center gap-0.5">
-                      <p className="text-[9px] uppercase tracking-[0.25em] text-slate-500 font-medium" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>Available Balance</p>
-                      <p className="text-[26px] md:text-[32px] font-extralight text-slate-700 tracking-wide" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", letterSpacing: "0.04em" }}>
+                    <div className="flex-1 flex flex-col items-center justify-center gap-1">
+                      <p className="text-[10px] uppercase tracking-[0.25em] text-slate-500 font-medium" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>Available Balance</p>
+                      <p className="text-[28px] md:text-[34px] font-extralight text-slate-700 tracking-wide" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", letterSpacing: "0.04em" }}>
                         {isCardVisible ? formatZar(balance) : "••••••••"}
                       </p>
                     </div>
                     <div className="flex items-end justify-between">
                       <div>
-                        <p className="text-[8px] uppercase tracking-[0.2em] text-slate-500 font-normal mb-0.5" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>Card Holder</p>
-                        <p className="text-[12px] uppercase tracking-[0.18em] text-slate-700 font-light" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif", letterSpacing: "0.18em" }}>
+                        <p className="text-[9px] uppercase tracking-[0.2em] text-slate-500 font-normal mb-1" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>Card Holder</p>
+                        <p className="text-[13px] uppercase tracking-[0.18em] text-slate-700 font-light" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif", letterSpacing: "0.18em" }}>
                           {displayName || "MINT MEMBER"}
                         </p>
                       </div>
                       <div className="text-right flex items-end">
-                        <p className="text-[20px] md:text-[24px] font-light text-slate-700 tracking-wider mb-[-2px]" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif", fontStyle: "italic", letterSpacing: "0.08em" }}>MINT</p>
+                        <p className="text-[22px] md:text-[26px] font-light text-slate-700 tracking-wider mb-[-2px]" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif", fontStyle: "italic", letterSpacing: "0.08em" }}>MINT</p>
                       </div>
                     </div>
                   </div>
