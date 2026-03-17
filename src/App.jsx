@@ -634,7 +634,7 @@ const App = () => {
             modal={null}
             onCloseModal={noOp}
           >
-            <DepositPage />
+            <DepositPage onBack={noOp} />
           </AppLayout>
         );
       case 'stockDetail':
@@ -1148,7 +1148,7 @@ const App = () => {
         modal={null}
         onCloseModal={() => {}}
       >
-        <DepositPage />
+        <DepositPage onBack={() => handleTabChange("home")} />
       </AppLayout>
     );
   }

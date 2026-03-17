@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Copy, Check, Building2 } from "lucide-react";
+import { Copy, Check, Building2, ArrowLeft } from "lucide-react";
 
 const ACCOUNT_DETAILS = [
   { label: "Account Holder", value: "MINT PLATFORMS (PTY) LTD", copyable: false },
@@ -11,7 +11,7 @@ const ACCOUNT_DETAILS = [
   { label: "SWIFT Code", value: "SBZAZAJJ", copyable: true },
 ];
 
-const DepositPage = () => {
+const DepositPage = ({ onBack }) => {
   const [copied, setCopied] = useState(null);
 
   const handleCopy = (value, label) => {
@@ -24,6 +24,18 @@ const DepositPage = () => {
   return (
     <div className="min-h-screen bg-slate-50 pb-32">
       <div className="bg-gradient-to-br from-[#31005e] to-[#5b21b6] px-6 pt-14 pb-10">
+        <div className="flex items-center gap-3 mb-4">
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              aria-label="Back"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-white transition active:scale-95"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+          )}
+        </div>
         <h1 className="text-2xl font-semibold text-white">Deposit</h1>
         <p className="mt-1 text-sm text-white/70">
           Transfer funds to your Mint account using the details below
