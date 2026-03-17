@@ -151,7 +151,16 @@ function pctHook(d, col) {
   }
 }
 
-const PIE_COLORS = [[91,33,182],[22,163,74],[234,88,12],[14,165,233],[168,85,247],[234,179,8],[236,72,153],[20,184,166]];
+const PIE_COLORS = [
+  [91,  33,  182], // P_MID
+  [124, 58,  237], // Vibrant Purple
+  [139, 92,  246], // Soft Purple
+  [167, 139, 250], // Lavender
+  [196, 181, 253], // Pale Lavender
+  [76,  29,  149], // Deep Purple
+  [109, 40,  217], // Rich Purple
+  [130, 95,  210], // P_DIM
+];
 
 function drawPieChart(doc, slices, cx, cy, r) {
   if (!slices?.length) return cy + r + 1;

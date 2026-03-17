@@ -239,7 +239,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
         ? await query.eq("id", id).eq("user_id", userId).maybeSingle()
         : await query.eq("user_id", userId).order("created_at", { ascending: false }).limit(1).maybeSingle();
       let raw = {};
-      try { raw = typeof record?.sumsub_raw === "string" ? JSON.parse(record.sumsub_raw) : (record?.sumsub_raw || {}); } catch {}
+      try { raw = typeof record?.sumsub_raw === "string" ? JSON.parse(record.sumsub_raw) : (record?.sumsub_raw || {}); } catch { }
       raw[flagKey] = true;
       if (extraFields) Object.assign(raw, extraFields);
       const updateQuery = supabase.from("user_onboarding").update({ sumsub_raw: JSON.stringify(raw) });
@@ -532,7 +532,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
             setBankBranchCode(record.bank_branch_code);
           }
           let raw = {};
-          try { raw = typeof record.sumsub_raw === "string" ? JSON.parse(record.sumsub_raw) : (record.sumsub_raw || {}); } catch {}
+          try { raw = typeof record.sumsub_raw === "string" ? JSON.parse(record.sumsub_raw) : (record.sumsub_raw || {}); } catch { }
           if (raw.bank_details?.bank_account_name) setBankAccountName(raw.bank_details.bank_account_name);
           if (raw.identity_details?.identity_number) {
             setIdentityNumber(raw.identity_details.identity_number);
@@ -678,6 +678,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
           completionSuccess = true;
         } else {
           console.error("Failed to complete onboarding via API:", result.error);
+          throw new Error(result.error?.message || "Failed to save completion status. Please try again.");
         }
 
         if (!completionSuccess) {
@@ -693,9 +694,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
   return (
     <div
-      className={`onboarding-process ${isFading ? "fade-out" : "fade-in"} ${
-        isDropdownOpen || sofDropdownOpen || bankDropdownOpen ? "dropdown-open" : ""
-      }`}
+      className={`onboarding-process ${isFading ? "fade-out" : "fade-in"} ${isDropdownOpen || sofDropdownOpen || bankDropdownOpen ? "dropdown-open" : ""
+        }`}
     >
       <div className="min-h-screen flex items-center justify-center px-4 py-8 relative">
         <button
@@ -1205,7 +1205,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                           bank_branch_code: bankBranchCode || null,
                         }).eq("user_id", userId);
                       }
-                    } catch {}
+                    } catch { }
                     await saveProgressFlag("bank_details_saved", {
                       bank_details: {
                         bank_name: bankName || null,
@@ -1506,9 +1506,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   <label htmlFor="source-of-funds">Primary Source of Funds</label>
                   <div className="custom-select" ref={sofDropdownRef}>
                     <div
-                      className={`glass-field select-trigger ${
-                        sofDropdownOpen ? "active" : ""
-                      }`}
+                      className={`glass-field select-trigger ${sofDropdownOpen ? "active" : ""
+                        }`}
                       role="button"
                       tabIndex={0}
                       onClick={() => setSofDropdownOpen((prev) => !prev)}
@@ -1530,9 +1529,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                       {sourceOfFundsOptions.map((option) => (
                         <div
                           key={option.value || "placeholder"}
-                          className={`custom-option ${
-                            sourceOfFunds === option.value ? "selected" : ""
-                          }`}
+                          className={`custom-option ${sourceOfFunds === option.value ? "selected" : ""
+                            }`}
                           role="button"
                           tabIndex={0}
                           onClick={() => handleSofSelect(option.value)}
@@ -1557,9 +1555,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 </div>
 
                 <div
-                  className={`conditional-section hide-when-dropdown-open ${
-                    sourceOfFunds === "other" ? "active" : ""
-                  }`}
+                  className={`conditional-section hide-when-dropdown-open ${sourceOfFunds === "other" ? "active" : ""
+                    }`}
                 >
                   <label htmlFor="source-of-funds-other">Please describe your source of funds</label>
                   <div className="glass-field">
@@ -1608,16 +1605,16 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                     type="button"
                     className={`continue-button agreement-continue ${sofReady ? "enabled" : ""}`}
                     disabled={!sofReady}
-                  onClick={async () => {
-                    await saveProgressFlag("source_of_funds_accepted", {
-                      source_of_funds_details: {
-                        source_of_funds: sourceOfFunds,
-                        source_of_funds_other: sourceOfFunds === "other" ? sourceOfFundsOther : null,
-                        expected_monthly_investment: expectedMonthlyInvestment,
-                      },
-                    });
-                    setSofDone(true); goToStep(getNextIncompleteStep(7, 7));
-                  }}
+                    onClick={async () => {
+                      await saveProgressFlag("source_of_funds_accepted", {
+                        source_of_funds_details: {
+                          source_of_funds: sourceOfFunds,
+                          source_of_funds_other: sourceOfFunds === "other" ? sourceOfFundsOther : null,
+                          expected_monthly_investment: expectedMonthlyInvestment,
+                        },
+                      });
+                      setSofDone(true); goToStep(getNextIncompleteStep(7, 7));
+                    }}
                   >
                     Continue
                   </button>

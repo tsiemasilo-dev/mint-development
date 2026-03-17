@@ -4,6 +4,37 @@ const crypto = require("crypto");
 const { Pool } = require("pg");
 const truIDClient = require("./truidClient.cjs");
 const { Resend } = require("resend");
+const fs = require("fs");
+const path = require("path");
+
+// Simple .env loader for local development (no dotenv dependency required)
+try {
+  const envPath = path.join(__dirname, "..", ".env");
+  if (fs.existsSync(envPath)) {
+    const envContent = fs.readFileSync(envPath, "utf8");
+    envContent.split("\n").forEach(line => {
+      // Basic key=value parsing
+      const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+      if (match) {
+        const key = match[1];
+        let value = match[2] || "";
+        // Remove quotes if present
+        if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
+        if (value.startsWith("'") && value.endsWith("'")) value = value.slice(1, -1);
+        // Only set if not already set by system environment
+        if (!process.env[key]) {
+          process.env[key] = value;
+        }
+      }
+    });
+    console.log("[Server] Local .env file loaded");
+  }
+} catch (e) {
+  console.warn("[Server] Could not load .env file:", e.message);
+}
+
+// Helper to check both standard and VITE_ prefixed env vars
+const readEnv = (key) => process.env[key] || process.env[`VITE_${key}`];
 
 let _resendClient = null;
 function getResendClient() {
@@ -106,7 +137,7 @@ async function sendOrderFillEmail(db, { transactionId, holdingId }) {
         fill_price_cents: fillPriceCents,
         fill_date: fillDate,
         updated_at: new Date().toISOString(),
-      }).eq("id", existingRow.data.id).then(() => {}).catch((err) => console.warn("[order-fill-email] Log update error:", err?.message));
+      }).eq("id", existingRow.data.id).then(() => { }).catch((err) => console.warn("[order-fill-email] Log update error:", err?.message));
     } else {
       await db.from("order_emails").insert({
         user_id: userId,
@@ -126,7 +157,7 @@ async function sendOrderFillEmail(db, { transactionId, holdingId }) {
         fill_date: fillDate,
         transaction_id: transactionId || null,
         holding_id: holdingId || null,
-      }).then(() => {}).catch((err) => console.warn("[order-fill-email] Log insert error:", err?.message));
+      }).then(() => { }).catch((err) => console.warn("[order-fill-email] Log insert error:", err?.message));
     }
 
     console.log(`[order-fill-email] Sent to ${userEmail} for ${displayName}`);
@@ -182,7 +213,7 @@ async function sendOrderConfirmationEmail(db, { userId, userEmail, assetName, as
       confirmation_resend_id: resendId,
       confirmation_sent_at: new Date().toISOString(),
       confirmation_price_cents: priceCents || null,
-    }).then(() => {}).catch((err) => console.warn("[order-email] Log write error:", err?.message));
+    }).then(() => { }).catch((err) => console.warn("[order-email] Log write error:", err?.message));
 
     console.log(`[order-email] Confirmation sent to ${userEmail} for ${displayName}`);
   } catch (err) {
@@ -201,10 +232,10 @@ app.use(cors());
 app.use(express.json({ limit: "20mb" }));
 
 // Sumsub configuration
-const SUMSUB_APP_TOKEN = process.env.SUMSUB_APP_TOKEN;
-const SUMSUB_SECRET_KEY = process.env.SUMSUB_SECRET_KEY;
+const SUMSUB_APP_TOKEN = readEnv("SUMSUB_APP_TOKEN");
+const SUMSUB_SECRET_KEY = readEnv("SUMSUB_SECRET_KEY");
 const SUMSUB_BASE_URL = "https://api.sumsub.com";
-const SUMSUB_LEVEL_NAME = process.env.SUMSUB_LEVEL_NAME || "mint-advanced-kyc";
+const SUMSUB_LEVEL_NAME = readEnv("SUMSUB_LEVEL_NAME") || "mint-advanced-kyc";
 
 // Create signature for Sumsub API requests
 function createSumsubSignature(ts, method, path, body = "") {
@@ -246,9 +277,9 @@ async function generateSumsubAccessToken(userId, levelName = SUMSUB_LEVEL_NAME) 
   const ts = Math.floor(Date.now() / 1000).toString();
   const path = `/resources/accessTokens?userId=${encodeURIComponent(userId)}&levelName=${encodeURIComponent(levelName)}`;
   const method = "POST";
-  
+
   const signature = createSumsubSignature(ts, method, path);
-  
+
   const response = await fetch(`${SUMSUB_BASE_URL}${path}`, {
     method,
     headers: {
@@ -259,12 +290,12 @@ async function generateSumsubAccessToken(userId, levelName = SUMSUB_LEVEL_NAME) 
       "X-App-Access-Sig": signature,
     },
   });
-  
+
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(`Sumsub API error: ${response.status} - ${errorText}`);
   }
-  
+
   return response.json();
 }
 
@@ -273,9 +304,9 @@ async function getSumsubApplicantStatus(applicantId) {
   const ts = Math.floor(Date.now() / 1000).toString();
   const path = `/resources/applicants/${applicantId}/requiredIdDocsStatus`;
   const method = "GET";
-  
+
   const signature = createSumsubSignature(ts, method, path);
-  
+
   const response = await fetch(`${SUMSUB_BASE_URL}${path}`, {
     method,
     headers: {
@@ -285,12 +316,12 @@ async function getSumsubApplicantStatus(applicantId) {
       "X-App-Access-Sig": signature,
     },
   });
-  
+
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(`Sumsub API error: ${response.status} - ${errorText}`);
   }
-  
+
   return response.json();
 }
 
@@ -299,9 +330,9 @@ async function getSumsubApplicantByExternalId(externalUserId) {
   const ts = Math.floor(Date.now() / 1000).toString();
   const path = `/resources/applicants/-;externalUserId=${encodeURIComponent(externalUserId)}/one`;
   const method = "GET";
-  
+
   const signature = createSumsubSignature(ts, method, path);
-  
+
   const response = await fetch(`${SUMSUB_BASE_URL}${path}`, {
     method,
     headers: {
@@ -311,7 +342,7 @@ async function getSumsubApplicantByExternalId(externalUserId) {
       "X-App-Access-Sig": signature,
     },
   });
-  
+
   if (!response.ok) {
     if (response.status === 404) {
       return null;
@@ -319,7 +350,7 @@ async function getSumsubApplicantByExternalId(externalUserId) {
     const errorText = await response.text();
     throw new Error(`Sumsub API error: ${response.status} - ${errorText}`);
   }
-  
+
   return response.json();
 }
 
@@ -328,9 +359,9 @@ async function getSumsubRequiredDocsStatus(applicantId) {
   const ts = Math.floor(Date.now() / 1000).toString();
   const path = `/resources/applicants/${applicantId}/requiredIdDocsStatus`;
   const method = "GET";
-  
+
   const signature = createSumsubSignature(ts, method, path);
-  
+
   const response = await fetch(`${SUMSUB_BASE_URL}${path}`, {
     method,
     headers: {
@@ -340,17 +371,15 @@ async function getSumsubRequiredDocsStatus(applicantId) {
       "X-App-Access-Sig": signature,
     },
   });
-  
+
   if (!response.ok) {
     const errorText = await response.text();
     console.error("Failed to get required docs status:", errorText);
     return null;
   }
-  
+
   return response.json();
 }
-
-const readEnv = (key) => process.env[key] || process.env[`VITE_${key}`];
 
 const SUPABASE_URL = readEnv('SUPABASE_URL') || readEnv('VITE_SUPABASE_URL');
 const SUPABASE_ANON_KEY = readEnv('SUPABASE_ANON_KEY') || readEnv('VITE_SUPABASE_ANON_KEY');
@@ -762,12 +791,12 @@ app.post("/api/sumsub/access-token", async (req, res) => {
       try {
         const { data: { user } } = await db.auth.getUser(token);
         if (user) authenticatedUserId = user.id;
-      } catch (e) {}
+      } catch (e) { }
     }
 
     const { levelName = SUMSUB_LEVEL_NAME } = req.body;
     const userId = authenticatedUserId;
-    
+
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -820,7 +849,7 @@ app.post("/api/sumsub/access-token", async (req, res) => {
         console.error("[Sumsub] Onboarding record error:", dbErr.message);
       }
     }
-    
+
     res.json({
       success: true,
       token: tokenData.token,
@@ -850,7 +879,7 @@ app.post("/api/sumsub/reset", async (req, res) => {
       try {
         const { data: { user } } = await db.auth.getUser(token);
         if (user) authenticatedUserId = user.id;
-      } catch (e) {}
+      } catch (e) { }
     }
 
     if (!authenticatedUserId) {
@@ -916,9 +945,9 @@ async function getSumsubApplicantById(applicantId) {
   const ts = Math.floor(Date.now() / 1000).toString();
   const path = `/resources/applicants/${applicantId}/one`;
   const method = "GET";
-  
+
   const signature = createSumsubSignature(ts, method, path);
-  
+
   const response = await fetch(`${SUMSUB_BASE_URL}${path}`, {
     method,
     headers: {
@@ -928,12 +957,12 @@ async function getSumsubApplicantById(applicantId) {
       "X-App-Access-Sig": signature,
     },
   });
-  
+
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(`Sumsub API error: ${response.status} - ${errorText}`);
   }
-  
+
   return response.json();
 }
 
@@ -947,17 +976,17 @@ app.get("/api/sumsub/status/:applicantId", async (req, res) => {
     }
 
     const { applicantId } = req.params;
-    
+
     // Get both the applicant info and required docs status
     const [applicant, requiredDocsStatus] = await Promise.all([
       getSumsubApplicantById(applicantId),
       getSumsubApplicantStatus(applicantId)
     ]);
-    
+
     // Calculate normalized status
     let hasAnySubmittedSteps = false;
     let hasRejectedSteps = false;
-    
+
     if (requiredDocsStatus) {
       for (const [stepName, stepData] of Object.entries(requiredDocsStatus)) {
         if (stepData !== null) {
@@ -968,10 +997,10 @@ app.get("/api/sumsub/status/:applicantId", async (req, res) => {
         }
       }
     }
-    
+
     const reviewStatus = applicant?.review?.reviewStatus;
     const reviewAnswer = applicant?.review?.reviewResult?.reviewAnswer;
-    
+
     let normalizedStatus = "not_verified";
     if (reviewAnswer === "GREEN") {
       normalizedStatus = "verified";
@@ -986,7 +1015,7 @@ app.get("/api/sumsub/status/:applicantId", async (req, res) => {
     } else {
       normalizedStatus = "not_verified";
     }
-    
+
     res.json({
       success: true,
       normalizedStatus,
@@ -1015,7 +1044,7 @@ app.post("/api/sumsub/check-status", async (req, res) => {
     }
 
     const { userId } = req.body;
-    
+
     if (!userId) {
       return res.status(400).json({
         success: false,
@@ -1024,7 +1053,7 @@ app.post("/api/sumsub/check-status", async (req, res) => {
     }
 
     const applicant = await getSumsubApplicantByExternalId(userId);
-    
+
     if (!applicant) {
       return res.json({
         success: true,
@@ -1055,7 +1084,7 @@ app.post("/api/sumsub/check-status", async (req, res) => {
 app.post("/api/sumsub/status", async (req, res) => {
   try {
     const { userId } = req.body;
-    
+
     if (!userId) {
       return res.status(400).json({
         success: false,
@@ -1100,7 +1129,7 @@ app.post("/api/sumsub/status", async (req, res) => {
     }
 
     const applicant = await getSumsubApplicantByExternalId(userId);
-    
+
     if (!applicant) {
       return res.json({
         success: true,
@@ -1115,13 +1144,13 @@ app.post("/api/sumsub/status", async (req, res) => {
 
     // Get the required docs status to check for incomplete steps
     const requiredDocsStatus = await getSumsubRequiredDocsStatus(applicant.id);
-    
+
     // Check document status - distinguish between "never started" and "started but incomplete"
     let hasIncompleteSteps = false;
     let hasRejectedSteps = false;
     let allStepsGreen = true;
     let hasAnySubmittedSteps = false; // Track if user ever submitted anything
-    
+
     if (requiredDocsStatus) {
       for (const [stepName, stepData] of Object.entries(requiredDocsStatus)) {
         if (stepData === null) {
@@ -1148,7 +1177,7 @@ app.post("/api/sumsub/status", async (req, res) => {
     const reviewAnswer = applicant.review?.reviewResult?.reviewAnswer;
     const rejectLabels = applicant.review?.reviewResult?.rejectLabels || [];
     const reviewRejectType = applicant.review?.reviewResult?.reviewRejectType;
-    
+
     // Log detailed Sumsub status for debugging
     console.log(`=== Sumsub Status for ${userId} ===`);
     console.log(`Applicant ID: ${applicant.id}`);
@@ -1160,16 +1189,16 @@ app.post("/api/sumsub/status", async (req, res) => {
     console.log(`Has Rejected Steps: ${hasRejectedSteps}`);
     console.log(`Has Any Submitted Steps: ${hasAnySubmittedSteps}`);
     console.log(`All Steps Green: ${allStepsGreen}`);
-    
+
     let status = "not_verified";
-    
+
     // Priority order for status determination:
     // 1. If all steps are GREEN and review is GREEN → verified
     // 2. If any steps are rejected or on hold → needs_resubmission
     // 3. If there are incomplete/missing steps → needs_resubmission (documents required)
     // 4. If all submitted and review pending → pending (under review)
     // 5. If user never submitted anything → not_verified
-    
+
     if (allStepsGreen && reviewAnswer === "GREEN") {
       status = "verified";
       console.log(`Status: verified (all steps GREEN)`);
@@ -1302,7 +1331,7 @@ app.post("/api/sumsub/sync-status", async (req, res) => {
     }
 
     const { userId } = req.body;
-    
+
     if (!userId) {
       return res.status(400).json({
         success: false,
@@ -1311,7 +1340,7 @@ app.post("/api/sumsub/sync-status", async (req, res) => {
     }
 
     const applicant = await getSumsubApplicantByExternalId(userId);
-    
+
     if (!applicant) {
       return res.json({
         success: true,
@@ -1327,9 +1356,9 @@ app.post("/api/sumsub/sync-status", async (req, res) => {
     const reviewStatus = applicant.review?.reviewStatus;
     const reviewAnswer = applicant.review?.reviewResult?.reviewAnswer;
     const rejectLabels = applicant.review?.reviewResult?.rejectLabels || [];
-    
+
     let status = "not_verified";
-    
+
     if (reviewAnswer === "GREEN") {
       status = "verified";
     } else if (reviewAnswer === "RED") {
@@ -1384,10 +1413,10 @@ app.post("/api/sumsub/webhook", async (req, res) => {
   }
 
   console.log("[Webhook] Sumsub webhook received:", JSON.stringify(req.body, null, 2));
-  
+
   const { type, applicantId, reviewResult, reviewStatus, externalUserId } = req.body;
   const db = supabaseAdmin || supabase;
-  
+
   if (!db || !externalUserId) {
     console.log("[Webhook] No database client or externalUserId, skipping");
     return res.status(200).json({ received: true });
@@ -1397,11 +1426,11 @@ app.post("/api/sumsub/webhook", async (req, res) => {
     let kycUpdate = null;
     let onboardingKycStatus = null;
     let reviewAnswer = null;
-    
+
     if (type === "applicantReviewed") {
       reviewAnswer = reviewResult?.reviewAnswer;
       const rejectLabels = reviewResult?.rejectLabels || [];
-      
+
       if (reviewAnswer === "GREEN") {
         console.log(`[Webhook] User ${externalUserId} KYC verified successfully`);
         kycUpdate = { kyc_verified: true, kyc_pending: false, kyc_needs_resubmission: false };
@@ -1433,12 +1462,12 @@ app.post("/api/sumsub/webhook", async (req, res) => {
           console.error(`[Webhook] Failed to save pack_details for ${externalUserId}:`, packErr.message);
         }
       } else if (reviewAnswer === "RED") {
-        const canResubmit = rejectLabels.some(label => 
-          ["DOCUMENT_PAGE_MISSING", "INCOMPLETE_DOCUMENT", "UNSATISFACTORY_PHOTOS", 
-           "DOCUMENT_DAMAGED", "SCREENSHOTS", "SPAM", "NOT_DOCUMENT", "SELFIE_MISMATCH",
-           "FORGERY", "GRAPHIC_EDITOR", "DOCUMENT_DEPRIVED"].includes(label)
+        const canResubmit = rejectLabels.some(label =>
+          ["DOCUMENT_PAGE_MISSING", "INCOMPLETE_DOCUMENT", "UNSATISFACTORY_PHOTOS",
+            "DOCUMENT_DAMAGED", "SCREENSHOTS", "SPAM", "NOT_DOCUMENT", "SELFIE_MISMATCH",
+            "FORGERY", "GRAPHIC_EDITOR", "DOCUMENT_DEPRIVED"].includes(label)
         );
-        
+
         if (canResubmit) {
           console.log(`[Webhook] User ${externalUserId} KYC needs resubmission: ${rejectLabels.join(", ")}`);
           kycUpdate = { kyc_verified: false, kyc_pending: false, kyc_needs_resubmission: true };
@@ -1462,7 +1491,7 @@ app.post("/api/sumsub/webhook", async (req, res) => {
       kycUpdate = { kyc_verified: false, kyc_pending: false, kyc_needs_resubmission: true };
       onboardingKycStatus = "action_required";
     }
-    
+
     if (kycUpdate) {
       const { data: existingAction } = await db
         .from("required_actions")
@@ -1521,7 +1550,7 @@ app.post("/api/sumsub/webhook", async (req, res) => {
   } catch (err) {
     console.error("[Webhook] Failed to process Sumsub webhook:", err);
   }
-  
+
   res.status(200).json({ received: true });
 });
 
@@ -1908,7 +1937,7 @@ app.post("/api/banking/capture", async (req, res) => {
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
-      
+
       if (existingOnboarding) {
         await db
           .from("user_onboarding")
@@ -2159,12 +2188,12 @@ app.get("/api/stocks/quote", async (req, res) => {
   try {
     const { symbols } = req.query;
     if (!symbols) return res.status(400).json({ error: "symbols parameter required" });
-    
+
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbols.split(',')[0]}?interval=1d&range=1d`;
-    
+
     const symbolList = symbols.split(',').map(s => s.trim());
     const results = {};
-    
+
     await Promise.all(symbolList.map(async (symbol) => {
       try {
         const response = await fetch(
@@ -2183,7 +2212,7 @@ app.get("/api/stocks/quote", async (req, res) => {
           const currentPrice = meta.regularMarketPrice;
           const change = currentPrice - prevClose;
           const changePercent = prevClose ? ((change / prevClose) * 100) : 0;
-          
+
           results[symbol] = {
             symbol: symbol,
             name: meta.shortName || meta.longName || symbol,
@@ -2200,7 +2229,7 @@ app.get("/api/stocks/quote", async (req, res) => {
         results[symbol] = { symbol, error: err.message };
       }
     }));
-    
+
     res.json(results);
   } catch (error) {
     console.error("Stock quote error:", error);
@@ -2212,7 +2241,7 @@ app.get("/api/stocks/chart", async (req, res) => {
   try {
     const { symbol, range = '5d', interval = '15m' } = req.query;
     if (!symbol) return res.status(400).json({ error: "symbol parameter required" });
-    
+
     const response = await fetch(
       `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=${interval}&range=${range}`,
       {
@@ -2221,22 +2250,22 @@ app.get("/api/stocks/chart", async (req, res) => {
         }
       }
     );
-    
+
     const data = await response.json();
     const result = data?.chart?.result?.[0];
-    
+
     if (!result) {
       return res.status(404).json({ error: "No data found for symbol" });
     }
-    
+
     const timestamps = result.timestamp || [];
     const quotes = result.indicators?.quote?.[0] || {};
     const closes = quotes.close || [];
-    
+
     const chartPoints = timestamps.map((ts, i) => {
       const date = new Date(ts * 1000);
       let label;
-      
+
       if (range === '1d') {
         label = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
       } else if (range === '5d') {
@@ -2248,16 +2277,16 @@ app.get("/api/stocks/chart", async (req, res) => {
       } else {
         label = date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
       }
-      
+
       return {
         day: label,
         value: closes[i] != null ? Number(closes[i].toFixed(2)) : null,
         timestamp: ts,
       };
     }).filter(p => p.value != null);
-    
+
     const meta = result.meta;
-    
+
     res.json({
       symbol: symbol,
       currency: meta.currency || 'USD',
@@ -2802,7 +2831,7 @@ app.post("/api/record-investment", async (req, res) => {
       }
     } else if (isStrategyInvestment) {
       console.log("[record-investment] Strategy selected. Breaking down and allocating constituent holdings.");
-      
+
       const { data: stratData, error: stratError } = await db
         .from("strategies")
         .select("holdings")
@@ -2812,40 +2841,40 @@ app.post("/api/record-investment", async (req, res) => {
       if (!stratError && stratData?.holdings && Array.isArray(stratData.holdings) && stratData.holdings.length > 0) {
         const holdingsArr = stratData.holdings;
         const holdingSymbols = holdingsArr.map(h => h.symbol).filter(Boolean);
-        
+
         if (holdingSymbols.length > 0) {
           const { data: secs } = await db
             .from("securities")
             .select("id, symbol, last_price")
             .in("symbol", holdingSymbols);
-            
+
           if (secs && secs.length > 0) {
             const amountPerSecurityCents = Math.round((amount * 100) / secs.length);
             const amountPerSecurityRands = amount / secs.length;
-            
+
             for (const sec of secs) {
               const secId = sec.id;
               const secCurrentPriceCents = sec.last_price ? Number(sec.last_price) : null;
               const secCurrentPriceRands = secCurrentPriceCents ? secCurrentPriceCents / 100 : amountPerSecurityRands;
-              
+
               const secQty = secCurrentPriceRands > 0 ? amountPerSecurityRands / secCurrentPriceRands : 1;
               const secAvgFillCents = secCurrentPriceCents || amountPerSecurityCents;
               const secMarketValueCents = Math.round(secQty * secAvgFillCents);
-              
+
               const { data: existingSecHolding } = await db
                 .from("stock_holdings")
                 .select("id, quantity, avg_fill")
                 .eq("user_id", userId)
                 .eq("security_id", secId)
                 .maybeSingle();
-                
+
               if (existingSecHolding) {
                 const oldQty = Number(existingSecHolding.quantity || 0);
                 const oldAvgFill = Number(existingSecHolding.avg_fill || 0);
                 const newQty = oldQty + secQty;
                 const newAvgFill = newQty > 0 ? ((oldAvgFill * oldQty) + (secAvgFillCents * secQty)) / newQty : secAvgFillCents;
                 const newMarketValue = Math.round(newQty * (secCurrentPriceCents || newAvgFill));
-                
+
                 await db.from("stock_holdings").update({
                   quantity: newQty,
                   avg_fill: Math.round(newAvgFill),
@@ -2876,7 +2905,7 @@ app.post("/api/record-investment", async (req, res) => {
     const descriptionText = isStrategyInvestment
       ? `Invested in strategy ${name || "Strategy"}`
       : `Purchased ${(holdingResult.data ? "shares" : "units")} of ${name || symbol || "Unknown"}`;
-    
+
     console.log("[record-investment] Creating transaction record...");
     const txPayload = {
       user_id: userId,
@@ -2966,7 +2995,7 @@ app.post("/api/record-investment", async (req, res) => {
       reference: paymentReference,
       orderDate,
     };
-    sendOrderConfirmationEmail(db, confirmEmailData).catch(() => {});
+    sendOrderConfirmationEmail(db, confirmEmailData).catch(() => { });
 
     console.log("[record-investment] === SUCCESS === Holding:", JSON.stringify(holdingResult.data));
     res.json({ success: true, holding: holdingResult.data });
@@ -3165,7 +3194,7 @@ app.get("/api/user/strategies", async (req, res) => {
     console.log("[user/strategies] Request received");
     console.log("[user/strategies] Supabase available:", !!supabase);
     console.log("[user/strategies] SupabaseAdmin available:", !!supabaseAdmin);
-    
+
     if (!supabase) {
       console.log("[user/strategies] ERROR: Database not connected - supabase is null");
       return res.status(503).json({ success: false, error: "Database not available. Please check server configuration." });
@@ -3473,7 +3502,7 @@ app.get("/api/user/transactions", async (req, res) => {
       }
 
       const settlement_status = deriveSettlementStatus(tx);
-      
+
       if (sName) {
         const holdingLogos = strategyHoldingsMap[sName.toLowerCase()] || [];
         if (holdingLogos.length > 0) {
@@ -3968,17 +3997,17 @@ app.post("/api/sumsub/sync", async (req, res) => {
     const authHeader = req.headers.authorization || "";
     const token = authHeader.replace("Bearer ", "");
     const db = supabaseAdmin || supabase;
-    
+
     if (!db) return res.status(500).json({ error: "No database client" });
-    
+
     let isAdmin = false;
     if (token) {
       try {
         const { data: { user } } = await db.auth.getUser(token);
         if (user) isAdmin = true;
-      } catch (e) {}
+      } catch (e) { }
     }
-    
+
     const internalCall = req.headers["x-internal-key"] === SUMSUB_SECRET_KEY;
     if (!isAdmin && !internalCall) {
       return res.status(401).json({ error: "Authentication required" });
@@ -4005,7 +4034,7 @@ app.post("/api/sumsub/sync", async (req, res) => {
         const ts = Math.floor(Date.now() / 1000).toString();
         const path = `/resources/applicants/-;externalUserId=${u.id}/one`;
         const sig = createSumsubSignature(ts, "GET", path);
-        
+
         const response = await fetch(`${SUMSUB_BASE_URL.startsWith("http") ? SUMSUB_BASE_URL : "https://" + SUMSUB_BASE_URL}${path}`, {
           method: "GET",
           headers: {
@@ -4480,7 +4509,7 @@ app.post("/api/onboarding/complete", async (req, res) => {
       savedAt: new Date().toISOString(),
     } : null;
 
-    const updatePayload = { 
+    const updatePayload = {
       kyc_status: "onboarding_complete",
       updated_at: new Date().toISOString()
     };
@@ -4557,6 +4586,51 @@ app.post("/api/onboarding/complete", async (req, res) => {
       }
     }
 
+    if (signed_agreement_url) {
+      try {
+        const packDb = authClient;
+        const { data: existingPack } = await packDb
+          .from("user_onboarding_pack_details")
+          .select("id, pack_details")
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        const agreementData = {
+          url: signed_agreement_url,
+          signed_at: signed_at || new Date().toISOString(),
+          downloaded_at: downloaded_at || null,
+          type: "account_agreement"
+        };
+
+        if (existingPack) {
+          let packDetails = existingPack.pack_details;
+          if (!packDetails || typeof packDetails !== "object") packDetails = {};
+
+          const agreements = Array.isArray(packDetails.agreements) ? packDetails.agreements : [];
+          agreements.push(agreementData);
+          packDetails.agreements = agreements;
+
+          await packDb
+            .from("user_onboarding_pack_details")
+            .update({
+              pack_details: packDetails,
+              updated_at: new Date().toISOString()
+            })
+            .eq("id", existingPack.id);
+        } else {
+          await packDb
+            .from("user_onboarding_pack_details")
+            .insert({
+              user_id: userId,
+              pack_details: { agreements: [agreementData] },
+              updated_at: new Date().toISOString()
+            });
+        }
+      } catch (packErr) {
+        console.warn("[Onboarding] Failed to save agreement to pack details:", packErr.message);
+      }
+    }
+
     console.log(`[Onboarding] Completed for user ${userId}, onboarding_id: ${onboardingId}`);
     res.json({ success: true, onboarding_id: onboardingId });
   } catch (error) {
@@ -4613,7 +4687,7 @@ app.get("/api/onboarding/status", async (req, res) => {
               sofDone = !!raw?.source_of_funds_accepted;
               termsDone = !!raw?.terms_accepted;
             }
-          } catch {}
+          } catch { }
         }
         const agreementSigned = !!raw?.signed_at;
         is_fully_onboarded = kycDone && taxDone && bankDone && mandateAgreed && riskDone && sofDone && termsDone && agreementSigned;
@@ -4678,7 +4752,7 @@ app.post("/api/webhooks/csdp", async (req, res) => {
       console.log(`[CSDP Webhook] Updated settlement_status to ${newStatus} for tx:${transactionId} holding:${holdingId}`);
 
       if (newStatus === SETTLEMENT_STATUSES.CONFIRMED) {
-        sendOrderFillEmail(db, { transactionId, holdingId }).catch(() => {});
+        sendOrderFillEmail(db, { transactionId, holdingId }).catch(() => { });
       }
     } else if (status === "rejected" || status === "failed") {
       if (transactionId) {
@@ -4735,7 +4809,7 @@ app.post("/api/webhooks/broker", async (req, res) => {
       }
 
       console.log(`[Broker Webhook] Settlement CONFIRMED for tx:${transactionId} holding:${holdingId}`);
-      sendOrderFillEmail(db, { transactionId, holdingId }).catch(() => {});
+      sendOrderFillEmail(db, { transactionId, holdingId }).catch(() => { });
     } else if (status === "rejected" || status === "failed") {
       if (transactionId) {
         await db.from("transactions").update({ settlement_status: SETTLEMENT_STATUSES.FAILED }).eq("id", transactionId);
@@ -4864,7 +4938,7 @@ app.get('/api/diagnose/news-articles', async (req, res) => {
       published_at: a.published_at,
       source: a.source,
     }));
-  } catch (e) {}
+  } catch (e) { }
 
   // 3. Write test — insert a clearly labelled test row then delete it
   const testDocId = Date.now(); // doc_id is bigint

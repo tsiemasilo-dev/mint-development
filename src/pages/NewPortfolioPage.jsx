@@ -163,11 +163,11 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   const { profile } = useProfile();
   const { strategies, selectedStrategy: userSelectedStrategy, loading: strategiesLoading, selectStrategy, refetch: refetchStrategies } = useUserStrategies();
   const { chartData: realChartData, loading: chartLoading } = useStrategyChartData(userSelectedStrategy?.strategyId, timeFilter, userSelectedStrategy?.firstInvestedDate || null);
-  
+
   const fullName = [profile?.firstName || profile?.first_name, profile?.lastName || profile?.last_name]
     .filter(Boolean).join(" ") || "User";
   const initials = fullName.split(" ").filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase() || "U";
-  
+
   const isStrategyReady = !strategiesLoading && userSelectedStrategy;
   const currentStrategy = userSelectedStrategy || {
     name: strategiesLoading ? "Loading..." : "No Strategy",
@@ -490,112 +490,112 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   if (currentView === "allocations") {
     return (
       <SwipeBackWrapper onBack={() => setCurrentView("portfolio")} enabled={true}>
-      <div className="min-h-screen pb-[env(safe-area-inset-bottom)] text-white relative overflow-x-hidden">
-        {/* Gradient background - same as portfolio page */}
-        <div className="absolute inset-x-0 top-0 -z-10 h-full">
-          <div 
-            className="absolute inset-x-0 top-0"
-            style={{ 
-              height: '100vh',
-              background: 'linear-gradient(180deg, #0d0d12 0%, #0e0a14 0.5%, #100b18 1%, #120c1c 1.5%, #150e22 2%, #181028 2.5%, #1c122f 3%, #201436 3.5%, #25173e 4%, #2a1a46 5%, #301d4f 6%, #362158 7%, #3d2561 8%, #44296b 9%, #4c2e75 10%, #54337f 11%, #5d3889 12%, #663e93 13%, #70449d 14%, #7a4aa7 15%, #8451b0 16%, #8e58b9 17%, #9860c1 18%, #a268c8 19%, #ac71ce 20%, #b57ad3 21%, #be84d8 22%, #c68edc 23%, #cd98e0 24%, #d4a2e3 25%, #daace6 26%, #dfb6e9 27%, #e4c0eb 28%, #e8c9ed 29%, #ecd2ef 30%, #efdaf1 31%, #f2e1f3 32%, #f4e7f5 33%, #f6ecf7 34%, #f8f0f9 35%, #f9f3fa 36%, #faf5fb 38%, #fbf7fc 40%, #fcf9fd 42%, #fdfafd 45%, #faf8fc 55%, #f8f6fa 100%)'
-            }} 
-          />
-          <div 
-            className="absolute inset-x-0 top-[100vh] bottom-0"
-            style={{ background: '#f8f6fa' }} 
-          />
-        </div>
+        <div className="min-h-screen pb-[env(safe-area-inset-bottom)] text-white relative overflow-x-hidden">
+          {/* Gradient background - same as portfolio page */}
+          <div className="absolute inset-x-0 top-0 -z-10 h-full">
+            <div
+              className="absolute inset-x-0 top-0"
+              style={{
+                height: '100vh',
+                background: 'linear-gradient(180deg, #0d0d12 0%, #0e0a14 0.5%, #100b18 1%, #120c1c 1.5%, #150e22 2%, #181028 2.5%, #1c122f 3%, #201436 3.5%, #25173e 4%, #2a1a46 5%, #301d4f 6%, #362158 7%, #3d2561 8%, #44296b 9%, #4c2e75 10%, #54337f 11%, #5d3889 12%, #663e93 13%, #70449d 14%, #7a4aa7 15%, #8451b0 16%, #8e58b9 17%, #9860c1 18%, #a268c8 19%, #ac71ce 20%, #b57ad3 21%, #be84d8 22%, #c68edc 23%, #cd98e0 24%, #d4a2e3 25%, #daace6 26%, #dfb6e9 27%, #e4c0eb 28%, #e8c9ed 29%, #ecd2ef 30%, #efdaf1 31%, #f2e1f3 32%, #f4e7f5 33%, #f6ecf7 34%, #f8f0f9 35%, #f9f3fa 36%, #faf5fb 38%, #fbf7fc 40%, #fcf9fd 42%, #fdfafd 45%, #faf8fc 55%, #f8f6fa 100%)'
+              }}
+            />
+            <div
+              className="absolute inset-x-0 top-[100vh] bottom-0"
+              style={{ background: '#f8f6fa' }}
+            />
+          </div>
 
-        {/* Header */}
-        <div className="mx-auto flex w-full max-w-sm flex-col px-4 pt-12 md:max-w-md md:px-6">
-          <header className="flex items-center gap-3 mb-6">
-            <button 
-              onClick={() => setCurrentView("portfolio")}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm border border-white/20 shadow-lg transition hover:bg-white/20"
-            >
-              <ArrowLeft className="h-5 w-5 text-white" />
-            </button>
-            <h1 className="text-xl font-bold text-white">{currentStrategy.name || "Strategy"} Allocations</h1>
-          </header>
-        </div>
+          {/* Header */}
+          <div className="mx-auto flex w-full max-w-sm flex-col px-4 pt-12 md:max-w-md md:px-6">
+            <header className="flex items-center gap-3 mb-6">
+              <button
+                onClick={() => setCurrentView("portfolio")}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm border border-white/20 shadow-lg transition hover:bg-white/20"
+              >
+                <ArrowLeft className="h-5 w-5 text-white" />
+              </button>
+              <h1 className="text-xl font-bold text-white">{currentStrategy.name || "Strategy"} Allocations</h1>
+            </header>
+          </div>
 
-        {/* Allocation History Cards - sorted most recent first */}
-        <div className="mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-6">
-          {strategies.length === 0 ? (
-            <div className="rounded-3xl p-8 backdrop-blur-xl shadow-sm border border-slate-100/50 text-center" style={{ background: 'rgba(255,255,255,0.7)' }}>
-              <p className="text-sm font-semibold text-slate-900 mb-1">No allocations yet</p>
-              <p className="text-xs text-slate-500">Your strategy allocations will appear here once you start investing.</p>
-            </div>
-          ) : (
-            [...strategies].sort((a, b) => new Date(b.entryDate || 0) - new Date(a.entryDate || 0)).map((allocation) => {
-              const topPerformers = Array.isArray(allocation.holdings) ? allocation.holdings.slice(0, 3) : [];
-              return (
-                <div 
-                  key={allocation.id}
-                  className="rounded-3xl p-5 backdrop-blur-xl shadow-sm border border-slate-100/50"
-                  style={{
-                    background: 'rgba(255,255,255,0.7)',
-                  }}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div>
-                      <p className="text-xs text-slate-500 mb-1">Amount</p>
-                      <p className="text-xl font-bold text-slate-900">
-                        {formatCurrency(allocation.investedAmount || 0)}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-slate-500 mb-1">Return</p>
-                      <p className={`text-xl font-bold ${(allocation.previousMonthChange || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        {(allocation.previousMonthChange || 0) >= 0 ? '+' : ''}{(allocation.previousMonthChange || 0).toFixed(1)}%
-                      </p>
-                    </div>
-                  </div>
-
-
-                  <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-                    <div>
-                      <p className="text-xs text-slate-500 mb-1">{allocation.entryDate ? 'Date' : 'Strategy'}</p>
-                      <p className="text-sm font-medium text-slate-700">
-                        {allocation.entryDate ? formatDate(allocation.entryDate) : allocation.name}
-                      </p>
-                    </div>
-                    
-                    {topPerformers.length > 0 && (
-                      <div className="flex items-center -space-x-2">
-                        {topPerformers.map((asset, index) => {
-                          const matchedStock = stocksList.find(st => st.ticker === asset.symbol);
-                          const logo = asset.logo_url || asset.logo || matchedStock?.logo || null;
-                          return (
-                            <div 
-                              key={asset.symbol}
-                              className="h-9 w-9 rounded-full bg-white border-2 border-white shadow-md overflow-hidden"
-                              style={{ zIndex: 3 - index }}
-                            >
-                              {failedLogos[asset.symbol] || !logo ? (
-                                <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-100 to-purple-100 text-[10px] font-bold text-violet-700">
-                                  {asset.symbol.slice(0, 2)}
-                                </div>
-                              ) : (
-                                <img
-                                  src={logo}
-                                  alt={asset.symbol}
-                                  className="h-full w-full object-cover"
-                                  onError={() => setFailedLogos(prev => ({ ...prev, [asset.symbol]: true }))}
-                                />
-                              )}
-                            </div>
-                          );
-                        })}
+          {/* Allocation History Cards - sorted most recent first */}
+          <div className="mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-6">
+            {strategies.length === 0 ? (
+              <div className="rounded-3xl p-8 backdrop-blur-xl shadow-sm border border-slate-100/50 text-center" style={{ background: 'rgba(255,255,255,0.7)' }}>
+                <p className="text-sm font-semibold text-slate-900 mb-1">No allocations yet</p>
+                <p className="text-xs text-slate-500">Your strategy allocations will appear here once you start investing.</p>
+              </div>
+            ) : (
+              [...strategies].sort((a, b) => new Date(b.entryDate || 0) - new Date(a.entryDate || 0)).map((allocation) => {
+                const topPerformers = Array.isArray(allocation.holdings) ? allocation.holdings.slice(0, 3) : [];
+                return (
+                  <div
+                    key={allocation.id}
+                    className="rounded-3xl p-5 backdrop-blur-xl shadow-sm border border-slate-100/50"
+                    style={{
+                      background: 'rgba(255,255,255,0.7)',
+                    }}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <p className="text-xs text-slate-500 mb-1">Amount</p>
+                        <p className="text-xl font-bold text-slate-900">
+                          {formatCurrency(allocation.investedAmount || 0)}
+                        </p>
                       </div>
-                    )}
+                      <div className="text-right">
+                        <p className="text-xs text-slate-500 mb-1">Return</p>
+                        <p className={`text-xl font-bold ${(allocation.previousMonthChange || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          {(allocation.previousMonthChange || 0) >= 0 ? '+' : ''}{(allocation.previousMonthChange || 0).toFixed(1)}%
+                        </p>
+                      </div>
+                    </div>
+
+
+                    <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+                      <div>
+                        <p className="text-xs text-slate-500 mb-1">{allocation.entryDate ? 'Date' : 'Strategy'}</p>
+                        <p className="text-sm font-medium text-slate-700">
+                          {allocation.entryDate ? formatDate(allocation.entryDate) : allocation.name}
+                        </p>
+                      </div>
+
+                      {topPerformers.length > 0 && (
+                        <div className="flex items-center -space-x-2">
+                          {topPerformers.map((asset, index) => {
+                            const matchedStock = stocksList.find(st => st.ticker === asset.symbol);
+                            const logo = asset.logo_url || asset.logo || matchedStock?.logo || null;
+                            return (
+                              <div
+                                key={asset.symbol}
+                                className="h-9 w-9 rounded-full bg-white border-2 border-white shadow-md overflow-hidden"
+                                style={{ zIndex: 3 - index }}
+                              >
+                                {failedLogos[asset.symbol] || !logo ? (
+                                  <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-100 to-purple-100 text-[10px] font-bold text-violet-700">
+                                    {asset.symbol.slice(0, 2)}
+                                  </div>
+                                ) : (
+                                  <img
+                                    src={logo}
+                                    alt={asset.symbol}
+                                    className="h-full w-full object-cover"
+                                    onError={() => setFailedLogos(prev => ({ ...prev, [asset.symbol]: true }))}
+                                  />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })
-          )}
+                );
+              })
+            )}
+          </div>
         </div>
-      </div>
       </SwipeBackWrapper>
     );
   }
@@ -605,21 +605,21 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       {/* Gradient background - scrolls with content */}
       <div className="absolute inset-x-0 top-0 -z-10 h-full">
         {/* Base gradient: seamless purple to lavender to white transition using vh units for consistent position */}
-        <div 
+        <div
           className="absolute inset-x-0 top-0"
-          style={{ 
+          style={{
             height: '100vh',
             background: 'linear-gradient(180deg, #0d0d12 0%, #0e0a14 0.5%, #100b18 1%, #120c1c 1.5%, #150e22 2%, #181028 2.5%, #1c122f 3%, #201436 3.5%, #25173e 4%, #2a1a46 5%, #301d4f 6%, #362158 7%, #3d2561 8%, #44296b 9%, #4c2e75 10%, #54337f 11%, #5d3889 12%, #663e93 13%, #70449d 14%, #7a4aa7 15%, #8451b0 16%, #8e58b9 17%, #9860c1 18%, #a268c8 19%, #ac71ce 20%, #b57ad3 21%, #be84d8 22%, #c68edc 23%, #cd98e0 24%, #d4a2e3 25%, #daace6 26%, #dfb6e9 27%, #e4c0eb 28%, #e8c9ed 29%, #ecd2ef 30%, #efdaf1 31%, #f2e1f3 32%, #f4e7f5 33%, #f6ecf7 34%, #f8f0f9 35%, #f9f3fa 36%, #faf5fb 38%, #fbf7fc 40%, #fcf9fd 42%, #fdfafd 45%, #faf8fc 55%, #f8f6fa 100%)'
-          }} 
+          }}
         />
         {/* Continuation for rest of page - matches end of gradient */}
-        <div 
+        <div
           className="absolute inset-x-0 top-[100vh] bottom-0"
-          style={{ background: '#f8f6fa' }} 
+          style={{ background: '#f8f6fa' }}
         />
-        
+
         {/* Subtle ambient glow behind account balance */}
-        <div 
+        <div
           className="absolute top-[6%] left-1/2 -translate-x-1/2 w-[300px] h-[160px] rounded-full"
           style={{ background: 'radial-gradient(ellipse at center, rgba(91,33,182,0.15) 0%, rgba(76,29,149,0.08) 40%, transparent 70%)', filter: 'blur(50px)' }}
         />
@@ -633,7 +633,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
             <div className="flex flex-col gap-1">
               <div className="flex h-10 w-10 items-center justify-center rounded-full overflow-hidden bg-white/20 border border-white/30 text-sm font-semibold text-white">
                 {profile.avatarUrl ? (
-                  <img 
+                  <img
                     src={profile.avatarUrl}
                     alt={fullName}
                     className="h-full w-full object-cover"
@@ -645,7 +645,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
               </div>
               <p className="text-lg font-medium text-white/90 mt-1">{fullName}</p>
             </div>
-            <button 
+            <button
               className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 backdrop-blur-sm transition hover:bg-white/10"
               onClick={onOpenNotifications}
             >
@@ -718,11 +718,10 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                   setTabDirection(newIdx > oldIdx ? 1 : -1);
                   setActiveTab(tab.id);
                 }}
-                className={`relative overflow-hidden px-4 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 ${
-                  activeTab === tab.id
+                className={`relative overflow-hidden px-4 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 ${activeTab === tab.id
                     ? "bg-violet-500 text-white shadow-lg shadow-violet-500/30"
                     : "border border-white/60 text-white backdrop-blur-xl hover:bg-white/20"
-                }`}
+                  }`}
                 style={activeTab !== tab.id ? { background: 'rgba(255,255,255,0.15)', textShadow: '0 0 8px rgba(0,0,0,0.5), 0 1px 4px rgba(0,0,0,0.3)' } : {}}
               >
                 {tabRipple && tabRipple.id === tab.id && (
@@ -749,1308 +748,1302 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       </div>
 
       <AnimatePresence mode="wait" initial={false}>
-      {/* Strategy Tab Content */}
-      {activeTab === "strategy" && (
-        <motion.div
-          key="strategy"
-          initial={{ opacity: 0, x: tabDirection * 40, filter: 'blur(6px)' }}
-          animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
-          exit={{ opacity: 0, x: tabDirection * -40, filter: 'blur(6px)' }}
-          transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
-        >
-        <>
-          {/* Chart section */}
-          <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 md:max-w-md md:px-8">
-        <section className="py-2">
-          {strategies.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 px-6">
-              <div className="w-16 h-16 rounded-full bg-purple-50 flex items-center justify-center mb-4">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                  <path d="M2 17l10 5 10-5" />
-                  <path d="M2 12l10 5 10-5" />
-                </svg>
-              </div>
-              <p className="text-lg font-semibold text-slate-900 mb-1">Invest in Your First Strategy</p>
-              <p className="text-sm text-slate-500 text-center max-w-[260px]">Choose a strategy and start building your portfolio. Your performance will show up here.</p>
-            </div>
-          ) : (
-          <>
-          <div className="flex items-center justify-between mb-3 -ml-4">
-            <div className="relative" ref={dropdownRef}>
-              <button 
-                onClick={() => setShowStrategyDropdown(!showStrategyDropdown)}
-                className="flex items-center gap-0.5 text-slate-900 hover:text-slate-700 transition"
-              >
-                <span className="text-lg font-semibold tracking-tight" style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}>
-                  {currentStrategy.name || "Strategy"}
-                </span>
-                <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${showStrategyDropdown ? 'rotate-180' : ''}`} />
-              </button>
-              {showStrategyDropdown && strategies.length > 0 && (
-                <div 
-                  className="absolute top-full left-0 mt-2 min-w-[200px] max-h-[280px] overflow-y-auto bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200/50 z-50 overscroll-contain"
-                  style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif", WebkitOverflowScrolling: 'touch' }}
-                >
-                  {strategies.map((strategy) => (
-                    <button
-                      key={strategy.strategyId}
-                      onClick={() => handleStrategySelect(strategy)}
-                      className={`w-full px-4 py-3.5 text-left hover:bg-purple-50/50 transition-colors duration-150 border-b border-slate-100/50 last:border-b-0 ${
-                        userSelectedStrategy?.strategyId === strategy.strategyId ? 'bg-purple-50' : ''
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-slate-800 text-sm tracking-tight">{strategy.name}</p>
+        {/* Strategy Tab Content */}
+        {activeTab === "strategy" && (
+          <motion.div
+            key="strategy"
+            initial={{ opacity: 0, x: tabDirection * 40, filter: 'blur(6px)' }}
+            animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, x: tabDirection * -40, filter: 'blur(6px)' }}
+            transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
+          >
+            <>
+              {/* Chart section */}
+              <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 md:max-w-md md:px-8">
+                <section className="py-2">
+                  {strategies.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 px-6">
+                      <div className="w-16 h-16 rounded-full bg-purple-50 flex items-center justify-center mb-4">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                          <path d="M2 17l10 5 10-5" />
+                          <path d="M2 12l10 5 10-5" />
+                        </svg>
                       </div>
-                      <p className="text-xs text-slate-400 mt-0.5 font-medium tabular-nums">
-                        R{(strategy.currentValue || 0).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </p>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="flex gap-1">
-              {[
-                { id: "D", label: "D" },
-                { id: "W", label: "W" },
-                { id: "M", label: "M" },
-                { id: "ALL", label: "All" },
-              ].map((filter) => (
-                <button
-                  key={filter.id}
-                  onClick={() => setTimeFilter(filter.id)}
-                  className={`px-3 h-9 rounded-full text-sm font-bold transition-all ${
-                    timeFilter === filter.id
-                      ? "bg-slate-700/80 text-white shadow-lg backdrop-blur-md border border-white/20"
-                      : "text-slate-400 hover:text-slate-600 hover:bg-slate-200/30"
-                  }`}
-                  style={timeFilter === filter.id ? {
-                    boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.1), 0 4px 12px rgba(0,0,0,0.15)'
-                  } : {}}
-                >
-                  {filter.label}
-                </button>
-              ))}
-            </div>
-          </div>
+                      <p className="text-lg font-semibold text-slate-900 mb-1">Invest in Your First Strategy</p>
+                      <p className="text-sm text-slate-500 text-center max-w-[260px]">Choose a strategy and start building your portfolio. Your performance will show up here.</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between mb-3 -ml-4">
+                        <div className="relative" ref={dropdownRef}>
+                          <button
+                            onClick={() => setShowStrategyDropdown(!showStrategyDropdown)}
+                            className="flex items-center gap-0.5 text-slate-900 hover:text-slate-700 transition"
+                          >
+                            <span className="text-lg font-semibold tracking-tight" style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}>
+                              {currentStrategy.name || "Strategy"}
+                            </span>
+                            <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${showStrategyDropdown ? 'rotate-180' : ''}`} />
+                          </button>
+                          {showStrategyDropdown && strategies.length > 0 && (
+                            <div
+                              className="absolute top-full left-0 mt-2 min-w-[200px] max-h-[280px] overflow-y-auto bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200/50 z-50 overscroll-contain"
+                              style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif", WebkitOverflowScrolling: 'touch' }}
+                            >
+                              {strategies.map((strategy) => (
+                                <button
+                                  key={strategy.strategyId}
+                                  onClick={() => handleStrategySelect(strategy)}
+                                  className={`w-full px-4 py-3.5 text-left hover:bg-purple-50/50 transition-colors duration-150 border-b border-slate-100/50 last:border-b-0 ${userSelectedStrategy?.strategyId === strategy.strategyId ? 'bg-purple-50' : ''
+                                    }`}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-medium text-slate-800 text-sm tracking-tight">{strategy.name}</p>
+                                  </div>
+                                  <p className="text-xs text-slate-400 mt-0.5 font-medium tabular-nums">
+                                    R{(strategy.currentValue || 0).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </p>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex gap-1">
+                          {[
+                            { id: "D", label: "D" },
+                            { id: "W", label: "W" },
+                            { id: "M", label: "M" },
+                            { id: "ALL", label: "All" },
+                          ].map((filter) => (
+                            <button
+                              key={filter.id}
+                              onClick={() => setTimeFilter(filter.id)}
+                              className={`px-3 h-9 rounded-full text-sm font-bold transition-all ${timeFilter === filter.id
+                                  ? "bg-slate-700/80 text-white shadow-lg backdrop-blur-md border border-white/20"
+                                  : "text-slate-400 hover:text-slate-600 hover:bg-slate-200/30"
+                                }`}
+                              style={timeFilter === filter.id ? {
+                                boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.1), 0 4px 12px rgba(0,0,0,0.15)'
+                              } : {}}
+                            >
+                              {filter.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
 
-          <div className="mb-3 px-1">
+                      <div className="mb-3 px-1">
+                        {(() => {
+                          const cv = currentStrategy.currentValue || 0;
+                          const ia = currentStrategy.investedAmount || 0;
+                          const pnl = cv - ia;
+                          const pnlPct = ia > 0 ? (pnl / ia) * 100 : 0;
+                          const isPos = pnl >= 0;
+                          return (
+                            <>
+                              <p className="text-3xl font-bold text-slate-900">R{cv.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className={`text-sm font-semibold ${isPos ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                  {isPos ? '+' : '-'}R{Math.abs(pnl).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${isPos ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-500'}`}>
+                                  {isPos ? '+' : ''}{pnlPct.toFixed(1)}%
+                                </span>
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
+
+                      <div style={{ width: '100%', height: 220, marginBottom: 8 }}>
+                        {currentChartData.length === 0 ? (
+                          <div style={{ width: '100%', height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <div className="text-slate-400 text-sm">{isLoadingData ? 'Loading chart...' : 'No data available'}</div>
+                          </div>
+                        ) : (
+                          <ResponsiveContainer width="100%" height={220}>
+                            <ComposedChart
+                              data={currentChartData}
+                              margin={{ top: 10, right: 15, left: 5, bottom: 30 }}
+                            >
+                              <defs>
+                                <linearGradient id="glowGradientVertical" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.4" />
+                                  <stop offset="50%" stopColor="#a78bfa" stopOpacity="0.2" />
+                                  <stop offset="100%" stopColor="#c4b5fd" stopOpacity="0.02" />
+                                </linearGradient>
+                              </defs>
+
+                              <XAxis
+                                dataKey="day"
+                                axisLine={false}
+                                tickLine={false}
+                                tickMargin={8}
+                                interval={currentChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(currentChartData.length / 6) - 1)}
+                                tick={({ x, y, payload }) => {
+                                  if (!payload.value) return null;
+                                  return <text x={x} y={y} dy={12} textAnchor="middle" fill="#64748b" fontSize={11} fontWeight={500}>{payload.value}</text>;
+                                }}
+                              />
+
+                              <YAxis
+                                domain={strategyAxisConfig.domain}
+                                ticks={strategyAxisConfig.ticks}
+                                tickFormatter={formatPnlAxis}
+                                tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 500 }}
+                                axisLine={false}
+                                tickLine={false}
+                                width={55}
+                              />
+
+                              <ReferenceLine y={0} stroke="#cbd5e1" strokeDasharray="3 3" strokeWidth={1} />
+
+                              <Tooltip
+                                content={({ active, payload, label }) => {
+                                  if (active && payload && payload.length) {
+                                    const fullDate = payload[0]?.payload?.fullDate || label;
+                                    const val = payload[0].value;
+                                    const isPos = val >= 0;
+                                    return (
+                                      <div className="bg-white/95 backdrop-blur-sm border border-slate-200 rounded-lg px-3 py-1.5 shadow-md">
+                                        <div className="text-xs text-slate-500 mb-0.5">{fullDate}</div>
+                                        <div className="text-sm font-bold text-violet-700">
+                                          {isPos ? '+' : '-'}R{Math.abs(val).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                }}
+                                cursor={false}
+                                wrapperStyle={{ outline: 'none' }}
+                              />
+
+                              <Area
+                                type="monotone"
+                                dataKey="value"
+                                stroke="none"
+                                fill="url(#glowGradientVertical)"
+                                fillOpacity={1}
+                              />
+
+                              <Line
+                                type="monotone"
+                                dataKey="value"
+                                stroke="#7c3aed"
+                                strokeWidth={2.5}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                dot={false}
+                                activeDot={{
+                                  r: 6,
+                                  fill: '#7c3aed',
+                                  stroke: '#c4b5fd',
+                                  strokeWidth: 2,
+                                }}
+                              />
+                            </ComposedChart>
+                          </ResponsiveContainer>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </section>
+              </div>
+
+              {/* Scrollable content section - starts after chart */}
+              <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
+                {strategies.length === 0 ? (
+                  <button
+                    onClick={() => onOpenStrategies && onOpenStrategies()}
+                    className="w-full py-3.5 rounded-full bg-gradient-to-r from-slate-800 to-slate-900 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg shadow-slate-900/30 transition hover:-translate-y-0.5 hover:shadow-xl"
+                  >
+                    Make Your First Investment
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => { setCurrentView("allocations"); window.scrollTo(0, 0); }}
+                    className="w-full py-3.5 rounded-full bg-gradient-to-r from-slate-800 to-slate-900 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg shadow-slate-900/30 transition hover:-translate-y-0.5 hover:shadow-xl"
+                  >
+                    View All Allocations
+                  </button>
+                )}
+
+                <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-sm font-semibold text-slate-900">Portfolio Holdings</p>
+                  </div>
+                  <p className="text-xs text-slate-400 mb-4">All holdings by weight</p>
+
+                  <div className="space-y-3">
+                    {holdings.map((holding) => (
+                      <div
+                        key={holding.symbol}
+                        className="flex items-center justify-between"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 overflow-hidden">
+                            {holding.isStrategy && holding.topLogos?.length > 0 ? (
+                              <div className="flex -space-x-1.5 items-center justify-center">
+                                {holding.topLogos.slice(0, 3).map((logo, li) => (
+                                  <img key={li} src={logo} className="w-5 h-5 rounded-full object-cover border border-white shadow-sm" referrerPolicy="no-referrer" crossOrigin="anonymous" />
+                                ))}
+                              </div>
+                            ) : failedLogos[holding.symbol] || !holding.logo ? (
+                              <span className="text-xs font-bold text-slate-600">
+                                {holding.symbol.slice(0, 3)}
+                              </span>
+                            ) : (
+                              <img
+                                src={holding.logo}
+                                alt={holding.name}
+                                className="h-8 w-8 object-contain"
+                                referrerPolicy="no-referrer"
+                                crossOrigin="anonymous"
+                                onError={() => setFailedLogos(prev => ({ ...prev, [holding.symbol]: true }))}
+                              />
+                            )}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-sm font-semibold text-slate-900">{holding.symbol}</p>
+                            </div>
+                            <p className="text-xs text-slate-500">{holding.name}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className={`text-sm font-semibold ${holding.change >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            {holding.change >= 0 ? '+' : ''}{holding.change.toFixed(1)}%
+                          </p>
+                          <p className="text-[10px] text-slate-400">{holding.weight.toFixed(1)}% of portfolio</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                {/* Calendar Returns */}
+                <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50">
+                  <div className="flex items-center justify-between gap-2 mb-4">
+                    <p className="text-sm font-semibold text-slate-900">Calendar Returns</p>
+                    <div className="flex items-center gap-2">
+                      <div className="relative" ref={calendarFilterRef}>
+                        <button
+                          onClick={() => setShowCalendarFilterDropdown(!showCalendarFilterDropdown)}
+                          className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-200 max-w-[140px]"
+                        >
+                          <span className="truncate">{calendarFilterOptions.find(o => o.id === calendarFilter)?.label || "Overall Portfolio"}</span>
+                          <ChevronDown className={`h-3.5 w-3.5 flex-shrink-0 transition-transform duration-200 ${showCalendarFilterDropdown ? 'rotate-180' : ''}`} />
+                        </button>
+                        {showCalendarFilterDropdown && (
+                          <div className="absolute right-0 top-full mt-1 min-w-[160px] max-h-[200px] overflow-y-auto bg-white rounded-xl shadow-xl border border-slate-200/50 z-50 overflow-hidden">
+                            {calendarFilterOptions.map((option) => (
+                              <button
+                                key={option.id}
+                                onClick={() => { setCalendarFilter(option.id); setShowCalendarFilterDropdown(false); }}
+                                className={`w-full px-4 py-2.5 text-left text-xs font-semibold transition-colors ${option.id === calendarFilter
+                                    ? "bg-violet-50 text-violet-700"
+                                    : "text-slate-600 hover:bg-slate-50"
+                                  }`}
+                              >
+                                {option.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {availableCalendarYears.length > 0 && (
+                        <div className="relative" ref={yearDropdownRef}>
+                          <button
+                            onClick={() => setShowYearDropdown(!showYearDropdown)}
+                            className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-200"
+                          >
+                            {calendarYear}
+                            <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${showYearDropdown ? 'rotate-180' : ''}`} />
+                          </button>
+                          {showYearDropdown && (
+                            <div className="absolute right-0 top-full mt-1 min-w-[80px] bg-white rounded-xl shadow-xl border border-slate-200/50 z-50 overflow-hidden">
+                              {availableCalendarYears.map((year) => (
+                                <button
+                                  key={year}
+                                  onClick={() => { setCalendarYear(Number(year)); setShowYearDropdown(false); }}
+                                  className={`w-full px-4 py-2.5 text-left text-xs font-semibold transition-colors ${Number(year) === calendarYear
+                                      ? "bg-violet-50 text-violet-700"
+                                      : "text-slate-600 hover:bg-slate-50"
+                                    }`}
+                                >
+                                  {year}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {monthNames.map((label, index) => {
+                      const monthKey = String(index + 1).padStart(2, "0");
+                      const value = calendarData[String(calendarYear)]?.[monthKey];
+                      const hasData = value != null;
+                      return (
+                        <div
+                          key={`${calendarYear}-${label}`}
+                          className={`rounded-xl px-3 py-2.5 text-center ${hasData ? getReturnColor(value) : "bg-slate-50"}`}
+                        >
+                          <p className={`text-[10px] font-semibold ${hasData ? "text-slate-500" : "text-slate-300"}`}>{label}</p>
+                          <p className={`mt-0.5 text-sm font-bold ${hasData ? "" : "text-slate-300"}`}>
+                            {hasData ? `${(Number(value) * 100).toFixed(2)}%` : "—"}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                {strategies.length > 0 && (
+                  <button
+                    onClick={() => (onOpenStrategies || onOpenInvest) && (onOpenStrategies || onOpenInvest)()}
+                    className="w-full py-3.5 rounded-full bg-gradient-to-r from-slate-800 to-slate-900 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg shadow-slate-900/30 transition hover:-translate-y-0.5 hover:shadow-xl flex items-center justify-center gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Buy More Strategies
+                  </button>
+                )}
+              </div>
+            </>
+          </motion.div>
+        )}
+
+        {/* Individual Stocks Tab Content */}
+        {activeTab === "stocks" && (
+          <motion.div
+            key="stocks"
+            initial={{ opacity: 0, x: tabDirection * 40, filter: 'blur(6px)' }}
+            animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, x: tabDirection * -40, filter: 'blur(6px)' }}
+            transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
+          >
             {(() => {
-              const cv = currentStrategy.currentValue || 0;
-              const ia = currentStrategy.investedAmount || 0;
-              const pnl = cv - ia;
-              const pnlPct = ia > 0 ? (pnl / ia) * 100 : 0;
-              const isPos = pnl >= 0;
+              const isMyStock = myStockIds.has(selectedStock?.id);
+              const userHolding = isMyStock && selectedSecurityId ? (rawHoldings || []).find(h => h.security_id === selectedSecurityId) : null;
+              const userQuantity = userHolding ? (userHolding.quantity || 0) : 0;
+              const avgFillRands = userHolding ? (userHolding.avg_fill || 0) / 100 : 0;
+              const costBasisStock = avgFillRands * userQuantity;
+              const showStockPnl = isMyStock && userQuantity > 0 && avgFillRands > 0;
+              const stockChartData = liveStockChartData.length > 0
+                ? (showStockPnl
+                  ? (() => {
+                    const pts = [{ ...liveStockChartData[0], day: null, value: 0 }];
+                    liveStockChartData.forEach(d => {
+                      pts.push({ ...d, value: Number(((d.value * userQuantity) - costBasisStock).toFixed(2)) });
+                    });
+                    return pts;
+                  })()
+                  : liveStockChartData)
+                : (showStockPnl
+                  ? [{ day: null, value: 0 }, { day: "Today", value: 0 }]
+                  : []);
+              const stockAxisConfig = computePnlAxisConfig(stockChartData);
+              if (!selectedStock) {
+                if (quotesLoading || holdingsLoading) {
+                  return <div className="text-center py-10 text-slate-500">Loading stocks...</div>;
+                }
+                if (stocksList.length === 0) {
+                  return <div className="text-center py-10 text-slate-500">No stocks available.</div>;
+                }
+                return null;
+              }
+              const otherStocks = stocksList.filter(s => s.id !== selectedStock?.id && !myStockIds.has(s.id));
+              const hasNoHoldings = myStocks.length === 0;
               return (
                 <>
-                  <p className="text-3xl font-bold text-slate-900">R{cv.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className={`text-sm font-semibold ${isPos ? 'text-emerald-500' : 'text-rose-500'}`}>
-                      {isPos ? '+' : '-'}R{Math.abs(pnl).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
-                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${isPos ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-500'}`}>
-                      {isPos ? '+' : ''}{pnlPct.toFixed(1)}%
-                    </span>
+                  {hasNoHoldings ? (
+                    <div className="flex flex-col items-center justify-center py-12 px-6">
+                      <div className="w-16 h-16 rounded-full bg-purple-50 flex items-center justify-center mb-4">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+                          <polyline points="16 7 22 7 22 13" />
+                        </svg>
+                      </div>
+                      <p className="text-lg font-semibold text-slate-900 mb-1">Invest in Your First Stock</p>
+                      <p className="text-sm text-slate-500 text-center max-w-[260px] mb-5">Browse individual stocks and start building your portfolio. Your holdings will show up here.</p>
+                      <button
+                        onClick={() => onOpenInvest && onOpenInvest()}
+                        className="w-full max-w-[280px] py-3.5 rounded-full bg-gradient-to-r from-slate-800 to-slate-900 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg shadow-slate-900/30 transition hover:-translate-y-0.5 hover:shadow-xl"
+                      >
+                        Make Your First Investment
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 md:max-w-md md:px-8">
+                      <section className="py-2">
+                        {/* Chart and stock selector only shown when user has holdings */}
+                        <div className="flex items-center justify-between mb-3 px-1">
+                          <div className="relative" ref={stockDropdownRef}>
+                            <button
+                              onClick={() => setShowStockDropdown(!showStockDropdown)}
+                              className="flex items-center gap-2 text-slate-900 hover:text-slate-700 transition"
+                            >
+                              <span className="text-lg font-semibold tracking-tight" style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}>
+                                {selectedStock.name}
+                              </span>
+                              <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${showStockDropdown ? 'rotate-180' : ''}`} />
+                            </button>
+                            {showStockDropdown && (myStocks.length > 0 || stocksList.length > 0) && (
+                              <div
+                                className="absolute top-full left-0 mt-2 min-w-[200px] max-h-[280px] overflow-y-auto bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200/50 z-50 overscroll-contain"
+                                style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif", WebkitOverflowScrolling: 'touch' }}
+                              >
+                                {(myStocks.length > 0 ? myStocks : stocksList.slice(0, 20)).map((stock) => (
+                                  <button
+                                    key={stock.id}
+                                    onClick={() => { setSelectedStock(stock); setShowStockDropdown(false); }}
+                                    className={`w-full px-4 py-3.5 text-left hover:bg-purple-50/50 transition-colors duration-150 border-b border-slate-100/50 last:border-b-0 ${selectedStock.id === stock.id ? 'bg-purple-50' : ''
+                                      }`}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <p className="font-medium text-slate-800 text-sm tracking-tight">{stock.name}</p>
+                                    </div>
+                                    <p className="text-xs text-slate-400 mt-0.5 font-medium tabular-nums">
+                                      {formatCurrency(liveQuotes[stock.ticker]?.price || stock.price)}
+                                    </p>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex gap-1">
+                            {[
+                              { id: "D", label: "D" },
+                              { id: "W", label: "W" },
+                              { id: "M", label: "M" },
+                              { id: "ALL", label: "All" },
+                            ].map((filter) => (
+                              <button
+                                key={filter.id}
+                                onClick={() => setStockTimeFilter(filter.id)}
+                                className={`px-3 h-9 rounded-full text-sm font-bold transition-all ${stockTimeFilter === filter.id
+                                    ? "bg-slate-700/80 text-white shadow-lg backdrop-blur-md border border-white/20"
+                                    : "text-slate-400 hover:text-slate-600 hover:bg-slate-200/30"
+                                  }`}
+                                style={stockTimeFilter === filter.id ? {
+                                  boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.1), 0 4px 12px rgba(0,0,0,0.15)'
+                                } : {}}
+                              >
+                                {filter.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="mb-3 px-1">
+                          {(() => {
+                            if (isMyStock && userHolding && userQuantity > 0) {
+                              const holdingMarketValue = liveHoldingValue(userHolding);
+                              const costBasis = ((userHolding.avg_fill || 0) * userQuantity) / 100;
+                              const pnl = holdingMarketValue - costBasis;
+                              const pnlPct = costBasis > 0 ? ((pnl / costBasis) * 100) : 0;
+                              const dailyChangePct = userHolding.change_percent || 0;
+                              const dailyChangeAmt = (holdingMarketValue * dailyChangePct) / (100 + dailyChangePct);
+                              return (
+                                <>
+                                  <p className="text-3xl font-bold text-slate-900">{formatCurrency(holdingMarketValue)}</p>
+                                  <p className={`text-sm ${pnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                    {pnl >= 0 ? '+' : ''}{formatCurrency(pnl)} ({pnl >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%)
+                                  </p>
+                                </>
+                              );
+                            }
+                            const perSharePrice = liveQuotes[selectedStock.ticker]?.price || selectedStock.price;
+                            const changePct = liveQuotes[selectedStock.ticker]?.changePercent ?? selectedStock.dailyChange;
+                            return (
+                              <>
+                                <p className="text-3xl font-bold text-slate-900">{formatCurrency(perSharePrice)}</p>
+                                <p className={`text-sm ${changePct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                  ({changePct >= 0 ? '+' : ''}{changePct.toFixed(2)}% Today)
+                                </p>
+                              </>
+                            );
+                          })()}
+                        </div>
+
+                        <div style={{ width: '100%', height: 220, marginBottom: 8 }}>
+                          {stockChartData.length === 0 ? (
+                            <div style={{ width: '100%', height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <div className="text-slate-400 text-sm">{stockChartLoading ? 'Loading chart...' : 'No data available'}</div>
+                            </div>
+                          ) : (
+                            <ResponsiveContainer width="100%" height={220}>
+                              <ComposedChart
+                                data={stockChartData}
+                                margin={{ top: 10, right: 15, left: 5, bottom: 30 }}
+                              >
+                                <defs>
+                                  <linearGradient id="stockGlowGradientVertical" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.4" />
+                                    <stop offset="50%" stopColor="#a78bfa" stopOpacity="0.2" />
+                                    <stop offset="100%" stopColor="#c4b5fd" stopOpacity="0.02" />
+                                  </linearGradient>
+                                </defs>
+
+                                <XAxis
+                                  dataKey="day"
+                                  axisLine={false}
+                                  tickLine={false}
+                                  tickMargin={8}
+                                  interval={stockTimeFilter === 'D'
+                                    ? Math.max(0, Math.ceil(stockChartData.length / 4) - 1)
+                                    : stockChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(stockChartData.length / 6) - 1)}
+                                  tick={({ x, y, payload }) => {
+                                    if (!payload.value) return null;
+                                    const val = String(payload.value);
+                                    if (stockTimeFilter === 'D' && val.includes('|')) {
+                                      const [dayPart, timePart] = val.split('|');
+                                      return (
+                                        <text x={x} y={y} textAnchor="middle" fill="#64748b" fontSize={10} fontWeight={500}>
+                                          <tspan x={x} dy={10}>{dayPart}</tspan>
+                                          <tspan x={x} dy={13}>{timePart}</tspan>
+                                        </text>
+                                      );
+                                    }
+                                    return <text x={x} y={y} dy={12} textAnchor="middle" fill="#64748b" fontSize={11} fontWeight={500}>{payload.value}</text>;
+                                  }}
+                                />
+
+                                <YAxis
+                                  domain={stockAxisConfig.domain}
+                                  ticks={stockAxisConfig.ticks}
+                                  tickFormatter={formatPnlAxis}
+                                  tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 500 }}
+                                  axisLine={false}
+                                  tickLine={false}
+                                  width={55}
+                                />
+
+                                {showStockPnl && (
+                                  <ReferenceLine y={0} stroke="#cbd5e1" strokeDasharray="3 3" strokeWidth={1} />
+                                )}
+
+                                <Tooltip
+                                  content={({ active, payload, label }) => {
+                                    if (active && payload && payload.length) {
+                                      let fullDate = payload[0]?.payload?.fullDate || label;
+                                      if (typeof fullDate === 'string' && fullDate.includes('|')) {
+                                        fullDate = fullDate.replace('|', ' ');
+                                      }
+                                      const val = payload[0].value;
+                                      const isPos = val >= 0;
+                                      return (
+                                        <div className="bg-white/95 backdrop-blur-sm border border-slate-200 rounded-lg px-3 py-1.5 shadow-md">
+                                          <div className="text-xs text-slate-500 mb-0.5">{fullDate}</div>
+                                          <div className="text-sm font-bold text-violet-700">
+                                            {showStockPnl ? (isPos ? '+' : '-') + 'R' + Math.abs(val).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : 'R' + val.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                          </div>
+                                        </div>
+                                      );
+                                    }
+                                    return null;
+                                  }}
+                                  cursor={false}
+                                  wrapperStyle={{ outline: 'none' }}
+                                />
+
+                                <Area
+                                  type="monotone"
+                                  dataKey="value"
+                                  stroke="none"
+                                  fill="url(#stockGlowGradientVertical)"
+                                  fillOpacity={1}
+                                />
+
+                                <Line
+                                  type="monotone"
+                                  dataKey="value"
+                                  stroke="#7c3aed"
+                                  strokeWidth={2.5}
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  dot={false}
+                                  activeDot={{
+                                    r: 6,
+                                    fill: '#7c3aed',
+                                    stroke: '#c4b5fd',
+                                    strokeWidth: 2,
+                                  }}
+                                />
+                              </ComposedChart>
+                            </ResponsiveContainer>
+                          )}
+                        </div>
+                      </section>
+                    </div>
+                  )}
+
+                  <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
+                    {myStocks.length > 0 && (() => {
+                      const STOCKS_PER_PAGE = 6;
+                      const myTotalPages = Math.ceil(myStocks.length / STOCKS_PER_PAGE);
+                      const myPagedStocks = myStocks.slice(myStocksPage * STOCKS_PER_PAGE, (myStocksPage + 1) * STOCKS_PER_PAGE);
+                      return (
+                        <section
+                          className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50"
+                          style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
+                        >
+                          <div className="flex items-center justify-between mb-4">
+                            <p className="text-sm font-semibold text-slate-900">My Stocks</p>
+                            {myTotalPages > 1 && (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => setMyStocksPage(p => Math.max(0, p - 1))}
+                                  disabled={myStocksPage === 0}
+                                  className={`h-7 w-7 rounded-full flex items-center justify-center transition ${myStocksPage === 0 ? 'text-slate-300' : 'text-slate-600 hover:bg-slate-100 active:bg-slate-200'}`}
+                                >
+                                  <ChevronLeft className="h-4 w-4" />
+                                </button>
+                                <span className="text-xs font-medium text-slate-400 tabular-nums">{myStocksPage + 1}/{myTotalPages}</span>
+                                <button
+                                  onClick={() => setMyStocksPage(p => Math.min(myTotalPages - 1, p + 1))}
+                                  disabled={myStocksPage >= myTotalPages - 1}
+                                  className={`h-7 w-7 rounded-full flex items-center justify-center transition ${myStocksPage >= myTotalPages - 1 ? 'text-slate-300' : 'text-slate-600 hover:bg-slate-100 active:bg-slate-200'}`}
+                                >
+                                  <ChevronRight className="h-4 w-4" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                          <div className="space-y-3">
+                            {myPagedStocks.map((stock) => {
+                              const livePrice = liveQuotes[stock.ticker]?.price || stock.price;
+                              const liveChange = liveQuotes[stock.ticker]?.changePercent ?? stock.dailyChange;
+                              const isPositive = liveChange >= 0;
+                              const stockSecId = liveQuotes[stock.ticker]?.id || null;
+                              const stockHolding = stockSecId ? (rawHoldings || []).find(h => h.security_id === stockSecId) : null;
+                              const stockQty = stockHolding ? (stockHolding.quantity || 0) : 0;
+                              const displayPrice = stockQty > 0 ? livePrice * stockQty : livePrice;
+                              return (
+                                <button
+                                  key={stock.id}
+                                  onClick={() => setSelectedStock(stock)}
+                                  className="w-full flex items-center gap-3 rounded-2xl bg-white/70 backdrop-blur-xl p-3 shadow-sm border border-slate-100/50 transition hover:bg-white/90 text-left"
+                                >
+                                  <div className="h-11 w-11 rounded-full bg-white border border-slate-200 shadow-sm overflow-hidden flex-shrink-0">
+                                    {failedLogos[stock.ticker] ? (
+                                      <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-100 to-purple-100 text-xs font-bold text-violet-700">
+                                        {stock.ticker.slice(0, 2)}
+                                      </div>
+                                    ) : (
+                                      <img
+                                        src={stock.logo}
+                                        alt={stock.name}
+                                        className="h-full w-full object-cover"
+                                        onError={() => setFailedLogos(prev => ({ ...prev, [stock.ticker]: true }))}
+                                      />
+                                    )}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                      <p className="text-sm font-semibold text-slate-900 truncate">{stock.name}</p>
+                                    </div>
+                                    <p className="text-xs text-slate-500 font-medium">{stockQty > 0 ? `${Math.round(stockQty)} shares` : stock.ticker}</p>
+                                  </div>
+                                  <div className="text-right flex-shrink-0">
+                                    <p className="text-sm font-bold text-slate-900">{formatCurrency(displayPrice)}</p>
+                                    <p className={`text-xs font-medium ${isPositive ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                      {isPositive ? '+' : ''}{liveChange.toFixed(2)}%
+                                    </p>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </section>
+                      );
+                    })()}
+
+                    {!hasNoHoldings && (
+                      <button
+                        onClick={() => onOpenInvest && onOpenInvest()}
+                        className="w-full py-3.5 rounded-full bg-gradient-to-r from-slate-800 to-slate-900 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg shadow-slate-900/30 transition hover:-translate-y-0.5 hover:shadow-xl flex items-center justify-center gap-2"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Buy More Stocks
+                      </button>
+                    )}
                   </div>
                 </>
               );
             })()}
-          </div>
-
-          <div style={{ width: '100%', height: 220, marginBottom: 8 }}>
-            {currentChartData.length === 0 ? (
-              <div style={{ width: '100%', height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <div className="text-slate-400 text-sm">{isLoadingData ? 'Loading chart...' : 'No data available'}</div>
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <ComposedChart
-                  data={currentChartData}
-                  margin={{ top: 10, right: 15, left: 5, bottom: 30 }}
-                >
-                  <defs>
-                    <linearGradient id="glowGradientVertical" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.4" />
-                      <stop offset="50%" stopColor="#a78bfa" stopOpacity="0.2" />
-                      <stop offset="100%" stopColor="#c4b5fd" stopOpacity="0.02" />
-                    </linearGradient>
-                  </defs>
-                  
-                  <XAxis 
-                    dataKey="day" 
-                    axisLine={false}
-                    tickLine={false}
-                    tickMargin={8}
-                    interval={currentChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(currentChartData.length / 6) - 1)}
-                    tick={({ x, y, payload }) => {
-                      if (!payload.value) return null;
-                      return <text x={x} y={y} dy={12} textAnchor="middle" fill="#64748b" fontSize={11} fontWeight={500}>{payload.value}</text>;
-                    }}
-                  />
-
-                  <YAxis
-                    domain={strategyAxisConfig.domain}
-                    ticks={strategyAxisConfig.ticks}
-                    tickFormatter={formatPnlAxis}
-                    tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 500 }}
-                    axisLine={false}
-                    tickLine={false}
-                    width={55}
-                  />
-
-                  <ReferenceLine y={0} stroke="#cbd5e1" strokeDasharray="3 3" strokeWidth={1} />
-                  
-                  <Tooltip
-                    content={({ active, payload, label }) => {
-                      if (active && payload && payload.length) {
-                        const fullDate = payload[0]?.payload?.fullDate || label;
-                        const val = payload[0].value;
-                        const isPos = val >= 0;
-                        return (
-                          <div className="bg-white/95 backdrop-blur-sm border border-slate-200 rounded-lg px-3 py-1.5 shadow-md">
-                            <div className="text-xs text-slate-500 mb-0.5">{fullDate}</div>
-                            <div className="text-sm font-bold text-violet-700">
-                              {isPos ? '+' : '-'}R{Math.abs(val).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </div>
-                          </div>
-                        );
-                      }
-                      return null;
-                    }}
-                    cursor={false}
-                    wrapperStyle={{ outline: 'none' }}
-                  />
-
-                  <Area
-                    type="monotone"
-                    dataKey="value"
-                    stroke="none"
-                    fill="url(#glowGradientVertical)"
-                    fillOpacity={1}
-                  />
-
-                  <Line
-                    type="monotone"
-                    dataKey="value"
-                    stroke="#7c3aed"
-                    strokeWidth={2.5}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    dot={false}
-                    activeDot={{
-                      r: 6,
-                      fill: '#7c3aed',
-                      stroke: '#c4b5fd',
-                      strokeWidth: 2,
-                    }}
-                  />
-                </ComposedChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-          </>
-          )}
-        </section>
-      </div>
-
-      {/* Scrollable content section - starts after chart */}
-      <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
-        {strategies.length === 0 ? (
-          <button 
-            onClick={() => onOpenStrategies && onOpenStrategies()}
-            className="w-full py-3.5 rounded-full bg-gradient-to-r from-slate-800 to-slate-900 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg shadow-slate-900/30 transition hover:-translate-y-0.5 hover:shadow-xl"
-          >
-            Make Your First Investment
-          </button>
-        ) : (
-          <button 
-            onClick={() => { setCurrentView("allocations"); window.scrollTo(0, 0); }}
-            className="w-full py-3.5 rounded-full bg-gradient-to-r from-slate-800 to-slate-900 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg shadow-slate-900/30 transition hover:-translate-y-0.5 hover:shadow-xl"
-          >
-            View All Allocations
-          </button>
+          </motion.div>
         )}
 
-        <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-sm font-semibold text-slate-900">Portfolio Holdings</p>
-          </div>
-          <p className="text-xs text-slate-400 mb-4">All holdings by weight</p>
-          
-          <div className="space-y-3">
-            {holdings.map((holding) => (
-              <div 
-                key={holding.symbol}
-                className="flex items-center justify-between"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 overflow-hidden">
-                    {holding.isStrategy && holding.topLogos?.length > 0 ? (
-                      <div className="flex -space-x-1.5 items-center justify-center">
-                        {holding.topLogos.slice(0, 3).map((logo, li) => (
-                          <img key={li} src={logo} className="w-5 h-5 rounded-full object-cover border border-white shadow-sm" referrerPolicy="no-referrer" crossOrigin="anonymous" />
-                        ))}
-                      </div>
-                    ) : failedLogos[holding.symbol] || !holding.logo ? (
-                      <span className="text-xs font-bold text-slate-600">
-                        {holding.symbol.slice(0, 3)}
-                      </span>
-                    ) : (
-                      <img 
-                        src={holding.logo} 
-                        alt={holding.name}
-                        className="h-8 w-8 object-contain"
-                        referrerPolicy="no-referrer"
-                        crossOrigin="anonymous"
-                        onError={() => setFailedLogos(prev => ({ ...prev, [holding.symbol]: true }))}
-                      />
-                    )}
+        {/* Holdings Tab Content */}
+        {activeTab === "holdings" && (
+          <motion.div
+            key="holdings"
+            initial={{ opacity: 0, x: tabDirection * 40, filter: 'blur(6px)' }}
+            animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, x: tabDirection * -40, filter: 'blur(6px)' }}
+            transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
+          >
+            {(() => {
+              if (holdingsLoading || strategiesLoading) {
+                return (
+                  <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
+                    <div className="text-center py-10 text-slate-500">Loading holdings...</div>
                   </div>
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <p className="text-sm font-semibold text-slate-900">{holding.symbol}</p>
-                    </div>
-                    <p className="text-xs text-slate-500">{holding.name}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className={`text-sm font-semibold ${holding.change >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                    {holding.change >= 0 ? '+' : ''}{holding.change.toFixed(1)}%
-                  </p>
-                  <p className="text-[10px] text-slate-400">{holding.weight.toFixed(1)}% of portfolio</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
+                );
+              }
+              const pieColors = ["#4C1D95", "#5B21B6", "#6D28D9", "#7C3AED", "#8B5CF6", "#A78BFA", "#C4B5FD", "#DDD6FE", "#EDE9FE", "#F5F3FF"];
 
-        {/* Calendar Returns */}
-        <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50">
-          <div className="flex items-center justify-between gap-2 mb-4">
-            <p className="text-sm font-semibold text-slate-900">Calendar Returns</p>
-            <div className="flex items-center gap-2">
-              <div className="relative" ref={calendarFilterRef}>
-                <button
-                  onClick={() => setShowCalendarFilterDropdown(!showCalendarFilterDropdown)}
-                  className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-200 max-w-[140px]"
-                >
-                  <span className="truncate">{calendarFilterOptions.find(o => o.id === calendarFilter)?.label || "Overall Portfolio"}</span>
-                  <ChevronDown className={`h-3.5 w-3.5 flex-shrink-0 transition-transform duration-200 ${showCalendarFilterDropdown ? 'rotate-180' : ''}`} />
-                </button>
-                {showCalendarFilterDropdown && (
-                  <div className="absolute right-0 top-full mt-1 min-w-[160px] max-h-[200px] overflow-y-auto bg-white rounded-xl shadow-xl border border-slate-200/50 z-50 overflow-hidden">
-                    {calendarFilterOptions.map((option) => (
-                      <button
-                        key={option.id}
-                        onClick={() => { setCalendarFilter(option.id); setShowCalendarFilterDropdown(false); }}
-                        className={`w-full px-4 py-2.5 text-left text-xs font-semibold transition-colors ${
-                          option.id === calendarFilter
-                            ? "bg-violet-50 text-violet-700"
-                            : "text-slate-600 hover:bg-slate-50"
-                        }`}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              {availableCalendarYears.length > 0 && (
-                <div className="relative" ref={yearDropdownRef}>
-                  <button
-                    onClick={() => setShowYearDropdown(!showYearDropdown)}
-                    className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-200"
-                  >
-                    {calendarYear}
-                    <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${showYearDropdown ? 'rotate-180' : ''}`} />
-                  </button>
-                  {showYearDropdown && (
-                    <div className="absolute right-0 top-full mt-1 min-w-[80px] bg-white rounded-xl shadow-xl border border-slate-200/50 z-50 overflow-hidden">
-                      {availableCalendarYears.map((year) => (
-                        <button
-                          key={year}
-                          onClick={() => { setCalendarYear(Number(year)); setShowYearDropdown(false); }}
-                          className={`w-full px-4 py-2.5 text-left text-xs font-semibold transition-colors ${
-                            Number(year) === calendarYear
-                              ? "bg-violet-50 text-violet-700"
-                              : "text-slate-600 hover:bg-slate-50"
-                          }`}
-                        >
-                          {year}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            {monthNames.map((label, index) => {
-              const monthKey = String(index + 1).padStart(2, "0");
-              const value = calendarData[String(calendarYear)]?.[monthKey];
-              const hasData = value != null;
-              return (
-                <div
-                  key={`${calendarYear}-${label}`}
-                  className={`rounded-xl px-3 py-2.5 text-center ${hasData ? getReturnColor(value) : "bg-slate-50"}`}
-                >
-                  <p className={`text-[10px] font-semibold ${hasData ? "text-slate-500" : "text-slate-300"}`}>{label}</p>
-                  <p className={`mt-0.5 text-sm font-bold ${hasData ? "" : "text-slate-300"}`}>
-                    {hasData ? `${(Number(value) * 100).toFixed(2)}%` : "—"}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        </section>
+              const holdingsData = allStrategyHoldings.map(h => ({
+                id: h.symbol,
+                name: h.name,
+                ticker: h.symbol,
+                logo: h.logo,
+                isStrategy: h.isStrategy || false,
+                securityId: h.securityId || null,
+                topLogos: h.topLogos || [],
+                strategyId: h.strategyId || null,
+                strategyHoldings: h.strategyHoldings || [],
+                currentValue: h.currentValue || 0,
+                investedAmount: h.investedAmount || 0,
+                change: h.change || 0,
+                isPending: h.isPending || false,
+                settlement_status: h.settlement_status || null,
+              })).sort((a, b) => b.currentValue - a.currentValue);
 
-              {strategies.length > 0 && (
-              <button
-                onClick={() => (onOpenStrategies || onOpenInvest) && (onOpenStrategies || onOpenInvest)()}
-                className="w-full py-3.5 rounded-full bg-gradient-to-r from-slate-800 to-slate-900 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg shadow-slate-900/30 transition hover:-translate-y-0.5 hover:shadow-xl flex items-center justify-center gap-2"
-              >
-                <Plus className="h-4 w-4" />
-                Buy More Strategies
-              </button>
-              )}
-      </div>
-        </>
-        </motion.div>
-      )}
-
-      {/* Individual Stocks Tab Content */}
-      {activeTab === "stocks" && (
-        <motion.div
-          key="stocks"
-          initial={{ opacity: 0, x: tabDirection * 40, filter: 'blur(6px)' }}
-          animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
-          exit={{ opacity: 0, x: tabDirection * -40, filter: 'blur(6px)' }}
-          transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
-        >
-      {(() => {
-        const isMyStock = myStockIds.has(selectedStock?.id);
-        const userHolding = isMyStock && selectedSecurityId ? (rawHoldings || []).find(h => h.security_id === selectedSecurityId) : null;
-        const userQuantity = userHolding ? (userHolding.quantity || 0) : 0;
-        const avgFillRands = userHolding ? (userHolding.avg_fill || 0) / 100 : 0;
-        const costBasisStock = avgFillRands * userQuantity;
-        const showStockPnl = isMyStock && userQuantity > 0 && avgFillRands > 0;
-        const stockChartData = liveStockChartData.length > 0
-          ? (showStockPnl
-              ? (() => {
-                  const pts = [{ ...liveStockChartData[0], day: null, value: 0 }];
-                  liveStockChartData.forEach(d => {
-                    pts.push({ ...d, value: Number(((d.value * userQuantity) - costBasisStock).toFixed(2)) });
-                  });
-                  return pts;
-                })()
-              : liveStockChartData)
-          : (showStockPnl
-              ? [{ day: null, value: 0 }, { day: "Today", value: 0 }]
-              : []);
-        const stockAxisConfig = computePnlAxisConfig(stockChartData);
-        if (!selectedStock) {
-          if (quotesLoading || holdingsLoading) {
-            return <div className="text-center py-10 text-slate-500">Loading stocks...</div>;
-          }
-          if (stocksList.length === 0) {
-            return <div className="text-center py-10 text-slate-500">No stocks available.</div>;
-          }
-          return null;
-        }
-        const otherStocks = stocksList.filter(s => s.id !== selectedStock?.id && !myStockIds.has(s.id));
-        const hasNoHoldings = myStocks.length === 0;
-        return (
-          <>
-            {hasNoHoldings ? (
-              <div className="flex flex-col items-center justify-center py-12 px-6">
-                <div className="w-16 h-16 rounded-full bg-purple-50 flex items-center justify-center mb-4">
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
-                    <polyline points="16 7 22 7 22 13" />
-                  </svg>
-                </div>
-                <p className="text-lg font-semibold text-slate-900 mb-1">Invest in Your First Stock</p>
-                <p className="text-sm text-slate-500 text-center max-w-[260px] mb-5">Browse individual stocks and start building your portfolio. Your holdings will show up here.</p>
-                <button
-                  onClick={() => onOpenInvest && onOpenInvest()}
-                  className="w-full max-w-[280px] py-3.5 rounded-full bg-gradient-to-r from-slate-800 to-slate-900 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg shadow-slate-900/30 transition hover:-translate-y-0.5 hover:shadow-xl"
-                >
-                  Make Your First Investment
-                </button>
-              </div>
-            ) : (
-            <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 md:max-w-md md:px-8">
-              <section className="py-2">
-                {/* Chart and stock selector only shown when user has holdings */}
-                <div className="flex items-center justify-between mb-3 px-1">
-                  <div className="relative" ref={stockDropdownRef}>
-                    <button
-                      onClick={() => setShowStockDropdown(!showStockDropdown)}
-                      className="flex items-center gap-2 text-slate-900 hover:text-slate-700 transition"
-                    >
-                      <span className="text-lg font-semibold tracking-tight" style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}>
-                        {selectedStock.name}
-                      </span>
-                      <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${showStockDropdown ? 'rotate-180' : ''}`} />
-                    </button>
-                    {showStockDropdown && (myStocks.length > 0 || stocksList.length > 0) && (
-                      <div
-                        className="absolute top-full left-0 mt-2 min-w-[200px] max-h-[280px] overflow-y-auto bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200/50 z-50 overscroll-contain"
-                        style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif", WebkitOverflowScrolling: 'touch' }}
-                      >
-                        {(myStocks.length > 0 ? myStocks : stocksList.slice(0, 20)).map((stock) => (
-                          <button
-                            key={stock.id}
-                            onClick={() => { setSelectedStock(stock); setShowStockDropdown(false); }}
-                            className={`w-full px-4 py-3.5 text-left hover:bg-purple-50/50 transition-colors duration-150 border-b border-slate-100/50 last:border-b-0 ${
-                              selectedStock.id === stock.id ? 'bg-purple-50' : ''
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <p className="font-medium text-slate-800 text-sm tracking-tight">{stock.name}</p>
-                            </div>
-                            <p className="text-xs text-slate-400 mt-0.5 font-medium tabular-nums">
-                              {formatCurrency(liveQuotes[stock.ticker]?.price || stock.price)}
-                            </p>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex gap-1">
-                    {[
-                      { id: "D", label: "D" },
-                      { id: "W", label: "W" },
-                      { id: "M", label: "M" },
-                      { id: "ALL", label: "All" },
-                    ].map((filter) => (
-                      <button
-                        key={filter.id}
-                        onClick={() => setStockTimeFilter(filter.id)}
-                        className={`px-3 h-9 rounded-full text-sm font-bold transition-all ${
-                          stockTimeFilter === filter.id
-                            ? "bg-slate-700/80 text-white shadow-lg backdrop-blur-md border border-white/20"
-                            : "text-slate-400 hover:text-slate-600 hover:bg-slate-200/30"
-                        }`}
-                        style={stockTimeFilter === filter.id ? {
-                          boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.1), 0 4px 12px rgba(0,0,0,0.15)'
-                        } : {}}
-                      >
-                        {filter.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mb-3 px-1">
-                  {(() => {
-                    if (isMyStock && userHolding && userQuantity > 0) {
-                      const holdingMarketValue = liveHoldingValue(userHolding);
-                      const costBasis = ((userHolding.avg_fill || 0) * userQuantity) / 100;
-                      const pnl = holdingMarketValue - costBasis;
-                      const pnlPct = costBasis > 0 ? ((pnl / costBasis) * 100) : 0;
-                      const dailyChangePct = userHolding.change_percent || 0;
-                      const dailyChangeAmt = (holdingMarketValue * dailyChangePct) / (100 + dailyChangePct);
-                      return (
-                        <>
-                          <p className="text-3xl font-bold text-slate-900">{formatCurrency(holdingMarketValue)}</p>
-                          <p className={`text-sm ${pnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                            {pnl >= 0 ? '+' : ''}{formatCurrency(pnl)} ({pnl >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%)
-                          </p>
-                        </>
-                      );
+              const flatPieData = (() => {
+                const map = new Map();
+                holdingsData.forEach(h => {
+                  if (h.isStrategy && h.strategyHoldings?.length > 0) {
+                    const totalWeight = h.strategyHoldings.reduce((s, c) => s + (c.weight || 0), 0) || 100;
+                    h.strategyHoldings.forEach(c => {
+                      const pct = (c.weight || 0) / totalWeight;
+                      const val = h.currentValue * pct;
+                      const key = c.symbol || c.name;
+                      if (map.has(key)) {
+                        map.get(key).value += val;
+                      } else {
+                        map.set(key, { name: c.symbol || c.name, displayName: c.name || c.symbol, value: val });
+                      }
+                    });
+                  } else if (!h.isStrategy) {
+                    const key = h.ticker;
+                    if (map.has(key)) {
+                      map.get(key).value += h.currentValue;
+                    } else {
+                      map.set(key, { name: h.ticker, displayName: h.name, value: h.currentValue });
                     }
-                    const perSharePrice = liveQuotes[selectedStock.ticker]?.price || selectedStock.price;
-                    const changePct = liveQuotes[selectedStock.ticker]?.changePercent ?? selectedStock.dailyChange;
+                  }
+                });
+                return Array.from(map.values()).sort((a, b) => b.value - a.value);
+              })();
+
+              if (holdingsData.length === 0) {
+                return (
+                  <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
+                    <div
+                      className="rounded-3xl p-8 backdrop-blur-xl shadow-sm border border-slate-100/50 text-center"
+                      style={{ background: 'rgba(255,255,255,0.7)', fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
+                    >
+                      <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-gradient-to-br from-violet-100 to-purple-100 flex items-center justify-center">
+                        <TrendingUp className="h-7 w-7 text-violet-500" />
+                      </div>
+                      <p className="text-lg font-semibold text-slate-900 mb-1">No holdings yet</p>
+                      <p className="text-sm text-slate-500">Your investment holdings will appear here once you start investing.</p>
+                    </div>
+                    {investmentGoals && investmentGoals.length > 0 && (
+                      <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50">
+                        <div className="flex items-center justify-between mb-4">
+                          <p className="text-sm font-semibold text-slate-900">Your Goals</p>
+                          <span className="text-xs font-semibold text-violet-600 bg-violet-50 rounded-full px-2 py-0.5">{investmentGoals.length}</span>
+                        </div>
+                        <div className="space-y-3">
+                          {investmentGoals.map((g) => {
+                            const currentValue = g.currentAmount || 0;
+                            const invested = g.investedAmount || 0;
+                            const target = g.targetAmount || 0;
+                            const remaining = Math.max(0, target - currentValue);
+                            const pct = target > 0 ? Math.min(100, (currentValue / target) * 100) : 0;
+                            const gainLoss = currentValue - invested;
+                            return (
+                              <div key={g.id || (g.label + g.targetAmount)} className="rounded-2xl bg-slate-50 p-4">
+                                <div className="flex items-center justify-between mb-1">
+                                  <div>
+                                    <p className="text-sm font-semibold text-slate-900">{g.label}</p>
+                                    <div className="flex items-center gap-1.5">
+                                      {g.linkedAssetName && (
+                                        <p className="text-[10px] text-slate-400">Linked to {g.linkedAssetName}</p>
+                                      )}
+                                      {g.targetDate && !isNaN(new Date(g.targetDate).getTime()) && (
+                                        <p className="text-[10px] text-slate-400">
+                                          {g.linkedAssetName ? '• ' : ''}{new Date(g.targetDate).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <p className="text-xs font-semibold text-slate-600">
+                                    {formatCurrency(currentValue)} / {formatCurrency(target)}
+                                  </p>
+                                </div>
+                                <div className="h-2.5 w-full rounded-full bg-slate-200 overflow-hidden mb-2">
+                                  <div
+                                    className="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-600 transition-all"
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <p className="text-xs text-slate-500">
+                                    {pct >= 100 ? "Goal reached!" : `${formatCurrency(remaining)} remaining`}
+                                  </p>
+                                  <div className="flex items-center gap-2">
+                                    {gainLoss !== 0 && invested > 0 && (
+                                      <span className={`text-[10px] font-semibold ${gainLoss > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                        {gainLoss > 0 ? '+' : ''}{formatCurrency(gainLoss)}
+                                      </span>
+                                    )}
+                                    <p className="text-xs font-semibold text-violet-600">{pct.toFixed(0)}%</p>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    )}
+                  </div>
+                );
+              }
+
+              const totalValue = holdingsData.reduce((sum, h) => sum + h.currentValue, 0);
+              const totalCostBasisValue = holdingsData.reduce((sum, h) => sum + (h.costBasis || h.currentValue), 0);
+              const totalDistinct = flatPieData.length;
+
+              const top10 = flatPieData.slice(0, 10).map((h, idx) => ({
+                name: h.name,
+                displayName: h.displayName,
+                value: h.value,
+                color: pieColors[idx % pieColors.length],
+              }));
+              const othersValue = flatPieData.slice(10).reduce((sum, h) => sum + h.value, 0);
+              const pieData = othersValue > 0
+                ? [...top10, { name: "Others", displayName: "Others", value: othersValue, color: "#E9D5FF" }]
+                : top10;
+
+              return (
+                <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
+                  {/* Summary Card with Pie Chart */}
+                  <div
+                    className="rounded-3xl p-5 backdrop-blur-xl shadow-sm border border-slate-100/50"
+                    style={{ background: 'rgba(255,255,255,0.7)', fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-col gap-3">
+                        <div>
+                          <p className="text-xs text-slate-500 mb-0.5">Total Portfolio Value</p>
+                          <p className="text-2xl font-bold text-slate-900">{formatCurrency(totalValue)}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <p className="text-3xl font-bold text-slate-900">{totalDistinct}</p>
+                          <div className="flex flex-col justify-center">
+                            <p className="text-xs text-slate-500 leading-tight">Total Holdings</p>
+                            <p className="text-xs text-slate-500 leading-tight">assets</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right: Pie Chart */}
+                      <div className="relative h-44 w-44 -mr-4 md:mr-0" style={{ pointerEvents: isLoadingData ? 'none' : 'auto', opacity: isLoadingData ? 0.5 : 1, transition: 'opacity 0.3s ease' }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <defs>
+                              <filter id="glow">
+                                <feGaussianBlur stdDeviation="2" result="coloredBlur" />
+                                <feMerge>
+                                  <feMergeNode in="coloredBlur" />
+                                  <feMergeNode in="SourceGraphic" />
+                                </feMerge>
+                              </filter>
+                            </defs>
+                            <Pie
+                              data={pieData}
+                              cx="50%"
+                              cy="50%"
+                              outerRadius={80}
+                              paddingAngle={2}
+                              dataKey="value"
+                              stroke="rgba(255,255,255,0.9)"
+                              strokeWidth={1.5}
+                              animationBegin={0}
+                              animationDuration={800}
+                              animationEasing="ease-out"
+                            >
+                              {pieData.map((entry, index) => (
+                                <Cell
+                                  key={`cell-${index}`}
+                                  fill={entry.color}
+                                  opacity={activePieIndex >= 0 && activePieIndex !== index ? 0.4 : 1}
+                                  style={{
+                                    transform: activePieIndex === index
+                                      ? 'scale(1.1)'
+                                      : activePieIndex >= 0
+                                        ? 'scale(0.94)'
+                                        : 'scale(1)',
+                                    transformOrigin: 'center',
+                                    transition: 'transform 0.6s cubic-bezier(0.25, 0.1, 0.25, 1), opacity 0.5s ease-out, filter 0.5s ease-out',
+                                    cursor: 'pointer',
+                                    filter: activePieIndex === index ? 'url(#glow)' : 'none'
+                                  }}
+                                  onMouseEnter={() => !isLoadingData && setActivePieIndex(index)}
+                                  onMouseLeave={() => !isLoadingData && setActivePieIndex(-1)}
+                                  onClick={() => !isLoadingData && setActivePieIndex(activePieIndex === index ? -1 : index)}
+                                />
+                              ))}
+                            </Pie>
+                            <Tooltip
+                              wrapperStyle={{ outline: 'none', zIndex: 100 }}
+                              position={{ x: -80, y: -10 }}
+                              content={({ active, payload }) => {
+                                if (active && payload && payload.length) {
+                                  const data = payload[0].payload;
+                                  const percent = ((data.value / totalValue) * 100).toFixed(1);
+                                  return (
+                                    <div
+                                      className="px-3 py-2 rounded-xl shadow-2xl border border-white/20"
+                                      style={{
+                                        background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(248,250,252,0.9) 100%)',
+                                        backdropFilter: 'blur(20px)',
+                                        WebkitBackdropFilter: 'blur(20px)',
+                                        minWidth: '70px',
+                                        textAlign: 'center'
+                                      }}
+                                    >
+                                      <p className="text-xs font-bold text-slate-800">{data.displayName || data.name}</p>
+                                      <p className="text-base font-bold bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text text-transparent">
+                                        {percent}%
+                                      </p>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              }}
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Holdings List */}
+                  {(() => {
+                    const HOLDINGS_PER_PAGE = 6;
+                    const holdingsTotalPages = Math.ceil(holdingsData.length / HOLDINGS_PER_PAGE);
+                    const pagedHoldings = holdingsData.slice(holdingsPage * HOLDINGS_PER_PAGE, (holdingsPage + 1) * HOLDINGS_PER_PAGE);
                     return (
                       <>
-                        <p className="text-3xl font-bold text-slate-900">{formatCurrency(perSharePrice)}</p>
-                        <p className={`text-sm ${changePct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                          ({changePct >= 0 ? '+' : ''}{changePct.toFixed(2)}% Today)
-                        </p>
+                        <section
+                          className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50"
+                          style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
+                        >
+                          <div className="flex items-center justify-between mb-4">
+                            <p className="text-sm font-semibold text-slate-900">Your Assets</p>
+                            {holdingsTotalPages > 1 && (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => setHoldingsPage(p => Math.max(0, p - 1))}
+                                  disabled={holdingsPage === 0}
+                                  className={`h-7 w-7 rounded-full flex items-center justify-center transition ${holdingsPage === 0 ? 'text-slate-300' : 'text-slate-600 hover:bg-slate-100 active:bg-slate-200'}`}
+                                >
+                                  <ChevronLeft className="h-4 w-4" />
+                                </button>
+                                <span className="text-xs font-medium text-slate-400 tabular-nums">{holdingsPage + 1}/{holdingsTotalPages}</span>
+                                <button
+                                  onClick={() => setHoldingsPage(p => Math.min(holdingsTotalPages - 1, p + 1))}
+                                  disabled={holdingsPage >= holdingsTotalPages - 1}
+                                  className={`h-7 w-7 rounded-full flex items-center justify-center transition ${holdingsPage >= holdingsTotalPages - 1 ? 'text-slate-300' : 'text-slate-600 hover:bg-slate-100 active:bg-slate-200'}`}
+                                >
+                                  <ChevronRight className="h-4 w-4" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                          <div className="space-y-3">
+                            {pagedHoldings.map((stock) => {
+                              const pctValue = totalValue > 0 ? ((stock.currentValue / totalValue) * 100) : 0;
+                              const changePnl = stock.change || 0;
+                              const isExpanded = stock.isStrategy && expandedStrategyId === stock.strategyId;
+                              return (
+                                <div key={stock.id} ref={isExpanded ? expandedRowRef : null}>
+                                  <div
+                                    className={`rounded-2xl bg-white/70 backdrop-blur-xl p-4 shadow-sm border transition-all duration-200 cursor-pointer active:scale-[0.98] ${stock.isStrategy ? 'border-violet-100/60' : 'border-slate-100/50'}`}
+                                    onClick={() => {
+                                      if (stock.isStrategy) {
+                                        setExpandedStrategyId(isExpanded ? null : stock.strategyId);
+                                      } else {
+                                        setModalHolding(stock);
+                                        setModalTimeFilter("W");
+                                      }
+                                    }}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <div className="h-11 w-11 rounded-full bg-white border border-slate-200 shadow-sm overflow-hidden flex-shrink-0">
+                                        {stock.isStrategy && stock.topLogos?.length > 0 ? (
+                                          <div className="flex -space-x-1.5 items-center justify-center h-full w-full bg-gradient-to-br from-violet-50 to-purple-50">
+                                            {stock.topLogos.slice(0, 3).map((logo, li) => (
+                                              <img key={li} src={logo} className="w-5 h-5 rounded-full object-cover border border-white shadow-sm" referrerPolicy="no-referrer" crossOrigin="anonymous" />
+                                            ))}
+                                          </div>
+                                        ) : !stock.logo || failedLogos[stock.ticker] ? (
+                                          <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-100 to-purple-100 text-xs font-bold text-violet-700">
+                                            {stock.ticker.slice(0, 2)}
+                                          </div>
+                                        ) : (
+                                          <img
+                                            src={stock.logo}
+                                            alt={stock.name}
+                                            className="h-full w-full object-cover"
+                                            onError={() => setFailedLogos(prev => ({ ...prev, [stock.ticker]: true }))}
+                                          />
+                                        )}
+                                      </div>
+
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-semibold text-slate-900 truncate">{stock.name}</p>
+                                        <p className="text-xs text-slate-500 font-medium">{stock.isStrategy ? `${(stock.strategyHoldings || []).length} assets` : stock.ticker}</p>
+                                      </div>
+
+                                      <div className="flex items-center gap-2">
+                                        <div className="text-right flex-shrink-0">
+                                          <p className="text-sm font-bold text-slate-900">
+                                            {stock.isPending ? "—" : formatCurrency(stock.currentValue)}
+                                          </p>
+                                          {stock.isPending ? (
+                                            <p className="text-xs text-amber-500 font-semibold">Pending</p>
+                                          ) : (
+                                            <p className={`text-xs font-semibold ${changePnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                              {changePnl >= 0 ? '+' : ''}{changePnl.toFixed(1)}%
+                                            </p>
+                                          )}
+                                          <p className="text-[10px] text-slate-400">{pctValue.toFixed(1)}% of portfolio</p>
+                                        </div>
+                                        {stock.isStrategy && (
+                                          <ChevronDown className={`h-4 w-4 text-slate-400 flex-shrink-0 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Expandable constituent stocks */}
+                                  {stock.isStrategy && isExpanded && stock.strategyHoldings?.length > 0 && (
+                                    <div className="mt-1.5 ml-3 space-y-1.5 border-l-2 border-violet-100 pl-3">
+                                      {stock.strategyHoldings.map((c, ci) => {
+                                        const matchedHolding = (rawHoldings || []).find(h => h.symbol === c.symbol);
+                                        const matchedStock = stocksList?.find(s => s.ticker === c.symbol);
+                                        const logo = matchedHolding?.logo || matchedStock?.logo || null;
+                                        let pnlRands, pnlPct;
+                                        if (c.pnlRands != null) {
+                                          pnlRands = c.pnlRands;
+                                          pnlPct = c.pnlPct ?? 0;
+                                        } else {
+                                          const totalW = stock.strategyHoldings.reduce((s, x) => s + (x.weight || 0), 0) || 100;
+                                          const fraction = (c.weight || 0) / totalW;
+                                          const constituentCurrentVal = stock.currentValue * fraction;
+                                          const constituentCostBasis = (stock.investedAmount || stock.currentValue) * fraction;
+                                          pnlRands = constituentCurrentVal - constituentCostBasis;
+                                          pnlPct = constituentCostBasis > 0 ? (pnlRands / constituentCostBasis) * 100 : 0;
+                                        }
+                                        const isGain = pnlRands >= 0;
+                                        const onOpenConstituent = () => {
+                                          if (!matchedStock) return;
+                                          const rawH = (rawHoldings || []).find(h => h.security_id === matchedStock.id);
+                                          const livePrice = liveQuotes[matchedStock.ticker]?.price || matchedStock.price || 0;
+                                          const qty = rawH ? (rawH.quantity || 0) : 0;
+                                          setModalHolding({ ...matchedStock, currentValue: qty * livePrice });
+                                          setModalTimeFilter("W");
+                                        };
+                                        return (
+                                          <button key={ci} onClick={onOpenConstituent} className="w-full rounded-xl bg-white/80 backdrop-blur-sm p-3 border border-slate-100/50 flex items-center gap-3 text-left transition hover:bg-white/95 active:scale-[0.98]">
+                                            <div className="h-8 w-8 rounded-full bg-white border border-slate-200 shadow-sm overflow-hidden flex-shrink-0">
+                                              {logo && !failedLogos[c.symbol] ? (
+                                                <img
+                                                  src={logo}
+                                                  alt={c.symbol}
+                                                  className="h-full w-full object-cover"
+                                                  referrerPolicy="no-referrer"
+                                                  crossOrigin="anonymous"
+                                                  onError={() => setFailedLogos(prev => ({ ...prev, [c.symbol]: true }))}
+                                                />
+                                              ) : (
+                                                <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
+                                                  <span className="text-[9px] font-bold text-slate-500">{(c.symbol || '').slice(0, 3)}</span>
+                                                </div>
+                                              )}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                              <p className="text-xs font-semibold text-slate-800 truncate">{c.name || c.symbol}</p>
+                                              <p className="text-[10px] text-slate-500">{c.symbol}</p>
+                                            </div>
+                                            <div className="text-right flex-shrink-0">
+                                              <p className={`text-xs font-bold ${isGain ? 'text-emerald-600' : 'text-rose-500'}`}>
+                                                {isGain ? '+' : ''}{formatCurrency(pnlRands)}
+                                              </p>
+                                              <p className={`text-[10px] font-semibold ${isGain ? 'text-emerald-500' : 'text-rose-400'}`}>
+                                                {isGain ? '+' : ''}{pnlPct.toFixed(2)}%
+                                              </p>
+                                            </div>
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </section>
+
+                        {(() => {
+                          const STOCKS_PER_PAGE = 6;
+                          const holdingsOtherStocks = stocksList.filter(s => !myStockIds.has(s.id));
+                          const otherTotalPages = Math.ceil(holdingsOtherStocks.length / STOCKS_PER_PAGE);
+                          const otherPagedStocks = holdingsOtherStocks.slice(otherStocksPage * STOCKS_PER_PAGE, (otherStocksPage + 1) * STOCKS_PER_PAGE);
+                          if (holdingsOtherStocks.length === 0) return null;
+                          return (
+                            <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50 mt-4">
+                              <div className="flex items-center justify-between mb-4">
+                                <p className="text-sm font-semibold text-slate-900">Other Stocks</p>
+                                {otherTotalPages > 1 && (
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={() => setOtherStocksPage(p => Math.max(0, p - 1))}
+                                      disabled={otherStocksPage === 0}
+                                      className={`h-7 w-7 rounded-full flex items-center justify-center transition ${otherStocksPage === 0 ? 'text-slate-300' : 'text-slate-600 hover:bg-slate-100 active:bg-slate-200'}`}
+                                    >
+                                      <ChevronLeft className="h-4 w-4" />
+                                    </button>
+                                    <span className="text-xs font-medium text-slate-400 tabular-nums">{otherStocksPage + 1}/{otherTotalPages}</span>
+                                    <button
+                                      onClick={() => setOtherStocksPage(p => Math.min(otherTotalPages - 1, p + 1))}
+                                      disabled={otherStocksPage >= otherTotalPages - 1}
+                                      className={`h-7 w-7 rounded-full flex items-center justify-center transition ${otherStocksPage >= otherTotalPages - 1 ? 'text-slate-300' : 'text-slate-600 hover:bg-slate-100 active:bg-slate-200'}`}
+                                    >
+                                      <ChevronRight className="h-4 w-4" />
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="space-y-3">
+                                {otherPagedStocks.map((stock) => {
+                                  const livePrice = liveQuotes[stock.ticker]?.price || stock.price;
+                                  const liveChange = liveQuotes[stock.ticker]?.changePercent ?? stock.dailyChange;
+                                  const isPositive = liveChange >= 0;
+                                  return (
+                                    <button
+                                      key={stock.id}
+                                      onClick={() => { setModalHolding(stock); setModalTimeFilter("W"); }}
+                                      className="w-full flex items-center gap-3 rounded-2xl bg-white/70 backdrop-blur-xl p-3 shadow-sm border border-slate-100/50 transition hover:bg-white/90 text-left"
+                                    >
+                                      <div className="h-11 w-11 rounded-full bg-white border border-slate-200 shadow-sm overflow-hidden flex-shrink-0">
+                                        {failedLogos[stock.ticker] ? (
+                                          <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-100 to-purple-100 text-xs font-bold text-violet-700">
+                                            {stock.ticker.slice(0, 2)}
+                                          </div>
+                                        ) : (
+                                          <img
+                                            src={stock.logo}
+                                            alt={stock.name}
+                                            className="h-full w-full object-cover"
+                                            onError={() => setFailedLogos(prev => ({ ...prev, [stock.ticker]: true }))}
+                                          />
+                                        )}
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-semibold text-slate-900 truncate">{stock.name}</p>
+                                        <p className="text-xs text-slate-500 font-medium">{stock.ticker}</p>
+                                      </div>
+                                      <div className="text-right flex-shrink-0">
+                                        <p className="text-sm font-bold text-slate-900">{formatCurrency(livePrice)}</p>
+                                        <p className={`text-xs font-medium ${isPositive ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                          {isPositive ? '+' : ''}{liveChange.toFixed(2)}%
+                                        </p>
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </section>
+                          );
+                        })()}
+
+                        {investmentGoals && investmentGoals.length > 0 && (
+                          <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50 mt-4">
+                            <div className="flex items-center justify-between mb-4">
+                              <p className="text-sm font-semibold text-slate-900">Your Goals</p>
+                              <span className="text-xs font-semibold text-violet-600 bg-violet-50 rounded-full px-2 py-0.5">{investmentGoals.length}</span>
+                            </div>
+                            <div className="space-y-3">
+                              {investmentGoals.map((g) => {
+                                const currentValue = g.currentAmount || 0;
+                                const invested = g.investedAmount || 0;
+                                const target = g.targetAmount || 0;
+                                const remaining = Math.max(0, target - currentValue);
+                                const pct = target > 0 ? Math.min(100, (currentValue / target) * 100) : 0;
+                                const gainLoss = currentValue - invested;
+                                return (
+                                  <div key={g.id || (g.label + g.targetAmount)} className="rounded-2xl bg-slate-50 p-4">
+                                    <div className="flex items-center justify-between mb-1">
+                                      <div>
+                                        <p className="text-sm font-semibold text-slate-900">{g.label}</p>
+                                        <div className="flex items-center gap-1.5">
+                                          {g.linkedAssetName && (
+                                            <p className="text-[10px] text-slate-400">Linked to {g.linkedAssetName}</p>
+                                          )}
+                                          {g.targetDate && !isNaN(new Date(g.targetDate).getTime()) && (
+                                            <p className="text-[10px] text-slate-400">
+                                              {g.linkedAssetName ? '• ' : ''}{new Date(g.targetDate).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
+                                            </p>
+                                          )}
+                                        </div>
+                                      </div>
+                                      <p className="text-xs font-semibold text-slate-600">
+                                        {formatCurrency(currentValue)} / {formatCurrency(target)}
+                                      </p>
+                                    </div>
+                                    <div className="h-2.5 w-full rounded-full bg-slate-200 overflow-hidden mb-2">
+                                      <div
+                                        className="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-600 transition-all"
+                                        style={{ width: `${pct}%` }}
+                                      />
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                      <p className="text-xs text-slate-500">
+                                        {pct >= 100 ? "Goal reached!" : `${formatCurrency(remaining)} remaining`}
+                                      </p>
+                                      <div className="flex items-center gap-2">
+                                        {gainLoss !== 0 && invested > 0 && (
+                                          <span className={`text-[10px] font-semibold ${gainLoss > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                            {gainLoss > 0 ? '+' : ''}{formatCurrency(gainLoss)}
+                                          </span>
+                                        )}
+                                        <p className="text-xs font-semibold text-violet-600">{pct.toFixed(0)}%</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </section>
+                        )}
                       </>
                     );
                   })()}
                 </div>
-
-                <div style={{ width: '100%', height: 220, marginBottom: 8 }}>
-                  {stockChartData.length === 0 ? (
-                    <div style={{ width: '100%', height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <div className="text-slate-400 text-sm">{stockChartLoading ? 'Loading chart...' : 'No data available'}</div>
-                    </div>
-                  ) : (
-                    <ResponsiveContainer width="100%" height={220}>
-                      <ComposedChart
-                        data={stockChartData}
-                        margin={{ top: 10, right: 15, left: 5, bottom: 30 }}
-                      >
-                        <defs>
-                          <linearGradient id="stockGlowGradientVertical" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.4" />
-                            <stop offset="50%" stopColor="#a78bfa" stopOpacity="0.2" />
-                            <stop offset="100%" stopColor="#c4b5fd" stopOpacity="0.02" />
-                          </linearGradient>
-                        </defs>
-
-                        <XAxis
-                          dataKey="day"
-                          axisLine={false}
-                          tickLine={false}
-                          tickMargin={8}
-                          interval={stockTimeFilter === 'D'
-                            ? Math.max(0, Math.ceil(stockChartData.length / 4) - 1)
-                            : stockChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(stockChartData.length / 6) - 1)}
-                          tick={({ x, y, payload }) => {
-                            if (!payload.value) return null;
-                            const val = String(payload.value);
-                            if (stockTimeFilter === 'D' && val.includes('|')) {
-                              const [dayPart, timePart] = val.split('|');
-                              return (
-                                <text x={x} y={y} textAnchor="middle" fill="#64748b" fontSize={10} fontWeight={500}>
-                                  <tspan x={x} dy={10}>{dayPart}</tspan>
-                                  <tspan x={x} dy={13}>{timePart}</tspan>
-                                </text>
-                              );
-                            }
-                            return <text x={x} y={y} dy={12} textAnchor="middle" fill="#64748b" fontSize={11} fontWeight={500}>{payload.value}</text>;
-                          }}
-                        />
-
-                        <YAxis
-                          domain={stockAxisConfig.domain}
-                          ticks={stockAxisConfig.ticks}
-                          tickFormatter={formatPnlAxis}
-                          tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 500 }}
-                          axisLine={false}
-                          tickLine={false}
-                          width={55}
-                        />
-
-                        {showStockPnl && (
-                          <ReferenceLine y={0} stroke="#cbd5e1" strokeDasharray="3 3" strokeWidth={1} />
-                        )}
-
-                        <Tooltip
-                          content={({ active, payload, label }) => {
-                            if (active && payload && payload.length) {
-                              let fullDate = payload[0]?.payload?.fullDate || label;
-                              if (typeof fullDate === 'string' && fullDate.includes('|')) {
-                                fullDate = fullDate.replace('|', ' ');
-                              }
-                              const val = payload[0].value;
-                              const isPos = val >= 0;
-                              return (
-                                <div className="bg-white/95 backdrop-blur-sm border border-slate-200 rounded-lg px-3 py-1.5 shadow-md">
-                                  <div className="text-xs text-slate-500 mb-0.5">{fullDate}</div>
-                                  <div className="text-sm font-bold text-violet-700">
-                                    {showStockPnl ? (isPos ? '+' : '-') + 'R' + Math.abs(val).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : 'R' + val.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                  </div>
-                                </div>
-                              );
-                            }
-                            return null;
-                          }}
-                          cursor={false}
-                          wrapperStyle={{ outline: 'none' }}
-                        />
-
-                        <Area
-                          type="monotone"
-                          dataKey="value"
-                          stroke="none"
-                          fill="url(#stockGlowGradientVertical)"
-                          fillOpacity={1}
-                        />
-
-                        <Line
-                          type="monotone"
-                          dataKey="value"
-                          stroke="#7c3aed"
-                          strokeWidth={2.5}
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          dot={false}
-                          activeDot={{
-                            r: 6,
-                            fill: '#7c3aed',
-                            stroke: '#c4b5fd',
-                            strokeWidth: 2,
-                          }}
-                        />
-                      </ComposedChart>
-                    </ResponsiveContainer>
-                  )}
-                </div>
-              </section>
-            </div>
-            )}
-
-            <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
-              {myStocks.length > 0 && (() => {
-                const STOCKS_PER_PAGE = 6;
-                const myTotalPages = Math.ceil(myStocks.length / STOCKS_PER_PAGE);
-                const myPagedStocks = myStocks.slice(myStocksPage * STOCKS_PER_PAGE, (myStocksPage + 1) * STOCKS_PER_PAGE);
-                return (
-                <section
-                  className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50"
-                  style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <p className="text-sm font-semibold text-slate-900">My Stocks</p>
-                    {myTotalPages > 1 && (
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setMyStocksPage(p => Math.max(0, p - 1))}
-                          disabled={myStocksPage === 0}
-                          className={`h-7 w-7 rounded-full flex items-center justify-center transition ${myStocksPage === 0 ? 'text-slate-300' : 'text-slate-600 hover:bg-slate-100 active:bg-slate-200'}`}
-                        >
-                          <ChevronLeft className="h-4 w-4" />
-                        </button>
-                        <span className="text-xs font-medium text-slate-400 tabular-nums">{myStocksPage + 1}/{myTotalPages}</span>
-                        <button
-                          onClick={() => setMyStocksPage(p => Math.min(myTotalPages - 1, p + 1))}
-                          disabled={myStocksPage >= myTotalPages - 1}
-                          className={`h-7 w-7 rounded-full flex items-center justify-center transition ${myStocksPage >= myTotalPages - 1 ? 'text-slate-300' : 'text-slate-600 hover:bg-slate-100 active:bg-slate-200'}`}
-                        >
-                          <ChevronRight className="h-4 w-4" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                  <div className="space-y-3">
-                    {myPagedStocks.map((stock) => {
-                      const livePrice = liveQuotes[stock.ticker]?.price || stock.price;
-                      const liveChange = liveQuotes[stock.ticker]?.changePercent ?? stock.dailyChange;
-                      const isPositive = liveChange >= 0;
-                      const stockSecId = liveQuotes[stock.ticker]?.id || null;
-                      const stockHolding = stockSecId ? (rawHoldings || []).find(h => h.security_id === stockSecId) : null;
-                      const stockQty = stockHolding ? (stockHolding.quantity || 0) : 0;
-                      const displayPrice = stockQty > 0 ? livePrice * stockQty : livePrice;
-                      return (
-                        <button
-                          key={stock.id}
-                          onClick={() => setSelectedStock(stock)}
-                          className="w-full flex items-center gap-3 rounded-2xl bg-white/70 backdrop-blur-xl p-3 shadow-sm border border-slate-100/50 transition hover:bg-white/90 text-left"
-                        >
-                          <div className="h-11 w-11 rounded-full bg-white border border-slate-200 shadow-sm overflow-hidden flex-shrink-0">
-                            {failedLogos[stock.ticker] ? (
-                              <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-100 to-purple-100 text-xs font-bold text-violet-700">
-                                {stock.ticker.slice(0, 2)}
-                              </div>
-                            ) : (
-                              <img
-                                src={stock.logo}
-                                alt={stock.name}
-                                className="h-full w-full object-cover"
-                                onError={() => setFailedLogos(prev => ({ ...prev, [stock.ticker]: true }))}
-                              />
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <p className="text-sm font-semibold text-slate-900 truncate">{stock.name}</p>
-                            </div>
-                            <p className="text-xs text-slate-500 font-medium">{stockQty > 0 ? `${Math.round(stockQty)} shares` : stock.ticker}</p>
-                          </div>
-                          <div className="text-right flex-shrink-0">
-                            <p className="text-sm font-bold text-slate-900">{formatCurrency(displayPrice)}</p>
-                            <p className={`text-xs font-medium ${isPositive ? 'text-emerald-500' : 'text-rose-500'}`}>
-                              {isPositive ? '+' : ''}{liveChange.toFixed(2)}%
-                            </p>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </section>
-                );
-              })()}
-
-              {!hasNoHoldings && (
-              <button
-                onClick={() => onOpenInvest && onOpenInvest()}
-                className="w-full py-3.5 rounded-full bg-gradient-to-r from-slate-800 to-slate-900 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg shadow-slate-900/30 transition hover:-translate-y-0.5 hover:shadow-xl flex items-center justify-center gap-2"
-              >
-                <Plus className="h-4 w-4" />
-                Buy More Stocks
-              </button>
-              )}
-            </div>
-          </>
-        );
-      })()}
-        </motion.div>
-      )}
-
-      {/* Holdings Tab Content */}
-      {activeTab === "holdings" && (
-        <motion.div
-          key="holdings"
-          initial={{ opacity: 0, x: tabDirection * 40, filter: 'blur(6px)' }}
-          animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
-          exit={{ opacity: 0, x: tabDirection * -40, filter: 'blur(6px)' }}
-          transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
-        >
-      {(() => {
-        if (holdingsLoading || strategiesLoading) {
-          return (
-            <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
-              <div className="text-center py-10 text-slate-500">Loading holdings...</div>
-            </div>
-          );
-        }
-        const pieColors = ["#8B5CF6", "#A78BFA", "#C4B5FD", "#DDD6FE", "#EDE9FE", "#7C3AED", "#6D28D9", "#5B21B6", "#4C1D95", "#7E22CE"];
-
-        const holdingsData = allStrategyHoldings.map(h => ({
-          id: h.symbol,
-          name: h.name,
-          ticker: h.symbol,
-          logo: h.logo,
-          isStrategy: h.isStrategy || false,
-          securityId: h.securityId || null,
-          topLogos: h.topLogos || [],
-          strategyId: h.strategyId || null,
-          strategyHoldings: h.strategyHoldings || [],
-          currentValue: h.currentValue || 0,
-          investedAmount: h.investedAmount || 0,
-          change: h.change || 0,
-          isPending: h.isPending || false,
-          settlement_status: h.settlement_status || null,
-        })).sort((a, b) => b.currentValue - a.currentValue);
-
-        const flatPieData = (() => {
-          const map = new Map();
-          holdingsData.forEach(h => {
-            if (h.isStrategy && h.strategyHoldings?.length > 0) {
-              const totalWeight = h.strategyHoldings.reduce((s, c) => s + (c.weight || 0), 0) || 100;
-              h.strategyHoldings.forEach(c => {
-                const pct = (c.weight || 0) / totalWeight;
-                const val = h.currentValue * pct;
-                const key = c.symbol || c.name;
-                if (map.has(key)) {
-                  map.get(key).value += val;
-                } else {
-                  map.set(key, { name: c.symbol || c.name, displayName: c.name || c.symbol, value: val });
-                }
-              });
-            } else if (!h.isStrategy) {
-              const key = h.ticker;
-              if (map.has(key)) {
-                map.get(key).value += h.currentValue;
-              } else {
-                map.set(key, { name: h.ticker, displayName: h.name, value: h.currentValue });
-              }
-            }
-          });
-          return Array.from(map.values()).sort((a, b) => b.value - a.value);
-        })();
-
-        if (holdingsData.length === 0) {
-          return (
-            <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
-              <div 
-                className="rounded-3xl p-8 backdrop-blur-xl shadow-sm border border-slate-100/50 text-center"
-                style={{ background: 'rgba(255,255,255,0.7)', fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
-              >
-                <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-gradient-to-br from-violet-100 to-purple-100 flex items-center justify-center">
-                  <TrendingUp className="h-7 w-7 text-violet-500" />
-                </div>
-                <p className="text-lg font-semibold text-slate-900 mb-1">No holdings yet</p>
-                <p className="text-sm text-slate-500">Your investment holdings will appear here once you start investing.</p>
-              </div>
-              {investmentGoals && investmentGoals.length > 0 && (
-                <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50">
-                  <div className="flex items-center justify-between mb-4">
-                    <p className="text-sm font-semibold text-slate-900">Your Goals</p>
-                    <span className="text-xs font-semibold text-violet-600 bg-violet-50 rounded-full px-2 py-0.5">{investmentGoals.length}</span>
-                  </div>
-                  <div className="space-y-3">
-                    {investmentGoals.map((g) => {
-                      const currentValue = g.currentAmount || 0;
-                      const invested = g.investedAmount || 0;
-                      const target = g.targetAmount || 0;
-                      const remaining = Math.max(0, target - currentValue);
-                      const pct = target > 0 ? Math.min(100, (currentValue / target) * 100) : 0;
-                      const gainLoss = currentValue - invested;
-                      return (
-                        <div key={g.id || (g.label + g.targetAmount)} className="rounded-2xl bg-slate-50 p-4">
-                          <div className="flex items-center justify-between mb-1">
-                            <div>
-                              <p className="text-sm font-semibold text-slate-900">{g.label}</p>
-                              <div className="flex items-center gap-1.5">
-                                {g.linkedAssetName && (
-                                  <p className="text-[10px] text-slate-400">Linked to {g.linkedAssetName}</p>
-                                )}
-                                {g.targetDate && !isNaN(new Date(g.targetDate).getTime()) && (
-                                  <p className="text-[10px] text-slate-400">
-                                    {g.linkedAssetName ? '• ' : ''}{new Date(g.targetDate).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                            <p className="text-xs font-semibold text-slate-600">
-                              {formatCurrency(currentValue)} / {formatCurrency(target)}
-                            </p>
-                          </div>
-                          <div className="h-2.5 w-full rounded-full bg-slate-200 overflow-hidden mb-2">
-                            <div
-                              className="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-600 transition-all"
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs text-slate-500">
-                              {pct >= 100 ? "Goal reached!" : `${formatCurrency(remaining)} remaining`}
-                            </p>
-                            <div className="flex items-center gap-2">
-                              {gainLoss !== 0 && invested > 0 && (
-                                <span className={`text-[10px] font-semibold ${gainLoss > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                  {gainLoss > 0 ? '+' : ''}{formatCurrency(gainLoss)}
-                                </span>
-                              )}
-                              <p className="text-xs font-semibold text-violet-600">{pct.toFixed(0)}%</p>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </section>
-              )}
-            </div>
-          );
-        }
-
-        const totalValue = holdingsData.reduce((sum, h) => sum + h.currentValue, 0);
-        const totalCostBasisValue = holdingsData.reduce((sum, h) => sum + (h.costBasis || h.currentValue), 0);
-        const totalDistinct = flatPieData.length;
-
-        const top10 = flatPieData.slice(0, 10).map((h, idx) => ({
-          name: h.name,
-          displayName: h.displayName,
-          value: h.value,
-          color: pieColors[idx % pieColors.length],
-        }));
-        const othersValue = flatPieData.slice(10).reduce((sum, h) => sum + h.value, 0);
-        const pieData = othersValue > 0
-          ? [...top10, { name: "Others", displayName: "Others", value: othersValue, color: "#E9D5FF" }]
-          : top10;
-
-        return (
-        <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
-          {/* Summary Card with Pie Chart */}
-          <div 
-            className="rounded-3xl p-5 backdrop-blur-xl shadow-sm border border-slate-100/50"
-            style={{ background: 'rgba(255,255,255,0.7)', fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex flex-col gap-3">
-                <div>
-                  <p className="text-xs text-slate-500 mb-0.5">Total Portfolio Value</p>
-                  <p className="text-2xl font-bold text-slate-900">{formatCurrency(totalValue)}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <p className="text-3xl font-bold text-slate-900">{totalDistinct}</p>
-                  <div className="flex flex-col justify-center">
-                    <p className="text-xs text-slate-500 leading-tight">Total Holdings</p>
-                    <p className="text-xs text-slate-500 leading-tight">assets</p>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Right: Pie Chart */}
-              <div className="relative h-44 w-44 -mr-4 md:mr-0" style={{ pointerEvents: isLoadingData ? 'none' : 'auto', opacity: isLoadingData ? 0.5 : 1, transition: 'opacity 0.3s ease' }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <defs>
-                      <filter id="glow">
-                        <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
-                        <feMerge>
-                          <feMergeNode in="coloredBlur"/>
-                          <feMergeNode in="SourceGraphic"/>
-                        </feMerge>
-                      </filter>
-                    </defs>
-                    <Pie
-                      data={pieData}
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={80}
-                      paddingAngle={2}
-                      dataKey="value"
-                      stroke="rgba(255,255,255,0.9)"
-                      strokeWidth={1.5}
-                      animationBegin={0}
-                      animationDuration={800}
-                      animationEasing="ease-out"
-                    >
-                      {pieData.map((entry, index) => (
-                        <Cell 
-                          key={`cell-${index}`} 
-                          fill={entry.color}
-                          opacity={activePieIndex >= 0 && activePieIndex !== index ? 0.4 : 1}
-                          style={{ 
-                            transform: activePieIndex === index 
-                              ? 'scale(1.1)' 
-                              : activePieIndex >= 0 
-                                ? 'scale(0.94)' 
-                                : 'scale(1)',
-                            transformOrigin: 'center',
-                            transition: 'transform 0.6s cubic-bezier(0.25, 0.1, 0.25, 1), opacity 0.5s ease-out, filter 0.5s ease-out',
-                            cursor: 'pointer',
-                            filter: activePieIndex === index ? 'url(#glow)' : 'none'
-                          }}
-                          onMouseEnter={() => !isLoadingData && setActivePieIndex(index)}
-                          onMouseLeave={() => !isLoadingData && setActivePieIndex(-1)}
-                          onClick={() => !isLoadingData && setActivePieIndex(activePieIndex === index ? -1 : index)}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip 
-                      wrapperStyle={{ outline: 'none', zIndex: 100 }}
-                      position={{ x: -80, y: -10 }}
-                      content={({ active, payload }) => {
-                        if (active && payload && payload.length) {
-                          const data = payload[0].payload;
-                          const percent = ((data.value / totalValue) * 100).toFixed(1);
-                          return (
-                            <div 
-                              className="px-3 py-2 rounded-xl shadow-2xl border border-white/20"
-                              style={{ 
-                                background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(248,250,252,0.9) 100%)',
-                                backdropFilter: 'blur(20px)',
-                                WebkitBackdropFilter: 'blur(20px)',
-                                minWidth: '70px',
-                                textAlign: 'center'
-                              }}
-                            >
-                              <p className="text-xs font-bold text-slate-800">{data.displayName || data.name}</p>
-                              <p className="text-base font-bold bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text text-transparent">
-                                {percent}%
-                              </p>
-                            </div>
-                          );
-                        }
-                        return null;
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-
-          {/* Holdings List */}
-          {(() => {
-            const HOLDINGS_PER_PAGE = 6;
-            const holdingsTotalPages = Math.ceil(holdingsData.length / HOLDINGS_PER_PAGE);
-            const pagedHoldings = holdingsData.slice(holdingsPage * HOLDINGS_PER_PAGE, (holdingsPage + 1) * HOLDINGS_PER_PAGE);
-            return (
-            <>
-            <section
-              className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50"
-              style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
-            >
-              <div className="flex items-center justify-between mb-4">
-                <p className="text-sm font-semibold text-slate-900">Your Assets</p>
-                {holdingsTotalPages > 1 && (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setHoldingsPage(p => Math.max(0, p - 1))}
-                      disabled={holdingsPage === 0}
-                      className={`h-7 w-7 rounded-full flex items-center justify-center transition ${holdingsPage === 0 ? 'text-slate-300' : 'text-slate-600 hover:bg-slate-100 active:bg-slate-200'}`}
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </button>
-                    <span className="text-xs font-medium text-slate-400 tabular-nums">{holdingsPage + 1}/{holdingsTotalPages}</span>
-                    <button
-                      onClick={() => setHoldingsPage(p => Math.min(holdingsTotalPages - 1, p + 1))}
-                      disabled={holdingsPage >= holdingsTotalPages - 1}
-                      className={`h-7 w-7 rounded-full flex items-center justify-center transition ${holdingsPage >= holdingsTotalPages - 1 ? 'text-slate-300' : 'text-slate-600 hover:bg-slate-100 active:bg-slate-200'}`}
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </button>
-                  </div>
-                )}
-              </div>
-              <div className="space-y-3">
-                {pagedHoldings.map((stock) => {
-                  const pctValue = totalValue > 0 ? ((stock.currentValue / totalValue) * 100) : 0;
-                  const changePnl = stock.change || 0;
-                  const isExpanded = stock.isStrategy && expandedStrategyId === stock.strategyId;
-                  return (
-                  <div key={stock.id} ref={isExpanded ? expandedRowRef : null}>
-                    <div 
-                      className={`rounded-2xl bg-white/70 backdrop-blur-xl p-4 shadow-sm border transition-all duration-200 cursor-pointer active:scale-[0.98] ${stock.isStrategy ? 'border-violet-100/60' : 'border-slate-100/50'}`}
-                      onClick={() => {
-                        if (stock.isStrategy) {
-                          setExpandedStrategyId(isExpanded ? null : stock.strategyId);
-                        } else {
-                          setModalHolding(stock);
-                          setModalTimeFilter("W");
-                        }
-                      }}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="h-11 w-11 rounded-full bg-white border border-slate-200 shadow-sm overflow-hidden flex-shrink-0">
-                          {stock.isStrategy && stock.topLogos?.length > 0 ? (
-                            <div className="flex -space-x-1.5 items-center justify-center h-full w-full bg-gradient-to-br from-violet-50 to-purple-50">
-                              {stock.topLogos.slice(0, 3).map((logo, li) => (
-                                <img key={li} src={logo} className="w-5 h-5 rounded-full object-cover border border-white shadow-sm" referrerPolicy="no-referrer" crossOrigin="anonymous" />
-                              ))}
-                            </div>
-                          ) : !stock.logo || failedLogos[stock.ticker] ? (
-                            <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-100 to-purple-100 text-xs font-bold text-violet-700">
-                              {stock.ticker.slice(0, 2)}
-                            </div>
-                          ) : (
-                            <img
-                              src={stock.logo}
-                              alt={stock.name}
-                              className="h-full w-full object-cover"
-                              onError={() => setFailedLogos(prev => ({ ...prev, [stock.ticker]: true }))}
-                            />
-                          )}
-                        </div>
-                        
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-slate-900 truncate">{stock.name}</p>
-                          <p className="text-xs text-slate-500 font-medium">{stock.isStrategy ? `${(stock.strategyHoldings || []).length} assets` : stock.ticker}</p>
-                        </div>
-                        
-                        <div className="flex items-center gap-2">
-                          <div className="text-right flex-shrink-0">
-                            <p className="text-sm font-bold text-slate-900">
-                              {stock.isPending ? "—" : formatCurrency(stock.currentValue)}
-                            </p>
-                            {stock.isPending ? (
-                              <p className="text-xs text-amber-500 font-semibold">Pending</p>
-                            ) : (
-                              <p className={`text-xs font-semibold ${changePnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                {changePnl >= 0 ? '+' : ''}{changePnl.toFixed(1)}%
-                              </p>
-                            )}
-                            <p className="text-[10px] text-slate-400">{pctValue.toFixed(1)}% of portfolio</p>
-                          </div>
-                          {stock.isStrategy && (
-                            <ChevronDown className={`h-4 w-4 text-slate-400 flex-shrink-0 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Expandable constituent stocks */}
-                    {stock.isStrategy && isExpanded && stock.strategyHoldings?.length > 0 && (
-                      <div className="mt-1.5 ml-3 space-y-1.5 border-l-2 border-violet-100 pl-3">
-                        {stock.strategyHoldings.map((c, ci) => {
-                          const matchedHolding = (rawHoldings || []).find(h => h.symbol === c.symbol);
-                          const matchedStock = stocksList?.find(s => s.ticker === c.symbol);
-                          const logo = matchedHolding?.logo || matchedStock?.logo || null;
-                          let pnlRands, pnlPct;
-                          if (c.pnlRands != null) {
-                            pnlRands = c.pnlRands;
-                            pnlPct = c.pnlPct ?? 0;
-                          } else {
-                            const totalW = stock.strategyHoldings.reduce((s, x) => s + (x.weight || 0), 0) || 100;
-                            const fraction = (c.weight || 0) / totalW;
-                            const constituentCurrentVal = stock.currentValue * fraction;
-                            const constituentCostBasis = (stock.investedAmount || stock.currentValue) * fraction;
-                            pnlRands = constituentCurrentVal - constituentCostBasis;
-                            pnlPct = constituentCostBasis > 0 ? (pnlRands / constituentCostBasis) * 100 : 0;
-                          }
-                          const isGain = pnlRands >= 0;
-                          const onOpenConstituent = () => {
-                            if (!matchedStock) return;
-                            const rawH = (rawHoldings || []).find(h => h.security_id === matchedStock.id);
-                            const livePrice = liveQuotes[matchedStock.ticker]?.price || matchedStock.price || 0;
-                            const qty = rawH ? (rawH.quantity || 0) : 0;
-                            setModalHolding({ ...matchedStock, currentValue: qty * livePrice });
-                            setModalTimeFilter("W");
-                          };
-                          return (
-                            <button key={ci} onClick={onOpenConstituent} className="w-full rounded-xl bg-white/80 backdrop-blur-sm p-3 border border-slate-100/50 flex items-center gap-3 text-left transition hover:bg-white/95 active:scale-[0.98]">
-                              <div className="h-8 w-8 rounded-full bg-white border border-slate-200 shadow-sm overflow-hidden flex-shrink-0">
-                                {logo && !failedLogos[c.symbol] ? (
-                                  <img
-                                    src={logo}
-                                    alt={c.symbol}
-                                    className="h-full w-full object-cover"
-                                    referrerPolicy="no-referrer"
-                                    crossOrigin="anonymous"
-                                    onError={() => setFailedLogos(prev => ({ ...prev, [c.symbol]: true }))}
-                                  />
-                                ) : (
-                                  <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
-                                    <span className="text-[9px] font-bold text-slate-500">{(c.symbol || '').slice(0, 3)}</span>
-                                  </div>
-                                )}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-semibold text-slate-800 truncate">{c.name || c.symbol}</p>
-                                <p className="text-[10px] text-slate-500">{c.symbol}</p>
-                              </div>
-                              <div className="text-right flex-shrink-0">
-                                <p className={`text-xs font-bold ${isGain ? 'text-emerald-600' : 'text-rose-500'}`}>
-                                  {isGain ? '+' : ''}{formatCurrency(pnlRands)}
-                                </p>
-                                <p className={`text-[10px] font-semibold ${isGain ? 'text-emerald-500' : 'text-rose-400'}`}>
-                                  {isGain ? '+' : ''}{pnlPct.toFixed(2)}%
-                                </p>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                  );
-                })}
-              </div>
-            </section>
-
-            {(() => {
-              const STOCKS_PER_PAGE = 6;
-              const holdingsOtherStocks = stocksList.filter(s => !myStockIds.has(s.id));
-              const otherTotalPages = Math.ceil(holdingsOtherStocks.length / STOCKS_PER_PAGE);
-              const otherPagedStocks = holdingsOtherStocks.slice(otherStocksPage * STOCKS_PER_PAGE, (otherStocksPage + 1) * STOCKS_PER_PAGE);
-              if (holdingsOtherStocks.length === 0) return null;
-              return (
-                <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50 mt-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <p className="text-sm font-semibold text-slate-900">Other Stocks</p>
-                    {otherTotalPages > 1 && (
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setOtherStocksPage(p => Math.max(0, p - 1))}
-                          disabled={otherStocksPage === 0}
-                          className={`h-7 w-7 rounded-full flex items-center justify-center transition ${otherStocksPage === 0 ? 'text-slate-300' : 'text-slate-600 hover:bg-slate-100 active:bg-slate-200'}`}
-                        >
-                          <ChevronLeft className="h-4 w-4" />
-                        </button>
-                        <span className="text-xs font-medium text-slate-400 tabular-nums">{otherStocksPage + 1}/{otherTotalPages}</span>
-                        <button
-                          onClick={() => setOtherStocksPage(p => Math.min(otherTotalPages - 1, p + 1))}
-                          disabled={otherStocksPage >= otherTotalPages - 1}
-                          className={`h-7 w-7 rounded-full flex items-center justify-center transition ${otherStocksPage >= otherTotalPages - 1 ? 'text-slate-300' : 'text-slate-600 hover:bg-slate-100 active:bg-slate-200'}`}
-                        >
-                          <ChevronRight className="h-4 w-4" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                  <div className="space-y-3">
-                    {otherPagedStocks.map((stock) => {
-                      const livePrice = liveQuotes[stock.ticker]?.price || stock.price;
-                      const liveChange = liveQuotes[stock.ticker]?.changePercent ?? stock.dailyChange;
-                      const isPositive = liveChange >= 0;
-                      return (
-                        <button
-                          key={stock.id}
-                          onClick={() => { setModalHolding(stock); setModalTimeFilter("W"); }}
-                          className="w-full flex items-center gap-3 rounded-2xl bg-white/70 backdrop-blur-xl p-3 shadow-sm border border-slate-100/50 transition hover:bg-white/90 text-left"
-                        >
-                          <div className="h-11 w-11 rounded-full bg-white border border-slate-200 shadow-sm overflow-hidden flex-shrink-0">
-                            {failedLogos[stock.ticker] ? (
-                              <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-100 to-purple-100 text-xs font-bold text-violet-700">
-                                {stock.ticker.slice(0, 2)}
-                              </div>
-                            ) : (
-                              <img
-                                src={stock.logo}
-                                alt={stock.name}
-                                className="h-full w-full object-cover"
-                                onError={() => setFailedLogos(prev => ({ ...prev, [stock.ticker]: true }))}
-                              />
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-slate-900 truncate">{stock.name}</p>
-                            <p className="text-xs text-slate-500 font-medium">{stock.ticker}</p>
-                          </div>
-                          <div className="text-right flex-shrink-0">
-                            <p className="text-sm font-bold text-slate-900">{formatCurrency(livePrice)}</p>
-                            <p className={`text-xs font-medium ${isPositive ? 'text-emerald-500' : 'text-rose-500'}`}>
-                              {isPositive ? '+' : ''}{liveChange.toFixed(2)}%
-                            </p>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </section>
               );
             })()}
-
-            {investmentGoals && investmentGoals.length > 0 && (
-              <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50 mt-4">
-                <div className="flex items-center justify-between mb-4">
-                  <p className="text-sm font-semibold text-slate-900">Your Goals</p>
-                  <span className="text-xs font-semibold text-violet-600 bg-violet-50 rounded-full px-2 py-0.5">{investmentGoals.length}</span>
-                </div>
-                <div className="space-y-3">
-                  {investmentGoals.map((g) => {
-                    const currentValue = g.currentAmount || 0;
-                    const invested = g.investedAmount || 0;
-                    const target = g.targetAmount || 0;
-                    const remaining = Math.max(0, target - currentValue);
-                    const pct = target > 0 ? Math.min(100, (currentValue / target) * 100) : 0;
-                    const gainLoss = currentValue - invested;
-                    return (
-                      <div key={g.id || (g.label + g.targetAmount)} className="rounded-2xl bg-slate-50 p-4">
-                        <div className="flex items-center justify-between mb-1">
-                          <div>
-                            <p className="text-sm font-semibold text-slate-900">{g.label}</p>
-                            <div className="flex items-center gap-1.5">
-                              {g.linkedAssetName && (
-                                <p className="text-[10px] text-slate-400">Linked to {g.linkedAssetName}</p>
-                              )}
-                              {g.targetDate && !isNaN(new Date(g.targetDate).getTime()) && (
-                                <p className="text-[10px] text-slate-400">
-                                  {g.linkedAssetName ? '• ' : ''}{new Date(g.targetDate).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                          <p className="text-xs font-semibold text-slate-600">
-                            {formatCurrency(currentValue)} / {formatCurrency(target)}
-                          </p>
-                        </div>
-                        <div className="h-2.5 w-full rounded-full bg-slate-200 overflow-hidden mb-2">
-                          <div
-                            className="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-600 transition-all"
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs text-slate-500">
-                            {pct >= 100 ? "Goal reached!" : `${formatCurrency(remaining)} remaining`}
-                          </p>
-                          <div className="flex items-center gap-2">
-                            {gainLoss !== 0 && invested > 0 && (
-                              <span className={`text-[10px] font-semibold ${gainLoss > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                {gainLoss > 0 ? '+' : ''}{formatCurrency(gainLoss)}
-                              </span>
-                            )}
-                            <p className="text-xs font-semibold text-violet-600">{pct.toFixed(0)}%</p>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-            )}
-          </>
-          );
-          })()}
-        </div>
-        );
-      })()}
-        </motion.div>
-      )}
+          </motion.div>
+        )}
       </AnimatePresence>
 
       {/* Holding Stock Chart Modal */}
@@ -2079,8 +2072,8 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           const mFormatLabel = (isoStr, filter) => {
             if (!isoStr) return '';
             const d = new Date(isoStr.slice(0, 10) + 'T00:00:00');
-            const DAY = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-            const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+            const DAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+            const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
             const dow = d.getDay(), dy = d.getDate(), mo = d.getMonth(), yr = d.getFullYear();
             if (filter === 'D') return DAY[dow] + ' ' + dy + ' ' + MON[mo];
             if (filter === 'W') return DAY[dow] + ' ' + dy;
@@ -2103,11 +2096,11 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
             ? [{ day: mPurchaseLabel || 'Purchase', value: 0 }, { day: mNowLabel || 'Now', value: 0 }]
             : mBaseChartData.length > 0
               ? (mShowPnl
-                  ? mBaseChartData.map(d => ({
-                      ...d,
-                      value: Number(((d.value * mQty) - mCostBasis).toFixed(2)),
-                    }))
-                  : mBaseChartData)
+                ? mBaseChartData.map(d => ({
+                  ...d,
+                  value: Number(((d.value * mQty) - mCostBasis).toFixed(2)),
+                }))
+                : mBaseChartData)
               // No closes after purchase yet (e.g. bought on weekend): flat line at current P&L.
               : (mShowPnl ? [{ day: mPurchaseLabel, value: 0 }, { day: mNowLabel, value: Number(mPnl.toFixed(2)) }] : []);
           const mAxisConfig = computePnlAxisConfig(mChartData);
@@ -2162,7 +2155,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                     className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition"
                   >
                     <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                      <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                      <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                     </svg>
                   </button>
                 </div>
@@ -2197,11 +2190,10 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                     <button
                       key={f.id}
                       onClick={() => setModalTimeFilter(f.id)}
-                      className={`px-3 h-9 rounded-full text-sm font-bold transition-all ${
-                        modalTimeFilter === f.id
+                      className={`px-3 h-9 rounded-full text-sm font-bold transition-all ${modalTimeFilter === f.id
                           ? "bg-slate-700/80 text-white shadow-lg backdrop-blur-md border border-white/20"
                           : "text-slate-400 hover:text-slate-600 hover:bg-slate-200/30"
-                      }`}
+                        }`}
                       style={modalTimeFilter === f.id ? { boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.1), 0 4px 12px rgba(0,0,0,0.15)' } : {}}
                     >
                       {f.label}
