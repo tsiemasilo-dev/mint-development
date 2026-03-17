@@ -696,20 +696,7 @@ export default function AccountAgreementStep({
         await supabase.from("user_onboarding").update({ kyc_status: "onboarding_complete", signed_agreement_url: publicUrl || null }).eq("user_id", userId);
       }
 
-      const token = session?.access_token;
-      if (token) {
-        fetch("/api/onboarding/complete", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({
-            existing_onboarding_id: existingOnboardingId || null,
-            agreed_terms: true, agreed_privacy: true,
-            signed_agreement_url: publicUrl,
-            signed_at: now, downloaded_at: now,
-          }),
-        }).catch((e) => console.warn("API complete failed:", e));
-      }
-
+      // Completion is handled by the parent's onComplete callback
       setPhase("success");
     } catch (err) {
       console.error("Sign error:", err);
@@ -1272,7 +1259,15 @@ export default function AccountAgreementStep({
           </p>
         </div>
 
-        <button type="button" className="continue-button agreement-continue enabled" onClick={onComplete}>
+        <button
+          type="button"
+          className="continue-button agreement-continue enabled"
+          onClick={() => onComplete?.({
+            signed_agreement_url: pdfUrl,
+            signed_at,
+            downloaded_at,
+          })}
+        >
           Go to Dashboard
         </button>
       </div>

@@ -618,7 +618,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
     expectedMonthlyInvestment &&
     agreedSourceOfFunds;
 
-  const handleFinalComplete = async () => {
+  const handleFinalComplete = async (signingResults = {}) => {
     if (!supabase) {
       if (onComplete) onComplete();
       return;
@@ -659,6 +659,10 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
           bank_account_type: bankAccountType || null,
           bank_account_number: bankAccountNumber || null,
           bank_branch_code: bankBranchCode || null,
+          // Pass signing results if available
+          signed_agreement_url: signingResults.signed_agreement_url || null,
+          signed_at: signingResults.signed_at || null,
+          downloaded_at: signingResults.downloaded_at || null,
         };
 
         const res = await fetch("/api/onboarding/complete", {

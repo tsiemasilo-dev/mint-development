@@ -4438,6 +4438,9 @@ app.post("/api/onboarding/complete", async (req, res) => {
       bank_name,
       bank_account_number,
       bank_branch_code,
+      signed_agreement_url,
+      signed_at,
+      downloaded_at,
     } = req.body;
 
     const userId = user.id;
@@ -4477,11 +4480,21 @@ app.post("/api/onboarding/complete", async (req, res) => {
       savedAt: new Date().toISOString(),
     } : null;
 
-    const updatePayload = { kyc_status: "onboarding_complete" };
+    const updatePayload = { 
+      kyc_status: "onboarding_complete",
+      updated_at: new Date().toISOString()
+    };
+    if (signed_agreement_url) updatePayload.signed_agreement_url = signed_agreement_url;
+    if (signed_at) updatePayload.signed_at = signed_at;
+    if (downloaded_at) updatePayload.downloaded_at = downloaded_at;
+
     const insertPayload = {
       user_id: userId,
       kyc_status: "onboarding_complete",
       employment_status: "not_provided",
+      signed_agreement_url: signed_agreement_url || null,
+      signed_at: signed_at || null,
+      downloaded_at: downloaded_at || null,
     };
 
     if (bank_name) updatePayload.bank_name = bank_name;
