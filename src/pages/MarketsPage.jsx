@@ -933,7 +933,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                   : "text-white/70"
               }`}
             >
-              Invest
+              OpenStrategies
             </button>
             <button
               onClick={() => {
