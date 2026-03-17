@@ -823,7 +823,7 @@ const HomePage = ({
                       <div className="flex flex-col gap-0.5">
                         <MintLogoSlate className="h-6 w-auto opacity-80" />
                         {profile.mintNumber && (
-                          <p className="text-[8px] tracking-[0.22em] text-slate-400 font-medium uppercase" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>
+                          <p className="text-[11px] tracking-[0.18em] text-slate-500 font-medium uppercase" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>
                             {profile.mintNumber}
                           </p>
                         )}
