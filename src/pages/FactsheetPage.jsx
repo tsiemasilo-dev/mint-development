@@ -910,8 +910,8 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
           <h2 className="text-sm font-semibold text-slate-900">Fees & Disclaimers</h2>
           <ul className="mt-3 space-y-2 text-xs text-slate-600">
             <li>• Brokerage fee: 0.25% of investment amount</li>
-            <li>• Custody fee (ISIN): R62.00 per asset</li>
-            <li>• Transaction fee (Paystack): 2.9% of total</li>
+            <li>• Custody fee (ISIN): R69.00 per asset</li>
+            <li>• Transaction fee (Paystack): 3.5% of total</li>
             <li>• Past performance does not guarantee future results</li>
             <li>• All data is for informational purposes only</li>
           </ul>

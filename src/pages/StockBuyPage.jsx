@@ -130,7 +130,7 @@ const StockBuyPage = ({ security, onBack, onContinue }) => {
                   <p className="text-xs font-semibold text-slate-900">{formatCurrency(fees.isinTotal, displayCurrency)}</p>
                 </div>
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-slate-600">Transaction Fee (2.9%)</p>
+                  <p className="text-xs text-slate-600">Transaction Fee (3.5%)</p>
                   <p className="text-xs font-semibold text-slate-900">{formatCurrency(fees.paystackAmount, displayCurrency)}</p>
                 </div>
               </div>
