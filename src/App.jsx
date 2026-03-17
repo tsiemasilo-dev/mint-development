@@ -39,6 +39,7 @@ import ProfileDetailsPage from "./pages/ProfileDetailsPage.jsx";
 import ChangePasswordPage from "./pages/ChangePasswordPage.jsx";
 import LegalDocumentationPage from "./pages/LegalDocumentationPage.jsx";
 import StatementsPage from "./pages/StatementsPage.jsx";
+import DepositPage from "./pages/DepositPage.jsx";
 import IdentityCheckPage from "./pages/IdentityCheckPage.jsx";
 import BankLinkPage from "./pages/BankLinkPage.jsx";
 import MintBankPage from "./pages/MintBankPage.jsx";
@@ -75,7 +76,7 @@ const getTokensFromHash = (hash) => {
 
 const recoveryTokens = isRecoveryMode ? getTokensFromHash(initialHash) : null;
 
-const mainTabs = ['home', 'credit', 'transact', 'investments', 'statements', 'more', 'welcome', 'auth'];
+const mainTabs = ['home', 'credit', 'transact', 'investments', 'markets', 'deposit', 'more', 'welcome', 'auth'];
 
 const App = () => {
   const [currentPage, setCurrentPage] = useState(hasError ? "linkExpired" : (isRecoveryMode ? "auth" : "welcome"));
@@ -185,14 +186,10 @@ const App = () => {
   }, [currentPage, cacheCurrentPageState]);
 
   const handleTabChange = useCallback((tab) => {
-    if (tab === 'statements') {
-      navigateTo(tab);
-    } else {
-      navigationHistory.current = [];
-      setPreviousPageName(null);
-      setCurrentPage(tab);
-    }
-  }, [navigateTo]);
+    navigationHistory.current = [];
+    setPreviousPageName(null);
+    setCurrentPage(tab);
+  }, []);
 
   const goBack = useCallback(() => {
     if (navigationHistory.current.length > 0) {
@@ -610,13 +607,35 @@ const App = () => {
         );
       case 'markets':
         return (
-          <MarketsPage
-            onBack={noOp}
-            onOpenNotifications={noOp}
-            onOpenStockDetail={noOp}
-            onOpenNewsArticle={noOp}
-            onOpenFactsheet={noOp}
-          />
+          <AppLayout
+            activeTab="markets"
+            onTabChange={noOp}
+            onWithdraw={noOp}
+            onShowComingSoon={noOp}
+            modal={null}
+            onCloseModal={noOp}
+          >
+            <MarketsPage
+              onBack={noOp}
+              onOpenNotifications={noOp}
+              onOpenStockDetail={noOp}
+              onOpenNewsArticle={noOp}
+              onOpenFactsheet={noOp}
+            />
+          </AppLayout>
+        );
+      case 'deposit':
+        return (
+          <AppLayout
+            activeTab="deposit"
+            onTabChange={noOp}
+            onWithdraw={noOp}
+            onShowComingSoon={noOp}
+            modal={null}
+            onCloseModal={noOp}
+          >
+            <DepositPage />
+          </AppLayout>
         );
       case 'stockDetail':
         return (
@@ -1084,28 +1103,52 @@ const App = () => {
   if (currentPage === "markets") {
     return (
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
-        <MarketsPage
-          onBack={goBack}
-          initialViewMode={marketsInitialView}
-          onViewModeChange={(mode) => setMarketsInitialView(mode)}
-          onOpenNotifications={() => {
-            setNotificationReturnPage("markets");
-            navigateTo("notifications");
-          }}
-          onOpenStockDetail={(security) => {
-            setSelectedSecurity(security);
-            navigateTo("stockDetail");
-          }}
-          onOpenNewsArticle={(articleId) => {
-            setSelectedArticleId(articleId);
-            navigateTo("newsArticle");
-          }}
-          onOpenFactsheet={(strategy) => {
-            setSelectedStrategy(strategy);
-            navigateTo("factsheet");
-          }}
-        />
+        <AppLayout
+          activeTab="markets"
+          onTabChange={handleTabChange}
+          onWithdraw={() => {}}
+          onShowComingSoon={() => {}}
+          modal={null}
+          onCloseModal={() => {}}
+        >
+          <MarketsPage
+            onBack={canSwipeBack ? goBack : undefined}
+            initialViewMode={marketsInitialView}
+            onViewModeChange={(mode) => setMarketsInitialView(mode)}
+            onOpenNotifications={() => {
+              setNotificationReturnPage("markets");
+              navigateTo("notifications");
+            }}
+            onOpenStockDetail={(security) => {
+              setSelectedSecurity(security);
+              navigateTo("stockDetail");
+            }}
+            onOpenNewsArticle={(articleId) => {
+              setSelectedArticleId(articleId);
+              navigateTo("newsArticle");
+            }}
+            onOpenFactsheet={(strategy) => {
+              setSelectedStrategy(strategy);
+              navigateTo("factsheet");
+            }}
+          />
+        </AppLayout>
       </SwipeBackWrapper>
+    );
+  }
+
+  if (currentPage === "deposit") {
+    return (
+      <AppLayout
+        activeTab="deposit"
+        onTabChange={handleTabChange}
+        onWithdraw={() => {}}
+        onShowComingSoon={() => {}}
+        modal={null}
+        onCloseModal={() => {}}
+      >
+        <DepositPage />
+      </AppLayout>
     );
   }
 

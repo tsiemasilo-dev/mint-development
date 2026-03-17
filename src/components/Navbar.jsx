@@ -2,21 +2,23 @@ import React, { useRef, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import {
   Home,
-  FileText,
   PieChart,
+  TrendingUp,
+  ArrowDownToLine,
   MoreHorizontal,
 } from "lucide-react";
- 
+
 const Navbar = ({ activeTab, setActiveTab }) => {
   const navRef = useRef(null);
   const ImpactStyle = {
     Light: "LIGHT",
   };
- 
+
   const tabs = [
     { id: "home", label: "Home", icon: Home },
     { id: "investments", label: "Portfolio", icon: PieChart },
-    { id: "statements", label: "Statements", icon: FileText },
+    { id: "markets", label: "Markets", icon: TrendingUp },
+    { id: "deposit", label: "Deposit", icon: ArrowDownToLine },
     { id: "more", label: "More", icon: MoreHorizontal },
   ];
 
@@ -58,7 +60,7 @@ const Navbar = ({ activeTab, setActiveTab }) => {
     }, 100);
     return () => clearTimeout(interval);
   }, []);
- 
+
   return (
     <>
       {createPortal(
@@ -71,7 +73,7 @@ const Navbar = ({ activeTab, setActiveTab }) => {
             willChange: "transform"
           }}
         >
-          <div className="relative mx-auto grid w-full max-w-lg grid-cols-4 items-center px-4">
+          <div className="relative mx-auto grid w-full max-w-lg grid-cols-5 items-center px-2">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
@@ -83,8 +85,8 @@ const Navbar = ({ activeTab, setActiveTab }) => {
                   activeTab === tab.id ? "text-[#31005e] scale-110" : "text-slate-400 opacity-60"
                 }`}
               >
-                <tab.icon size={24} strokeWidth={activeTab === tab.id ? 2.5 : 1.5} />
-                <span className="text-[9px] font-black uppercase tracking-[0.1em]">{tab.label}</span>
+                <tab.icon size={22} strokeWidth={activeTab === tab.id ? 2.5 : 1.5} />
+                <span className="text-[8px] font-black uppercase tracking-[0.08em]">{tab.label}</span>
               </button>
             ))}
           </div>
@@ -94,5 +96,5 @@ const Navbar = ({ activeTab, setActiveTab }) => {
     </>
   );
 };
- 
+
 export default Navbar;

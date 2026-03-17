@@ -12,6 +12,7 @@ import {
   ChevronRight,
   AlertCircle,
   User,
+  FileText,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import ProfileSkeleton from "../components/ProfileSkeleton";
@@ -121,6 +122,7 @@ const MorePage = ({ onNavigate }) => {
     [
       { id: "profile", label: "Profile Details", icon: User, onClick: () => onNavigate?.("profileDetails") },
       { id: "settings", label: "Settings", icon: Settings, onClick: () => onNavigate?.("settings") },
+      { id: "statements", label: "Statements", icon: FileText, onClick: () => onNavigate?.("statements") },
     ],
     [
       { id: "help", label: "Help & FAQs", icon: HelpCircle },
