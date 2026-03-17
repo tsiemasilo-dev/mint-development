@@ -885,7 +885,7 @@ const HomePage = ({
       <div className="mx-auto -mt-10 flex w-full max-w-sm flex-col gap-6 px-4 pb-10 md:max-w-md md:px-8">
         <section className="grid grid-cols-4 gap-3 text-[11px] font-medium">
           {[
-            { label: <>Open<br />Strategies</>, icon: LayoutGrid, onClick: onOpenStrategies || onOpenInvest },
+            { label: "Invest", icon: LayoutGrid, onClick: onOpenStrategies || onOpenInvest },
             { label: "Markets", icon: TrendingUp, onClick: onOpenMarkets || onOpenInvest },
             { label: "News", icon: Newspaper, onClick: () => (onOpenNews ? onOpenNews("news") : (onOpenInvest && onOpenInvest("news"))) },
             { label: "Goals", icon: Target, onClick: () => setShowGoalsModal(true) },
