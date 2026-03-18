@@ -1802,14 +1802,17 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
 
       {/* Strategy Preview Modal */}
       {selectedStrategy && portalTarget && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 overscroll-contain">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 overscroll-contain"
+          style={{ paddingBottom: "calc(var(--navbar-height, 64px) + 8px)" }}
+        >
           <button
             type="button"
             className="absolute inset-0 h-full w-full cursor-default"
             aria-label="Close preview"
             onClick={() => setSelectedStrategy(null)}
           />
-          <div className="relative z-10 flex max-h-[85vh] w-full max-w-sm flex-col overflow-hidden rounded-[32px] bg-white shadow-2xl">
+          <div className="relative z-10 flex w-full max-w-sm flex-col overflow-hidden rounded-[32px] bg-white shadow-2xl" style={{ maxHeight: "calc(90vh - var(--navbar-height, 64px) - 16px)" }}>
             <button
               type="button"
               onClick={() => setSelectedStrategy(null)}
