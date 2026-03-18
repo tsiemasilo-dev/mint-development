@@ -86,9 +86,8 @@ const DateRangePills = ({ dateRange, setDateRange }) => (
         key={d ?? "all"}
         type="button"
         onClick={() => setDateRange(d)}
-        className={`flex-1 rounded-full px-2 py-1.5 text-xs font-semibold transition whitespace-nowrap text-center ${
-          dateRange === d ? "bg-white text-slate-900 shadow-sm" : "text-white/70 hover:bg-white/10 hover:text-white"
-        }`}
+        className={`flex-1 rounded-full px-2 py-1.5 text-xs font-semibold transition whitespace-nowrap text-center ${dateRange === d ? "bg-white text-slate-900 shadow-sm" : "text-white/70 hover:bg-white/10 hover:text-white"
+          }`}
       >
         {d ? `${d}d` : "All"}
       </button>
@@ -402,7 +401,7 @@ const StatementsPage = ({ onOpenNotifications }) => {
       logo_url: t.logo_url,
       holding_logos: t.holding_logos || [],
     }))
-  , [activityTransactions]);
+    , [activityTransactions]);
 
   const activitySummaryStats = useMemo(() => {
     const totalDeposited = activityItems
@@ -460,7 +459,7 @@ const StatementsPage = ({ onOpenNotifications }) => {
     const combined = [...strategyRows, ...holdingsRows];
     return combined.filter(r =>
       activeTab === "strategy" ? r.type === "Strategy" :
-      activeTab === "holdings" ? r.type === "Holdings" : false
+        activeTab === "holdings" ? r.type === "Holdings" : false
     );
   }, [strategyRows, holdingsRows, activeTab]);
 
@@ -468,7 +467,7 @@ const StatementsPage = ({ onOpenNotifications }) => {
     deferredSearch
       ? filtered.filter(r => r.title.toLowerCase().includes(deferredSearch))
       : filtered
-  , [filtered, deferredSearch]);
+    , [filtered, deferredSearch]);
 
   const pages = Math.max(1, Math.ceil(searchFiltered.length / perPage));
   const pageRows = searchFiltered.slice((page - 1) * perPage, page * perPage);
@@ -481,7 +480,7 @@ const StatementsPage = ({ onOpenNotifications }) => {
     if (!dataReady || pdfLoading) return;
     setPdfLoading(true);
     try {
-      await generateMintStatement(
+      const pdfBuffer = await generateMintStatement(
         profile,
         displayName,
         holdingsRows,
@@ -490,6 +489,14 @@ const StatementsPage = ({ onOpenNotifications }) => {
         computedFrom,
         computedTo
       );
+
+      const blob = new Blob([pdfBuffer], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Mint-Statement-${new Date().toISOString().slice(0, 10)}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
     } catch (e) {
       console.error("PDF generation failed:", e);
     } finally {
@@ -632,11 +639,10 @@ const StatementsPage = ({ onOpenNotifications }) => {
                     key={f}
                     type="button"
                     onClick={() => setActivityFilter(f)}
-                    className={`flex-shrink-0 rounded-full px-4 py-2 text-xs font-semibold transition ${
-                      activityFilter === f
+                    className={`flex-shrink-0 rounded-full px-4 py-2 text-xs font-semibold transition ${activityFilter === f
                         ? "bg-slate-900 text-white shadow-sm"
                         : "bg-white text-slate-500 hover:text-slate-700 shadow-sm border border-slate-100"
-                    }`}
+                      }`}
                   >
                     {f}
                   </button>
@@ -728,16 +734,15 @@ const StatementsPage = ({ onOpenNotifications }) => {
                                   ) : item.status ? (
                                     <>
                                       <span className="text-slate-300">·</span>
-                                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
-                                        ["successful", "completed", "posted"].includes(item.status) ? "bg-emerald-50 text-emerald-600"
+                                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${["successful", "completed", "posted"].includes(item.status) ? "bg-emerald-50 text-emerald-600"
                                           : item.status === "pending" ? "bg-amber-50 text-amber-600"
-                                          : item.status === "failed" ? "bg-rose-50 text-rose-500"
-                                          : "bg-slate-100 text-slate-500"
-                                      }`}>
+                                            : item.status === "failed" ? "bg-rose-50 text-rose-500"
+                                              : "bg-slate-100 text-slate-500"
+                                        }`}>
                                         {["successful", "completed", "posted"].includes(item.status) ? "Completed"
                                           : item.status === "pending" ? "Pending"
-                                          : item.status === "failed" ? "Failed"
-                                          : item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                                            : item.status === "failed" ? "Failed"
+                                              : item.status.charAt(0).toUpperCase() + item.status.slice(1)}
                                       </span>
                                     </>
                                   ) : null}
@@ -939,7 +944,7 @@ const StatementsPage = ({ onOpenNotifications }) => {
                 <h2 className="text-lg font-bold text-slate-900">
                   {selectedCard.type === "Holdings" ? "Stock Details"
                     : selectedCard.type === "Strategy" ? "Strategy Details"
-                    : "Transaction Details"}
+                      : "Transaction Details"}
                 </h2>
                 <button
                   type="button"
@@ -969,11 +974,10 @@ const StatementsPage = ({ onOpenNotifications }) => {
                   </div>
                   <div className="rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-50 to-white p-4 text-center">
                     <p className="text-2xl font-bold text-slate-900">{selectedCard.amount}</p>
-                    <p className={`mt-1 text-sm font-semibold ${
-                      selectedCard.unrealizedPL?.startsWith("+") ? "text-emerald-600"
+                    <p className={`mt-1 text-sm font-semibold ${selectedCard.unrealizedPL?.startsWith("+") ? "text-emerald-600"
                         : selectedCard.unrealizedPL?.startsWith("-") ? "text-red-600"
-                        : "text-slate-400"
-                    }`}>{selectedCard.unrealizedPL || "—"}</p>
+                          : "text-slate-400"
+                      }`}>{selectedCard.unrealizedPL || "—"}</p>
                     <p className="mt-0.5 text-xs text-slate-400">Unrealised P/L</p>
                   </div>
                   <div className="grid grid-cols-2 gap-3">

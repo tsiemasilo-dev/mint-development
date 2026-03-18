@@ -259,7 +259,7 @@ async function buildPDF({ profile, onboardingData, packDetail, signatureDataUrl,
   }
   y += 4;
 
-  // Parties block — {Name}, {ID NUMBER}, {CLIENT ADDRESS} replaced with real data
+  // Parties block
   doc.setFontSize(9);
   doc.setTextColor(40, 40, 40);
   const parties = [
@@ -270,11 +270,8 @@ async function buildPDF({ profile, onboardingData, packDetail, signatureDataUrl,
     ["", false],
     ["and", true],
     ["", false],
-    // ← {Name} replaced
     [fullName, true],
-    // ← {ID NUMBER} replaced
     [`ID / Registration Number: ${resolvedId}`, false],
-    // ← {CLIENT ADDRESS} replaced
     [address, false],
     ['("Client")', false],
   ];
@@ -286,7 +283,6 @@ async function buildPDF({ profile, onboardingData, packDetail, signatureDataUrl,
   }
   y += 6;
 
-  // Clauses — exact wording from the docx
   const bold = (...args) => { doc.setFont("helvetica", "bold"); doc.setFontSize(args[0] || 9.5); };
   const norm = (...args) => { doc.setFont("helvetica", "normal"); doc.setFontSize(args[0] || 8.5); };
   const color = (r, g, b) => doc.setTextColor(r, g, b);
@@ -319,57 +315,28 @@ async function buildPDF({ profile, onboardingData, packDetail, signatureDataUrl,
     }
   };
 
-  // 1. APPOINTMENT
   writeHeading("1. APPOINTMENT");
-  writePara(
-    `The Client hereby appoints Mint Platforms (Pty) Ltd, trading as Mint ("Mint"), to act as its authorised securities administrator for purposes of facilitating the custody, administration and record-keeping of securities held by the Client.`,
-  );
-  writePara(
-    `The Client further authorises Mint to facilitate the opening and maintenance of an account in the Client's name with Computershare Nominees (Pty) Ltd, or its affiliated companies, acting as nominee and custodian, for the purpose of holding and administering securities on behalf of the Client.`,
-  );
+  writePara(`The Client hereby appoints Mint Platforms (Pty) Ltd, trading as Mint ("Mint"), to act as its authorised securities administrator for purposes of facilitating the custody, administration and record-keeping of securities held by the Client.`);
+  writePara(`The Client further authorises Mint to facilitate the opening and maintenance of an account in the Client's name with Computershare Nominees (Pty) Ltd, or its affiliated companies, acting as nominee and custodian, for the purpose of holding and administering securities on behalf of the Client.`);
   writePara("Mint is authorised to:");
-  writePara(
-    "1.1  Facilitate the opening and administration of the Client's securities account with Computershare Nominees (Pty) Ltd, including the submission of all required documentation and client information.",
-    4,
-  );
-  writePara(
-    "1.2  Administer, record, and facilitate the holding of securities beneficially owned by the Client through the nominee and custody structure.",
-    4,
-  );
-  writePara(
-    "1.3  Interface and communicate with relevant transfer secretaries, custodians, central securities depositories, settlement agents, and registry service providers in order to give effect to the Client's investment holdings.",
-    4,
-  );
-  writePara(
-    "1.4  Provide relevant client and investment information, instructions, and documentation to Strate, Computershare Limited, and any related service providers for the purposes of securities settlement, custody administration, and registry maintenance.",
-    4,
-  );
+  writePara("1.1  Facilitate the opening and administration of the Client's securities account with Computershare Nominees (Pty) Ltd, including the submission of all required documentation and client information.", 4);
+  writePara("1.2  Administer, record, and facilitate the holding of securities beneficially owned by the Client through the nominee and custody structure.", 4);
+  writePara("1.3  Interface and communicate with relevant transfer secretaries, custodians, central securities depositories, settlement agents, and registry service providers in order to give effect to the Client's investment holdings.", 4);
+  writePara("1.4  Provide relevant client and investment information, instructions, and documentation to Strate, Computershare Limited, and any related service providers for the purposes of securities settlement, custody administration, and registry maintenance.", 4);
 
-  // 2. NOMINEE AND UNDERLYING ACCOUNT ARRANGEMENTS
   writeHeading("2. NOMINEE AND UNDERLYING ACCOUNT ARRANGEMENTS");
   writePara("2.1  The Client acknowledges that securities acquired through Mint may be held through:", 4);
   writeBullet("a nominee structure, or");
   writeBullet("underlying accounts opened in the Client's name with a custodian or registry service provider.");
   y += 2;
-  writePara(
-    "2.2  Where required by the relevant service provider, Mint is authorised to facilitate the opening of such underlying accounts in the Client's name for purposes of recording ownership of securities.",
-    4,
-  );
-  writePara(
-    "2.3  The Client consents to Mint providing the Client's information to relevant service providers for the purpose of establishing such accounts.",
-    4,
-  );
+  writePara("2.2  Where required by the relevant service provider, Mint is authorised to facilitate the opening of such underlying accounts in the Client's name for purposes of recording ownership of securities.", 4);
+  writePara("2.3  The Client consents to Mint providing the Client's information to relevant service providers for the purpose of establishing such accounts.", 4);
 
-  // 3. RECORD OF OWNERSHIP
   writeHeading("3. RECORD OF OWNERSHIP");
   writePara("3.1  The Client remains the beneficial owner of any securities purchased or held through Mint.", 4);
   writePara("3.2  Mint will maintain internal records reflecting the Client's beneficial ownership of securities.", 4);
-  writePara(
-    "3.3  Official registry records may be maintained by a transfer secretary or registry provider as required under applicable market infrastructure rules.",
-    4,
-  );
+  writePara("3.3  Official registry records may be maintained by a transfer secretary or registry provider as required under applicable market infrastructure rules.", 4);
 
-  // 4. CLIENT INSTRUCTIONS
   writeHeading("4. CLIENT INSTRUCTIONS");
   writePara("4.1  Mint will act on instructions provided by the Client regarding:", 4);
   writeBullet("subscriptions");
@@ -378,76 +345,48 @@ async function buildPDF({ profile, onboardingData, packDetail, signatureDataUrl,
   writeBullet("corporate actions");
   writeBullet("other administrative matters relating to the Client's securities.");
   y += 2;
-  writePara(
-    "4.2  Instructions may be provided through electronic platforms, written instruction, or other communication channels approved by Mint.",
-    4,
-  );
+  writePara("4.2  Instructions may be provided through electronic platforms, written instruction, or other communication channels approved by Mint.", 4);
 
-  // 5. INFORMATION SHARING
   writeHeading("5. INFORMATION SHARING");
-  writePara(
-    "5.1  The Client authorises Mint to provide relevant client information and investment details to third-party service providers including but not limited to:",
-    4,
-  );
+  writePara("5.1  The Client authorises Mint to provide relevant client information and investment details to third-party service providers including but not limited to:", 4);
   writeBullet("custodians");
   writeBullet("transfer secretaries");
   writeBullet("registry service providers");
   writeBullet("settlement agents");
   y += 1;
   writePara("for the purpose of administering the Client's securities holdings.");
-  writePara(
-    "5.2  Such information will be shared solely for the purposes of facilitating the Client's investments.",
-    4,
-  );
+  writePara("5.2  Such information will be shared solely for the purposes of facilitating the Client's investments.", 4);
 
-  // 6. TERM
   writeHeading("6. TERM");
-  writePara(
-    "This Agreement shall commence on the date of signature and remain in effect until terminated by either party upon written notice.",
-  );
+  writePara("This Agreement shall commence on the date of signature and remain in effect until terminated by either party upon written notice.");
 
-  // 7. GOVERNING LAW
   writeHeading("7. GOVERNING LAW");
-  writePara(
-    "This Agreement shall be governed by and interpreted in accordance with the laws of the Republic of South Africa.",
-  );
+  writePara("This Agreement shall be governed by and interpreted in accordance with the laws of the Republic of South Africa.");
 
-  // 8. SIGNATURES
   y = needsNewPage(doc, y, 70);
   writeHeading("8. SIGNATURES");
 
   const { day, month, year } = todayParts();
   norm(8.5); color(40, 40, 40);
-  doc.text(
-    `Signed at MINT PLATFORMS on this ${day} day of ${month} 20${year}.`,
-    MARGIN, y,
-  );
+  doc.text(`Signed at MINT PLATFORMS on this ${day} day of ${month} 20${year}.`, MARGIN, y);
   y += 10;
 
   const colW = (PAGE_W - MARGIN * 2 - 10) / 2;
   const cx = MARGIN + colW + 10;
 
-  // Mint signatory (left) — with CEO signature image
   bold(8.5); color(40, 40, 40);
   doc.text("For and on behalf of Mint Platforms (Pty) Ltd", MARGIN, y);
   norm(8.5);
   doc.text("Name: Lonwabo Damane", MARGIN, y + 5);
   doc.text("Title: Chief Executive Officer", MARGIN, y + 10);
-  // CEO signature image — sized to fill column width at a natural height
   if (ceoSigB64?.data && ceoSigB64.width > 0) {
     const aspect = ceoSigB64.width / ceoSigB64.height;
     const maxH = 22;
     const maxW = colW;
     let h = 18;
     let w = h * aspect;
-    if (w > maxW) {
-      w = maxW;
-      h = w / aspect;
-    }
-    if (h > maxH) {
-      h = maxH;
-      w = h * aspect;
-    }
+    if (w > maxW) { w = maxW; h = w / aspect; }
+    if (h > maxH) { h = maxH; w = h * aspect; }
     doc.addImage(ceoSigB64.data, "PNG", MARGIN, y + 12, w, h, undefined, "FAST");
   }
   doc.setDrawColor(100, 100, 100); doc.setLineWidth(0.3);
@@ -455,16 +394,13 @@ async function buildPDF({ profile, onboardingData, packDetail, signatureDataUrl,
   doc.setFontSize(7.5); color(120, 120, 120);
   doc.text("Authorised Signatory", MARGIN, y + 36);
 
-  // Client signatory (right) — Name auto-filled from real data
   bold(8.5); color(40, 40, 40);
   doc.text("For and on behalf of the Client", cx, y);
   norm(8.5);
   doc.text(`Name: ${fullName}`, cx, y + 5);
   doc.text(`ID: ${resolvedId}`, cx, y + 10);
 
-  // Drawn signature image
   if (signatureDataUrl) {
-    // Briefly get dimensions for client signature too
     const userSig = await new Promise((resolve) => {
       const img = new Image();
       img.onload = () => resolve({ width: img.width, height: img.height });
@@ -478,17 +414,10 @@ async function buildPDF({ profile, onboardingData, packDetail, signatureDataUrl,
       const maxW = colW;
       let h = 18;
       let w = h * aspect;
-      if (w > maxW) {
-        w = maxW;
-        h = w / aspect;
-      }
-      if (h > maxH) {
-        h = maxH;
-        w = h * aspect;
-      }
+      if (w > maxW) { w = maxW; h = w / aspect; }
+      if (h > maxH) { h = maxH; w = h * aspect; }
       doc.addImage(signatureDataUrl, "PNG", cx, y + 12, w, h, undefined, "FAST");
     } else {
-      // Fallback
       doc.addImage(signatureDataUrl, "PNG", cx, y + 12, colW, 18, undefined, "FAST");
     }
   }
@@ -496,7 +425,6 @@ async function buildPDF({ profile, onboardingData, packDetail, signatureDataUrl,
   doc.setDrawColor(100, 100, 100); doc.setLineWidth(0.3);
   doc.line(cx, y + 32, cx + colW, y + 32);
 
-  // Date Signed + Date Downloaded under signature line
   bold(7.5); color(60, 60, 60);
   doc.text(`Date Signed: ${formatDateLong(signedAt)}`, cx, y + 37);
   norm(7.5); color(100, 100, 100);
@@ -504,7 +432,6 @@ async function buildPDF({ profile, onboardingData, packDetail, signatureDataUrl,
 
   y += 54;
 
-  // Audit trail box
   y = needsNewPage(doc, y, 30);
   doc.setFillColor(248, 246, 252);
   doc.setDrawColor(200, 190, 220);
@@ -517,7 +444,6 @@ async function buildPDF({ profile, onboardingData, packDetail, signatureDataUrl,
   doc.text(`Signed at (UTC):   ${new Date(signedAt).toISOString()}`, MARGIN + 4, y + 15);
   doc.text(`Downloaded (UTC):  ${new Date(downloadedAt).toISOString()}`, MARGIN + 4, y + 20);
 
-  // Footers on every page — must be last
   drawFooters(doc, signedAt, downloadedAt);
 
   return doc.output("arraybuffer");
@@ -540,7 +466,7 @@ export default function AccountAgreementStep({
     bankAccountType = "SAVINGS",
   } = onboardingData;
 
-  const [phase, setPhase] = useState("review");   // review | sign | processing | success
+  const [phase, setPhase] = useState("review");
   const [error, setError] = useState("");
   const [pdfUrl, setPdfUrl] = useState("");
   const [signedAt, setSignedAt] = useState(null);
@@ -553,7 +479,7 @@ export default function AccountAgreementStep({
   const signatureDataUrlRef = useRef(null);
   const [sigEmpty, setSigEmpty] = useState(true);
 
-  // ── fetch latest onboarding & pack details (SumSub data) ─────────────────────
+  // ── fetch latest onboarding & pack details ────────────────────────────────
   useEffect(() => {
     async function getAllData() {
       try {
@@ -561,7 +487,6 @@ export default function AccountAgreementStep({
         if (!session?.user?.id) return;
         const uid = session.user.id;
 
-        // Fetch pack details
         const { data: pdData } = await supabase
           .from("user_onboarding_pack_details")
           .select("pack_details")
@@ -569,7 +494,6 @@ export default function AccountAgreementStep({
           .maybeSingle();
         if (pdData?.pack_details) setPackDetail(pdData.pack_details);
 
-        // Fetch onboarding record for bank/tax details
         const { data: obData } = await supabase
           .from("user_onboarding")
           .select("bank_name, bank_account_number, bank_branch_code, sumsub_raw")
@@ -597,11 +521,9 @@ export default function AccountAgreementStep({
     getAllData();
   }, []);
 
-  // ── derive client info (with SumSub overrides) ────────────────────────────
+  // ── derive client info ────────────────────────────────────────────────────
   const pd = packDetail?.info || {};
   const pdFullName = (pd.firstNameEn && pd.lastNameEn) ? `${pd.firstNameEn} ${pd.lastNameEn}` : (pd.firstName && pd.lastName ? `${pd.firstName} ${pd.lastName}` : "");
-
-  // Find ID or Tax number in pack_details with defensive checks for idDocType
   const pdIdDoc = Array.isArray(pd.idDocs) ? pd.idDocs.find(d => d.number && (d.idDocType === "ID_CARD" || d.idDocType === "PASSPORT" || d.idDocType === "DRIVERS")) : null;
   const pdTaxDoc = Array.isArray(pd.idDocs) ? pd.idDocs.find(d => {
     if (!d.number) return false;
@@ -625,10 +547,8 @@ export default function AccountAgreementStep({
   const address = pdAddress || profile?.address || profile?.physical_address || "—";
   const email = packDetail?.email || profile?.email || "—";
   const cell = packDetail?.phone || profile?.cell_number || profile?.phone || "—";
-
   const resolvedId = pdIdNumber || fetchedOnboarding.identityNumber || onboardingData?.identityNumber || "—";
 
-  // Bank details merged from props and fetched record
   const effectiveBankName = bankName || fetchedOnboarding.bankName || "";
   const effectiveBankAcc = bankAccountNumber || fetchedOnboarding.bankAccountNumber || "";
   const effectiveBankBranch = bankBranchCode || fetchedOnboarding.bankBranchCode || "";
@@ -641,7 +561,6 @@ export default function AccountAgreementStep({
     : String(sourceOfFunds || fetchedOnboarding.source_of_funds || "—").replace(/_/g, " ");
 
   const resolvedMonthly = expectedMonthlyInvestment || fetchedOnboarding.expected_monthly_investment || "";
-
 
   // ── signature pad ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -712,7 +631,6 @@ export default function AccountAgreementStep({
       try {
         const token = session?.access_token;
         if (token) {
-          // Convert ArrayBuffer → base64 and upload via server (uses service role key)
           const uint8 = new Uint8Array(pdfBuffer);
           let binary = "";
           for (let i = 0; i < uint8.length; i++) binary += String.fromCharCode(uint8[i]);
@@ -737,7 +655,7 @@ export default function AccountAgreementStep({
 
       setPdfUrl(publicUrl);
 
-      // Merge signing details + all required flags into sumsub_raw
+      // ── FIX: save ALL completion flags + URL atomically ──────────────────
       try {
         const { data: existing } = await supabase
           .from("user_onboarding")
@@ -748,29 +666,53 @@ export default function AccountAgreementStep({
         if (existing?.sumsub_raw) {
           raw = typeof existing.sumsub_raw === "string" ? JSON.parse(existing.sumsub_raw) : existing.sumsub_raw;
         }
-        // Stamp all required onboarding flags — reaching the signing step means
-        // the user completed all prior steps.
+        // Stamp all prior step flags (reaching signing = all prior steps done)
         raw.tax_details_saved = raw.tax_details_saved || true;
         raw.bank_details_saved = raw.bank_details_saved || true;
         raw.mandate_accepted = raw.mandate_accepted || true;
         raw.risk_disclosure_accepted = raw.risk_disclosure_accepted || true;
         raw.source_of_funds_accepted = raw.source_of_funds_accepted || true;
         raw.terms_accepted = true;
+        // ── FIX: explicitly stamp account_agreement_signed ───────────────
+        raw.account_agreement_signed = true;
         raw.signed_at = now;
         raw.downloaded_at = now;
-        if (publicUrl) raw.signed_agreement_url = publicUrl;
+        raw.signed_agreement_url = publicUrl;
+
         const updatePayload = {
           kyc_status: "onboarding_complete",
           sumsub_raw: JSON.stringify(raw),
+          // ── FIX: always write URL to the dedicated column ───────────────
+          signed_agreement_url: publicUrl,
+          signed_at: now,
         };
-        if (publicUrl) updatePayload.signed_agreement_url = publicUrl;
-        await supabase.from("user_onboarding").update(updatePayload).eq("user_id", userId);
+
+        const { error: updateError } = await supabase
+          .from("user_onboarding")
+          .update(updatePayload)
+          .eq("user_id", userId);
+
+        if (updateError) {
+          console.error("[AccountAgreementStep] DB update error:", updateError.message);
+          // Fallback — try minimal update
+          await supabase.from("user_onboarding").update({
+            kyc_status: "onboarding_complete",
+            signed_agreement_url: publicUrl,
+          }).eq("user_id", userId);
+        }
       } catch (dbErr) {
         console.warn("Onboarding DB update failed (non-critical):", dbErr?.message);
-        await supabase.from("user_onboarding").update({ kyc_status: "onboarding_complete", signed_agreement_url: publicUrl || null }).eq("user_id", userId);
+        // Last-resort minimal update
+        try {
+          await supabase.from("user_onboarding").update({
+            kyc_status: "onboarding_complete",
+            signed_agreement_url: publicUrl,
+          }).eq("user_id", userId);
+        } catch (e) {
+          console.error("[AccountAgreementStep] Fallback DB update also failed:", e?.message);
+        }
       }
 
-      // Completion is handled by the parent's onComplete callback
       setPhase("success");
     } catch (err) {
       console.error("Sign error:", err);
@@ -812,7 +754,11 @@ export default function AccountAgreementStep({
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id;
-      if (userId) await supabase.from("user_onboarding").update({ downloaded_at: dlNow }).eq("user_id", userId);
+      if (userId) {
+        await supabase.from("user_onboarding").update({
+          downloaded_at: dlNow,
+        }).eq("user_id", userId);
+      }
     } catch (e) { console.warn("Could not persist downloaded_at:", e); }
   };
 
@@ -826,7 +772,6 @@ export default function AccountAgreementStep({
 
   // ─────────────────────────────────────────────────────────────────────────
   // PHASE: REVIEW
-  // Shows all real client data for confirmation before signing
   // ─────────────────────────────────────────────────────────────────────────
   if (phase === "review") {
     const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : "—");
@@ -875,7 +820,6 @@ export default function AccountAgreementStep({
           ))}
         </div>
 
-        {/* Details card */}
         <div className="animate-fade-in delay-2" style={{
           background: "white", border: `1px solid ${purpleBorder}`,
           borderRadius: 16, overflow: "hidden",
@@ -921,7 +865,6 @@ export default function AccountAgreementStep({
           ))}
         </div>
 
-        {/* Agreement notice */}
         <div className="animate-fade-in delay-3" style={{
           background: "hsl(270 50% 97%)", border: `1px solid hsl(270 40% 88%)`,
           borderRadius: 12, padding: "14px 18px", display: "flex", gap: 12, marginBottom: 28,
@@ -936,8 +879,8 @@ export default function AccountAgreementStep({
             </p>
             <p style={{ margin: 0, fontSize: 11.5, color: purpleMid, lineHeight: 1.6 }}>
               On the next screen you will read the full agreement with your details already filled in,
-              then draw your signature. The signed PDF will record your <strong>date signed</strong> and
-              <strong> date downloaded</strong> on every page.
+              then draw your signature. The signed PDF will record your <strong>date signed</strong> and{" "}
+              <strong>date downloaded</strong> on every page.
             </p>
           </div>
         </div>
@@ -956,7 +899,6 @@ export default function AccountAgreementStep({
 
   // ─────────────────────────────────────────────────────────────────────────
   // PHASE: SIGN
-  // Shows the full agreement text (client details auto-populated) + signature pad
   // ─────────────────────────────────────────────────────────────────────────
   if (phase === "sign") {
     const { day, month, year } = todayParts();
@@ -975,13 +917,11 @@ export default function AccountAgreementStep({
           </p>
         </div>
 
-        {/* ── Agreement document ── */}
         <div className="animate-fade-in delay-2" style={{
           background: "white", border: `1px solid ${purpleBorder}`,
           borderRadius: 16, overflow: "hidden",
           boxShadow: "0 4px 24px rgba(83,47,126,0.08)", marginBottom: 24,
         }}>
-          {/* Doc header */}
           <div style={{
             padding: "16px 24px", borderBottom: `1px solid ${purpleBorder}`,
             background: purplePale, display: "flex", alignItems: "center", gap: 10,
@@ -995,13 +935,8 @@ export default function AccountAgreementStep({
             </span>
           </div>
 
-          {/* Scrollable agreement body */}
           <div style={{ padding: "24px 28px", maxHeight: 480, overflowY: "auto", fontSize: 13, lineHeight: 1.7, color: "#222" }}>
-
-            {/* Parties — {Name}, {ID NUMBER}, {CLIENT ADDRESS} replaced with real data */}
-            <p style={{ textAlign: "center", marginBottom: 16 }}>
-              <strong>Between</strong>
-            </p>
+            <p style={{ textAlign: "center", marginBottom: 16 }}><strong>Between</strong></p>
             <p style={{ textAlign: "center", marginBottom: 4 }}>
               <strong>Mint Platforms (Pty) Ltd</strong>, trading as <strong>Mint</strong><br />
               Registration Number: 2024/644796/07<br />
@@ -1013,12 +948,9 @@ export default function AccountAgreementStep({
               padding: "12px 20px", borderRadius: 10,
               background: "hsl(270 50% 97%)", border: `1px solid hsl(270 40% 88%)`,
             }}>
-              {/* ← real client name */}
               <strong style={{ fontSize: 14, color: purple }}>{fullName}</strong><br />
               <span style={{ fontSize: 12, color: purpleMid }}>
-                {/* ← real ID number */}
                 ID / Registration Number: {identityNumber || "—"}<br />
-                {/* ← real address */}
                 {address}<br />
               </span>
               <span style={{ fontSize: 12 }}>(&quot;Client&quot;)</span>
@@ -1026,121 +958,55 @@ export default function AccountAgreementStep({
 
             <hr style={{ border: "none", borderTop: `1px solid ${purpleBorder}`, margin: "20px 0" }} />
 
-            {/* Clause 1 */}
             <p><strong style={{ color: purple }}>1. APPOINTMENT</strong></p>
-            <p>
-              The Client hereby appoints <strong>Mint Platforms (Pty) Ltd, trading as Mint (&quot;Mint&quot;)</strong>,
-              to act as its authorised securities administrator for purposes of facilitating the custody,
-              administration and record-keeping of securities held by the Client.
-            </p>
-            <p>
-              The Client further authorises Mint to facilitate the opening and maintenance of an account in
-              the Client&apos;s name with <strong>Computershare Nominees (Pty) Ltd</strong>, or its affiliated companies,
-              acting as nominee and custodian, for the purpose of holding and administering securities on behalf of the Client.
-            </p>
+            <p>The Client hereby appoints <strong>Mint Platforms (Pty) Ltd, trading as Mint (&quot;Mint&quot;)</strong>, to act as its authorised securities administrator for purposes of facilitating the custody, administration and record-keeping of securities held by the Client.</p>
+            <p>The Client further authorises Mint to facilitate the opening and maintenance of an account in the Client&apos;s name with <strong>Computershare Nominees (Pty) Ltd</strong>, or its affiliated companies, acting as nominee and custodian, for the purpose of holding and administering securities on behalf of the Client.</p>
             <p>Mint is authorised to:</p>
-            <p style={{ paddingLeft: 16 }}>
-              <strong>1.1</strong> Facilitate the opening and administration of the Client&apos;s securities account with{" "}
-              <strong>Computershare Nominees (Pty) Ltd</strong>, including the submission of all required documentation and client information.
-            </p>
-            <p style={{ paddingLeft: 16 }}>
-              <strong>1.2</strong> Administer, record, and facilitate the holding of securities beneficially owned by the Client through
-              the nominee and custody structure.
-            </p>
-            <p style={{ paddingLeft: 16 }}>
-              <strong>1.3</strong> Interface and communicate with relevant transfer secretaries, custodians, central securities
-              depositories, settlement agents, and registry service providers in order to give effect to the Client&apos;s investment holdings.
-            </p>
-            <p style={{ paddingLeft: 16 }}>
-              <strong>1.4</strong> Provide relevant client and investment information, instructions, and documentation to{" "}
-              <strong>Strate</strong>, <strong>Computershare Limited</strong>, and any related service providers for the purposes of
-              securities settlement, custody administration, and registry maintenance.
-            </p>
+            <p style={{ paddingLeft: 16 }}><strong>1.1</strong> Facilitate the opening and administration of the Client&apos;s securities account with <strong>Computershare Nominees (Pty) Ltd</strong>, including the submission of all required documentation and client information.</p>
+            <p style={{ paddingLeft: 16 }}><strong>1.2</strong> Administer, record, and facilitate the holding of securities beneficially owned by the Client through the nominee and custody structure.</p>
+            <p style={{ paddingLeft: 16 }}><strong>1.3</strong> Interface and communicate with relevant transfer secretaries, custodians, central securities depositories, settlement agents, and registry service providers in order to give effect to the Client&apos;s investment holdings.</p>
+            <p style={{ paddingLeft: 16 }}><strong>1.4</strong> Provide relevant client and investment information, instructions, and documentation to <strong>Strate</strong>, <strong>Computershare Limited</strong>, and any related service providers for the purposes of securities settlement, custody administration, and registry maintenance.</p>
 
-            {/* Clause 2 */}
             <p><strong style={{ color: purple }}>2. NOMINEE AND UNDERLYING ACCOUNT ARRANGEMENTS</strong></p>
-            <p style={{ paddingLeft: 16 }}>
-              <strong>2.1</strong> The Client acknowledges that securities acquired through Mint may be held through:
-            </p>
+            <p style={{ paddingLeft: 16 }}><strong>2.1</strong> The Client acknowledges that securities acquired through Mint may be held through:</p>
             <ul style={{ paddingLeft: 32 }}>
               <li>a <strong>nominee structure</strong>, or</li>
               <li><strong>underlying accounts opened in the Client&apos;s name</strong> with a custodian or registry service provider.</li>
             </ul>
-            <p style={{ paddingLeft: 16 }}>
-              <strong>2.2</strong> Where required by the relevant service provider, Mint is authorised to facilitate the opening of such
-              underlying accounts in the Client&apos;s name for purposes of recording ownership of securities.
-            </p>
-            <p style={{ paddingLeft: 16 }}>
-              <strong>2.3</strong> The Client consents to Mint providing the Client&apos;s information to relevant service providers for
-              the purpose of establishing such accounts.
-            </p>
+            <p style={{ paddingLeft: 16 }}><strong>2.2</strong> Where required by the relevant service provider, Mint is authorised to facilitate the opening of such underlying accounts in the Client&apos;s name for purposes of recording ownership of securities.</p>
+            <p style={{ paddingLeft: 16 }}><strong>2.3</strong> The Client consents to Mint providing the Client&apos;s information to relevant service providers for the purpose of establishing such accounts.</p>
 
-            {/* Clause 3 */}
             <p><strong style={{ color: purple }}>3. RECORD OF OWNERSHIP</strong></p>
-            <p style={{ paddingLeft: 16 }}>
-              <strong>3.1</strong> The Client remains the <strong>beneficial owner</strong> of any securities purchased or held through Mint.
-            </p>
-            <p style={{ paddingLeft: 16 }}>
-              <strong>3.2</strong> Mint will maintain internal records reflecting the Client&apos;s beneficial ownership of securities.
-            </p>
-            <p style={{ paddingLeft: 16 }}>
-              <strong>3.3</strong> Official registry records may be maintained by a transfer secretary or registry provider as required
-              under applicable market infrastructure rules.
-            </p>
+            <p style={{ paddingLeft: 16 }}><strong>3.1</strong> The Client remains the <strong>beneficial owner</strong> of any securities purchased or held through Mint.</p>
+            <p style={{ paddingLeft: 16 }}><strong>3.2</strong> Mint will maintain internal records reflecting the Client&apos;s beneficial ownership of securities.</p>
+            <p style={{ paddingLeft: 16 }}><strong>3.3</strong> Official registry records may be maintained by a transfer secretary or registry provider as required under applicable market infrastructure rules.</p>
 
-            {/* Clause 4 */}
             <p><strong style={{ color: purple }}>4. CLIENT INSTRUCTIONS</strong></p>
-            <p style={{ paddingLeft: 16 }}>
-              <strong>4.1</strong> Mint will act on instructions provided by the Client regarding:
-            </p>
+            <p style={{ paddingLeft: 16 }}><strong>4.1</strong> Mint will act on instructions provided by the Client regarding:</p>
             <ul style={{ paddingLeft: 32 }}>
-              <li>subscriptions</li>
-              <li>transfers</li>
-              <li>disposals</li>
+              <li>subscriptions</li><li>transfers</li><li>disposals</li>
               <li>corporate actions</li>
               <li>other administrative matters relating to the Client&apos;s securities.</li>
             </ul>
-            <p style={{ paddingLeft: 16 }}>
-              <strong>4.2</strong> Instructions may be provided through electronic platforms, written instruction,
-              or other communication channels approved by Mint.
-            </p>
+            <p style={{ paddingLeft: 16 }}><strong>4.2</strong> Instructions may be provided through electronic platforms, written instruction, or other communication channels approved by Mint.</p>
 
-            {/* Clause 5 */}
             <p><strong style={{ color: purple }}>5. INFORMATION SHARING</strong></p>
-            <p style={{ paddingLeft: 16 }}>
-              <strong>5.1</strong> The Client authorises Mint to provide relevant client information and investment details to
-              third-party service providers including but not limited to:
-            </p>
+            <p style={{ paddingLeft: 16 }}><strong>5.1</strong> The Client authorises Mint to provide relevant client information and investment details to third-party service providers including but not limited to:</p>
             <ul style={{ paddingLeft: 32 }}>
-              <li>custodians</li>
-              <li>transfer secretaries</li>
-              <li>registry service providers</li>
-              <li>settlement agents</li>
+              <li>custodians</li><li>transfer secretaries</li>
+              <li>registry service providers</li><li>settlement agents</li>
             </ul>
             <p>for the purpose of administering the Client&apos;s securities holdings.</p>
-            <p style={{ paddingLeft: 16 }}>
-              <strong>5.2</strong> Such information will be shared solely for the purposes of facilitating the Client&apos;s investments.
-            </p>
+            <p style={{ paddingLeft: 16 }}><strong>5.2</strong> Such information will be shared solely for the purposes of facilitating the Client&apos;s investments.</p>
 
-            {/* Clause 6 */}
             <p><strong style={{ color: purple }}>6. TERM</strong></p>
-            <p>
-              This Agreement shall commence on the date of signature and remain in effect until terminated by either party upon written notice.
-            </p>
+            <p>This Agreement shall commence on the date of signature and remain in effect until terminated by either party upon written notice.</p>
 
-            {/* Clause 7 */}
             <p><strong style={{ color: purple }}>7. GOVERNING LAW</strong></p>
-            <p>
-              This Agreement shall be governed by and interpreted in accordance with the laws of the{" "}
-              <strong>Republic of South Africa</strong>.
-            </p>
+            <p>This Agreement shall be governed by and interpreted in accordance with the laws of the <strong>Republic of South Africa</strong>.</p>
 
-            {/* Clause 8 — Signatures preview (auto-filled) */}
             <p><strong style={{ color: purple }}>8. SIGNATURES</strong></p>
-            <p>
-              Signed at <strong>MINT PLATFORMS</strong> on this <strong>{day}</strong> day of{" "}
-              <strong>{month}</strong> 20<strong>{year}</strong>.
-            </p>
+            <p>Signed at <strong>MINT PLATFORMS</strong> on this <strong>{day}</strong> day of <strong>{month}</strong> 20<strong>{year}</strong>.</p>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginTop: 16 }}>
               <div style={{ borderTop: `2px solid ${purpleBorder}`, paddingTop: 10 }}>
@@ -1150,17 +1016,14 @@ export default function AccountAgreementStep({
               </div>
               <div style={{ borderTop: `2px solid ${purpleBorder}`, paddingTop: 10 }}>
                 <p style={{ margin: 0, fontSize: 12, fontWeight: 600 }}>For and on behalf of the Client</p>
-                {/* ← real client name auto-filled */}
                 <p style={{ margin: "4px 0 0", fontSize: 12, color: purpleMid }}>Name: <strong style={{ color: purple }}>{fullName}</strong></p>
-                <p style={{ margin: "2px 0 0", fontSize: 11, color: purpleMid }}>
-                  ID: {identityNumber || "—"}
-                </p>
+                <p style={{ margin: "2px 0 0", fontSize: 11, color: purpleMid }}>ID: {identityNumber || "—"}</p>
               </div>
             </div>
           </div>
         </div>
 
-        {/* ── Signature pad ── */}
+        {/* Signature pad */}
         <div className="animate-fade-in delay-3" style={{
           background: "white", border: `2px dashed ${purpleBorder}`,
           borderRadius: 16, overflow: "hidden", marginBottom: 16, position: "relative",
@@ -1171,7 +1034,6 @@ export default function AccountAgreementStep({
             background: purplePale,
           }}>
             <span style={{ fontSize: 11, fontWeight: 600, color: purpleMid, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-              {/* ← client name in signature header */}
               Signature of {fullName}
             </span>
             <button type="button" onClick={clearSignature} style={{
@@ -1196,7 +1058,6 @@ export default function AccountAgreementStep({
           <canvas ref={canvasRef} style={{ display: "block", width: "100%", height: 160, cursor: "crosshair", touchAction: "none" }} />
         </div>
 
-        {/* Legal note */}
         <div className="animate-fade-in delay-3" style={{
           display: "flex", gap: 8, marginBottom: 20,
           padding: "10px 14px", borderRadius: 8,
@@ -1278,7 +1139,6 @@ export default function AccountAgreementStep({
           Your agreement has been signed and saved. Welcome to <span className="mint-brand">MINT</span>.
         </p>
 
-        {/* Date info box */}
         <div style={{
           background: purplePale, border: `1px solid ${purpleBorder}`,
           borderRadius: 12, padding: "14px 20px", marginBottom: 24, textAlign: "left",
@@ -1296,7 +1156,6 @@ export default function AccountAgreementStep({
           </div>
         </div>
 
-        {/* Completion pills */}
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28, alignItems: "center" }}>
           {["Identity verified", "Bank details saved", "Agreement signed", pdfUrl ? "PDF saved to your account" : "PDF ready to download"].map((item) => (
             <div key={item} style={{
@@ -1313,7 +1172,6 @@ export default function AccountAgreementStep({
           ))}
         </div>
 
-        {/* Download — re-stamps date on each click */}
         <div style={{ marginBottom: 28 }}>
           <button type="button" onClick={handleDownload} style={{
             display: "inline-flex", alignItems: "center", gap: 8,

@@ -1122,6 +1122,7 @@ app.post("/api/sumsub/status", async (req, res) => {
     }
 
     if (!SUMSUB_APP_TOKEN || !SUMSUB_SECRET_KEY) {
+      console.error("[Sumsub] Credentials not configured in environment variables");
       return res.status(500).json({
         success: false,
         error: { message: "Sumsub credentials not configured" }
@@ -1441,16 +1442,22 @@ app.post("/api/sumsub/webhook", async (req, res) => {
           if (applicantData) {
             const { data: existingPack } = await db
               .from("user_onboarding_pack_details")
-              .select("user_id")
+              .select("user_id, pack_details")
               .eq("user_id", externalUserId)
               .maybeSingle();
 
             if (existingPack) {
+              // Preserve existing agreements if they exist
+              const currentDetails = existingPack.pack_details || {};
+              if (Array.isArray(currentDetails.agreements) && currentDetails.agreements.length > 0) {
+                applicantData.agreements = currentDetails.agreements;
+              }
+
               await db
                 .from("user_onboarding_pack_details")
                 .update({ pack_details: applicantData, updated_at: new Date().toISOString() })
                 .eq("user_id", externalUserId);
-              console.log(`[Webhook] Updated user_onboarding_pack_details for user ${externalUserId}`);
+              console.log(`[Webhook] Updated user_onboarding_pack_details for user ${externalUserId} (preserved ${applicantData.agreements?.length || 0} agreements)`);
             } else {
               await db
                 .from("user_onboarding_pack_details")
@@ -1679,7 +1686,7 @@ app.post("/api/banking/initiate", async (req, res) => {
       });
     }
 
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    const { data: { user }, error: authError } = await db.auth.getUser(token);
     if (authError || !user) {
       return res.status(401).json({
         success: false,
@@ -1826,7 +1833,7 @@ app.post("/api/banking/capture", async (req, res) => {
       });
     }
 
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    const { data: { user }, error: authError } = await db.auth.getUser(token);
     if (authError || !user) {
       return res.status(401).json({
         success: false,
@@ -2010,6 +2017,9 @@ app.post("/api/banking/capture-confirm", async (req, res) => {
 
     const db = supabaseAdmin || supabase;
     const authClient = supabaseAdmin || supabase;
+    if (!authClient) {
+      return res.status(500).json({ success: false, error: "Database not configured" });
+    }
     const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
     if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
 
@@ -2063,6 +2073,9 @@ app.post("/api/banking/unlink", async (req, res) => {
 
     const db = supabaseAdmin || supabase;
     const authClient = supabaseAdmin || supabase;
+    if (!authClient) {
+      return res.status(500).json({ success: false, error: "Database not configured" });
+    }
     const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
     if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
 
@@ -2306,6 +2319,9 @@ async function authenticateUser(req) {
     return { user: null, error: "Missing or invalid Authorization header" };
   }
   const token = authHeader.replace("Bearer ", "");
+  if (!supabase) {
+    return { user: null, error: "Database client not initialized" };
+  }
   const { data, error } = await supabase.auth.getUser(token);
   if (error || !data?.user) {
     return { user: null, error: error?.message || "Invalid token" };
@@ -4305,6 +4321,9 @@ app.post("/api/onboarding/save-mandate", async (req, res) => {
 
     const db = getAuthenticatedDb(token);
     const authClient = supabaseAdmin || supabase;
+    if (!authClient) {
+      return res.status(500).json({ success: false, error: "Database not connected" });
+    }
     const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
     if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
 
@@ -4378,6 +4397,9 @@ app.get("/api/onboarding/mandate", async (req, res) => {
 
     const db = supabaseAdmin || supabase;
     const authClient = supabaseAdmin || supabase;
+    if (!authClient) {
+      return res.status(500).json({ success: false, error: "Database not configured" });
+    }
     const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
     if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
 
@@ -4418,6 +4440,9 @@ app.post("/api/onboarding/upload-agreement", async (req, res) => {
     if (!token) return res.status(401).json({ success: false, error: "Missing token" });
 
     const authClient = supabaseAdmin || supabase;
+    if (!authClient) {
+      return res.status(500).json({ success: false, error: "Database not connected" });
+    }
     const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
     if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
 
@@ -4453,6 +4478,9 @@ app.post("/api/onboarding/complete", async (req, res) => {
 
     const db = getAuthenticatedDb(token);
     const authClient = supabaseAdmin || supabase;
+    if (!authClient) {
+      return res.status(500).json({ success: false, error: "Database not connected" });
+    }
     const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
     if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
 
@@ -4471,6 +4499,11 @@ app.post("/api/onboarding/complete", async (req, res) => {
       signed_at,
       downloaded_at,
     } = req.body;
+
+    console.log(`[Onboarding] /complete called for user ${user.id}. Agreement URL present: ${!!signed_agreement_url}`);
+    if (!signed_agreement_url) {
+      console.log("[Onboarding] Warning: signed_agreement_url is missing in request body:", JSON.stringify(req.body));
+    }
 
     const userId = user.id;
 
@@ -4587,6 +4620,7 @@ app.post("/api/onboarding/complete", async (req, res) => {
     }
 
     if (signed_agreement_url) {
+      console.log(`[Onboarding] Saving agreement URL to pack details for user ${userId}`);
       try {
         const packDb = authClient;
         const { data: existingPack } = await packDb
@@ -4617,6 +4651,7 @@ app.post("/api/onboarding/complete", async (req, res) => {
               updated_at: new Date().toISOString()
             })
             .eq("id", existingPack.id);
+          console.log(`[Onboarding] Appended agreement to existing pack for user ${userId}`);
         } else {
           await packDb
             .from("user_onboarding_pack_details")
@@ -4625,6 +4660,7 @@ app.post("/api/onboarding/complete", async (req, res) => {
               pack_details: { agreements: [agreementData] },
               updated_at: new Date().toISOString()
             });
+          console.log(`[Onboarding] Created new pack with agreement for user ${userId}`);
         }
       } catch (packErr) {
         console.warn("[Onboarding] Failed to save agreement to pack details:", packErr.message);
@@ -4647,6 +4683,9 @@ app.get("/api/onboarding/status", async (req, res) => {
 
     const db = getAuthenticatedDb(token);
     const authClient = supabaseAdmin || supabase;
+    if (!authClient) {
+      return res.status(500).json({ success: false, error: "Database not connected" });
+    }
     const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
     if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
 

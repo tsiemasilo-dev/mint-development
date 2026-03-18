@@ -165,6 +165,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const [taxDone, setTaxDone] = useState(false);
   const [taxNumber, setTaxNumber] = useState("");
   const [termsDone, setTermsDone] = useState(false);
+  // ── FIX: track step 9 completion ──────────────────────────────────────────
+  const [agreementDone, setAgreementDone] = useState(false);
   const [authStatus, setAuthStatus] = useState({
     isChecked: false,
     isAuthenticated: false,
@@ -252,6 +254,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
     }
   };
 
+  // ── FIX: include step 9 (agreementDone) in navigation logic ──────────────
   const getNextIncompleteStep = (afterStep, justCompletedStep) => {
     const identityCheckDone = !!existingOnboardingId || kycAlreadyVerified;
     const steps = [
@@ -263,11 +266,12 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
       { step: 6, done: riskDone },
       { step: 7, done: sofDone },
       { step: 8, done: termsDone },
+      { step: 9, done: agreementDone },
     ];
     for (const s of steps) {
       if (s.step > afterStep && !s.done && s.step !== justCompletedStep) return s.step;
     }
-    return 9;
+    return 10; // all done — signals fully complete
   };
 
   const handleContinue = async () => {
@@ -326,7 +330,6 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
       await ensureOnboardingRecord();
 
-      // Save the ID number to the onboarding record we just ensured exists
       await saveProgressFlag("identity_details_saved", {
         identity_details: { identity_number: cleanIdNumber, savedAt: new Date().toISOString() },
       });
@@ -343,9 +346,11 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
     }
   };
 
+  // ── FIX: include step 9 in back navigation ────────────────────────────────
   const getPrevIncompleteStep = (beforeStep) => {
     const identityCheckDone = !!existingOnboardingId || kycAlreadyVerified;
     const steps = [
+      { step: 9, done: agreementDone },
       { step: 8, done: termsDone },
       { step: 7, done: sofDone },
       { step: 6, done: riskDone },
@@ -518,7 +523,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
         const onboardingId = result.success && result.onboarding_id ? result.onboarding_id : null;
         const recordQuery = supabase
           .from("user_onboarding")
-          .select("bank_name, bank_account_number, bank_branch_code, sumsub_raw, kyc_status")
+          .select("bank_name, bank_account_number, bank_branch_code, sumsub_raw, kyc_status, signed_agreement_url")
           .eq("user_id", userId);
         const { data: record } = onboardingId
           ? await recordQuery.eq("id", onboardingId).maybeSingle()
@@ -531,6 +536,12 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
             setBankAccountNumber(record.bank_account_number);
             setBankBranchCode(record.bank_branch_code);
           }
+
+          // ── FIX: load agreementDone from the dedicated column OR sumsub_raw ──
+          if (record.signed_agreement_url) {
+            setAgreementDone(true);
+          }
+
           let raw = {};
           try { raw = typeof record.sumsub_raw === "string" ? JSON.parse(record.sumsub_raw) : (record.sumsub_raw || {}); } catch { }
           if (raw.bank_details?.bank_account_name) setBankAccountName(raw.bank_details.bank_account_name);
@@ -553,6 +564,10 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
           }
           if (raw.bank_details_saved === true) setBankDone(true);
           if (raw.terms_accepted === true) setTermsDone(true);
+          // ── FIX: also check sumsub_raw for agreement completion ────────────
+          if (raw.signed_at || raw.signed_agreement_url || raw.account_agreement_signed) {
+            setAgreementDone(true);
+          }
         }
       } catch (err) {
         // ignore; user can still proceed normally
@@ -618,77 +633,54 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
     expectedMonthlyInvestment &&
     agreedSourceOfFunds;
 
+  // ── FIX: slim handleFinalComplete — URL already saved by AccountAgreementStep ──
   const handleFinalComplete = async (signingResults = {}) => {
+    // Mark step 9 done immediately so the overview reflects it
+    setAgreementDone(true);
+
     if (!supabase) {
       if (onComplete) onComplete();
       return;
     }
 
-    let completionSuccess = false;
-
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
-      if (token) {
-        if (mandateDataRef.current) {
-          const savePayload = { ...mandateDataRef.current, agreedMandate };
-          try {
-            const mandateRes = await fetch("/api/onboarding/save-mandate", {
-              method: "POST",
-              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-              body: JSON.stringify({ mandate_data: savePayload, existing_onboarding_id: existingOnboardingId || null }),
-            });
-            const mandateResult = await mandateRes.json();
-            if (mandateResult.onboarding_id) setExistingOnboardingId(mandateResult.onboarding_id);
-          } catch (e) {
-            console.error("Mandate save error during completion:", e);
-          }
-        }
+      if (!token) {
+        if (onComplete) onComplete();
+        return;
+      }
 
-        const completePayload = {
-          existing_onboarding_id: existingOnboardingId || null,
-          risk_disclosure_agreed: agreedRiskDisclosure || false,
-          source_of_funds: sourceOfFunds || null,
-          source_of_funds_other: sourceOfFunds === "other" ? (sourceOfFundsOther || null) : null,
-          expected_monthly_investment: expectedMonthlyInvestment || null,
-          agreed_terms: agreedTerms || false,
-          agreed_privacy: agreedPrivacy || false,
-          tax_number: taxNumber || null,
-          bank_name: bankName || null,
-          bank_account_name: bankAccountName || null,
-          bank_account_type: bankAccountType || null,
-          bank_account_number: bankAccountNumber || null,
-          bank_branch_code: bankBranchCode || null,
-          // Pass signing results if available
-          signed_agreement_url: signingResults.signed_agreement_url || null,
-          signed_at: signingResults.signed_at || null,
-          downloaded_at: signingResults.downloaded_at || null,
-        };
+      // Only pass the signing fields — avoid nulls overwriting good data
+      // that AccountAgreementStep already wrote directly to Supabase.
+      const completePayload = {
+        existing_onboarding_id: existingOnboardingId || null,
+        signed_agreement_url: signingResults.signed_agreement_url || null,
+        signed_at: signingResults.signed_at || null,
+        downloaded_at: signingResults.downloaded_at || null,
+      };
 
-        console.log("[Onboarding] Completing with payload:", completePayload);
+      console.log("[Onboarding] Completing with payload:", completePayload);
 
-        const res = await fetch("/api/onboarding/complete", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(completePayload),
-        });
-        const result = await res.json();
-        if (result.success) {
-          completionSuccess = true;
-        } else {
-          console.error("Failed to complete onboarding via API:", result.error);
-          throw new Error(result.error?.message || "Failed to save completion status. Please try again.");
-        }
+      const res = await fetch("/api/onboarding/complete", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(completePayload),
+      });
+      const result = await res.json();
+      console.log("[Onboarding] Complete API response:", result);
 
-        if (!completionSuccess) {
-          console.warn("[Onboarding] Completion API failed. Skipping risky Supabase fallback.");
-        }
+      if (!result.success) {
+        // Log but don't block the user — AccountAgreementStep already saved
+        // the URL and set kyc_status directly, so the critical data is safe.
+        console.error("[Onboarding] Complete API failed (non-blocking):", result.error);
       }
     } catch (err) {
-      console.error("Failed to update KYC status:", err);
+      // Non-blocking — critical saves already done inside AccountAgreementStep
+      console.error("[Onboarding] handleFinalComplete error (non-blocking):", err);
     }
 
     if (onComplete) onComplete();
@@ -749,6 +741,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   </svg>
                 );
                 const identityCheckDone = !!existingOnboardingId || kycAlreadyVerified;
+                // ── FIX: step 9 now uses agreementDone ──────────────────────
                 const steps = [
                   { done: identityCheckDone, title: "Identity Check", doneDesc: "ID number confirmed", pendingDesc: "Confirm your ID number is unique in our records", badge: "Confirmed" },
                   { done: kycAlreadyVerified, title: "Identification", doneDesc: "Identity verification complete", pendingDesc: "Verify your identity for security purposes", badge: "Verified" },
@@ -758,7 +751,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   { done: riskDone, title: "Risk Disclosure", doneDesc: "Risk disclosure acknowledged", pendingDesc: "Review investment risk disclosure", badge: "Acknowledged" },
                   { done: sofDone, title: "Source of Funds", doneDesc: "Source of funds declared", pendingDesc: "Declare the origin of your investment funds", badge: "Declared" },
                   { done: termsDone, title: "General Terms", doneDesc: "Terms and conditions accepted", pendingDesc: "Review and accept terms and conditions", badge: "Accepted" },
-                  { done: false, title: "Account Agreement", doneDesc: "Agreement signed", pendingDesc: "Review and sign the formal account agreement", badge: "Signed" },
+                  { done: agreementDone, title: "Account Agreement", doneDesc: "Agreement signed", pendingDesc: "Review and sign the formal account agreement", badge: "Signed" },
                 ];
                 return (
                   <>
@@ -1758,6 +1751,25 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               existingOnboardingId={existingOnboardingId}
               onComplete={handleFinalComplete}
             />
+          ) : step === 10 ? (
+            // ── All steps complete — should not normally be visible ────────
+            <div className="text-center py-16 animate-fade-in">
+              <div style={{
+                width: 80, height: 80, borderRadius: "50%", margin: "0 auto 24px",
+                background: "linear-gradient(135deg, hsl(152 70% 45%) 0%, hsl(152 60% 35%) 100%)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" width={40} height={40}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                </svg>
+              </div>
+              <h2 className="text-3xl font-light tracking-tight mb-3" style={{ color: "hsl(270 30% 25%)" }}>
+                All Steps Complete
+              </h2>
+              <p className="text-sm" style={{ color: "hsl(270 20% 50%)" }}>
+                Your onboarding is fully complete. Welcome to <span className="mint-brand">MINT</span>.
+              </p>
+            </div>
           ) : null}
         </div>
       </div>
