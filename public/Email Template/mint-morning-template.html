@@ -5,342 +5,369 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Mint Morning Template</title>
   <style>
-    * { box-sizing: border-box; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      margin: 0;
-      padding: 0;
-      background: #f8fafc;
+      background: #f1f5f9;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       min-height: 100vh;
+      color: #0f172a;
     }
-    /* ── App top header ── */
-    .app-header {
+
+    /* ── App top bar ── */
+    .app-bar {
       display: flex;
       align-items: center;
       gap: 12px;
-      padding: 48px 16px 24px;
-      max-width: 672px;
+      padding: 40px 20px 20px;
+      max-width: 680px;
       margin: 0 auto;
     }
     .back-btn {
-      width: 40px;
-      height: 40px;
+      width: 38px; height: 38px;
       border-radius: 50%;
-      background: #ffffff;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      background: #fff;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.10);
+      display: flex; align-items: center; justify-content: center;
       flex-shrink: 0;
     }
-    .app-header-title {
-      font-size: 18px;
-      font-weight: 600;
-      color: #0f172a;
+    .app-bar-title { font-size: 17px; font-weight: 700; color: #0f172a; }
+
+    /* ── Page wrap ── */
+    .page { max-width: 680px; margin: 0 auto; padding: 0 16px 48px; }
+
+    /* ── Card ── */
+    .card {
+      background: #fff;
+      border-radius: 20px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      overflow: hidden;
+      margin-bottom: 14px;
     }
-    /* ── Article card ── */
-    .page-wrap {
-      max-width: 672px;
-      margin: 0 auto;
-      padding: 0 16px 40px;
-    }
-    .article-card {
-      background: #ffffff;
-      border-radius: 24px;
-      padding: 24px;
-      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.10), 0 2px 4px -2px rgba(0,0,0,0.10);
-    }
-    @media (min-width: 768px) {
-      .article-card { padding: 32px; }
-      .app-header { padding: 48px 32px 24px; }
-      .page-wrap { padding: 0 32px 40px; }
-    }
-    /* ── Card header ── */
+    .card-body { padding: 22px 22px 0; }
+    .card-footer { padding: 16px 22px 22px; }
+
+    /* ── Card header: logo + meta ── */
     .card-header {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
+      padding-bottom: 16px;
+      margin-bottom: 16px;
       border-bottom: 1px solid #f1f5f9;
-      padding-bottom: 24px;
-      margin-bottom: 24px;
     }
-    .header-logo {
-      height: 22px;
-      width: auto;
-      display: block;
-      flex-shrink: 0;
-    }
-    .card-header-text .name {
-      font-size: 14px;
-      font-weight: 600;
-      color: #0f172a;
-      line-height: 1.4;
-      margin: 0;
-    }
-    .card-header-text .date {
-      font-size: 12px;
-      color: #64748b;
-      margin: 2px 0 0;
-    }
-    /* ── Title ── */
-    .article-title {
-      font-size: 24px;
-      font-weight: 700;
-      color: #0f172a;
-      line-height: 1.3;
-      margin: 0 0 16px;
-    }
-    @media (min-width: 768px) {
-      .article-title { font-size: 30px; }
-    }
+    .header-logo { height: 20px; width: auto; display: block; flex-shrink: 0; }
+    .header-divider { width: 1px; height: 20px; background: #e2e8f0; flex-shrink: 0; }
+    .header-meta { display: flex; flex-direction: column; gap: 1px; }
+    .header-pub { font-size: 12px; font-weight: 700; color: #0f172a; }
+    .header-date { font-size: 11px; color: #94a3b8; }
+
     /* ── Pills ── */
-    .pills {
+    .pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    .pill {
+      border-radius: 9999px; padding: 3px 10px;
+      font-size: 11px; font-weight: 600; line-height: 1.4;
+    }
+    .pill-slate { background: #f1f5f9; color: #475569; }
+    .pill-violet { background: #ede9fe; color: #6d28d9; }
+
+    /* ── Article title ── */
+    .article-title {
+      font-size: 22px; font-weight: 800; line-height: 1.25;
+      color: #0f172a; margin-bottom: 14px;
+      letter-spacing: -0.3px;
+    }
+    .article-title.small { font-size: 18px; }
+
+    /* ── Body text ── */
+    .body-text { font-size: 14px; line-height: 1.6; color: #475569; }
+    .body-text p { margin-bottom: 10px; }
+    .body-text p:last-child { margin-bottom: 0; }
+
+    /* ── Section heading ── */
+    .section-heading {
       display: flex;
-      flex-wrap: wrap;
+      align-items: center;
       gap: 8px;
-      margin-bottom: 24px;
-    }
-    .pill-slate {
-      background: #f1f5f9;
-      border-radius: 9999px;
-      padding: 4px 12px;
+      margin: 18px 0 8px;
       font-size: 12px;
-      font-weight: 600;
-      color: #475569;
-    }
-    .pill-violet {
-      background: #ede9fe;
-      border-radius: 9999px;
-      padding: 4px 12px;
-      font-size: 12px;
-      font-weight: 600;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
       color: #6d28d9;
     }
-    /* ── Body text ── */
-    .article-body {
-      font-size: 14px;
-      line-height: 1.625;
-      color: #334155;
-      white-space: pre-wrap;
+    .section-heading::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #ede9fe;
     }
-    .article-body p { margin: 0 0 16px; }
-    .article-body p:last-child { margin-bottom: 0; }
-    .section-heading {
-      font-size: 14px;
-      font-weight: 700;
-      color: #0f172a;
-      margin: 0 0 6px;
-    }
-    .markets-box {
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
-      border-radius: 12px;
+
+    /* ── Markets data box ── */
+    .data-box {
+      background: #fafafa;
+      border: 1px solid #f1f5f9;
+      border-radius: 10px;
       padding: 12px 14px;
-      margin-bottom: 16px;
+      margin-bottom: 10px;
+    }
+    .data-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 3px 0;
+      border-bottom: 1px solid #f1f5f9;
       font-size: 13px;
-      line-height: 1.625;
-      color: #334155;
     }
-    .markets-note {
-      font-size: 12px;
-      color: #64748b;
-      margin-top: 8px;
+    .data-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .data-label { color: #334155; font-weight: 500; }
+    .data-val { font-weight: 700; font-size: 12px; }
+    .data-val.down { color: #dc2626; }
+    .data-note { font-size: 11px; color: #94a3b8; margin-top: 6px; }
+
+    /* ── Calendar list ── */
+    .cal-list { list-style: none; margin-bottom: 10px; }
+    .cal-item {
+      display: flex; align-items: baseline; gap: 8px;
+      padding: 5px 0;
+      border-bottom: 1px solid #f8fafc;
+      font-size: 13px;
     }
-    .author-line {
-      font-size: 12px;
-      color: #64748b;
+    .cal-item:last-child { border-bottom: none; }
+    .cal-time { font-size: 11px; font-weight: 700; color: #6d28d9; min-width: 60px; flex-shrink: 0; }
+    .cal-label { color: #334155; }
+
+    /* ── Author ── */
+    .author { font-size: 11px; color: #94a3b8; margin-top: 12px; font-style: italic; }
+
+    /* ── Related topics ── */
+    .topics-wrap {
+      border-top: 1px solid #f1f5f9;
+      padding-top: 14px;
       margin-top: 16px;
     }
-    /* ── Related Topics ── */
-    .related-topics {
-      margin-top: 32px;
-      border-top: 1px solid #f1f5f9;
-      padding-top: 24px;
+    .topics-label {
+      font-size: 10px; font-weight: 800; text-transform: uppercase;
+      letter-spacing: 0.08em; color: #94a3b8; margin-bottom: 8px;
     }
-    .related-label {
-      font-size: 12px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: #64748b;
-      margin-bottom: 12px;
-    }
-    .topic-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+    .topic-tags { display: flex; flex-wrap: wrap; gap: 6px; }
     .topic-tag {
-      border: 1px solid #e2e8f0;
-      border-radius: 9999px;
-      background: #ffffff;
-      padding: 4px 12px;
-      font-size: 12px;
-      font-weight: 500;
-      color: #475569;
+      border: 1px solid #e2e8f0; border-radius: 9999px;
+      padding: 3px 10px; font-size: 11px; font-weight: 500; color: #64748b;
     }
-    /* ── Read more button ── */
-    .read-more-wrap { margin-top: 24px; }
-    .read-more-btn {
+
+    /* ── CTA button ── */
+    .cta-btn {
       display: inline-block;
       background: #6d28d9;
-      color: #ffffff;
-      border-radius: 12px;
-      padding: 12px 20px;
-      font-size: 14px;
-      font-weight: 700;
+      color: #fff;
+      border-radius: 10px;
+      padding: 10px 18px;
+      font-size: 13px; font-weight: 700;
       text-decoration: none;
       line-height: 1;
     }
-    /* ── Second article card ── */
-    .article-card + .article-card { margin-top: 16px; }
-    /* ── Footer ── */
-    .footer {
-      margin-top: 16px;
-      background: #ffffff;
-      border: 1px solid #f1f5f9;
-      border-radius: 20px;
+
+    /* ── Footer card ── */
+    .footer-card {
+      background: #fff;
+      border-radius: 16px;
       padding: 16px 18px;
-      font-size: 12px;
+      border: 1px solid #e2e8f0;
+      font-size: 11px;
       line-height: 1.6;
       color: #94a3b8;
     }
-    .footer a { color: #6d28d9; text-decoration: none; font-weight: 700; }
+    .footer-card a { color: #6d28d9; font-weight: 700; text-decoration: none; }
+
+    @media (max-width: 600px) {
+      .app-bar { padding: 32px 16px 16px; }
+      .page { padding: 0 12px 40px; }
+      .card-body { padding: 18px 18px 0; }
+      .card-footer { padding: 14px 18px 18px; }
+      .article-title { font-size: 20px; }
+    }
   </style>
 </head>
 <body>
 
-  <!-- App top header (simulates the in-app nav bar) -->
-  <div class="app-header">
+  <!-- App bar -->
+  <div class="app-bar">
     <div class="back-btn">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#334155" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#334155" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="15 18 9 12 15 6"/>
       </svg>
     </div>
-    <span class="app-header-title">Article</span>
+    <span class="app-bar-title">Article</span>
   </div>
 
-  <div class="page-wrap">
+  <div class="page">
 
-    <!-- ── HERO ARTICLE CARD ── -->
-    <article class="article-card">
+    <!-- ════════════════════════════════════
+         HERO ARTICLE CARD
+    ════════════════════════════════════ -->
+    <div class="card">
+      <div class="card-body">
 
-      <!-- Card header: logo + Mint News + date -->
-      <div class="card-header">
-        <img src="https://mfxnghmuccevsxwcetej.supabase.co/storage/v1/object/public/Mint%20Assets/mint-logo.svg" alt="Mint" class="header-logo" />
-        <div class="card-header-text">
-          <p class="name">Mint News</p>
-          <p class="date">19 March 2026 &bull; 07:00 AM</p>
-        </div>
-      </div>
-
-      <!-- Title -->
-      <h2 class="article-title">SA BRIEFING: Top 40 futures weaker after US interest rate decision</h2>
-
-      <!-- Source + channel pills -->
-      <div class="pills">
-        <span class="pill-slate">Alliance News South Africa</span>
-        <span class="pill-violet">Market Brief</span>
-      </div>
-
-      <!-- Body text -->
-      <div class="article-body">
-        <p>(Alliance News) - Stocks are likely to open lower as US President Donald Trump on Wednesday threatened to destroy Iran's key South Pars gas field if there were further attacks against Qatar's main gas plant.</p>
-        <p>Here is what you need to know before the Johannesburg market open on Thursday:</p>
-
-        <p class="section-heading">Markets</p>
-        <div class="markets-box">
-          FTSE JSE Top 40: called down 716.18 points, 0.8%, at 105,171.00<br/>
-          FTSE 100: called down 99.09 points, 0.9%, at 10,206.20<br/>
-          Hang Seng: down 1.7% at 25,592.99<br/><br/>
-          DJIA: closed down 768.11 points, 1.6% at 46,225.15<br/>
-          S&amp;P 500: closed down 91.39 points, 1.4%, at 6,624.70<br/>
-          Nasdaq: closed down 327.11 points, 1.5%, at 22,152.42<br/>
-          US 10-year Treasury yield: 4.27%
-          <div class="markets-note">Figures reflect changes since the prior Johannesburg equities close.</div>
+        <!-- Card header -->
+        <div class="card-header">
+          <img class="header-logo"
+            src="https://mfxnghmuccevsxwcetej.supabase.co/storage/v1/object/public/Mint%20Assets/mint-logo.svg"
+            alt="Mint" />
+          <div class="header-divider"></div>
+          <div class="header-meta">
+            <span class="header-pub">Mint News</span>
+            <span class="header-date">19 March 2026 &bull; 07:00 AM</span>
+          </div>
         </div>
 
-        <p class="section-heading">Company Calendar</p>
-        <p>
-          Exxaro Resources Ltd - half year results<br/>
-          Momentum Group Ltd - half year results<br/>
-          South Ocean Holdings Ltd - full year results
-        </p>
-
-        <p class="section-heading">Economic Calendar</p>
-        <p>
-          09:00 SAST UK unemployment<br/>
-          12:00 SAST eurozone aggregate demand<br/>
-          13:00 SAST South Africa building permits<br/>
-          14:00 SAST UK interest rate decision<br/>
-          14:30 SAST US initial jobless claims
-        </p>
-
-        <p class="section-heading">SA News</p>
-        <p>Sabvest Capital reported a 41% rise in annual pretax profit to ZAR1.26 billion in 2025, driven by strong performances across most of its investee companies and higher fair value gains. Gross income from operations and investments increased 28% to ZAR1.41 billion.</p>
-
-        <p class="section-heading">Global News</p>
-        <p>The US Federal Reserve left interest rates unchanged amid uncertainty caused by the events in the Middle East. The FOMC voted 11-1 to leave the federal funds rate target range at 3.50-3.75%, as widely expected by market consensus.</p>
-
-        <p class="author-line">By Artwell Dlamini, Alliance News senior reporter South Africa</p>
-      </div>
-
-      <!-- Related Topics -->
-      <div class="related-topics">
-        <div class="related-label">Related Topics</div>
-        <div class="topic-tags">
-          <span class="topic-tag">JSE</span>
-          <span class="topic-tag">Markets</span>
-          <span class="topic-tag">South Africa</span>
-          <span class="topic-tag">US Federal Reserve</span>
+        <!-- Pills -->
+        <div class="pills">
+          <span class="pill pill-slate">Alliance News South Africa</span>
+          <span class="pill pill-violet">Market Brief</span>
         </div>
-      </div>
 
-      <div class="read-more-wrap">
-        <a href="https://www.mymint.co.za" class="read-more-btn">Read more on Mint</a>
-      </div>
+        <!-- Title -->
+        <h1 class="article-title">SA BRIEFING: Top 40 futures weaker after US interest rate decision</h1>
 
-    </article>
-
-    <!-- ── SECOND ARTICLE CARD ── -->
-    <article class="article-card" style="margin-top:16px;">
-
-      <div class="card-header">
-        <img src="https://mfxnghmuccevsxwcetej.supabase.co/storage/v1/object/public/Mint%20Assets/mint-logo.svg" alt="Mint" class="header-logo" />
-        <div class="card-header-text">
-          <p class="name">Mint News</p>
-          <p class="date">19 March 2026 &bull; 07:00 AM</p>
+        <!-- Intro -->
+        <div class="body-text">
+          <p>(Alliance News) — Stocks are likely to open lower as US President Donald Trump on Wednesday threatened to destroy Iran's key South Pars gas field if there were further attacks against Qatar's main gas plant.</p>
+          <p>Here is what you need to know before the Johannesburg market open on Thursday:</p>
         </div>
-      </div>
 
-      <h2 class="article-title" style="font-size:20px;">Rand strengthens as dollar weakens on Fed rate hold</h2>
-
-      <div class="pills">
-        <span class="pill-slate">Alliance News South Africa</span>
-      </div>
-
-      <div class="article-body">
-        <p>The South African rand firmed against a weaker dollar on Thursday after the US Federal Reserve held interest rates steady, easing pressure on emerging market currencies and boosting appetite for risk assets.</p>
-        <p>The rand traded at R18.42 per dollar at 07:30 SAST, compared with R18.71 at the close on Wednesday, a gain of around 1.6%.</p>
-        <p class="author-line">By Nomvula Dube, Alliance News South Africa</p>
-      </div>
-
-      <div class="related-topics">
-        <div class="related-label">Related Topics</div>
-        <div class="topic-tags">
-          <span class="topic-tag">Rand</span>
-          <span class="topic-tag">Currency</span>
-          <span class="topic-tag">Forex</span>
+        <!-- MARKETS -->
+        <div class="section-heading">Markets</div>
+        <div class="data-box">
+          <div class="data-row">
+            <span class="data-label">FTSE JSE Top 40</span>
+            <span class="data-val down">▼ 0.8% &nbsp;105,171</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">FTSE 100</span>
+            <span class="data-val down">▼ 0.9% &nbsp;10,206</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">Hang Seng</span>
+            <span class="data-val down">▼ 1.7% &nbsp;25,593</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">DJIA (close)</span>
+            <span class="data-val down">▼ 1.6% &nbsp;46,225</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">S&amp;P 500 (close)</span>
+            <span class="data-val down">▼ 1.4% &nbsp;6,625</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">Nasdaq (close)</span>
+            <span class="data-val down">▼ 1.5% &nbsp;22,152</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">US 10-yr Treasury</span>
+            <span class="data-val" style="color:#334155;">4.27%</span>
+          </div>
+          <p class="data-note">Changes since prior Johannesburg equities close.</p>
         </div>
-      </div>
 
-      <div class="read-more-wrap">
-        <a href="https://www.mymint.co.za" class="read-more-btn">Read more on Mint</a>
-      </div>
+        <!-- COMPANY CALENDAR -->
+        <div class="section-heading">Company Calendar</div>
+        <ul class="cal-list">
+          <li class="cal-item"><span class="cal-time">EXX</span><span class="cal-label">Exxaro Resources — half year results</span></li>
+          <li class="cal-item"><span class="cal-time">MTM</span><span class="cal-label">Momentum Group — half year results</span></li>
+          <li class="cal-item"><span class="cal-time">SOH</span><span class="cal-label">South Ocean Holdings — full year results</span></li>
+        </ul>
 
-    </article>
+        <!-- ECONOMIC CALENDAR -->
+        <div class="section-heading">Economic Calendar</div>
+        <ul class="cal-list">
+          <li class="cal-item"><span class="cal-time">09:00</span><span class="cal-label">UK unemployment rate</span></li>
+          <li class="cal-item"><span class="cal-time">12:00</span><span class="cal-label">Eurozone aggregate demand</span></li>
+          <li class="cal-item"><span class="cal-time">13:00</span><span class="cal-label">South Africa building permits</span></li>
+          <li class="cal-item"><span class="cal-time">14:00</span><span class="cal-label">UK interest rate decision</span></li>
+          <li class="cal-item"><span class="cal-time">14:30</span><span class="cal-label">US initial jobless claims</span></li>
+        </ul>
+
+        <!-- SA NEWS -->
+        <div class="section-heading">SA News</div>
+        <div class="body-text">
+          <p>Sabvest Capital reported a 41% rise in annual pretax profit to ZAR1.26 billion in 2025, driven by strong performances across most investee companies and higher fair value gains. Gross income rose 28% to ZAR1.41 billion.</p>
+        </div>
+
+        <!-- GLOBAL NEWS -->
+        <div class="section-heading">Global News</div>
+        <div class="body-text">
+          <p>The US Federal Reserve left interest rates unchanged amid Middle East uncertainty. The FOMC voted 11-1 to hold the federal funds rate at 3.50–3.75%, in line with market expectations.</p>
+        </div>
+
+        <p class="author">By Artwell Dlamini &mdash; Alliance News, senior reporter South Africa</p>
+
+        <!-- Related Topics -->
+        <div class="topics-wrap">
+          <div class="topics-label">Related Topics</div>
+          <div class="topic-tags">
+            <span class="topic-tag">JSE</span>
+            <span class="topic-tag">Markets</span>
+            <span class="topic-tag">South Africa</span>
+            <span class="topic-tag">US Federal Reserve</span>
+          </div>
+        </div>
+
+      </div>
+      <div class="card-footer">
+        <a href="https://www.mymint.co.za" class="cta-btn">Read more on Mint</a>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════
+         SECOND ARTICLE CARD
+    ════════════════════════════════════ -->
+    <div class="card">
+      <div class="card-body">
+
+        <div class="card-header">
+          <img class="header-logo"
+            src="https://mfxnghmuccevsxwcetej.supabase.co/storage/v1/object/public/Mint%20Assets/mint-logo.svg"
+            alt="Mint" />
+          <div class="header-divider"></div>
+          <div class="header-meta">
+            <span class="header-pub">Mint News</span>
+            <span class="header-date">19 March 2026 &bull; 07:00 AM</span>
+          </div>
+        </div>
+
+        <div class="pills">
+          <span class="pill pill-slate">Alliance News South Africa</span>
+        </div>
+
+        <h1 class="article-title small">Rand strengthens as dollar weakens on Fed rate hold</h1>
+
+        <div class="body-text">
+          <p>The South African rand firmed against a weaker dollar on Thursday after the US Federal Reserve held interest rates steady, easing pressure on emerging market currencies and boosting appetite for risk assets.</p>
+          <p>The rand traded at R18.42 per dollar at 07:30 SAST, compared with R18.71 at Wednesday's close — a gain of around 1.6%.</p>
+        </div>
+
+        <p class="author">By Nomvula Dube &mdash; Alliance News South Africa</p>
+
+        <div class="topics-wrap">
+          <div class="topics-label">Related Topics</div>
+          <div class="topic-tags">
+            <span class="topic-tag">Rand</span>
+            <span class="topic-tag">Currency</span>
+            <span class="topic-tag">Forex</span>
+          </div>
+        </div>
+
+      </div>
+      <div class="card-footer">
+        <a href="https://www.mymint.co.za" class="cta-btn">Read more on Mint</a>
+      </div>
+    </div>
 
     <!-- Footer -->
-    <div class="footer">
-      Alliance News South Africa covers every actively traded company listed on the Johannesburg Stock Exchange, large and small, and the global influences upon South African markets and the local economy.<br/><br/>
-      Copyright &copy; 2026 Alliance News Ltd. All rights reserved.<br/><br/>
-      You're receiving this on Mint. <a href="https://www.mymint.co.za">Open Mint</a>
+    <div class="footer-card">
+      Alliance News South Africa covers every actively traded company listed on the Johannesburg Stock Exchange and the global influences on South African markets.<br/><br/>
+      &copy; 2026 Alliance News Ltd. All rights reserved &nbsp;&bull;&nbsp;
+      <a href="https://www.mymint.co.za">Open Mint</a>
     </div>
 
   </div>
