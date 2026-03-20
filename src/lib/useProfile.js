@@ -30,8 +30,8 @@ const buildProfile = ({ user, row }) => {
     gender: row?.gender || metadata.gender || "",
     address: row?.address || metadata.address || "",
     idNumber: row?.id_number || metadata.id_number || "",
-    mintNumber: row?.mint_number || "",
-    wallet_balance: row?.wallet_balance || 0, // ADDED wallet_balance
+    mintNumber: row?.mint_number || row?.wallet_mint_number || "",
+    wallet_balance: row?.wallet_balance ?? row?.wallets_balance ?? 0, // USE WALLETS BALANCE FALLBACK
     watchlist: row?.watchlist || [],
   };
 };
@@ -71,6 +71,20 @@ export const useProfile = () => {
           )
           .eq("id", user.id)
           .maybeSingle();
+
+        // Fetch from wallets table as well
+        const { data: wData } = await supabase
+          .from("wallets")
+          .select("balance, mint_number")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (wData) {
+          if (d1) {
+            d1.wallets_balance = wData.balance;
+            d1.wallet_mint_number = wData.mint_number;
+          }
+        }
 
         if (!e1) {
           rowData = d1;

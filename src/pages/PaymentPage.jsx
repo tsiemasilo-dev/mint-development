@@ -265,11 +265,11 @@ const PaymentPage = ({ onBack, strategy, amount, baseAmount, shareCount, onSucce
                   setPaymentStatus("processing");
                   const newBalance = (profile?.wallet_balance || 0) - totalToDeduct;
                   
-                  // Update balance in Supabase
+                  // Update balance in the official 'wallets' table
                   const { error: updateError } = await supabase
-                    .from("profiles")
-                    .update({ wallet_balance: newBalance })
-                    .eq("id", profile.id);
+                    .from("wallets")
+                    .update({ balance: newBalance })
+                    .eq("user_id", profile.id);
 
                   if (updateError) throw updateError;
 
