@@ -72,12 +72,7 @@ const SumsubVerification = ({ onVerified }) => {
         
         setUserId(currentUserId);
 
-        const apiBase = import.meta.env.VITE_API_URL || "";
-        const { data: { session } } = await supabase.auth.getSession();
-        const authToken = session?.access_token;
-
-
-        const response = await fetch(`${apiBase}/api/sumsub/access-token`, {
+        const response = await fetch("/api/sumsub/access-token", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -110,10 +105,9 @@ const SumsubVerification = ({ onVerified }) => {
 
   const accessTokenExpirationHandler = useCallback(async () => {
     try {
-      const apiBase = import.meta.env.VITE_API_URL || "";
       const { data: { session } } = await supabase.auth.getSession();
       const authToken = session?.access_token;
-      const response = await fetch(`${apiBase}/api/sumsub/access-token`, {
+      const response = await fetch("/api/sumsub/access-token", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -210,13 +204,12 @@ const SumsubVerification = ({ onVerified }) => {
     
     const reinitialize = async () => {
       try {
-        const apiBase = import.meta.env.VITE_API_URL || "";
         const { data: { session: sess } } = await supabase.auth.getSession();
         const aToken = sess?.access_token;
 
         console.log("Retry: re-initializing Sumsub SDK (preserving existing applicant data)");
 
-        const response = await fetch(`${apiBase}/api/sumsub/access-token`, {
+        const response = await fetch("/api/sumsub/access-token", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

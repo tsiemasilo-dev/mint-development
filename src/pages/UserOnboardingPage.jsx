@@ -212,8 +212,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       if (!token) return;
-      const apiBase = import.meta.env.VITE_API_URL || "";
-      const res = await fetch(`${apiBase}/api/onboarding/save-employment`, {
+      const res = await fetch("/api/onboarding/save-employment", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ employment_status: "not_provided", annual_income_currency: "ZAR" }),
@@ -585,11 +584,11 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   useEffect(() => {
     const checkKycStatus = async () => {
       try {
-        const apiBase = import.meta.env.VITE_API_URL || "";
-        const { data: userData } = await supabase.auth.getUser();
+        // No apiBase prefix to force relative path
+      const { data: userData } = await supabase.auth.getUser();
         const userId = userData?.user?.id;
         if (!userId) return;
-        const res = await fetch(`${apiBase}/api/sumsub/status`, {
+        const res = await fetch("/api/sumsub/status", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ userId }),

@@ -120,9 +120,7 @@ export const useSumsubStatus = () => {
       }
 
       const userId = userData.user.id;
-      const apiBase = import.meta.env.VITE_API_URL || window.location.origin;
-      
-      const response = await fetch(`${apiBase}/api/sumsub/status`, {
+      const response = await fetch("/api/sumsub/status", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId })
