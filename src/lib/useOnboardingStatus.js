@@ -28,7 +28,6 @@ export const useOnboardingStatus = () => {
         });
         if (res.ok) {
           const json = await res.json();
-          console.log("[useOnboardingStatus] API response:", json);
           setOnboardingComplete(json.is_fully_onboarded === true);
           setLoading(false);
           return;
@@ -80,12 +79,6 @@ export const useOnboardingStatus = () => {
       supabase.removeChannel(channel);
     };
   }, [checkStatus]);
-
-  useEffect(() => {
-    if (!loading) {
-      console.log(`[useOnboardingStatus] Loading finished. onboardingComplete: ${onboardingComplete}`);
-    }
-  }, [loading, onboardingComplete]);
 
   return { onboardingComplete, loading, error, refetch: checkStatus };
 };

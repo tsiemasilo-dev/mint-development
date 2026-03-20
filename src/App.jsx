@@ -237,7 +237,6 @@ const App = () => {
       "stockPayment",
       "factsheet" // Optional: can they see a factsheet without onboarding? Usually yes, but maybe blocked for investment.
     ];
-    console.log(`[Guard Check] Page: ${page}, Loading: ${onboardingRef.current.loading}, Complete: ${onboardingRef.current.complete}`);
 
     if (protectedPages.includes(page) && !onboardingRef.current.loading && !onboardingRef.current.complete) {
       console.log(`[App] Onboarding required for page: ${page}. Redirecting.`);
