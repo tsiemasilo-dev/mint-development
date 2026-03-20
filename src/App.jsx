@@ -234,8 +234,7 @@ const App = () => {
       "creditApply", 
       "creditRepay", 
       "payment", 
-      "stockPayment",
-      "factsheet" // Optional: can they see a factsheet without onboarding? Usually yes, but maybe blocked for investment.
+      "stockPayment"
     ];
 
     if (protectedPages.includes(page) && !onboardingRef.current.loading && !onboardingRef.current.complete) {
