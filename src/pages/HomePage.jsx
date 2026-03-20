@@ -826,10 +826,10 @@ const HomePage = ({
                 }}>
                   <div className="relative h-full overflow-hidden bg-white/95 backdrop-blur-sm rounded-[28px] border border-white/20">
                     {/* Visual Physical Card Back: Magnetic Strip */}
-                    <div className="w-full h-8 bg-[#1a1a1a] absolute top-6 left-0 opacity-90 shadow-sm z-50" />
+                         {/* Visual Physical Card Back: Removed Strip */}
                     
                     {/* Main content */}
-                    <div className="relative h-full flex flex-col pt-10">
+                    <div className="relative h-full flex flex-col pt-6">
                       <SwipeableBalanceCard 
                         userId={userId} 
                         isBackFacing={cardNormalizedIndex === 1} 
