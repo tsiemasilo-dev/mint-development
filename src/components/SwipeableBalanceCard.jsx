@@ -61,7 +61,8 @@ const SwipeableBalanceCard = ({
   userId,
   isBackFacing = true,
   forceVisible,
-  mintNumber,
+  mintNumber: mintNumberProp,
+  onBuyPress,
 }) => {
   const [activeTab, setActiveTab] = useState("m");
   const [isOpen, setIsOpen] = useState(false);
@@ -71,6 +72,50 @@ const SwipeableBalanceCard = ({
   const holdingSettlementStatus = getSettlementStatusForHolding(settlementCfg);
   const [showUpdatedText, setShowUpdatedText] = useState(false);
   const updatedTimerRef = useRef(null);
+
+  // ── FIX 1: Wallet balance state ──────────────────────────────────────────
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [walletLoading, setWalletLoading] = useState(true);
+
+  useEffect(() => {
+    if (!userId) return;
+    const fetchWallet = async () => {
+      setWalletLoading(true);
+      const { data, error } = await supabase
+        .from("wallets")
+        .select("balance")
+        .eq("user_id", userId)
+        .single();
+      if (!error && data?.balance !== undefined) {
+        setWalletBalance(Number(data.balance));
+      }
+      setWalletLoading(false);
+    };
+    fetchWallet();
+  }, [userId]);
+
+  // ── FIX 2: Mint number — fetch from DB if prop not provided ──────────────
+  const [mintNumber, setMintNumber] = useState(mintNumberProp || null);
+
+  useEffect(() => {
+    // If parent already passed it in as a prop, use that
+    if (mintNumberProp) {
+      setMintNumber(mintNumberProp);
+      return;
+    }
+    if (!userId) return;
+    const fetchMintNumber = async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("mint_number")
+        .eq("id", userId)
+        .single();
+      if (!error && data?.mint_number) {
+        setMintNumber(data.mint_number);
+      }
+    };
+    fetchMintNumber();
+  }, [userId, mintNumberProp]);
 
   useEffect(() => {
     if (lastUpdated) {
@@ -104,6 +149,7 @@ const SwipeableBalanceCard = ({
       document.removeEventListener("touchstart", handleClickOutside);
     };
   }, [isOpen]);
+
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [loading, setLoading] = useState(true);
   const [chartData, setChartData] = useState([]);
@@ -184,13 +230,13 @@ const SwipeableBalanceCard = ({
 
       const [holdingsRes, strategiesRes] = token
         ? await Promise.all([
-            fetch("/api/user/holdings", {
-              headers: { Authorization: `Bearer ${token}` },
-            }).then((r) => (r.ok ? r.json() : { holdings: [] })),
-            fetch("/api/user/strategies", {
-              headers: { Authorization: `Bearer ${token}` },
-            }).then((r) => (r.ok ? r.json() : { strategies: [] })),
-          ])
+          fetch("/api/user/holdings", {
+            headers: { Authorization: `Bearer ${token}` },
+          }).then((r) => (r.ok ? r.json() : { holdings: [] })),
+          fetch("/api/user/strategies", {
+            headers: { Authorization: `Bearer ${token}` },
+          }).then((r) => (r.ok ? r.json() : { strategies: [] })),
+        ])
         : [{ holdings: [] }, { strategies: [] }];
 
       const stockHoldings = (holdingsRes.holdings || []).filter(h => !h.strategy_id);
@@ -263,10 +309,14 @@ const SwipeableBalanceCard = ({
 
   useEffect(() => {
     const fetchChartPrices = async () => {
-      if (!userId || dbData.holdings.length === 0) {
-        setChartData([]);
+      if (!userId) return;
+
+      // ── FIX 3: Don't wipe chart while holdings are still loading ──────────
+      if (dbData.holdings.length === 0) {
+        if (!loading) setChartData([]);
         return;
       }
+
       setChartLoading(true);
 
       const holdingsToChart = selectedAsset ? [selectedAsset] : dbData.holdings;
@@ -363,7 +413,7 @@ const SwipeableBalanceCard = ({
               });
             }
           }
-        } catch (e) {}
+        } catch (e) { }
       }
 
       const pricePromises = stockHoldings.map(async (h) => {
@@ -486,15 +536,15 @@ const SwipeableBalanceCard = ({
     };
 
     fetchChartPrices();
-  }, [userId, dbData.holdings, activeTab, selectedAsset, lastUpdated]);
+  }, [userId, dbData.holdings, activeTab, selectedAsset, lastUpdated, loading]);
 
   const displayMarketValue = selectedAsset
     ? Number(selectedAsset.market_value || 0) / 100
     : dbData.totalMarketValue;
   const displayInvested = selectedAsset
     ? (Number(selectedAsset.avg_fill || 0) *
-        Number(selectedAsset.quantity || 0)) /
-      100
+      Number(selectedAsset.quantity || 0)) /
+    100
     : dbData.totalInvested;
   const displayInvestedAmount = selectedAsset
     ? Number(selectedAsset.invested_amount || selectedAsset.market_value || 0) / 100
@@ -657,12 +707,14 @@ const SwipeableBalanceCard = ({
                   </span>
                 </div>
               </div>
-                <div className="mt-auto pt-2 border-t border-slate-100/50">
-                  <p className="text-[8px] uppercase tracking-[0.2em] text-slate-400 font-medium mb-0.5" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>MINT NUMBER</p>
-                  <p className="text-[11px] tracking-[0.1em] text-slate-700 font-mono font-bold">
-                    {mintNumber || "GENERATING..."}
-                  </p>
-                </div>
+              <div className="mt-auto pt-2 border-t border-slate-100/50">
+                <p className="text-[8px] uppercase tracking-[0.2em] text-slate-400 font-medium mb-0.5" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>
+                  MINT NUMBER
+                </p>
+                <p className="text-[11px] tracking-[0.1em] text-slate-700 font-mono font-bold">
+                  {mintNumber ?? "GENERATING..."}
+                </p>
+              </div>
             </div>
           </div>
 
@@ -751,6 +803,7 @@ const SwipeableBalanceCard = ({
                 </div>
               )}
             </div>
+
             <div ref={dropdownRef} className="relative">
               <button
                 onClick={() => setIsOpen(!isOpen)}
@@ -839,6 +892,16 @@ const SwipeableBalanceCard = ({
                 </div>
               )}
             </div>
+
+            {/* ── FIX 4: Buy button — only shows when wallet has funds ── */}
+            {!walletLoading && walletBalance > 0 && (
+              <button
+                onClick={onBuyPress}
+                className="mt-1 w-full py-2 rounded-xl bg-violet-500 hover:bg-violet-600 active:scale-95 transition-all text-white text-[11px] font-semibold tracking-wide shadow-sm"
+              >
+                Buy · {formatFull(walletBalance)} available
+              </button>
+            )}
           </div>
         </div>
       </div>

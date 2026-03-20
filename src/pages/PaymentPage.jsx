@@ -5,67 +5,115 @@ import { supabase } from "../lib/supabase";
 import PaymentMethodModal from "../components/PaymentMethodModal";
 import PaymentPendingPage from "./PaymentPendingPage.jsx";
 
-const PaymentPage = ({ onBack, strategy, amount, baseAmount, shareCount, onSuccess, onCancel, onOpenDeposit, initialMethod }) => {
+const PaymentPage = ({
+  onBack,
+  strategy,
+  amount,
+  baseAmount,
+  shareCount,
+  onSuccess,
+  onCancel,
+  onOpenDeposit,
+  initialMethod,
+}) => {
   const { profile } = useProfile();
-  const [paymentStatus, setPaymentStatus] = useState(initialMethod ? (initialMethod === "paystack" ? "initializing" : "eft-instructions") : "method-selection");
+  const [paymentStatus, setPaymentStatus] = useState(
+    initialMethod
+      ? initialMethod === "paystack"
+        ? "initializing"
+        : "eft-instructions"
+      : "method-selection",
+  );
   const [selectedMethod, setSelectedMethod] = useState(initialMethod || null);
   const [errorMessage, setErrorMessage] = useState("");
   const hasInitialized = useRef(false);
   const isMounted = useRef(true);
   const [isMethodModalOpen, setIsMethodModalOpen] = useState(!initialMethod);
 
-  const isStrategyPurchase = !!(strategy?.holdings || strategy?.risk_level || strategy?.slug);
-  const assetTypeLabel = isStrategyPurchase ? "Strategy" : "Individual Stock";
+  // ── FIX 1: Fetch live wallet balance from the wallets table ──────────────
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [walletLoading, setWalletLoading] = useState(true);
 
-  const recordInvestment = useCallback(async (paymentReference = "", method = null) => {
-    const maxRetries = 5;
-    const finalMethod = method || selectedMethod;
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token;
-        const stratId = strategy?.strategyId || (isStrategyPurchase ? strategy?.id : null);
-        const recordData = {
-          securityId: strategy?.id,
-          symbol: strategy?.symbol || strategy?.short_name || "",
-          name: strategy?.name || "",
-          amount: amount,
-          baseAmount: baseAmount || amount,
-          strategyId: stratId,
-          paymentReference,
-          paymentMethod: finalMethod,
-          ...(shareCount ? { shareCount: Number(shareCount) } : {}),
-        };
-        const headers = { "Content-Type": "application/json" };
-        if (token) {
-          headers.Authorization = `Bearer ${token}`;
-        }
-        const res = await fetch("/api/record-investment", {
-          method: "POST",
-          headers,
-          body: JSON.stringify(recordData),
-        });
-
-        if (res.ok || res.status === 409) {
-          return true;
-        }
-
-        const errorBody = await res.text();
-        console.warn(`Record attempt ${attempt}/${maxRetries} failed (${res.status}):`, errorBody);
-        if (res.status === 400) {
-          return false;
-        }
-      } catch (recordError) {
-        console.warn(`Record attempt ${attempt}/${maxRetries} network error:`, recordError.message);
+  useEffect(() => {
+    if (!profile?.id) return;
+    const fetchWallet = async () => {
+      setWalletLoading(true);
+      const { data, error } = await supabase
+        .from("wallets")
+        .select("balance")
+        .eq("user_id", profile.id)
+        .single();
+      if (!error && data?.balance !== undefined) {
+        setWalletBalance(Number(data.balance));
       }
+      setWalletLoading(false);
+    };
+    fetchWallet();
+  }, [profile?.id]);
 
-      if (attempt < maxRetries) {
-        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 8000);
-        await new Promise(r => setTimeout(r, delay));
+  const isStrategyPurchase = !!(
+    strategy?.holdings ||
+    strategy?.risk_level ||
+    strategy?.slug
+  );
+
+  const recordInvestment = useCallback(
+    async (paymentReference = "", method = null) => {
+      const maxRetries = 5;
+      const finalMethod = method || selectedMethod;
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          const token = session?.access_token;
+          const stratId =
+            strategy?.strategyId ||
+            (isStrategyPurchase ? strategy?.id : null);
+          const recordData = {
+            securityId: strategy?.id,
+            symbol: strategy?.symbol || strategy?.short_name || "",
+            name: strategy?.name || "",
+            amount: amount,
+            baseAmount: baseAmount || amount,
+            strategyId: stratId,
+            paymentReference,
+            paymentMethod: finalMethod,
+            ...(shareCount ? { shareCount: Number(shareCount) } : {}),
+          };
+          const headers = { "Content-Type": "application/json" };
+          if (token) headers.Authorization = `Bearer ${token}`;
+
+          const res = await fetch("/api/record-investment", {
+            method: "POST",
+            headers,
+            body: JSON.stringify(recordData),
+          });
+
+          if (res.ok || res.status === 409) return true;
+
+          const errorBody = await res.text();
+          console.warn(
+            `Record attempt ${attempt}/${maxRetries} failed (${res.status}):`,
+            errorBody,
+          );
+          if (res.status === 400) return false;
+        } catch (recordError) {
+          console.warn(
+            `Record attempt ${attempt}/${maxRetries} network error:`,
+            recordError.message,
+          );
+        }
+
+        if (attempt < maxRetries) {
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 8000);
+          await new Promise((r) => setTimeout(r, delay));
+        }
       }
-    }
-    return false;
-  }, [amount, baseAmount, isStrategyPurchase, selectedMethod, shareCount, strategy]);
+      return false;
+    },
+    [amount, baseAmount, isStrategyPurchase, selectedMethod, shareCount, strategy],
+  );
 
   const launchPaystack = useCallback(() => {
     if (hasInitialized.current) return;
@@ -104,26 +152,22 @@ const PaymentPage = ({ onBack, strategy, amount, baseAmount, shareCount, onSucce
         share_count: shareCount ? Number(shareCount) : null,
       },
       onClose: function () {
-        console.log("Payment window closed");
         if (!isMounted.current) return;
         setPaymentStatus("failed");
         setErrorMessage("Payment cancelled");
         setTimeout(() => onCancel?.(), 2000);
       },
       onSuccess: async function (response) {
-        console.log("Payment successful:", response);
         if (!isMounted.current) return;
         setPaymentStatus("success");
-
         const recorded = await recordInvestment(response?.reference || "");
-
         if (!recorded) {
-          console.error("Failed to record investment after all retries. Payment ref:", response?.reference, "— can be recovered via reconciliation.");
+          console.error(
+            "Failed to record investment after all retries. Payment ref:",
+            response?.reference,
+          );
         }
-
-        setTimeout(() => {
-          onSuccess?.(response);
-        }, 2000);
+        setTimeout(() => onSuccess?.(response), 2000);
       },
       onError: function (error) {
         console.error("Payment error:", error);
@@ -145,12 +189,15 @@ const PaymentPage = ({ onBack, strategy, amount, baseAmount, shareCount, onSucce
       setPaymentStatus("wallet-payment");
       return;
     }
+    // direct_eft — show inline EFT instructions
     setPaymentStatus("eft-instructions");
-    onOpenDeposit?.();
   };
 
   const [eftRef, setEftRef] = useState("");
 
+  // ── FIX 4: handleEftConfirm is wired to "I have paid by EFT" button ──────
+  // PaymentMethodModal's onEFTConfirm = user chose EFT as method (opens instructions)
+  // The "I have paid" button inside eft-instructions calls handleEftConfirm directly
   const handleEftConfirm = async () => {
     setPaymentStatus("processing");
     const eftReference = `EFT-${Date.now()}`;
@@ -158,7 +205,9 @@ const PaymentPage = ({ onBack, strategy, amount, baseAmount, shareCount, onSucce
 
     if (!recorded) {
       setPaymentStatus("failed");
-      setErrorMessage("Could not confirm your EFT. Please try again or use Paystack.");
+      setErrorMessage(
+        "Could not confirm your EFT. Please try again or use Paystack.",
+      );
       return;
     }
 
@@ -168,7 +217,9 @@ const PaymentPage = ({ onBack, strategy, amount, baseAmount, shareCount, onSucce
 
   useEffect(() => {
     isMounted.current = true;
-    return () => { isMounted.current = false; };
+    return () => {
+      isMounted.current = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -184,13 +235,11 @@ const PaymentPage = ({ onBack, strategy, amount, baseAmount, shareCount, onSucce
       if (hasInitialized.current) return;
 
       if (window.PaystackPop) {
-        console.log("Paystack SDK ready, launching payment...");
         launchPaystack();
         return;
       }
 
       if (attempts >= maxAttempts) {
-        console.error("Paystack SDK failed to load after", maxAttempts, "attempts");
         setPaymentStatus("failed");
         setErrorMessage("Payment system unavailable. Please try again later.");
         return;
@@ -227,7 +276,12 @@ const PaymentPage = ({ onBack, strategy, amount, baseAmount, shareCount, onSucce
           <h1 className="text-lg font-semibold">Payment</h1>
         </header>
 
-        {/* Replaced inline modal with PaymentMethodModal component - ADDED */}
+        {/*
+          ── FIX 4 (wiring):
+          onEFTConfirm  → user SELECTS EFT as their method → opens eft-instructions view
+          onSelectWallet → user selects wallet → opens wallet-payment view
+          The "I have paid by EFT" button inside eft-instructions calls handleEftConfirm directly
+        */}
         <PaymentMethodModal
           isOpen={isMethodModalOpen}
           onClose={() => onBack?.()}
@@ -242,30 +296,38 @@ const PaymentPage = ({ onBack, strategy, amount, baseAmount, shareCount, onSucce
           {paymentStatus === "method-selection" && (
             <>
               <Loader2 className="h-16 w-16 mx-auto text-violet-600 animate-spin mb-4" />
-              <h2 className="text-lg font-semibold text-slate-900 mb-2">Waiting for selection</h2>
-              <p className="text-sm text-slate-600">Please choose a funding method to continue</p>
+              <h2 className="text-lg font-semibold text-slate-900 mb-2">
+                Waiting for selection
+              </h2>
+              <p className="text-sm text-slate-600">
+                Please choose a funding method to continue
+              </p>
             </>
           )}
 
           {paymentStatus === "initializing" && (
             <>
               <Loader2 className="h-16 w-16 mx-auto text-violet-600 animate-spin mb-4" />
-              <h2 className="text-lg font-semibold text-slate-900 mb-2">Initializing Payment</h2>
+              <h2 className="text-lg font-semibold text-slate-900 mb-2">
+                Initializing Payment
+              </h2>
               <p className="text-sm text-slate-600">Please wait...</p>
             </>
           )}
 
-          {/* Wallet Payment UI - ADDED */}
+          {/* ── FIX 1 + 3: Pass live walletBalance into WalletPaymentFlow ── */}
           {paymentStatus === "wallet-payment" && (
             <WalletPaymentFlow
               amount={amount}
-              profile={profile}
+              walletBalance={walletBalance}
+              walletLoading={walletLoading}
               onConfirm={async (totalToDeduct) => {
                 try {
                   setPaymentStatus("processing");
-                  const newBalance = (profile?.wallet_balance || 0) - totalToDeduct;
-                  
-                  // Update balance in the official 'wallets' table
+
+                  // ── FIX 3: Deduct from live walletBalance, not profile ──
+                  const newBalance = walletBalance - totalToDeduct;
+
                   const { error: updateError } = await supabase
                     .from("wallets")
                     .update({ balance: newBalance })
@@ -273,50 +335,68 @@ const PaymentPage = ({ onBack, strategy, amount, baseAmount, shareCount, onSucce
 
                   if (updateError) throw updateError;
 
-                  // Record investment
                   const walletRef = `WALLET-${Date.now()}`;
-                  const recorded = await recordInvestment(walletRef);
-                  
-                  if (!recorded) {
-                    throw new Error("Failed to record investment");
-                  }
+                  const recorded = await recordInvestment(walletRef, "wallet");
+
+                  if (!recorded) throw new Error("Failed to record investment");
 
                   setPaymentStatus("success");
-                  setTimeout(() => onSuccess?.({ reference: walletRef, method: "wallet" }), 2000);
+                  setTimeout(
+                    () =>
+                      onSuccess?.({ reference: walletRef, method: "wallet" }),
+                    2000,
+                  );
                 } catch (err) {
                   console.error("Wallet payment error:", err);
                   setPaymentStatus("failed");
                   setErrorMessage(err.message || "Wallet payment failed");
                 }
               }}
-              onCancel={() => setPaymentStatus("method-selection")}
+              onCancel={() => {
+                setIsMethodModalOpen(true);
+                setPaymentStatus("method-selection");
+              }}
             />
           )}
 
           {paymentStatus === "processing" && (
             <>
               <Loader2 className="h-16 w-16 mx-auto text-violet-600 animate-spin mb-4" />
-              <h2 className="text-lg font-semibold text-slate-900 mb-2">Processing Payment</h2>
-              <p className="text-sm text-slate-600">Complete payment in the popup window</p>
+              <h2 className="text-lg font-semibold text-slate-900 mb-2">
+                Processing Payment
+              </h2>
+              <p className="text-sm text-slate-600">
+                Complete payment in the popup window
+              </p>
             </>
           )}
 
           {paymentStatus === "eft-instructions" && (
             <div className="text-left">
-              <h2 className="text-lg font-semibold text-slate-900 mb-2 text-center">Direct EFT details</h2>
-              <p className="text-xs text-slate-600 mb-4 text-center">Use these details to pay, then confirm below.</p>
+              <h2 className="text-lg font-semibold text-slate-900 mb-2 text-center">
+                Direct EFT details
+              </h2>
+              <p className="text-xs text-slate-600 mb-4 text-center">
+                Use these details to pay, then confirm below.
+              </p>
               <div className="rounded-2xl border border-slate-200 p-4 space-y-2">
                 <div className="flex justify-between text-xs">
                   <span className="text-slate-500">Account Name</span>
-                  <span className="font-semibold text-slate-900">MINT PLATFORMS (PTY) LTD</span>
+                  <span className="font-semibold text-slate-900">
+                    MINT PLATFORMS (PTY) LTD
+                  </span>
                 </div>
                 <div className="flex justify-between text-xs">
                   <span className="text-slate-500">Bank</span>
-                  <span className="font-semibold text-slate-900">Standard Bank</span>
+                  <span className="font-semibold text-slate-900">
+                    Standard Bank
+                  </span>
                 </div>
                 <div className="flex justify-between text-xs">
                   <span className="text-slate-500">Account Number</span>
-                  <span className="font-semibold text-slate-900">02 154 470 0</span>
+                  <span className="font-semibold text-slate-900">
+                    02 154 470 0
+                  </span>
                 </div>
                 <div className="flex justify-between text-xs">
                   <span className="text-slate-500">Branch Code</span>
@@ -326,13 +406,17 @@ const PaymentPage = ({ onBack, strategy, amount, baseAmount, shareCount, onSucce
                   <span className="text-slate-500">SWIFT Code</span>
                   <span className="font-semibold text-slate-900">SBZAZAJJ</span>
                 </div>
+                {/* ── FIX 2: snake_case mint_number not camelCase mintNumber ── */}
                 <div className="flex justify-between text-xs">
                   <span className="text-slate-500">Reference</span>
-                  <span className="font-semibold text-slate-900">{profile?.mintNumber || "Loading..."}</span>
+                  <span className="font-semibold text-slate-900">
+                    {profile?.mint_number || "Loading..."}
+                  </span>
                 </div>
               </div>
               <p className="mt-3 text-[11px] text-slate-500 text-center">
-                Always use your Mint number as the payment reference so we can allocate your investment correctly.
+                Always use your Mint number as the payment reference so we can
+                allocate your investment correctly.
               </p>
               <button
                 type="button"
@@ -341,6 +425,7 @@ const PaymentPage = ({ onBack, strategy, amount, baseAmount, shareCount, onSucce
               >
                 View Deposit Page Details
               </button>
+              {/* ── FIX 4: This calls handleEftConfirm, not handleMethodSelection ── */}
               <button
                 type="button"
                 onClick={handleEftConfirm}
@@ -354,16 +439,24 @@ const PaymentPage = ({ onBack, strategy, amount, baseAmount, shareCount, onSucce
           {paymentStatus === "success" && (
             <>
               <CheckCircle2 className="h-16 w-16 mx-auto text-emerald-600 mb-4" />
-              <h2 className="text-lg font-semibold text-slate-900 mb-2">Payment Successful!</h2>
-              <p className="text-sm text-slate-600">Your investment is being processed</p>
+              <h2 className="text-lg font-semibold text-slate-900 mb-2">
+                Payment Successful!
+              </h2>
+              <p className="text-sm text-slate-600">
+                Your investment is being processed
+              </p>
             </>
           )}
 
           {paymentStatus === "failed" && (
             <>
               <XCircle className="h-16 w-16 mx-auto text-rose-600 mb-4" />
-              <h2 className="text-lg font-semibold text-slate-900 mb-2">Payment Failed</h2>
-              <p className="text-sm text-slate-600">{errorMessage || "Something went wrong"}</p>
+              <h2 className="text-lg font-semibold text-slate-900 mb-2">
+                Payment Failed
+              </h2>
+              <p className="text-sm text-slate-600">
+                {errorMessage || "Something went wrong"}
+              </p>
               <button
                 type="button"
                 onClick={onBack}
@@ -379,22 +472,34 @@ const PaymentPage = ({ onBack, strategy, amount, baseAmount, shareCount, onSucce
           <div className="space-y-2">
             <div className="flex justify-between">
               <span className="text-xs text-slate-600">Strategy</span>
-              <span className="text-xs font-semibold text-slate-900">{strategy?.name || "N/A"}</span>
+              <span className="text-xs font-semibold text-slate-900">
+                {strategy?.name || "N/A"}
+              </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-xs text-slate-600">Total Cost (incl. fees)</span>
+              <span className="text-xs text-slate-600">
+                Total Cost (incl. fees)
+              </span>
               <span className="text-xs font-semibold text-slate-900">
-                {strategy?.currency || "R"}{amount?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0.00"}
+                {strategy?.currency || "R"}
+                {amount?.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                }) || "0.00"}
               </span>
             </div>
             <div className="flex justify-between pt-2 border-t border-slate-100">
               <span className="text-xs text-slate-600">Payment Method</span>
               <span className="text-xs font-semibold text-slate-900">
-                {selectedMethod === "direct_eft" ? "Direct EFT" : 
-                 selectedMethod === "paystack" ? "Paystack" : 
-                 selectedMethod === "ozow" ? "Ozow" : 
-                 selectedMethod === "wallet" ? "Wallet" : 
-                 "Not selected"}
+                {selectedMethod === "direct_eft"
+                  ? "Direct EFT"
+                  : selectedMethod === "paystack"
+                    ? "Paystack"
+                    : selectedMethod === "ozow"
+                      ? "Ozow"
+                      : selectedMethod === "wallet"
+                        ? "Wallet"
+                        : "Not selected"}
               </span>
             </div>
           </div>
@@ -404,65 +509,100 @@ const PaymentPage = ({ onBack, strategy, amount, baseAmount, shareCount, onSucce
   );
 };
 
-// ADDED: WalletPaymentFlow helper component
-const WalletPaymentFlow = ({ amount, profile, onConfirm, onCancel }) => {
+// ── WalletPaymentFlow ────────────────────────────────────────────────────────
+// FIX 1 + 3: receives walletBalance as a prop instead of reading profile directly
+const WalletPaymentFlow = ({
+  amount,
+  walletBalance,
+  walletLoading,
+  onConfirm,
+  onCancel,
+}) => {
   const [inputAmount, setInputAmount] = useState(amount || 0);
   const serviceFeeRate = 0.08;
   const serviceFee = inputAmount * serviceFeeRate;
   const totalToDeduct = inputAmount + serviceFee;
-  const walletBalance = profile?.wallet_balance || 0;
   const remainingBalance = walletBalance - totalToDeduct;
   const isInsufficient = totalToDeduct > walletBalance;
 
-  const formatCurrency = (val) => {
-    return val.toLocaleString("en-ZA", {
+  const formatCurrency = (val) =>
+    val.toLocaleString("en-ZA", {
       style: "currency",
       currency: "ZAR",
       minimumFractionDigits: 2,
     });
-  };
+
+  if (walletLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-8 gap-3">
+        <Loader2 className="h-8 w-8 text-violet-500 animate-spin" />
+        <p className="text-sm text-slate-500">Loading wallet balance...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="text-left">
-      <h2 className="text-lg font-semibold text-slate-900 mb-2 text-center">Wallet Payment</h2>
-      <p className="text-xs text-slate-600 mb-4 text-center">Fund your investment directly from your Mint wallet.</p>
-      
+      <h2 className="text-lg font-semibold text-slate-900 mb-2 text-center">
+        Wallet Payment
+      </h2>
+      <p className="text-xs text-slate-600 mb-4 text-center">
+        Fund your investment directly from your Mint wallet.
+      </p>
+
       <div className="space-y-4">
         <div>
-          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Amount to invest</label>
+          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            Amount to invest
+          </label>
           <input
             type="number"
             value={inputAmount}
             onChange={(e) => setInputAmount(Number(e.target.value))}
             className="mt-1 w-full rounded-xl border border-slate-200 p-3 text-sm font-semibold outline-none focus:border-violet-500"
           />
-          <p className="mt-1 text-[10px] text-slate-500">Service Fee (8%): {formatCurrency(serviceFee)}</p>
+          <p className="mt-1 text-[10px] text-slate-500">
+            Service Fee (8%): {formatCurrency(serviceFee)}
+          </p>
         </div>
 
         <div className="rounded-2xl bg-slate-50 p-4 space-y-2">
           <div className="flex justify-between text-xs">
             <span className="text-slate-500">Investment Amount</span>
-            <span className="font-semibold text-slate-900">{formatCurrency(inputAmount)}</span>
+            <span className="font-semibold text-slate-900">
+              {formatCurrency(inputAmount)}
+            </span>
           </div>
           <div className="flex justify-between text-xs">
             <span className="text-slate-500">Service Fee (8%)</span>
-            <span className="font-semibold text-slate-900">{formatCurrency(serviceFee)}</span>
+            <span className="font-semibold text-slate-900">
+              {formatCurrency(serviceFee)}
+            </span>
           </div>
           <div className="flex justify-between border-t border-slate-200 pt-2 text-sm">
             <span className="font-bold text-slate-900">Total to deduct</span>
-            <span className="font-bold text-violet-700">{formatCurrency(totalToDeduct)}</span>
+            <span className="font-bold text-violet-700">
+              {formatCurrency(totalToDeduct)}
+            </span>
           </div>
         </div>
 
         <div className="flex justify-between px-1 text-[11px]">
-          <span className="text-slate-500">Wallet Balance: {formatCurrency(walletBalance)}</span>
-          <span className={`font-semibold ${isInsufficient ? "text-rose-600" : "text-emerald-600"}`}>
+          <span className="text-slate-500">
+            Wallet Balance: {formatCurrency(walletBalance)}
+          </span>
+          <span
+            className={`font-semibold ${isInsufficient ? "text-rose-600" : "text-emerald-600"
+              }`}
+          >
             Remaining: {formatCurrency(remainingBalance)}
           </span>
         </div>
 
         {isInsufficient && (
-          <p className="text-center text-xs font-semibold text-rose-600">Insufficient wallet balance</p>
+          <p className="text-center text-xs font-semibold text-rose-600">
+            Insufficient wallet balance
+          </p>
         )}
 
         <div className="flex gap-3 pt-2">
