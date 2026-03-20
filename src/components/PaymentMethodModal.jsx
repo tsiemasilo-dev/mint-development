@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../lib/supabase";
 import { useProfile } from "../lib/useProfile";
 
-const STANDARD_BANK_LOGO = "/standard-bank-logo.png";
+const STANDARD_BANK_LOGO = "/standard-bank-logo.jpg";
 
 const PaymentMethodModal = ({ isOpen, onClose, amount, strategyName, onSelectPaystack, onSelectOzow, onEFTConfirm, onSelectWallet }) => { // ADDED onSelectWallet prop
   const [eftExpanded, setEftExpanded] = useState(false);

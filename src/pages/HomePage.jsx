@@ -816,13 +816,7 @@ const HomePage = ({
                         <p className="text-[22px] md:text-[26px] font-light text-slate-700 tracking-wider mb-[-2px]" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif", fontStyle: "italic", letterSpacing: "0.08em" }}>MINT</p>
                       </div>
                     </div>
-                    {/* Mint Number on Front */}
-                    <div className="absolute top-4 right-4 z-20 text-right opacity-60">
-                      <p className="text-[8px] uppercase tracking-[0.2em] text-slate-400 font-medium mb-0.5">Mint ID</p>
-                      <p className="text-[10px] tracking-[0.1em] text-slate-700 font-mono font-bold">
-                        {profile.mintNumber || "GENERATING..."}
-                      </p>
-                    </div>
+
                   </div>
                 </CardContent>
 
