@@ -778,7 +778,7 @@ const HomePage = ({
                 <button
                   type="button"
                   onClick={() => { setHomeTab("invest"); setCardRotation(-180); }}
-                  className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${homeTab === "invest" ? "bg-white text-slate-900 shadow-sm" : "text-white/70 hover:bg-white/10 hover:text-white"}`}
+                  className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${homeTab === "invest" || homeTab === "balance" ? "bg-white text-slate-900 shadow-sm" : "text-white/70 hover:bg-white/10 hover:text-white"}`}
                 >
                   Wealth
                 </button>
