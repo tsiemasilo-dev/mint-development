@@ -657,7 +657,12 @@ const SwipeableBalanceCard = ({
                   </span>
                 </div>
               </div>
-              {/* Mint Number display moved to parent HomePage card layout */}
+                <div className="mt-auto pt-2 border-t border-slate-100/50">
+                  <p className="text-[8px] uppercase tracking-[0.2em] text-slate-400 font-medium mb-0.5" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>MINT NUMBER</p>
+                  <p className="text-[11px] tracking-[0.1em] text-slate-700 font-mono font-bold">
+                    {mintNumber || "GENERATING..."}
+                  </p>
+                </div>
             </div>
           </div>
 

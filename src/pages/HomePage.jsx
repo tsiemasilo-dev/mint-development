@@ -138,14 +138,14 @@ const HomePage = ({
   const [news, setNews] = useState([]);
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [loadingNews, setLoadingNews] = useState(false);
-  const [homeTab, setHomeTab] = useState("invest");
+  const [homeTab, setHomeTab] = useState("balance");
   const [userId, setUserId] = useState(null);
   const [localBestAssets, setLocalBestAssets] = useState([]);
   const [hasAnyHoldings, setHasAnyHoldings] = useState(false);
   const { onboardingComplete, loading: onboardingLoading, refetch: fetchOnboardingStatus } = useOnboardingStatus();
   const onboardingChecked = !onboardingLoading;
 
-  const [cardRotation, setCardRotation] = useState(-180);
+  const [cardRotation, setCardRotation] = useState(0);
   const [isCardAnimating, setIsCardAnimating] = useState(false);
   const dragStartXRef = useRef(0);
   const [isCardVisible, setIsCardVisible] = useState(() => {
@@ -843,13 +843,7 @@ const HomePage = ({
                         mintNumber={profile.mintNumber} 
                       />
                       
-                      {/* Repositioned Mint ID to Bottom Left - Matched with Front Size */}
-                      <div className="absolute bottom-8 left-8 z-50 pointer-events-none flex flex-col items-start translate-z-10">
-                        <p className="text-[9px] uppercase tracking-[0.2em] text-slate-400 font-medium mb-1" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>MINT NUMBER</p>
-                        <p className="text-[13px] uppercase tracking-[0.18em] text-slate-700 font-light" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif", letterSpacing: "0.18em" }}>
-                          {profile.mintNumber || ""}
-                        </p>
-                      </div>
+
                     </div>
                   </div>
                 </CardContent>
