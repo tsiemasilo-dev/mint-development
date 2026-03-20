@@ -15,7 +15,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
     description: "",
   };
 
-  const minimumInvestment = currentStrategy.calculatedMinInvestment || null;
+  const minimumInvestment = currentStrategy.calculatedMinInvestment || currentStrategy.min_investment || null;
   const currency = currentStrategy.currency || 'R';
   
   const [amount, setAmount] = useState(minimumInvestment || 0);
