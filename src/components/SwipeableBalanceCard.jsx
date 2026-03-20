@@ -689,29 +689,29 @@ const SwipeableBalanceCard = ({
       )}
       <div className="relative z-10 flex flex-col h-full text-slate-700">
         <div className="flex flex-1 min-h-0">
-          <div className="w-[50%] p-4 pb-3 flex flex-col border-r border-slate-200">
-            <div className="flex flex-col flex-1 min-h-0 items-center justify-center gap-3 text-center">
+          <div className="w-[50%] p-4 pb-3 flex flex-col border-r border-slate-200 overflow-hidden">
+            <div className="flex flex-col flex-1 min-h-0 gap-2">
               <div className="shrink-0">
-                <p className="text-[10px] uppercase tracking-widest text-slate-500 font-medium mb-1.5">
+                <p className="text-[10px] uppercase tracking-widest text-slate-500 font-medium mb-1.5 truncate">
                   {selectedAsset ? selectedAsset.symbol : "portfolio value"}
                 </p>
-                <p className="text-base font-bold text-slate-900 mb-2">
+                <p className="text-base font-bold text-slate-900 mb-2 truncate">
                   {isVisible ? (selectedAsset ? formatKMB(displayBalance) : formatFull(displayBalance)) : masked}
                 </p>
-                <div className="flex items-center justify-center gap-2">
-                  <span className={`text-sm font-semibold ${isLoss ? "text-rose-400" : "text-emerald-400"}`}>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`text-sm font-semibold shrink-0 ${isLoss ? "text-rose-400" : "text-emerald-400"}`}>
                     {isLoss ? "▼" : "▲"} {isVisible ? formatKMB(Math.abs(displayReturn)) : masked}
                   </span>
-                  <span className={`px-1.5 py-0.5 rounded-full text-[8px] font-medium uppercase ${isLoss ? "bg-rose-500/20 text-rose-400" : "bg-emerald-500/20 text-emerald-400"}`}>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[8px] font-medium uppercase shrink-0 ${isLoss ? "bg-rose-500/20 text-rose-400" : "bg-emerald-500/20 text-emerald-400"}`}>
                     {isVisible ? `${isLoss ? "-" : "+"}${returnPct}%` : masked}
                   </span>
                 </div>
               </div>
-              <div className="pt-2 border-t border-slate-100/50 w-full">
-                <p className="text-[8px] uppercase tracking-[0.2em] text-slate-400 font-medium mb-0.5" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>
+              <div className="mt-auto pt-2 border-t border-slate-100/50">
+                <p className="text-[8px] uppercase tracking-[0.2em] text-slate-400 font-medium mb-0.5 truncate" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>
                   MINT NUMBER
                 </p>
-                <p className="text-[11px] tracking-[0.1em] text-slate-700 font-mono font-bold">
+                <p className="text-[11px] tracking-[0.1em] text-slate-700 font-mono font-bold truncate">
                   {mintNumber ?? "GENERATING..."}
                 </p>
               </div>
