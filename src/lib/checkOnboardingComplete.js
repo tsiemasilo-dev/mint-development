@@ -32,7 +32,7 @@ export function parseOnboardingFlags(record) {
 
   // If user has a legacy 'onboarding_complete' status, or has a signature
   // timestamp, we can grandfather them in for all the steps.
-  const hasCompletedOldFlow = record?.kyc_status === "onboarding_complete" || (kycDone && !!raw?.signed_at);
+  const hasCompletedOldFlow = record?.kyc_status === "onboarding_complete" || (kycDone && (!!raw?.signed_at || !!raw?.account_agreement_signed));
 
   const agreementSigned = !!raw?.signed_at || !!raw?.account_agreement_signed;
 

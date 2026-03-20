@@ -24,7 +24,7 @@ function parseOnboardingFlags(record) {
       const raw = typeof record.sumsub_raw === "string"
         ? JSON.parse(record.sumsub_raw)
         : record.sumsub_raw;
-      if (kycDone && raw?.signed_at) {
+      if (kycDone && (raw?.signed_at || raw?.account_agreement_signed)) {
         taxDone = true; bankDone = true; mandateAgreed = true;
         riskDone = true; sofDone = true; termsDone = true;
         agreementSigned = true;

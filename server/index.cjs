@@ -4980,7 +4980,7 @@ app.get("/api/onboarding/status", async (req, res) => {
           try {
             raw = typeof data.sumsub_raw === "string" ? JSON.parse(data.sumsub_raw) : data.sumsub_raw;
             // Robust grandfathering: if they have a signed_at date, they've passed the essential hurdles
-            const isGrandfathered = (kycDone && !!raw?.signed_at) || (data.kyc_status === "onboarding_complete");
+            const isGrandfathered = (kycDone && (!!raw?.signed_at || !!raw?.account_agreement_signed)) || (data.kyc_status === "onboarding_complete");
             
             if (isGrandfathered) {
               taxDone = true; bankDone = true; mandateAgreed = true;

@@ -3,6 +3,7 @@ import { ArrowLeft, X, Info, Heart, Wallet, FileText } from "lucide-react";
 import generateFactsheetPdf from "../lib/generateFactsheetPdf";
 import { supabase } from "../lib/supabase";
 import { checkOnboardingComplete } from "../lib/checkOnboardingComplete";
+import { useOnboardingStatus } from "../lib/useOnboardingStatus";
 import { formatChangePct, getChangeColor } from "../lib/strategyData.js";
 import { buildHoldingsBySymbol, calculateMinInvestment, getAdjustedShares, computeExtendedSummary } from "../lib/strategyUtils";
 import {
@@ -27,6 +28,7 @@ const timeframeOptions = [
 const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding }) => {
+  const { onboardingComplete, loading: onboardingLoading } = useOnboardingStatus();
   const [timeframe, setTimeframe] = useState("YTD");
   const [activeLabel, setActiveLabel] = useState(null);
   const [selectedMetricModal, setSelectedMetricModal] = useState(null);
@@ -1028,7 +1030,9 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
               const { data: { session } } = await supabase.auth.getSession();
               if (!session?.user) { setInvestChecking(false); return; }
 
-              const isOnboarded = await checkOnboardingComplete();
+              // Use the cached status from the hook instead of fresh fetch to avoid race conditions
+              if (onboardingLoading) return;
+              const isOnboarded = onboardingComplete;
               if (!isOnboarded) {
                 setShowOnboardingModal(true);
                 setInvestChecking(false);

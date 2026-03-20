@@ -4,8 +4,10 @@ import { getSecurityBySymbol, getSecurityPrices, normalizePriceSeries } from "..
 import { supabase } from "../lib/supabase.js";
 import { useProfile } from "../lib/useProfile";
 import { checkOnboardingComplete } from "../lib/checkOnboardingComplete";
+import { useOnboardingStatus } from "../lib/useOnboardingStatus";
 
 const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavigateToOnboarding }) => {
+  const { onboardingComplete, loading: onboardingLoading } = useOnboardingStatus();
   const { profile } = useProfile();
   const [selectedPeriod, setSelectedPeriod] = useState("YTD");
   const [security, setSecurity] = useState(initialSecurity);
@@ -496,11 +498,12 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
             onClick={async () => {
               setBuyChecking(true);
               try {
-                const isOnboarded = await checkOnboardingComplete();
-                if (!isOnboarded) {
-                  setShowOnboardingModal(true);
-                  return;
-                }
+              // Use hook status to prevent race conditions on clicks while fetching
+              if (onboardingLoading) return;
+              if (!onboardingComplete) {
+                setShowOnboardingModal(true);
+                return;
+              }
                 onOpenBuy?.();
               } finally {
                 setBuyChecking(false);
