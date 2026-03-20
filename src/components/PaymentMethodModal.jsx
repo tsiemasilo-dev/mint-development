@@ -87,6 +87,7 @@ const PaymentMethodModal = ({
     <AnimatePresence>
       {isOpen && (
         <motion.div
+          key="modal-overlay"
           className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/50 backdrop-blur-sm"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -276,6 +277,7 @@ const PaymentMethodModal = ({
                   <AnimatePresence>
                     {eftExpanded && (
                       <motion.div
+                        key="eft-details"
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: "auto", opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
@@ -392,6 +394,7 @@ const PaymentMethodModal = ({
       <AnimatePresence>
         {showThankYou && (
           <motion.div
+            key="thank-you-modal"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
