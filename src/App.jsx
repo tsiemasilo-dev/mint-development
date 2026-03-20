@@ -14,6 +14,7 @@ import NewPortfolioPage from "./pages/NewPortfolioPage.jsx";
 import InvestPage from "./pages/InvestPage.jsx";
 import InvestAmountPage from "./pages/InvestAmountPage.jsx";
 import PaymentPage from "./pages/PaymentPage.jsx";
+import PaymentMethodPage from "./pages/PaymentMethodPage.jsx";
 import PaymentSuccessPage from "./pages/PaymentSuccessPage.jsx";
 import FactsheetPage from "./pages/FactsheetPage.jsx";
 import OpenStrategiesPage from "./pages/OpenStrategiesPage.jsx";
@@ -99,6 +100,7 @@ const App = () => {
   const [selectedGoalId, setSelectedGoalId] = useState(null);
   const selectedGoalIdRef = useRef(null);
   const goalInvestAmountRef = useRef(0);
+  const pendingPaymentTypeRef = useRef(null);
   const recoveryHandled = useRef(false);
   const { refetch: refetchNotifications } = useNotificationsContext();
   const [showPinLock, setShowPinLock] = useState(false);
@@ -117,6 +119,17 @@ const App = () => {
   });
 
   const justLoggedInRef = useRef(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ozowStatus = params.get("ozow");
+    if (ozowStatus === "success") {
+      window.history.replaceState({}, "", window.location.pathname);
+      setCurrentPage("paymentSuccess");
+    } else if (ozowStatus === "cancel" || ozowStatus === "error") {
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -1193,9 +1206,10 @@ const App = () => {
             setSelectedGoalId(goalId);
             selectedGoalIdRef.current = goalId;
             goalInvestAmountRef.current = pendingGoalFlow?.baseAmount || pendingGoalFlow?.amount || stockCheckout.amount;
+            pendingPaymentTypeRef.current = "stock";
             setShowGoalModal(false);
             setPendingGoalFlow(null);
-            navigateTo("stockPayment");
+            navigateTo("paymentMethod");
           }}
           investmentAmount={pendingGoalFlow?.baseAmount || pendingGoalFlow?.amount || stockCheckout.amount}
           assetName={pendingGoalFlow?.assetName || selectedSecurity?.name || "Stock"}
@@ -1332,12 +1346,74 @@ const App = () => {
             setSelectedGoalId(goalId);
             selectedGoalIdRef.current = goalId;
             goalInvestAmountRef.current = pendingGoalFlow?.baseAmount || pendingGoalFlow?.amount || investmentAmount;
+            pendingPaymentTypeRef.current = "strategy";
             setShowGoalModal(false);
             setPendingGoalFlow(null);
-            navigateTo("payment");
+            navigateTo("paymentMethod");
           }}
           investmentAmount={pendingGoalFlow?.baseAmount || pendingGoalFlow?.amount || investmentAmount}
           assetName={pendingGoalFlow?.assetName || selectedStrategy?.name || "Strategy"}
+        />
+      </SwipeBackWrapper>
+    );
+  }
+
+  if (currentPage === "paymentMethod") {
+    const isStock = pendingPaymentTypeRef.current === "stock";
+    const pmAmount = isStock ? stockCheckout.amount : investmentAmount;
+    const pmName = isStock
+      ? (stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock")
+      : (selectedStrategy?.name || "Investment");
+    const pmStrategyId = isStock ? (stockCheckout.security?.id || null) : (selectedStrategy?.id || null);
+
+    const handleSelectOzow = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        const baseUrl = window.location.origin;
+        const successUrl = `${baseUrl}/?ozow=success`;
+        const cancelUrl = `${baseUrl}/?ozow=cancel`;
+        const errorUrl = `${baseUrl}/?ozow=error`;
+
+        const resp = await fetch("/api/ozow/initiate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            amount: pmAmount,
+            strategyName: pmName,
+            strategyId: pmStrategyId,
+            userId: user?.id || null,
+            successUrl,
+            cancelUrl,
+            errorUrl,
+          }),
+        });
+        const data = await resp.json();
+        if (data.success && data.paymentUrl) {
+          window.location.href = data.paymentUrl;
+        } else {
+          alert(data.error || "Failed to initiate Ozow payment. Please try again.");
+        }
+      } catch (err) {
+        console.error("Ozow initiation failed:", err);
+        alert("Could not connect to Ozow. Please try another payment method.");
+      }
+    };
+
+    const handleEFTConfirm = () => {
+      navigationHistory.current = [];
+      setPreviousPageName(null);
+      setCurrentPage("paymentSuccess");
+    };
+
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <PaymentMethodPage
+          onBack={goBack}
+          amount={pmAmount}
+          strategyName={pmName}
+          onSelectPaystack={() => navigateTo(isStock ? "stockPayment" : "payment")}
+          onSelectOzow={handleSelectOzow}
+          onEFTConfirm={handleEFTConfirm}
         />
       </SwipeBackWrapper>
     );
