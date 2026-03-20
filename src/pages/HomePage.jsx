@@ -843,11 +843,11 @@ const HomePage = ({
                         mintNumber={profile.mintNumber} 
                       />
                       
-                      {/* Styled Mint Number Overlay - ON the magnetic strip */}
-                      <div className="absolute -top-3 right-6 z-50 pointer-events-none flex flex-col items-end">
-                        <p className="text-[6px] uppercase tracking-[0.2em] text-white/40 font-medium mb-0.5">Member ID</p>
-                        <p className="text-[14px] tracking-[0.2em] text-white font-mono font-bold" style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}>
-                          {profile.mintNumber || "PENDING"}
+                      {/* Repositioned Mint ID to Bottom Left */}
+                      <div className="absolute bottom-8 left-8 z-50 pointer-events-none flex flex-col items-start translate-z-10">
+                        <p className="text-[7px] uppercase tracking-[0.2em] text-slate-400 font-bold mb-0.5">Mint ID</p>
+                        <p className="text-[12px] tracking-[0.25em] text-slate-800 font-mono font-bold">
+                          {profile.mintNumber || ""}
                         </p>
                       </div>
                     </div>
