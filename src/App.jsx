@@ -227,15 +227,8 @@ const App = () => {
     if (page === currentPage) return;
     
     // Protected routes that REQUIRE onboarding
-    const protectedPages = [
-      "deposit", 
-      "stockBuy", 
-      "investAmount", 
-      "creditApply", 
-      "creditRepay", 
-      "payment", 
-      "stockPayment"
-    ];
+    const protectedPages = ["deposit", "creditApply", "creditRepay"];
+
 
     if (protectedPages.includes(page) && !onboardingRef.current.loading && !onboardingRef.current.complete) {
       console.log(`[App] Onboarding required for page: ${page}. Redirecting.`);
