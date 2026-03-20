@@ -3278,12 +3278,16 @@ app.get("/api/user/strategies", async (req, res) => {
         const stratHoldings = stratHoldingsByStratId[strategy.id] || [];
         let investedAmount = 0;
         let currentMarketValue = 0;
-        for (const h of stratHoldings) {
-          const qty = Number(h.quantity || 0);
-          const avgFill = Number(h.avg_fill || 0);
-          const livePrice = stratLivePriceMap[h.security_id] || avgFill;
-          investedAmount += (avgFill * qty) / 100;
-          currentMarketValue += (livePrice * qty) / 100;
+        const allPending = stratHoldings.length > 0 && stratHoldings.every(h => !h.avg_fill);
+        if (!allPending) {
+          for (const h of stratHoldings) {
+            const qty = Number(h.quantity || 0);
+            const avgFill = Number(h.avg_fill || 0);
+            if (!avgFill) continue;
+            const livePrice = stratLivePriceMap[h.security_id] || avgFill;
+            investedAmount += (avgFill * qty) / 100;
+            currentMarketValue += (livePrice * qty) / 100;
+          }
         }
 
         matchedStrategies.push({
