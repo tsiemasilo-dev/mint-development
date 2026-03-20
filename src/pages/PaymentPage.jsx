@@ -382,6 +382,7 @@ const PaymentPage = ({
         isOpen={walletConfirmOpen}
         amount={amount}
         strategyName={strategy?.name}
+        walletBalance={walletBalance}
         walletLoading={walletLoading}
         isProcessing={paymentStatus === "processing"}
         onCancel={() => {
@@ -391,6 +392,7 @@ const PaymentPage = ({
           setSelectedMethod(null);
         }}
         onConfirm={handleWalletConfirm}
+        onNavigateToDeposit={onOpenDeposit}
       />
 
       <EFTSuccessModal
@@ -617,9 +619,12 @@ const WalletConfirmModal = ({
   isProcessing,
   onCancel,
   onConfirm,
+  onNavigateToDeposit,
 }) => {
   const serviceFeeRate = 0.08;
-  const totalToDeduct = (amount || 0) * (1 + serviceFeeRate);
+  const serviceFee = (amount || 0) * serviceFeeRate;
+  const totalToDeduct = (amount || 0) + serviceFee;
+  const hasEnoughFunds = walletBalance >= totalToDeduct;
 
   const fmt = (v) =>
     `R${Number(v).toLocaleString("en-ZA", {
@@ -638,18 +643,21 @@ const WalletConfirmModal = ({
           </div>
         </div>
 
-        <h2 className="text-lg font-semibold text-slate-900 text-center mb-3">
+        <h2 className="text-lg font-semibold text-slate-900 text-center mb-1">
           Confirm Purchase
         </h2>
+        <p className="text-xs text-slate-500 text-center mb-5">
+          {strategyName || "Investment Asset"}
+        </p>
 
-        <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 mb-6 space-y-2">
+        <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 mb-5 space-y-2">
           <div className="flex justify-between text-xs">
-            <span className="text-slate-500">Investment</span>
+            <span className="text-slate-500">Base Investment</span>
             <span className="font-semibold text-slate-900">{fmt(amount)}</span>
           </div>
           <div className="flex justify-between text-xs">
-            <span className="text-slate-500">Service fee (8%)</span>
-            <span className="font-semibold text-slate-900">{fmt(amount * 0.08)}</span>
+            <span className="text-slate-500">Service Fee (8%)</span>
+            <span className="font-semibold text-slate-900">{fmt(serviceFee)}</span>
           </div>
           <div className="border-t border-slate-200 mt-2 pt-2 flex justify-between text-sm">
             <span className="font-bold text-slate-700">Total to Deduct</span>
@@ -657,30 +665,54 @@ const WalletConfirmModal = ({
           </div>
         </div>
 
-        <p className="text-xs text-slate-500 text-center mb-6">
-          You currently have{" "}
-          <span className="font-semibold text-slate-700">
-            {walletLoading ? "..." : fmt(walletBalance)}
-          </span>{" "}
-          available.
-        </p>
+        <div className="space-y-3 mb-6">
+          <div className="flex justify-between items-center px-1">
+            <span className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">Wallet Balance</span>
+            <span className="text-xs font-bold text-slate-700">{walletLoading ? "..." : fmt(walletBalance)}</span>
+          </div>
+          
+          {!walletLoading && !hasEnoughFunds ? (
+            <div className="rounded-xl bg-rose-50 border border-rose-100 p-3">
+              <p className="text-[11px] text-rose-600 text-center font-medium">
+                Insufficient funds — please top up your wallet
+              </p>
+            </div>
+          ) : !walletLoading && (
+            <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-3">
+              <p className="text-[11px] text-emerald-600 text-center font-medium">
+                Remaining balance after: {fmt(walletBalance - totalToDeduct)}
+              </p>
+            </div>
+          )}
+        </div>
 
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-semibold text-slate-600 transition active:scale-95"
-          >
-            Cancel
-          </button>
+        <div className="flex flex-col gap-2">
           <button
             type="button"
             onClick={onConfirm}
-            disabled={isProcessing}
-            className="flex-1 rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3 text-sm font-semibold text-white shadow-lg transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={isProcessing || (!walletLoading && !hasEnoughFunds)}
+            className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3.5 text-sm font-semibold text-white shadow-lg transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isProcessing ? "Processing..." : "Continue"}
+            {isProcessing ? "Processing..." : "Confirm Purchase"}
           </button>
+          
+          {!walletLoading && !hasEnoughFunds ? (
+            <button
+              type="button"
+              onClick={onNavigateToDeposit}
+              className="w-full rounded-2xl border-2 border-violet-200 py-3.5 text-sm font-semibold text-violet-700 transition active:scale-95"
+            >
+              Top Up Now
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="w-full py-2.5 text-sm font-semibold text-slate-400"
+            >
+              Cancel
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -700,29 +732,35 @@ const WalletSuccessModal = ({ isOpen, strategyName, amountDeducted, newBalance, 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
       <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl text-center">
-        <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-500 mb-4" />
+        <div className="flex flex-col items-center pt-2 pb-6">
+          <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4 bg-emerald-100">
+            <CheckCircle2 className="h-10 w-10 text-emerald-500" />
+          </div>
+          <h2 className="text-xl font-bold text-slate-900 mb-2">
+            Purchase Successful!
+          </h2>
+          <p className="text-sm text-slate-500">Thank you for your purchase</p>
+        </div>
 
-        <h2 className="text-xl font-semibold text-slate-900 mb-2">
-          Purchase successful!
-        </h2>
-
-        <p className="text-sm text-slate-600 mb-1">
-          You bought{" "}
-          <span className="font-semibold text-slate-900">
-            {strategyName || "your investment"}
-          </span>{" "}
-          for <span className="font-semibold text-slate-900">{fmt(amountDeducted)}</span>.
-        </p>
-
-        <p className="text-sm text-slate-600 mb-6">
-          Your remaining wallet balance is{" "}
-          <span className="font-semibold text-slate-900">{fmt(newBalance)}</span>.
-        </p>
+        <div className="rounded-2xl bg-slate-50 p-5 mb-8 text-left space-y-3">
+          <div className="flex justify-between items-center">
+            <span className="text-xs text-slate-500">Strategy</span>
+            <span className="text-xs font-bold text-slate-900">{strategyName || "Investment"}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-xs text-slate-500">Amount Deducted</span>
+            <span className="text-xs font-bold text-rose-600">-{fmt(amountDeducted)}</span>
+          </div>
+          <div className="pt-3 border-t border-slate-200 flex justify-between items-center">
+            <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider">New Balance</span>
+            <span className="text-sm font-bold text-emerald-600">{fmt(newBalance)}</span>
+          </div>
+        </div>
 
         <button
           type="button"
           onClick={onDone}
-          className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3 text-sm font-semibold text-white shadow-lg transition active:scale-95"
+          className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-4 text-sm font-bold text-white shadow-lg transition active:scale-95"
         >
           Back to Home
         </button>

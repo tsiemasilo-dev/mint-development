@@ -921,9 +921,11 @@ const App = () => {
             onBack={noOp}
             strategy={previewStrategy}
             amount={previewAmount}
+            baseAmount={cachedState.baseInvestmentAmount}
             onSuccess={noOp}
             onCancel={noOp}
-            onOpenDeposit={noOp}
+            onOpenDeposit={() => navigateTo("deposit")}
+            initialMethod={pendingPaymentMethod}
           />
         );
       }
