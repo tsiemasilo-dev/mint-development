@@ -4,6 +4,7 @@ import { useProfile } from "../lib/useProfile";
 import { supabase } from "../lib/supabase";
 import PaymentMethodModal from "../components/PaymentMethodModal";
 import PaymentPendingPage from "./PaymentPendingPage.jsx";
+import { checkOnboardingComplete } from "../lib/checkOnboardingComplete";
 
 const PaymentPage = ({
   onBack,
@@ -38,6 +39,9 @@ const PaymentPage = ({
   const [walletConfirmOpen, setWalletConfirmOpen] = useState(false);
   const [walletSuccessOpen, setWalletSuccessOpen] = useState(false);
   const [walletNewBalance, setWalletNewBalance] = useState(0);
+  const [walletAmountDeducted, setWalletAmountDeducted] = useState(0);
+  const [eftReference, setEftReference] = useState("");
+  const [eftSuccessOpen, setEftSuccessOpen] = useState(false);
 
   useEffect(() => {
     if (!profile?.id) return;
@@ -63,7 +67,7 @@ const PaymentPage = ({
   );
 
   const recordInvestment = useCallback(
-    async (paymentReference = "", method = null) => {
+    async (paymentReference = "", method = null, overrideAmount = null) => {
       const maxRetries = 5;
       const finalMethod = method || selectedMethod;
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -79,7 +83,7 @@ const PaymentPage = ({
             securityId: strategy?.id,
             symbol: strategy?.symbol || strategy?.short_name || "",
             name: strategy?.name || "",
-            amount: amount,
+            amount: overrideAmount || amount,
             baseAmount: baseAmount || amount,
             strategyId: stratId,
             paymentReference,
@@ -95,14 +99,17 @@ const PaymentPage = ({
             body: JSON.stringify(recordData),
           });
 
-          if (res.ok || res.status === 409) return true;
+          if (res.ok || res.status === 409) {
+            const data = await res.json();
+            return { success: true, ...data };
+          }
 
-          const errorBody = await res.text();
+          const errorBody = await res.json().catch(() => ({ error: "Unknown error" }));
           console.warn(
             `Record attempt ${attempt}/${maxRetries} failed (${res.status}):`,
             errorBody,
           );
-          if (res.status === 400) return false;
+          if (res.status === 400) return { success: false, ...errorBody };
         } catch (recordError) {
           console.warn(
             `Record attempt ${attempt}/${maxRetries} network error:`,
@@ -115,7 +122,7 @@ const PaymentPage = ({
           await new Promise((r) => setTimeout(r, delay));
         }
       }
-      return false;
+      return { success: false, error: "Retries exhausted" };
     },
     [amount, baseAmount, isStrategyPurchase, selectedMethod, shareCount, strategy],
   );
@@ -166,7 +173,7 @@ const PaymentPage = ({
         if (!isMounted.current) return;
         setPaymentStatus("success");
         const recorded = await recordInvestment(response?.reference || "");
-        if (!recorded) {
+        if (!recorded.success) {
           console.error(
             "Failed to record investment after all retries. Payment ref:",
             response?.reference,
@@ -195,32 +202,82 @@ const PaymentPage = ({
       setWalletConfirmOpen(true);
       return;
     }
+    if (method === "direct_eft") {
+      const uniqueRef = `EFT-${Date.now()}-${profile?.mint_number || "X"}`;
+      setEftReference(uniqueRef);
+      setPaymentStatus("eft-instructions");
+      
+      // Phase 1: Save intent to DB immediately
+      const recordEftIntent = async () => {
+        try {
+          await fetch('/api/eft-deposit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              amount,
+              baseAmount,
+              reference: uniqueRef,
+              strategyId: strategy?.id,
+              symbol: strategy?.symbol,
+              name: strategy?.name,
+              shareCount,
+              intent: true
+            })
+          });
+        } catch (err) {
+          console.warn("[EFT] Failed to save pre-payment intent:", err.message);
+        }
+      };
+      recordEftIntent();
+      return;
+    }
     setPaymentStatus("eft-instructions");
   };
 
+  /**
+   * IMPORTANT: Fee Architecture Note
+   * 
+   * The 'amount' prop comes from InvestAmountPage (or StockBuyPage). 
+   * - For Paystack: amount already includes a 3.5% processing fee.
+   * - For Wallet: InvestAmountPage detects 'pendingPaymentMethod === wallet' 
+   *   and passes a total that includes Broker/Custody fees but 0.0% processing fee.
+   * 
+   * Therefore, we MUST add the 8% service fee here. Do not 'fix' this by 
+   * adding the 8% in the previous pages, or you will double-charge the user.
+   */
   const handleWalletConfirm = async () => {
     const serviceFeeRate = 0.08;
     const totalToDeduct = amount * (1 + serviceFeeRate);
+
+    if (paymentStatus === "processing") return;
+    
+    // ── ONBOARDING GUARD (PROMPT 4) ────────────────────────────────────────
+    const { is_fully_onboarded } = await checkOnboardingComplete();
+    if (!is_fully_onboarded) {
+      setErrorMessage("Please complete your onboarding before making an investment");
+      setIsMethodModalOpen(false);
+      // Dispatch a navigate event to identityCheck (pattern used elsewhere)
+      window.dispatchEvent(new CustomEvent("navigate-within-app", { detail: "identityCheck" }));
+      return;
+    }
 
     setWalletConfirmOpen(false);
     setPaymentStatus("processing");
 
     try {
-      const newBalance = walletBalance - totalToDeduct;
-
-      const { error: updateError } = await supabase
-        .from("wallets")
-        .update({ balance: newBalance })
-        .eq("user_id", profile.id);
-
-      if (updateError) throw updateError;
-
       const walletRef = `WALLET-${Date.now()}`;
-      const recorded = await recordInvestment(walletRef, "wallet");
+      const recorded = await recordInvestment(walletRef, "wallet", totalToDeduct);
 
-      if (!recorded) throw new Error("Failed to record investment");
+      if (!recorded.success) {
+        if (recorded.error === "Insufficient funds") {
+          throw new Error("You have insufficient wallet funds for this investment");
+        }
+        throw new Error(recorded.error || "Failed to record investment");
+      }
 
-      setWalletNewBalance(newBalance);
+      const finalNewBalance = recorded.newWalletBalance ?? (walletBalance - totalToDeduct);
+      setWalletNewBalance(finalNewBalance);
+      setWalletAmountDeducted(totalToDeduct);
       setPaymentStatus("wallet-done");
       setWalletSuccessOpen(true);
     } catch (err) {
@@ -232,21 +289,44 @@ const PaymentPage = ({
 
   const [eftRef, setEftRef] = useState("");
 
+  /**
+   * IMPORTANT: EFT Flow Note
+   * 
+   * EFT follows a 'Pending' flow. 
+   * 1. Selecting EFT generates a unique reference and records an 'intent' via /api/eft-deposit (status: pending).
+   * 2. Clicking 'I have paid' confirms this intent but does NOT update holdings yet.
+   * 3. Holdings and user_strategies are ONLY updated when an admin manually confirms 
+   *    the transaction via /api/confirm-eft-deposit after funds reflect.
+   */
   const handleEftConfirm = async () => {
+    if (paymentStatus === "processing") return;
     setPaymentStatus("processing");
-    const eftReference = `EFT-${Date.now()}`;
-    const recorded = await recordInvestment(eftReference);
+    
+    try {
+      const response = await fetch('/api/eft-deposit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount,
+          baseAmount,
+          reference: eftReference,
+          strategyId: strategy?.id,
+          symbol: strategy?.symbol,
+          name: strategy?.name,
+          shareCount,
+          confirmed_by_user: true
+        })
+      });
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error || "Failed to confirm EFT intent");
 
-    if (!recorded) {
+      setPaymentStatus("eft-pending");
+      setEftSuccessOpen(true);
+    } catch (err) {
+      console.error("EFT confirmation error:", err);
       setPaymentStatus("failed");
-      setErrorMessage(
-        "Could not confirm your EFT. Please try again or use Paystack.",
-      );
-      return;
+      setErrorMessage(err.message || "EFT confirmation failed");
     }
-
-    setEftRef(eftReference);
-    setPaymentStatus("eft-pending");
   };
 
   useEffect(() => {
@@ -302,8 +382,8 @@ const PaymentPage = ({
         isOpen={walletConfirmOpen}
         amount={amount}
         strategyName={strategy?.name}
-        walletBalance={walletBalance}
         walletLoading={walletLoading}
+        isProcessing={paymentStatus === "processing"}
         onCancel={() => {
           setWalletConfirmOpen(false);
           setIsMethodModalOpen(true);
@@ -313,10 +393,20 @@ const PaymentPage = ({
         onConfirm={handleWalletConfirm}
       />
 
-      {/* Wallet Success Modal */}
+      <EFTSuccessModal
+        isOpen={eftSuccessOpen}
+        strategyName={strategy?.name}
+        amount={amount}
+        reference={eftReference}
+        onDone={() => {
+          setEftSuccessOpen(false);
+          onSuccess?.({ reference: eftReference, method: "direct_eft", pending: true });
+        }}
+      />
       <WalletSuccessModal
         isOpen={walletSuccessOpen}
         strategyName={strategy?.name}
+        amountDeducted={walletAmountDeducted}
         newBalance={walletNewBalance}
         onDone={() => {
           setWalletSuccessOpen(false);
@@ -418,15 +508,14 @@ const PaymentPage = ({
                   <span className="font-semibold text-slate-900">SBZAZAJJ</span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-slate-500">Reference</span>
-                  <span className="font-semibold text-slate-900">
-                    {profile?.mint_number || "Loading..."}
+                  <span className="text-slate-500">Payment Reference</span>
+                  <span className="font-bold text-violet-700 bg-violet-50 px-2 rounded">
+                    {eftReference || "Generating..."}
                   </span>
                 </div>
               </div>
               <p className="mt-3 text-[11px] text-slate-500 text-center">
-                Always use your Mint number as the payment reference so we can
-                allocate your investment correctly.
+                Please use the reference shown above when making your payment.
               </p>
               <button
                 type="button"
@@ -525,6 +614,7 @@ const WalletConfirmModal = ({
   strategyName,
   walletBalance,
   walletLoading,
+  isProcessing,
   onCancel,
   onConfirm,
 }) => {
@@ -552,13 +642,20 @@ const WalletConfirmModal = ({
           Confirm Purchase
         </h2>
 
-        <p className="text-sm text-slate-600 text-center mb-2 leading-relaxed">
-          <span className="font-bold text-slate-900">{fmt(totalToDeduct)}</span>{" "}
-          will be deducted from your wallet to purchase{" "}
-          <span className="font-semibold text-slate-900">
-            {strategyName || "this investment"}
-          </span>.
-        </p>
+        <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 mb-6 space-y-2">
+          <div className="flex justify-between text-xs">
+            <span className="text-slate-500">Investment</span>
+            <span className="font-semibold text-slate-900">{fmt(amount)}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-slate-500">Service fee (8%)</span>
+            <span className="font-semibold text-slate-900">{fmt(amount * 0.08)}</span>
+          </div>
+          <div className="border-t border-slate-200 mt-2 pt-2 flex justify-between text-sm">
+            <span className="font-bold text-slate-700">Total to Deduct</span>
+            <span className="font-bold text-violet-700">{fmt(totalToDeduct)}</span>
+          </div>
+        </div>
 
         <p className="text-xs text-slate-500 text-center mb-6">
           You currently have{" "}
@@ -579,9 +676,10 @@ const WalletConfirmModal = ({
           <button
             type="button"
             onClick={onConfirm}
-            className="flex-1 rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3 text-sm font-semibold text-white shadow-lg transition active:scale-95"
+            disabled={isProcessing}
+            className="flex-1 rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3 text-sm font-semibold text-white shadow-lg transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Continue
+            {isProcessing ? "Processing..." : "Continue"}
           </button>
         </div>
       </div>
@@ -590,7 +688,7 @@ const WalletConfirmModal = ({
 };
 
 // ── WalletSuccessModal ────────────────────────────────────────────────────────
-const WalletSuccessModal = ({ isOpen, strategyName, newBalance, onDone }) => {
+const WalletSuccessModal = ({ isOpen, strategyName, amountDeducted, newBalance, onDone }) => {
   const fmt = (v) =>
     `R${Number(v).toLocaleString("en-ZA", {
       minimumFractionDigits: 2,
@@ -612,7 +710,8 @@ const WalletSuccessModal = ({ isOpen, strategyName, newBalance, onDone }) => {
           You bought{" "}
           <span className="font-semibold text-slate-900">
             {strategyName || "your investment"}
-          </span>.
+          </span>{" "}
+          for <span className="font-semibold text-slate-900">{fmt(amountDeducted)}</span>.
         </p>
 
         <p className="text-sm text-slate-600 mb-6">
@@ -626,6 +725,58 @@ const WalletSuccessModal = ({ isOpen, strategyName, newBalance, onDone }) => {
           className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3 text-sm font-semibold text-white shadow-lg transition active:scale-95"
         >
           Back to Home
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ── EFTSuccessModal ────────────────────────────────────────────────────────
+const EFTSuccessModal = ({ isOpen, strategyName, amount, reference, onDone }) => {
+  const fmt = (v) =>
+    `R${Number(v).toLocaleString("en-ZA", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+      <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl text-center">
+        <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-full bg-violet-50 mb-4">
+          <Clock className="h-8 w-8 text-violet-500 animate-pulse" />
+        </div>
+
+        <h2 className="text-xl font-semibold text-slate-900 mb-2">
+          Investment Pending
+        </h2>
+
+        <p className="text-sm text-slate-600 mb-4">
+          We have recorded your intent to invest <span className="font-bold text-slate-900">{fmt(amount)}</span> in <span className="font-semibold text-slate-900">{strategyName || "your selected asset"}</span>.
+        </p>
+
+        <div className="bg-slate-50 rounded-2xl p-4 mb-6 border border-slate-100">
+          <p className="text-xs text-slate-500 mb-2">Your payment reference is:</p>
+          <p className="text-base font-bold text-violet-700 tracking-wider mb-2">
+            {reference}
+          </p>
+          <p className="text-[10px] text-slate-400 italic">
+            Please ensure you have made the transfer using this exact reference.
+          </p>
+        </div>
+
+        <p className="text-xs text-slate-500 mb-8 leading-relaxed">
+          We will confirm your purchase once your payment reflects in our account. 
+          This typically takes 1-2 business days.
+        </p>
+
+        <button
+          type="button"
+          onClick={onDone}
+          className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3 text-sm font-semibold text-white shadow-lg transition active:scale-95"
+        >
+          Done
         </button>
       </div>
     </div>

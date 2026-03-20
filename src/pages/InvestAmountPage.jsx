@@ -47,10 +47,14 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod }) => {
     const afterBroker = amount + brokerAmount;
     const isinTotal = ISIN_FEE_PER_ASSET * numAssets;
     const afterIsin = afterBroker + isinTotal;
-    const paystackAmount = afterIsin * PAYSTACK_FEE_RATE;
+    
+    // ── FIXED PROCESSING FEE (PROMPT 1) ───────────────────────────────────
+    const isWallet = paymentMethod === "wallet";
+    const paystackAmount = isWallet ? 0 : afterIsin * PAYSTACK_FEE_RATE;
     const totalCost = afterIsin + paystackAmount;
+    
     return { brokerAmount, isinTotal, paystackAmount, totalCost };
-  }, [amount, numAssets]);
+  }, [amount, numAssets, paymentMethod]);
 
   const step = minimumInvestment || 0;
 
@@ -267,9 +271,16 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod }) => {
                     (varies by payment method)
                   </span>
                 </p>
-                <p className="text-xs font-semibold text-slate-900">
-                  {formatCurrency(fees.paystackAmount, currency)}
-                </p>
+                <div className="text-right">
+                  <p className="text-xs font-semibold text-slate-900">
+                    {formatCurrency(fees.paystackAmount, currency)}
+                  </p>
+                  {paymentMethod === "wallet" && (
+                    <p className="text-[9px] text-violet-500 font-medium">
+                      (8% fee applied at checkout)
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           )}

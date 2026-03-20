@@ -75,8 +75,11 @@ const PaymentMethodModal = ({
     })}`;
   };
 
+  const serviceFeeRate = 0.08;
+  const totalAmountWithFees = (amount || 0) * (1 + serviceFeeRate);
   const isWalletReady = !profileLoading && !walletLoading;
-  const hasWalletFunds = walletBalance > 0;
+  const hasEnoughFunds = walletBalance >= totalAmountWithFees;
+  const hasAnyFunds = walletBalance > 0;
 
   if (!isOpen) return null;
 
@@ -134,31 +137,31 @@ const PaymentMethodModal = ({
                 {/* ── Pay with Wallet ── */}
                 <button
                   type="button"
-                  disabled={!isWalletReady || !hasWalletFunds}
+                  disabled={!isWalletReady || !hasEnoughFunds}
                   onClick={() => {
-                    if (hasWalletFunds) onSelectWallet?.();
+                    if (hasEnoughFunds) onSelectWallet?.();
                   }}
-                  className={`w-full flex items-center gap-4 rounded-2xl border-2 px-4 py-3.5 text-left transition active:scale-[0.98] ${!hasWalletFunds
+                  className={`w-full flex items-center gap-4 rounded-2xl border-2 px-4 py-3.5 text-left transition active:scale-[0.98] ${!hasEnoughFunds
                       ? "border-slate-100 bg-slate-50 opacity-60 cursor-not-allowed"
                       : "border-slate-200 bg-white hover:border-violet-300 hover:bg-violet-50/40"
                     }`}
                 >
                   <div
-                    className={`flex h-10 w-10 items-center justify-center rounded-xl flex-shrink-0 ${!hasWalletFunds ? "bg-slate-200" : "bg-violet-100"
+                    className={`flex h-10 w-10 items-center justify-center rounded-xl flex-shrink-0 ${!hasEnoughFunds ? "bg-slate-200" : "bg-violet-100"
                       }`}
                   >
                     {!isWalletReady ? (
                       <Loader2 className="h-5 w-5 text-slate-400 animate-spin" />
                     ) : (
                       <Wallet
-                        className={`h-5 w-5 ${!hasWalletFunds ? "text-slate-400" : "text-violet-600"
+                        className={`h-5 w-5 ${!hasEnoughFunds ? "text-slate-400" : "text-violet-600"
                           }`}
                       />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p
-                      className={`text-sm font-semibold ${!hasWalletFunds ? "text-slate-500" : "text-slate-900"
+                      className={`text-sm font-semibold ${!hasEnoughFunds ? "text-slate-500" : "text-slate-900"
                         }`}
                     >
                       Pay with Wallet
@@ -166,18 +169,20 @@ const PaymentMethodModal = ({
                     <p className="text-xs text-slate-500 mt-0.5">
                       {!isWalletReady
                         ? "Checking balance..."
-                        : !hasWalletFunds
-                          ? "Insufficient balance — please top up"
-                          : `Available: ${formatAmount(walletBalance)}`}
+                        : !hasAnyFunds
+                          ? "No wallet balance — please top up"
+                          : !hasEnoughFunds
+                            ? "Insufficient wallet funds — top up to continue"
+                            : `Available: ${formatAmount(walletBalance)}`}
                     </p>
                   </div>
                   <span
-                    className={`text-[11px] font-semibold rounded-full px-2 py-0.5 flex-shrink-0 ${!hasWalletFunds
+                    className={`text-[11px] font-semibold rounded-full px-2 py-0.5 flex-shrink-0 ${!hasEnoughFunds
                         ? "text-slate-400 bg-slate-200"
                         : "text-violet-600 bg-violet-100"
                       }`}
                   >
-                    {!hasWalletFunds ? "Top Up Required" : "Wallet"}
+                    {!hasEnoughFunds ? (hasAnyFunds ? "Top Up Required" : "Top Up") : "Wallet"}
                   </span>
                 </button>
 

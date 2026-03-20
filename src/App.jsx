@@ -53,6 +53,7 @@ import PinLockScreen from "./components/PinLockScreen.jsx";
 import { isPinEnabled } from "./lib/usePin.js";
 import GoalLinkModal from "./components/GoalLinkModal.jsx";
 import { useOnboardingStatus } from "./lib/useOnboardingStatus.js";
+import { checkOnboardingComplete } from "./lib/checkOnboardingComplete.js";
 
 const initialHash = window.location.hash;
 const isRecoveryMode = initialHash.includes('type=recovery');
@@ -1249,6 +1250,7 @@ const App = () => {
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <StockBuyPage
           security={selectedSecurity}
+          paymentMethod={pendingPaymentMethod}
           onBack={goBack}
           onContinue={(amount, security, baseAmount, shareCount) => {
             setStockCheckout({ security, amount, baseAmount: baseAmount || amount, shareCount });
@@ -1265,13 +1267,20 @@ const App = () => {
         <GoalLinkModal
           isOpen={showGoalModal && pendingGoalFlow?.type === "stock"}
           onClose={() => { setShowGoalModal(false); setPendingGoalFlow(null); setSelectedGoalId(null); selectedGoalIdRef.current = null; goalInvestAmountRef.current = 0; }}
-          onConfirm={(goalId) => {
+          onConfirm={async (goalId) => {
             setSelectedGoalId(goalId);
             selectedGoalIdRef.current = goalId;
             goalInvestAmountRef.current = pendingGoalFlow?.baseAmount || pendingGoalFlow?.amount || stockCheckout.amount;
             pendingPaymentTypeRef.current = "stock";
             setShowGoalModal(false);
             setPendingGoalFlow(null);
+            
+            // ── ONBOARDING GUARD (PROMPT 4) ────────────────────────────────
+            const { is_fully_onboarded } = await checkOnboardingComplete();
+            if (!is_fully_onboarded) {
+              navigateTo("identityCheck");
+              return;
+            }
             setShowPaymentMethodModal(true);
           }}
           investmentAmount={pendingGoalFlow?.baseAmount || pendingGoalFlow?.amount || stockCheckout.amount}
@@ -1473,6 +1482,7 @@ const App = () => {
         <InvestAmountPage
           onBack={goBack}
           strategy={selectedStrategy}
+          paymentMethod={pendingPaymentMethod}
           onContinue={(amount, baseAmount) => {
             setInvestmentAmount(amount);
             setBaseInvestmentAmount(baseAmount || amount);
@@ -1489,13 +1499,20 @@ const App = () => {
         <GoalLinkModal
           isOpen={showGoalModal && pendingGoalFlow?.type === "strategy"}
           onClose={() => { setShowGoalModal(false); setPendingGoalFlow(null); setSelectedGoalId(null); selectedGoalIdRef.current = null; goalInvestAmountRef.current = 0; }}
-          onConfirm={(goalId) => {
+          onConfirm={async (goalId) => {
             setSelectedGoalId(goalId);
             selectedGoalIdRef.current = goalId;
             goalInvestAmountRef.current = pendingGoalFlow?.baseAmount || pendingGoalFlow?.amount || investmentAmount;
             pendingPaymentTypeRef.current = "strategy";
             setShowGoalModal(false);
             setPendingGoalFlow(null);
+            
+            // ── ONBOARDING GUARD (PROMPT 4) ────────────────────────────────
+            const { is_fully_onboarded } = await checkOnboardingComplete();
+            if (!is_fully_onboarded) {
+              navigateTo("identityCheck");
+              return;
+            }
             setShowPaymentMethodModal(true);
           }}
           investmentAmount={pendingGoalFlow?.baseAmount || pendingGoalFlow?.amount || investmentAmount}

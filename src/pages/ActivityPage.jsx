@@ -358,7 +358,7 @@ const ActivityPage = ({ onBack }) => {
                                     ? "bg-rose-50 text-rose-500"
                                     : "bg-slate-100 text-slate-500"
                                 }`}>
-                                  {item.status === "successful" || item.status === "completed" || item.status === "posted" ? "Completed" : item.status === "pending" ? "Pending" : item.status === "failed" ? "Failed" : item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                                  {item.status === "successful" || item.status === "completed" || item.status === "posted" ? "Completed" : item.status === "pending" ? "Awaiting payment confirmation" : item.status === "failed" ? "Failed" : item.status.charAt(0).toUpperCase() + item.status.slice(1)}
                                 </span>
                               </>
                             )}

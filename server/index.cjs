@@ -166,7 +166,7 @@ async function sendOrderFillEmail(db, { transactionId, holdingId }) {
   }
 }
 
-async function sendOrderConfirmationEmail(db, { userId, userEmail, assetName, assetSymbol, strategyName, amountCents, quantity, priceCents, reference, orderDate }) {
+async function sendOrderConfirmationEmail(db, { userId, userEmail, assetName, assetSymbol, strategyName, amountCents, quantity, priceCents, reference, orderDate, paymentMethod }) {
   try {
     const resend = getResendClient();
     if (!resend) {
@@ -185,6 +185,7 @@ async function sendOrderConfirmationEmail(db, { userId, userEmail, assetName, as
       assetName, assetSymbol, strategyName,
       amountCents, quantity, priceCents,
       reference, orderDate,
+      paymentMethod,
     });
 
     const resp = await resend.emails.send({
@@ -1556,9 +1557,9 @@ app.post("/api/sumsub/webhook", async (req, res) => {
         .maybeSingle();
 
       if (existingOnboarding) {
-        if (existingOnboarding.kyc_status === "onboarding_complete" && onboardingKycStatus === "verified") {
+        if (existingOnboarding.kyc_status === "onboarding_complete" && onboardingKycStatus !== "onboarding_complete") {
           delete onboardingUpdate.kyc_status;
-          console.log(`[Webhook] Preserving onboarding_complete status for user ${externalUserId} (not overwriting with verified)`);
+          console.log(`[Webhook] Preserving onboarding_complete status for user ${externalUserId} (not overwriting with ${onboardingKycStatus})`);
         }
         await db.from("user_onboarding").update(onboardingUpdate).eq("id", existingOnboarding.id).eq("user_id", externalUserId);
         console.log(`[Webhook] Updated user_onboarding for user ${externalUserId} -> ${onboardingUpdate.kyc_status || existingOnboarding.kyc_status}`);
@@ -2615,6 +2616,45 @@ app.post("/api/record-investment", async (req, res) => {
       console.log(`[record-investment] Skipping Paystack verification for ${paymentMethod} payment using reference: ${paymentReference}`);
     }
 
+    // ── WALLET PAYMENT HANDLER (PROMPT 1) ───────────────────────────────────
+    let originalWalletBalance = null;
+    let newWalletBalance = null;
+    let deductionSuccessful = false;
+
+    if (paymentMethod === "wallet") {
+      const { data: wallet, error: walletQueryError } = await db
+        .from("wallets")
+        .select("balance")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (walletQueryError || !wallet) {
+        console.log("[record-investment] WALLET NOT FOUND for user:", userId);
+        return res.status(400).json({ success: false, error: "Wallet not found" });
+      }
+
+      originalWalletBalance = Number(wallet.balance);
+      if (originalWalletBalance < amount) {
+        console.log("[record-investment] INSUFFICIENT FUNDS. Balance:", originalWalletBalance, "Required:", amount);
+        return res.status(400).json({ success: false, error: "Insufficient funds" });
+      }
+
+      newWalletBalance = originalWalletBalance - amount;
+      const { error: deductError } = await db
+        .from("wallets")
+        .update({ balance: newWalletBalance })
+        .eq("user_id", userId);
+
+      if (deductError) {
+        console.error("[record-investment] WALLET DEDUCTION ERROR:", deductError.message);
+        return res.status(500).json({ success: false, error: "Failed to deduct wallet balance" });
+      }
+      
+      deductionSuccessful = true;
+      const feeDeducted = amount - (baseAmount || amount);
+      console.log(`[Wallet] Deducted R${amount} from user ${userId}. Base: R${baseAmount || amount}, Fee: R${feeDeducted.toFixed(2)}, Final balance: R${newWalletBalance}`);
+    }
+
     const { data: existingTx } = await db
       .from("transactions")
       .select("id")
@@ -2951,13 +2991,30 @@ app.post("/api/record-investment", async (req, res) => {
       priceCents: currentPriceCents,
       reference: paymentReference,
       orderDate,
+      paymentMethod,
     };
     sendOrderConfirmationEmail(db, confirmEmailData).catch(() => { });
 
     console.log("[record-investment] === SUCCESS === Holding:", JSON.stringify(holdingResult.data));
-    res.json({ success: true, holding: holdingResult.data });
+    res.json({ 
+      success: true, 
+      holding: holdingResult.data,
+      newWalletBalance: paymentMethod === "wallet" ? newWalletBalance : null
+    });
   } catch (error) {
     console.error("[record-investment] === UNCAUGHT ERROR ===", error);
+
+    // Rollback wallet deduction if anything failed after deduction was successful
+    if (typeof paymentMethod !== 'undefined' && paymentMethod === "wallet" && typeof deductionSuccessful !== 'undefined' && deductionSuccessful && typeof originalWalletBalance !== 'undefined' && originalWalletBalance !== null) {
+      try {
+        const db = supabaseAdmin || supabase;
+        console.log(`[Wallet] Rollback — Attempting to restore user wallet balance to ${originalWalletBalance}`);
+        await db.from("wallets").update({ balance: originalWalletBalance }).eq("user_id", userId);
+      } catch (rollbackErr) {
+        console.error("[Wallet] Rollback CRITICAL FAILURE:", rollbackErr.message);
+      }
+    }
+
     res.status(500).json({ success: false, error: error.message || "Failed to record investment" });
   }
 });
@@ -3130,6 +3187,16 @@ app.post("/api/confirm-eft-deposit", async (req, res) => {
             await db.from("stock_holdings").insert({ user_id: userId, security_id: sec.id, strategy_id: strategyId, quantity: holdingQty, avg_fill: pc, market_value: Math.round(holdingQty * pc), unrealized_pnl: 0, as_of_date: today, Status: "active" });
           }
         }
+        
+        // --- ADDED: user_strategies update for EFT confirmation ---
+        console.log(`[confirm-eft] Upserting user_strategies for strategy: ${strategyId}`);
+        const { data: existingUS } = await db.from("user_strategies").select("id, invested_amount").eq("user_id", userId).eq("strategy_id", strategyId).maybeSingle();
+        if (existingUS) {
+          const newInvested = (existingUS.invested_amount || 0) + amountCents;
+          await db.from("user_strategies").update({ invested_amount: newInvested, updated_at: now }).eq("id", existingUS.id);
+        } else {
+          await db.from("user_strategies").insert({ user_id: userId, strategy_id: strategyId, invested_amount: amountCents, status: "active", created_at: now, updated_at: now });
+        }
       }
     } else if (securityId && !isStrategyInvestment) {
       const { data: secData } = await db.from("securities").select("last_price").eq("id", securityId).maybeSingle();
@@ -3191,11 +3258,12 @@ app.post("/api/confirm-eft-deposit", async (req, res) => {
           priceCents: currentPriceCents,
           reference,
           orderDate: now,
+          paymentMethod: 'direct_eft',
         }).catch(() => {});
       } catch (_) {}
     }
 
-    console.log(`[confirm-eft] Confirmed EFT for user ${userId}, ref: ${reference}, asset: ${name || symbol}`);
+    console.log(`[EFT] Payment confirmed for user ${userId}, ref: ${reference}, amount: R${amount || amountCents / 100}`);
     return res.status(200).json({ success: true, reference });
   } catch (err) {
     console.error("[confirm-eft] Error:", err);

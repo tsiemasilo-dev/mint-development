@@ -7,7 +7,7 @@ const ISIN_FEE_PER_ASSET = 69;
 const PAYSTACK_FEE_RATE = 0.035;
 const MIN_INVESTMENT = 1000;
 
-const StockBuyPage = ({ security, onBack, onContinue }) => {
+const StockBuyPage = ({ security, onBack, onContinue, paymentMethod }) => {
   const { displayCurrency, priceValue } = useMemo(() => {
     const currency = security?.currency || "R";
     const normalizedCurrency = currency.toUpperCase() === "ZAC" ? "R" : currency;
@@ -45,10 +45,13 @@ const StockBuyPage = ({ security, onBack, onContinue }) => {
     const afterBroker = totalAmount + brokerAmount;
     const isinTotal = ISIN_FEE_PER_ASSET * numAssets;
     const afterIsin = afterBroker + isinTotal;
-    const paystackAmount = afterIsin * PAYSTACK_FEE_RATE;
+
+    const isWallet = paymentMethod === "wallet";
+    const paystackAmount = isWallet ? 0 : afterIsin * PAYSTACK_FEE_RATE;
     const totalCost = afterIsin + paystackAmount;
+
     return { brokerAmount, isinTotal, paystackAmount, totalCost };
-  }, [totalAmount, numAssets]);
+  }, [totalAmount, numAssets, paymentMethod]);
 
   const isInvalid = !Number.isFinite(shares) || shares <= 0 || shares < minShares;
 
@@ -130,8 +133,17 @@ const StockBuyPage = ({ security, onBack, onContinue }) => {
                   <p className="text-xs font-semibold text-slate-900">{formatCurrency(fees.isinTotal, displayCurrency)}</p>
                 </div>
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-slate-600">Transaction Fee (3.5%)</p>
-                  <p className="text-xs font-semibold text-slate-900">{formatCurrency(fees.paystackAmount, displayCurrency)}</p>
+                  <p className="text-xs text-slate-600">Processing Fee</p>
+                  <div className="text-right">
+                    <p className="text-xs font-semibold text-slate-900">
+                      {formatCurrency(fees.paystackAmount, displayCurrency)}
+                    </p>
+                    {paymentMethod === "wallet" && (
+                      <p className="text-[9px] text-violet-500 font-medium">
+                        (8% fee applied at checkout)
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
             )}

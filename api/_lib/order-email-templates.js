@@ -162,14 +162,15 @@ function buildShell({ heroLabel, heroTitle, body, footerNote }) {
  * @param {number} [params.quantity]     - number of shares
  * @param {string} [params.reference]    - transaction reference
  * @param {string} [params.strategyName] - if a strategy, overrides assetName
+ * @param {string} [params.paymentMethod] - e.g. "wallet", "paystack"
  */
 export function buildOrderConfirmationHtml({
   assetName,
   assetSymbol,
-  amountCents,
   quantity,
   reference,
   strategyName,
+  paymentMethod,
 }) {
   const displayName = strategyName || assetName || assetSymbol || "Investment";
   const isStrategy = !!strategyName;
@@ -181,6 +182,7 @@ export function buildOrderConfirmationHtml({
     </p>
 
     ${detailRow("Order Type", isStrategy ? "Strategy Allocation" : "Stock Purchase")}
+    ${paymentMethod ? detailRow("Funding Source", paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1).replace('_', ' ')) : ""}
     ${detailRow("Portfolio Asset", `<strong>${displayName}</strong>`)}
     ${detailRow("Total Amount", `<span style="color:${MINT_PURPLE}; font-size:16px;">${formatZar(amountCents)}</span>`)}
     ${quantity ? detailRow("Quantity", `${Number(quantity).toFixed(4)} shares`) : ""}

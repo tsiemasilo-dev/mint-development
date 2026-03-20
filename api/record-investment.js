@@ -26,7 +26,7 @@ async function verifyPaystackPayment(reference) {
   return { verified: true, data: result.data };
 }
 
-async function sendOrderConfirmationEmail(db, { userId, userEmail, assetName, assetSymbol, strategyName, amountCents, quantity, priceCents, reference, orderDate }) {
+async function sendOrderConfirmationEmail(db, { userId, userEmail, assetName, assetSymbol, strategyName, amountCents, quantity, priceCents, reference, orderDate, paymentMethod }) {
   try {
     const resend = getResend();
     if (!resend) {
@@ -48,6 +48,7 @@ async function sendOrderConfirmationEmail(db, { userId, userEmail, assetName, as
       priceCents,
       reference,
       orderDate,
+      paymentMethod,
     });
 
     const resp = await resend.emails.send({
@@ -133,6 +134,43 @@ export default async function handler(req, res) {
         return res.status(400).json({ success: false, error: payError || "Payment verification failed" });
       }
       payData = vPayData;
+    }
+
+    // ── WALLET PAYMENT HANDLER (PROMPT 1) ───────────────────────────────────
+    let originalWalletBalance = null;
+    let newWalletBalance = null;
+    let deductionSuccessful = false;
+
+    if (paymentMethod === "wallet") {
+      const { data: wallet, error: walletQueryError } = await db
+        .from("wallets")
+        .select("balance")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (walletQueryError || !wallet) {
+        return res.status(400).json({ success: false, error: "Wallet not found" });
+      }
+
+      originalWalletBalance = Number(wallet.balance);
+      if (originalWalletBalance < amount) {
+        return res.status(400).json({ success: false, error: "Insufficient funds" });
+      }
+
+      newWalletBalance = originalWalletBalance - amount;
+      const { error: deductError } = await db
+        .from("wallets")
+        .update({ balance: newWalletBalance })
+        .eq("user_id", userId);
+
+      if (deductError) {
+        console.error("[record-investment] WALLET DEDUCTION ERROR:", deductError.message);
+        return res.status(500).json({ success: false, error: "Failed to deduct wallet balance" });
+      }
+      
+      deductionSuccessful = true;
+      const feeDeducted = amount - (baseAmount || amount);
+      console.log(`[Wallet] Deducted R${amount} from user ${userId}. Base: R${baseAmount || amount}, Fee: R${feeDeducted.toFixed(2)}, Final balance: R${newWalletBalance}`);
     }
 
     const { data: existingTx } = await db
@@ -410,11 +448,28 @@ export default async function handler(req, res) {
       priceCents: currentPriceCents,
       reference: paymentReference,
       orderDate,
+      paymentMethod,
     }).catch(() => {});
 
-    return res.status(200).json({ success: true, holding: holdingResult.data });
+    return res.status(200).json({ 
+      success: true, 
+      holding: holdingResult.data,
+      newWalletBalance: paymentMethod === "wallet" ? newWalletBalance : null
+    });
   } catch (error) {
     console.error("[record-investment] Error:", error);
+
+    // Rollback wallet deduction if anything failed after deduction was successful
+    if (typeof paymentMethod !== 'undefined' && paymentMethod === "wallet" && typeof deductionSuccessful !== 'undefined' && deductionSuccessful && typeof originalWalletBalance !== 'undefined' && originalWalletBalance !== null) {
+      try {
+        const db = supabaseAdmin || supabase;
+        console.log(`[Wallet] Rollback — Attempting to restore user wallet balance to ${originalWalletBalance}`);
+        await db.from("wallets").update({ balance: originalWalletBalance }).eq("user_id", userId);
+      } catch (rollbackErr) {
+        console.error("[Wallet] Rollback CRITICAL FAILURE:", rollbackErr.message);
+      }
+    }
+
     return res.status(500).json({ success: false, error: error.message || "Failed to record investment" });
   }
 }

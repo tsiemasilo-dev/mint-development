@@ -694,19 +694,21 @@ export default function AccountAgreementStep({
 
         if (updateError) {
           console.error("[AccountAgreementStep] DB update error:", updateError.message);
-          // Fallback — try minimal update
+          // Fallback — try minimal update but ensure signed_at is included
           await supabase.from("user_onboarding").update({
             kyc_status: "onboarding_complete",
             signed_agreement_url: publicUrl,
+            signed_at: now,
           }).eq("user_id", userId);
         }
       } catch (dbErr) {
         console.warn("Onboarding DB update failed (non-critical):", dbErr?.message);
-        // Last-resort minimal update
+        // Last-resort minimal update — ensure signed_at is included
         try {
           await supabase.from("user_onboarding").update({
             kyc_status: "onboarding_complete",
             signed_agreement_url: publicUrl,
+            signed_at: now,
           }).eq("user_id", userId);
         } catch (e) {
           console.error("[AccountAgreementStep] Fallback DB update also failed:", e?.message);
