@@ -843,10 +843,10 @@ const HomePage = ({
                         mintNumber={profile.mintNumber} 
                       />
                       
-                      {/* Repositioned Mint ID to Bottom Left */}
+                      {/* Repositioned Mint ID to Bottom Left - Matched with Front Size */}
                       <div className="absolute bottom-8 left-8 z-50 pointer-events-none flex flex-col items-start translate-z-10">
-                        <p className="text-[7px] uppercase tracking-[0.2em] text-slate-400 font-bold mb-0.5">MINT NUMBER</p>
-                        <p className="text-[12px] tracking-[0.25em] text-slate-800 font-mono font-bold">
+                        <p className="text-[9px] uppercase tracking-[0.2em] text-slate-400 font-medium mb-1" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>MINT NUMBER</p>
+                        <p className="text-[13px] uppercase tracking-[0.18em] text-slate-700 font-light" style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif", letterSpacing: "0.18em" }}>
                           {profile.mintNumber || ""}
                         </p>
                       </div>
