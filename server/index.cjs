@@ -2665,8 +2665,8 @@ app.post("/api/record-investment", async (req, res) => {
           continue;
         }
 
-        // Scale shares proportionally to what the user actually invested
-        const holdingQty = rawHoldingQty * scalingRatio;
+        // Scale shares proportionally to what the user actually invested — always whole shares
+        const holdingQty = Math.max(1, Math.round(rawHoldingQty * scalingRatio));
 
         const priceCents = Number(sec.last_price || 0);
         if (priceCents <= 0) {
@@ -2690,16 +2690,10 @@ app.post("/api/record-investment", async (req, res) => {
 
         if (existing) {
           const oldQty = Number(existing.quantity || 0);
-          const oldAvgFill = Number(existing.avg_fill || 0);
-          const newQty = oldQty + holdingQty;
-          const newAvgFill = newQty > 0
-            ? ((oldAvgFill * oldQty) + (priceCents * holdingQty)) / newQty
-            : priceCents;
+          const newQty = Math.round(oldQty + holdingQty);
 
           const { error: updateErr } = await db.from("stock_holdings").update({
             quantity: newQty,
-            avg_fill: Math.round(newAvgFill),
-            market_value: Math.round(newQty * priceCents),
             as_of_date: today,
             updated_at: now,
           }).eq("id", existing.id);
@@ -2715,9 +2709,6 @@ app.post("/api/record-investment", async (req, res) => {
             security_id: sec.id,
             strategy_id: strategyId,
             quantity: holdingQty,
-            avg_fill: priceCents,
-            market_value: Math.round(holdingQty * priceCents),
-            unrealized_pnl: 0,
             as_of_date: today,
             Status: "active",
           });
@@ -2780,11 +2771,10 @@ app.post("/api/record-investment", async (req, res) => {
       }
 
       const currentPriceRands = currentPriceCents ? currentPriceCents / 100 : amount;
-      const quantity = shareCount && Number(shareCount) > 0 ? Number(shareCount) : (currentPriceRands > 0 ? amount / currentPriceRands : 1);
+      const rawQuantity = shareCount && Number(shareCount) > 0 ? Number(shareCount) : (currentPriceRands > 0 ? amount / currentPriceRands : 1);
+      const quantity = Math.max(1, Math.round(rawQuantity));
       calcQuantity = quantity;
-      const avgFillCents = currentPriceCents || Math.round(amount * 100);
-      const marketValueCents = Math.round(quantity * (currentPriceCents || amount * 100));
-      console.log("[record-investment] Calculated - currentPriceRands:", currentPriceRands, "quantity:", quantity, "avgFillCents:", avgFillCents, "marketValueCents:", marketValueCents);
+      console.log("[record-investment] Calculated - currentPriceRands:", currentPriceRands, "rawQuantity:", rawQuantity, "quantity:", quantity);
 
       const { data: existing, error: fetchError } = await db
         .from("stock_holdings")
@@ -2799,19 +2789,14 @@ app.post("/api/record-investment", async (req, res) => {
       }
 
       if (existing) {
-        console.log("[record-investment] Existing holding found, updating. Old qty:", existing.quantity, "avg_fill:", existing.avg_fill);
+        console.log("[record-investment] Existing holding found, updating. Old qty:", existing.quantity);
         const oldQty = Number(existing.quantity || 0);
-        const oldAvgFill = Number(existing.avg_fill || 0);
-        const newQty = oldQty + quantity;
-        const newAvgFill = newQty > 0 ? ((oldAvgFill * oldQty) + (avgFillCents * quantity)) / newQty : avgFillCents;
-        const newMarketValue = Math.round(newQty * (currentPriceCents || newAvgFill));
-        console.log("[record-investment] New values - qty:", newQty, "avgFill:", Math.round(newAvgFill), "marketValue:", newMarketValue);
+        const newQty = Math.round(oldQty + quantity);
+        console.log("[record-investment] New qty:", newQty);
         const { data, error } = await db
           .from("stock_holdings")
           .update({
             quantity: newQty,
-            avg_fill: Math.round(newAvgFill),
-            market_value: newMarketValue,
             as_of_date: new Date().toISOString().split("T")[0],
             updated_at: new Date().toISOString(),
           })
@@ -2825,9 +2810,6 @@ app.post("/api/record-investment", async (req, res) => {
           user_id: userId,
           security_id: securityId,
           quantity: quantity,
-          avg_fill: avgFillCents,
-          market_value: marketValueCents,
-          unrealized_pnl: 0,
           as_of_date: new Date().toISOString().split("T")[0],
           Status: "active",
           strategy_id: strategyId || null,
