@@ -64,10 +64,12 @@ export const useFinancialData = () => {
         holdings,
         allServerTransactions,
         creditResult,
+        walletResult,
       ] = await Promise.all([
         fetchServerHoldings(token),
         fetchServerTransactions(token, 100),
         supabase.from("credit_accounts").select("*").eq("user_id", userId).maybeSingle(),
+        supabase.from("wallets").select("balance").eq("user_id", userId).maybeSingle(),
       ]);
 
       const transactions = allServerTransactions.slice(0, 20);
@@ -105,10 +107,10 @@ export const useFinancialData = () => {
         .filter((t) => expenseTypes.includes(t.direction))
         .reduce((sum, t) => sum + Math.abs((t.amount || 0) / 100), 0);
       const availableCredit = Math.max(0, (totalIncome - totalExpenses) * 0.2);
-      const totalBalance = totalInvestments + availableCredit;
+      const walletBalance = walletResult.data?.balance ?? 0;
 
       setData({
-        balance: totalBalance,
+        balance: walletBalance,
         investments: totalInvestments,
         availableCredit,
         transactions,
