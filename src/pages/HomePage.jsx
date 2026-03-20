@@ -835,6 +835,7 @@ const HomePage = ({
                         isBackFacing={cardNormalizedIndex === 1} 
                         forceVisible={isCardVisible} 
                         mintNumber={profile.mintNumber} 
+                        onBuyPress={onOpenStrategies || onOpenInvest}
                       />
                       
 
