@@ -67,7 +67,7 @@ export const useProfile = () => {
         const { data: d1, error: e1 } = await supabase
           .from("profiles")
           .select(
-            "id, first_name, last_name, email, avatar_url, phone_number, date_of_birth, gender, address, id_number, mint_number, wallet_balance, watchlist"
+            "id, first_name, last_name, email, avatar_url, phone_number, date_of_birth, gender, address, id_number, watchlist"
           )
           .eq("id", user.id)
           .maybeSingle();
@@ -91,7 +91,7 @@ export const useProfile = () => {
           const { data: d2, error: e2 } = await supabase
             .from("profiles")
             .select(
-              "id, first_name, last_name, email, avatar_url, phone_number, date_of_birth, gender, address, id_number, wallet_balance, watchlist"
+              "id, first_name, last_name, email, avatar_url, phone_number, date_of_birth, gender, address, id_number, watchlist"
             )
             .eq("id", user.id)
             .maybeSingle();
