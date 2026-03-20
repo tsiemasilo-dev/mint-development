@@ -28,6 +28,11 @@ import {
 
 const VISIBILITY_STORAGE_KEY = "mintBalanceVisible";
 
+const formatFull = (value) => {
+  const num = Number(value);
+  return `R${num.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+
 const formatKMB = (value) => {
   const num = Number(value);
   const sign = num < 0 ? "-" : "";
@@ -641,7 +646,7 @@ const SwipeableBalanceCard = ({
                   {selectedAsset ? selectedAsset.symbol : "portfolio value"}
                 </p>
                 <p className="text-base font-bold text-slate-900 mb-2">
-                  {isVisible ? formatKMB(displayBalance) : masked}
+                  {isVisible ? (selectedAsset ? formatKMB(displayBalance) : formatFull(displayBalance)) : masked}
                 </p>
                 <div className="flex items-center gap-2">
                   <span className={`text-sm font-semibold ${isLoss ? "text-rose-400" : "text-emerald-400"}`}>
