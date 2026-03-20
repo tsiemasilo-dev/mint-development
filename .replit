@@ -68,6 +68,10 @@ REDIRECT_URL = "https://98c53c65-2d21-45be-85d9-9955243bdc05-00-345u4hugvanos.sp
 WEBHOOK_URL = "https://98c53c65-2d21-45be-85d9-9955243bdc05-00-345u4hugvanos.spock.replit.dev/api/truid/webhook"
 SUMSUB_LEVEL_NAME = "mint-advanced-kyc"
 OZOW_IS_TEST = "false"
+VITE_SUPABASE_URL = "https://mfxnghmuccevsxwcetej.supabase.co"
+VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1meG5naG11Y2NldnN4d2NldGVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg4NTI1ODAsImV4cCI6MjA4NDQyODU4MH0.lktfglzBMaHd79hLFDRH1HHSwsEwZ56Tv6e287kQiFg"
+VITE_PAYSTACK_PUBLIC_KEY = "pk_live_1cbfba656265cbb275483c8f953bc356dd5869d2"
+SUMSUB_BASE_URL = "api.sumsub.com"
 
 [postMerge]
 path = "scripts/post-merge.sh"
