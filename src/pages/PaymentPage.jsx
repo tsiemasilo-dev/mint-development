@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { ArrowLeft, CheckCircle2, XCircle, Loader2, Landmark, CreditCard } from "lucide-react";
+import { ArrowLeft, CheckCircle2, XCircle, Loader2, Landmark, CreditCard, Wallet } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
 import { supabase } from "../lib/supabase";
 import PaymentMethodModal from "../components/PaymentMethodModal";
@@ -30,9 +30,14 @@ const PaymentPage = ({
   const isMounted = useRef(true);
   const [isMethodModalOpen, setIsMethodModalOpen] = useState(!initialMethod);
 
-  // ── FIX 1: Fetch live wallet balance from the wallets table ──────────────
+  // Wallet balance from the wallets table
   const [walletBalance, setWalletBalance] = useState(0);
   const [walletLoading, setWalletLoading] = useState(true);
+
+  // Wallet modal state
+  const [walletConfirmOpen, setWalletConfirmOpen] = useState(false);
+  const [walletSuccessOpen, setWalletSuccessOpen] = useState(false);
+  const [walletNewBalance, setWalletNewBalance] = useState(0);
 
   useEffect(() => {
     if (!profile?.id) return;
@@ -186,18 +191,47 @@ const PaymentPage = ({
       return;
     }
     if (method === "wallet") {
-      setPaymentStatus("wallet-payment");
+      setPaymentStatus("wallet-pending");
+      setWalletConfirmOpen(true);
       return;
     }
-    // direct_eft — show inline EFT instructions
     setPaymentStatus("eft-instructions");
+  };
+
+  const handleWalletConfirm = async () => {
+    const serviceFeeRate = 0.08;
+    const totalToDeduct = amount * (1 + serviceFeeRate);
+
+    setWalletConfirmOpen(false);
+    setPaymentStatus("processing");
+
+    try {
+      const newBalance = walletBalance - totalToDeduct;
+
+      const { error: updateError } = await supabase
+        .from("wallets")
+        .update({ balance: newBalance })
+        .eq("user_id", profile.id);
+
+      if (updateError) throw updateError;
+
+      const walletRef = `WALLET-${Date.now()}`;
+      const recorded = await recordInvestment(walletRef, "wallet");
+
+      if (!recorded) throw new Error("Failed to record investment");
+
+      setWalletNewBalance(newBalance);
+      setPaymentStatus("wallet-done");
+      setWalletSuccessOpen(true);
+    } catch (err) {
+      console.error("Wallet payment error:", err);
+      setPaymentStatus("failed");
+      setErrorMessage(err.message || "Wallet payment failed");
+    }
   };
 
   const [eftRef, setEftRef] = useState("");
 
-  // ── FIX 4: handleEftConfirm is wired to "I have paid by EFT" button ──────
-  // PaymentMethodModal's onEFTConfirm = user chose EFT as method (opens instructions)
-  // The "I have paid" button inside eft-instructions calls handleEftConfirm directly
   const handleEftConfirm = async () => {
     setPaymentStatus("processing");
     const eftReference = `EFT-${Date.now()}`;
@@ -263,6 +297,33 @@ const PaymentPage = ({
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
+      {/* Wallet Confirmation Modal */}
+      <WalletConfirmModal
+        isOpen={walletConfirmOpen}
+        amount={amount}
+        strategyName={strategy?.name}
+        walletBalance={walletBalance}
+        walletLoading={walletLoading}
+        onCancel={() => {
+          setWalletConfirmOpen(false);
+          setIsMethodModalOpen(true);
+          setPaymentStatus("method-selection");
+          setSelectedMethod(null);
+        }}
+        onConfirm={handleWalletConfirm}
+      />
+
+      {/* Wallet Success Modal */}
+      <WalletSuccessModal
+        isOpen={walletSuccessOpen}
+        strategyName={strategy?.name}
+        newBalance={walletNewBalance}
+        onDone={() => {
+          setWalletSuccessOpen(false);
+          onSuccess?.({ reference: `WALLET-${Date.now()}`, method: "wallet" });
+        }}
+      />
+
       <div className="mx-auto flex w-full max-w-sm flex-col px-3 pt-12 md:max-w-md md:px-6">
         <header className="flex items-center justify-center gap-3 mb-6 relative">
           <button
@@ -276,12 +337,6 @@ const PaymentPage = ({
           <h1 className="text-lg font-semibold">Payment</h1>
         </header>
 
-        {/*
-          ── FIX 4 (wiring):
-          onEFTConfirm  → user SELECTS EFT as their method → opens eft-instructions view
-          onSelectWallet → user selects wallet → opens wallet-payment view
-          The "I have paid by EFT" button inside eft-instructions calls handleEftConfirm directly
-        */}
         <PaymentMethodModal
           isOpen={isMethodModalOpen}
           onClose={() => onBack?.()}
@@ -293,7 +348,7 @@ const PaymentPage = ({
         />
 
         <section className="mt-20 rounded-3xl border border-slate-100 bg-white p-8 shadow-sm text-center">
-          {paymentStatus === "method-selection" && (
+          {(paymentStatus === "method-selection" || paymentStatus === "wallet-pending") && (
             <>
               <Loader2 className="h-16 w-16 mx-auto text-violet-600 animate-spin mb-4" />
               <h2 className="text-lg font-semibold text-slate-900 mb-2">
@@ -313,50 +368,6 @@ const PaymentPage = ({
               </h2>
               <p className="text-sm text-slate-600">Please wait...</p>
             </>
-          )}
-
-          {/* ── FIX 1 + 3: Pass live walletBalance into WalletPaymentFlow ── */}
-          {paymentStatus === "wallet-payment" && (
-            <WalletPaymentFlow
-              amount={amount}
-              walletBalance={walletBalance}
-              walletLoading={walletLoading}
-              onConfirm={async (totalToDeduct) => {
-                try {
-                  setPaymentStatus("processing");
-
-                  // ── FIX 3: Deduct from live walletBalance, not profile ──
-                  const newBalance = walletBalance - totalToDeduct;
-
-                  const { error: updateError } = await supabase
-                    .from("wallets")
-                    .update({ balance: newBalance })
-                    .eq("user_id", profile.id);
-
-                  if (updateError) throw updateError;
-
-                  const walletRef = `WALLET-${Date.now()}`;
-                  const recorded = await recordInvestment(walletRef, "wallet");
-
-                  if (!recorded) throw new Error("Failed to record investment");
-
-                  setPaymentStatus("success");
-                  setTimeout(
-                    () =>
-                      onSuccess?.({ reference: walletRef, method: "wallet" }),
-                    2000,
-                  );
-                } catch (err) {
-                  console.error("Wallet payment error:", err);
-                  setPaymentStatus("failed");
-                  setErrorMessage(err.message || "Wallet payment failed");
-                }
-              }}
-              onCancel={() => {
-                setIsMethodModalOpen(true);
-                setPaymentStatus("method-selection");
-              }}
-            />
           )}
 
           {paymentStatus === "processing" && (
@@ -406,7 +417,6 @@ const PaymentPage = ({
                   <span className="text-slate-500">SWIFT Code</span>
                   <span className="font-semibold text-slate-900">SBZAZAJJ</span>
                 </div>
-                {/* ── FIX 2: snake_case mint_number not camelCase mintNumber ── */}
                 <div className="flex justify-between text-xs">
                   <span className="text-slate-500">Reference</span>
                   <span className="font-semibold text-slate-900">
@@ -425,7 +435,6 @@ const PaymentPage = ({
               >
                 View Deposit Page Details
               </button>
-              {/* ── FIX 4: This calls handleEftConfirm, not handleMethodSelection ── */}
               <button
                 type="button"
                 onClick={handleEftConfirm}
@@ -436,7 +445,7 @@ const PaymentPage = ({
             </div>
           )}
 
-          {paymentStatus === "success" && (
+          {(paymentStatus === "success" || paymentStatus === "wallet-done") && (
             <>
               <CheckCircle2 className="h-16 w-16 mx-auto text-emerald-600 mb-4" />
               <h2 className="text-lg font-semibold text-slate-900 mb-2">
@@ -509,119 +518,115 @@ const PaymentPage = ({
   );
 };
 
-// ── WalletPaymentFlow ────────────────────────────────────────────────────────
-// FIX 1 + 3: receives walletBalance as a prop instead of reading profile directly
-const WalletPaymentFlow = ({
+// ── WalletConfirmModal ────────────────────────────────────────────────────────
+const WalletConfirmModal = ({
+  isOpen,
   amount,
+  strategyName,
   walletBalance,
   walletLoading,
-  onConfirm,
   onCancel,
+  onConfirm,
 }) => {
-  const [inputAmount, setInputAmount] = useState(amount || 0);
   const serviceFeeRate = 0.08;
-  const serviceFee = inputAmount * serviceFeeRate;
-  const totalToDeduct = inputAmount + serviceFee;
-  const remainingBalance = walletBalance - totalToDeduct;
-  const isInsufficient = totalToDeduct > walletBalance;
+  const totalToDeduct = (amount || 0) * (1 + serviceFeeRate);
 
-  const formatCurrency = (val) =>
-    val.toLocaleString("en-ZA", {
-      style: "currency",
-      currency: "ZAR",
+  const fmt = (v) =>
+    `R${Number(v).toLocaleString("en-ZA", {
       minimumFractionDigits: 2,
-    });
+      maximumFractionDigits: 2,
+    })}`;
 
-  if (walletLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-8 gap-3">
-        <Loader2 className="h-8 w-8 text-violet-500 animate-spin" />
-        <p className="text-sm text-slate-500">Loading wallet balance...</p>
-      </div>
-    );
-  }
+  if (!isOpen) return null;
 
   return (
-    <div className="text-left">
-      <h2 className="text-lg font-semibold text-slate-900 mb-2 text-center">
-        Wallet Payment
-      </h2>
-      <p className="text-xs text-slate-600 mb-4 text-center">
-        Fund your investment directly from your Mint wallet.
-      </p>
-
-      <div className="space-y-4">
-        <div>
-          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-            Amount to invest
-          </label>
-          <input
-            type="number"
-            value={inputAmount}
-            onChange={(e) => setInputAmount(Number(e.target.value))}
-            className="mt-1 w-full rounded-xl border border-slate-200 p-3 text-sm font-semibold outline-none focus:border-violet-500"
-          />
-          <p className="mt-1 text-[10px] text-slate-500">
-            Service Fee (8%): {formatCurrency(serviceFee)}
-          </p>
-        </div>
-
-        <div className="rounded-2xl bg-slate-50 p-4 space-y-2">
-          <div className="flex justify-between text-xs">
-            <span className="text-slate-500">Investment Amount</span>
-            <span className="font-semibold text-slate-900">
-              {formatCurrency(inputAmount)}
-            </span>
-          </div>
-          <div className="flex justify-between text-xs">
-            <span className="text-slate-500">Service Fee (8%)</span>
-            <span className="font-semibold text-slate-900">
-              {formatCurrency(serviceFee)}
-            </span>
-          </div>
-          <div className="flex justify-between border-t border-slate-200 pt-2 text-sm">
-            <span className="font-bold text-slate-900">Total to deduct</span>
-            <span className="font-bold text-violet-700">
-              {formatCurrency(totalToDeduct)}
-            </span>
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+      <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
+        <div className="flex items-center justify-center mb-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-violet-100">
+            <Wallet className="h-6 w-6 text-violet-600" />
           </div>
         </div>
 
-        <div className="flex justify-between px-1 text-[11px]">
-          <span className="text-slate-500">
-            Wallet Balance: {formatCurrency(walletBalance)}
-          </span>
-          <span
-            className={`font-semibold ${isInsufficient ? "text-rose-600" : "text-emerald-600"
-              }`}
-          >
-            Remaining: {formatCurrency(remainingBalance)}
-          </span>
-        </div>
+        <h2 className="text-lg font-semibold text-slate-900 text-center mb-3">
+          Confirm Purchase
+        </h2>
 
-        {isInsufficient && (
-          <p className="text-center text-xs font-semibold text-rose-600">
-            Insufficient wallet balance
-          </p>
-        )}
+        <p className="text-sm text-slate-600 text-center mb-2 leading-relaxed">
+          <span className="font-bold text-slate-900">{fmt(totalToDeduct)}</span>{" "}
+          will be deducted from your wallet to purchase{" "}
+          <span className="font-semibold text-slate-900">
+            {strategyName || "this investment"}
+          </span>.
+        </p>
 
-        <div className="flex gap-3 pt-2">
+        <p className="text-xs text-slate-500 text-center mb-6">
+          You currently have{" "}
+          <span className="font-semibold text-slate-700">
+            {walletLoading ? "..." : fmt(walletBalance)}
+          </span>{" "}
+          available.
+        </p>
+
+        <div className="flex gap-3">
           <button
             type="button"
             onClick={onCancel}
-            className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-semibold text-slate-600"
+            className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-semibold text-slate-600 transition active:scale-95"
           >
             Cancel
           </button>
           <button
             type="button"
-            onClick={() => onConfirm(totalToDeduct)}
-            disabled={isInsufficient || inputAmount <= 0}
-            className="flex-1 rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3 text-sm font-semibold text-white shadow-lg disabled:opacity-50"
+            onClick={onConfirm}
+            className="flex-1 rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3 text-sm font-semibold text-white shadow-lg transition active:scale-95"
           >
-            Confirm Payment
+            Continue
           </button>
         </div>
+      </div>
+    </div>
+  );
+};
+
+// ── WalletSuccessModal ────────────────────────────────────────────────────────
+const WalletSuccessModal = ({ isOpen, strategyName, newBalance, onDone }) => {
+  const fmt = (v) =>
+    `R${Number(v).toLocaleString("en-ZA", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+      <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl text-center">
+        <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-500 mb-4" />
+
+        <h2 className="text-xl font-semibold text-slate-900 mb-2">
+          Purchase successful!
+        </h2>
+
+        <p className="text-sm text-slate-600 mb-1">
+          You bought{" "}
+          <span className="font-semibold text-slate-900">
+            {strategyName || "your investment"}
+          </span>.
+        </p>
+
+        <p className="text-sm text-slate-600 mb-6">
+          Your remaining wallet balance is{" "}
+          <span className="font-semibold text-slate-900">{fmt(newBalance)}</span>.
+        </p>
+
+        <button
+          type="button"
+          onClick={onDone}
+          className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3 text-sm font-semibold text-white shadow-lg transition active:scale-95"
+        >
+          Back to Home
+        </button>
       </div>
     </div>
   );
