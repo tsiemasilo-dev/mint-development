@@ -690,7 +690,7 @@ const SwipeableBalanceCard = ({
       <div className="relative z-10 flex flex-col h-full text-slate-700">
         <div className="flex flex-1 min-h-0">
           <div className="w-[50%] p-4 pb-3 flex flex-col border-r border-slate-200">
-            <div className="flex flex-col flex-1 min-h-0 gap-2">
+            <div className="flex flex-col flex-1 min-h-0 items-center justify-center gap-3 text-center">
               <div className="shrink-0">
                 <p className="text-[10px] uppercase tracking-widest text-slate-500 font-medium mb-1.5">
                   {selectedAsset ? selectedAsset.symbol : "portfolio value"}
@@ -698,7 +698,7 @@ const SwipeableBalanceCard = ({
                 <p className="text-base font-bold text-slate-900 mb-2">
                   {isVisible ? (selectedAsset ? formatKMB(displayBalance) : formatFull(displayBalance)) : masked}
                 </p>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center justify-center gap-2">
                   <span className={`text-sm font-semibold ${isLoss ? "text-rose-400" : "text-emerald-400"}`}>
                     {isLoss ? "▼" : "▲"} {isVisible ? formatKMB(Math.abs(displayReturn)) : masked}
                   </span>
@@ -707,7 +707,7 @@ const SwipeableBalanceCard = ({
                   </span>
                 </div>
               </div>
-              <div className="mt-auto pt-2 border-t border-slate-100/50">
+              <div className="pt-2 border-t border-slate-100/50 w-full">
                 <p className="text-[8px] uppercase tracking-[0.2em] text-slate-400 font-medium mb-0.5" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>
                   MINT NUMBER
                 </p>
