@@ -21,7 +21,7 @@ const PaymentMethodModal = ({
   const { profile, loading: profileLoading } = useProfile();
 
   // ── FIX 1: Mint number pulled directly from profile ──────────────────────
-  const mintNumber = profile?.mint_number ?? null;
+  const mintNumber = profile?.mintNumber || profile?.mint_number || null;
 
   // ── FIX 2: Wallet balance fetched from the wallets table ─────────────────
   const [walletBalance, setWalletBalance] = useState(0);
