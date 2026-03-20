@@ -120,14 +120,11 @@ const App = () => {
   });
 
   const justLoggedInRef = useRef(false);
+  // Read ozow param synchronously at init — before any effect can clear the URL
+  const ozowReturnParam = useRef(new URLSearchParams(window.location.search).get("ozow"));
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const ozowStatus = params.get("ozow");
-    if (ozowStatus === "success") {
-      window.history.replaceState({}, "", window.location.pathname);
-      setCurrentPage("paymentSuccess");
-    } else if (ozowStatus === "cancel" || ozowStatus === "error") {
+    if (ozowReturnParam.current) {
       window.history.replaceState({}, "", window.location.pathname);
     }
   }, []);
@@ -364,13 +361,8 @@ const App = () => {
         try {
           const { data: { session } } = await supabase.auth.getSession();
           if (session) {
-            const ozowParam = new URLSearchParams(window.location.search).get("ozow");
-            if (ozowParam === "success") {
-              window.history.replaceState({}, "", window.location.pathname);
+            if (ozowReturnParam.current === "success") {
               setCurrentPage("paymentSuccess");
-            } else if (ozowParam === "cancel" || ozowParam === "error") {
-              window.history.replaceState({}, "", window.location.pathname);
-              setCurrentPage("home");
             } else {
               setCurrentPage("home");
             }
