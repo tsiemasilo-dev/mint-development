@@ -12,11 +12,13 @@ function parseOnboardingFlags(record) {
   let riskDone = false;
   let sofDone = false;
   let termsDone = false;
+  let agreementSigned = false;
 
   // "onboarding_complete" is only written by the signing step — definitive proof of full completion.
   if (record?.kyc_status === "onboarding_complete") {
     taxDone = true; bankDone = true; mandateAgreed = true;
     riskDone = true; sofDone = true; termsDone = true;
+    agreementSigned = true;
   } else if (record?.sumsub_raw) {
     try {
       const raw = typeof record.sumsub_raw === "string"
@@ -25,6 +27,7 @@ function parseOnboardingFlags(record) {
       if (kycDone && raw?.signed_at) {
         taxDone = true; bankDone = true; mandateAgreed = true;
         riskDone = true; sofDone = true; termsDone = true;
+        agreementSigned = true;
       } else {
         taxDone = !!raw?.tax_details_saved;
         bankDone = !!raw?.bank_details_saved;
@@ -32,12 +35,13 @@ function parseOnboardingFlags(record) {
         riskDone = !!raw?.risk_disclosure_accepted;
         sofDone = !!raw?.source_of_funds_accepted;
         termsDone = !!raw?.terms_accepted;
+        agreementSigned = !!raw?.signed_at || !!raw?.account_agreement_signed;
       }
     } catch {}
   }
 
-  const allComplete = kycDone && taxDone && bankDone && mandateAgreed && riskDone && sofDone && termsDone;
-  return { kycDone, taxDone, bankDone, mandateAgreed, riskDone, sofDone, termsDone, allComplete };
+  const allComplete = kycDone && taxDone && bankDone && mandateAgreed && riskDone && sofDone && termsDone && agreementSigned;
+  return { kycDone, taxDone, bankDone, mandateAgreed, riskDone, sofDone, termsDone, agreementSigned, allComplete };
 }
 
 export default async function handler(req, res) {
