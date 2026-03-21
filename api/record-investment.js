@@ -258,8 +258,8 @@ export default async function handler(req, res) {
           continue;
         }
 
-        // Scale shares proportionally to what the user actually invested
-        const holdingQty = rawHoldingQty * scalingRatio;
+        // Scale shares proportionally to what the user actually invested (ENFORCE INTEGER)
+        const holdingQty = Math.floor(rawHoldingQty * scalingRatio);
 
         const priceCents = Number(sec.last_price || 0);
         if (priceCents <= 0) {
@@ -284,7 +284,7 @@ export default async function handler(req, res) {
         if (existing) {
           const oldQty = Number(existing.quantity || 0);
           const oldAvgFill = Number(existing.avg_fill || 0);
-          const newQty = oldQty + holdingQty;
+          const newQty = Math.floor(oldQty + holdingQty);
           const newAvgFill = newQty > 0
             ? ((oldAvgFill * oldQty) + (priceCents * holdingQty)) / newQty
             : priceCents;
@@ -385,7 +385,9 @@ export default async function handler(req, res) {
       }
 
       const currentPriceRands = currentPriceCents ? currentPriceCents / 100 : investAmount;
-      quantity = currentPriceRands > 0 ? investAmount / currentPriceRands : 1;
+      // ENFORCE INTEGER: Round down to nearest whole share
+      quantity = currentPriceRands > 0 ? Math.floor(investAmount / currentPriceRands) : 1;
+      if (quantity <= 0) quantity = 1; // Safeguard for very small amounts vs price
       const avgFillCents = currentPriceCents || Math.round(investAmount * 100);
       const marketValueCents = Math.round(quantity * (currentPriceCents || investAmount * 100));
 
@@ -403,7 +405,7 @@ export default async function handler(req, res) {
       if (existing) {
         const oldQty = Number(existing.quantity || 0);
         const oldAvgFill = Number(existing.avg_fill || 0);
-        const newQty = oldQty + quantity;
+        const newQty = Math.floor(oldQty + quantity);
         const newAvgFill = newQty > 0 ? ((oldAvgFill * oldQty) + (avgFillCents * quantity)) / newQty : avgFillCents;
         const newMarketValue = Math.round(newQty * (currentPriceCents || newAvgFill));
         const { data, error } = await db
@@ -475,7 +477,7 @@ export default async function handler(req, res) {
       assetSymbol: symbol || null,
       strategyName: isStrategyInvestment ? (name || symbol || "Strategy") : null,
       amountCents: Math.round(amount * 100),
-      quantity: quantity,
+      quantity: quantity ? Math.floor(quantity) : null,
       priceCents: currentPriceCents,
       reference: paymentReference,
       orderDate,
