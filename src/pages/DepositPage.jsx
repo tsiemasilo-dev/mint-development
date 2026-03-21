@@ -90,14 +90,12 @@ const DepositPage = ({ onBack }) => {
 
   const bankDetails = [
     { label: "Account Holder", value: "MINT PLATFORMS (PTY) LTD" },
-    { label: "ID/Reg Number", value: "2024/644796/07" },
     { label: "Bank", value: "STANDARD BANK" },
     { label: "Account Type", value: "BUSINESS CURRENT ACCOUNT" },
     { label: "Account Number", value: "02 154 470 0" },
     { label: "Branch", value: "SANDTON CITY" },
     { label: "Branch Code", value: "002064" },
     { label: "SWIFT Code", value: "SBZAZAJJ" },
-    { label: "Date Account Opened", value: "30 October 2025" },
   ];
 
   return (
