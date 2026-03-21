@@ -89,10 +89,10 @@ const DepositPage = ({ onBack }) => {
   };
 
   const bankDetails = [
-    { label: "Account Name", value: "Mint Wealth (Pty) Ltd" },
+    { label: "Account Name", value: "MINT PLATFORMS (PTY) LTD" },
     { label: "Bank", value: "Standard Bank" },
-    { label: "Account Number", value: "10192837465" },
-    { label: "Branch Code", value: "051001" },
+    { label: "Account Number", value: "02 154 470 0" },
+    { label: "Branch Code", value: "002064" },
     { label: "Account Type", value: "Business Current" },
     { label: "SWIFT Code", value: "SBZA ZAJJ" },
   ];
