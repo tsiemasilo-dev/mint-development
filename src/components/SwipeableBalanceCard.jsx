@@ -13,7 +13,6 @@ import {
   Line,
   ReferenceLine,
   ResponsiveContainer,
-  YAxis,
   Tooltip,
 } from "recharts";
 import { supabase } from "../lib/supabase";
@@ -25,7 +24,6 @@ import {
   useSettlementConfig,
   getSettlementStatusForHolding,
 } from "../lib/useSettlementStatus";
-import { useProfile } from "../lib/useProfile";
 
 const VISIBILITY_STORAGE_KEY = "mintBalanceVisible";
 
@@ -48,25 +46,12 @@ const formatKMB = (value) => {
 
 const TIMEFRAME_DAYS = { d: 7, w: 30, m: 90 };
 
-const formatYAxis = (value) => {
-  const num = Number(value);
-  if (Math.abs(num) < 0.5) return "R0";
-  const sign = num < 0 ? "-" : "";
-  const abs = Math.abs(num);
-  if (abs >= 1e6) return `${sign}R${(abs / 1e6).toFixed(1)}m`;
-  if (abs >= 1e3) return `${sign}R${(abs / 1e3).toFixed(0)}k`;
-  return `${sign}R${abs.toFixed(0)}`;
-};
-
 const SwipeableBalanceCard = ({
   userId,
   isBackFacing = true,
   forceVisible,
   mintNumber: mintNumberProp,
-  onBuyPress,
 }) => {
-  const { profile } = useProfile();
-
   const [activeTab, setActiveTab] = useState("m");
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -75,37 +60,6 @@ const SwipeableBalanceCard = ({
   const holdingSettlementStatus = getSettlementStatusForHolding(settlementCfg);
   const [showUpdatedText, setShowUpdatedText] = useState(false);
   const updatedTimerRef = useRef(null);
-
-  // ── SWIPE/FLIP STATE ─────────────────────────────────────────────────────
-  const [rotation, setRotation] = useState(isBackFacing ? 180 : 0);
-  const [isAnimating, setIsAnimating] = useState(false);
-  const dragStartX = useRef(null);
-
-  useEffect(() => {
-    // Sync with parent prop if it changes
-    setRotation(isBackFacing ? 180 : 0);
-  }, [isBackFacing]);
-
-  const handleDragStart = (e) => {
-    if (isAnimating) return;
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    dragStartX.current = clientX;
-  };
-
-  const handleDragEnd = (e) => {
-    if (isAnimating || dragStartX.current === null) return;
-    const clientX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
-    const diff = dragStartX.current - clientX;
-    const threshold = 50;
-
-    if (Math.abs(diff) > threshold) {
-      setIsAnimating(true);
-      // Flip 180 degrees in the direction of the swipe
-      setRotation((prev) => (diff > 0 ? prev + 180 : prev - 180));
-      setTimeout(() => setIsAnimating(false), 600);
-    }
-    dragStartX.current = null;
-  };
 
   // ── FIX 1: Wallet balance state ──────────────────────────────────────────
   const [walletBalance, setWalletBalance] = useState(0);
@@ -119,13 +73,20 @@ const SwipeableBalanceCard = ({
         .from("wallets")
         .select("balance")
         .eq("user_id", userId)
-        .single();
+        .maybeSingle();
       if (!error && data?.balance !== undefined) {
         setWalletBalance(Number(data.balance));
       }
       setWalletLoading(false);
     };
     fetchWallet();
+
+    window.addEventListener("profile-updated", fetchWallet);
+    window.addEventListener("wallet-updated", fetchWallet);
+    return () => {
+      window.removeEventListener("profile-updated", fetchWallet);
+      window.removeEventListener("wallet-updated", fetchWallet);
+    };
   }, [userId]);
 
   // ── FIX 2: Mint number — fetch from DB if prop not provided ──────────────
@@ -592,54 +553,13 @@ const SwipeableBalanceCard = ({
       : "0.0";
   const chartColor = isLoss ? "#FB7185" : "#10B981";
 
-  const chartAxisConfig = useMemo(() => {
-    if (!chartData || chartData.length === 0) return { domain: [-10, 10], ticks: [-10, 0, 10] };
-    const values = chartData.map((p) => p.v);
-    let dataMin = Math.min(...values);
-    let dataMax = Math.max(...values);
-
-    if (Math.abs(dataMax - dataMin) < 1) {
-      dataMin = Math.min(dataMin, -5);
-      dataMax = Math.max(dataMax, 5);
-    }
-
-    let axisMin, axisMax;
-    if (dataMin >= 0) {
-      axisMin = 0;
-      axisMax = dataMax * 1.15 || 10;
-    } else if (dataMax <= 0) {
-      axisMin = dataMin * 1.15 || -10;
-      axisMax = 0;
-    } else {
-      const absMax = Math.max(Math.abs(dataMin), Math.abs(dataMax));
-      axisMin = -(absMax * 1.15);
-      axisMax = absMax * 1.15;
-    }
-
-    const totalRange = axisMax - axisMin;
-    const step = Math.round(totalRange / 3) || 1;
-    const ticks = [];
-    let t = Math.round(axisMin);
-    while (t <= axisMax + 0.5) {
-      ticks.push(t);
-      t += step;
-    }
-    if (!ticks.includes(0)) {
-      ticks.push(0);
-      ticks.sort((a, b) => a - b);
-    }
-
-    const unique = [...new Set(ticks)].sort((a, b) => a - b);
-    return { domain: [axisMin, axisMax], ticks: unique.length >= 2 ? unique : [0, 5, 10] };
-  }, [chartData]);
-
   const masked = "••••";
 
   if (loading && userId)
     return (
-      <div className="w-full h-full rounded-[28px] bg-white p-4 flex flex-col border border-slate-100 shadow-sm">
+      <div className="w-full h-full rounded-[28px] bg-slate-50 p-4 flex flex-col">
         <div className="flex flex-1">
-          <div className="w-[50%] flex flex-col justify-between border-r border-slate-100 pr-4">
+          <div className="w-[50%] flex flex-col justify-between border-r border-slate-200 pr-4">
             <div className="space-y-3">
               <div>
                 <Skeleton className="h-2.5 w-20 bg-slate-200 mb-2" />
@@ -692,7 +612,7 @@ const SwipeableBalanceCard = ({
   };
 
   return (
-    <div className="relative w-full h-full z-10 bg-white rounded-[28px] overflow-hidden shadow-sm border border-slate-100">
+    <div className="relative w-full z-10 rounded-[26px] overflow-hidden">
       {isConnected && (
         <div className="absolute top-2 right-3 z-20 flex items-center gap-1.5">
           {showUpdatedText && (
@@ -721,239 +641,208 @@ const SwipeableBalanceCard = ({
           `}</style>
         </div>
       )}
-      <div className="relative z-10 flex flex-col h-full text-slate-700">
-        {!isBackFacing ? (
-          /* CARD FRONT */
-          <div className="flex flex-col h-full p-8 justify-between">
-            <div className="space-y-1">
-              <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-bold">
-                Account Balance
-              </p>
-              <p className="text-3xl font-bold text-slate-900">
-                {isVisible ? (walletLoading ? "Loading..." : formatFull(walletBalance)) : masked}
-              </p>
-            </div>
-
-            <div className="mt-auto">
-              <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-bold mb-1">
-                Cardholder
-              </p>
-              <p className="text-lg font-bold text-slate-800 uppercase tracking-wide">
-                {profile?.firstName ? `${profile.firstName} ${profile.lastName}` : "MINT USER"}
-              </p>
-            </div>
+      <div className="absolute inset-0 rounded-[26px] bg-[radial-gradient(circle_at_78%_18%,rgba(88,62,186,0.45),rgba(8,8,48,0.95)_46%,rgba(5,5,33,0.98)_100%)]" />
+      <div className="relative z-10 flex flex-col p-4 text-slate-100">
+        <div className="mb-2 flex items-start justify-between gap-3">
+          <p className="text-[10px] uppercase tracking-widest text-slate-400 font-medium">
+            {selectedAsset ? selectedAsset.symbol : "portfolio value"}
+          </p>
+          <div className="flex bg-white/5 p-0.5 rounded-lg border border-white/15 shrink-0">
+            {["d", "w", "m"].map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-3 py-1 text-[10px] font-semibold rounded-md ${activeTab === tab ? "bg-white/10 text-white shadow-sm" : "text-slate-300"}`}
+              >
+                {tab.toUpperCase()}
+              </button>
+            ))}
           </div>
-        ) : (
-          /* CARD BACK */
-          <div className="flex flex-1 min-h-0">
-            <div className="w-[50%] p-4 pb-3 flex flex-col border-r border-slate-100 overflow-hidden">
-              <div className="flex flex-col flex-1 min-h-0 gap-2">
-                <div className="shrink-0">
-                  <p className="text-[10px] uppercase tracking-widest text-slate-500 font-medium mb-1.5 truncate">
-                    {selectedAsset ? selectedAsset.symbol : "portfolio value"}
-                  </p>
-                  <p className="text-base font-bold text-slate-900 mb-2 truncate">
-                    {isVisible ? (selectedAsset ? formatKMB(displayBalance) : formatFull(displayBalance)) : masked}
-                  </p>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`text-sm font-semibold shrink-0 ${isLoss ? "text-rose-400" : "text-emerald-400"}`}>
-                      {isLoss ? "▼" : "▲"} {isVisible ? formatKMB(Math.abs(displayReturn)) : masked}
-                    </span>
-                    <span className={`px-1.5 py-0.5 rounded-full text-[8px] font-medium uppercase shrink-0 ${isLoss ? "bg-rose-500/20 text-rose-400" : "bg-emerald-500/20 text-emerald-400"}`}>
-                      {isVisible ? `${isLoss ? "-" : "+"}${returnPct}%` : masked}
-                    </span>
-                  </div>
-                </div>
-                <div className="mt-auto pt-2 border-t border-slate-100/50">
-                  <p className="text-[8px] uppercase tracking-[0.2em] text-slate-400 font-medium mb-0.5 truncate" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>
-                    MINT NUMBER
-                  </p>
-                  <p className="text-[11px] tracking-[0.1em] text-slate-700 font-mono font-bold truncate">
-                    {mintNumber ?? "GENERATING..."}
-                  </p>
-                </div>
-              </div>
+        </div>
+
+        <p className="text-[36px] leading-none font-bold text-white mb-3 w-full overflow-visible whitespace-nowrap">
+          {isVisible ? (selectedAsset ? formatKMB(displayBalance) : formatFull(displayBalance)) : masked}
+        </p>
+
+        <div className="mb-2 flex items-center gap-2 flex-wrap">
+          <span className={`px-2 py-0.5 rounded-xl border text-sm font-semibold shrink-0 ${isLoss ? "border-rose-700/70 bg-rose-600/15 text-rose-300" : "border-emerald-700/70 bg-emerald-600/15 text-emerald-300"}`}>
+            {isLoss ? "▼" : "▲"} {isVisible ? formatKMB(Math.abs(displayReturn)) : masked}
+          </span>
+          <span className={`text-[12px] font-medium shrink-0 ${isLoss ? "text-rose-300/80" : "text-emerald-300/80"}`}>
+            {isVisible ? `${isLoss ? "-" : "+"}${returnPct}% all time` : masked}
+          </span>
+        </div>
+
+        <div ref={dropdownRef} className="relative mb-2 self-end">
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/15 min-w-[180px]"
+          >
+            <div className="flex items-center gap-2">
+              <LayoutGrid size={12} className="text-violet-400" />
+              <span className="text-[12px] leading-none font-medium text-slate-200 whitespace-nowrap">
+                {selectedAsset ? selectedAsset.symbol : "All Investments"}
+              </span>
             </div>
-
-            <div className="w-[50%] p-4 pb-4 flex flex-col">
-              <div className="flex justify-end mb-2">
-                <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
-                  {["d", "w", "m"].map((tab) => (
-                    <button
-                      key={tab}
-                      onClick={() => setActiveTab(tab)}
-                      className={`px-3 py-1 text-[10px] font-semibold rounded-md ${activeTab === tab ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
-                    >
-                      {tab.toUpperCase()}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="flex-1" style={{ minHeight: 100, height: 100 }}>
-                {chartData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={100}>
-                    <ComposedChart
-                      data={chartData}
-                      margin={{ top: 2, right: 0, left: -12, bottom: 0 }}
-                    >
-                      <YAxis
-                        domain={chartAxisConfig.domain}
-                        ticks={chartAxisConfig.ticks}
-                        tickFormatter={formatYAxis}
-                        tick={{ fontSize: 8, fill: "#94a3b8" }}
-                        axisLine={false}
-                        tickLine={false}
-                        width={42}
-                      />
-                      <Tooltip
-                        content={({ active, payload }) => {
-                          if (!active || !payload?.length) return null;
-                          return (
-                            <div className="bg-white/95 backdrop-blur-sm border border-slate-200 rounded-lg px-2 py-1 shadow-md">
-                              <p className="text-[9px] text-slate-500">{payload[0]?.payload?.d}</p>
-                              <p className="text-[10px] font-semibold text-slate-800">
-                                {formatKMB(payload[0]?.value)}
-                              </p>
-                            </div>
-                          );
-                        }}
-                      />
-                      <ReferenceLine
-                        y={0}
-                        stroke="#cbd5e1"
-                        strokeDasharray="3 3"
-                        strokeWidth={1}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="v"
-                        stroke="none"
-                        fill={chartColor}
-                        fillOpacity={0.1}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="v"
-                        stroke={chartColor}
-                        strokeWidth={2}
-                        dot={false}
-                      />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex items-center justify-center h-full">
-                    {chartLoading ? (
-                      <div className="flex items-end gap-1 w-full h-full py-2">
-                        {[40, 55, 35, 65, 50, 70, 45, 60, 75, 55, 65, 50].map(
-                          (h, i) => (
-                            <Skeleton
-                              key={i}
-                              className="flex-1 rounded-sm bg-slate-100"
-                              style={{ height: `${h}%` }}
-                            />
-                          ),
-                        )}
-                      </div>
-                    ) : (
-                      <p className="text-[9px] text-slate-500">No chart data</p>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div ref={dropdownRef} className="relative">
+            {isOpen ? (
+              <ChevronUp size={14} className="text-slate-300" />
+            ) : (
+              <ChevronDown size={14} className="text-slate-300" />
+            )}
+          </button>
+          {isOpen && (
+            <div className="absolute bottom-full mb-1 right-0 w-full bg-white rounded-xl z-[120] overflow-hidden border border-slate-200 shadow-lg">
+              <div className="py-1 overflow-y-auto max-h-[140px]">
                 <button
-                  onClick={() => setIsOpen(!isOpen)}
-                  className="mt-2 mb-1 flex items-center justify-between p-2 rounded-xl bg-slate-100 border border-slate-200 w-full"
+                  onClick={() => {
+                    setSelectedAsset(null);
+                    setIsOpen(false);
+                    scrollToHoldingIndex(-1);
+                  }}
+                  className={`w-full flex items-center gap-2 px-3 py-1.5 text-left ${!selectedAsset ? "bg-slate-100" : "hover:bg-slate-50"}`}
                 >
-                  <div className="flex items-center gap-2">
-                    <LayoutGrid size={12} className="text-violet-400" />
-                    <span className="text-[10px] font-medium text-slate-700">
-                      {selectedAsset ? selectedAsset.symbol : "All Investments"}
-                    </span>
-                  </div>
-                  {isOpen ? (
-                    <ChevronUp size={14} className="text-slate-500" />
-                  ) : (
-                    <ChevronDown size={14} className="text-slate-500" />
-                  )}
+                  <LayoutGrid size={10} className="text-violet-400 shrink-0" />
+                  <span className="text-[9px] font-medium text-slate-700 truncate">
+                    All Investments
+                  </span>
                 </button>
-                {isOpen && (
-                  <div className="absolute bottom-full mb-1 right-0 w-full bg-white rounded-xl z-[120] overflow-hidden border border-slate-200 shadow-lg">
-                    <div className="py-1 overflow-y-auto max-h-[140px]">
-                      <button
-                        onClick={() => {
-                          setSelectedAsset(null);
-                          setIsOpen(false);
-                          scrollToHoldingIndex(-1);
-                        }}
-                        className={`w-full flex items-center gap-2 px-3 py-1.5 text-left ${!selectedAsset ? "bg-slate-100" : "hover:bg-slate-50"}`}
-                      >
-                        <LayoutGrid size={10} className="text-violet-400 shrink-0" />
-                        <span className="text-[9px] font-medium text-slate-700 truncate">
-                          All Investments
+                {dbData.holdings.map((item, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      setSelectedAsset(item);
+                      setIsOpen(false);
+                      scrollToHoldingIndex(idx);
+                    }}
+                    className={`w-full flex items-center gap-2 px-3 py-1.5 text-left ${selectedAsset?.symbol === item.symbol ? "bg-slate-100" : "hover:bg-slate-50"}`}
+                  >
+                    <div className="w-4 h-4 rounded-full overflow-hidden bg-slate-100 shrink-0">
+                      {item.isStrategy && item.topLogos?.length > 0 ? (
+                        <div className="flex -space-x-1 h-full items-center justify-center">
+                          {item.topLogos.slice(0, 2).map((logo, li) => (
+                            <img
+                              key={li}
+                              src={logo}
+                              className="w-3 h-3 rounded-full object-cover border border-white/25"
+                            />
+                          ))}
+                        </div>
+                      ) : item.logo_url ? (
+                        <img
+                          src={item.logo_url}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span className="flex items-center justify-center w-full h-full text-[6px] text-slate-500">
+                          {item.symbol?.substring(0, 2)}
                         </span>
-                      </button>
-                      {dbData.holdings.map((item, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => {
-                            setSelectedAsset(item);
-                            setIsOpen(false);
-                            scrollToHoldingIndex(idx);
-                          }}
-                          className={`w-full flex items-center gap-2 px-3 py-1.5 text-left ${selectedAsset?.symbol === item.symbol ? "bg-slate-100" : "hover:bg-slate-50"}`}
-                        >
-                          <div className="w-4 h-4 rounded-full overflow-hidden bg-slate-100 shrink-0">
-                            {item.isStrategy && item.topLogos?.length > 0 ? (
-                              <div className="flex -space-x-1 h-full items-center justify-center">
-                                {item.topLogos.slice(0, 2).map((logo, li) => (
-                                  <img
-                                    key={li}
-                                    src={logo}
-                                    className="w-3 h-3 rounded-full object-cover border border-white/25"
-                                  />
-                                ))}
-                              </div>
-                            ) : item.logo_url ? (
-                              <img
-                                src={item.logo_url}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <span className="flex items-center justify-center w-full h-full text-[6px] text-slate-500">
-                                {item.symbol?.substring(0, 2)}
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-[9px] font-medium text-slate-700 truncate">
-                            {item.symbol}
-                          </span>
-                          {(() => {
-                            if (item.isStrategy && Number(item.avg_fill || 0) === 0) {
-                              return <SettlementBadge status="pending" size="xs" />;
-                            }
-                            if (item.settlement_status && item.settlement_status !== "confirmed") {
-                              return <SettlementBadge status={item.settlement_status} size="xs" />;
-                            }
-                            const isSettlementActive = settlementCfg.brokerEnabled || settlementCfg.fullyIntegrated;
-                            if (!isSettlementActive) return null;
-                            const s = holdingSettlementStatus;
-                            return s && s !== "confirmed" ? (
-                              <SettlementBadge status={s} size="xs" />
-                            ) : null;
-                          })()}
-                        </button>
-                      ))}
+                      )}
                     </div>
-                  </div>
-                )}
+                    <span className="text-[9px] font-medium text-slate-700 truncate">
+                      {item.symbol}
+                    </span>
+                    {(() => {
+                      if (item.isStrategy && Number(item.avg_fill || 0) === 0) {
+                        return <SettlementBadge status="pending" size="xs" />;
+                      }
+                      if (item.settlement_status && item.settlement_status !== "confirmed") {
+                        return <SettlementBadge status={item.settlement_status} size="xs" />;
+                      }
+                      const isSettlementActive = settlementCfg.brokerEnabled || settlementCfg.fullyIntegrated;
+                      if (!isSettlementActive) return null;
+                      const s = holdingSettlementStatus;
+                      return s && s !== "confirmed" ? (
+                        <SettlementBadge status={s} size="xs" />
+                      ) : null;
+                    })()}
+                  </button>
+                ))}
               </div>
-
-              {/* Buy button removed per request */}
             </div>
+          )}
+        </div>
+
+        <div className="mb-3 w-full overflow-hidden" style={{ minHeight: 100, height: 100 }}>
+              {chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={100}>
+                  <ComposedChart
+                    data={chartData}
+                    margin={{ top: 2, right: 0, left: 0, bottom: 0 }}
+                  >
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null;
+                        return (
+                          <div className="bg-white/95 backdrop-blur-sm border border-slate-200 rounded-lg px-2 py-1 shadow-md">
+                            <p className="text-[9px] text-slate-500">{payload[0]?.payload?.d}</p>
+                            <p className="text-[10px] font-semibold text-slate-800">
+                              {formatKMB(payload[0]?.value)}
+                            </p>
+                          </div>
+                        );
+                      }}
+                    />
+                    <ReferenceLine
+                      y={0}
+                      stroke="rgba(148,163,184,0.5)"
+                      strokeDasharray="3 3"
+                      strokeWidth={1}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="v"
+                      stroke="none"
+                      fill={chartColor}
+                      fillOpacity={0.1}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="v"
+                      stroke={chartColor}
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-full">
+                  {chartLoading ? (
+                    <div className="flex items-end gap-1 w-full h-full py-2">
+                      {[40, 55, 35, 65, 50, 70, 45, 60, 75, 55, 65, 50].map(
+                        (h, i) => (
+                          <Skeleton
+                            key={i}
+                            className="flex-1 rounded-sm bg-white/10"
+                            style={{ height: `${h}%` }}
+                          />
+                        ),
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-[9px] text-slate-500">No chart data</p>
+                  )}
+                </div>
+              )}
+            </div>
+        <div className="mt-auto pt-3 pb-5 border-t border-white/10 flex items-start">
+          <div className="flex-1 min-w-0 pr-3">
+            <p className="text-[8px] uppercase tracking-[0.2em] text-slate-400 font-medium mb-0.5">
+              ACCOUNT BALANCE
+            </p>
+            <p className="text-[11px] font-semibold text-slate-100 truncate">
+              {isVisible ? (walletLoading ? "Loading..." : formatFull(walletBalance)) : masked}
+            </p>
           </div>
-        )}
+          <div className="w-px self-stretch bg-white/10" />
+          <div className="flex-1 min-w-0 pl-3">
+            <p className="text-[8px] uppercase tracking-[0.2em] text-slate-400 font-medium mb-0.5" style={{ fontFamily: "'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif" }}>
+              MINT NUMBER
+            </p>
+            <p className="text-[11px] tracking-[0.1em] text-slate-300 font-mono font-bold truncate">
+              {mintNumber ?? "GENERATING..."}
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );
