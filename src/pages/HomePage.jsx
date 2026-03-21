@@ -64,7 +64,7 @@ const CardContent = ({ children, style, variant = "default" }) => {
 
   return (
     <div
-      className="absolute inset-0 rounded-[24px] overflow-hidden"
+      className={`absolute inset-0 rounded-[24px] ${variant === "invest" ? "overflow-visible" : "overflow-hidden"}`}
       style={{
         background: bg,
         boxShadow: "0 20px 45px -18px rgba(15, 23, 42, 0.2)",
@@ -727,7 +727,7 @@ const HomePage = ({
             <div className="relative select-none">
               <div className="relative w-full touch-pan-y" style={{ aspectRatio: "1.55 / 1" }}>
                 <CardContent variant="invest">
-                  <div className="relative h-full overflow-hidden rounded-[28px] border border-white/10">
+                  <div className="relative h-full overflow-visible rounded-[28px] border border-white/10">
                     <div className="relative h-full flex flex-col">
                       <SwipeableBalanceCard
                         userId={userId}

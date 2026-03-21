@@ -755,9 +755,9 @@ const SwipeableBalanceCard = ({
           )}
         </div>
 
-        <div className="mb-3 w-full" style={{ minHeight: 96, height: 96 }}>
+        <div className="mb-3 w-full" style={{ minHeight: 80, height: 80 }}>
               {chartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={96}>
+                <ResponsiveContainer width="100%" height={80}>
                   <ComposedChart
                     data={chartData}
                     margin={{ top: 2, right: 0, left: 0, bottom: 0 }}
@@ -817,7 +817,7 @@ const SwipeableBalanceCard = ({
                 </div>
               )}
             </div>
-        <div className="mt-auto pt-3 border-t border-white/10 flex items-start">
+        <div className="mt-auto pt-3 pb-4 border-t border-white/10 flex items-start">
           <div className="flex-1 min-w-0 pr-3">
             <p className="text-[8px] uppercase tracking-[0.2em] text-slate-400 font-medium mb-0.5">
               ACCOUNT BALANCE
