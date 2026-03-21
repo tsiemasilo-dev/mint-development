@@ -900,15 +900,7 @@ const SwipeableBalanceCard = ({
               )}
             </div>
 
-            {/* ── FIX 4: Buy button — only shows when wallet has funds ── */}
-            {!walletLoading && walletBalance > 0 && (
-              <button
-                onClick={onBuyPress}
-                className="mt-1 w-full py-2 rounded-xl bg-violet-500 hover:bg-violet-600 active:scale-95 transition-all text-white text-[11px] font-semibold tracking-wide shadow-sm"
-              >
-                Buy · {formatFull(walletBalance)} available
-              </button>
-            )}
+            {/* Wallet balance display logic removed from here */}
           </div>
         </div>
       </div>
