@@ -28,6 +28,7 @@ export const useOnboardingStatus = () => {
         });
         if (res.ok) {
           const json = await res.json();
+          console.log("[useOnboardingStatus] Total Onboarding Status:", json.is_fully_onboarded ? "COMPLETE ✅" : "INCOMPLETE ❌", json);
           setOnboardingComplete(json.is_fully_onboarded === true);
           setLoading(false);
           return;
@@ -47,8 +48,9 @@ export const useOnboardingStatus = () => {
       if (dbError) throw dbError;
 
       if (data && data.length > 0) {
-        const { allComplete } = parseOnboardingFlags(data[0]);
-        setOnboardingComplete(allComplete);
+        const flags = parseOnboardingFlags(data[0]);
+        console.log("[useOnboardingStatus] DB Fallback Flags:", flags.allComplete ? "COMPLETE ✅" : "INCOMPLETE ❌", flags);
+        setOnboardingComplete(flags.allComplete);
       } else {
         setOnboardingComplete(false);
       }
