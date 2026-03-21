@@ -217,7 +217,7 @@ const DepositPage = ({ onBack }) => {
         </div>
 
         {/* Sticky Action Button */}
-        <div className="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-white via-white/80 to-transparent z-20">
+        <div className="fixed bottom-0 left-0 right-0 px-6 pt-6 pb-[100px] bg-gradient-to-t from-white via-white/80 to-transparent z-20">
           <div className="max-w-xl mx-auto">
             <button
                 onClick={handleConfirmDeposit}
