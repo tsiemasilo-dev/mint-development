@@ -25,6 +25,7 @@ import {
   useSettlementConfig,
   getSettlementStatusForHolding,
 } from "../lib/useSettlementStatus";
+import { useProfile } from "../lib/useProfile";
 
 const VISIBILITY_STORAGE_KEY = "mintBalanceVisible";
 
@@ -64,6 +65,8 @@ const SwipeableBalanceCard = ({
   mintNumber: mintNumberProp,
   onBuyPress,
 }) => {
+  const { profile } = useProfile();
+
   const [activeTab, setActiveTab] = useState("m");
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -603,9 +606,9 @@ const SwipeableBalanceCard = ({
 
   if (loading && userId)
     return (
-      <div className="w-full h-full rounded-[28px] bg-slate-50 p-4 flex flex-col">
+      <div className="w-full h-full rounded-[28px] bg-white p-4 flex flex-col border border-slate-100 shadow-sm">
         <div className="flex flex-1">
-          <div className="w-[50%] flex flex-col justify-between border-r border-slate-200 pr-4">
+          <div className="w-[50%] flex flex-col justify-between border-r border-slate-100 pr-4">
             <div className="space-y-3">
               <div>
                 <Skeleton className="h-2.5 w-20 bg-slate-200 mb-2" />
@@ -658,7 +661,7 @@ const SwipeableBalanceCard = ({
   };
 
   return (
-    <div className="relative w-full h-full z-10">
+    <div className="relative w-full h-full z-10 bg-white rounded-[28px] overflow-hidden shadow-sm border border-slate-100">
       {isConnected && (
         <div className="absolute top-2 right-3 z-20 flex items-center gap-1.5">
           {showUpdatedText && (
@@ -688,8 +691,31 @@ const SwipeableBalanceCard = ({
         </div>
       )}
       <div className="relative z-10 flex flex-col h-full text-slate-700">
-        <div className="flex flex-1 min-h-0">
-          <div className="w-[50%] p-4 pb-3 flex flex-col border-r border-slate-200 overflow-hidden">
+        {!isBackFacing ? (
+          /* CARD FRONT */
+          <div className="flex flex-col h-full p-8 justify-between">
+            <div className="space-y-1">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-bold">
+                Account Balance
+              </p>
+              <p className="text-3xl font-bold text-slate-900">
+                {isVisible ? (walletLoading ? "Loading..." : formatFull(walletBalance)) : masked}
+              </p>
+            </div>
+            
+            <div className="mt-auto">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-bold mb-1">
+                Cardholder
+              </p>
+              <p className="text-lg font-bold text-slate-800 uppercase tracking-wide">
+                {profile?.firstName ? `${profile.firstName} ${profile.lastName}` : "MINT USER"}
+              </p>
+            </div>
+          </div>
+        ) : (
+          /* CARD BACK */
+          <div className="flex flex-1 min-h-0">
+            <div className="w-[50%] p-4 pb-3 flex flex-col border-r border-slate-100 overflow-hidden">
             <div className="flex flex-col flex-1 min-h-0 gap-2">
               <div className="shrink-0">
                 <p className="text-[10px] uppercase tracking-widest text-slate-500 font-medium mb-1.5 truncate">
@@ -791,7 +817,7 @@ const SwipeableBalanceCard = ({
                         (h, i) => (
                           <Skeleton
                             key={i}
-                            className="flex-1 rounded-sm bg-white/10"
+                            className="flex-1 rounded-sm bg-slate-100"
                             style={{ height: `${h}%` }}
                           />
                         ),
@@ -893,17 +919,10 @@ const SwipeableBalanceCard = ({
               )}
             </div>
 
-            {/* ── FIX 4: Buy button — only shows when wallet has funds ── */}
-            {!walletLoading && walletBalance > 0 && (
-              <button
-                onClick={onBuyPress}
-                className="mt-1 w-full py-2 rounded-xl bg-violet-500 hover:bg-violet-600 active:scale-95 transition-all text-white text-[11px] font-semibold tracking-wide shadow-sm"
-              >
-                Buy · {formatFull(walletBalance)} available
-              </button>
-            )}
+              {/* Buy button removed per request */}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
