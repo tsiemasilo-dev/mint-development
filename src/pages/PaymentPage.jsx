@@ -258,6 +258,8 @@ const PaymentPage = ({
     try {
       const walletRef = `WALLET-${Date.now()}`;
       const recorded = await recordInvestment(walletRef, "wallet", totalToDeduct);
+      
+      console.log("Wallet payment API response:", recorded);
 
       if (!recorded.success) {
         if (recorded.error === "Insufficient funds") {
@@ -265,6 +267,11 @@ const PaymentPage = ({
         }
         throw new Error(recorded.error || "Failed to record investment");
       }
+
+      // Dispatch events for immediate UI updates
+      window.dispatchEvent(new Event("wallet-updated"));
+      window.dispatchEvent(new Event("profile-updated"));
+      window.dispatchEvent(new Event("financial-data-updated"));
 
       const finalNewBalance = recorded.newWalletBalance ?? (walletBalance - totalToDeduct);
       setWalletNewBalance(finalNewBalance);

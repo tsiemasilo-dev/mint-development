@@ -327,6 +327,37 @@ export default async function handler(req, res) {
         console.warn("[record-investment] Skipped symbols (no security/price):", skippedSymbols.join(", "));
       }
 
+      // --- ADDED: user_strategies update for investment ---
+      console.log(`[record-investment] Updating user_strategies for strategy: ${strategyId}`);
+      const { data: existingUS } = await db
+        .from("user_strategies")
+        .select("id, invested_amount")
+        .eq("user_id", userId)
+        .eq("strategy_id", strategyId)
+        .maybeSingle();
+
+      const investmentAmountCents = Math.round(amount * 100);
+      const nowTs = new Date().toISOString();
+
+      if (existingUS) {
+        const newInvested = (existingUS.invested_amount || 0) + investmentAmountCents;
+        await db
+          .from("user_strategies")
+          .update({ invested_amount: newInvested, updated_at: nowTs })
+          .eq("id", existingUS.id);
+      } else {
+        await db
+          .from("user_strategies")
+          .insert({
+            user_id: userId,
+            strategy_id: strategyId,
+            invested_amount: investmentAmountCents,
+            status: "active",
+            created_at: nowTs,
+            updated_at: nowTs,
+          });
+      }
+
       holdingResult = { data: { strategyHoldingsRecorded: insertedHoldings.length, skipped: skippedSymbols }, error: null };
     }
 
