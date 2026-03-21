@@ -85,20 +85,13 @@ const SwipeableBalanceCard = ({
         .from("wallets")
         .select("balance")
         .eq("user_id", userId)
-        .maybeSingle();
+        .single();
       if (!error && data?.balance !== undefined) {
         setWalletBalance(Number(data.balance));
       }
       setWalletLoading(false);
     };
     fetchWallet();
-
-    window.addEventListener("profile-updated", fetchWallet);
-    window.addEventListener("wallet-updated", fetchWallet);
-    return () => {
-      window.removeEventListener("profile-updated", fetchWallet);
-      window.removeEventListener("wallet-updated", fetchWallet);
-    };
   }, [userId]);
 
   // ── FIX 2: Mint number — fetch from DB if prop not provided ──────────────
