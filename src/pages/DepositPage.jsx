@@ -21,7 +21,7 @@ const SuccessModal = ({ isOpen, onClose, reference }) => {
             <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">
               Payment Reference
             </p>
-            <p className="text-lg font-mono font-medium text-white tracking-widest uppercase">{reference}</p>
+            <p className="text-lg font-mono font-medium text-white">{reference}</p>
           </div>
         </div>
         <p className="text-sm text-zinc-500">
@@ -39,16 +39,23 @@ const SuccessModal = ({ isOpen, onClose, reference }) => {
 };
 
 const DepositPage = ({ onBack }) => {
-  const { profile, loading: profileLoading } = useProfile();
+  const { profile } = useProfile();
   const [amount, setAmount] = useState("");
   const [copied, setCopied] = useState(null);
+  const [reference, setReference] = useState("");
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
 
-  // Reference is now always the user's MINT ID
-  const reference = profile?.mintNumber || profile?.mint_number || "M-REF-PENDING";
+  useEffect(() => {
+    // Reference should be user's MINT ID
+    if (profile?.mintNumber) {
+        setReference(profile.mintNumber);
+    } else if (profile?.mint_number) {
+        setReference(profile.mint_number);
+    }
+  }, [profile]);
 
   const handleCopy = (text, key) => {
-    if (!text || text === "M-REF-PENDING") return;
+    if (!text) return;
     navigator.clipboard.writeText(text);
     setCopied(key);
     setTimeout(() => setCopied(null), 2000);
@@ -60,24 +67,18 @@ const DepositPage = ({ onBack }) => {
       return;
     }
 
-    if (!profile?.id) {
-        alert("System error: User profile not loaded.");
-        return;
-    }
-
     try {
       // Record the pending transaction
       const { error } = await supabase.from("transactions").insert([
         {
-          user_id: profile.id,
+          user_id: profile?.id,
           type: "deposit",
           status: "pending",
           direction: "credit",
           amount: Math.round(parseFloat(amount) * 100), // Cents
-          store_reference: reference,
-          description: "Manual Bank Deposit",
+          store_reference: reference, // Using the mint_number here as requested
+          description: "Bank Deposit (EFT)",
           currency: "ZAR",
-          transaction_date: new Date().toISOString()
         },
       ]);
 
@@ -156,52 +157,45 @@ const DepositPage = ({ onBack }) => {
             </h2>
           </div>
 
-          <div className="bg-zinc-900/50 border border-white/5 rounded-3xl overflow-hidden divide-y divide-white/5 text-left">
-            {/* Reference Number - CRITICAL */}
-            <div className="p-6 bg-white/5">
-              <div className="flex items-center justify-between mb-2 text-left">
-                <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Payment Reference</span>
-                <span className="text-[10px] bg-green-500/10 text-green-500 font-bold px-2 py-0.5 rounded uppercase">
-                  Required
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-4">
-                <p className="text-2xl font-mono text-white tracking-widest uppercase truncate">
-                  {profileLoading ? "LOADING..." : reference}
+          <div className="bg-zinc-900/50 border border-white/5 rounded-3xl overflow-hidden divide-y divide-white/5">
+            <div className="p-6">
+              <p className="text-xs text-zinc-500 uppercase tracking-widest mb-1">
+                Payment Reference
+              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-xl font-mono text-white">
+                  {reference || "Generating..."}
                 </p>
                 <button
                   onClick={() => handleCopy(reference, "ref")}
-                  className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-xl hover:bg-white/20 transition-all active:scale-95 shadow-sm"
+                  className="p-2 text-zinc-500 hover:text-white transition-colors"
                 >
-                  <Copy className="w-4 h-4" />
-                  <span className="text-sm font-bold">
-                    {copied === "ref" ? "Copied" : "Copy"}
-                  </span>
+                  {copied === "ref" ? (
+                    <Check className="w-5 h-5 text-green-500" />
+                  ) : (
+                    <Copy className="w-5 h-5" />
+                  )}
                 </button>
               </div>
-              <p className="text-[11px] text-amber-500/80 mt-3 font-medium flex items-center gap-2 px-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                Please use this exact reference in your banking app.
+              <p className="text-[10px] text-zinc-500 mt-2">
+                * Please use this exact reference to avoid processing delays.
               </p>
             </div>
 
-            {/* Other details */}
             {bankDetails.map((detail) => (
               <div
                 key={detail.label}
-                className="p-6 flex items-center justify-between text-left hover:bg-white/5 transition-colors"
+                className="p-6 flex items-center justify-between"
               >
-                <div className="text-left">
-                  <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold mb-1">
+                <div>
+                  <p className="text-xs text-zinc-500 uppercase tracking-widest mb-1">
                     {detail.label}
                   </p>
-                  <p className="text-base font-bold text-zinc-200">
-                    {detail.value}
-                  </p>
+                  <p className="text-base text-zinc-200">{detail.value}</p>
                 </div>
                 <button
                   onClick={() => handleCopy(detail.value, detail.label)}
-                  className="p-3 text-zinc-500 hover:text-white transition-all active:scale-90"
+                  className="p-2 text-zinc-500 hover:text-white transition-colors"
                 >
                   {copied === detail.label ? (
                     <Check className="w-5 h-5 text-green-500" />
