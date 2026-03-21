@@ -125,16 +125,23 @@ const PaymentPage = ({
             strategy?.strategyId ||
             (isStrategyPurchase ? strategy?.id : null);
           const recordData = {
-            securityId: strategy?.id,
             symbol: strategy?.symbol || strategy?.short_name || "",
             name: strategy?.name || "",
             amount: overrideAmount || amount,
             baseAmount: baseAmount || amount,
-            strategyId: stratId,
             paymentReference,
             paymentMethod: finalMethod,
             ...(shareCount ? { shareCount: Number(shareCount) } : {}),
           };
+
+          if (isStrategyPurchase) {
+            recordData.strategyId = strategy?.id;
+          } else {
+            recordData.securityId = strategy?.id;
+          }
+
+          console.log("Recording investment with body:", recordData);
+
           const headers = { "Content-Type": "application/json" };
           if (token) headers.Authorization = `Bearer ${token}`;
 

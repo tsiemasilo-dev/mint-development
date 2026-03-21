@@ -121,8 +121,8 @@ export default async function handler(req, res) {
     // amount = total charged including fees (used for transaction records)
     const investAmount = (baseAmount && baseAmount > 0) ? baseAmount : amount;
 
-    if (!securityId || !amount || !paymentReference) {
-      return res.status(400).json({ success: false, error: "Missing required fields: securityId, amount, paymentReference" });
+    if ((!securityId && !strategyId) || !amount || !paymentReference) {
+      return res.status(400).json({ success: false, error: "Missing required fields: securityId or strategyId, amount, paymentReference" });
     }
 
     let payData = { amount: Math.round(amount * 100) };
