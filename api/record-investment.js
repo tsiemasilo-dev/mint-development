@@ -116,7 +116,7 @@ export default async function handler(req, res) {
 
     const db = supabaseAdmin || supabase;
     const userId = user.id;
-    const { securityId, symbol, name, amount, baseAmount, strategyId, paymentReference, paymentMethod } = req.body;
+    const { securityId, symbol, name, amount, baseAmount, strategyId, paymentReference, paymentMethod, shareCount } = req.body;
     // baseAmount = investment amount excluding fees (used for holdings/quantity calculations)
     // amount = total charged including fees (used for transaction records)
     const investAmount = (baseAmount && baseAmount > 0) ? baseAmount : amount;
@@ -385,8 +385,12 @@ export default async function handler(req, res) {
       }
 
       const currentPriceRands = currentPriceCents ? currentPriceCents / 100 : investAmount;
-      // ENFORCE INTEGER: Round down to nearest whole share
-      quantity = currentPriceRands > 0 ? Math.floor(investAmount / currentPriceRands) : 1;
+      // ENFORCE INTEGER: Prioritize shareCount from frontend if available
+      if (shareCount && Number(shareCount) > 0) {
+        quantity = Math.floor(Number(shareCount));
+      } else {
+        quantity = currentPriceRands > 0 ? Math.floor(investAmount / currentPriceRands) : 1;
+      }
       if (quantity <= 0) quantity = 1; // Safeguard for very small amounts vs price
       const avgFillCents = currentPriceCents || Math.round(investAmount * 100);
       const marketValueCents = Math.round(quantity * (currentPriceCents || investAmount * 100));
