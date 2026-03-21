@@ -255,11 +255,12 @@ const PaymentPage = ({
    * adding the 8% in the previous pages, or you will double-charge the user.
    */
   const handleWalletConfirm = async () => {
-
+    console.log('Confirm clicked');
     const serviceFeeRate = 0.08;
     const totalToDeduct = amount * (1 + serviceFeeRate);
 
     if (paymentStatus === "processing") return;
+
     
     // ── ONBOARDING GUARD (PROMPT 4) ────────────────────────────────────────
     const { is_fully_onboarded } = await checkOnboardingComplete();
