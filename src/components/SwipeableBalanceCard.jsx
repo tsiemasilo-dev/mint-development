@@ -62,7 +62,6 @@ const SwipeableBalanceCard = ({
   isBackFacing = true,
   forceVisible,
   mintNumber: mintNumberProp,
-  onBuyPress,
 }) => {
   const [activeTab, setActiveTab] = useState("m");
   const [isOpen, setIsOpen] = useState(false);
@@ -85,20 +84,13 @@ const SwipeableBalanceCard = ({
         .from("wallets")
         .select("balance")
         .eq("user_id", userId)
-        .maybeSingle();
+        .single();
       if (!error && data?.balance !== undefined) {
         setWalletBalance(Number(data.balance));
       }
       setWalletLoading(false);
     };
     fetchWallet();
-
-    window.addEventListener("profile-updated", fetchWallet);
-    window.addEventListener("wallet-updated", fetchWallet);
-    return () => {
-      window.removeEventListener("profile-updated", fetchWallet);
-      window.removeEventListener("wallet-updated", fetchWallet);
-    };
   }, [userId]);
 
   // ── FIX 2: Mint number — fetch from DB if prop not provided ──────────────
@@ -705,6 +697,16 @@ const SwipeableBalanceCard = ({
                 <p className="text-base font-bold text-slate-900 mb-2 truncate">
                   {isVisible ? (selectedAsset ? formatKMB(displayBalance) : formatFull(displayBalance)) : masked}
                 </p>
+                <div className="mb-2">
+                  <p className="text-[8px] uppercase tracking-[0.2em] text-slate-400 font-medium mb-0.5 truncate">
+                    Account Balance
+                  </p>
+                  <p className="text-[11px] font-semibold text-slate-700 truncate">
+                    {isVisible
+                      ? (walletLoading ? "Loading..." : formatFull(walletBalance))
+                      : masked}
+                  </p>
+                </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className={`text-sm font-semibold shrink-0 ${isLoss ? "text-rose-400" : "text-emerald-400"}`}>
                     {isLoss ? "▼" : "▲"} {isVisible ? formatKMB(Math.abs(displayReturn)) : masked}
@@ -899,9 +901,6 @@ const SwipeableBalanceCard = ({
                 </div>
               )}
             </div>
-
-            {/* ── FIX 4: Buy button — only shows when wallet has funds ── */}
-            {/* Wallet balance display logic removed from here */}
 
           </div>
         </div>
