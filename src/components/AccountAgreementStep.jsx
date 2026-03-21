@@ -657,11 +657,18 @@ export default function AccountAgreementStep({
 
       // ── FIX: save ALL completion flags + URL atomically ──────────────────
       try {
-        const { data: existing } = await supabase
+        // Use the specific onboarding ID if available, fallback to latest for this user
+        const recordId = existingOnboardingId;
+        const { data: records } = await supabase
           .from("user_onboarding")
-          .select("sumsub_raw")
-          .eq("user_id", userId)
-          .maybeSingle();
+          .select("id, sumsub_raw")
+          .eq(recordId ? "id" : "user_id", recordId || userId)
+          .order("created_at", { ascending: false })
+          .limit(1);
+        
+        const existing = records?.[0];
+        const targetId = existing?.id || recordId;
+
         let raw = {};
         if (existing?.sumsub_raw) {
           raw = typeof existing.sumsub_raw === "string" ? JSON.parse(existing.sumsub_raw) : existing.sumsub_raw;
@@ -672,7 +679,7 @@ export default function AccountAgreementStep({
         raw.mandate_accepted = raw.mandate_accepted || true;
         raw.risk_disclosure_accepted = raw.risk_disclosure_accepted || true;
         raw.source_of_funds_accepted = raw.source_of_funds_accepted || true;
-        raw.terms_accepted = true;
+        raw.terms_accepted = raw.terms_accepted || true;
         // ── FIX: explicitly stamp account_agreement_signed ───────────────
         raw.account_agreement_signed = true;
         raw.signed_at = now;
@@ -684,17 +691,16 @@ export default function AccountAgreementStep({
           sumsub_raw: JSON.stringify(raw),
         };
 
-        const { error: updateError } = await supabase
-          .from("user_onboarding")
-          .update(updatePayload)
-          .eq("user_id", userId);
-
-        if (updateError) {
-          console.error("[AccountAgreementStep] DB update error:", updateError.message);
-          // Fallback — try minimal update but ensure signed_at is included
-          await supabase.from("user_onboarding").update({
-            kyc_status: "onboarding_complete",
-          }).eq("user_id", userId);
+        if (targetId) {
+          await supabase
+            .from("user_onboarding")
+            .update(updatePayload)
+            .eq("id", targetId);
+        } else {
+          // Fallback if no record found
+          await supabase
+            .from("user_onboarding")
+            .insert({ ...updatePayload, user_id: userId, employment_status: "not_provided" });
         }
       } catch (dbErr) {
         console.warn("Onboarding DB update failed (non-critical):", dbErr?.message);

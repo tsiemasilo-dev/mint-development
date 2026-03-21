@@ -165,6 +165,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const [taxDone, setTaxDone] = useState(false);
   const [taxNumber, setTaxNumber] = useState("");
   const [termsDone, setTermsDone] = useState(false);
+  const [agreementSignedDone, setAgreementSignedDone] = useState(false);
   const [authStatus, setAuthStatus] = useState({
     isChecked: false,
     isAuthenticated: false,
@@ -262,6 +263,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
       { step: 6, done: riskDone },
       { step: 7, done: sofDone },
       { step: 8, done: termsDone },
+      { step: 9, done: agreementSignedDone },
     ];
     for (const s of steps) {
       if (s.step > afterStep && !s.done && s.step !== justCompletedStep) return s.step;
@@ -746,7 +748,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   { done: riskDone, title: "Risk Disclosure", doneDesc: "Risk disclosure acknowledged", pendingDesc: "Review investment risk disclosure", badge: "Acknowledged" },
                   { done: sofDone, title: "Source of Funds", doneDesc: "Source of funds declared", pendingDesc: "Declare the origin of your investment funds", badge: "Declared" },
                   { done: termsDone, title: "General Terms", doneDesc: "Terms and conditions accepted", pendingDesc: "Review and accept terms and conditions", badge: "Accepted" },
-                  { done: false, title: "Account Agreement", doneDesc: "Agreement signed", pendingDesc: "Review and sign the formal account agreement", badge: "Signed" },
+                  { done: agreementSignedDone, title: "Account Agreement", doneDesc: "Agreement signed", pendingDesc: "Review and sign the formal account agreement", badge: "Signed" },
                 ];
                 return (
                   <>
@@ -1705,8 +1707,9 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   className={`continue-button agreement-continue ${agreementReady ? "enabled" : ""}`}
                   disabled={!agreementReady}
                   onClick={async () => {
-                    await saveProgressFlag("terms_accepted");
-                    setTermsDone(true);
+                    const { data: { flags: updatedFlags } } = await saveProgressFlag("terms_accepted");
+                    setTermsDone(updatedFlags.terms_accepted);
+                    setAgreementSignedDone(updatedFlags.agreement_signed); // Assuming agreement_signed is a flag
                     goToStep(getNextIncompleteStep(8, 8));
                   }}
                 >

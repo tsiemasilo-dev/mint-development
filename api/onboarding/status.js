@@ -41,6 +41,7 @@ function parseOnboardingFlags(record) {
   }
 
   const allComplete = kycDone && taxDone && bankDone && mandateAgreed && riskDone && sofDone && termsDone && agreementSigned;
+  console.log(`[Onboarding Diagnosis] User ${record?.user_id || 'unknown'}: kyc=${kycDone}, tax=${taxDone}, bank=${bankDone}, mandate=${mandateAgreed}, risk=${riskDone}, sof=${sofDone}, terms=${termsDone}, agreement=${agreementSigned} => ALL=${allComplete}`);
   return { kycDone, taxDone, bankDone, mandateAgreed, riskDone, sofDone, termsDone, agreementSigned, allComplete };
 }
 
