@@ -912,15 +912,6 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 </div>
               ) : (
                 <>
-                  <div className="text-center mb-4 animate-fade-in delay-2">
-                    <button
-                      type="button"
-                      className="continue-button proceed-button"
-                      onClick={() => goToStep(getNextIncompleteStep(2, 2))}
-                    >
-                      Skip for now
-                    </button>
-                  </div>
                   <SumsubVerification onVerified={() => setShowProceed(true)} />
                 </>
               )}
