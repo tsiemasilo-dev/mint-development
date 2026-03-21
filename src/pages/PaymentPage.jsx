@@ -22,7 +22,9 @@ const PaymentPage = ({
     initialMethod
       ? initialMethod === "paystack"
         ? "initializing"
-        : "eft-instructions"
+        : initialMethod === "wallet"
+          ? "wallet-pending"
+          : "eft-instructions"
       : "method-selection",
   );
   const [selectedMethod, setSelectedMethod] = useState(initialMethod || null);
@@ -36,15 +38,66 @@ const PaymentPage = ({
   const [walletLoading, setWalletLoading] = useState(true);
 
   // Wallet modal state
-  const [walletConfirmOpen, setWalletConfirmOpen] = useState(false);
+  const [walletConfirmOpen, setWalletConfirmOpen] = useState(initialMethod === "wallet");
   const [walletSuccessOpen, setWalletSuccessOpen] = useState(false);
   const [walletNewBalance, setWalletNewBalance] = useState(0);
   const [walletAmountDeducted, setWalletAmountDeducted] = useState(0);
   const [eftReference, setEftReference] = useState("");
   const [eftSuccessOpen, setEftSuccessOpen] = useState(false);
 
+  const handleMethodSelection = useCallback((method) => {
+    setSelectedMethod(method);
+    setIsMethodModalOpen(false);
+    if (method === "paystack") {
+      setPaymentStatus("initializing");
+      return;
+    }
+    if (method === "wallet") {
+      setPaymentStatus("wallet-pending");
+      setWalletConfirmOpen(true);
+      return;
+    }
+    if (method === "direct_eft") {
+      const uniqueRef = `EFT-${Date.now()}-${profile?.mint_number || "X"}`;
+      setEftReference(uniqueRef);
+      setPaymentStatus("eft-instructions");
+      
+      // Phase 1: Save intent to DB immediately
+      const recordEftIntent = async () => {
+        try {
+          await fetch('/api/eft-deposit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              amount,
+              baseAmount,
+              reference: uniqueRef,
+              strategyId: strategy?.id,
+              symbol: strategy?.symbol,
+              name: strategy?.name,
+              shareCount,
+              intent: true
+            })
+          });
+        } catch (err) {
+          console.warn("[EFT] Failed to save pre-payment intent:", err.message);
+        }
+      };
+      recordEftIntent();
+      return;
+    }
+    setPaymentStatus("eft-instructions");
+  }, [profile, amount, baseAmount, strategy, shareCount]);
+
+  useEffect(() => {
+    if (initialMethod && !hasInitialized.current) {
+      handleMethodSelection(initialMethod);
+    }
+  }, [initialMethod, handleMethodSelection]);
+
   useEffect(() => {
     if (!profile?.id) return;
+
     const fetchWallet = async () => {
       setWalletLoading(true);
       const { data, error } = await supabase
@@ -190,50 +243,6 @@ const PaymentPage = ({
     });
   }, [strategy, amount, profile, onSuccess, onCancel, shareCount, recordInvestment]);
 
-  const handleMethodSelection = (method) => {
-    setSelectedMethod(method);
-    setIsMethodModalOpen(false);
-    if (method === "paystack") {
-      setPaymentStatus("initializing");
-      return;
-    }
-    if (method === "wallet") {
-      setPaymentStatus("wallet-pending");
-      setWalletConfirmOpen(true);
-      return;
-    }
-    if (method === "direct_eft") {
-      const uniqueRef = `EFT-${Date.now()}-${profile?.mint_number || "X"}`;
-      setEftReference(uniqueRef);
-      setPaymentStatus("eft-instructions");
-      
-      // Phase 1: Save intent to DB immediately
-      const recordEftIntent = async () => {
-        try {
-          await fetch('/api/eft-deposit', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              amount,
-              baseAmount,
-              reference: uniqueRef,
-              strategyId: strategy?.id,
-              symbol: strategy?.symbol,
-              name: strategy?.name,
-              shareCount,
-              intent: true
-            })
-          });
-        } catch (err) {
-          console.warn("[EFT] Failed to save pre-payment intent:", err.message);
-        }
-      };
-      recordEftIntent();
-      return;
-    }
-    setPaymentStatus("eft-instructions");
-  };
-
   /**
    * IMPORTANT: Fee Architecture Note
    * 
@@ -246,6 +255,7 @@ const PaymentPage = ({
    * adding the 8% in the previous pages, or you will double-charge the user.
    */
   const handleWalletConfirm = async () => {
+
     const serviceFeeRate = 0.08;
     const totalToDeduct = amount * (1 + serviceFeeRate);
 

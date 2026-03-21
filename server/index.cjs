@@ -3271,6 +3271,58 @@ app.post("/api/confirm-eft-deposit", async (req, res) => {
   }
 });
 
+app.post("/api/confirm-deposit", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  try {
+    const adminSecret = process.env.ADMIN_SECRET || process.env.CONFIRM_EFT_SECRET;
+    const { reference, adminSecret: providedSecret, amount: manualAmount } = req.body;
+
+    if (!adminSecret || providedSecret !== adminSecret) {
+      return res.status(403).json({ success: false, error: "Forbidden" });
+    }
+    if (!reference) return res.status(400).json({ success: false, error: "Missing reference" });
+
+    const db = supabaseAdmin || supabase;
+    const { data: tx, error: txErr } = await db
+      .from("transactions")
+      .select("*")
+      .eq("store_reference", reference)
+      .eq("type", "deposit")
+      .eq("status", "pending")
+      .maybeSingle();
+
+    if (txErr || !tx) {
+      return res.status(404).json({ success: false, error: "Pending deposit not found" });
+    }
+
+    const userId = tx.user_id;
+    // Use manual amount from admin panel (cents) or stored amount
+    const depositAmount = manualAmount || tx.amount; 
+
+    // 1. Update transaction status
+    await db.from("transactions").update({ 
+      status: "posted", 
+      amount: depositAmount,
+      updated_at: new Date().toISOString() 
+    }).eq("id", tx.id);
+
+    // 2. Update wallet balance
+    const { data: wallet } = await db.from("wallets").select("id, balance").eq("user_id", userId).maybeSingle();
+    if (wallet) {
+      const newBalance = (wallet.balance || 0) + depositAmount;
+      await db.from("wallets").update({ balance: newBalance, updated_at: new Date().toISOString() }).eq("id", wallet.id);
+    } else {
+      await db.from("wallets").insert({ user_id: userId, balance: depositAmount });
+    }
+
+    console.log(`[confirm-deposit] User ${userId} wallet topped up by R${depositAmount/100}`);
+    return res.status(200).json({ success: true });
+  } catch (err) {
+    console.error("[confirm-deposit] Error:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.post("/api/user/ensure-mint-number", async (req, res) => {
   try {
     if (!supabase) {
