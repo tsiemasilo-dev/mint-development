@@ -879,8 +879,6 @@ const AuthForm = ({ initialStep = 'email', onSignupComplete, onLoginComplete, on
                   value={lastName}
                   onChange={(event) => setLastName(event.target.value.replace(/[^a-zA-ZÀ-ÖØ-öø-ÿ\s'-]/g, ''))}
                 />
-              </div>
-              <div className="flex justify-center pt-2">
                 <PrimaryButton ariaLabel="Continue" onClick={handleNameContinue}>
                   <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
