@@ -2,14 +2,14 @@
   MINT APP — DEVELOPMENT AUDIT
   Developer: tsiemasilo-dev
   Repository: github.com/mihle-matimba/mint
-  Period: 21 January 2026 – 10 March 2026
+  Period: 21 January 2026 – 24 March 2026
 
   Accounts used:
     tsiemasilo-dev  ·  T-Dev  ·  Masilo  ·  MintDev  ·  masechabamaile
     manwhodevs  ·  AlgoDev  ·  patymca
     MarDeveloper  ·  MarchDeveloper  (AI-assisted sessions, directed by tsiemasilo)
 
-  Total Commits: 837
+  Total Commits: 848
 ================================================================================
 
 
@@ -282,6 +282,44 @@
 
 
 ────────────────────────────────────────────────────────────────────────────────
+  24 MARCH 2026
+  Account: masechabamaile (11 commits, AI-assisted session)
+────────────────────────────────────────────────────────────────────────────────
+
+  Onboarding Bug Fix  [masechabamaile]
+  · Fixed a bug in the onboarding completion check where the agreement signing
+    status variable was declared as a constant, preventing it from being updated
+    correctly — changed to a mutable variable so the status saves properly
+
+  Payment Method UI  [masechabamaile]
+  · Grayed out Paystack in the payment method selection modal with an identical
+    "Coming Soon" dark-gradient badge to match the existing Ozow treatment —
+    non-clickable and visually consistent at 60% opacity
+
+  Mint Mornings Email — Styling Overhaul  [masechabamaile]
+  · Updated the daily Mint Mornings email template to match the in-app news
+    article page visual design:
+              - Round gray avatar header in place of the previous layout
+              - 24px border radius on news cards
+              - Body text changed to #334155 (slate-700)
+              - Article titles set to font-weight 700
+              - "Related Topics" label styled in slate-500 to match the app
+  · Capped each news paragraph at 280 characters and limited to 3 paragraphs
+    per article — prevents overly long email sections
+  · Updated the static reference email template file to match
+
+  Mint Mornings Email — Test Endpoint  [masechabamaile]
+  · Added a titleSearch parameter to the single-send test endpoint so a
+    specific briefing (e.g. "LONDON BRIEFING" or "SA BRIEFING") can be
+    targeted and previewed directly without sending the full newsletter
+
+  Navigation Bar  [masechabamaile]
+  · Reverted the navigation bar (Home, Portfolio, Markets, More) fully back to
+    its original appearance — removed all animated SVG icon enhancements that
+    were added and tested during this session
+
+
+────────────────────────────────────────────────────────────────────────────────
   ACCOUNTS SUMMARY
 ────────────────────────────────────────────────────────────────────────────────
 
@@ -304,13 +342,15 @@
   patymca                43      21 Jan – 31 Jan         KYC: Sumsub + TruID
   MarchDeveloper         30      02 Mar – 04 Mar         Min investment, back nav,
   (AI-assisted)                                          factsheet fixes
-  masechabamaile         22      28 Jan – 30 Jan         Financial calculations,
-                                                         outstanding actions
+  masechabamaile         33      28 Jan – 24 Mar         Financial calculations,
+  (AI-assisted)                                          outstanding actions,
+                                                         email styling, payment
+                                                         UI, onboarding fix
   tsiemasilo-dev         13      27 Jan – 09 Mar         Direct merges, PRs,
   (direct GitHub)                                        branch management
   ──────────────────────────────────────────────────────────────────────────────
-  TOTAL                 837      21 Jan 2026 –
-                                 10 Mar 2026
+  TOTAL                 848      21 Jan 2026 –
+                                 24 Mar 2026
 
 
 ────────────────────────────────────────────────────────────────────────────────
@@ -347,6 +387,11 @@
   ✓  Session management resilience and Vercel API endpoint fixes
   ✓  Order confirmation and fill email notifications (Resend integration)
   ✓  Shared email template system — one source of truth for all emails
+  ✓  Onboarding agreement signing bug fix — mutable status variable
+  ✓  Paystack grayed out with "Coming Soon" badge — matches Ozow treatment
+  ✓  Mint Mornings email restyled to match in-app article page design
+  ✓  News paragraph truncation in emails (280 chars, 3 paragraphs max)
+  ✓  Targeted briefing test endpoint (send by title search)
 
 ================================================================================
   End of Audit — Mint App (github.com/mihle-matimba/mint)
