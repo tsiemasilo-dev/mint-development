@@ -38,7 +38,7 @@
     /* ── Card ── */
     .card {
       background: #fff;
-      border-radius: 20px;
+      border-radius: 24px;
       box-shadow: 0 2px 12px rgba(0,0,0,0.08);
       overflow: hidden;
       margin-bottom: 14px;
@@ -46,20 +46,24 @@
     .card-body { padding: 22px 22px 0; }
     .card-footer { padding: 16px 22px 22px; }
 
-    /* ── Card header: logo + meta ── */
+    /* ── Card header: avatar + meta ── */
     .card-header {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
       padding-bottom: 16px;
       margin-bottom: 16px;
       border-bottom: 1px solid #f1f5f9;
     }
-    .header-logo { height: 20px; width: auto; display: block; flex-shrink: 0; }
-    .header-divider { width: 1px; height: 20px; background: #e2e8f0; flex-shrink: 0; }
-    .header-meta { display: flex; flex-direction: column; gap: 1px; }
-    .header-pub { font-size: 12px; font-weight: 700; color: #0f172a; }
-    .header-date { font-size: 11px; color: #94a3b8; }
+    .header-avatar {
+      width: 44px; height: 44px; border-radius: 50%;
+      background: #f1f5f9; display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .header-logo { height: 20px; width: auto; display: block; }
+    .header-meta { display: flex; flex-direction: column; gap: 2px; }
+    .header-pub { font-size: 13px; font-weight: 600; color: #0f172a; }
+    .header-date { font-size: 11px; color: #64748b; }
 
     /* ── Pills ── */
     .pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
@@ -72,14 +76,14 @@
 
     /* ── Article title ── */
     .article-title {
-      font-size: 22px; font-weight: 800; line-height: 1.25;
+      font-size: 22px; font-weight: 700; line-height: 1.25;
       color: #0f172a; margin-bottom: 14px;
       letter-spacing: -0.3px;
     }
     .article-title.small { font-size: 18px; }
 
     /* ── Body text ── */
-    .body-text { font-size: 14px; line-height: 1.6; color: #475569; }
+    .body-text { font-size: 14px; line-height: 1.6; color: #334155; }
     .body-text p { margin-bottom: 10px; }
     .body-text p:last-child { margin-bottom: 0; }
 
@@ -146,8 +150,8 @@
       margin-top: 16px;
     }
     .topics-label {
-      font-size: 10px; font-weight: 800; text-transform: uppercase;
-      letter-spacing: 0.08em; color: #94a3b8; margin-bottom: 8px;
+      font-size: 10px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.08em; color: #64748b; margin-bottom: 8px;
     }
     .topic-tags { display: flex; flex-wrap: wrap; gap: 6px; }
     .topic-tag {
@@ -210,10 +214,11 @@
 
         <!-- Card header -->
         <div class="card-header">
-          <img class="header-logo"
-            src="https://mfxnghmuccevsxwcetej.supabase.co/storage/v1/object/public/Mint%20Assets/mint-logo.svg"
-            alt="Mint" />
-          <div class="header-divider"></div>
+          <div class="header-avatar">
+            <img class="header-logo"
+              src="https://mfxnghmuccevsxwcetej.supabase.co/storage/v1/object/public/Mint%20Assets/mint-logo.svg"
+              alt="Mint" />
+          </div>
           <div class="header-meta">
             <span class="header-pub">Mint News</span>
             <span class="header-date">19 March 2026 &bull; 07:00 AM</span>
@@ -325,10 +330,11 @@
       <div class="card-body">
 
         <div class="card-header">
-          <img class="header-logo"
-            src="https://mfxnghmuccevsxwcetej.supabase.co/storage/v1/object/public/Mint%20Assets/mint-logo.svg"
-            alt="Mint" />
-          <div class="header-divider"></div>
+          <div class="header-avatar">
+            <img class="header-logo"
+              src="https://mfxnghmuccevsxwcetej.supabase.co/storage/v1/object/public/Mint%20Assets/mint-logo.svg"
+              alt="Mint" />
+          </div>
           <div class="header-meta">
             <span class="header-pub">Mint News</span>
             <span class="header-date">19 March 2026 &bull; 07:00 AM</span>

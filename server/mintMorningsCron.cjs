@@ -86,7 +86,7 @@ function buildMintMorningsHtml(articles) {
     const topics = [...artIndustries, ...artMarkets];
 
     let bodyHtml = artParsed.intro
-      ? `<p style="margin:0 0 10px;font-family:${F};font-size:14px;line-height:1.6;color:#475569;">${textToHtml(artParsed.intro)}</p>`
+      ? `<p style="margin:0 0 10px;font-family:${F};font-size:14px;line-height:1.6;color:#334155;">${textToHtml(artParsed.intro)}</p>`
       : '';
 
     if (artMarketData.length > 0) {
@@ -108,7 +108,7 @@ function buildMintMorningsHtml(articles) {
 
     artNewsSections.forEach(s => {
       bodyHtml += sectionHeading(sectionTitle(s.name));
-      bodyHtml += `<p style="margin:0 0 10px;font-family:${F};font-size:14px;line-height:1.6;color:#475569;">${textToHtml(s.content)}</p>`;
+      bodyHtml += `<p style="margin:0 0 10px;font-family:${F};font-size:14px;line-height:1.6;color:#334155;">${textToHtml(s.content)}</p>`;
     });
 
     const authorHtml = author
@@ -117,32 +117,37 @@ function buildMintMorningsHtml(articles) {
 
     const topicsHtml = topics.length > 0 ? `
       <div style="margin-top:16px;padding-top:14px;border-top:1px solid #f1f5f9;">
-        <div style="font-family:${F};font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#94a3b8;margin-bottom:8px;">Related Topics</div>
+        <div style="font-family:${F};font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:#64748b;margin-bottom:8px;">Related Topics</div>
         <div>${topics.map(t => `<span style="display:inline-block;border:1px solid #e2e8f0;border-radius:9999px;padding:3px 10px;font-family:${F};font-size:11px;font-weight:500;color:#64748b;margin:0 5px 5px 0;">${t}</span>`).join('')}</div>
       </div>` : '';
 
     const cardHeader = `
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-bottom:1px solid #f1f5f9;padding-bottom:14px;margin-bottom:14px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-bottom:1px solid #f1f5f9;padding-bottom:16px;margin-bottom:16px;">
         <tr>
-          <td style="padding-right:10px;vertical-align:middle;">
-            <img src="${LOGO}" height="18" width="46" alt="Mint" style="display:block;height:18px;width:46px;border:0;outline:none;" />
+          <td style="padding-right:12px;vertical-align:middle;" width="44">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="width:44px;height:44px;border-radius:50%;background:#f1f5f9;text-align:center;vertical-align:middle;">
+                  <img src="${LOGO}" height="20" alt="Mint" style="display:inline-block;height:20px;border:0;outline:none;" />
+                </td>
+              </tr>
+            </table>
           </td>
-          <td style="width:1px;background:#e2e8f0;vertical-align:middle;">&nbsp;</td>
-          <td style="padding-left:10px;vertical-align:middle;">
-            <div style="font-family:${F};font-size:12px;font-weight:700;color:#0f172a;line-height:1.3;">Mint News</div>
-            <div style="font-family:${F};font-size:11px;color:#94a3b8;margin-top:1px;">${formattedDate} &bull; ${formattedTime}</div>
+          <td style="vertical-align:middle;">
+            <div style="font-family:${F};font-size:13px;font-weight:600;color:#0f172a;line-height:1.3;">Mint News</div>
+            <div style="font-family:${F};font-size:11px;color:#64748b;margin-top:2px;">${formattedDate} &bull; ${formattedTime}</div>
           </td>
         </tr>
       </table>`;
 
     const titleSize = isHero ? '22px' : '18px';
-    const titleWeight = '800';
+    const titleWeight = '700';
 
     return `
     <tr>
       <td style="padding:${isHero ? '0' : '12px'} 16px 0;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
-          class="card" style="max-width:600px;background:#ffffff;border-radius:20px;box-shadow:0 2px 12px rgba(0,0,0,0.08);overflow:hidden;">
+          class="card" style="max-width:600px;background:#ffffff;border-radius:24px;box-shadow:0 2px 12px rgba(0,0,0,0.08);overflow:hidden;">
           <tr>
             <td style="padding:22px 22px 0 22px;">
               ${cardHeader}
