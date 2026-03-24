@@ -9,7 +9,7 @@
     manwhodevs  ·  AlgoDev  ·  patymca
     MarDeveloper  ·  MarchDeveloper  (AI-assisted sessions, directed by tsiemasilo)
 
-  Total Commits: 848
+  Total Commits: 850
 ================================================================================
 
 
@@ -282,8 +282,18 @@
 
 
 ────────────────────────────────────────────────────────────────────────────────
-  24 MARCH 2026
-  Account: masechabamaile (11 commits, AI-assisted session)
+  22 MARCH 2026
+  Account: tsiemasilo-dev (direct GitHub)
+────────────────────────────────────────────────────────────────────────────────
+
+  Sign-Up Flow  [tsiemasilo-dev]
+  · [3e470b3] Merged Pull Request #125: fix/remove-address-from-signup —
+              removed redundant street address field from the sign-up form
+
+
+────────────────────────────────────────────────────────────────────────────────
+  23 – 24 MARCH 2026
+  Account: masechabamaile (12 commits, AI-assisted session)
 ────────────────────────────────────────────────────────────────────────────────
 
   Onboarding Bug Fix  [masechabamaile]
@@ -342,14 +352,15 @@
   patymca                43      21 Jan – 31 Jan         KYC: Sumsub + TruID
   MarchDeveloper         30      02 Mar – 04 Mar         Min investment, back nav,
   (AI-assisted)                                          factsheet fixes
-  masechabamaile         33      28 Jan – 24 Mar         Financial calculations,
+  masechabamaile         34      28 Jan – 24 Mar         Financial calculations,
   (AI-assisted)                                          outstanding actions,
                                                          email styling, payment
                                                          UI, onboarding fix
-  tsiemasilo-dev         13      27 Jan – 09 Mar         Direct merges, PRs,
-  (direct GitHub)                                        branch management
+  tsiemasilo-dev         14      27 Jan – 22 Mar         Direct merges, PRs,
+  (direct GitHub)                                        branch management,
+                                                         sign-up flow cleanup
   ──────────────────────────────────────────────────────────────────────────────
-  TOTAL                 848      21 Jan 2026 –
+  TOTAL                 850      21 Jan 2026 –
                                  24 Mar 2026
 
 
@@ -387,6 +398,7 @@
   ✓  Session management resilience and Vercel API endpoint fixes
   ✓  Order confirmation and fill email notifications (Resend integration)
   ✓  Shared email template system — one source of truth for all emails
+  ✓  Sign-up form cleanup — redundant street address field removed
   ✓  Onboarding agreement signing bug fix — mutable status variable
   ✓  Paystack grayed out with "Coming Soon" badge — matches Ozow treatment
   ✓  Mint Mornings email restyled to match in-app article page design
