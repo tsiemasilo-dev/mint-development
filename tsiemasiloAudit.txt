@@ -9,7 +9,7 @@
     manwhodevs  ·  AlgoDev  ·  patymca
     MarDeveloper  ·  MarchDeveloper  (AI-assisted sessions, directed by tsiemasilo)
 
-  Total Commits: 850
+  Total Commits: 943
 ================================================================================
 
 
@@ -282,6 +282,89 @@
 
 
 ────────────────────────────────────────────────────────────────────────────────
+  16 – 20 MARCH 2026
+  Account: masechabamaile (86 commits, AI-assisted)
+────────────────────────────────────────────────────────────────────────────────
+
+  Balance & Portfolio Display  [masechabamaile]
+  · Overhauled the balance card display — updated to show portfolio value,
+    wallet funds, and accurate profit and loss
+  · Updated account balance to reflect wallet funds instead of portfolio value
+  · Updated holdings calculations to use live stock prices
+  · Fixed calculation errors for holdings when market value is missing
+  · Updated portfolio balance to show accurate real-time gains and losses
+  · Updated chart to display investment performance accurately from purchase date
+
+  Pending Investment Status  [masechabamaile]
+  · Added pending status badges to assets on the portfolio page
+  · Improved display of pending investment holdings across the application
+  · Updated settlement logic to show pending status for new purchases
+  · Prevented misleading profit calculations for pending strategy trades
+  · Removed duplicate pending badges from asset display
+
+  Payment Methods & EFT  [masechabamaile]
+  · Added a "Coming Soon" premium dark-gradient badge to the Ozow payment option
+  · Updated payment method styling to match the remote main branch
+  · Added an EFT pending payment page for unconfirmed transactions
+  · Improved payment redirect logic and return parameter handling
+  · Added investment recording from the payment success page
+  · Added multiple payment options to the goal linking process
+  · Updated Ozow integration to correctly process transactions
+
+  Navigation & Tab Restructuring  [masechabamaile]
+  · Unified home and wealth tabs into a single swipeable card control
+  · Added Home tab with front card swiping capability
+  · Restructured main navigation — added Deposit tab, renamed Invest and
+    Markets tabs
+  · Removed the Deposit tab from the bottom navigation bar after restructuring
+  · Replaced Markets tab with Deposit tab on the home screen
+
+  Card Design  [masechabamaile]
+  · Updated card to a silver metallic appearance
+  · Added a decorative background pattern to both sides of the card
+  · Added Mint number display below the logo on the front card
+  · Added a Home tab card to display the user's balance
+
+  Mint Mornings Email — Initial Build  [masechabamaile]
+  · Built the initial Mint Mornings HTML email template for daily market news
+  · Iteratively updated styling to match the in-app news article page design
+  · Updated logo display, section heading colors, and rule line colors
+  · Added HTML preview file with sample article content for reference
+
+  Activity & Transactions  [masechabamaile]
+  · Updated activity page tabs and transaction categorization logic
+  · Updated transaction history to display fees and correct financial summaries
+
+  Fees & Strategy  [masechabamaile]
+  · Updated app fees and transaction processing rates
+  · Updated investment and stock purchase fee labels
+  · Fixed fees calculation for strategies with no holdings
+  · Set minimum investment amount for test strategy
+  · Improved strategy modal display to prevent content cutoff
+
+  Deposit Page  [masechabamaile]
+  · Updated the deposit page with bank branding and user-specific payment details
+
+
+────────────────────────────────────────────────────────────────────────────────
+  20 MARCH 2026
+  Account: 5t4ybnghrf (7 commits, AI-assisted)
+────────────────────────────────────────────────────────────────────────────────
+
+  EFT Deposits & Payment  [5t4ybnghrf]
+  · Built functionality to process EFT deposits and send email confirmations
+    on successful payment
+  · Added a pending wallet balance for EFT payments awaiting confirmation
+  · Displayed the user's Mint number inside the EFT payment modal as reference
+  · Added a thank-you popup shown to users after payment confirmation
+  · Completed onboarding immediately upon the user signing the agreement
+    document — removes the manual completion step
+  · Adjusted portfolio card layout to correctly display all content without
+    cutoff
+  · Updated the development script to use the local Vite installation
+
+
+────────────────────────────────────────────────────────────────────────────────
   22 MARCH 2026
   Account: tsiemasilo-dev (direct GitHub)
 ────────────────────────────────────────────────────────────────────────────────
@@ -352,15 +435,19 @@
   patymca                43      21 Jan – 31 Jan         KYC: Sumsub + TruID
   MarchDeveloper         30      02 Mar – 04 Mar         Min investment, back nav,
   (AI-assisted)                                          factsheet fixes
-  masechabamaile         34      28 Jan – 24 Mar         Financial calculations,
+  masechabamaile        120      28 Jan – 24 Mar         Financial calculations,
   (AI-assisted)                                          outstanding actions,
-                                                         email styling, payment
-                                                         UI, onboarding fix
+                                                         portfolio, payments,
+                                                         email, card design,
+                                                         onboarding fix
+  5t4ybnghrf              7      20 Mar                  EFT deposits, pending
+  (AI-assisted)                                          wallet, Mint number,
+                                                         onboarding completion
   tsiemasilo-dev         14      27 Jan – 22 Mar         Direct merges, PRs,
   (direct GitHub)                                        branch management,
                                                          sign-up flow cleanup
   ──────────────────────────────────────────────────────────────────────────────
-  TOTAL                 850      21 Jan 2026 –
+  TOTAL                 943      21 Jan 2026 –
                                  24 Mar 2026
 
 
@@ -398,6 +485,21 @@
   ✓  Session management resilience and Vercel API endpoint fixes
   ✓  Order confirmation and fill email notifications (Resend integration)
   ✓  Shared email template system — one source of truth for all emails
+  ✓  EFT deposit processing with email confirmation (5t4ybnghrf)
+  ✓  Pending wallet balance for EFT payments
+  ✓  Mint number displayed in EFT payment modal
+  ✓  Thank-you popup after payment confirmation
+  ✓  Auto-complete onboarding on document signing
+  ✓  Ozow "Coming Soon" badge — initial build (masechabamaile)
+  ✓  EFT pending payment page
+  ✓  Payment recording from payment success page
+  ✓  Balance card overhaul — wallet funds, portfolio value, P&L display
+  ✓  Pending investment status badges across portfolio
+  ✓  Mint Mornings email template — initial build and iterative styling
+  ✓  Activity page tabs and transaction categorization
+  ✓  Holdings calculations with live stock prices
+  ✓  Navigation restructuring — home, deposit, markets, invest tabs
+  ✓  Silver metallic card design with decorative pattern and Mint number
   ✓  Sign-up form cleanup — redundant street address field removed
   ✓  Onboarding agreement signing bug fix — mutable status variable
   ✓  Paystack grayed out with "Coming Soon" badge — matches Ozow treatment
