@@ -145,6 +145,7 @@ const App = () => {
     };
 
     const onEnter = (e) => {
+      if (!(e.target instanceof Element)) return;
       const btn = e.target.closest('button');
       if (!btn) return;
       const rect = btn.getBoundingClientRect();
@@ -163,6 +164,7 @@ const App = () => {
     };
 
     const onLeave = (e) => {
+      if (!(e.target instanceof Element)) return;
       const btn = e.target.closest('button');
       if (!btn) return;
       const ripple = btn.querySelector(`.${RIPPLE_CLASS}`);
