@@ -6,7 +6,7 @@ import SwipeBackWrapper from "./components/SwipeBackWrapper.jsx";
 
 import AuthPage from "./pages/AuthPage.jsx";
 import HomePage from "./pages/HomePage.jsx";
-import CreditPage from "./pages/CreditPage.jsx";
+import CreditHome from "./pages/credit/CreditHome";
 import CreditApplyPage from "./pages/CreditApplyPage.jsx";
 import CreditRepayPage from "./pages/CreditRepayPage.jsx";
 import InvestmentsPage from "./pages/InvestmentsPage.jsx";
@@ -498,21 +498,22 @@ const App = () => {
             />
           </AppLayout>
         );
-      case 'credit':
+      case "credit":
         return (
-          <AppLayout
-            activeTab="credit"
-            onTabChange={noOp}
-            onWithdraw={noOp}
-            onShowComingSoon={noOp}
-            modal={null}
-            onCloseModal={noOp}
-          >
-            <CreditPage
-              onOpenNotifications={noOp}
-              onOpenCreditApply={noOp}
-            />
-          </AppLayout>
+          <CreditHome 
+            profile={profile} 
+            onOpenNotifications={() => setShowNotifications(true)} 
+            onTabChange={setCurrentPage} 
+          />
+        );
+
+      case "instantLiquidity":
+        return (
+          <InstantLiquidityPage 
+            profile={profile} 
+            onOpenNotifications={() => setShowNotifications(true)} 
+            onTabChange={setCurrentPage} 
+          />
         );
       case 'statements':
         return (
