@@ -1,56 +1,5 @@
-import React, { useState, useRef, startTransition } from "react";
-import { motion, useMotionValue, useSpring } from "framer-motion";
-
-const OriginButton = ({ children, onClick, className, circleColor }) => {
-  const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
-  const containerRef = useRef(null);
-  const scale = useMotionValue(0);
-  const smoothScale = useSpring(scale, { stiffness: 85, damping: 18, restDelta: 0.001 });
-
-  const handleMouseEnter = (e) => {
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    startTransition(() => setCursorPos({ x: e.clientX - rect.left, y: e.clientY - rect.top }));
-    scale.set(1);
-  };
-
-  const handleMouseLeave = (e) => {
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    startTransition(() => setCursorPos({ x: e.clientX - rect.left, y: e.clientY - rect.top }));
-    scale.set(0);
-  };
-
-  return (
-    <button
-      ref={containerRef}
-      type="button"
-      onClick={onClick}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      className={className}
-      style={{ position: "relative", overflow: "hidden" }}
-    >
-      <motion.span
-        style={{
-          position: "absolute",
-          left: cursorPos.x,
-          top: cursorPos.y,
-          width: 400,
-          height: 400,
-          borderRadius: "50%",
-          backgroundColor: circleColor,
-          scale: smoothScale,
-          x: "-50%",
-          y: "-50%",
-          pointerEvents: "none",
-          zIndex: 0,
-        }}
-      />
-      <span style={{ position: "relative", zIndex: 1 }}>{children}</span>
-    </button>
-  );
-};
+import React from "react";
+import OriginButton from "../components/OriginButton";
 
 const OnboardingPage = ({ onCreateAccount, onLogin }) => {
   return (
