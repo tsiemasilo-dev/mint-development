@@ -7,17 +7,29 @@ const OriginButton = ({ children, onClick, className, circleColor = "rgba(148,16
   const scale = useMotionValue(0);
   const smoothScale = useSpring(scale, { stiffness: 85, damping: 18, restDelta: 0.001 });
 
-  const handleMouseEnter = (e) => {
+  const getPos = (clientX, clientY) => {
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
-    startTransition(() => setCursorPos({ x: e.clientX - rect.left, y: e.clientY - rect.top }));
+    startTransition(() => setCursorPos({ x: clientX - rect.left, y: clientY - rect.top }));
+  };
+
+  const handleMouseEnter = (e) => {
+    getPos(e.clientX, e.clientY);
     scale.set(1);
   };
 
   const handleMouseLeave = (e) => {
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    startTransition(() => setCursorPos({ x: e.clientX - rect.left, y: e.clientY - rect.top }));
+    getPos(e.clientX, e.clientY);
+    scale.set(0);
+  };
+
+  const handleTouchStart = (e) => {
+    const touch = e.touches[0];
+    getPos(touch.clientX, touch.clientY);
+    scale.set(1);
+  };
+
+  const handleTouchEnd = () => {
     scale.set(0);
   };
 
@@ -28,6 +40,9 @@ const OriginButton = ({ children, onClick, className, circleColor = "rgba(148,16
       onClick={onClick}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
       className={className}
       style={{ ...style, position: "relative", overflow: "hidden" }}
       aria-label={ariaLabel}
