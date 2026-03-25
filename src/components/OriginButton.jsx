@@ -29,7 +29,15 @@ const OriginButton = ({ children, onClick, className, circleColor = "rgba(148,16
     scale.set(1);
   };
 
-  const handleTouchEnd = () => {
+  const handleTouchEnd = (e) => {
+    e.preventDefault();
+    setTimeout(() => {
+      scale.set(0);
+      if (onClick) onClick();
+    }, 320);
+  };
+
+  const handleTouchCancel = () => {
     scale.set(0);
   };
 
@@ -42,7 +50,7 @@ const OriginButton = ({ children, onClick, className, circleColor = "rgba(148,16
       onMouseLeave={handleMouseLeave}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
-      onTouchCancel={handleTouchEnd}
+      onTouchCancel={handleTouchCancel}
       className={className}
       style={{ ...style, position: "relative", overflow: "hidden" }}
       aria-label={ariaLabel}
