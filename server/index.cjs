@@ -3,6 +3,224 @@ const cors = require("cors");
 const crypto = require("crypto");
 const { Pool } = require("pg");
 const truIDClient = require("./truidClient.cjs");
+const { Resend } = require("resend");
+const fs = require("fs");
+const path = require("path");
+
+// Simple .env loader for local development (no dotenv dependency required)
+try {
+  const envPath = path.join(__dirname, "..", ".env");
+  if (fs.existsSync(envPath)) {
+    const envContent = fs.readFileSync(envPath, "utf8");
+    envContent.split("\n").forEach(line => {
+      // Basic key=value parsing
+      const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+      if (match) {
+        const key = match[1];
+        let value = match[2] || "";
+        // Remove quotes if present
+        if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
+        if (value.startsWith("'") && value.endsWith("'")) value = value.slice(1, -1);
+        // Only set if not already set by system environment
+        if (!process.env[key]) {
+          process.env[key] = value;
+        }
+      }
+    });
+    console.log("[Server] Local .env file loaded");
+  }
+} catch (e) {
+  console.warn("[Server] Could not load .env file:", e.message);
+}
+
+// Helper to check both standard and VITE_ prefixed env vars
+const readEnv = (key) => process.env[key] || process.env[`VITE_${key}`];
+
+let _resendClient = null;
+function getResendClient() {
+  if (!_resendClient && process.env.RESEND_API_KEY) {
+    _resendClient = new Resend(process.env.RESEND_API_KEY);
+  }
+  return _resendClient;
+}
+
+async function sendOrderFillEmail(db, { transactionId, holdingId }) {
+  try {
+    const resend = getResendClient();
+    if (!resend) return;
+
+    const dedupKey = transactionId || holdingId;
+    if (dedupKey) {
+      const { data: existing } = await db.from("order_emails")
+        .select("id, fill_status")
+        .or(`transaction_id.eq.${dedupKey},holding_id.eq.${dedupKey}`)
+        .limit(1)
+        .maybeSingle();
+      if (existing && existing.fill_status === "sent") {
+        console.log(`[order-fill-email] Already sent for tx:${transactionId} holding:${holdingId} — skipping`);
+        return;
+      }
+    }
+
+    let userId = null;
+    let txData = null;
+    let holdingData = null;
+
+    if (transactionId) {
+      const { data } = await db.from("transactions").select("user_id, name, amount, store_reference, transaction_date").eq("id", transactionId).maybeSingle();
+      if (data) { txData = data; userId = data.user_id; }
+    }
+    if (holdingId) {
+      const { data } = await db.from("stock_holdings").select("user_id, security_id, quantity, avg_fill, market_value").eq("id", holdingId).maybeSingle();
+      if (data) { holdingData = data; if (!userId) userId = data.user_id; }
+    }
+    if (!userId) return;
+
+    let userEmail = null;
+    const { data: userData } = await db.auth.admin.getUserById(userId);
+    if (userData?.user?.email) userEmail = userData.user.email;
+    if (!userEmail) return;
+
+    let assetName = null;
+    let assetSymbol = null;
+    let strategyName = null;
+    const txName = txData?.name || "";
+    if (txName.startsWith("Strategy Investment:")) {
+      strategyName = txName.replace("Strategy Investment: ", "");
+    } else {
+      assetName = txName.replace("Purchased ", "");
+    }
+
+    if (holdingData?.security_id) {
+      const { data: sec } = await db.from("securities").select("name, symbol").eq("id", holdingData.security_id).maybeSingle();
+      if (sec) { assetName = sec.name; assetSymbol = sec.symbol; }
+    }
+
+    const amountCents = txData?.amount || (holdingData?.market_value) || 0;
+    const fillPriceCents = holdingData?.avg_fill || null;
+    const quantity = holdingData?.quantity || null;
+    const reference = txData?.store_reference || null;
+    const orderDate = txData?.transaction_date || null;
+    const fillDate = new Date().toISOString();
+
+    const displayName = strategyName || assetName || assetSymbol || "Asset";
+    const subject = `Order Filled \u2014 ${displayName}`;
+
+    const { buildOrderFillHtml } = await import('../api/_lib/order-email-templates.js');
+    const html = buildOrderFillHtml({
+      assetName, assetSymbol, strategyName,
+      amountCents, quantity, fillPriceCents,
+      reference, orderDate, fillDate,
+    });
+
+    const resp = await resend.emails.send({
+      from: "Mint <orders@mymint.co.za>",
+      to: [userEmail],
+      subject,
+      html,
+    });
+
+    const resendId = resp?.data?.id || null;
+
+    const fillStatus = resp.error ? "failed" : "sent";
+    const existingRow = await db.from("order_emails")
+      .select("id")
+      .or(`transaction_id.eq.${transactionId || ""},holding_id.eq.${holdingId || ""}`)
+      .limit(1)
+      .maybeSingle();
+
+    if (existingRow?.data?.id) {
+      await db.from("order_emails").update({
+        fill_status: fillStatus,
+        fill_resend_id: resendId,
+        fill_sent_at: fillDate,
+        fill_price_cents: fillPriceCents,
+        fill_date: fillDate,
+        updated_at: new Date().toISOString(),
+      }).eq("id", existingRow.data.id).then(() => { }).catch((err) => console.warn("[order-fill-email] Log update error:", err?.message));
+    } else {
+      await db.from("order_emails").insert({
+        user_id: userId,
+        email: userEmail,
+        asset_name: assetName || null,
+        asset_symbol: assetSymbol || null,
+        strategy_name: strategyName || null,
+        amount_cents: amountCents,
+        quantity,
+        reference,
+        order_date: orderDate,
+        confirmation_status: "unknown",
+        fill_status: fillStatus,
+        fill_resend_id: resendId,
+        fill_sent_at: fillDate,
+        fill_price_cents: fillPriceCents,
+        fill_date: fillDate,
+        transaction_id: transactionId || null,
+        holding_id: holdingId || null,
+      }).then(() => { }).catch((err) => console.warn("[order-fill-email] Log insert error:", err?.message));
+    }
+
+    console.log(`[order-fill-email] Sent to ${userEmail} for ${displayName}`);
+  } catch (err) {
+    console.error("[order-fill-email] Failed:", err.message);
+  }
+}
+
+async function sendOrderConfirmationEmail(db, { userId, userEmail, assetName, assetSymbol, strategyName, amountCents, quantity, priceCents, reference, orderDate, paymentMethod }) {
+  try {
+    const resend = getResendClient();
+    if (!resend) {
+      console.log("[order-email] RESEND_API_KEY not set — skipping confirmation email");
+      return;
+    }
+
+    const isStrategy = !!strategyName;
+    const displayName = strategyName || assetName || assetSymbol || "Unknown";
+    const subject = isStrategy
+      ? `Order Confirmed \u2014 ${strategyName}`
+      : `Order Confirmed \u2014 ${assetName || assetSymbol || "Stock"}`;
+
+    const { buildOrderConfirmationHtml } = await import('../api/_lib/order-email-templates.js');
+    const html = buildOrderConfirmationHtml({
+      assetName, assetSymbol, strategyName,
+      amountCents, quantity, priceCents,
+      reference, orderDate,
+      paymentMethod,
+    });
+
+    const resp = await resend.emails.send({
+      from: "Mint <orders@mymint.co.za>",
+      to: [userEmail],
+      subject,
+      html,
+    });
+
+    const resendId = resp?.data?.id || null;
+    if (resp.error) {
+      console.error("[order-email] Resend error:", resp.error.message);
+    }
+
+    await db.from("order_emails").insert({
+      user_id: userId,
+      email: userEmail,
+      asset_name: assetName || null,
+      asset_symbol: assetSymbol || null,
+      strategy_name: strategyName || null,
+      amount_cents: amountCents,
+      quantity: quantity || null,
+      reference: reference || null,
+      order_date: orderDate,
+      confirmation_status: resp.error ? "failed" : "sent",
+      confirmation_resend_id: resendId,
+      confirmation_sent_at: new Date().toISOString(),
+      confirmation_price_cents: priceCents || null,
+    }).then(() => { }).catch((err) => console.warn("[order-email] Log write error:", err?.message));
+
+    console.log(`[order-email] Confirmation sent to ${userEmail} for ${displayName}`);
+  } catch (err) {
+    console.error("[order-email] Failed to send confirmation:", err.message);
+  }
+}
 
 const pgPool = process.env.DATABASE_URL ? new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -12,13 +230,13 @@ const pgPool = process.env.DATABASE_URL ? new Pool({
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "20mb" }));
 
 // Sumsub configuration
-const SUMSUB_APP_TOKEN = process.env.SUMSUB_APP_TOKEN;
-const SUMSUB_SECRET_KEY = process.env.SUMSUB_SECRET_KEY;
+const SUMSUB_APP_TOKEN = readEnv("SUMSUB_APP_TOKEN");
+const SUMSUB_SECRET_KEY = readEnv("SUMSUB_SECRET_KEY");
 const SUMSUB_BASE_URL = "https://api.sumsub.com";
-const SUMSUB_LEVEL_NAME = process.env.SUMSUB_LEVEL_NAME || "mint-advanced-kyc";
+const SUMSUB_LEVEL_NAME = readEnv("SUMSUB_LEVEL_NAME") || "mint-advanced-kyc";
 
 // Create signature for Sumsub API requests
 function createSumsubSignature(ts, method, path, body = "") {
@@ -60,9 +278,9 @@ async function generateSumsubAccessToken(userId, levelName = SUMSUB_LEVEL_NAME) 
   const ts = Math.floor(Date.now() / 1000).toString();
   const path = `/resources/accessTokens?userId=${encodeURIComponent(userId)}&levelName=${encodeURIComponent(levelName)}`;
   const method = "POST";
-  
+
   const signature = createSumsubSignature(ts, method, path);
-  
+
   const response = await fetch(`${SUMSUB_BASE_URL}${path}`, {
     method,
     headers: {
@@ -73,12 +291,12 @@ async function generateSumsubAccessToken(userId, levelName = SUMSUB_LEVEL_NAME) 
       "X-App-Access-Sig": signature,
     },
   });
-  
+
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(`Sumsub API error: ${response.status} - ${errorText}`);
   }
-  
+
   return response.json();
 }
 
@@ -87,9 +305,9 @@ async function getSumsubApplicantStatus(applicantId) {
   const ts = Math.floor(Date.now() / 1000).toString();
   const path = `/resources/applicants/${applicantId}/requiredIdDocsStatus`;
   const method = "GET";
-  
+
   const signature = createSumsubSignature(ts, method, path);
-  
+
   const response = await fetch(`${SUMSUB_BASE_URL}${path}`, {
     method,
     headers: {
@@ -99,12 +317,12 @@ async function getSumsubApplicantStatus(applicantId) {
       "X-App-Access-Sig": signature,
     },
   });
-  
+
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(`Sumsub API error: ${response.status} - ${errorText}`);
   }
-  
+
   return response.json();
 }
 
@@ -113,9 +331,9 @@ async function getSumsubApplicantByExternalId(externalUserId) {
   const ts = Math.floor(Date.now() / 1000).toString();
   const path = `/resources/applicants/-;externalUserId=${encodeURIComponent(externalUserId)}/one`;
   const method = "GET";
-  
+
   const signature = createSumsubSignature(ts, method, path);
-  
+
   const response = await fetch(`${SUMSUB_BASE_URL}${path}`, {
     method,
     headers: {
@@ -125,7 +343,7 @@ async function getSumsubApplicantByExternalId(externalUserId) {
       "X-App-Access-Sig": signature,
     },
   });
-  
+
   if (!response.ok) {
     if (response.status === 404) {
       return null;
@@ -133,7 +351,7 @@ async function getSumsubApplicantByExternalId(externalUserId) {
     const errorText = await response.text();
     throw new Error(`Sumsub API error: ${response.status} - ${errorText}`);
   }
-  
+
   return response.json();
 }
 
@@ -142,9 +360,9 @@ async function getSumsubRequiredDocsStatus(applicantId) {
   const ts = Math.floor(Date.now() / 1000).toString();
   const path = `/resources/applicants/${applicantId}/requiredIdDocsStatus`;
   const method = "GET";
-  
+
   const signature = createSumsubSignature(ts, method, path);
-  
+
   const response = await fetch(`${SUMSUB_BASE_URL}${path}`, {
     method,
     headers: {
@@ -154,17 +372,15 @@ async function getSumsubRequiredDocsStatus(applicantId) {
       "X-App-Access-Sig": signature,
     },
   });
-  
+
   if (!response.ok) {
     const errorText = await response.text();
     console.error("Failed to get required docs status:", errorText);
     return null;
   }
-  
+
   return response.json();
 }
-
-const readEnv = (key) => process.env[key] || process.env[`VITE_${key}`];
 
 const SUPABASE_URL = readEnv('SUPABASE_URL') || readEnv('VITE_SUPABASE_URL');
 const SUPABASE_ANON_KEY = readEnv('SUPABASE_ANON_KEY') || readEnv('VITE_SUPABASE_ANON_KEY');
@@ -227,10 +443,10 @@ cleanupInvalidHoldings();
 
 // ============================================================
 // Settlement Status System
-// Tracks investment lifecycle: pending_csdp → pending_broker → confirmed
+// Tracks investment lifecycle: pending (awaiting fill) → pending_broker → confirmed
 // ============================================================
 const SETTLEMENT_STATUSES = {
-  PENDING_CSDP: 'pending_csdp',
+  PENDING: 'pending',
   PENDING_BROKER: 'pending_broker',
   CONFIRMED: 'confirmed',
   FAILED: 'failed',
@@ -330,6 +546,57 @@ async function migrateGoalColumns() {
   }
 }
 migrateGoalColumns();
+
+async function migrateWalletColumns() {
+  const db = supabaseAdmin || supabase;
+  if (!db) return;
+  try {
+    const cols = [
+      "ALTER TABLE wallets ADD COLUMN IF NOT EXISTS pending_balance numeric DEFAULT 0",
+    ];
+    for (const sql of cols) {
+      try {
+        await db.rpc('exec_sql', { query: sql });
+      } catch (e) {
+        console.log('[wallets] RPC failed for column, may need manual addition:', e.message);
+      }
+    }
+    console.log('[wallets] pending_balance column ensured');
+  } catch (e) {
+    console.log('[wallets] Migration check error:', e.message);
+  }
+}
+migrateWalletColumns();
+
+async function ensureUserSessionsTable() {
+  if (!pgPool) return;
+  const client = await pgPool.connect();
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_sessions (
+        id         BIGSERIAL PRIMARY KEY,
+        user_id    UUID NOT NULL,
+        session_token TEXT NOT NULL,
+        user_agent TEXT DEFAULT '',
+        browser    TEXT DEFAULT '',
+        os         TEXT DEFAULT '',
+        device_type TEXT DEFAULT 'desktop',
+        ip_address TEXT DEFAULT '',
+        is_current BOOLEAN DEFAULT false,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        last_active_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions(user_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_user_sessions_token ON user_sessions(session_token)`);
+    console.log('[sessions] user_sessions table ready');
+  } catch (e) {
+    console.error('[sessions] Failed to create user_sessions table:', e.message);
+  } finally {
+    client.release();
+  }
+}
+ensureUserSessionsTable();
 
 function generateMintNumber(firstName, idNumber, createdAt) {
   const normalized = (firstName || 'MNT').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -485,9 +752,6 @@ function deriveSettlementStatus(record) {
     (record.store_reference && record.direction === 'debit');
 
   if (isInvestment) {
-    if (!settlementConfig.csdpEnabled) {
-      return SETTLEMENT_STATUSES.PENDING_CSDP;
-    }
     if (!settlementConfig.brokerEnabled) {
       return SETTLEMENT_STATUSES.PENDING_BROKER;
     }
@@ -502,13 +766,15 @@ function deriveHoldingSettlementStatus(holding) {
     return holding.settlement_status;
   }
 
+  const avgFill = Number(holding.avg_fill || 0);
+  if (!avgFill || avgFill === 0) {
+    return SETTLEMENT_STATUSES.PENDING;
+  }
+
   if (settlementConfig.isFullyIntegrated) {
     return SETTLEMENT_STATUSES.CONFIRMED;
   }
 
-  if (!settlementConfig.csdpEnabled) {
-    return SETTLEMENT_STATUSES.PENDING_CSDP;
-  }
   if (!settlementConfig.brokerEnabled) {
     return SETTLEMENT_STATUSES.PENDING_BROKER;
   }
@@ -547,12 +813,12 @@ app.post("/api/sumsub/access-token", async (req, res) => {
       try {
         const { data: { user } } = await db.auth.getUser(token);
         if (user) authenticatedUserId = user.id;
-      } catch (e) {}
+      } catch (e) { }
     }
 
     const { levelName = SUMSUB_LEVEL_NAME } = req.body;
     const userId = authenticatedUserId;
-    
+
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -605,7 +871,7 @@ app.post("/api/sumsub/access-token", async (req, res) => {
         console.error("[Sumsub] Onboarding record error:", dbErr.message);
       }
     }
-    
+
     res.json({
       success: true,
       token: tokenData.token,
@@ -635,7 +901,7 @@ app.post("/api/sumsub/reset", async (req, res) => {
       try {
         const { data: { user } } = await db.auth.getUser(token);
         if (user) authenticatedUserId = user.id;
-      } catch (e) {}
+      } catch (e) { }
     }
 
     if (!authenticatedUserId) {
@@ -701,9 +967,9 @@ async function getSumsubApplicantById(applicantId) {
   const ts = Math.floor(Date.now() / 1000).toString();
   const path = `/resources/applicants/${applicantId}/one`;
   const method = "GET";
-  
+
   const signature = createSumsubSignature(ts, method, path);
-  
+
   const response = await fetch(`${SUMSUB_BASE_URL}${path}`, {
     method,
     headers: {
@@ -713,12 +979,12 @@ async function getSumsubApplicantById(applicantId) {
       "X-App-Access-Sig": signature,
     },
   });
-  
+
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(`Sumsub API error: ${response.status} - ${errorText}`);
   }
-  
+
   return response.json();
 }
 
@@ -732,17 +998,17 @@ app.get("/api/sumsub/status/:applicantId", async (req, res) => {
     }
 
     const { applicantId } = req.params;
-    
+
     // Get both the applicant info and required docs status
     const [applicant, requiredDocsStatus] = await Promise.all([
       getSumsubApplicantById(applicantId),
       getSumsubApplicantStatus(applicantId)
     ]);
-    
+
     // Calculate normalized status
     let hasAnySubmittedSteps = false;
     let hasRejectedSteps = false;
-    
+
     if (requiredDocsStatus) {
       for (const [stepName, stepData] of Object.entries(requiredDocsStatus)) {
         if (stepData !== null) {
@@ -753,10 +1019,10 @@ app.get("/api/sumsub/status/:applicantId", async (req, res) => {
         }
       }
     }
-    
+
     const reviewStatus = applicant?.review?.reviewStatus;
     const reviewAnswer = applicant?.review?.reviewResult?.reviewAnswer;
-    
+
     let normalizedStatus = "not_verified";
     if (reviewAnswer === "GREEN") {
       normalizedStatus = "verified";
@@ -771,7 +1037,7 @@ app.get("/api/sumsub/status/:applicantId", async (req, res) => {
     } else {
       normalizedStatus = "not_verified";
     }
-    
+
     res.json({
       success: true,
       normalizedStatus,
@@ -800,7 +1066,7 @@ app.post("/api/sumsub/check-status", async (req, res) => {
     }
 
     const { userId } = req.body;
-    
+
     if (!userId) {
       return res.status(400).json({
         success: false,
@@ -809,7 +1075,7 @@ app.post("/api/sumsub/check-status", async (req, res) => {
     }
 
     const applicant = await getSumsubApplicantByExternalId(userId);
-    
+
     if (!applicant) {
       return res.json({
         success: true,
@@ -840,7 +1106,7 @@ app.post("/api/sumsub/check-status", async (req, res) => {
 app.post("/api/sumsub/status", async (req, res) => {
   try {
     const { userId } = req.body;
-    
+
     if (!userId) {
       return res.status(400).json({
         success: false,
@@ -878,6 +1144,7 @@ app.post("/api/sumsub/status", async (req, res) => {
     }
 
     if (!SUMSUB_APP_TOKEN || !SUMSUB_SECRET_KEY) {
+      console.error("[Sumsub] Credentials not configured in environment variables");
       return res.status(500).json({
         success: false,
         error: { message: "Sumsub credentials not configured" }
@@ -885,7 +1152,7 @@ app.post("/api/sumsub/status", async (req, res) => {
     }
 
     const applicant = await getSumsubApplicantByExternalId(userId);
-    
+
     if (!applicant) {
       return res.json({
         success: true,
@@ -900,13 +1167,13 @@ app.post("/api/sumsub/status", async (req, res) => {
 
     // Get the required docs status to check for incomplete steps
     const requiredDocsStatus = await getSumsubRequiredDocsStatus(applicant.id);
-    
+
     // Check document status - distinguish between "never started" and "started but incomplete"
     let hasIncompleteSteps = false;
     let hasRejectedSteps = false;
     let allStepsGreen = true;
     let hasAnySubmittedSteps = false; // Track if user ever submitted anything
-    
+
     if (requiredDocsStatus) {
       for (const [stepName, stepData] of Object.entries(requiredDocsStatus)) {
         if (stepData === null) {
@@ -933,7 +1200,7 @@ app.post("/api/sumsub/status", async (req, res) => {
     const reviewAnswer = applicant.review?.reviewResult?.reviewAnswer;
     const rejectLabels = applicant.review?.reviewResult?.rejectLabels || [];
     const reviewRejectType = applicant.review?.reviewResult?.reviewRejectType;
-    
+
     // Log detailed Sumsub status for debugging
     console.log(`=== Sumsub Status for ${userId} ===`);
     console.log(`Applicant ID: ${applicant.id}`);
@@ -945,16 +1212,16 @@ app.post("/api/sumsub/status", async (req, res) => {
     console.log(`Has Rejected Steps: ${hasRejectedSteps}`);
     console.log(`Has Any Submitted Steps: ${hasAnySubmittedSteps}`);
     console.log(`All Steps Green: ${allStepsGreen}`);
-    
+
     let status = "not_verified";
-    
+
     // Priority order for status determination:
     // 1. If all steps are GREEN and review is GREEN → verified
     // 2. If any steps are rejected or on hold → needs_resubmission
     // 3. If there are incomplete/missing steps → needs_resubmission (documents required)
     // 4. If all submitted and review pending → pending (under review)
     // 5. If user never submitted anything → not_verified
-    
+
     if (allStepsGreen && reviewAnswer === "GREEN") {
       status = "verified";
       console.log(`Status: verified (all steps GREEN)`);
@@ -1087,7 +1354,7 @@ app.post("/api/sumsub/sync-status", async (req, res) => {
     }
 
     const { userId } = req.body;
-    
+
     if (!userId) {
       return res.status(400).json({
         success: false,
@@ -1096,7 +1363,7 @@ app.post("/api/sumsub/sync-status", async (req, res) => {
     }
 
     const applicant = await getSumsubApplicantByExternalId(userId);
-    
+
     if (!applicant) {
       return res.json({
         success: true,
@@ -1112,9 +1379,9 @@ app.post("/api/sumsub/sync-status", async (req, res) => {
     const reviewStatus = applicant.review?.reviewStatus;
     const reviewAnswer = applicant.review?.reviewResult?.reviewAnswer;
     const rejectLabels = applicant.review?.reviewResult?.rejectLabels || [];
-    
+
     let status = "not_verified";
-    
+
     if (reviewAnswer === "GREEN") {
       status = "verified";
     } else if (reviewAnswer === "RED") {
@@ -1169,10 +1436,10 @@ app.post("/api/sumsub/webhook", async (req, res) => {
   }
 
   console.log("[Webhook] Sumsub webhook received:", JSON.stringify(req.body, null, 2));
-  
+
   const { type, applicantId, reviewResult, reviewStatus, externalUserId } = req.body;
   const db = supabaseAdmin || supabase;
-  
+
   if (!db || !externalUserId) {
     console.log("[Webhook] No database client or externalUserId, skipping");
     return res.status(200).json({ received: true });
@@ -1182,11 +1449,11 @@ app.post("/api/sumsub/webhook", async (req, res) => {
     let kycUpdate = null;
     let onboardingKycStatus = null;
     let reviewAnswer = null;
-    
+
     if (type === "applicantReviewed") {
       reviewAnswer = reviewResult?.reviewAnswer;
       const rejectLabels = reviewResult?.rejectLabels || [];
-      
+
       if (reviewAnswer === "GREEN") {
         console.log(`[Webhook] User ${externalUserId} KYC verified successfully`);
         kycUpdate = { kyc_verified: true, kyc_pending: false, kyc_needs_resubmission: false };
@@ -1197,16 +1464,22 @@ app.post("/api/sumsub/webhook", async (req, res) => {
           if (applicantData) {
             const { data: existingPack } = await db
               .from("user_onboarding_pack_details")
-              .select("user_id")
+              .select("user_id, pack_details")
               .eq("user_id", externalUserId)
               .maybeSingle();
 
             if (existingPack) {
+              // Preserve existing agreements if they exist
+              const currentDetails = existingPack.pack_details || {};
+              if (Array.isArray(currentDetails.agreements) && currentDetails.agreements.length > 0) {
+                applicantData.agreements = currentDetails.agreements;
+              }
+
               await db
                 .from("user_onboarding_pack_details")
                 .update({ pack_details: applicantData, updated_at: new Date().toISOString() })
                 .eq("user_id", externalUserId);
-              console.log(`[Webhook] Updated user_onboarding_pack_details for user ${externalUserId}`);
+              console.log(`[Webhook] Updated user_onboarding_pack_details for user ${externalUserId} (preserved ${applicantData.agreements?.length || 0} agreements)`);
             } else {
               await db
                 .from("user_onboarding_pack_details")
@@ -1218,12 +1491,12 @@ app.post("/api/sumsub/webhook", async (req, res) => {
           console.error(`[Webhook] Failed to save pack_details for ${externalUserId}:`, packErr.message);
         }
       } else if (reviewAnswer === "RED") {
-        const canResubmit = rejectLabels.some(label => 
-          ["DOCUMENT_PAGE_MISSING", "INCOMPLETE_DOCUMENT", "UNSATISFACTORY_PHOTOS", 
-           "DOCUMENT_DAMAGED", "SCREENSHOTS", "SPAM", "NOT_DOCUMENT", "SELFIE_MISMATCH",
-           "FORGERY", "GRAPHIC_EDITOR", "DOCUMENT_DEPRIVED"].includes(label)
+        const canResubmit = rejectLabels.some(label =>
+          ["DOCUMENT_PAGE_MISSING", "INCOMPLETE_DOCUMENT", "UNSATISFACTORY_PHOTOS",
+            "DOCUMENT_DAMAGED", "SCREENSHOTS", "SPAM", "NOT_DOCUMENT", "SELFIE_MISMATCH",
+            "FORGERY", "GRAPHIC_EDITOR", "DOCUMENT_DEPRIVED"].includes(label)
         );
-        
+
         if (canResubmit) {
           console.log(`[Webhook] User ${externalUserId} KYC needs resubmission: ${rejectLabels.join(", ")}`);
           kycUpdate = { kyc_verified: false, kyc_pending: false, kyc_needs_resubmission: true };
@@ -1247,7 +1520,7 @@ app.post("/api/sumsub/webhook", async (req, res) => {
       kycUpdate = { kyc_verified: false, kyc_pending: false, kyc_needs_resubmission: true };
       onboardingKycStatus = "action_required";
     }
-    
+
     if (kycUpdate) {
       const { data: existingAction } = await db
         .from("required_actions")
@@ -1284,9 +1557,9 @@ app.post("/api/sumsub/webhook", async (req, res) => {
         .maybeSingle();
 
       if (existingOnboarding) {
-        if (existingOnboarding.kyc_status === "onboarding_complete" && onboardingKycStatus === "verified") {
+        if (existingOnboarding.kyc_status === "onboarding_complete" && onboardingKycStatus !== "onboarding_complete") {
           delete onboardingUpdate.kyc_status;
-          console.log(`[Webhook] Preserving onboarding_complete status for user ${externalUserId} (not overwriting with verified)`);
+          console.log(`[Webhook] Preserving onboarding_complete status for user ${externalUserId} (not overwriting with ${onboardingKycStatus})`);
         }
         await db.from("user_onboarding").update(onboardingUpdate).eq("id", existingOnboarding.id).eq("user_id", externalUserId);
         console.log(`[Webhook] Updated user_onboarding for user ${externalUserId} -> ${onboardingUpdate.kyc_status || existingOnboarding.kyc_status}`);
@@ -1306,7 +1579,7 @@ app.post("/api/sumsub/webhook", async (req, res) => {
   } catch (err) {
     console.error("[Webhook] Failed to process Sumsub webhook:", err);
   }
-  
+
   res.status(200).json({ received: true });
 });
 
@@ -1435,7 +1708,7 @@ app.post("/api/banking/initiate", async (req, res) => {
       });
     }
 
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    const { data: { user }, error: authError } = await db.auth.getUser(token);
     if (authError || !user) {
       return res.status(401).json({
         success: false,
@@ -1582,7 +1855,7 @@ app.post("/api/banking/capture", async (req, res) => {
       });
     }
 
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    const { data: { user }, error: authError } = await db.auth.getUser(token);
     if (authError || !user) {
       return res.status(401).json({
         success: false,
@@ -1693,7 +1966,7 @@ app.post("/api/banking/capture", async (req, res) => {
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
-      
+
       if (existingOnboarding) {
         await db
           .from("user_onboarding")
@@ -1766,6 +2039,9 @@ app.post("/api/banking/capture-confirm", async (req, res) => {
 
     const db = supabaseAdmin || supabase;
     const authClient = supabaseAdmin || supabase;
+    if (!authClient) {
+      return res.status(500).json({ success: false, error: "Database not configured" });
+    }
     const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
     if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
 
@@ -1819,6 +2095,9 @@ app.post("/api/banking/unlink", async (req, res) => {
 
     const db = supabaseAdmin || supabase;
     const authClient = supabaseAdmin || supabase;
+    if (!authClient) {
+      return res.status(500).json({ success: false, error: "Database not configured" });
+    }
     const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
     if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
 
@@ -1944,12 +2223,12 @@ app.get("/api/stocks/quote", async (req, res) => {
   try {
     const { symbols } = req.query;
     if (!symbols) return res.status(400).json({ error: "symbols parameter required" });
-    
+
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbols.split(',')[0]}?interval=1d&range=1d`;
-    
+
     const symbolList = symbols.split(',').map(s => s.trim());
     const results = {};
-    
+
     await Promise.all(symbolList.map(async (symbol) => {
       try {
         const response = await fetch(
@@ -1968,7 +2247,7 @@ app.get("/api/stocks/quote", async (req, res) => {
           const currentPrice = meta.regularMarketPrice;
           const change = currentPrice - prevClose;
           const changePercent = prevClose ? ((change / prevClose) * 100) : 0;
-          
+
           results[symbol] = {
             symbol: symbol,
             name: meta.shortName || meta.longName || symbol,
@@ -1985,7 +2264,7 @@ app.get("/api/stocks/quote", async (req, res) => {
         results[symbol] = { symbol, error: err.message };
       }
     }));
-    
+
     res.json(results);
   } catch (error) {
     console.error("Stock quote error:", error);
@@ -1997,7 +2276,7 @@ app.get("/api/stocks/chart", async (req, res) => {
   try {
     const { symbol, range = '5d', interval = '15m' } = req.query;
     if (!symbol) return res.status(400).json({ error: "symbol parameter required" });
-    
+
     const response = await fetch(
       `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=${interval}&range=${range}`,
       {
@@ -2006,22 +2285,22 @@ app.get("/api/stocks/chart", async (req, res) => {
         }
       }
     );
-    
+
     const data = await response.json();
     const result = data?.chart?.result?.[0];
-    
+
     if (!result) {
       return res.status(404).json({ error: "No data found for symbol" });
     }
-    
+
     const timestamps = result.timestamp || [];
     const quotes = result.indicators?.quote?.[0] || {};
     const closes = quotes.close || [];
-    
+
     const chartPoints = timestamps.map((ts, i) => {
       const date = new Date(ts * 1000);
       let label;
-      
+
       if (range === '1d') {
         label = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
       } else if (range === '5d') {
@@ -2033,16 +2312,16 @@ app.get("/api/stocks/chart", async (req, res) => {
       } else {
         label = date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
       }
-      
+
       return {
         day: label,
         value: closes[i] != null ? Number(closes[i].toFixed(2)) : null,
         timestamp: ts,
       };
     }).filter(p => p.value != null);
-    
+
     const meta = result.meta;
-    
+
     res.json({
       symbol: symbol,
       currency: meta.currency || 'USD',
@@ -2062,6 +2341,9 @@ async function authenticateUser(req) {
     return { user: null, error: "Missing or invalid Authorization header" };
   }
   const token = authHeader.replace("Bearer ", "");
+  if (!supabase) {
+    return { user: null, error: "Database client not initialized" };
+  }
   const { data, error } = await supabase.auth.getUser(token);
   if (error || !data?.user) {
     return { user: null, error: error?.message || "Invalid token" };
@@ -2308,21 +2590,70 @@ app.post("/api/record-investment", async (req, res) => {
     const db = supabaseAdmin || supabase;
     console.log("[record-investment] Using DB client:", supabaseAdmin ? "admin (service role)" : "anon");
 
-    const { securityId, symbol, name, amount, strategyId, paymentReference, shareCount } = req.body;
-    console.log("[record-investment] Parsed fields - securityId:", securityId, "symbol:", symbol, "name:", name, "amount:", amount, "strategyId:", strategyId, "paymentReference:", paymentReference, "shareCount:", shareCount);
+    const { securityId, symbol, name, amount, baseAmount, strategyId, paymentReference, shareCount, paymentMethod } = req.body;
+    // baseAmount = investment amount excluding fees; amount = total charged including fees
+    const investAmount = (baseAmount && baseAmount > 0) ? baseAmount : amount;
+    console.log("[record-investment] Parsed fields - securityId:", securityId, "symbol:", symbol, "name:", name, "amount:", amount, "baseAmount:", baseAmount, "strategyId:", strategyId, "paymentReference:", paymentReference, "shareCount:", shareCount, "paymentMethod:", paymentMethod);
 
     if (!securityId || !amount || !paymentReference) {
       console.log("[record-investment] MISSING FIELDS - securityId:", !!securityId, "amount:", !!amount, "paymentReference:", !!paymentReference);
       return res.status(400).json({ success: false, error: "Missing required fields: securityId, amount, paymentReference" });
     }
 
-    console.log("[record-investment] Verifying Paystack payment:", paymentReference);
-    const { verified, error: payError, data: payData } = await verifyPaystackPayment(paymentReference);
-    if (!verified) {
-      console.log("[record-investment] PAYSTACK VERIFICATION FAILED:", payError);
-      return res.status(400).json({ success: false, error: payError || "Payment verification failed" });
+    let payData = { amount: Math.round(amount * 100) };
+    const skipVerification = paymentMethod === "wallet" || paymentMethod === "direct_eft" || paymentMethod === "ozow";
+
+    if (!skipVerification) {
+      console.log("[record-investment] Verifying Paystack payment:", paymentReference);
+      const { verified, error: payError, data: vPayData } = await verifyPaystackPayment(paymentReference);
+      if (!verified) {
+        console.log("[record-investment] PAYSTACK VERIFICATION FAILED:", payError);
+        return res.status(400).json({ success: false, error: payError || "Payment verification failed" });
+      }
+      payData = vPayData;
+      console.log("[record-investment] Paystack verified OK. Paid amount (kobo):", payData.amount, "= R", payData.amount / 100);
+    } else {
+      console.log(`[record-investment] Skipping Paystack verification for ${paymentMethod} payment using reference: ${paymentReference}`);
     }
-    console.log("[record-investment] Paystack verified OK. Paid amount (kobo):", payData.amount, "= R", payData.amount / 100);
+
+    // ── WALLET PAYMENT HANDLER (PROMPT 1) ───────────────────────────────────
+    let originalWalletBalance = null;
+    let newWalletBalance = null;
+    let deductionSuccessful = false;
+
+    if (paymentMethod === "wallet") {
+      const { data: wallet, error: walletQueryError } = await db
+        .from("wallets")
+        .select("balance")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (walletQueryError || !wallet) {
+        console.log("[record-investment] WALLET NOT FOUND for user:", userId);
+        return res.status(400).json({ success: false, error: "Wallet not found" });
+      }
+
+      originalWalletBalance = Number(wallet.balance);
+      if (originalWalletBalance < amount) {
+        console.log("[record-investment] INSUFFICIENT FUNDS. Balance:", originalWalletBalance, "Required:", amount);
+        return res.status(400).json({ success: false, error: "Insufficient funds" });
+      }
+
+      newWalletBalance = originalWalletBalance - amount;
+      const { error: deductError } = await db
+        .from("wallets")
+        .update({ balance: newWalletBalance })
+        .eq("user_id", userId);
+
+      if (deductError) {
+        console.error("[record-investment] WALLET DEDUCTION ERROR:", deductError.message);
+        return res.status(500).json({ success: false, error: "Failed to deduct wallet balance" });
+      }
+      
+      deductionSuccessful = true;
+      const feeDeducted = amount - (baseAmount || amount);
+      console.log(`[Wallet] Deducted R${amount} from user ${userId}. Base: R${baseAmount || amount}, Fee: R${feeDeducted.toFixed(2)}, Final balance: R${newWalletBalance}`);
+    }
 
     const { data: existingTx } = await db
       .from("transactions")
@@ -2335,13 +2666,136 @@ app.post("/api/record-investment", async (req, res) => {
     }
 
     const paidAmount = payData.amount / 100;
-    if (Math.abs(paidAmount - amount) > 1) {
+    if (!skipVerification && Math.abs(paidAmount - amount) > 1) {
       console.log("[record-investment] AMOUNT MISMATCH: paid", paidAmount, "expected", amount);
       return res.status(400).json({ success: false, error: `Amount mismatch: paid ${paidAmount}, expected ${amount}` });
     }
 
-    if (strategyId) {
-      console.log("[record-investment] Strategy investment detected - strategyId:", strategyId, "- strategy subscriptions are derived from transactions");
+    const isStrategyInvestment = !!strategyId;
+
+    if (isStrategyInvestment) {
+      console.log("[record-investment] Strategy investment detected - strategyId:", strategyId);
+
+      const { data: strategyData, error: stratError } = await db
+        .from("strategies")
+        .select("holdings")
+        .eq("id", strategyId)
+        .maybeSingle();
+
+      if (stratError || !strategyData?.holdings?.length) {
+        console.warn("[record-investment] Could not fetch strategy holdings:", stratError?.message);
+        return res.status(500).json({ success: false, error: "Could not load strategy holdings to record positions" });
+      }
+
+      const strategyHoldings = strategyData.holdings;
+      const symbols = strategyHoldings.map(h => h.symbol).filter(Boolean);
+
+      const { data: securitiesData, error: secLookupError } = await db
+        .from("securities")
+        .select("id, symbol, last_price")
+        .in("symbol", symbols);
+
+      if (secLookupError) {
+        return res.status(500).json({ success: false, error: "Could not look up securities for strategy" });
+      }
+
+      const secBySymbol = {};
+      (securitiesData || []).forEach(s => { secBySymbol[s.symbol] = s; });
+
+      // Compute total basket cost at current prices so we can scale by investAmount
+      let totalBasketCostRands = 0;
+      for (const holding of strategyHoldings) {
+        const sec = secBySymbol[holding.symbol];
+        if (!sec) continue;
+        const qty = Number(holding.quantity || holding.shares || 0);
+        const priceCents = Number(sec.last_price || 0);
+        if (qty > 0 && priceCents > 0) totalBasketCostRands += (qty * priceCents) / 100;
+      }
+      // investAmount is how much the user actually put in (before fees)
+      const scalingRatio = totalBasketCostRands > 0 ? investAmount / totalBasketCostRands : 1;
+      console.log("[record-investment] Basket cost:", totalBasketCostRands.toFixed(2), "investAmount:", investAmount, "scalingRatio:", scalingRatio.toFixed(6));
+
+      const now = new Date().toISOString();
+      const today = now.split("T")[0];
+      const insertedHoldings = [];
+      const skippedSymbols = [];
+
+      for (const holding of strategyHoldings) {
+        const sec = secBySymbol[holding.symbol];
+        if (!sec) {
+          console.warn("[record-investment] Security not found for symbol:", holding.symbol);
+          skippedSymbols.push(holding.symbol);
+          continue;
+        }
+
+        const rawHoldingQty = Number(holding.quantity || holding.shares || 0);
+        if (rawHoldingQty <= 0) {
+          skippedSymbols.push(holding.symbol);
+          continue;
+        }
+
+        // Scale shares proportionally to what the user actually invested — always whole shares
+        const holdingQty = Math.max(1, Math.round(rawHoldingQty * scalingRatio));
+
+        const priceCents = Number(sec.last_price || 0);
+        if (priceCents <= 0) {
+          console.warn("[record-investment] No price found for:", holding.symbol);
+          skippedSymbols.push(holding.symbol);
+          continue;
+        }
+
+        const { data: existing, error: lookupErr } = await db
+          .from("stock_holdings")
+          .select("id, quantity, avg_fill")
+          .eq("user_id", userId)
+          .eq("security_id", sec.id)
+          .eq("strategy_id", strategyId)
+          .maybeSingle();
+
+        if (lookupErr) {
+          console.error("[record-investment] Error looking up holding for", holding.symbol, lookupErr.message);
+          return res.status(500).json({ success: false, error: `Failed to look up holding for ${holding.symbol}` });
+        }
+
+        if (existing) {
+          const oldQty = Number(existing.quantity || 0);
+          const newQty = Math.round(oldQty + holdingQty);
+
+          const { error: updateErr } = await db.from("stock_holdings").update({
+            quantity: newQty,
+            as_of_date: today,
+            updated_at: now,
+          }).eq("id", existing.id);
+
+          if (updateErr) {
+            console.error("[record-investment] Failed to update holding for", holding.symbol, updateErr.message);
+            return res.status(500).json({ success: false, error: `Failed to update holding for ${holding.symbol}` });
+          }
+          console.log("[record-investment] Updated holding:", holding.symbol, "qty:", newQty);
+        } else {
+          const { error: insertErr } = await db.from("stock_holdings").insert({
+            user_id: userId,
+            security_id: sec.id,
+            strategy_id: strategyId,
+            quantity: holdingQty,
+            as_of_date: today,
+            Status: "active",
+          });
+
+          if (insertErr) {
+            console.error("[record-investment] Failed to insert holding for", holding.symbol, insertErr.message);
+            return res.status(500).json({ success: false, error: `Failed to record holding for ${holding.symbol}` });
+          }
+          console.log("[record-investment] Inserted holding:", holding.symbol, "qty:", holdingQty);
+        }
+
+        insertedHoldings.push({ symbol: holding.symbol, quantity: holdingQty, priceCents });
+      }
+
+      if (skippedSymbols.length > 0) {
+        console.warn("[record-investment] Skipped symbols (no security/price):", skippedSymbols.join(", "));
+      }
+      console.log("[record-investment] Strategy holdings recorded:", insertedHoldings.length, "skipped:", skippedSymbols.length);
     }
 
     console.log("[record-investment] Checking if securityId exists in securities table:", securityId);
@@ -2353,10 +2807,11 @@ app.post("/api/record-investment", async (req, res) => {
     console.log("[record-investment] Security check result:", securityCheck ? "FOUND" : "NOT FOUND", "error:", secCheckError ? JSON.stringify(secCheckError) : "none");
 
     let holdingResult = { data: null, error: null };
+    let currentPriceCents = null;
+    let calcQuantity = null;
 
-    if (securityCheck) {
+    if (securityCheck && !isStrategyInvestment) {
       console.log("[record-investment] Security exists - will create/update stock_holdings");
-      let currentPriceCents = null;
       const { data: securityData, error: secError } = await db
         .from("securities")
         .select("last_price")
@@ -2385,10 +2840,10 @@ app.post("/api/record-investment", async (req, res) => {
       }
 
       const currentPriceRands = currentPriceCents ? currentPriceCents / 100 : amount;
-      const quantity = shareCount && Number(shareCount) > 0 ? Number(shareCount) : (currentPriceRands > 0 ? amount / currentPriceRands : 1);
-      const avgFillCents = currentPriceCents || Math.round(amount * 100);
-      const marketValueCents = Math.round(quantity * (currentPriceCents || amount * 100));
-      console.log("[record-investment] Calculated - currentPriceRands:", currentPriceRands, "quantity:", quantity, "avgFillCents:", avgFillCents, "marketValueCents:", marketValueCents);
+      const rawQuantity = shareCount && Number(shareCount) > 0 ? Number(shareCount) : (currentPriceRands > 0 ? amount / currentPriceRands : 1);
+      const quantity = Math.max(1, Math.round(rawQuantity));
+      calcQuantity = quantity;
+      console.log("[record-investment] Calculated - currentPriceRands:", currentPriceRands, "rawQuantity:", rawQuantity, "quantity:", quantity);
 
       const { data: existing, error: fetchError } = await db
         .from("stock_holdings")
@@ -2403,19 +2858,14 @@ app.post("/api/record-investment", async (req, res) => {
       }
 
       if (existing) {
-        console.log("[record-investment] Existing holding found, updating. Old qty:", existing.quantity, "avg_fill:", existing.avg_fill);
+        console.log("[record-investment] Existing holding found, updating. Old qty:", existing.quantity);
         const oldQty = Number(existing.quantity || 0);
-        const oldAvgFill = Number(existing.avg_fill || 0);
-        const newQty = oldQty + quantity;
-        const newAvgFill = newQty > 0 ? ((oldAvgFill * oldQty) + (avgFillCents * quantity)) / newQty : avgFillCents;
-        const newMarketValue = Math.round(newQty * (currentPriceCents || newAvgFill));
-        console.log("[record-investment] New values - qty:", newQty, "avgFill:", Math.round(newAvgFill), "marketValue:", newMarketValue);
+        const newQty = Math.round(oldQty + quantity);
+        console.log("[record-investment] New qty:", newQty);
         const { data, error } = await db
           .from("stock_holdings")
           .update({
             quantity: newQty,
-            avg_fill: Math.round(newAvgFill),
-            market_value: newMarketValue,
             as_of_date: new Date().toISOString().split("T")[0],
             updated_at: new Date().toISOString(),
           })
@@ -2429,11 +2879,9 @@ app.post("/api/record-investment", async (req, res) => {
           user_id: userId,
           security_id: securityId,
           quantity: quantity,
-          avg_fill: avgFillCents,
-          market_value: marketValueCents,
-          unrealized_pnl: 0,
           as_of_date: new Date().toISOString().split("T")[0],
           Status: "active",
+          strategy_id: strategyId || null,
         };
         console.log("[record-investment] Insert data:", JSON.stringify(holdingData));
         const { data, error } = await db
@@ -2448,16 +2896,13 @@ app.post("/api/record-investment", async (req, res) => {
         console.error("[record-investment] HOLDING UPSERT FAILED:", JSON.stringify(holdingResult.error));
         return res.status(500).json({ success: false, error: holdingResult.error.message });
       }
-    } else {
-      console.log("[record-investment] Security NOT in securities table (likely strategy-only investment). No stock_holdings will be created.");
     }
 
-    const isStrategyInvestment = strategyId && !securityCheck;
     console.log("[record-investment] isStrategyInvestment:", isStrategyInvestment);
     const descriptionText = isStrategyInvestment
       ? `Invested in strategy ${name || "Strategy"}`
       : `Purchased ${(holdingResult.data ? "shares" : "units")} of ${name || symbol || "Unknown"}`;
-    
+
     console.log("[record-investment] Creating transaction record...");
     const txPayload = {
       user_id: userId,
@@ -2534,11 +2979,376 @@ app.post("/api/record-investment", async (req, res) => {
       }
     }
 
+    const orderDate = new Date().toISOString();
+    const confirmEmailData = {
+      userId,
+      userEmail: user.email,
+      assetName: name || null,
+      assetSymbol: symbol || null,
+      strategyName: isStrategyInvestment ? (name || symbol || "Strategy") : null,
+      amountCents: Math.round(amount * 100),
+      quantity: calcQuantity,
+      priceCents: currentPriceCents,
+      reference: paymentReference,
+      orderDate,
+      paymentMethod,
+    };
+    sendOrderConfirmationEmail(db, confirmEmailData).catch(() => { });
+
     console.log("[record-investment] === SUCCESS === Holding:", JSON.stringify(holdingResult.data));
-    res.json({ success: true, holding: holdingResult.data });
+    res.json({ 
+      success: true, 
+      holding: holdingResult.data,
+      newWalletBalance: paymentMethod === "wallet" ? newWalletBalance : null
+    });
   } catch (error) {
     console.error("[record-investment] === UNCAUGHT ERROR ===", error);
+
+    // Rollback wallet deduction if anything failed after deduction was successful
+    if (typeof paymentMethod !== 'undefined' && paymentMethod === "wallet" && typeof deductionSuccessful !== 'undefined' && deductionSuccessful && typeof originalWalletBalance !== 'undefined' && originalWalletBalance !== null) {
+      try {
+        const db = supabaseAdmin || supabase;
+        console.log(`[Wallet] Rollback — Attempting to restore user wallet balance to ${originalWalletBalance}`);
+        await db.from("wallets").update({ balance: originalWalletBalance }).eq("user_id", userId);
+      } catch (rollbackErr) {
+        console.error("[Wallet] Rollback CRITICAL FAILURE:", rollbackErr.message);
+      }
+    }
+
     res.status(500).json({ success: false, error: error.message || "Failed to record investment" });
+  }
+});
+
+app.post("/api/eft-deposit", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  try {
+    if (!supabase) return res.status(500).json({ success: false, error: "Database not connected" });
+    const { user, error: authError } = await authenticateUser(req);
+    if (authError || !user) return res.status(401).json({ success: false, error: "Unauthorized" });
+
+    const db = supabaseAdmin || supabase;
+    const userId = user.id;
+    const { amount, reference, securityId, symbol, name, strategyId, baseAmount, shareCount } = req.body;
+
+    if (!amount || Number(amount) <= 0) return res.status(400).json({ success: false, error: "Invalid amount" });
+
+    const amountCents = Math.round(Number(amount) * 100);
+    const eftRef = reference || `EFT-${Date.now()}`;
+    const now = new Date().toISOString();
+    const assetName = name || symbol || "Investment";
+
+    const purchaseIntent = {
+      type: "eft_intent",
+      securityId: securityId || null,
+      symbol: symbol || null,
+      name: name || null,
+      strategyId: strategyId || null,
+      amount: Number(amount),
+      baseAmount: baseAmount ? Number(baseAmount) : Number(amount),
+      shareCount: shareCount ? Number(shareCount) : null,
+    };
+
+    const { error: txError } = await db.from("transactions").insert({
+      user_id: userId,
+      direction: "credit",
+      name: `EFT Deposit — ${assetName}`,
+      description: JSON.stringify(purchaseIntent),
+      amount: amountCents,
+      store_reference: eftRef,
+      currency: "ZAR",
+      status: "pending",
+      transaction_date: now,
+      created_at: now,
+    });
+
+    if (txError) {
+      console.error("[eft-deposit] Transaction insert error:", txError.message);
+      return res.status(500).json({ success: false, error: "Failed to record pending deposit" });
+    }
+
+    try {
+      const { data: wallet } = await db.from("wallets").select("pending_balance").eq("user_id", userId).maybeSingle();
+      if (wallet !== null) {
+        const currentPending = Number(wallet?.pending_balance || 0);
+        await db.from("wallets").update({ pending_balance: currentPending + Number(amount) }).eq("user_id", userId);
+      }
+    } catch (walletErr) {
+      console.warn("[eft-deposit] Could not update pending_balance:", walletErr?.message);
+    }
+
+    try {
+      if (process.env.RESEND_API_KEY && user.email) {
+        const { buildEFTPendingHtml } = await import('../api/_lib/order-email-templates.js');
+        const { Resend } = await import('resend');
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        const html = buildEFTPendingHtml({ assetName, amountCents, reference: eftRef, dateStr: now });
+        const resp = await resend.emails.send({
+          from: "Mint <orders@mymint.co.za>",
+          to: [user.email],
+          subject: `EFT Payment Noted — ${assetName}`,
+          html,
+        });
+        if (resp.error) {
+          console.error("[eft-deposit] Email error:", resp.error.message);
+        } else {
+          console.log(`[eft-deposit] Pending email sent to ${user.email} for ${assetName}`);
+        }
+      }
+    } catch (emailErr) {
+      console.warn("[eft-deposit] Could not send pending email:", emailErr?.message);
+    }
+
+    console.log(`[eft-deposit] Pending EFT of R${amount} recorded for user ${userId}, ref: ${eftRef}, asset: ${assetName}`);
+    return res.status(200).json({ success: true, reference: eftRef });
+  } catch (err) {
+    console.error("[eft-deposit] Error:", err);
+    return res.status(500).json({ success: false, error: err.message || "Failed to record EFT deposit" });
+  }
+});
+
+app.post("/api/confirm-eft-deposit", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  try {
+    const adminSecret = process.env.ADMIN_SECRET || process.env.CONFIRM_EFT_SECRET;
+    const { reference, adminSecret: providedSecret } = req.body;
+
+    if (!adminSecret || providedSecret !== adminSecret) {
+      return res.status(403).json({ success: false, error: "Forbidden" });
+    }
+    if (!reference) return res.status(400).json({ success: false, error: "Missing reference" });
+
+    const db = supabaseAdmin || supabase;
+    if (!db) return res.status(500).json({ success: false, error: "Database not connected" });
+
+    const { data: tx, error: txLookupErr } = await db
+      .from("transactions")
+      .select("*")
+      .eq("store_reference", reference)
+      .eq("status", "pending")
+      .maybeSingle();
+
+    if (txLookupErr || !tx) {
+      return res.status(404).json({ success: false, error: "Pending EFT transaction not found for reference: " + reference });
+    }
+
+    let intent = {};
+    try {
+      const parsed = JSON.parse(tx.description || "{}");
+      if (parsed.type === "eft_intent") intent = parsed;
+    } catch (_) {}
+
+    const { securityId, symbol, name, strategyId, amount, baseAmount } = intent;
+    const userId = tx.user_id;
+    const amountCents = tx.amount;
+    const investAmount = baseAmount && baseAmount > 0 ? baseAmount : (amount || amountCents / 100);
+    const isStrategyInvestment = !!strategyId;
+    const now = new Date().toISOString();
+    const today = now.split("T")[0];
+    let quantity = null;
+    let currentPriceCents = null;
+
+    let userEmail = null;
+    try {
+      const { data: authUser } = await (supabaseAdmin || supabase).auth.admin.getUserById(userId);
+      userEmail = authUser?.user?.email || null;
+    } catch (_) {}
+
+    if (isStrategyInvestment && securityId) {
+      const { data: strategyData } = await db.from("strategies").select("holdings").eq("id", strategyId).maybeSingle();
+      if (strategyData?.holdings?.length) {
+        const symbols = strategyData.holdings.map(h => h.symbol).filter(Boolean);
+        const { data: securitiesData } = await db.from("securities").select("id, symbol, last_price").in("symbol", symbols);
+        const secBySymbol = {};
+        (securitiesData || []).forEach(s => { secBySymbol[s.symbol] = s; });
+        let totalBasketCostRands = 0;
+        for (const h of strategyData.holdings) {
+          const sec = secBySymbol[h.symbol];
+          if (!sec) continue;
+          const qty = Number(h.quantity || h.shares || 0);
+          const pc = Number(sec.last_price || 0);
+          if (qty > 0 && pc > 0) totalBasketCostRands += (qty * pc) / 100;
+        }
+        const scalingRatio = totalBasketCostRands > 0 ? investAmount / totalBasketCostRands : 1;
+        for (const h of strategyData.holdings) {
+          const sec = secBySymbol[h.symbol];
+          if (!sec) continue;
+          const rawQty = Number(h.quantity || h.shares || 0);
+          if (rawQty <= 0) continue;
+          const holdingQty = rawQty * scalingRatio;
+          const pc = Number(sec.last_price || 0);
+          if (pc <= 0) continue;
+          const { data: existing } = await db.from("stock_holdings").select("id, quantity, avg_fill").eq("user_id", userId).eq("security_id", sec.id).eq("strategy_id", strategyId).maybeSingle();
+          if (existing) {
+            const oldQty = Number(existing.quantity || 0);
+            const newQty = oldQty + holdingQty;
+            const newAvg = newQty > 0 ? ((Number(existing.avg_fill || 0) * oldQty) + (pc * holdingQty)) / newQty : pc;
+            await db.from("stock_holdings").update({ quantity: newQty, avg_fill: Math.round(newAvg), market_value: Math.round(newQty * pc), as_of_date: today, updated_at: now }).eq("id", existing.id);
+          } else {
+            await db.from("stock_holdings").insert({ user_id: userId, security_id: sec.id, strategy_id: strategyId, quantity: holdingQty, avg_fill: pc, market_value: Math.round(holdingQty * pc), unrealized_pnl: 0, as_of_date: today, Status: "active" });
+          }
+        }
+        
+        // --- ADDED: user_strategies update for EFT confirmation ---
+        console.log(`[confirm-eft] Upserting user_strategies for strategy: ${strategyId}`);
+        const { data: existingUS } = await db.from("user_strategies").select("id, invested_amount").eq("user_id", userId).eq("strategy_id", strategyId).maybeSingle();
+        if (existingUS) {
+          const newInvested = (existingUS.invested_amount || 0) + amountCents;
+          await db.from("user_strategies").update({ invested_amount: newInvested, updated_at: now }).eq("id", existingUS.id);
+        } else {
+          await db.from("user_strategies").insert({ user_id: userId, strategy_id: strategyId, invested_amount: amountCents, status: "active", created_at: now, updated_at: now });
+        }
+      }
+    } else if (securityId && !isStrategyInvestment) {
+      const { data: secData } = await db.from("securities").select("last_price").eq("id", securityId).maybeSingle();
+      currentPriceCents = secData?.last_price ? Number(secData.last_price) : null;
+      if (!currentPriceCents) {
+        const { data: priceData } = await db.from("security_prices").select("close_price").eq("security_id", securityId).order("price_date", { ascending: false }).limit(1).maybeSingle();
+        if (priceData?.close_price) currentPriceCents = Number(priceData.close_price);
+      }
+      const priceRands = currentPriceCents ? currentPriceCents / 100 : investAmount;
+      quantity = priceRands > 0 ? investAmount / priceRands : 1;
+      const avgFill = currentPriceCents || Math.round(investAmount * 100);
+      const { data: existing } = await db.from("stock_holdings").select("id, quantity, avg_fill").eq("user_id", userId).eq("security_id", securityId).maybeSingle();
+      if (existing) {
+        const oldQty = Number(existing.quantity || 0);
+        const newQty = oldQty + quantity;
+        const newAvg = newQty > 0 ? ((Number(existing.avg_fill || 0) * oldQty) + (avgFill * quantity)) / newQty : avgFill;
+        await db.from("stock_holdings").update({ quantity: newQty, avg_fill: Math.round(newAvg), market_value: Math.round(newQty * (currentPriceCents || Math.round(newAvg))), as_of_date: today, updated_at: now }).eq("id", existing.id);
+      } else {
+        await db.from("stock_holdings").insert({ user_id: userId, security_id: securityId, quantity, avg_fill: avgFill, market_value: Math.round(quantity * (currentPriceCents || avgFill)), unrealized_pnl: 0, as_of_date: today, Status: "active", strategy_id: strategyId || null });
+      }
+    }
+
+    await db.from("transactions").insert({
+      user_id: userId,
+      direction: "debit",
+      name: isStrategyInvestment ? `Strategy Investment: ${name || symbol || "Strategy"}` : `Purchased ${name || symbol || "Stock"}`,
+      description: isStrategyInvestment ? `Invested in strategy ${name || "Strategy"}` : `Purchased shares of ${name || symbol || "Unknown"}`,
+      amount: amountCents,
+      store_reference: `${reference}-INVEST`,
+      currency: "ZAR",
+      status: "posted",
+      transaction_date: now,
+      created_at: now,
+    }).then(() => {}).catch(() => {});
+
+    await db.from("transactions").update({ status: "posted" }).eq("store_reference", reference);
+
+    try {
+      const { data: wallet } = await db.from("wallets").select("balance, pending_balance").eq("user_id", userId).maybeSingle();
+      if (wallet !== null) {
+        const newBalance = Number(wallet.balance || 0) + (amount || amountCents / 100);
+        const newPending = Math.max(0, Number(wallet.pending_balance || 0) - (amount || amountCents / 100));
+        await db.from("wallets").update({ balance: newBalance, pending_balance: newPending }).eq("user_id", userId);
+      }
+    } catch (walletErr) {
+      console.warn("[confirm-eft] Wallet update failed:", walletErr?.message);
+    }
+
+    if (userEmail) {
+      try {
+        sendOrderConfirmationEmail(db, {
+          userId,
+          userEmail,
+          assetName: name || null,
+          assetSymbol: symbol || null,
+          strategyName: isStrategyInvestment ? (name || symbol || "Strategy") : null,
+          amountCents,
+          quantity,
+          priceCents: currentPriceCents,
+          reference,
+          orderDate: now,
+          paymentMethod: 'direct_eft',
+        }).catch(() => {});
+      } catch (_) {}
+    }
+
+    console.log(`[EFT] Payment confirmed for user ${userId}, ref: ${reference}, amount: R${amount || amountCents / 100}`);
+    return res.status(200).json({ success: true, reference });
+  } catch (err) {
+    console.error("[confirm-eft] Error:", err);
+    return res.status(500).json({ success: false, error: err.message || "Failed to confirm EFT deposit" });
+  }
+});
+
+app.post("/api/confirm-deposit", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  try {
+    const adminSecret = process.env.ADMIN_SECRET || process.env.CONFIRM_EFT_SECRET;
+    const { reference, adminSecret: providedSecret, amount: manualAmount } = req.body;
+
+    if (!adminSecret || providedSecret !== adminSecret) {
+      return res.status(403).json({ success: false, error: "Forbidden" });
+    }
+    if (!reference) return res.status(400).json({ success: false, error: "Missing reference" });
+
+    const db = supabaseAdmin || supabase;
+    const { data: tx, error: txErr } = await db
+      .from("transactions")
+      .select("*")
+      .eq("store_reference", reference)
+      .eq("type", "deposit")
+      .eq("status", "pending")
+      .maybeSingle();
+
+    if (txErr || !tx) {
+      return res.status(404).json({ success: false, error: "Pending deposit not found" });
+    }
+
+    const userId = tx.user_id;
+    // Use manual amount from admin panel (cents) or stored amount
+    const depositAmount = manualAmount || tx.amount; 
+
+    // 1. Update transaction status
+    await db.from("transactions").update({ 
+      status: "posted", 
+      amount: depositAmount,
+      updated_at: new Date().toISOString() 
+    }).eq("id", tx.id);
+
+    let newBalance = 0;
+    const { data: wallet } = await db.from("wallets").select("id, balance").eq("user_id", userId).maybeSingle();
+    if (wallet) {
+      newBalance = (wallet.balance || 0) + depositAmount;
+      await db.from("wallets").update({ balance: newBalance, updated_at: new Date().toISOString() }).eq("id", wallet.id);
+    } else {
+      newBalance = depositAmount;
+      await db.from("wallets").insert({ user_id: userId, balance: depositAmount });
+    }
+
+    // 3. Send confirmation email
+    try {
+      const { data: authUser } = await (supabaseAdmin || supabase).auth.admin.getUserById(userId);
+      const userEmail = authUser?.user?.email;
+
+      if (userEmail && process.env.RESEND_API_KEY) {
+        const { buildDepositConfirmationHtml } = await import("../api/_lib/order-email-templates.js");
+        const { Resend } = await import("resend");
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        const html = buildDepositConfirmationHtml({ 
+          amountCents: depositAmount, 
+          newBalanceCents: newBalance,
+          reference, 
+          dateStr: new Date().toISOString() 
+        });
+
+        await resend.emails.send({
+          from: "Mint <orders@mymint.co.za>",
+          to: [userEmail],
+          subject: "Wallet Top-up Confirmed",
+          html,
+        });
+      }
+    } catch (emailErr) {
+      console.warn("[confirm-deposit] Email skip:", emailErr?.message);
+    }
+
+    console.log(`[confirm-deposit] User ${userId} wallet topped up by R${depositAmount/100}`);
+    return res.status(200).json({ success: true });
+
+  } catch (err) {
+    console.error("[confirm-deposit] Error:", err);
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -2611,13 +3421,13 @@ app.get("/api/user/holdings", async (req, res) => {
     let holdings, holdingsError;
     const holdingsResult = await db
       .from("stock_holdings")
-      .select("id, user_id, security_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status, settlement_status")
+      .select("id, user_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status, settlement_status")
       .eq("user_id", userId);
 
     if (holdingsResult.error && holdingsResult.error.message && holdingsResult.error.message.includes("settlement_status")) {
       const fallback = await db
         .from("stock_holdings")
-        .select("id, user_id, security_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status")
+        .select("id, user_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status")
         .eq("user_id", userId);
       holdings = fallback.data;
       holdingsError = fallback.error;
@@ -2675,20 +3485,39 @@ app.get("/api/user/holdings", async (req, res) => {
       .map(h => {
         const sec = securitiesMap[h.security_id];
         const priceData = latestPricesMap[h.security_id];
-        const livePrice = priceData?.latestPrice ?? sec?.last_price ?? 0;
-        const prevPrice = priceData?.prevPrice ?? livePrice;
-        const dailyChange = livePrice - prevPrice;
-        const dailyChangePct = prevPrice > 0 ? ((dailyChange / prevPrice) * 100) : 0;
+        const livePrice = sec?.last_price ?? priceData?.latestPrice ?? 0;
+        const dailyChange = sec?.change_price ?? (livePrice - (priceData?.prevPrice ?? livePrice));
+        const dailyChangePct = sec?.change_percent ?? (priceData?.prevPrice > 0 ? ((dailyChange / priceData.prevPrice) * 100) : 0);
         const quantity = h.quantity || 0;
-        const avgFill = h.avg_fill || 0;
+        const avgFill = Number(h.avg_fill || 0);
+        const isPending = !avgFill || avgFill === 0;
+        const settlementStatus = deriveHoldingSettlementStatus(h);
+        if (isPending) {
+          return {
+            ...h,
+            market_value: 0,
+            unrealized_pnl: 0,
+            settlement_status: settlementStatus,
+            symbol: sec?.symbol || "N/A",
+            name: sec?.name || "Unknown",
+            asset_class: sec?.sector || "Other",
+            logo_url: sec?.logo_url || null,
+            last_price: 0,
+            change_price: 0,
+            change_percent: 0,
+            exchange: sec?.exchange || null,
+          };
+        }
         const costBasis = avgFill * quantity;
         const liveMarketValue = livePrice * quantity;
         const pnl = liveMarketValue - costBasis;
+        const investedAmount = h.market_value || ((h.avg_fill || 0) * (h.quantity || 0));
         return {
           ...h,
           market_value: liveMarketValue,
+          invested_amount: investedAmount,
           unrealized_pnl: pnl,
-          settlement_status: deriveHoldingSettlementStatus(h),
+          settlement_status: settlementStatus,
           symbol: sec?.symbol || "N/A",
           name: sec?.name || "Unknown",
           asset_class: sec?.sector || "Other",
@@ -2709,18 +3538,27 @@ app.get("/api/user/holdings", async (req, res) => {
 
 app.get("/api/user/strategies", async (req, res) => {
   try {
+    console.log("[user/strategies] Request received");
+    console.log("[user/strategies] Supabase available:", !!supabase);
+    console.log("[user/strategies] SupabaseAdmin available:", !!supabaseAdmin);
+
     if (!supabase) {
-      return res.status(500).json({ success: false, error: "Database not connected" });
+      console.log("[user/strategies] ERROR: Database not connected - supabase is null");
+      return res.status(503).json({ success: false, error: "Database not available. Please check server configuration." });
     }
 
     const { user, error: authError } = await authenticateUser(req);
     if (authError || !user) {
+      console.log("[user/strategies] Auth error:", authError);
       return res.status(401).json({ success: false, error: authError || "Unauthorized" });
     }
+
+    console.log("[user/strategies] User authenticated:", user.id);
 
     const db = supabaseAdmin || supabase;
     const userId = user.id;
 
+    // First, get user's strategy investments from transactions
     const { data: transactions, error: txError } = await db
       .from("transactions")
       .select("id, name, amount, direction, transaction_date")
@@ -2732,8 +3570,9 @@ app.get("/api/user/strategies", async (req, res) => {
       return res.status(500).json({ success: false, error: txError.message });
     }
 
-    const strategyInvestments = {};
+    // Extract strategy names from transactions (for matching and first-date only)
     const strategyFirstDate = {};
+    const strategyTxNames = new Set();
     for (const tx of (transactions || [])) {
       const txName = (tx.name || "").trim();
       let strategyName = null;
@@ -2743,10 +3582,7 @@ app.get("/api/user/strategies", async (req, res) => {
         strategyName = txName.replace("Purchased ", "").trim();
       }
       if (strategyName) {
-        if (!strategyInvestments[strategyName]) {
-          strategyInvestments[strategyName] = 0;
-        }
-        strategyInvestments[strategyName] += Math.abs(tx.amount || 0);
+        strategyTxNames.add(strategyName);
         if (tx.transaction_date) {
           if (!strategyFirstDate[strategyName] || tx.transaction_date < strategyFirstDate[strategyName]) {
             strategyFirstDate[strategyName] = tx.transaction_date;
@@ -2755,11 +3591,53 @@ app.get("/api/user/strategies", async (req, res) => {
       }
     }
 
-    const strategyNames = Object.keys(strategyInvestments);
+    const strategyNames = Array.from(strategyTxNames);
     if (strategyNames.length === 0) {
-      return res.json({ success: true, strategies: [] });
+      return res.status(200).json({ success: true, strategies: [] });
     }
 
+    // Fetch user's holdings with strategy_id to compute cost basis and live value
+    const { data: userStratHoldings } = await db
+      .from("stock_holdings")
+      .select("id, security_id, strategy_id, quantity, avg_fill")
+      .eq("user_id", userId)
+      .not("strategy_id", "is", null);
+
+    const stratHoldingsByStratId = {};
+    for (const h of (userStratHoldings || [])) {
+      if (!stratHoldingsByStratId[h.strategy_id]) stratHoldingsByStratId[h.strategy_id] = [];
+      stratHoldingsByStratId[h.strategy_id].push(h);
+    }
+
+    // Fetch live prices for those securities
+    const stratSecIds = (userStratHoldings || []).map(h => h.security_id).filter(Boolean);
+    let stratLivePriceMap = {};
+    const symbolPnlMap = {};
+    if (stratSecIds.length > 0) {
+      const { data: stratSecs } = await db
+        .from("securities")
+        .select("id, symbol, last_price")
+        .in("id", stratSecIds);
+      (stratSecs || []).forEach(s => { stratLivePriceMap[s.id] = s.last_price || 0; });
+
+      // Build per-symbol P&L from actual user holdings (skip pending - no avg_fill)
+      for (const h of (userStratHoldings || [])) {
+        const sec = (stratSecs || []).find(s => s.id === h.security_id);
+        if (!sec) continue;
+        const qty = Number(h.quantity || 0);
+        const avgFill = Number(h.avg_fill || 0);
+        if (!avgFill) continue;
+        const livePrice = sec.last_price || avgFill;
+        symbolPnlMap[sec.symbol] = {
+          pnlRands: ((livePrice - avgFill) * qty) / 100,
+          pnlPct: avgFill > 0 ? ((livePrice - avgFill) / avgFill) * 100 : 0,
+          currentValue: (livePrice * qty) / 100,
+          costBasis: (avgFill * qty) / 100,
+        };
+      }
+    }
+
+    // Get all active strategies
     const { data: allStrategies, error: stratErr } = await db
       .from("strategies")
       .select(`
@@ -2775,6 +3653,7 @@ app.get("/api/user/strategies", async (req, res) => {
       return res.status(500).json({ success: false, error: stratErr.message });
     }
 
+    // Get securities for logos
     const allHoldingSymbols = new Set();
     for (const strategy of (allStrategies || [])) {
       const h = strategy.holdings || [];
@@ -2794,6 +3673,7 @@ app.get("/api/user/strategies", async (req, res) => {
       }
     }
 
+    // Match user's strategies
     const matchedStrategies = [];
     for (const strategy of (allStrategies || [])) {
       const matchKey = strategyNames.find(sn =>
@@ -2803,11 +3683,33 @@ app.get("/api/user/strategies", async (req, res) => {
       if (matchKey) {
         const metrics = strategy.strategy_metrics;
         const latestMetric = Array.isArray(metrics) ? metrics[0] : metrics;
-        const enrichedHoldings = (strategy.holdings || []).map(h => ({
-          ...h,
-          logo_url: h.logo_url || securitiesMap[h.symbol]?.logo_url || null,
-          name: h.name || securitiesMap[h.symbol]?.name || h.symbol,
-        }));
+        const enrichedHoldings = (strategy.holdings || []).map(h => {
+          const pnlData = symbolPnlMap[h.symbol] || null;
+          return {
+            ...h,
+            logo_url: h.logo_url || securitiesMap[h.symbol]?.logo_url || null,
+            name: h.name || securitiesMap[h.symbol]?.name || h.symbol,
+            pnlRands: pnlData ? pnlData.pnlRands : null,
+            pnlPct: pnlData ? pnlData.pnlPct : null,
+            currentValue: pnlData ? pnlData.currentValue : null,
+            costBasis: pnlData ? pnlData.costBasis : null,
+          };
+        });
+        const stratHoldings = stratHoldingsByStratId[strategy.id] || [];
+        let investedAmount = 0;
+        let currentMarketValue = 0;
+        const allPending = stratHoldings.length > 0 && stratHoldings.every(h => !h.avg_fill);
+        if (!allPending) {
+          for (const h of stratHoldings) {
+            const qty = Number(h.quantity || 0);
+            const avgFill = Number(h.avg_fill || 0);
+            if (!avgFill) continue;
+            const livePrice = stratLivePriceMap[h.security_id] || avgFill;
+            investedAmount += (avgFill * qty) / 100;
+            currentMarketValue += (livePrice * qty) / 100;
+          }
+        }
+
         matchedStrategies.push({
           id: strategy.id,
           name: strategy.name,
@@ -2818,30 +3720,19 @@ app.get("/api/user/strategies", async (req, res) => {
           iconUrl: strategy.icon_url,
           imageUrl: strategy.image_url,
           holdings: enrichedHoldings,
-          investedAmount: strategyInvestments[matchKey] / 100,
+          investedAmount,
+          currentMarketValue,
           metrics: latestMetric || null,
           firstInvestedDate: strategyFirstDate[matchKey] || null,
         });
       }
     }
 
-    const holdingSecIds = matchedStrategies.map(s => s.id);
-    if (holdingSecIds.length > 0) {
-      const { data: badHoldings } = await db
-        .from("stock_holdings")
-        .select("id, security_id")
-        .eq("user_id", userId)
-        .in("security_id", holdingSecIds);
-      for (const bh of (badHoldings || [])) {
-        console.log("[user/strategies] Cleaning up invalid stock_holding", bh.id, "for strategy", bh.security_id);
-        await db.from("stock_holdings").delete().eq("id", bh.id);
-      }
-    }
-
-    res.json({ success: true, strategies: matchedStrategies });
+    console.log("[user/strategies] Found strategies for user:", matchedStrategies.length);
+    return res.status(200).json({ success: true, strategies: matchedStrategies });
   } catch (error) {
     console.error("[user/strategies] Error:", error);
-    res.status(500).json({ success: false, error: error.message || "Failed to fetch user strategies" });
+    return res.status(500).json({ success: false, error: error.message || "Failed to fetch user strategies" });
   }
 });
 
@@ -2963,7 +3854,7 @@ app.get("/api/user/transactions", async (req, res) => {
       }
 
       const settlement_status = deriveSettlementStatus(tx);
-      
+
       if (sName) {
         const holdingLogos = strategyHoldingsMap[sName.toLowerCase()] || [];
         if (holdingLogos.length > 0) {
@@ -3458,17 +4349,17 @@ app.post("/api/sumsub/sync", async (req, res) => {
     const authHeader = req.headers.authorization || "";
     const token = authHeader.replace("Bearer ", "");
     const db = supabaseAdmin || supabase;
-    
+
     if (!db) return res.status(500).json({ error: "No database client" });
-    
+
     let isAdmin = false;
     if (token) {
       try {
         const { data: { user } } = await db.auth.getUser(token);
         if (user) isAdmin = true;
-      } catch (e) {}
+      } catch (e) { }
     }
-    
+
     const internalCall = req.headers["x-internal-key"] === SUMSUB_SECRET_KEY;
     if (!isAdmin && !internalCall) {
       return res.status(401).json({ error: "Authentication required" });
@@ -3495,7 +4386,7 @@ app.post("/api/sumsub/sync", async (req, res) => {
         const ts = Math.floor(Date.now() / 1000).toString();
         const path = `/resources/applicants/-;externalUserId=${u.id}/one`;
         const sig = createSumsubSignature(ts, "GET", path);
-        
+
         const response = await fetch(`${SUMSUB_BASE_URL.startsWith("http") ? SUMSUB_BASE_URL : "https://" + SUMSUB_BASE_URL}${path}`, {
           method: "GET",
           headers: {
@@ -3559,6 +4450,117 @@ app.post("/api/sumsub/sync", async (req, res) => {
 // Onboarding Endpoints (server-side for RLS bypass)
 // ============================================================
 
+function hasMatchingPackIdNumber(value, idNumber) {
+  if (value == null) return false;
+
+  if (Array.isArray(value)) {
+    return value.some((item) => hasMatchingPackIdNumber(item, idNumber));
+  }
+
+  if (typeof value === "object") {
+    for (const [key, nestedValue] of Object.entries(value)) {
+      if (key === "number" && String(nestedValue) === idNumber) {
+        return true;
+      }
+      if (hasMatchingPackIdNumber(nestedValue, idNumber)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function maskEmailAddress(email) {
+  const normalized = String(email || "").trim();
+  const atIndex = normalized.indexOf("@");
+  if (!normalized || atIndex <= 0) return "";
+
+  const localPart = normalized.slice(0, atIndex);
+  const domainPart = normalized.slice(atIndex);
+  const visiblePrefix = localPart.slice(0, 4);
+  const maskedCount = Math.max(localPart.length - visiblePrefix.length, 5);
+  return `${visiblePrefix}${"*".repeat(maskedCount)}${domainPart}`;
+}
+
+app.post("/api/onboarding/check-id-number", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (!token) return res.status(401).json({ success: false, error: "Missing token" });
+
+    const authClient = supabaseAdmin || supabase;
+    const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
+    if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
+
+    const idNumber = String(req.body?.id_number || "").replace(/\D/g, "");
+    if (!/^\d{13}$/.test(idNumber)) {
+      return res.status(400).json({ success: false, error: "A valid 13-digit id_number is required" });
+    }
+
+    let exists = false;
+    let matchedUserId = null;
+    let matchedEmail = null;
+
+    if (pgPool) {
+      const client = await pgPool.connect();
+      try {
+        const query = `
+          SELECT user_id
+          FROM user_onboarding_pack_details
+          WHERE jsonb_path_exists(
+            pack_details,
+            '$.**.number ? (@ == $id)',
+            jsonb_build_object('id', to_jsonb($1::text))
+          )
+          LIMIT 1
+        `;
+        const result = await client.query(query, [idNumber]);
+        exists = result.rows.length > 0;
+        if (exists) {
+          matchedUserId = result.rows[0].user_id || null;
+        }
+      } finally {
+        client.release();
+      }
+    }
+
+    if (!exists) {
+      const db = getAuthenticatedDb(token);
+      const { data: rows, error } = await db
+        .from("user_onboarding_pack_details")
+        .select("user_id, pack_details");
+
+      if (error) {
+        return res.status(500).json({ success: false, error: error.message });
+      }
+
+      const matchedRow = (rows || []).find((row) => hasMatchingPackIdNumber(row?.pack_details, idNumber));
+      exists = Boolean(matchedRow);
+      if (matchedRow?.user_id) {
+        matchedUserId = matchedRow.user_id;
+      }
+    }
+
+    if (exists && matchedUserId) {
+      const db = supabaseAdmin || getAuthenticatedDb(token);
+      if (db) {
+        const { data: profile } = await db
+          .from("profiles")
+          .select("email")
+          .eq("id", matchedUserId)
+          .maybeSingle();
+        matchedEmail = profile?.email || null;
+      }
+    }
+
+    return res.json({ success: true, exists, masked_email: maskEmailAddress(matchedEmail) || null });
+  } catch (error) {
+    console.error("[Onboarding] ID precheck error:", error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.post("/api/onboarding/save-employment", async (req, res) => {
   try {
     const authHeader = req.headers.authorization || "";
@@ -3571,23 +4573,31 @@ app.post("/api/onboarding/save-employment", async (req, res) => {
     if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
 
     const {
-      employment_status, employer_name, employer_industry, employment_type,
-      institution_name, course_name, graduation_date,
-      annual_income_amount, annual_income_currency, existing_onboarding_id
-    } = req.body;
+      existing_onboarding_id,
+      employment_status,
+      employer_name,
+      employer_industry,
+      employment_type,
+      institution_name,
+      course_name,
+      graduation_date,
+      annual_income_amount,
+      annual_income_currency,
+    } = req.body || {};
 
     const payload = {
       user_id: user.id,
-      employment_status: employment_status || null,
-      employer_name: employer_name || null,
-      employer_industry: employer_industry || null,
-      employment_type: employment_type || null,
-      institution_name: institution_name || null,
-      course_name: course_name || null,
-      graduation_date: graduation_date || null,
-      annual_income_amount: annual_income_amount || null,
-      annual_income_currency: annual_income_currency || "USD",
+      employment_status: employment_status || "not_provided",
     };
+
+    if (employer_name !== undefined) payload.employer_name = employer_name || null;
+    if (employer_industry !== undefined) payload.employer_industry = employer_industry || null;
+    if (employment_type !== undefined) payload.employment_type = employment_type || null;
+    if (institution_name !== undefined) payload.institution_name = institution_name || null;
+    if (course_name !== undefined) payload.course_name = course_name || null;
+    if (graduation_date !== undefined) payload.graduation_date = graduation_date || null;
+    if (annual_income_amount !== undefined) payload.annual_income_amount = annual_income_amount || null;
+    if (annual_income_currency !== undefined) payload.annual_income_currency = annual_income_currency || "ZAR";
 
     let savedId = existing_onboarding_id;
 
@@ -3605,6 +4615,7 @@ app.post("/api/onboarding/save-employment", async (req, res) => {
       if (!updated || updated.length === 0) {
         return res.status(404).json({ success: false, error: "Onboarding record not found" });
       }
+      savedId = updated[0].id;
     } else {
       const { data: existingRecord } = await db
         .from("user_onboarding")
@@ -3630,7 +4641,7 @@ app.post("/api/onboarding/save-employment", async (req, res) => {
           .from("user_onboarding")
           .insert(payload)
           .select("id")
-          .single();
+          .maybeSingle();
         if (error) {
           console.error("[Onboarding] Insert employment error:", error.message);
           return res.status(500).json({ success: false, error: error.message });
@@ -3655,6 +4666,9 @@ app.post("/api/onboarding/save-mandate", async (req, res) => {
 
     const db = getAuthenticatedDb(token);
     const authClient = supabaseAdmin || supabase;
+    if (!authClient) {
+      return res.status(500).json({ success: false, error: "Database not connected" });
+    }
     const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
     if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
 
@@ -3728,6 +4742,9 @@ app.get("/api/onboarding/mandate", async (req, res) => {
 
     const db = supabaseAdmin || supabase;
     const authClient = supabaseAdmin || supabase;
+    if (!authClient) {
+      return res.status(500).json({ success: false, error: "Database not configured" });
+    }
     const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
     if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
 
@@ -3761,6 +4778,43 @@ app.get("/api/onboarding/mandate", async (req, res) => {
   }
 });
 
+app.post("/api/onboarding/upload-agreement", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (!token) return res.status(401).json({ success: false, error: "Missing token" });
+
+    const authClient = supabaseAdmin || supabase;
+    if (!authClient) {
+      return res.status(500).json({ success: false, error: "Database not connected" });
+    }
+    const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
+    if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
+
+    const { pdfBase64 } = req.body;
+    if (!pdfBase64) return res.status(400).json({ success: false, error: "pdfBase64 required" });
+
+    const db = supabaseAdmin || supabase;
+    const fileName = `${user.id}/agreement-${Date.now()}.pdf`;
+    const pdfBuffer = Buffer.from(pdfBase64, "base64");
+
+    const { error: upErr } = await db.storage
+      .from("signed-agreements")
+      .upload(fileName, pdfBuffer, { contentType: "application/pdf", upsert: true });
+
+    if (upErr) {
+      console.warn("[Onboarding] PDF upload failed:", upErr.message);
+      return res.json({ success: true, publicUrl: "" });
+    }
+
+    const { data: urlData } = db.storage.from("signed-agreements").getPublicUrl(fileName);
+    return res.json({ success: true, publicUrl: urlData?.publicUrl || "" });
+  } catch (error) {
+    console.error("[Onboarding] Agreement upload error:", error);
+    res.json({ success: true, publicUrl: "" });
+  }
+});
+
 app.post("/api/onboarding/complete", async (req, res) => {
   try {
     const authHeader = req.headers.authorization || "";
@@ -3769,6 +4823,9 @@ app.post("/api/onboarding/complete", async (req, res) => {
 
     const db = getAuthenticatedDb(token);
     const authClient = supabaseAdmin || supabase;
+    if (!authClient) {
+      return res.status(500).json({ success: false, error: "Database not connected" });
+    }
     const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
     if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
 
@@ -3783,7 +4840,15 @@ app.post("/api/onboarding/complete", async (req, res) => {
       bank_name,
       bank_account_number,
       bank_branch_code,
+      signed_agreement_url,
+      signed_at,
+      downloaded_at,
     } = req.body;
+
+    console.log(`[Onboarding] /complete called for user ${user.id}. Agreement URL present: ${!!signed_agreement_url}`);
+    if (!signed_agreement_url) {
+      console.log("[Onboarding] Warning: signed_agreement_url is missing in request body:", JSON.stringify(req.body));
+    }
 
     const userId = user.id;
 
@@ -3822,11 +4887,21 @@ app.post("/api/onboarding/complete", async (req, res) => {
       savedAt: new Date().toISOString(),
     } : null;
 
-    const updatePayload = { kyc_status: "onboarding_complete" };
+    const updatePayload = {
+      kyc_status: "onboarding_complete",
+      updated_at: new Date().toISOString()
+    };
+    if (signed_agreement_url) updatePayload.signed_agreement_url = signed_agreement_url;
+    if (signed_at) updatePayload.signed_at = signed_at;
+    if (downloaded_at) updatePayload.downloaded_at = downloaded_at;
+
     const insertPayload = {
       user_id: userId,
       kyc_status: "onboarding_complete",
       employment_status: "not_provided",
+      signed_agreement_url: signed_agreement_url || null,
+      signed_at: signed_at || null,
+      downloaded_at: downloaded_at || null,
     };
 
     if (bank_name) updatePayload.bank_name = bank_name;
@@ -3889,6 +4964,54 @@ app.post("/api/onboarding/complete", async (req, res) => {
       }
     }
 
+    if (signed_agreement_url) {
+      console.log(`[Onboarding] Saving agreement URL to pack details for user ${userId}`);
+      try {
+        const packDb = authClient;
+        const { data: existingPack } = await packDb
+          .from("user_onboarding_pack_details")
+          .select("id, pack_details")
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        const agreementData = {
+          url: signed_agreement_url,
+          signed_at: signed_at || new Date().toISOString(),
+          downloaded_at: downloaded_at || null,
+          type: "account_agreement"
+        };
+
+        if (existingPack) {
+          let packDetails = existingPack.pack_details;
+          if (!packDetails || typeof packDetails !== "object") packDetails = {};
+
+          const agreements = Array.isArray(packDetails.agreements) ? packDetails.agreements : [];
+          agreements.push(agreementData);
+          packDetails.agreements = agreements;
+
+          await packDb
+            .from("user_onboarding_pack_details")
+            .update({
+              pack_details: packDetails,
+              updated_at: new Date().toISOString()
+            })
+            .eq("id", existingPack.id);
+          console.log(`[Onboarding] Appended agreement to existing pack for user ${userId}`);
+        } else {
+          await packDb
+            .from("user_onboarding_pack_details")
+            .insert({
+              user_id: userId,
+              pack_details: { agreements: [agreementData] },
+              updated_at: new Date().toISOString()
+            });
+          console.log(`[Onboarding] Created new pack with agreement for user ${userId}`);
+        }
+      } catch (packErr) {
+        console.warn("[Onboarding] Failed to save agreement to pack details:", packErr.message);
+      }
+    }
+
     console.log(`[Onboarding] Completed for user ${userId}, onboarding_id: ${onboardingId}`);
     res.json({ success: true, onboarding_id: onboardingId });
   } catch (error) {
@@ -3905,12 +5028,15 @@ app.get("/api/onboarding/status", async (req, res) => {
 
     const db = getAuthenticatedDb(token);
     const authClient = supabaseAdmin || supabase;
+    if (!authClient) {
+      return res.status(500).json({ success: false, error: "Database not connected" });
+    }
     const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
     if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
 
     const { data, error } = await db
       .from("user_onboarding")
-      .select("id, kyc_status, employment_status, created_at")
+      .select("id, kyc_status, employment_status, sumsub_raw, created_at")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -3921,10 +5047,45 @@ app.get("/api/onboarding/status", async (req, res) => {
       return res.status(500).json({ success: false, error: error.message });
     }
 
+    let is_fully_onboarded = false;
+    if (data) {
+      // "onboarding_complete" is only ever written by AccountAgreementStep.handleSign()
+      // after the user physically signs — it is definitive proof of full completion.
+      if (data.kyc_status === "onboarding_complete") {
+        is_fully_onboarded = true;
+      } else {
+        const kycDone = data.kyc_status === "approved" || data.kyc_status === "verified" || data.kyc_status === "onboarding_complete";
+        let taxDone = false, bankDone = false, mandateAgreed = false, riskDone = false, sofDone = false, termsDone = false;
+        let raw = {};
+        if (data.sumsub_raw) {
+          try {
+            raw = typeof data.sumsub_raw === "string" ? JSON.parse(data.sumsub_raw) : data.sumsub_raw;
+            // Robust grandfathering: if they have a signed_at date, they've passed the essential hurdles
+            const isGrandfathered = (kycDone && (!!raw?.signed_at || !!raw?.account_agreement_signed)) || (data.kyc_status === "onboarding_complete");
+            
+            if (isGrandfathered) {
+              taxDone = true; bankDone = true; mandateAgreed = true;
+              riskDone = true; sofDone = true; termsDone = true;
+            } else {
+              taxDone = !!raw?.tax_details_saved;
+              bankDone = !!raw?.bank_details_saved;
+              mandateAgreed = !!raw?.mandate_data?.agreedMandate || !!raw?.mandate_accepted;
+              riskDone = !!raw?.risk_disclosure_accepted;
+              sofDone = !!raw?.source_of_funds_accepted;
+              termsDone = !!raw?.terms_accepted;
+            }
+          } catch { }
+        }
+        const agreementSigned = !!raw?.signed_at || !!raw?.account_agreement_signed;
+        is_fully_onboarded = kycDone && taxDone && bankDone && mandateAgreed && riskDone && sofDone && termsDone && agreementSigned;
+      }
+    }
+
     res.json({
       success: true,
       onboarding: data || null,
       onboarding_id: data?.id || null,
+      is_fully_onboarded,
     });
   } catch (error) {
     console.error("[Onboarding] Status error:", error);
@@ -3976,6 +5137,10 @@ app.post("/api/webhooks/csdp", async (req, res) => {
       }
 
       console.log(`[CSDP Webhook] Updated settlement_status to ${newStatus} for tx:${transactionId} holding:${holdingId}`);
+
+      if (newStatus === SETTLEMENT_STATUSES.CONFIRMED) {
+        sendOrderFillEmail(db, { transactionId, holdingId }).catch(() => { });
+      }
     } else if (status === "rejected" || status === "failed") {
       if (transactionId) {
         await db.from("transactions").update({ settlement_status: SETTLEMENT_STATUSES.FAILED }).eq("id", transactionId);
@@ -4031,6 +5196,7 @@ app.post("/api/webhooks/broker", async (req, res) => {
       }
 
       console.log(`[Broker Webhook] Settlement CONFIRMED for tx:${transactionId} holding:${holdingId}`);
+      sendOrderFillEmail(db, { transactionId, holdingId }).catch(() => { });
     } else if (status === "rejected" || status === "failed") {
       if (transactionId) {
         await db.from("transactions").update({ settlement_status: SETTLEMENT_STATUSES.FAILED }).eq("id", transactionId);
@@ -4050,11 +5216,11 @@ app.post("/api/webhooks/broker", async (req, res) => {
 
 app.post('/api/test-mint-mornings-single', async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email, titleSearch } = req.body;
     if (!email) return res.status(400).json({ error: 'Email required' });
     const db = supabaseAdmin || supabase;
     if (!db) return res.status(500).json({ error: 'No database connection' });
-    const result = await sendTestEmail(db, email);
+    const result = await sendTestEmail(db, email, titleSearch);
     res.json(result);
   } catch (error) {
     console.error('[MINT MORNINGS] Test single error:', error);
@@ -4091,11 +5257,576 @@ app.post('/api/test-mint-mornings', async (req, res) => {
   }
 });
 
+const PORT = process.env.API_PORT || 3001;
+
+// Health check endpoint
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// ── News_articles diagnostic endpoint ─────────────────────────────────────────
+app.get('/api/diagnose/news-articles', async (req, res) => {
+  const db = supabaseAdmin || supabase;
+  const results = {
+    supabase_connected: !!db,
+    table_readable: false,
+    table_writable: false,
+    row_count: null,
+    latest_article: null,
+    latest_article_created_at: null,
+    write_test: null,
+    write_error: null,
+    read_error: null,
+    allbrf_count: null,
+  };
+
+  if (!db) {
+    return res.status(500).json({ ...results, error: 'Supabase client not initialized — check VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY secrets.' });
+  }
+
+  // 1. Read test
+  try {
+    const { data, error, count } = await db
+      .from('News_articles')
+      .select('id, title, source, published_at, content_types, created_at', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (error) {
+      results.read_error = error.message;
+    } else {
+      results.table_readable = true;
+      results.row_count = count;
+      if (data && data.length > 0) {
+        results.latest_article = data[0].title;
+        results.latest_article_created_at = data[0].created_at;
+      }
+    }
+  } catch (e) {
+    results.read_error = e.message;
+  }
+
+  // 2. Count ALLBRF articles and get latest
+  try {
+    const { count: allbrfCount, error: allbrfErr } = await db
+      .from('News_articles')
+      .select('id', { count: 'exact', head: true })
+      .filter('content_types', 'cs', '"ALLBRF"');
+    if (!allbrfErr) results.allbrf_count = allbrfCount;
+
+    const { data: recentAllbrf } = await db
+      .from('News_articles')
+      .select('title, published_at, source')
+      .filter('content_types', 'cs', '"ALLBRF"')
+      .order('published_at', { ascending: false })
+      .limit(5);
+    results.latest_allbrf_articles = (recentAllbrf || []).map(a => ({
+      title: a.title,
+      published_at: a.published_at,
+      source: a.source,
+    }));
+  } catch (e) { }
+
+  // 3. Write test — insert a clearly labelled test row then delete it
+  const testDocId = Date.now(); // doc_id is bigint
+  try {
+    const { data: inserted, error: insertErr } = await db
+      .from('News_articles')
+      .insert({
+        id: testDocId,
+        doc_id: testDocId,
+        title: '[DIAGNOSTIC TEST] News_articles write test',
+        source: 'Mint Diagnostic',
+        published_at: new Date().toISOString(),
+        body_text: 'This is an automated diagnostic write test. It will be deleted immediately.',
+        content_types: ['DIAG'],
+      })
+      .select('id')
+      .single();
+
+    if (insertErr) {
+      results.write_test = 'FAILED';
+      results.write_error = insertErr.message;
+    } else {
+      results.table_writable = true;
+      results.write_test = 'SUCCESS';
+      // Clean up the test row
+      await db.from('News_articles').delete().eq('id', inserted.id);
+      results.write_test = 'SUCCESS (test row deleted)';
+    }
+  } catch (e) {
+    results.write_test = 'FAILED';
+    results.write_error = e.message;
+  }
+
+  const status = results.table_readable && results.table_writable ? 200 : 500;
+  return res.status(status).json(results);
+});
+
+// ─── Ozow Payment Routes ─────────────────────────────────────────────────────
+
+app.post("/api/ozow/initiate", async (req, res) => {
+  try {
+    const { amount, strategyName, strategyId, userId, userEmail, successUrl, cancelUrl, errorUrl, notifyUrl } = req.body;
+
+    const siteCode = process.env.OZOW_SITE_CODE;
+    const privateKey = process.env.OZOW_PRIVATE_KEY;
+
+    if (!siteCode || !privateKey) {
+      return res.status(500).json({ success: false, error: "Ozow not configured. Please add OZOW_SITE_CODE and OZOW_PRIVATE_KEY." });
+    }
+
+    if (!amount || Number(amount) <= 0) {
+      return res.status(400).json({ success: false, error: "Invalid payment amount." });
+    }
+
+    const crypto = require("crypto");
+    const countryCode = "ZA";
+    const currencyCode = "ZAR";
+    const amountStr = Number(amount).toFixed(2);
+    const transactionRef = `MINT-${userId ? userId.substr(0, 8) : "USER"}-${Date.now()}`;
+    const bankReference = "Mint Payment";
+    const customer = userEmail || "";
+    const optional1 = strategyId || "";
+    const optional2 = userEmail || "";
+    const optional3 = userId || "";
+    const isTest = process.env.OZOW_IS_TEST === "true" ? "true" : "false";
+
+    const baseUrl = process.env.APP_URL || "https://mymint.co.za";
+    const resolvedSuccessUrl = successUrl || `${baseUrl}/?ozow=success`;
+    const resolvedCancelUrl = cancelUrl || `${baseUrl}/?ozow=cancel`;
+    const resolvedErrorUrl = errorUrl || `${baseUrl}/?ozow=error`;
+    const resolvedNotifyUrl = notifyUrl || `${baseUrl}/api/ozow/notify`;
+
+    // Hash order per Ozow spec:
+    // SiteCode, CountryCode, CurrencyCode, Amount, TransactionReference, BankReference,
+    // [Optional1-5 only if non-empty], Customer, CancelUrl, ErrorUrl, SuccessUrl, NotifyUrl, IsTest, PrivateKey
+    const hashParts = [
+      siteCode,
+      countryCode,
+      currencyCode,
+      amountStr,
+      transactionRef,
+      bankReference,
+    ];
+    if (optional1) hashParts.push(optional1);
+    if (optional2) hashParts.push(optional2);
+    if (optional3) hashParts.push(optional3);
+    hashParts.push(
+      customer,
+      resolvedCancelUrl,
+      resolvedErrorUrl,
+      resolvedSuccessUrl,
+      resolvedNotifyUrl,
+      isTest,
+      privateKey,
+    );
+
+    const hashCheck = crypto.createHash("sha512").update(hashParts.join("").toLowerCase(), "utf8").digest("hex");
+
+    console.log(`[ozow] Initiated payment: ref=${transactionRef} amount=${amountStr} strategy=${strategyName} userId=${userId}`);
+
+    // Return form params — frontend must POST these as a hidden form to https://pay.ozow.com
+    return res.json({
+      success: true,
+      action_url: "https://pay.ozow.com",
+      SiteCode: siteCode,
+      CountryCode: countryCode,
+      CurrencyCode: currencyCode,
+      Amount: amountStr,
+      TransactionReference: transactionRef,
+      BankReference: bankReference,
+      Optional1: optional1,
+      Optional2: optional2,
+      Optional3: optional3,
+      Customer: customer,
+      CancelUrl: resolvedCancelUrl,
+      ErrorUrl: resolvedErrorUrl,
+      SuccessUrl: resolvedSuccessUrl,
+      NotifyUrl: resolvedNotifyUrl,
+      IsTest: isTest,
+      HashCheck: hashCheck,
+    });
+  } catch (err) {
+    console.error("[ozow] initiate error:", err);
+    return res.status(500).json({ success: false, error: "Failed to initiate Ozow payment." });
+  }
+});
+
+// Called from the success page to record the investment when the notify webhook hasn't fired yet
+app.post("/api/ozow/record-success", async (req, res) => {
+  try {
+    const { user, error: authError } = await authenticateUser(req);
+    if (authError || !user) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+
+    const { transactionRef, strategyId, amount } = req.body;
+    const userId = user.id;
+
+    if (!transactionRef || !strategyId || !amount || Number(amount) <= 0) {
+      return res.status(400).json({ success: false, error: "Missing required fields" });
+    }
+
+    // Only accept refs we generated
+    if (!transactionRef.startsWith("MINT-")) {
+      return res.status(400).json({ success: false, error: "Invalid transaction reference" });
+    }
+
+    const db = supabaseAdmin || supabase;
+    if (!db) return res.status(500).json({ success: false, error: "DB unavailable" });
+
+    // Deduplication
+    const { data: existingTx } = await db
+      .from("transactions")
+      .select("id")
+      .eq("store_reference", transactionRef)
+      .maybeSingle();
+
+    if (existingTx) {
+      console.log(`[ozow/record-success] Already recorded ref=${transactionRef}`);
+      return res.json({ success: true, alreadyRecorded: true });
+    }
+
+    const amountZAR = Number(amount);
+
+    // Load strategy
+    const { data: strategyData, error: stratError } = await db
+      .from("strategies")
+      .select("name, holdings")
+      .eq("id", strategyId)
+      .maybeSingle();
+
+    if (stratError || !strategyData) {
+      return res.status(404).json({ success: false, error: "Strategy not found" });
+    }
+
+    const strategyName = strategyData.name || "Strategy";
+    const strategyHoldings = strategyData.holdings || [];
+
+    if (strategyHoldings.length > 0) {
+      const symbols = strategyHoldings.map(h => h.symbol).filter(Boolean);
+      const { data: securitiesData } = await db
+        .from("securities")
+        .select("id, symbol, last_price")
+        .in("symbol", symbols);
+
+      const secBySymbol = {};
+      (securitiesData || []).forEach(s => { secBySymbol[s.symbol] = s; });
+
+      let totalBasketCostRands = 0;
+      for (const holding of strategyHoldings) {
+        const sec = secBySymbol[holding.symbol];
+        if (!sec) continue;
+        const qty = Number(holding.quantity || holding.shares || 0);
+        const priceCents = Number(sec.last_price || 0);
+        if (qty > 0 && priceCents > 0) totalBasketCostRands += (qty * priceCents) / 100;
+      }
+
+      const scalingRatio = totalBasketCostRands > 0 ? amountZAR / totalBasketCostRands : 1;
+      const now = new Date().toISOString();
+      const today = now.split("T")[0];
+
+      for (const holding of strategyHoldings) {
+        const sec = secBySymbol[holding.symbol];
+        if (!sec) continue;
+        const rawQty = Number(holding.quantity || holding.shares || 0);
+        if (rawQty <= 0) continue;
+        const priceCents = Number(sec.last_price || 0);
+        if (priceCents <= 0) continue;
+
+        const holdingQty = rawQty * scalingRatio;
+
+        const { data: existing } = await db
+          .from("stock_holdings")
+          .select("id, quantity, avg_fill")
+          .eq("user_id", userId)
+          .eq("security_id", sec.id)
+          .eq("strategy_id", strategyId)
+          .maybeSingle();
+
+        if (existing) {
+          const oldQty = Number(existing.quantity || 0);
+          const oldAvgFill = Number(existing.avg_fill || 0);
+          const newQty = oldQty + holdingQty;
+          const newAvgFill = newQty > 0 ? ((oldAvgFill * oldQty) + (priceCents * holdingQty)) / newQty : priceCents;
+          await db.from("stock_holdings").update({
+            quantity: newQty,
+            avg_fill: Math.round(newAvgFill),
+            market_value: Math.round(newQty * priceCents),
+            as_of_date: today,
+            updated_at: now,
+          }).eq("id", existing.id);
+        } else {
+          await db.from("stock_holdings").insert({
+            user_id: userId,
+            security_id: sec.id,
+            strategy_id: strategyId,
+            quantity: holdingQty,
+            avg_fill: priceCents,
+            market_value: Math.round(holdingQty * priceCents),
+            unrealized_pnl: 0,
+            as_of_date: today,
+            Status: "active",
+          });
+        }
+      }
+    }
+
+    // Transaction record
+    await db.from("transactions").insert({
+      user_id: userId,
+      direction: "debit",
+      name: `Strategy Investment: ${strategyName}`,
+      description: `Invested in strategy ${strategyName}`,
+      amount: Math.round(amountZAR * 100),
+      store_reference: transactionRef,
+      currency: "ZAR",
+      status: "posted",
+      transaction_date: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+    });
+
+    // Upsert user_strategies
+    const { data: existingUS } = await db
+      .from("user_strategies")
+      .select("id, invested_amount")
+      .eq("user_id", userId)
+      .eq("strategy_id", strategyId)
+      .maybeSingle();
+
+    if (existingUS) {
+      await db.from("user_strategies").update({
+        invested_amount: (existingUS.invested_amount || 0) + Math.round(amountZAR * 100),
+        updated_at: new Date().toISOString(),
+      }).eq("id", existingUS.id);
+    } else {
+      await db.from("user_strategies").insert({
+        user_id: userId,
+        strategy_id: strategyId,
+        invested_amount: Math.round(amountZAR * 100),
+        status: "active",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+    }
+
+    console.log(`[ozow/record-success] Investment recorded for user=${userId} strategy=${strategyId} amount=${amountZAR} ref=${transactionRef}`);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("[ozow/record-success] error:", err);
+    return res.status(500).json({ success: false, error: "Failed to record investment" });
+  }
+});
+
+app.post("/api/ozow/notify", async (req, res) => {
+  try {
+    const crypto = require("crypto");
+    const privateKey = process.env.OZOW_PRIVATE_KEY;
+    const {
+      SiteCode, TransactionId, TransactionReference, Amount, Status,
+      Optional1, Optional2, Optional3, Optional4, Optional5,
+      CurrencyCode, IsTest, StatusMessage, HashCheck,
+    } = req.body;
+
+    console.log("[ozow/notify] received:", req.body);
+
+    if (privateKey && HashCheck) {
+      // Notify hash order: SiteCode, TransactionId, TransactionReference, Amount, Status,
+      // Optional1-5 (always include even if empty), CurrencyCode, IsTest, PrivateKey
+      const hashParts = [
+        SiteCode, TransactionId, TransactionReference, Amount, Status,
+        Optional1 || "", Optional2 || "", Optional3 || "", Optional4 || "", Optional5 || "",
+        CurrencyCode, IsTest, privateKey,
+      ];
+      const computed = crypto.createHash("sha512").update(hashParts.join("").toLowerCase(), "utf8").digest("hex");
+      if (computed.toLowerCase() !== HashCheck.toLowerCase()) {
+        console.warn("[ozow/notify] Hash mismatch — possible spoofed request");
+        return res.status(200).send("OK");
+      }
+      console.log("[ozow/notify] Hash verified ✅");
+    }
+
+    console.log(`[ozow/notify] ref=${TransactionReference} status=${Status} amount=${Amount}`);
+
+    if (Status === "Complete" || Status === "CompleteExternal") {
+      console.log(`[ozow/notify] Payment complete ✅ ref=${TransactionReference}`);
+
+      const strategyId = Optional1 || null;
+      const userEmail = Optional2 || null;
+      const userId = Optional3 || null;
+      const amountZAR = Number(Amount) || 0;
+
+      if (!userId || !strategyId || amountZAR <= 0) {
+        console.warn(`[ozow/notify] Missing userId/strategyId/amount — cannot record investment. userId=${userId} strategyId=${strategyId} amount=${amountZAR}`);
+        return res.status(200).send("OK");
+      }
+
+      const db = supabaseAdmin || supabase;
+      if (!db) {
+        console.error("[ozow/notify] No DB client available");
+        return res.status(200).send("OK");
+      }
+
+      // Deduplication — skip if already processed
+      const { data: existingTx } = await db
+        .from("transactions")
+        .select("id")
+        .eq("store_reference", TransactionReference)
+        .maybeSingle();
+
+      if (existingTx) {
+        console.log(`[ozow/notify] Duplicate — already recorded ref=${TransactionReference}`);
+        return res.status(200).send("OK");
+      }
+
+      // Load strategy holdings
+      const { data: strategyData, error: stratError } = await db
+        .from("strategies")
+        .select("name, holdings")
+        .eq("id", strategyId)
+        .maybeSingle();
+
+      if (stratError || !strategyData) {
+        console.error("[ozow/notify] Could not load strategy:", stratError?.message);
+        return res.status(200).send("OK");
+      }
+
+      const strategyName = strategyData.name || "Strategy";
+      const strategyHoldings = strategyData.holdings || [];
+
+      if (strategyHoldings.length > 0) {
+        const symbols = strategyHoldings.map(h => h.symbol).filter(Boolean);
+        const { data: securitiesData } = await db
+          .from("securities")
+          .select("id, symbol, last_price")
+          .in("symbol", symbols);
+
+        const secBySymbol = {};
+        (securitiesData || []).forEach(s => { secBySymbol[s.symbol] = s; });
+
+        // Compute total basket cost to derive scaling ratio
+        let totalBasketCostRands = 0;
+        for (const holding of strategyHoldings) {
+          const sec = secBySymbol[holding.symbol];
+          if (!sec) continue;
+          const qty = Number(holding.quantity || holding.shares || 0);
+          const priceCents = Number(sec.last_price || 0);
+          if (qty > 0 && priceCents > 0) totalBasketCostRands += (qty * priceCents) / 100;
+        }
+
+        const scalingRatio = totalBasketCostRands > 0 ? amountZAR / totalBasketCostRands : 1;
+        const now = new Date().toISOString();
+        const today = now.split("T")[0];
+
+        for (const holding of strategyHoldings) {
+          const sec = secBySymbol[holding.symbol];
+          if (!sec) continue;
+          const rawQty = Number(holding.quantity || holding.shares || 0);
+          if (rawQty <= 0) continue;
+          const priceCents = Number(sec.last_price || 0);
+          if (priceCents <= 0) continue;
+
+          const holdingQty = rawQty * scalingRatio;
+
+          const { data: existing } = await db
+            .from("stock_holdings")
+            .select("id, quantity, avg_fill")
+            .eq("user_id", userId)
+            .eq("security_id", sec.id)
+            .eq("strategy_id", strategyId)
+            .maybeSingle();
+
+          if (existing) {
+            const oldQty = Number(existing.quantity || 0);
+            const oldAvgFill = Number(existing.avg_fill || 0);
+            const newQty = oldQty + holdingQty;
+            const newAvgFill = newQty > 0 ? ((oldAvgFill * oldQty) + (priceCents * holdingQty)) / newQty : priceCents;
+            await db.from("stock_holdings").update({
+              quantity: newQty,
+              avg_fill: Math.round(newAvgFill),
+              market_value: Math.round(newQty * priceCents),
+              as_of_date: today,
+              updated_at: now,
+            }).eq("id", existing.id);
+            console.log(`[ozow/notify] Updated holding ${holding.symbol} qty=${newQty}`);
+          } else {
+            await db.from("stock_holdings").insert({
+              user_id: userId,
+              security_id: sec.id,
+              strategy_id: strategyId,
+              quantity: holdingQty,
+              avg_fill: priceCents,
+              market_value: Math.round(holdingQty * priceCents),
+              unrealized_pnl: 0,
+              as_of_date: today,
+              Status: "active",
+            });
+            console.log(`[ozow/notify] Inserted holding ${holding.symbol} qty=${holdingQty}`);
+          }
+        }
+      }
+
+      // Record transaction
+      await db.from("transactions").insert({
+        user_id: userId,
+        direction: "debit",
+        name: `Strategy Investment: ${strategyName}`,
+        description: `Invested in strategy ${strategyName}`,
+        amount: Math.round(amountZAR * 100),
+        store_reference: TransactionReference,
+        currency: "ZAR",
+        status: "posted",
+        transaction_date: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+      });
+      console.log(`[ozow/notify] Transaction recorded for ref=${TransactionReference}`);
+
+      // Upsert user_strategies
+      const { data: existingUS } = await db
+        .from("user_strategies")
+        .select("id, invested_amount")
+        .eq("user_id", userId)
+        .eq("strategy_id", strategyId)
+        .maybeSingle();
+
+      if (existingUS) {
+        const newInvested = (existingUS.invested_amount || 0) + Math.round(amountZAR * 100);
+        await db.from("user_strategies").update({
+          invested_amount: newInvested,
+          updated_at: new Date().toISOString(),
+        }).eq("id", existingUS.id);
+        console.log(`[ozow/notify] user_strategies updated invested_amount=${newInvested}`);
+      } else {
+        await db.from("user_strategies").insert({
+          user_id: userId,
+          strategy_id: strategyId,
+          invested_amount: Math.round(amountZAR * 100),
+          status: "active",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+        console.log(`[ozow/notify] user_strategies created for strategy=${strategyId}`);
+      }
+
+    } else if (Status === "Cancelled") {
+      console.log(`[ozow/notify] Payment cancelled ref=${TransactionReference}`);
+    } else if (Status === "Error") {
+      console.log(`[ozow/notify] Payment error ref=${TransactionReference} msg=${StatusMessage}`);
+    }
+
+    return res.status(200).send("OK");
+  } catch (err) {
+    console.error("[ozow/notify] error:", err);
+    return res.status(200).send("OK");
+  }
+});
+
+// Catch-all 404 handler - MUST be after all route definitions
 app.use((req, res) => {
   res.status(404).json({ error: "Not found", message: "This is the API server. The frontend is served separately." });
 });
 
-const PORT = process.env.API_PORT || 3001;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`TruID API server running on port ${PORT}`);
 });

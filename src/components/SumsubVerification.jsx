@@ -25,12 +25,12 @@ const LoadingSpinner = () => (
   <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-solid border-current border-r-transparent motion-reduce:animate-[spin_1.5s_linear_infinite]" />
 );
 
-const SumsubVerification = ({ onVerified, resubmitMode = false }) => {
+const SumsubVerification = ({ onVerified }) => {
   const [accessToken, setAccessToken] = useState(null);
   const [userId, setUserId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [errorType, setErrorType] = useState(null); // 'config' | 'resubmit' | 'rejected' | 'generic'
+  const [errorType, setErrorType] = useState(null); // 'config' | 'rejected' | 'generic'
   const [verificationComplete, setVerificationComplete] = useState(false);
   const [verificationStatus, setVerificationStatus] = useState(null);
   const initializedRef = useRef(false);
@@ -61,9 +61,13 @@ const SumsubVerification = ({ onVerified, resubmitMode = false }) => {
         setError(null);
 
         let currentUserId = null;
+        let authToken = null;
         if (supabase) {
-          const { data: userData } = await supabase.auth.getUser();
-          currentUserId = userData?.user?.id;
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            currentUserId = session.user?.id;
+            authToken = session.access_token;
+          }
         }
         
         if (!currentUserId) {
@@ -72,15 +76,7 @@ const SumsubVerification = ({ onVerified, resubmitMode = false }) => {
         
         setUserId(currentUserId);
 
-        const apiBase = import.meta.env.VITE_API_URL || "";
-        const { data: { session } } = await supabase.auth.getSession();
-        const authToken = session?.access_token;
-
-        if (resubmitMode) {
-          console.log("Resubmit mode: opening Sumsub SDK for document resubmission (no reset - preserves existing data)");
-        }
-
-        const response = await fetch(`${apiBase}/api/sumsub/access-token`, {
+        const response = await fetch("/api/sumsub/access-token", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -113,10 +109,9 @@ const SumsubVerification = ({ onVerified, resubmitMode = false }) => {
 
   const accessTokenExpirationHandler = useCallback(async () => {
     try {
-      const apiBase = import.meta.env.VITE_API_URL || "";
       const { data: { session } } = await supabase.auth.getSession();
       const authToken = session?.access_token;
-      const response = await fetch(`${apiBase}/api/sumsub/access-token`, {
+      const response = await fetch("/api/sumsub/access-token", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -160,7 +155,6 @@ const SumsubVerification = ({ onVerified, resubmitMode = false }) => {
         console.log("Applicant status:", payload);
         const reviewStatus = payload?.reviewStatus;
         const reviewAnswer = payload?.reviewResult?.reviewAnswer;
-        const rejectType = payload?.reviewResult?.reviewRejectType;
         
         if ((reviewStatus === "completed" || reviewStatus === "onHold") && reviewAnswer === "GREEN") {
           setVerificationComplete(true);
@@ -172,21 +166,9 @@ const SumsubVerification = ({ onVerified, resubmitMode = false }) => {
           }
         } else if (reviewAnswer === "RED" && reviewStatus === "completed") {
           const moderationComment = payload?.reviewResult?.moderationComment;
-          if (resubmitMode) {
-            console.log("Resubmit mode active - letting Sumsub SDK handle resubmission flow natively");
-            if (!hasReceivedInitialStatus.current) {
-              hasReceivedInitialStatus.current = true;
-            }
-          } else {
-            setVerificationStatus("rejected");
-            if (rejectType === "RETRY") {
-              setError(moderationComment || "Some documents need to be resubmitted. Please try again with clearer images.");
-              setErrorType("resubmit");
-            } else {
-              setError(moderationComment || "Verification was not successful. Please contact support for assistance.");
-              setErrorType("resubmit");
-            }
-          }
+          setVerificationStatus("rejected");
+          setError(moderationComment || "Verification was not successful. Please contact support for assistance.");
+          setErrorType("rejected");
         } else if (reviewAnswer === "RED" && (reviewStatus === "prechecked" || reviewStatus === "pending")) {
           console.log("Precheck/pending rejection with RETRY - Sumsub SDK will handle retry flow internally");
           setVerificationStatus("pending");
@@ -207,7 +189,7 @@ const SumsubVerification = ({ onVerified, resubmitMode = false }) => {
       default:
         break;
     }
-  }, [onVerified, resubmitMode]);
+  }, [onVerified]);
 
   const errorHandler = useCallback((error) => {
     console.error("Sumsub SDK error:", error);
@@ -226,13 +208,12 @@ const SumsubVerification = ({ onVerified, resubmitMode = false }) => {
     
     const reinitialize = async () => {
       try {
-        const apiBase = import.meta.env.VITE_API_URL || "";
         const { data: { session: sess } } = await supabase.auth.getSession();
         const aToken = sess?.access_token;
 
         console.log("Retry: re-initializing Sumsub SDK (preserving existing applicant data)");
 
-        const response = await fetch(`${apiBase}/api/sumsub/access-token`, {
+        const response = await fetch("/api/sumsub/access-token", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -279,27 +260,6 @@ const SumsubVerification = ({ onVerified, resubmitMode = false }) => {
   }
 
   if (error) {
-    // Resubmission needed - show retry button
-    if (errorType === "resubmit") {
-      return (
-        <div className="w-full max-w-md mx-auto text-center py-8">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
-            <AlertCircleIcon className="w-8 h-8 text-white" />
-          </div>
-          <h3 className="text-lg font-medium text-slate-800 mb-2">Resubmit Documents</h3>
-          <p className="text-sm text-slate-500 mb-6">{error}</p>
-          <button
-            type="button"
-            onClick={handleRetry}
-            className="px-6 py-2.5 rounded-xl font-medium text-white transition-all duration-200"
-            style={{ background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)' }}
-          >
-            Try Again
-          </button>
-        </div>
-      );
-    }
-
     // Permanently rejected - show support contact
     if (errorType === "rejected") {
       return (

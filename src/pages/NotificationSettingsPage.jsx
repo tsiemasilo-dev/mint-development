@@ -93,21 +93,16 @@ const NotificationSettingsPage = ({ onBack }) => {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("notification_preferences")
+        .select("id, notifications_enabled")
         .eq("id", userData.user.id)
         .single();
 
-      if (profile?.notification_preferences) {
-        setPreferences(profile.notification_preferences);
-        const allOn = Object.values(profile.notification_preferences).every((v) => v === true);
-        setAllEnabled(allOn);
-      } else {
-        const defaultPrefs = {};
-        notificationTypes.forEach((type) => {
-          defaultPrefs[type.id] = true;
-        });
-        setPreferences(defaultPrefs);
-      }
+      const defaultPrefs = {};
+      notificationTypes.forEach((type) => {
+        defaultPrefs[type.id] = profile?.notifications_enabled !== false;
+      });
+      setPreferences(defaultPrefs);
+      setAllEnabled(profile?.notifications_enabled !== false);
     } catch (err) {
       console.error("Error loading preferences:", err);
     } finally {
@@ -123,9 +118,10 @@ const NotificationSettingsPage = ({ onBack }) => {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData?.user) return;
 
+      const anyEnabled = Object.values(newPrefs).some((v) => v === true);
       await supabase
         .from("profiles")
-        .update({ notification_preferences: newPrefs })
+        .update({ notifications_enabled: anyEnabled })
         .eq("id", userData.user.id);
       
       updateContextPrefs(newPrefs);

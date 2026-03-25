@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import SumsubVerification from "../components/SumsubVerification";
 import MandateViewer from "../components/MandateViewer";
+import AccountAgreementStep from "../components/AccountAgreementStep";
 import { supabase } from "../lib/supabase";
 import { useProfile } from "../lib/useProfile";
 import "../styles/onboarding-process.css";
@@ -63,21 +64,24 @@ const BankIcon = (props) => (
 );
 
 const southAfricanBanks = [
-  { value: "", label: "Select your bank", logo: null },
-  { value: "absa", label: "Absa Bank", logo: "https://logo.clearbit.com/absa.co.za" },
-  { value: "african_bank", label: "African Bank", logo: "https://logo.clearbit.com/africanbank.co.za" },
-  { value: "bidvest_bank", label: "Bidvest Bank", logo: "https://logo.clearbit.com/bidvestbank.co.za" },
-  { value: "capitec", label: "Capitec Bank", logo: "https://logo.clearbit.com/capitecbank.co.za" },
-  { value: "discovery_bank", label: "Discovery Bank", logo: "https://logo.clearbit.com/discovery.co.za" },
-  { value: "fnb", label: "First National Bank (FNB)", logo: "https://logo.clearbit.com/fnb.co.za" },
-  { value: "investec", label: "Investec", logo: "https://logo.clearbit.com/investec.com" },
-  { value: "nedbank", label: "Nedbank", logo: "https://logo.clearbit.com/nedbank.co.za" },
-  { value: "old_mutual", label: "Old Mutual", logo: "https://logo.clearbit.com/oldmutual.co.za" },
-  { value: "sasfin", label: "Sasfin Bank", logo: "https://logo.clearbit.com/sasfin.com" },
-  { value: "standard_bank", label: "Standard Bank", logo: "https://logo.clearbit.com/standardbank.co.za" },
-  { value: "tyme_bank", label: "TymeBank", logo: "https://logo.clearbit.com/tymebank.co.za" },
-  { value: "zero", label: "Bank Zero", logo: "https://logo.clearbit.com/bankzero.co.za" },
-  { value: "other", label: "Other", logo: null },
+  { value: "", label: "Select your bank", logo: null, branchCode: "" },
+  { value: "absa", label: "Absa Bank", logo: "https://logo.clearbit.com/absa.co.za", branchCode: "632005" },
+  { value: "access_bank", label: "Access Bank", logo: "https://logo.clearbit.com/accessbank.co.za", branchCode: "410506" },
+  { value: "african_bank", label: "African Bank", logo: "https://logo.clearbit.com/africanbank.co.za", branchCode: "430000" },
+  { value: "zero", label: "Bank Zero", logo: "https://logo.clearbit.com/bankzero.co.za", branchCode: "888000" },
+  { value: "bidvest_bank", label: "Bidvest Bank", logo: "https://logo.clearbit.com/bidvestbank.co.za", branchCode: "462005" },
+  { value: "capitec", label: "Capitec Bank", logo: "https://logo.clearbit.com/capitecbank.co.za", branchCode: "470010" },
+  { value: "capitec_business", label: "Capitec Business Bank", logo: "https://logo.clearbit.com/capitecbank.co.za", branchCode: "450105" },
+  { value: "discovery_bank", label: "Discovery Bank", logo: "https://logo.clearbit.com/discovery.co.za", branchCode: "679000" },
+  { value: "fnb", label: "First National Bank (FNB)", logo: "https://logo.clearbit.com/fnb.co.za", branchCode: "250655" },
+  { value: "investec", label: "Investec", logo: "https://logo.clearbit.com/investec.com", branchCode: "580105" },
+  { value: "nedbank", label: "Nedbank", logo: "https://logo.clearbit.com/nedbank.co.za", branchCode: "198765" },
+  { value: "old_mutual", label: "Old Mutual", logo: "https://logo.clearbit.com/oldmutual.co.za", branchCode: "462005" },
+  { value: "sasfin", label: "Sasfin Bank", logo: "https://logo.clearbit.com/sasfin.com", branchCode: "683000" },
+  { value: "standard_bank", label: "Standard Bank", logo: "https://logo.clearbit.com/standardbank.co.za", branchCode: "051001" },
+  { value: "tyme_bank", label: "TymeBank", logo: "https://logo.clearbit.com/tymebank.co.za", branchCode: "678910" },
+  { value: "ubank", label: "UBank", logo: "https://logo.clearbit.com/ubank.co.za", branchCode: "431010" },
+  { value: "other", label: "Other", logo: null, branchCode: "" },
 ];
 
 const employmentOptions = [
@@ -114,7 +118,7 @@ const monthlyInvestmentOptions = [
 ];
 
 const OnboardingProcessPage = ({ onBack, onComplete }) => {
-  const { profile } = useProfile();
+  const { profile, loading: profileLoading } = useProfile();
   const [step, setStep] = useState(0);
   const [isFading, setIsFading] = useState(false);
   const [employmentStatus, setEmploymentStatus] = useState("");
@@ -144,11 +148,24 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const [agreedSourceOfFunds, setAgreedSourceOfFunds] = useState(false);
   const [sofDropdownOpen, setSofDropdownOpen] = useState(false);
   const [bankName, setBankName] = useState("");
+  const [bankAccountName, setBankAccountName] = useState("");
+  const [bankAccountType, setBankAccountType] = useState("");
   const [bankAccountNumber, setBankAccountNumber] = useState("");
   const [bankBranchCode, setBankBranchCode] = useState("");
+  const [identityNumber, setIdentityNumber] = useState("");
+  const [identityCheckLoading, setIdentityCheckLoading] = useState(false);
+  const [identityCheckError, setIdentityCheckError] = useState("");
   const [bankDropdownOpen, setBankDropdownOpen] = useState(false);
   const bankDropdownRef = useRef(null);
   const [kycAlreadyVerified, setKycAlreadyVerified] = useState(false);
+  const [bankDone, setBankDone] = useState(false);
+  const [mandateDone, setMandateDone] = useState(false);
+  const [riskDone, setRiskDone] = useState(false);
+  const [sofDone, setSofDone] = useState(false);
+  const [taxDone, setTaxDone] = useState(false);
+  const [taxNumber, setTaxNumber] = useState("");
+  const [termsDone, setTermsDone] = useState(false);
+  const [agreementSignedDone, setAgreementSignedDone] = useState(false);
   const [authStatus, setAuthStatus] = useState({
     isChecked: false,
     isAuthenticated: false,
@@ -172,9 +189,15 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const handleBankSelect = (value) => {
     setBankName(value);
     setBankDropdownOpen(false);
+    const selected = southAfricanBanks.find((b) => b.value === value);
+    if (selected?.branchCode) {
+      setBankBranchCode(selected.branchCode);
+    } else {
+      setBankBranchCode("");
+    }
   };
 
-  const bankDetailsReady = bankName && bankAccountNumber && bankBranchCode;
+  const bankDetailsReady = bankName && bankAccountName.trim() && bankAccountType && bankAccountNumber && bankBranchCode;
 
   const goToStep = (nextStep) => {
     setIsFading(true);
@@ -190,8 +213,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       if (!token) return;
-      const apiBase = import.meta.env.VITE_API_URL || "";
-      const res = await fetch(`${apiBase}/api/onboarding/save-employment`, {
+      const res = await fetch("/api/onboarding/save-employment", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ employment_status: "not_provided", annual_income_currency: "ZAR" }),
@@ -205,34 +227,144 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
     }
   };
 
-  const handleContinue = async () => {
-    if (step === 0) {
-      await ensureOnboardingRecord();
-      if (kycAlreadyVerified) {
-        goToStep(3);
-      } else {
-        goToStep(2);
-      }
+  const saveProgressFlag = async (flagKey, extraFields) => {
+    if (!supabase) return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      if (!userId) return;
+      const id = existingOnboardingId || null;
+      const query = supabase.from("user_onboarding").select("sumsub_raw");
+      const { data: record } = id
+        ? await query.eq("id", id).eq("user_id", userId).maybeSingle()
+        : await query.eq("user_id", userId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      let raw = {};
+      try { raw = typeof record?.sumsub_raw === "string" ? JSON.parse(record.sumsub_raw) : (record?.sumsub_raw || {}); } catch { }
+      raw[flagKey] = true;
+      if (extraFields) Object.assign(raw, extraFields);
+      const updateQuery = supabase.from("user_onboarding").update({ sumsub_raw: JSON.stringify(raw) });
+      const { error } = id
+        ? await updateQuery.eq("id", id).eq("user_id", userId)
+        : await updateQuery.eq("user_id", userId);
+      if (error) console.error("[Onboarding] saveProgressFlag failed for", flagKey, error.message);
+    } catch (err) {
+      console.error("[Onboarding] saveProgressFlag error for", flagKey, err?.message);
     }
   };
 
-  const handleBack = () => {
-    if (step === 7) {
-      goToStep(6);
-    } else if (step === 6) {
-      goToStep(5);
-    } else if (step === 5) {
-      goToStep(4);
-    } else if (step === 4) {
-      goToStep(3);
-    } else if (step === 3) {
-      if (kycAlreadyVerified) {
-        goToStep(0);
-      } else {
-        goToStep(2);
+  const getNextIncompleteStep = (afterStep, justCompletedStep) => {
+    const identityCheckDone = !!existingOnboardingId || kycAlreadyVerified;
+    const steps = [
+      { step: 1, done: identityCheckDone },
+      { step: 2, done: kycAlreadyVerified },
+      { step: 3, done: taxDone },
+      { step: 4, done: bankDone },
+      { step: 5, done: mandateDone },
+      { step: 6, done: riskDone },
+      { step: 7, done: sofDone },
+      { step: 8, done: termsDone },
+      { step: 9, done: agreementSignedDone },
+    ];
+    for (const s of steps) {
+      if (s.step > afterStep && !s.done && s.step !== justCompletedStep) return s.step;
+    }
+    return 9;
+  };
+
+  const handleContinue = async () => {
+    if (step === 0) {
+      await ensureOnboardingRecord();
+      goToStep(getNextIncompleteStep(0));
+    }
+  };
+
+  const handleIdentityCheckContinue = async () => {
+    setIdentityCheckError("");
+
+    const cleanIdNumber = identityNumber.replace(/\D/g, "");
+    if (!/^\d{13}$/.test(cleanIdNumber)) {
+      setIdentityCheckError("Please enter a valid 13-digit ID number.");
+      return;
+    }
+
+    if (!supabase) {
+      setIdentityCheckError("Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+      return;
+    }
+
+    setIdentityCheckLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) {
+        setIdentityCheckError("You must be signed in to continue.");
+        return;
       }
-    } else if (step === 2) {
-      goToStep(0);
+
+      const res = await fetch("/api/onboarding/check-id-number", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ id_number: cleanIdNumber }),
+      });
+
+      const result = await res.json();
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || "Failed to verify ID number.");
+      }
+
+      if (result.exists) {
+        const maskedEmail = typeof result.masked_email === "string" ? result.masked_email.trim() : "";
+        if (maskedEmail) {
+          setIdentityCheckError(`ID already exists, please sign in on ${maskedEmail} to continue.`);
+        } else {
+          setIdentityCheckError("ID already exists");
+        }
+        return;
+      }
+
+      await ensureOnboardingRecord();
+
+      // Save the ID number to the onboarding record we just ensured exists
+      await saveProgressFlag("identity_details_saved", {
+        identity_details: { identity_number: cleanIdNumber, savedAt: new Date().toISOString() },
+      });
+
+      if (!kycAlreadyVerified) {
+        goToStep(2);
+      } else {
+        goToStep(getNextIncompleteStep(1));
+      }
+    } catch (err) {
+      setIdentityCheckError(err?.message || "Failed to verify ID number.");
+    } finally {
+      setIdentityCheckLoading(false);
+    }
+  };
+
+  const getPrevIncompleteStep = (beforeStep) => {
+    const identityCheckDone = !!existingOnboardingId || kycAlreadyVerified;
+    const steps = [
+      { step: 8, done: termsDone },
+      { step: 7, done: sofDone },
+      { step: 6, done: riskDone },
+      { step: 5, done: mandateDone },
+      { step: 4, done: bankDone },
+      { step: 3, done: taxDone },
+      { step: 2, done: kycAlreadyVerified },
+      { step: 1, done: identityCheckDone },
+    ];
+    for (const s of steps) {
+      if (s.step < beforeStep && !s.done) return s.step;
+    }
+    return 0;
+  };
+
+  const handleBack = () => {
+    if (step >= 1) {
+      goToStep(getPrevIncompleteStep(step));
     } else if (onBack) {
       onBack();
     }
@@ -373,7 +505,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
-        if (!token) return;
+        const userId = session?.user?.id;
+        if (!token || !userId) return;
 
         const res = await fetch("/api/onboarding/status", {
           headers: { Authorization: `Bearer ${token}` },
@@ -381,6 +514,46 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
         const result = await res.json();
         if (result.success && result.onboarding_id) {
           setExistingOnboardingId(result.onboarding_id);
+        }
+
+        const onboardingId = result.success && result.onboarding_id ? result.onboarding_id : null;
+        const recordQuery = supabase
+          .from("user_onboarding")
+          .select("bank_name, bank_account_number, bank_branch_code, sumsub_raw, kyc_status")
+          .eq("user_id", userId);
+        const { data: record } = onboardingId
+          ? await recordQuery.eq("id", onboardingId).maybeSingle()
+          : await recordQuery.order("created_at", { ascending: false }).limit(1).maybeSingle();
+
+        if (record) {
+          if (record.bank_name && record.bank_account_number && record.bank_branch_code) {
+            setBankDone(true);
+            setBankName(record.bank_name);
+            setBankAccountNumber(record.bank_account_number);
+            setBankBranchCode(record.bank_branch_code);
+          }
+          let raw = {};
+          try { raw = typeof record.sumsub_raw === "string" ? JSON.parse(record.sumsub_raw) : (record.sumsub_raw || {}); } catch { }
+          if (raw.bank_details?.bank_account_name) setBankAccountName(raw.bank_details.bank_account_name);
+          if (raw.identity_details?.identity_number) {
+            setIdentityNumber(raw.identity_details.identity_number);
+          }
+          if (raw.bank_details?.bank_account_type) setBankAccountType(raw.bank_details.bank_account_type);
+          if (raw.tax_details?.tax_number) {
+            setTaxNumber(raw.tax_details.tax_number);
+            setTaxDone(true);
+          }
+          if (raw.mandate_data?.agreedMandate === true || raw.mandate_accepted === true) setMandateDone(true);
+          if (raw.risk_disclosure_accepted === true) setRiskDone(true);
+          if (raw.source_of_funds_accepted === true) setSofDone(true);
+          if (raw.source_of_funds_details) {
+            const { source_of_funds, source_of_funds_other, expected_monthly_investment } = raw.source_of_funds_details;
+            if (source_of_funds) setSourceOfFunds(source_of_funds);
+            if (source_of_funds_other) setSourceOfFundsOther(source_of_funds_other);
+            if (expected_monthly_investment) setExpectedMonthlyInvestment(expected_monthly_investment);
+          }
+          if (raw.bank_details_saved === true) setBankDone(true);
+          if (raw.terms_accepted === true) setTermsDone(true);
         }
       } catch (err) {
         // ignore; user can still proceed normally
@@ -391,10 +564,20 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   }, []);
 
   useEffect(() => {
+    if (!profileLoading && profile && !bankAccountName) {
+      const nameFromProfile = [profile.first_name || profile.firstName, profile.last_name || profile.lastName]
+        .filter(Boolean).join(" ");
+      if (nameFromProfile) {
+        setBankAccountName(nameFromProfile);
+      }
+    }
+  }, [profile, profileLoading, bankAccountName]);
+
+  useEffect(() => {
     if (step !== 2) {
       setShowProceed(false);
     }
-    if (step !== 5) {
+    if (step !== 8) {
       setAgreedTerms(false);
       setAgreedPrivacy(false);
     }
@@ -403,11 +586,11 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   useEffect(() => {
     const checkKycStatus = async () => {
       try {
-        const apiBase = import.meta.env.VITE_API_URL || "";
-        const { data: userData } = await supabase.auth.getUser();
+        // No apiBase prefix to force relative path
+      const { data: userData } = await supabase.auth.getUser();
         const userId = userData?.user?.id;
         if (!userId) return;
-        const res = await fetch(`${apiBase}/api/sumsub/status`, {
+        const res = await fetch("/api/sumsub/status", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ userId }),
@@ -430,9 +613,13 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
   const showStudentSection = employmentStatus === "student";
   const agreementReady = agreedTerms && agreedPrivacy;
-  const sofReady = sourceOfFunds && agreedSourceOfFunds;
+  const sofReady =
+    sourceOfFunds &&
+    (sourceOfFunds !== "other" || sourceOfFundsOther.trim().length > 0) &&
+    expectedMonthlyInvestment &&
+    agreedSourceOfFunds;
 
-  const handleFinalComplete = async () => {
+  const handleFinalComplete = async (signingResults = {}) => {
     if (!supabase) {
       if (onComplete) onComplete();
       return;
@@ -467,10 +654,19 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
           expected_monthly_investment: expectedMonthlyInvestment || null,
           agreed_terms: agreedTerms || false,
           agreed_privacy: agreedPrivacy || false,
+          tax_number: taxNumber || null,
           bank_name: bankName || null,
+          bank_account_name: bankAccountName || null,
+          bank_account_type: bankAccountType || null,
           bank_account_number: bankAccountNumber || null,
           bank_branch_code: bankBranchCode || null,
+          // Pass signing results if available
+          signed_agreement_url: signingResults.signed_agreement_url || null,
+          signed_at: signingResults.signed_at || null,
+          downloaded_at: signingResults.downloaded_at || null,
         };
+
+        console.log("[Onboarding] Completing with payload:", completePayload);
 
         const res = await fetch("/api/onboarding/complete", {
           method: "POST",
@@ -485,37 +681,11 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
           completionSuccess = true;
         } else {
           console.error("Failed to complete onboarding via API:", result.error);
+          throw new Error(result.error?.message || "Failed to save completion status. Please try again.");
         }
 
         if (!completionSuccess) {
-          try {
-            const { data: userData } = await supabase.auth.getUser();
-            const userId = userData?.user?.id;
-            if (userId) {
-              const { data: existing } = await supabase
-                .from("user_onboarding")
-                .select("id")
-                .eq("user_id", userId)
-                .order("created_at", { ascending: false })
-                .limit(1)
-                .maybeSingle();
-
-              if (existing?.id) {
-                await supabase
-                  .from("user_onboarding")
-                  .update({ kyc_status: "onboarding_complete" })
-                  .eq("id", existing.id)
-                  .eq("user_id", userId);
-              } else {
-                await supabase
-                  .from("user_onboarding")
-                  .insert({ user_id: userId, kyc_status: "onboarding_complete", employment_status: "not_provided" });
-              }
-              completionSuccess = true;
-            }
-          } catch (directErr) {
-            console.error("Direct Supabase fallback also failed:", directErr);
-          }
+          console.warn("[Onboarding] Completion API failed. Skipping risky Supabase fallback.");
         }
       }
     } catch (err) {
@@ -527,9 +697,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
   return (
     <div
-      className={`onboarding-process ${isFading ? "fade-out" : "fade-in"} ${
-        isDropdownOpen || sofDropdownOpen || bankDropdownOpen ? "dropdown-open" : ""
-      }`}
+      className={`onboarding-process ${isFading ? "fade-out" : "fade-in"} ${isDropdownOpen || sofDropdownOpen || bankDropdownOpen ? "dropdown-open" : ""
+        }`}
     >
       <div className="min-h-screen flex items-center justify-center px-4 py-8 relative">
         <button
@@ -541,17 +710,6 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
           <ArrowLeftIcon width={20} height={20} />
         </button>
         <div className="w-full max-w-2xl onboarding-process-stage">
-          <div className="mb-4 text-center text-xs uppercase tracking-[0.2em] text-slate-500">
-            {authStatus.isChecked ? (
-              authStatus.isAuthenticated ? (
-                <>Signed in as {authStatus.displayName}</>
-              ) : (
-                <>Not signed in</>
-              )
-            ) : (
-              <>Checking session…</>
-            )}
-          </div>
           {step === 0 ? (
             <div>
               <div className="text-center animate-fade-in delay-1">
@@ -569,98 +727,62 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 </p>
               </div>
 
-              <div className="steps-container animate-fade-in delay-2">
-                <div className={`step-circle ${kycAlreadyVerified ? 'step-circle-complete' : ''}`}>
-                  {kycAlreadyVerified ? (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="16" height="16">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                    </svg>
-                  ) : '1'}
-                </div>
-                <div className={`step-line ${kycAlreadyVerified ? 'step-line-complete' : ''}`}></div>
-                <div className="step-circle">2</div>
-                <div className="step-line"></div>
-                <div className="step-circle">3</div>
-                <div className="step-line"></div>
-                <div className="step-circle">4</div>
-                <div className="step-line"></div>
-                <div className="step-circle">5</div>
-                <div className="step-line"></div>
-                <div className="step-circle">6</div>
-              </div>
-
-              <div className="step-info animate-fade-in delay-3">
-                <div className={`step-item ${kycAlreadyVerified ? 'step-item-complete' : ''}`}>
-                  <div className={`step-number ${kycAlreadyVerified ? 'step-number-complete' : ''}`}>
-                    {kycAlreadyVerified ? (
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="14" height="14">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                      </svg>
-                    ) : '1'}
-                  </div>
-                  <div className="step-content">
-                    <div className="step-title">
-                      Identification
-                      {kycAlreadyVerified && <span className="step-verified-badge">Verified</span>}
+              {(() => {
+                const tick = (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="16" height="16">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                );
+                const tickSm = (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="14" height="14">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                );
+                const identityCheckDone = !!existingOnboardingId || kycAlreadyVerified;
+                const steps = [
+                  { done: identityCheckDone, title: "Identity Check", doneDesc: "ID number confirmed", pendingDesc: "Confirm your ID number is unique in our records", badge: "Confirmed" },
+                  { done: kycAlreadyVerified, title: "Identification", doneDesc: "Identity verification complete", pendingDesc: "Verify your identity for security purposes", badge: "Verified" },
+                  { done: taxDone, title: "Tax Details", doneDesc: "Tax details captured", pendingDesc: "Provide your tax reference number", badge: "Captured" },
+                  { done: bankDone, title: "Bank Account", doneDesc: "Bank details saved", pendingDesc: "Add your bank account details", badge: "Saved" },
+                  { done: mandateDone, title: "Discretionary Mandate", doneDesc: "Mandate accepted", pendingDesc: "Review and accept the FSP investment mandate", badge: "Accepted" },
+                  { done: riskDone, title: "Risk Disclosure", doneDesc: "Risk disclosure acknowledged", pendingDesc: "Review investment risk disclosure", badge: "Acknowledged" },
+                  { done: sofDone, title: "Source of Funds", doneDesc: "Source of funds declared", pendingDesc: "Declare the origin of your investment funds", badge: "Declared" },
+                  { done: termsDone, title: "General Terms", doneDesc: "Terms and conditions accepted", pendingDesc: "Review and accept terms and conditions", badge: "Accepted" },
+                  { done: agreementSignedDone, title: "Account Agreement", doneDesc: "Agreement signed", pendingDesc: "Review and sign the formal account agreement", badge: "Signed" },
+                ];
+                return (
+                  <>
+                    <div className="steps-container animate-fade-in delay-2">
+                      {steps.map((s, i) => (
+                        <React.Fragment key={i}>
+                          <div className={`step-circle ${s.done ? 'step-circle-complete' : ''}`}>
+                            {s.done ? tick : i + 1}
+                          </div>
+                          {i < steps.length - 1 && <div className={`step-line ${s.done ? 'step-line-complete' : ''}`}></div>}
+                        </React.Fragment>
+                      ))}
                     </div>
-                    <div className="step-description">
-                      {kycAlreadyVerified
-                        ? 'Identity verification complete'
-                        : 'Verify your identity for security purposes'}
+                    <div className="step-info animate-fade-in delay-3">
+                      {steps.map((s, i) => (
+                        <div key={i} className={`step-item ${s.done ? 'step-item-complete' : ''}`}>
+                          <div className={`step-number ${s.done ? 'step-number-complete' : ''}`}>
+                            {s.done ? tickSm : i + 1}
+                          </div>
+                          <div className="step-content">
+                            <div className="step-title">
+                              {s.title}
+                              {s.done && <span className="step-verified-badge">{s.badge}</span>}
+                            </div>
+                            <div className="step-description">
+                              {s.done ? s.doneDesc : s.pendingDesc}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  </div>
-                </div>
-
-                <div className="step-item">
-                  <div className="step-number">2</div>
-                  <div className="step-content">
-                    <div className="step-title">Bank Account</div>
-                    <div className="step-description">
-                      Add your bank account details
-                    </div>
-                  </div>
-                </div>
-
-                <div className="step-item">
-                  <div className="step-number">3</div>
-                  <div className="step-content">
-                    <div className="step-title">Discretionary Mandate</div>
-                    <div className="step-description">
-                      Review and accept the FSP investment mandate
-                    </div>
-                  </div>
-                </div>
-
-                <div className="step-item">
-                  <div className="step-number">4</div>
-                  <div className="step-content">
-                    <div className="step-title">Risk Disclosure</div>
-                    <div className="step-description">
-                      Review investment risk disclosure
-                    </div>
-                  </div>
-                </div>
-
-                <div className="step-item">
-                  <div className="step-number">5</div>
-                  <div className="step-content">
-                    <div className="step-title">Source of Funds</div>
-                    <div className="step-description">
-                      Declare the origin of your investment funds
-                    </div>
-                  </div>
-                </div>
-
-                <div className="step-item">
-                  <div className="step-number">6</div>
-                  <div className="step-content">
-                    <div className="step-title">Agreements</div>
-                    <div className="step-description">
-                      Review and accept terms and conditions
-                    </div>
-                  </div>
-                </div>
-              </div>
+                  </>
+                );
+              })()}
 
               <div className="text-center mt-8 animate-fade-in delay-4">
                 <button
@@ -674,7 +796,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
               <div className="text-center mt-6 animate-fade-in delay-4">
                 <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  You'll be taken through our six-step process
+                  You'll be taken through our nine-step process
                 </p>
               </div>
             </div>
@@ -685,219 +807,51 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   className="text-xs uppercase tracking-[0.2em] mb-2"
                   style={{ color: "hsl(270 20% 55%)" }}
                 >
-                  Step 1 of 6
+                  Step 1 of 9
                 </p>
                 <h2
                   className="text-3xl font-light tracking-tight mb-2"
                   style={{ color: "hsl(270 30% 25%)" }}
                 >
-                  Employment details
+                  Identity Check
                 </h2>
                 <p className="text-sm" style={{ color: "hsl(270 20% 50%)" }}>
-                  Help us understand your <span className="mint-brand">MINT</span> profile
+                  Enter your South African ID number before continuing
                 </p>
               </div>
 
               <div className="space-y-5">
                 <div className="animate-fade-in delay-2">
-                  <label htmlFor="employment-status">Employment Status</label>
-                  <div className="custom-select" ref={dropdownRef}>
-                    <div
-                      className={`glass-field select-trigger ${
-                        isDropdownOpen ? "active" : ""
-                      }`}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setIsDropdownOpen((prev) => !prev)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          setIsDropdownOpen((prev) => !prev);
-                        }
-                      }}
-                    >
-                      <div
-                        className="selected-value"
-                        data-placeholder="Select your status"
-                      >
-                        {employmentStatus ? selectedOption?.label : ""}
-                      </div>
-                    </div>
-                    <div className={`custom-dropdown ${isDropdownOpen ? "active" : ""}`}>
-                      {employmentOptions.map((option) => (
-                        <div
-                          key={option.value || "placeholder"}
-                          className={`custom-option ${
-                            employmentStatus === option.value ? "selected" : ""
-                          }`}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => handleSelect(option.value)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter" || event.key === " ") {
-                              event.preventDefault();
-                              handleSelect(option.value);
-                            }
-                          }}
-                        >
-                          {option.label}
-                        </div>
-                      ))}
-                    </div>
+                  <label htmlFor="identity-number">ID Number</label>
+                  <div className="glass-field">
                     <input
-                      type="hidden"
-                      id="employment-status"
-                      name="employment-status"
-                      value={employmentStatus}
+                      type="text"
+                      id="identity-number"
+                      placeholder="Enter your 13-digit ID number"
+                      value={identityNumber}
+                      onChange={(event) => setIdentityNumber(event.target.value.replace(/\D/g, "").slice(0, 13))}
+                      inputMode="numeric"
+                      autoComplete="off"
                     />
                   </div>
                 </div>
 
-                <div
-                  className={`conditional-section space-y-4 hide-when-dropdown-open ${
-                    showEmployedSection ? "active" : ""
-                  }`}
-                >
-                  <div className="grid-2">
-                    <div>
-                      <label htmlFor="employer-name">Employer Name</label>
-                      <div className="glass-field">
-                        <input
-                          type="text"
-                          id="employer-name"
-                          placeholder="Company name"
-                          value={employerName}
-                          onChange={(event) => setEmployerName(event.target.value)}
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label htmlFor="employer-industry">Industry</label>
-                      <div className="glass-field">
-                        <select
-                          id="employer-industry"
-                          value={employerIndustry}
-                          onChange={(event) => setEmployerIndustry(event.target.value)}
-                        >
-                          <option value="">Select industry</option>
-                          <option value="technology">Technology</option>
-                          <option value="finance">Finance</option>
-                          <option value="healthcare">Healthcare</option>
-                          <option value="education">Education</option>
-                          <option value="retail">Retail</option>
-                          <option value="manufacturing">Manufacturing</option>
-                          <option value="other">Other</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <label htmlFor="employment-type">Employment Type</label>
-                    <div className="glass-field">
-                      <select
-                        id="employment-type"
-                        value={employmentType}
-                        onChange={(event) => setEmploymentType(event.target.value)}
-                      >
-                        <option value="">Select type</option>
-                        <option value="full-time">Full-Time</option>
-                        <option value="part-time">Part-Time</option>
-                      </select>
-                    </div>
-                  </div>
+                <div className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
+                  We will check this number in onboarding pack records before allowing you to proceed.
                 </div>
 
-                <div
-                  className={`conditional-section space-y-4 hide-when-dropdown-open ${
-                    showStudentSection ? "active" : ""
-                  }`}
-                >
-                  <div className="grid-2">
-                    <div>
-                      <label htmlFor="institution-name">Institution Name</label>
-                      <div className="glass-field">
-                        <input
-                          type="text"
-                          id="institution-name"
-                          placeholder="University name"
-                          value={institutionName}
-                          onChange={(event) => setInstitutionName(event.target.value)}
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label htmlFor="course-name">Course / Major</label>
-                      <div className="glass-field">
-                        <input
-                          type="text"
-                          id="course-name"
-                          placeholder="e.g. Computer Science"
-                          value={courseName}
-                          onChange={(event) => setCourseName(event.target.value)}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <label htmlFor="graduation-date">Expected Graduation</label>
-                    <div className="glass-field">
-                      <input
-                        type="month"
-                        id="graduation-date"
-                        value={graduationDate}
-                        onChange={(event) => setGraduationDate(event.target.value)}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="animate-fade-in delay-3 hide-when-dropdown-open">
-                  <label htmlFor="annual-income">Annual Income</label>
-                  <div className="income-row">
-                    <div className="glass-field">
-                      <select
-                        id="income-currency"
-                        value={incomeCurrency}
-                        onChange={(event) => setIncomeCurrency(event.target.value)}
-                      >
-                        <option value="USD">USD</option>
-                        <option value="EUR">EUR</option>
-                        <option value="GBP">GBP</option>
-                        <option value="ZAR">ZAR</option>
-                        <option value="NGN">NGN</option>
-                        <option value="KES">KES</option>
-                        <option value="GHS">GHS</option>
-                      </select>
-                    </div>
-                    <div className="glass-field">
-                      <input
-                        type="text"
-                        id="annual-income"
-                        placeholder="e.g. 50,000"
-                        value={annualIncome}
-                        onChange={(event) => setAnnualIncome(event.target.value)}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-2 animate-fade-in delay-4 hide-when-dropdown-open">
+                <div className="pt-2 animate-fade-in delay-3">
                   <button
                     type="button"
                     className="submit-btn"
-                    onClick={handleSubmit}
-                    disabled={isSubmitting}
+                    onClick={handleIdentityCheckContinue}
+                    disabled={identityCheckLoading}
                   >
-                    {isSubmitting ? "Saving..." : "Continue"}
+                    {identityCheckLoading ? "Checking..." : "Continue"}
                   </button>
-                  {submitError ? (
+                  {identityCheckError ? (
                     <p className="form-error" role="alert">
-                      {submitError}
-                    </p>
-                  ) : null}
-                  {submitSuccess ? (
-                    <p className="form-success" role="status">
-                      {submitSuccess}
+                      {identityCheckError}
                     </p>
                   ) : null}
                 </div>
@@ -910,7 +864,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   className="text-xs uppercase tracking-[0.2em] mb-2"
                   style={{ color: "hsl(270 20% 55%)" }}
                 >
-                  Step 1 of 6
+                  Step 2 of 9
                 </p>
                 <h2
                   className="text-3xl font-light tracking-tight mb-2"
@@ -948,21 +902,79 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   </div>
                 </div>
               ) : (
-                <SumsubVerification onVerified={() => setShowProceed(true)} />
+                <>
+                  <SumsubVerification onVerified={() => setShowProceed(true)} />
+                </>
               )}
               {showProceed && (
                 <div className="text-center mt-8 animate-fade-in delay-2">
                   <button
                     type="button"
                     className="continue-button proceed-button"
-                    onClick={() => goToStep(3)}
+                    onClick={() => goToStep(getNextIncompleteStep(2, 2))}
                   >
-                    Continue to Bank Details
+                    Continue
                   </button>
                 </div>
               )}
             </div>
           ) : step === 3 ? (
+            <div className="w-full max-w-xl mx-auto">
+              <div className="text-center mb-8 animate-fade-in delay-1">
+                <p className="text-xs uppercase tracking-[0.2em] mb-2" style={{ color: "hsl(270 20% 55%)" }}>
+                  Step 3 of 9
+                </p>
+                <div className="hero-icon">
+                  <FileContractIcon width={48} height={48} />
+                </div>
+                <h2 className="text-3xl font-light tracking-tight mb-2" style={{ color: "hsl(270 30% 25%)" }}>
+                  Tax Information
+                </h2>
+                <p className="text-sm" style={{ color: "hsl(270 20% 50%)" }}>
+                  Please provide your Tax Reference Number for compliance
+                </p>
+              </div>
+
+              <div className="space-y-6">
+                <div className="animate-fade-in delay-2">
+                  <label htmlFor="tax-number">Tax Reference Number</label>
+                  <div className="glass-field">
+                    <input
+                      type="text"
+                      id="tax-number"
+                      placeholder="Enter your 10-digit tax number"
+                      value={taxNumber}
+                      onChange={(event) => setTaxNumber(event.target.value.replace(/\D/g, "").slice(0, 10))}
+                      inputMode="numeric"
+                      autoComplete="off"
+                    />
+                  </div>
+                  <p className="text-xs mt-2" style={{ color: "hsl(270 15% 60%)" }}>
+                    Your tax number is required by SARS for investment reporting.
+                  </p>
+                </div>
+
+                <div className="pt-4 text-center animate-fade-in delay-3">
+                  <button
+                    type="button"
+                    className="continue-button"
+                    onClick={async () => {
+                      if (taxNumber && taxNumber.length > 5) {
+                        await saveProgressFlag("tax_details_saved", {
+                          tax_details: { tax_number: taxNumber, savedAt: new Date().toISOString() },
+                        });
+                        setTaxDone(true);
+                        goToStep(getNextIncompleteStep(3));
+                      }
+                    }}
+                    disabled={!taxNumber || taxNumber.length < 5}
+                  >
+                    Continue
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : step === 4 ? (
             <div className="w-full max-w-3xl mx-auto bank-step-wrapper">
               <div className="text-center animate-fade-in delay-1">
                 <div className="hero-icon">
@@ -982,6 +994,9 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               <div className="progress-bar animate-fade-in delay-1">
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
+                <div className="progress-step active"></div>
+                <div className="progress-step active"></div>
+                <div className="progress-step"></div>
                 <div className="progress-step"></div>
                 <div className="progress-step"></div>
                 <div className="progress-step"></div>
@@ -1072,6 +1087,44 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 </div>
                 <div className="bank-inputs-card">
                   <div className="bank-input-row">
+                    <label htmlFor="bank-account-name">Account Holder Name</label>
+                    <div className="bank-input-field">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="18" height="18" className="bank-input-icon">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6.75a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.5 20.118a7.5 7.5 0 0 1 15 0A17.933 17.933 0 0 1 12 21.75a17.933 17.933 0 0 1-7.5-1.632Z" />
+                      </svg>
+                      <input
+                        type="text"
+                        id="bank-account-name"
+                        placeholder="Enter account holder full name"
+                        value={bankAccountName}
+                        onChange={(event) => setBankAccountName(event.target.value)}
+                        autoComplete="name"
+                      />
+                    </div>
+                  </div>
+                  <div className="bank-input-divider"></div>
+                  <div className="bank-input-row">
+                    <label htmlFor="bank-account-type">Account Type</label>
+                    <div className="bank-input-field">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="18" height="18" className="bank-input-icon">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5m-16.5 5.25h16.5m-16.5 5.25h10.5" />
+                      </svg>
+                      <select
+                        id="bank-account-type"
+                        value={bankAccountType}
+                        onChange={(event) => setBankAccountType(event.target.value)}
+                      >
+                        <option value="">Select account type</option>
+                        <option value="savings">Savings</option>
+                        <option value="cheque">Cheque / Current</option>
+                        <option value="business">Business</option>
+                        <option value="transmission">Transmission</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="bank-input-divider"></div>
+                  <div className="bank-input-row">
                     <label htmlFor="bank-account-number">Account Number</label>
                     <div className="bank-input-field">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="18" height="18" className="bank-input-icon">
@@ -1099,9 +1152,11 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                       <input
                         type="text"
                         id="bank-branch-code"
-                        placeholder="Enter your branch code"
+                        placeholder={bankName === "other" ? "Enter your branch code" : "Select a bank above"}
                         value={bankBranchCode}
                         onChange={(event) => setBankBranchCode(event.target.value.replace(/\D/g, ""))}
+                        readOnly={bankName !== "other" && bankName !== ""}
+                        style={bankName !== "other" && bankName !== "" ? { opacity: 0.7, cursor: "default" } : {}}
                         inputMode="numeric"
                         autoComplete="off"
                       />
@@ -1122,19 +1177,43 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   type="button"
                   className={`continue-button agreement-continue ${bankDetailsReady ? "enabled" : ""}`}
                   disabled={!bankDetailsReady}
-                  onClick={() => goToStep(4)}
+                  onClick={async () => {
+                    try {
+                      const { data: { session } } = await supabase.auth.getSession();
+                      const userId = session?.user?.id;
+                      if (userId) {
+                        await supabase.from("user_onboarding").update({
+                          bank_name: bankName || null,
+                          bank_account_number: bankAccountNumber || null,
+                          bank_branch_code: bankBranchCode || null,
+                        }).eq("user_id", userId);
+                      }
+                    } catch { }
+                    await saveProgressFlag("bank_details_saved", {
+                      bank_details: {
+                        bank_name: bankName || null,
+                        bank_account_name: bankAccountName || null,
+                        bank_account_type: bankAccountType || null,
+                        bank_account_number: bankAccountNumber || null,
+                        bank_branch_code: bankBranchCode || null,
+                        savedAt: new Date().toISOString(),
+                      },
+                    });
+                    setBankDone(true);
+                    goToStep(getNextIncompleteStep(4, 4));
+                  }}
                 >
-                  Continue to Mandate
+                  Continue
                 </button>
               </div>
 
               <div className="text-center mt-6 animate-fade-in delay-4 hide-when-dropdown-open">
                 <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  Step 2 of 6
+                  Step 4 of 9
                 </p>
               </div>
             </div>
-          ) : step === 4 ? (
+          ) : step === 5 ? (
             <div className="w-full max-w-3xl mx-auto">
               <div className="text-center animate-fade-in delay-1">
                 <div className="hero-icon">
@@ -1155,10 +1234,51 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
+                <div className="progress-step active"></div>
+                <div className="progress-step active"></div>
+                <div className="progress-step"></div>
                 <div className="progress-step"></div>
                 <div className="progress-step"></div>
                 <div className="progress-step"></div>
               </div>
+
+              {(() => {
+                if (profileLoading) return null;
+                const missingFields = [
+                  !(profile?.firstName?.trim() || profile?.first_name?.trim()) && "First Name",
+                  !(profile?.lastName?.trim() || profile?.last_name?.trim()) && "Surname",
+                  !profile?.idNumber?.trim() && "ID Number",
+                  !profile?.address?.trim() && "Address",
+                  !profile?.phoneNumber?.trim() && "Cell Number",
+                  !profile?.email?.trim() && "Email Address",
+                ].filter(Boolean);
+                if (missingFields.length === 0) return null;
+                return (
+                  <div className="animate-fade-in delay-2" style={{
+                    background: "hsl(38 100% 97%)",
+                    border: "1px solid hsl(38 80% 75%)",
+                    borderRadius: "12px",
+                    padding: "14px 18px",
+                    marginBottom: "16px",
+                  }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="hsl(38 90% 45%)" strokeWidth="2" width="18" height="18" style={{ flexShrink: 0, marginTop: "1px" }}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                      </svg>
+                      <div>
+                        <p style={{ fontSize: "12px", fontWeight: "600", color: "hsl(38 70% 30%)", marginBottom: "6px" }}>
+                          Your profile is missing the following required fields. Please fill them in on the first tab of the mandate document below before you can continue:
+                        </p>
+                        <ul style={{ margin: 0, paddingLeft: "16px", listStyleType: "disc" }}>
+                          {missingFields.map((field) => (
+                            <li key={field} style={{ fontSize: "12px", color: "hsl(38 70% 30%)", marginBottom: "2px" }}>{field}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div className="animate-fade-in delay-2" style={{
                 borderRadius: '16px',
@@ -1188,9 +1308,30 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               </div>
 
               {!mandateValid && agreedMandate && (
-                <p className="text-center animate-fade-in" style={{ color: "#ef4444", fontSize: "12px", marginTop: "8px" }}>
-                  Please fill in all required client details (name, surname, ID, address, email, cell number), enter your initials, and select at least one option under each checkbox group in the Schedules section before continuing.
-                </p>
+                <div className="animate-fade-in" style={{ marginTop: "10px" }}>
+                  {(() => {
+                    const missing = [
+                      !(profile?.firstName?.trim() || profile?.first_name?.trim()) && "First Name",
+                      !(profile?.lastName?.trim() || profile?.last_name?.trim()) && "Surname",
+                      !profile?.idNumber?.trim() && "ID Number",
+                      !profile?.address?.trim() && "Address",
+                      !profile?.phoneNumber?.trim() && "Cell Number",
+                      !profile?.email?.trim() && "Email Address",
+                    ].filter(Boolean);
+                    if (missing.length > 0) {
+                      return (
+                        <p style={{ color: "#ef4444", fontSize: "12px", textAlign: "center" }}>
+                          Cannot continue — the following required fields are still empty in the mandate: <strong>{missing.join(", ")}</strong>. Please fill them in on Tab 1 of the mandate document above.
+                        </p>
+                      );
+                    }
+                    return (
+                      <p style={{ color: "#ef4444", fontSize: "12px", textAlign: "center" }}>
+                        Please enter your initials and complete all checkbox selections on the Schedules tab before continuing.
+                      </p>
+                    );
+                  })()}
+                </div>
               )}
 
               {submitError && (
@@ -1204,19 +1345,19 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   type="button"
                   className={`continue-button agreement-continue ${agreedMandate && mandateValid ? "enabled" : ""}`}
                   disabled={!agreedMandate || !mandateValid}
-                  onClick={() => goToStep(5)}
+                  onClick={async () => { await saveProgressFlag("mandate_accepted"); setMandateDone(true); goToStep(getNextIncompleteStep(5, 5)); }}
                 >
-                  Continue to Risk Disclosure
+                  Continue
                 </button>
               </div>
 
               <div className="text-center mt-6 animate-fade-in delay-4">
                 <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  Step 3 of 6
+                  Step 5 of 9
                 </p>
               </div>
             </div>
-          ) : step === 5 ? (
+          ) : step === 6 ? (
             <div className="w-full max-w-3xl mx-auto">
               <div className="text-center animate-fade-in delay-1">
                 <div className="hero-icon">
@@ -1238,6 +1379,9 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
+                <div className="progress-step active"></div>
+                <div className="progress-step active"></div>
+                <div className="progress-step"></div>
                 <div className="progress-step"></div>
                 <div className="progress-step"></div>
               </div>
@@ -1299,19 +1443,19 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   type="button"
                   className={`continue-button agreement-continue ${agreedRiskDisclosure ? "enabled" : ""}`}
                   disabled={!agreedRiskDisclosure}
-                  onClick={() => goToStep(6)}
+                  onClick={async () => { await saveProgressFlag("risk_disclosure_accepted"); setRiskDone(true); goToStep(getNextIncompleteStep(6, 6)); }}
                 >
-                  Continue to Source of Funds
+                  Continue
                 </button>
               </div>
 
               <div className="text-center mt-6 animate-fade-in delay-4">
                 <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  Step 4 of 6
+                  Step 6 of 9
                 </p>
               </div>
             </div>
-          ) : step === 6 ? (
+          ) : step === 7 ? (
             <div className="w-full max-w-3xl mx-auto">
               <div className="text-center animate-fade-in delay-1">
                 <div className="hero-icon">
@@ -1334,6 +1478,9 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
+                <div className="progress-step active"></div>
+                <div className="progress-step active"></div>
+                <div className="progress-step"></div>
                 <div className="progress-step"></div>
               </div>
 
@@ -1342,9 +1489,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   <label htmlFor="source-of-funds">Primary Source of Funds</label>
                   <div className="custom-select" ref={sofDropdownRef}>
                     <div
-                      className={`glass-field select-trigger ${
-                        sofDropdownOpen ? "active" : ""
-                      }`}
+                      className={`glass-field select-trigger ${sofDropdownOpen ? "active" : ""
+                        }`}
                       role="button"
                       tabIndex={0}
                       onClick={() => setSofDropdownOpen((prev) => !prev)}
@@ -1366,9 +1512,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                       {sourceOfFundsOptions.map((option) => (
                         <div
                           key={option.value || "placeholder"}
-                          className={`custom-option ${
-                            sourceOfFunds === option.value ? "selected" : ""
-                          }`}
+                          className={`custom-option ${sourceOfFunds === option.value ? "selected" : ""
+                            }`}
                           role="button"
                           tabIndex={0}
                           onClick={() => handleSofSelect(option.value)}
@@ -1393,9 +1538,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 </div>
 
                 <div
-                  className={`conditional-section hide-when-dropdown-open ${
-                    sourceOfFunds === "other" ? "active" : ""
-                  }`}
+                  className={`conditional-section hide-when-dropdown-open ${sourceOfFunds === "other" ? "active" : ""
+                    }`}
                 >
                   <label htmlFor="source-of-funds-other">Please describe your source of funds</label>
                   <div className="glass-field">
@@ -1444,20 +1588,29 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                     type="button"
                     className={`continue-button agreement-continue ${sofReady ? "enabled" : ""}`}
                     disabled={!sofReady}
-                    onClick={() => goToStep(7)}
+                    onClick={async () => {
+                      await saveProgressFlag("source_of_funds_accepted", {
+                        source_of_funds_details: {
+                          source_of_funds: sourceOfFunds,
+                          source_of_funds_other: sourceOfFunds === "other" ? sourceOfFundsOther : null,
+                          expected_monthly_investment: expectedMonthlyInvestment,
+                        },
+                      });
+                      setSofDone(true); goToStep(getNextIncompleteStep(7, 7));
+                    }}
                   >
-                    Continue to Agreements
+                    Continue
                   </button>
                 </div>
 
                 <div className="text-center mt-6 animate-fade-in delay-4 hide-when-dropdown-open">
                   <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                    Step 5 of 6
+                    Step 7 of 9
                   </p>
                 </div>
               </div>
             </div>
-          ) : (
+          ) : step === 8 ? (
             <div className="w-full max-w-3xl mx-auto">
               <div className="text-center animate-fade-in delay-1">
                 <div className="hero-icon">
@@ -1481,6 +1634,9 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
+                <div className="progress-step active"></div>
+                <div className="progress-step active"></div>
+                <div className="progress-step"></div>
               </div>
 
               <div className="agreement-card animate-fade-in delay-2">
@@ -1496,42 +1652,28 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <div className="agreement-section">
                   <div className="section-title">2. User Account</div>
                   <div className="agreement-text">
-                    You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account. You must provide accurate, current, and complete information during the registration process and keep your information updated.
+                    To use MINT, you must create an account. You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account. You agree to provide accurate and complete information during the onboarding process.
                   </div>
                 </div>
 
                 <div className="agreement-section">
-                  <div className="section-title">3. Privacy and Data Protection</div>
+                  <div className="section-title">3. Investment Services</div>
                   <div className="agreement-text">
-                    We collect, process, and store your personal data in accordance with our Privacy Policy. By using our services, you consent to such processing and warrant that all data provided by you is accurate. We implement industry-standard security measures to protect your information.
+                    MINT provides a platform for fractional investment in various assets. We are not a financial advisor, and the information provided through our platform does not constitute financial, investment, or tax advice. You should perform your own research or consult with a qualified advisor.
                   </div>
                 </div>
 
                 <div className="agreement-section">
-                  <div className="section-title">4. Use of Services</div>
+                  <div className="section-title">4. Fees and Charges</div>
                   <div className="agreement-text">
-                    You agree to use our services only for lawful purposes and in accordance with these Terms. You must not use our services in any way that could damage, disable, or impair our platform, or interfere with any other party's use of our services.
+                    MINT may charge fees for its services. These fees will be clearly disclosed to you. You agree to pay all fees associated with your use of our platform. We reserve the right to change our fee structure with prior notice to you.
                   </div>
                 </div>
 
                 <div className="agreement-section">
-                  <div className="section-title">5. Intellectual Property</div>
+                  <div className="section-title">5. Privacy and Security</div>
                   <div className="agreement-text">
-                    All content, features, and functionality of our services, including but not limited to text, graphics, logos, and software, are the exclusive property of MINT and are protected by international copyright, trademark, and other intellectual property laws.
-                  </div>
-                </div>
-
-                <div className="agreement-section">
-                  <div className="section-title">6. Limitation of Liability</div>
-                  <div className="agreement-text">
-                    MINT shall not be liable for any indirect, incidental, special, consequential, or punitive damages resulting from your use or inability to use our services. Our total liability shall not exceed the amount paid by you, if any, for accessing our services.
-                  </div>
-                </div>
-
-                <div className="agreement-section">
-                  <div className="section-title">7. Modifications</div>
-                  <div className="agreement-text">
-                    We reserve the right to modify these Terms at any time. We will notify users of any material changes via email or through our platform. Your continued use of our services after such modifications constitutes acceptance of the updated Terms.
+                    Your privacy is important to us. We collect and process your personal information in accordance with our Privacy Policy. We use industry-standard security measures to protect your data, but we cannot guarantee absolute security.
                   </div>
                 </div>
               </div>
@@ -1544,10 +1686,9 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                     onChange={(event) => setAgreedTerms(event.target.checked)}
                   />
                   <span className="checkbox-label">
-                    I have read and agree to the Terms and Conditions
+                    I agree to the Terms and Conditions
                   </span>
                 </label>
-
                 <label className="checkbox-item">
                   <input
                     type="checkbox"
@@ -1555,7 +1696,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                     onChange={(event) => setAgreedPrivacy(event.target.checked)}
                   />
                   <span className="checkbox-label">
-                    I consent to the Privacy Policy and data processing
+                    I agree to the Privacy Policy
                   </span>
                 </label>
               </div>
@@ -1565,19 +1706,41 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   type="button"
                   className={`continue-button agreement-continue ${agreementReady ? "enabled" : ""}`}
                   disabled={!agreementReady}
-                  onClick={handleFinalComplete}
+                  onClick={async () => {
+                    const { data: { flags: updatedFlags } } = await saveProgressFlag("terms_accepted");
+                    setTermsDone(updatedFlags.terms_accepted);
+                    setAgreementSignedDone(updatedFlags.agreement_signed); // Assuming agreement_signed is a flag
+                    goToStep(getNextIncompleteStep(8, 8));
+                  }}
                 >
-                  Accept and Continue
+                  Continue
                 </button>
               </div>
 
               <div className="text-center mt-6 animate-fade-in delay-4">
                 <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  Step 6 of 6 - Final step to complete your onboarding
+                  Step 8 of 9
                 </p>
               </div>
             </div>
-          )}
+          ) : step === 9 ? (
+            <AccountAgreementStep
+              profile={profile}
+              onboardingData={{
+                bankName,
+                bankAccountNumber,
+                bankBranchCode,
+                bankAccountType,
+                taxNumber,
+                identityNumber,
+                sourceOfFunds,
+                sourceOfFundsOther,
+                expectedMonthlyInvestment,
+              }}
+              existingOnboardingId={existingOnboardingId}
+              onComplete={handleFinalComplete}
+            />
+          ) : null}
         </div>
       </div>
     </div>

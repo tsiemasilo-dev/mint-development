@@ -1,54 +1,106 @@
-import React, { useState, useMemo } from "react";
-import { ArrowLeft, Info, Plus, Minus, ChevronDown, ChevronUp } from "lucide-react";
+import React, { useState, useMemo, useEffect } from "react";
+import { ArrowLeft, Info, Plus, Minus, ChevronDown, ChevronUp, X } from "lucide-react";
 import { formatCurrency } from "../lib/formatCurrency";
+import PdfViewer from "../components/PdfViewer";
+import { supabase } from "../lib/supabase";
+import { useOnboardingStatus } from "../lib/useOnboardingStatus";
 
 const BROKER_FEE_RATE = 0.0025;
-const ISIN_FEE_PER_ASSET = 62;
-const PAYSTACK_FEE_RATE = 0.029;
+const ISIN_FEE_PER_ASSET = 69;
+const TRANSACTION_FEE_RATE = 0.038;
+const CASH_BUFFER_RATE = 0.08;
 
-const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
+const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod }) => {
   const currentStrategy = strategy || {
     name: "",
     tickers: [],
     description: "",
   };
 
-  const minimumInvestment = currentStrategy.calculatedMinInvestment || null;
-  const currency = currentStrategy.currency || 'R';
-  
-  const [amount, setAmount] = useState(minimumInvestment || 0);
+  const minimumInvestment =
+    currentStrategy.calculatedMinInvestment ||
+    currentStrategy.min_investment ||
+    null;
+  const currency = currentStrategy.currency || "R";
+
+  // ── FIX 2: Lazy initialiser — avoids R0.00 flash while strategy loads ────
+  const [amount, setAmount] = useState(() => minimumInvestment || 0);
   const [agreementChecked, setAgreementChecked] = useState(false);
+  const [showMandateModal, setShowMandateModal] = useState(false);
   const [feeExpanded, setFeeExpanded] = useState(false);
 
-  const holdingsData = currentStrategy.holdingsWithLogos || currentStrategy.holdings || [];
-  const numAssets = holdingsData.length || 1;
+  useEffect(() => {
+    if (minimumInvestment && minimumInvestment > 0) {
+      setAmount(minimumInvestment);
+    }
+  }, [minimumInvestment]);
+
+  const { onboardingComplete: isFullyOnboarded, loading: isLoadingStatus } =
+    useOnboardingStatus();
+
+  const holdingsData =
+    currentStrategy.holdingsWithLogos || currentStrategy.holdings || [];
+  const numAssets = holdingsData.length || 0;
   const extraHoldings = holdingsData.length > 3 ? holdingsData.length - 3 : 0;
 
   const fees = useMemo(() => {
-    const brokerAmount = amount * BROKER_FEE_RATE;
-    const afterBroker = amount + brokerAmount;
+    const bufferedBase = amount * (1 + CASH_BUFFER_RATE);
+    const brokerAmount = bufferedBase * BROKER_FEE_RATE;
     const isinTotal = ISIN_FEE_PER_ASSET * numAssets;
-    const afterIsin = afterBroker + isinTotal;
-    const paystackAmount = afterIsin * PAYSTACK_FEE_RATE;
-    const totalCost = afterIsin + paystackAmount;
-    return { brokerAmount, isinTotal, paystackAmount, totalCost };
+    const transactionAmount = bufferedBase * TRANSACTION_FEE_RATE;
+    const totalCost = bufferedBase + brokerAmount + isinTotal + transactionAmount;
+    
+    return { brokerAmount, isinTotal, transactionAmount, totalCost, bufferedBase };
   }, [amount, numAssets]);
 
   const step = minimumInvestment || 0;
 
   const handleIncrement = () => {
-    if (step > 0) setAmount(amount + step);
+    if (step > 0) setAmount((prev) => prev + step);
   };
 
   const handleDecrement = () => {
     if (step > 0 && amount > step) {
-      setAmount(amount - step);
+      setAmount((prev) => prev - step);
     }
+  };
+
+  // ── FIX 3: Dynamic info banner text based on payment method ──────────────
+  const getInfoText = () => {
+    if (paymentMethod === "wallet") {
+      return "Your wallet balance will be used to complete this investment instantly.";
+    }
+    if (paymentMethod === "direct_eft") {
+      return "You'll receive banking details to complete your EFT payment.";
+    }
+    // Default — Paystack or not yet selected
+    return "You'll be redirected to complete payment securely via Paystack.";
+  };
+
+  // ── FIX 4: Pass baseAmount and shareCount through to PaymentPage ──────────
+  // shareCount is calculated here as amount / pricePerShare if available,
+  // otherwise left null and handled downstream
+  const handleContinue = () => {
+    const sharePrice =
+      currentStrategy.price_per_share ||
+      currentStrategy.pricePerShare ||
+      null;
+    const shareCount =
+      sharePrice && sharePrice > 0
+        ? Math.floor(amount / sharePrice)
+        : null;
+
+    onContinue?.(
+      fees.totalCost,   // total cost including all fees
+      amount,           // base investment amount before fees
+      shareCount,       // number of shares if calculable
+    );
   };
 
   return (
     <div className="min-h-screen bg-slate-50 pb-8 text-slate-900">
       <div className="mx-auto flex w-full max-w-sm flex-col px-3 pt-12 md:max-w-md md:px-6">
+
         {/* Header */}
         <header className="flex items-center justify-center gap-3 mb-6 relative">
           <button
@@ -62,9 +114,8 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
           <h1 className="text-lg font-semibold">Complete Investment</h1>
         </header>
 
-        {/* Strategy Card - White Background */}
+        {/* Strategy Card */}
         <section className="mb-6 rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
-          {/* Header Section with Flag Logo */}
           <div className="mb-4 flex items-start gap-3">
             <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-slate-100 overflow-hidden">
               <img
@@ -74,17 +125,22 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
               />
             </div>
             <div className="flex-1">
-              <h2 className="text-base font-semibold text-slate-900">{currentStrategy.name}</h2>
+              <h2 className="text-base font-semibold text-slate-900">
+                {currentStrategy.name}
+              </h2>
               <p className="text-xs text-slate-600 mt-2">
-                {currentStrategy.description?.split('.')[0] || "Investment strategy"}
+                {currentStrategy.description?.split(".")[0] ||
+                  "Investment strategy"}
               </p>
               <p className="text-xs font-semibold text-slate-600 mt-1">
-                {minimumInvestment ? `Min. ${formatCurrency(minimumInvestment, currency)}` : "Calculating..."}
+                {minimumInvestment
+                  ? `Min. ${formatCurrency(minimumInvestment, currency)}`
+                  : "Calculating..."}
               </p>
             </div>
           </div>
 
-          {/* Holdings Snapshot with Logos */}
+          {/* Holdings Snapshot */}
           <div className="flex items-center justify-between pt-3 border-t border-slate-100">
             <div className="flex items-center -space-x-2">
               {holdingsData.slice(0, 3).map((holding) => {
@@ -102,11 +158,14 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
                         className="h-full w-full object-cover"
                         onError={(e) => {
                           e.target.style.display = "none";
-                          e.target.parentElement.textContent = symbol.charAt(0);
+                          e.target.parentElement.textContent =
+                            symbol.charAt(0);
                         }}
                       />
                     ) : (
-                      <span className="text-[10px] font-bold text-slate-500">{symbol.charAt(0)}</span>
+                      <span className="text-[10px] font-bold text-slate-500">
+                        {symbol.charAt(0)}
+                      </span>
                     )}
                   </div>
                 );
@@ -117,32 +176,43 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
                 </div>
               )}
             </div>
-            <span className="text-xs font-semibold text-slate-600">Holdings snapshot</span>
+            <span className="text-xs font-semibold text-slate-600">
+              Holdings snapshot
+            </span>
           </div>
         </section>
 
-        {/* Number Input - Increment/Decrement */}
+        {/* Amount Input */}
         <section className="mb-6">
           <div className="rounded-2xl border border-slate-200 bg-white p-4">
             <div className="flex items-center justify-between gap-3">
               <button
                 type="button"
                 onClick={handleDecrement}
-                disabled={!minimumInvestment || amount <= minimumInvestment}
+                disabled={
+                  !minimumInvestment ||
+                  amount <= minimumInvestment ||
+                  !isFullyOnboarded
+                }
                 className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:enabled:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition"
               >
                 <Minus className="h-5 w-5" />
               </button>
-              
+
               <div className="text-center flex-1">
-                <p className="text-xs font-semibold text-slate-600 mb-1">Investment Amount</p>
-                <p className="text-3xl font-bold text-slate-900">{formatCurrency(amount, currency)}</p>
+                <p className="text-xs font-semibold text-slate-600 mb-1">
+                  Investment Amount
+                </p>
+                <p className="text-3xl font-bold text-slate-900">
+                  {formatCurrency(amount, currency)}
+                </p>
               </div>
 
               <button
                 type="button"
                 onClick={handleIncrement}
-                className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] text-white hover:shadow-lg transition"
+                disabled={!isFullyOnboarded}
+                className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] text-white hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition"
               >
                 <Plus className="h-5 w-5" />
               </button>
@@ -157,32 +227,57 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
             onClick={() => setFeeExpanded(!feeExpanded)}
             className="w-full flex items-center justify-between p-4"
           >
-            <h3 className="text-xs font-semibold text-slate-600">Fee Breakdown</h3>
-            {feeExpanded ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+            <h3 className="text-xs font-semibold text-slate-600">
+              Fee Breakdown
+            </h3>
+            {feeExpanded ? (
+              <ChevronUp className="h-4 w-4 text-slate-400" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-slate-400" />
+            )}
           </button>
+
           {feeExpanded && (
             <div className="px-4 pb-4 space-y-2">
               <div className="flex items-center justify-between">
                 <p className="text-xs text-slate-600">Investment Amount</p>
-                <p className="text-xs font-semibold text-slate-900">{formatCurrency(amount, currency)}</p>
+                <p className="text-xs font-semibold text-slate-900">
+                  {formatCurrency(amount, currency)}
+                </p>
               </div>
               <div className="flex items-center justify-between">
                 <p className="text-xs text-slate-600">Broker Fee (0.25%)</p>
-                <p className="text-xs font-semibold text-slate-900">{formatCurrency(fees.brokerAmount, currency)}</p>
+                <p className="text-xs font-semibold text-slate-900">
+                  {formatCurrency(fees.brokerAmount, currency)}
+                </p>
               </div>
               <div className="flex items-center justify-between">
-                <p className="text-xs text-slate-600">Custody Fee ({formatCurrency(ISIN_FEE_PER_ASSET, currency)} × {numAssets} asset{numAssets !== 1 ? "s" : ""})</p>
-                <p className="text-xs font-semibold text-slate-900">{formatCurrency(fees.isinTotal, currency)}</p>
+                <p className="text-xs text-slate-600">
+                  Custody Fee ({formatCurrency(ISIN_FEE_PER_ASSET, currency)} ×{" "}
+                  {numAssets} asset{numAssets !== 1 ? "s" : ""})
+                </p>
+                <p className="text-xs font-semibold text-slate-900">
+                  {formatCurrency(fees.isinTotal, currency)}
+                </p>
               </div>
               <div className="flex items-center justify-between">
-                <p className="text-xs text-slate-600">Transaction Fee (2.9%)</p>
-                <p className="text-xs font-semibold text-slate-900">{formatCurrency(fees.paystackAmount, currency)}</p>
+                <p className="text-xs text-slate-600">
+                  Transaction Fee (3.8%)
+                </p>
+                <div className="text-right">
+                  <p className="text-xs font-semibold text-slate-900">
+                    {formatCurrency(fees.transactionAmount, currency)}
+                  </p>
+                </div>
               </div>
             </div>
           )}
+
           <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-t border-slate-100">
             <p className="text-xs font-semibold text-slate-700">Total Cost</p>
-            <p className="text-sm font-bold text-slate-900">{formatCurrency(fees.totalCost, currency)}</p>
+            <p className="text-sm font-bold text-slate-900">
+              {formatCurrency(fees.totalCost, currency)}
+            </p>
           </div>
         </section>
 
@@ -197,32 +292,89 @@ const InvestAmountPage = ({ onBack, strategy, onContinue }) => {
             />
             <div className="flex-1">
               <p className="text-xs font-semibold text-slate-900">
-                I agree to Risk Disclosure, Fee Schedule & Mandate
+                I agree to Risk Disclosure, Fee Schedule &{" "}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setShowMandateModal(true);
+                  }}
+                  className="underline text-violet-700 hover:text-violet-900"
+                >
+                  Strategy Mandate
+                </button>
               </p>
               <p className="text-xs text-slate-600 mt-1">
-                By continuing, you confirm you have reviewed and agree to all terms and conditions
+                By continuing, you confirm you have reviewed and agree to all
+                terms and conditions
               </p>
             </div>
           </label>
         </section>
 
-        {/* Info */}
+        {/* Strategy Mandate PDF Modal */}
+        {showMandateModal && (
+          <div className="fixed inset-0 z-50 flex flex-col bg-white">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+              <h2 className="text-sm font-semibold text-slate-900">
+                Strategy Mandate
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowMandateModal(false)}
+                className="p-1.5 rounded-full hover:bg-slate-100 transition-colors"
+              >
+                <X className="h-5 w-5 text-slate-600" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <PdfViewer
+                file="/strategy-disclosures.pdf"
+                style={{ height: "100%" }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ── FIX 3: Dynamic info banner ── */}
         <div className="mb-6 flex items-start gap-2 rounded-lg bg-violet-50 p-3">
           <Info className="h-4 w-4 flex-shrink-0 text-violet-600 mt-0.5" />
-          <p className="text-xs text-violet-700">
-            You'll be redirected to complete payment on Paystack
-          </p>
+          <p className="text-xs text-violet-700">{getInfoText()}</p>
         </div>
 
-        {/* Continue Button */}
-        <button
-          type="button"
-          onClick={() => onContinue?.(fees.totalCost, amount)}
-          disabled={!agreementChecked}
-          className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3 text-sm font-semibold text-white shadow-lg shadow-violet-200/60 disabled:opacity-50 disabled:cursor-not-allowed hover:enabled:-translate-y-0.5 transition"
-        >
-          Continue
-        </button>
+        {/* Continue Button or Onboarding Block */}
+        {!isLoadingStatus && !isFullyOnboarded ? (
+          <div className="w-full rounded-2xl border border-rose-200 bg-rose-50 p-4 text-center">
+            <h3 className="text-sm font-semibold text-rose-800 mb-2">
+              Onboarding Required
+            </h3>
+            <p className="text-xs text-rose-700 mb-4">
+              You must complete your profile setup and verify your identity
+              before investing in strategies.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                const navEvent = new CustomEvent("navigate-within-app", {
+                  detail: { page: "userOnboarding" },
+                });
+                window.dispatchEvent(navEvent);
+              }}
+              className="w-full rounded-xl bg-rose-600 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-rose-700 transition"
+            >
+              Complete Onboarding
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={handleContinue}
+            disabled={!agreementChecked || isLoadingStatus}
+            className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3 text-sm font-semibold text-white shadow-lg shadow-violet-200/60 disabled:opacity-50 disabled:cursor-not-allowed hover:enabled:-translate-y-0.5 transition"
+          >
+            {isLoadingStatus ? "Checking status..." : "Continue"}
+          </button>
+        )}
       </div>
     </div>
   );

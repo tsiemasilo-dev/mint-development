@@ -3,7 +3,7 @@ import { ArrowDownLeft, ArrowLeft, ArrowUpRight, CalendarDays, Search, X, Trendi
 import ActivitySkeleton from "../components/ActivitySkeleton";
 import { useTransactions } from "../lib/useFinancialData";
 
-const filters = ["All", "Investments", "Deposits", "Withdrawals"];
+const filters = ["All", "Investments", "Fees", "Withdrawals"];
 
 const getTransactionIcon = (name, direction) => {
   const lower = (name || "").toLowerCase();
@@ -26,8 +26,8 @@ const getIconColors = (direction, name) => {
 const getFilterCategory = (direction, name) => {
   const lower = (name || "").toLowerCase();
   if (lower.includes("withdraw") || lower.includes("repay")) return "Withdrawals";
-  if (lower.includes("deposit") || direction === "credit") return "Deposits";
-  if (lower.includes("invest") || lower.includes("buy") || lower.includes("strategy") || direction === "debit") return "Investments";
+  if (lower.includes("fee") || lower.includes("commission") || lower.includes("brokerage") || lower.includes("charge") || lower.includes("levy")) return "Fees";
+  if (lower.includes("invest") || lower.includes("buy") || lower.includes("purchas") || lower.includes("strategy") || direction === "debit") return "Investments";
   return "Other";
 };
 
@@ -358,7 +358,7 @@ const ActivityPage = ({ onBack }) => {
                                     ? "bg-rose-50 text-rose-500"
                                     : "bg-slate-100 text-slate-500"
                                 }`}>
-                                  {item.status === "successful" || item.status === "completed" || item.status === "posted" ? "Completed" : item.status === "pending" ? "Pending" : item.status === "failed" ? "Failed" : item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                                  {item.status === "successful" || item.status === "completed" || item.status === "posted" ? "Completed" : item.status === "pending" ? "Awaiting payment confirmation" : item.status === "failed" ? "Failed" : item.status.charAt(0).toUpperCase() + item.status.slice(1)}
                                 </span>
                               </>
                             )}

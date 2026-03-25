@@ -61,29 +61,30 @@ export const useFinancialData = () => {
       const token = session.access_token;
 
       const [
-        balanceResult,
         holdings,
         allServerTransactions,
         creditResult,
+        walletResult,
       ] = await Promise.all([
-        supabase.from("user_balances").select("*").eq("user_id", userId).maybeSingle(),
         fetchServerHoldings(token),
         fetchServerTransactions(token, 100),
         supabase.from("credit_accounts").select("*").eq("user_id", userId).maybeSingle(),
+        supabase.from("wallets").select("balance").eq("user_id", userId).maybeSingle(),
       ]);
 
       const transactions = allServerTransactions.slice(0, 20);
       const allTransactions = allServerTransactions;
       const creditInfo = creditResult.data;
 
-      const sortedHoldings = [...holdings].sort((a, b) => {
+      const sortedHoldings = [...holdings].filter(h => !h.strategy_id).sort((a, b) => {
         const aGain = (a.unrealized_pnl || 0) / 100;
         const bGain = (b.unrealized_pnl || 0) / 100;
         return bGain - aGain;
       });
 
+      const liveVal = (h) => h.last_price != null && h.quantity != null ? (h.last_price * h.quantity) / 100 : (h.market_value || 0) / 100;
       const bestAssets = sortedHoldings.slice(0, 5).map((h) => {
-        const currentValue = (h.market_value || 0) / 100;
+        const currentValue = liveVal(h);
         const costBasis = ((h.avg_fill || 0) * (h.quantity || 0)) / 100;
         const changePercent = costBasis > 0 ? ((currentValue - costBasis) / costBasis) * 100 : 0;
         return {
@@ -95,7 +96,7 @@ export const useFinancialData = () => {
         };
       });
 
-      const totalInvestments = holdings.reduce((sum, h) => sum + ((h.avg_fill || 0) * (h.quantity || 0)) / 100, 0);
+      const totalInvestments = holdings.reduce((sum, h) => sum + liveVal(h), 0);
       
       const incomeTypes = ["credit"];
       const expenseTypes = ["debit"];
@@ -106,10 +107,10 @@ export const useFinancialData = () => {
         .filter((t) => expenseTypes.includes(t.direction))
         .reduce((sum, t) => sum + Math.abs((t.amount || 0) / 100), 0);
       const availableCredit = Math.max(0, (totalIncome - totalExpenses) * 0.2);
-      const totalBalance = totalInvestments + availableCredit;
+      const walletBalance = walletResult.data?.balance ?? 0;
 
       setData({
-        balance: totalBalance,
+        balance: walletBalance,
         investments: totalInvestments,
         availableCredit,
         transactions,
@@ -131,6 +132,21 @@ export const useFinancialData = () => {
 
   useEffect(() => {
     fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") fetchData();
+    };
+    const handleUpdate = () => {
+      fetchData();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("financial-data-updated", handleUpdate);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("financial-data-updated", handleUpdate);
+    };
   }, [fetchData]);
 
   return { ...data, refetch: fetchData };
@@ -164,8 +180,7 @@ export const useMintBalance = () => {
         const userId = session.user.id;
         const token = session.access_token;
 
-        const [balanceResult, holdings, allServerTransactions] = await Promise.all([
-          supabase.from("user_balances").select("*").eq("user_id", userId).maybeSingle(),
+        const [holdings, allServerTransactions] = await Promise.all([
           fetchServerHoldings(token),
           fetchServerTransactions(token, 100),
         ]);
@@ -173,8 +188,10 @@ export const useMintBalance = () => {
         const recentTransactions = allServerTransactions.slice(0, 10);
         const allTransactions = allServerTransactions;
         
-        const totalInvestments = holdings.reduce((sum, h) => sum + ((h.avg_fill || 0) * (h.quantity || 0)) / 100, 0);
-        const dailyChange = holdings.reduce((sum, h) => sum + ((h.unrealized_pnl || 0) / 100), 0);
+        const liveV = (h) => h.last_price != null && h.quantity != null ? (h.last_price * h.quantity) / 100 : (h.market_value || 0) / 100;
+        const totalInvestments = holdings.reduce((sum, h) => sum + liveV(h), 0);
+        const costBasisTotal = holdings.reduce((sum, h) => sum + ((h.avg_fill || 0) * (h.quantity || 0)) / 100, 0);
+        const dailyChange = totalInvestments - costBasisTotal;
         
         const incomeTypes = ["credit"];
         const expenseTypes = ["debit"];
@@ -209,6 +226,12 @@ export const useMintBalance = () => {
     };
 
     fetchBalance();
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") fetchBalance();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, []);
 
   return data;
@@ -358,15 +381,17 @@ export const useInvestments = () => {
 
       const goals = goalsResult.data || [];
 
-      const totalInvestments = holdings.reduce((sum, h) => sum + ((h.avg_fill || 0) * (h.quantity || 0)) / 100, 0);
-      const monthlyChange = holdings.reduce((sum, h) => sum + ((h.unrealized_pnl || 0) / 100), 0);
-      const monthlyChangePercent = totalInvestments > 0 ? (monthlyChange / totalInvestments) * 100 : 0;
+      const liveHV = (h) => h.last_price != null && h.quantity != null ? (h.last_price * h.quantity) / 100 : (h.market_value || 0) / 100;
+      const totalInvestments = holdings.reduce((sum, h) => sum + liveHV(h), 0);
+      const costBasisAll = holdings.reduce((sum, h) => sum + ((h.avg_fill || 0) * (h.quantity || 0)) / 100, 0);
+      const monthlyChange = totalInvestments - costBasisAll;
+      const monthlyChangePercent = costBasisAll > 0 ? (monthlyChange / costBasisAll) * 100 : 0;
 
       const assetClasses = {};
       holdings.forEach((h) => {
         const assetClass = h.asset_class || "Other";
-        const costBasis = ((h.avg_fill || 0) * (h.quantity || 0)) / 100;
-        assetClasses[assetClass] = (assetClasses[assetClass] || 0) + costBasis;
+        const holdingValue = liveHV(h);
+        assetClasses[assetClass] = (assetClasses[assetClass] || 0) + holdingValue;
       });
 
       const portfolioMix = Object.entries(assetClasses).map(([label, value]) => ({
@@ -383,7 +408,7 @@ export const useInvestments = () => {
             (h) => h.security_id === g.linked_security_id || h.strategy_id === g.linked_strategy_id
           );
           if (linkedHolding) {
-            const marketVal = (linkedHolding.market_value || 0) / 100;
+            const marketVal = linkedHolding.last_price != null && linkedHolding.quantity != null ? (linkedHolding.last_price * linkedHolding.quantity) / 100 : (linkedHolding.market_value || 0) / 100;
             const costBasis = ((linkedHolding.avg_fill || 0) * (linkedHolding.quantity || 0)) / 100;
             const gainLoss = marketVal - costBasis;
             currentValue = invested + (costBasis > 0 ? (gainLoss / costBasis) * invested : 0);
@@ -426,6 +451,14 @@ export const useInvestments = () => {
 
   useEffect(() => {
     fetchInvestments();
+  }, [fetchInvestments]);
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") fetchInvestments();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, [fetchInvestments]);
 
   return { ...data, refetch: fetchInvestments };

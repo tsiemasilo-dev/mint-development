@@ -56,6 +56,7 @@ export function setupRealtimePrices() {
         if (
           changed.last_price !== undefined ||
           changed.change_price !== undefined ||
+          changed.change_percent !== undefined ||
           changed.change_percentage !== undefined
         ) {
           console.log("[realtime-prices] Security price updated:", changed.symbol || changed.id);
@@ -73,6 +74,19 @@ export function setupRealtimePrices() {
       },
       (payload) => {
         console.log("[realtime-prices] New price record inserted for security:", payload.new?.security_id);
+        globalState.lastUpdated = Date.now();
+        notifyListeners();
+      }
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "stock_holdings",
+      },
+      (payload) => {
+        console.log("[realtime-prices] Holding updated:", payload.new?.id);
         globalState.lastUpdated = Date.now();
         notifyListeners();
       }

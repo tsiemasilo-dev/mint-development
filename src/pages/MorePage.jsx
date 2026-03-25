@@ -12,11 +12,13 @@ import {
   ChevronRight,
   AlertCircle,
   User,
+  FileText,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import ProfileSkeleton from "../components/ProfileSkeleton";
 import { useRequiredActions } from "../lib/useRequiredActions";
 import { useSumsubStatus } from "../lib/useSumsubStatus";
+import OriginButton from "../components/OriginButton";
 
 const MorePage = ({ onNavigate }) => {
   const [loading, setLoading] = useState(true);
@@ -26,9 +28,8 @@ const MorePage = ({ onNavigate }) => {
   const { bankLinked } = useRequiredActions();
   const { kycVerified, kycPending, kycNeedsResubmission } = useSumsubStatus();
 
-  const displayName = [profile?.first_name, profile?.last_name]
-    .filter(Boolean)
-    .join(" ");
+  const displayName = [profile?.first_name || profile?.firstName, profile?.last_name || profile?.lastName]
+    .filter(Boolean).join(" ");
   const displayUsername = profile?.email
     ? `@${profile.email.split("@")[0]}`
     : "";
@@ -122,6 +123,7 @@ const MorePage = ({ onNavigate }) => {
     [
       { id: "profile", label: "Profile Details", icon: User, onClick: () => onNavigate?.("profileDetails") },
       { id: "settings", label: "Settings", icon: Settings, onClick: () => onNavigate?.("settings") },
+      { id: "statements", label: "Statements", icon: FileText, onClick: () => onNavigate?.("statements") },
     ],
     [
       { id: "help", label: "Help & FAQs", icon: HelpCircle },
@@ -149,18 +151,18 @@ const MorePage = ({ onNavigate }) => {
   const usernameLabel = displayUsername || "Not set";
   const iconColorClasses = "text-[#5b21b6]";
 
-
   return (
     <div className="min-h-screen bg-white px-6 pt-16 pb-24">
       <header className="mb-8 flex items-center">
-        <button
-          type="button"
+        <OriginButton
           onClick={() => onNavigate?.("home")}
+          circleColor="rgba(148,163,184,0.2)"
           className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-700 transition active:scale-95"
           aria-label="Back"
+          disableTouch
         >
           <ArrowLeft className="h-5 w-5" />
-        </button>
+        </OriginButton>
         <div className="flex flex-1 justify-center">
           {profile?.avatar_url ? (
             <img
@@ -196,13 +198,14 @@ const MorePage = ({ onNavigate }) => {
         )}
         <h2 className="mt-3 text-xl font-semibold text-slate-900">{nameLabel}</h2>
         <p className="mt-1 text-sm text-slate-500">{usernameLabel}</p>
-        <button
-          type="button"
+        <OriginButton
           onClick={() => onNavigate?.("editProfile")}
+          circleColor="rgba(255,255,255,0.12)"
           className="mt-5 rounded-full bg-slate-900 px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 transition active:scale-95"
+          disableTouch
         >
           Edit Profile
-        </button>
+        </OriginButton>
       </div>
 
       <div className="mt-8">
@@ -214,14 +217,14 @@ const MorePage = ({ onNavigate }) => {
             </div>
           </div>
           <div className="mt-4 space-y-3">
-            <button
-              type="button"
+            <OriginButton
               onClick={() => onNavigate?.("actions")}
+              circleColor="rgba(148,163,184,0.15)"
               className="flex w-full items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-left transition hover:bg-slate-100"
+              disableTouch
             >
               <div className="flex items-center gap-2">
                 <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100">
-
                   <ShieldCheck className={`h-5 w-5 ${iconColorClasses}`} />
                 </span>
                 <span className="text-sm font-medium text-slate-700">KYC Verification</span>
@@ -239,17 +242,16 @@ const MorePage = ({ onNavigate }) => {
               >
                 {kycVerified ? "Verified" : kycNeedsResubmission ? "Needs Attention" : kycPending ? "Pending" : "Not Verified"}
               </span>
-            </button>
-            <button
-              type="button"
+            </OriginButton>
+            <OriginButton
               onClick={() => onNavigate?.("bankLink")}
+              circleColor="rgba(148,163,184,0.15)"
               className="flex w-full items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-left transition hover:bg-slate-100"
+              disableTouch
             >
               <div className="flex items-center gap-2">
                 <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100">
-
                   <Landmark className={`h-5 w-5 ${iconColorClasses}`} />
-
                 </span>
                 <span className="text-sm font-medium text-slate-700">Bank Account</span>
               </div>
@@ -261,7 +263,7 @@ const MorePage = ({ onNavigate }) => {
               >
                 {bankLinked ? "Linked" : "Not Linked"}
               </span>
-            </button>
+            </OriginButton>
           </div>
         </div>
       </div>
@@ -273,11 +275,12 @@ const MorePage = ({ onNavigate }) => {
               {section.map((item) => {
                 const Icon = item.icon;
                 return (
-                  <button
+                  <OriginButton
                     key={item.id}
-                    type="button"
                     onClick={item.onClick}
+                    circleColor="rgba(148,163,184,0.15)"
                     className="flex w-full items-center justify-between rounded-2xl px-2 py-3 text-left text-slate-700 transition hover:bg-slate-50 active:scale-[0.99]"
+                    disableTouch
                   >
                     <div className="flex items-center gap-3">
                       <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100">
@@ -286,7 +289,7 @@ const MorePage = ({ onNavigate }) => {
                       <span className="text-base font-medium text-slate-800">{item.label}</span>
                     </div>
                     <ChevronRight className="h-5 w-5 text-slate-400" />
-                  </button>
+                  </OriginButton>
                 );
               })}
             </div>

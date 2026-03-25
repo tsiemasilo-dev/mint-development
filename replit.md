@@ -16,7 +16,8 @@ Mint Auth is a React authentication application built with Vite, Tailwind CSS, a
 - **Design Language**: iOS-style UI with a "glassmorphism" design approach for a modern and sleek aesthetic.
 - **Animations**: Smooth transitions and animations are implemented using Framer Motion for an enhanced user experience.
 - **Theming**: Tailwind CSS is used for utility-first styling, enabling rapid and consistent UI development.
-- **Navigation**: Implements an iOS-style "swipe-back" navigation system for intuitive backward navigation on non-main-tab pages, complete with previous page preview, scaling effects, and haptic feedback.
+- **Navigation**: Implements an iOS-style "swipe-back" navigation system for intuitive backward navigation on non-main-tab pages, complete with previous page preview, scaling effects, and haptic feedback. SwipeBackWrapper is disabled on iOS web browsers (non-standalone) to avoid conflicting with Safari's native edge swipe gesture.
+- **Browser Back Prevention**: On mobile web browsers, browser history is synced with the app's internal navigation stack via `pushState`/`popstate`. A counter-based `pendingProgrammaticBacks` ref prevents double-back races. On main tabs, a sentinel history entry is pushed to prevent the browser from navigating away from the app. PWA meta tags (`apple-mobile-web-app-capable`, `mobile-web-app-capable`) enable standalone mode when installed to home screen, which fully disables Safari's navigation gestures.
 
 ### Technical Implementations
 - **Frontend Framework**: React 18 with Vite for fast development and optimized builds.
@@ -30,9 +31,9 @@ Mint Auth is a React authentication application built with Vite, Tailwind CSS, a
 - **Biometric Authentication**: Integration with `capacitor-face-id` for native iOS/Android biometrics (Face ID/Touch ID) for secure login alternatives, configurable via settings.
 - **PIN Lock Screen**: A 5-digit PIN setup and lock screen with SHA-256 hashing for enhanced session security.
 - **User Onboarding**: A 6-step identification process including employment details, Sumsub KYC verification, discretionary mandate, risk disclosure, source of funds declaration, bank account details collection, and T&C agreements. Bank details (name, account number, branch code) are saved to both dedicated `user_onboarding` columns and the `sumsub_raw` JSON field.
-- **Minimum Investment Enforcement**: R1,000 minimum per individual asset holding, enforced in `src/lib/strategyUtils.js`. `calculateMinInvestment` adjusts share counts upward so each holding meets R1,000 floor, with fallbacks to strategy-level `last_close`/`nav` price when holdings data is unavailable. The total strategy minimum is also floored at R1,000. Display uses "Min. investment" label in bottom sheets on MarketsPage and OpenStrategiesPage.
+- **Minimum Investment Enforcement**: No R1,000 floor on `calculateMinInvestment` — sums raw `shares × (last_price/100)` directly, returns `Math.round(total)` or null. `getAdjustedShares()` still uses R1,000 floor for individual asset purchases.
 - **Notification System**: Centralized real-time notifications via Supabase subscriptions, grouped by date, with swipe-to-delete, "mark all as read" functionality, and user-configurable notification type preferences.
-- **Settlement Status Tracking**: Real-time detection of CSDP and broker integration via environment variables, with a settlement lifecycle (pending_csdp → pending_broker → confirmed) and status badges on holdings.
+- **Settlement Config**: `/api/settlement/config.js` returns `fullyIntegrated: true`. CSDP settlement logic has been removed from the portfolio page (`NewPortfolioPage.jsx`). Portfolio tabs now display data based purely on `stock_holdings` records and strategy matching via transaction names.
 
 ### Feature Specifications
 - **Dashboard**: Investment portfolio dashboard with strategy selection and performance charts.
@@ -92,6 +93,12 @@ Mint Auth is a React authentication application built with Vite, Tailwind CSS, a
   - Fallback: if < 2 data points in timeframe, fetches last 30 available prices
   - Forward-fills prices across gaps for smooth curves
   - Tooltip shows date and P&L value on hover
+- **Purchase Date Anchoring** (Portfolio tab charts):
+  - Both strategy and stock charts on the portfolio page filter data to start from the user's actual purchase date
+  - Strategy P&L uses NAV on purchase date as baseline (falls back to last pre-purchase NAV for weekend/holiday buys); requires ≥2 post-purchase data points to show return
+  - Stock chart in `useStockChart` accepts optional `purchaseDate` param; filters price data to `>= purchaseDate`
+  - If no post-purchase data exists yet (e.g., bought on weekend), chart shows empty/"No data available" instead of pre-purchase history
+  - Purchase date for stocks sourced from `stock_holdings.created_at`; for strategies from `firstInvestedDate` (earliest transaction date)
 
 ### PDF Factsheet Generation
 - **File**: `src/lib/generateFactsheetPdf.js` — client-side PDF generation using jsPDF + jspdf-autotable
@@ -102,3 +109,24 @@ Mint Auth is a React authentication application built with Vite, Tailwind CSS, a
 - **Personalization**: Fetches user's transaction history for the strategy to calculate invested amount, current value, and return
 - **Data sources**: `strategies` table (objective, fees, benchmark, inception via `created_at`), `strategy_analytics` (curves, summary, calendar_returns), `securities` (sector data for holdings)
 - **Fees**: FactsheetPage fees section now reads from `management_fee_bps` database column instead of hardcoded values
+
+### Order Email Notifications
+- **Confirmation Email**: Sent immediately after a successful payment/investment via `api/record-investment.js`. Uses Resend (`orders@mymint.co.za`). Template from `api/_lib/order-email-templates.js` with glassmorphism design matching Mint Mornings. Status shown as "Pending" since settlement hasn't occurred yet.
+- **Fill Email**: Sent when CSDP or broker webhook confirms settlement (status = confirmed/filled/executed). Built inline in `server/index.cjs` via `sendOrderFillEmail()`. Status shown as "Confirmed" with green checkmark.
+- **Database Logging**: All order emails logged to `order_emails` table in Supabase with columns: user_id, email, email_type (order_confirmation/order_fill), asset details, amount/quantity/price, reference, dates, resend_id, status.
+- **Graceful Degradation**: If `RESEND_API_KEY` is not set, email sending is silently skipped (logged but no error thrown). Email failures never block the main transaction flow.
+
+### Vercel Serverless API Endpoints
+- **`api/onboarding/status.js`** — GET, returns user's latest onboarding record (id, kyc_status, employment_status). Mirrors Express server endpoint.
+- **`api/onboarding/complete.js`** — POST, marks onboarding complete, saves bank details to sumsub_raw.
+- **`api/onboarding/check-id-number.js`** — POST, validates SA ID number against onboarding pack records.
+- **`api/onboarding/save-mandate.js`** — POST, saves discretionary mandate data.
+- **`api/sessions/record.js`** — POST, records session fingerprint. Graceful no-op (user_sessions table not yet in Supabase).
+- **`api/sessions/validate.js`** — GET, validates session fingerprint. Always returns valid:true (user_sessions table not yet in Supabase).
+- **`api/_lib/supabase.js`** — Shared Supabase client (anon + admin) for Vercel serverless functions.
+
+### Onboarding Completion Checks
+- **Shared utility**: `src/lib/checkOnboardingComplete.js` — `parseOnboardingFlags(record)` returns `{ kycDone, bankDone, mandateAgreed, riskDone, sofDone, allComplete }`
+- **Mandate check**: checks BOTH `sumsub_raw.mandate_data.agreedMandate` (legacy flow) AND `sumsub_raw.mandate_accepted` (new flow)
+- **Used by**: HomePage, ActionsPage, IdentityCheckPage — single source of truth for completion status
+- **Smart step navigation**: `getNextIncompleteStep()` (forward) and `getPrevIncompleteStep()` (back) in UserOnboardingPage skip already-completed steps

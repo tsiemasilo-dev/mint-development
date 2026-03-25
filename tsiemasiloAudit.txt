@@ -1,0 +1,512 @@
+================================================================================
+  MINT APP — DEVELOPMENT AUDIT
+  Developer: tsiemasilo-dev
+  Repository: github.com/mihle-matimba/mint
+  Period: 21 January 2026 – 24 March 2026
+
+  Accounts used:
+    tsiemasilo-dev  ·  T-Dev  ·  Masilo  ·  MintDev  ·  masechabamaile
+    manwhodevs  ·  AlgoDev  ·  patymca
+    MarDeveloper  ·  MarchDeveloper  (AI-assisted sessions, directed by tsiemasilo)
+
+  Total Commits: 943
+================================================================================
+
+
+────────────────────────────────────────────────────────────────────────────────
+  21 – 31 JANUARY 2026
+  Accounts: patymca (43 commits) · masechabamaile (22 commits) · tsiemasilo-dev
+────────────────────────────────────────────────────────────────────────────────
+
+  Identity Verification — Sumsub & TruID Integration  [patymca]
+  · Added Sumsub identity verification and backend applicant creation — first
+    KYC system integrated into the onboarding flow
+  · Replaced the initial identity verification system with TruID Connect as a
+    new provider
+  · Integrated TruID Connect into the user onboarding flow end-to-end
+  · Updated identity verification to use TruID Connect instead of Sumsub
+
+  Financial Data & Outstanding Actions  [masechabamaile]
+  · Improved financial data calculations and transaction display accuracy
+  · Updated bank and identity verification statuses across pages
+  · Built the outstanding actions section — dynamically displays and redirects
+    users to incomplete tasks
+  · Updated actions to show real completion state and redirect correctly
+
+  Auth & UI Cleanup  [tsiemasilo-dev]
+  · [dc765d8] Guided existing users to the password reset flow on signup —
+              prevents confusion when an email already exists
+  · [6e65179] Removed the Mint Balance footer notice for a cleaner UI
+  · [ca938b2] Merged Pull Request #59: remove-mint-balance-information-section
+
+
+────────────────────────────────────────────────────────────────────────────────
+  02 – 05 FEBRUARY 2026
+  Accounts: Masilo (49 commits) · MintDev (57 commits)
+────────────────────────────────────────────────────────────────────────────────
+
+  Card Animations & Swipe UX  [Masilo]
+  · Built 3D card flip animation that follows the user's swipe direction
+  · Improved swiping animation to feel natural and directional
+  · Added smooth animated transitions to match finger movement exactly
+  · Refined card appearance — removed the circular background element for a
+    cleaner look
+
+  Android Navigation, Server Config & Security  [MintDev]
+  · Updated Android navigation and fixed KYC status determination logic
+  · Restored browser history navigation and updated server configuration
+  · Removed browser history handling to prevent duplicate page navigation
+  · Cleaned up sensitive token accidentally committed to project history
+
+
+────────────────────────────────────────────────────────────────────────────────
+  04 FEBRUARY 2026
+  Account: tsiemasilo-dev
+────────────────────────────────────────────────────────────────────────────────
+
+  · [492cee9] Built and updated the in-app notification system
+
+
+────────────────────────────────────────────────────────────────────────────────
+  05 – 10 FEBRUARY 2026  (Major Build Sprint)
+  Account: T-Dev (438 commits total) · tsiemasilo-dev
+────────────────────────────────────────────────────────────────────────────────
+
+  Portfolio Page — Full Redesign  [T-Dev]
+  · Redesigned the entire portfolio page with a modern fintech dashboard layout
+  · Built deep purple gradient background with glowing chart line effect
+  · Added portfolio value, holdings count, and asset distribution chart
+  · Integrated Recharts library for live portfolio value charting
+  · Added time-period filter buttons (1D, 1W, 1M, 3M, 1Y) with animated styles
+  · Connected user's actual name to the portfolio greeting
+  · Refined gradient and glow positioning for seamless blending with navigation
+  · Added smooth fade effects to chart line edges
+
+  Strategy & Allocation Views  [T-Dev]
+  · Built interactive dropdown for selecting investment strategies on portfolio
+  · Displayed real strategy names and financial data dynamically
+  · Updated allocation view to show investment history and top assets
+  · Applied consistent gradient styling to the allocations page
+
+  Holdings & Stock Display  [T-Dev]
+  · Connected portfolio holdings to real financial data from the database
+  · Added company logos to portfolio holdings display
+  · Updated holdings tab to show stock details with logos and current values
+  · Updated navigation tabs — renamed Strategy to Strategies, added Holdings
+
+  Individual Stock View — Built from Scratch  [T-Dev]
+  · Built functionality to view individual stock performance and market data
+  · Integrated live JSE stock market data into the individual stocks view
+  · Migrated stock data from external API to internal Supabase database
+  · Added dedicated section displaying stocks currently held by the user
+  · Added pagination to stock lists with navigation buttons
+  · Updated charts to use TradingView for richer data
+
+  Pie Chart  [T-Dev]
+  · Built portfolio allocation pie chart with hover animations
+  · Added iOS-style tooltips and smooth animated slice interactions
+  · Improved mobile tooltip visibility and positioning
+  · Refined labels and moved them outside the chart for clarity
+
+  Bottom Navigation Bar  [T-Dev]
+  · Fixed plus button positioning within the navigation bar
+  · Ensured the plus button renders above the overlay layer via a portal
+  · Improved stability and responsiveness of the bottom navigation bar
+  · Added bottom navigation bar to the portfolio page
+
+  Bank Account Linking — TruID  [T-Dev]
+  · Built standalone bank account linking page (separated from credit flow)
+  · Enabled users to link multiple bank accounts to their profile
+  · Displayed actual linked bank account details with bank logos
+  · Added dedicated success page after bank linking
+  · Built the option to unlink specific bank accounts
+  · Improved data extraction from TruID webhook for linked accounts
+
+  Holdings P&L & Real-Time Data  [T-Dev]
+  · Updated holdings to reflect accurate gains and losses using cost basis
+  · Set default displayed stock to the user's actual holdings
+  · Added real-time price updates for the investment portfolio
+  · Updated all pages to auto-refresh strategy data in real-time
+
+  Statements & Activity  [T-Dev]
+  · Replaced the Financials tab with the Activity page on Statements
+  · Updated Statements page to show full transaction history with a loader
+
+  Onboarding Steps  [T-Dev]
+  · Added new steps to the onboarding process: bank, mandate, risk, source of
+    funds
+  · Handled existing KYC verification status to skip re-verification
+  · Fixed onboarding progress not saving correctly
+  · Added onboarding completion status to the outstanding actions on home tab
+  · Saved user's source of funds and investment details to the database
+
+  PRs Merged  [tsiemasilo-dev]
+  · [3289142] Merged feature/sumsub/Tsie into main — Sumsub KYC integration
+  · [712462c] Merged Android.v1 into main — Android/Capacitor build
+  · [db8eb09] Merged remote-tracking branch origin/main into Merge/Version1
+
+
+────────────────────────────────────────────────────────────────────────────────
+  12 – 18 FEBRUARY 2026
+  Account: manwhodevs (93 commits)
+────────────────────────────────────────────────────────────────────────────────
+
+  User Verification & Onboarding Pack  [manwhodevs]
+  · Built verification check — marks already-verified users as complete
+    without re-running verification
+  · Saved user verification details to the onboarding pack on completion
+  · Updated user verification to save all details when status check completes
+  · Added verification detail fields to the onboarding pack data structure
+
+  Investment Goal & Fees  [manwhodevs]
+  · Updated investment goal modal content and fee label clarity
+  · Improved how fees are labelled and displayed throughout the investment flow
+
+  PR Merged  [tsiemasilo-dev]
+  · [0ff8e4f] Merged Pull Request #92: MergeUpdate into main
+
+
+────────────────────────────────────────────────────────────────────────────────
+  19 – 24 FEBRUARY 2026
+  Account: AlgoDev (44 commits) · tsiemasilo-dev
+────────────────────────────────────────────────────────────────────────────────
+
+  Mint Number Card Display  [AlgoDev]
+  · Adjusted card layout to cleanly display the user's Mint number
+  · Removed asset details from the card to improve spacing
+  · Refined spacing and font size for the Mint number within the card
+  · Improved overall card layout for a polished fintech card feel
+
+  UI Update  [tsiemasilo-dev]
+  · [0ecd311] Updated swipeable card component
+
+
+────────────────────────────────────────────────────────────────────────────────
+  02 – 04 MARCH 2026
+  Account: MarchDeveloper (30 commits, AI-assisted session)
+────────────────────────────────────────────────────────────────────────────────
+
+  Investment Rules & Navigation  [MarchDeveloper]
+  · Enforced minimum investment of R1,000 for all assets
+  · Ensured all individual asset purchases meet the minimum investment value
+  · Fixed back button navigation across multiple pages
+  · Removed "if applicable" text from factsheets for cleaner copy
+
+
+────────────────────────────────────────────────────────────────────────────────
+  04 – 05 MARCH 2026
+  Account: MarDeveloper (AI-assisted session) · tsiemasilo-dev
+────────────────────────────────────────────────────────────────────────────────
+
+  Environment Setup  [MarDeveloper]
+  · Updated project dependencies and configurations for Replit environment
+
+  Historical Performance Charting — Built from Scratch  [MarDeveloper]
+  · Built full historical performance charting for user portfolios and
+    strategies with real Supabase data
+  · Added time-period filters (1D, 1W, 1M, 3M, 1Y) and formatted Y-axis labels
+  · Updated charts to display profit and loss over time from actual cost basis
+  · Set all charts to begin from R0 baseline for immediate visual clarity
+  · Fixed Y-axis to always include R0 even when all values are positive
+  · Added consistent starting data point to all asset and strategy charts
+  · Fixed dropdown menus to close on outside click
+
+  Strategy Factsheet PDF — Built from Scratch  [MarDeveloper]
+  · Built personalised strategy factsheet PDF — downloadable per user and
+    strategy
+  · Configured PDF generation plugin at build time
+  · Displayed actual purchase fees, ISIN numbers, and asset allocation chart
+  · Replaced sector allocation with actual asset breakdown
+  · Fixed full asset names to display above their allocation bars
+  · Changed PDFs to open in a new tab instead of downloading
+  · Fixed minimum investment to show correct dynamic value from database
+  · Fixed server crash caused by missing API key guard
+
+  PR Merged  [tsiemasilo-dev]
+  · [c629336] Merged Pull Request #102: feature/MinDisclosureDocument
+
+
+────────────────────────────────────────────────────────────────────────────────
+  09 MARCH 2026
+  Account: MarDeveloper (AI-assisted) · tsiemasilo-dev
+────────────────────────────────────────────────────────────────────────────────
+
+  Onboarding Flow Overhaul  [MarDeveloper]
+  · Added checkpoints and progress saving throughout onboarding
+  · Improved flow to save each step and respect already-completed steps
+  · Enabled free back-navigation with pre-filled saved data
+  · Expanded completion checks to all five steps (KYC, bank, mandate, risk,
+    source of funds)
+  · Built intelligent step-skipping for already-completed steps
+  · Added Identity Check (Sumsub) as a formal onboarding step
+  · Unified onboarding status logic into a single shared source
+  · Fixed flow for both returning users and first-time users
+
+  Session & API Stability  [MarDeveloper]
+  · Improved session timeout resilience — graceful logging instead of crashes
+  · Added missing API endpoints required for Vercel deployment
+  · Fixed session handling across the full server
+
+  Banking Details  [MarDeveloper]
+  · Added automatic branch code population when a user selects their bank
+  · Saved full banking details to user profile with read-only branch code
+
+  Real-Time Data  [MarDeveloper]
+  · Improved Supabase real-time subscriptions and error handling
+
+  PRs Merged  [tsiemasilo-dev]
+  · [a86cac2] Merged Pull Request #103: Precheck-ID-on-samsub
+  · [1908668] Merged origin/main and resolved onboarding conflicts — smart
+              step skipping retained correctly
+
+
+────────────────────────────────────────────────────────────────────────────────
+  10 MARCH 2026
+  Account: MarDeveloper 
+────────────────────────────────────────────────────────────────────────────────
+
+  Order Email Notification System — Built from Scratch  [MarDeveloper]
+  · Built the complete automated order email system using Resend:
+              - order_emails table in Supabase (one row per order)
+              - sendOrderConfirmationEmail() — fires immediately after payment
+              - sendOrderFillEmail() — fires on CSDP/broker settlement (T+3)
+              - Idempotency checks to prevent any duplicate sends
+  · Split into two distinct email types: Confirmation and Settlement Fill
+  · Redesigned both email templates to match the Mint brand:
+              - Deep purple gradient header
+              - Bordered detail cards per order field
+              - Amber "Pending Settlement" / Purple "Settled" status badges
+              - Purple CTA button — Track Your Order / View My Portfolio
+  · Consolidated to one shared template file used by both Vercel serverless
+    functions and the Express server — single source of truth
+
+
+────────────────────────────────────────────────────────────────────────────────
+  16 – 20 MARCH 2026
+  Account: masechabamaile (86 commits, AI-assisted)
+────────────────────────────────────────────────────────────────────────────────
+
+  Balance & Portfolio Display  [masechabamaile]
+  · Overhauled the balance card display — updated to show portfolio value,
+    wallet funds, and accurate profit and loss
+  · Updated account balance to reflect wallet funds instead of portfolio value
+  · Updated holdings calculations to use live stock prices
+  · Fixed calculation errors for holdings when market value is missing
+  · Updated portfolio balance to show accurate real-time gains and losses
+  · Updated chart to display investment performance accurately from purchase date
+
+  Pending Investment Status  [masechabamaile]
+  · Added pending status badges to assets on the portfolio page
+  · Improved display of pending investment holdings across the application
+  · Updated settlement logic to show pending status for new purchases
+  · Prevented misleading profit calculations for pending strategy trades
+  · Removed duplicate pending badges from asset display
+
+  Payment Methods & EFT  [masechabamaile]
+  · Added a "Coming Soon" premium dark-gradient badge to the Ozow payment option
+  · Updated payment method styling to match the remote main branch
+  · Added an EFT pending payment page for unconfirmed transactions
+  · Improved payment redirect logic and return parameter handling
+  · Added investment recording from the payment success page
+  · Added multiple payment options to the goal linking process
+  · Updated Ozow integration to correctly process transactions
+
+  Navigation & Tab Restructuring  [masechabamaile]
+  · Unified home and wealth tabs into a single swipeable card control
+  · Added Home tab with front card swiping capability
+  · Restructured main navigation — added Deposit tab, renamed Invest and
+    Markets tabs
+  · Removed the Deposit tab from the bottom navigation bar after restructuring
+  · Replaced Markets tab with Deposit tab on the home screen
+
+  Card Design  [masechabamaile]
+  · Updated card to a silver metallic appearance
+  · Added a decorative background pattern to both sides of the card
+  · Added Mint number display below the logo on the front card
+  · Added a Home tab card to display the user's balance
+
+  Mint Mornings Email — Initial Build  [masechabamaile]
+  · Built the initial Mint Mornings HTML email template for daily market news
+  · Iteratively updated styling to match the in-app news article page design
+  · Updated logo display, section heading colors, and rule line colors
+  · Added HTML preview file with sample article content for reference
+
+  Activity & Transactions  [masechabamaile]
+  · Updated activity page tabs and transaction categorization logic
+  · Updated transaction history to display fees and correct financial summaries
+
+  Fees & Strategy  [masechabamaile]
+  · Updated app fees and transaction processing rates
+  · Updated investment and stock purchase fee labels
+  · Fixed fees calculation for strategies with no holdings
+  · Set minimum investment amount for test strategy
+  · Improved strategy modal display to prevent content cutoff
+
+  Deposit Page  [masechabamaile]
+  · Updated the deposit page with bank branding and user-specific payment details
+
+
+────────────────────────────────────────────────────────────────────────────────
+  20 MARCH 2026
+  Account: 5t4ybnghrf (7 commits, AI-assisted)
+────────────────────────────────────────────────────────────────────────────────
+
+  EFT Deposits & Payment  [5t4ybnghrf]
+  · Built functionality to process EFT deposits and send email confirmations
+    on successful payment
+  · Added a pending wallet balance for EFT payments awaiting confirmation
+  · Displayed the user's Mint number inside the EFT payment modal as reference
+  · Added a thank-you popup shown to users after payment confirmation
+  · Completed onboarding immediately upon the user signing the agreement
+    document — removes the manual completion step
+  · Adjusted portfolio card layout to correctly display all content without
+    cutoff
+  · Updated the development script to use the local Vite installation
+
+
+────────────────────────────────────────────────────────────────────────────────
+  22 MARCH 2026
+  Account: tsiemasilo-dev (direct GitHub)
+────────────────────────────────────────────────────────────────────────────────
+
+  Sign-Up Flow  [tsiemasilo-dev]
+  · [3e470b3] Merged Pull Request #125: fix/remove-address-from-signup —
+              removed redundant street address field from the sign-up form
+
+
+────────────────────────────────────────────────────────────────────────────────
+  23 – 24 MARCH 2026
+  Account: masechabamaile (12 commits, AI-assisted session)
+────────────────────────────────────────────────────────────────────────────────
+
+  Onboarding Bug Fix  [masechabamaile]
+  · Fixed a bug in the onboarding completion check where the agreement signing
+    status variable was declared as a constant, preventing it from being updated
+    correctly — changed to a mutable variable so the status saves properly
+
+  Payment Method UI  [masechabamaile]
+  · Grayed out Paystack in the payment method selection modal with an identical
+    "Coming Soon" dark-gradient badge to match the existing Ozow treatment —
+    non-clickable and visually consistent at 60% opacity
+
+  Mint Mornings Email — Styling Overhaul  [masechabamaile]
+  · Updated the daily Mint Mornings email template to match the in-app news
+    article page visual design:
+              - Round gray avatar header in place of the previous layout
+              - 24px border radius on news cards
+              - Body text changed to #334155 (slate-700)
+              - Article titles set to font-weight 700
+              - "Related Topics" label styled in slate-500 to match the app
+  · Capped each news paragraph at 280 characters and limited to 3 paragraphs
+    per article — prevents overly long email sections
+  · Updated the static reference email template file to match
+
+  Mint Mornings Email — Test Endpoint  [masechabamaile]
+  · Added a titleSearch parameter to the single-send test endpoint so a
+    specific briefing (e.g. "LONDON BRIEFING" or "SA BRIEFING") can be
+    targeted and previewed directly without sending the full newsletter
+
+  Navigation Bar  [masechabamaile]
+  · Reverted the navigation bar (Home, Portfolio, Markets, More) fully back to
+    its original appearance — removed all animated SVG icon enhancements that
+    were added and tested during this session
+
+
+────────────────────────────────────────────────────────────────────────────────
+  ACCOUNTS SUMMARY
+────────────────────────────────────────────────────────────────────────────────
+
+  Account             Commits    Period                  Focus Area
+  ──────────────────────────────────────────────────────────────────────────────
+  T-Dev                 438      05 Feb – 10 Feb         Portfolio, charts,
+                                                         stocks, bank linking,
+                                                         onboarding, real-time
+  manwhodevs             93      12 Feb – 18 Feb         Verification, onboard-
+                                                         ing pack, investment
+                                                         goal & fees
+  MintDev                57      03 Feb – 05 Feb         Android nav, server
+                                                         config, KYC status,
+                                                         security cleanup
+  MarDeveloper           48      04 Mar – 10 Mar         Perf charts, PDF facts-
+  (AI-assisted)                                          heet, onboarding, emails
+  Masilo                 49      02 Feb – 03 Feb         Card flip animations,
+                                                         swipe UX
+  AlgoDev                44      19 Feb – 24 Feb         Mint number card layout
+  patymca                43      21 Jan – 31 Jan         KYC: Sumsub + TruID
+  MarchDeveloper         30      02 Mar – 04 Mar         Min investment, back nav,
+  (AI-assisted)                                          factsheet fixes
+  masechabamaile        120      28 Jan – 24 Mar         Financial calculations,
+  (AI-assisted)                                          outstanding actions,
+                                                         portfolio, payments,
+                                                         email, card design,
+                                                         onboarding fix
+  5t4ybnghrf              7      20 Mar                  EFT deposits, pending
+  (AI-assisted)                                          wallet, Mint number,
+                                                         onboarding completion
+  tsiemasilo-dev         14      27 Jan – 22 Mar         Direct merges, PRs,
+  (direct GitHub)                                        branch management,
+                                                         sign-up flow cleanup
+  ──────────────────────────────────────────────────────────────────────────────
+  TOTAL                 943      21 Jan 2026 –
+                                 24 Mar 2026
+
+
+────────────────────────────────────────────────────────────────────────────────
+  FULL FEATURE SUMMARY
+────────────────────────────────────────────────────────────────────────────────
+
+  ✓  KYC identity verification — Sumsub integration
+  ✓  KYC identity verification — TruID Connect integration & migration
+  ✓  Financial data calculations and transaction display
+  ✓  Outstanding actions section — dynamic, real-time completion tracking
+  ✓  Authentication — password reset guidance for existing users
+  ✓  In-app notification system
+  ✓  Card flip and swipe animations (3D, direction-following)
+  ✓  Android / Capacitor navigation and build configuration
+  ✓  Portfolio page — full redesign with deep purple fintech dashboard
+  ✓  Dashboard gradient background with glowing purple chart line
+  ✓  Recharts portfolio chart with time filters and R0 baseline
+  ✓  Strategy selector, allocation view, and holdings tab
+  ✓  Portfolio pie chart with animations and iOS-style tooltips
+  ✓  Individual stock view with live JSE price data
+  ✓  Stock logos and company branding throughout holdings
+  ✓  Bank account linking with TruID (multiple accounts, logos, unlinking)
+  ✓  Holdings P&L display using actual cost basis
+  ✓  Statements page with full transaction activity
+  ✓  Real-time Supabase price and strategy data subscriptions
+  ✓  Mint number card display and layout
+  ✓  User verification onboarding pack and fee labels
+  ✓  Minimum investment enforcement (R1,000 per asset)
+  ✓  Historical performance charting (P&L, time filters, R0 baseline)
+  ✓  Personalised strategy factsheet PDF with asset allocation
+  ✓  SA ID precheck against Sumsub — prevents duplicate registrations
+  ✓  Complete onboarding flow overhaul (step skipping, saving, back-nav)
+  ✓  Branch code auto-population for banking details
+  ✓  Session management resilience and Vercel API endpoint fixes
+  ✓  Order confirmation and fill email notifications (Resend integration)
+  ✓  Shared email template system — one source of truth for all emails
+  ✓  EFT deposit processing with email confirmation (5t4ybnghrf)
+  ✓  Pending wallet balance for EFT payments
+  ✓  Mint number displayed in EFT payment modal
+  ✓  Thank-you popup after payment confirmation
+  ✓  Auto-complete onboarding on document signing
+  ✓  Ozow "Coming Soon" badge — initial build (masechabamaile)
+  ✓  EFT pending payment page
+  ✓  Payment recording from payment success page
+  ✓  Balance card overhaul — wallet funds, portfolio value, P&L display
+  ✓  Pending investment status badges across portfolio
+  ✓  Mint Mornings email template — initial build and iterative styling
+  ✓  Activity page tabs and transaction categorization
+  ✓  Holdings calculations with live stock prices
+  ✓  Navigation restructuring — home, deposit, markets, invest tabs
+  ✓  Silver metallic card design with decorative pattern and Mint number
+  ✓  Sign-up form cleanup — redundant street address field removed
+  ✓  Onboarding agreement signing bug fix — mutable status variable
+  ✓  Paystack grayed out with "Coming Soon" badge — matches Ozow treatment
+  ✓  Mint Mornings email restyled to match in-app article page design
+  ✓  News paragraph truncation in emails (280 chars, 3 paragraphs max)
+  ✓  Targeted briefing test endpoint (send by title search)
+
+================================================================================
+  End of Audit — Mint App (github.com/mihle-matimba/mint)
+================================================================================

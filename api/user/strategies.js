@@ -28,7 +28,7 @@ export default async function handler(req, res) {
 
     const { data: transactions, error: txError } = await db
       .from("transactions")
-      .select("id, name, amount, direction, transaction_date")
+      .select("id, name, amount, direction, transaction_date, created_at")
       .eq("user_id", userId)
       .eq("direction", "debit");
 
@@ -37,8 +37,8 @@ export default async function handler(req, res) {
       return res.status(500).json({ success: false, error: txError.message });
     }
 
-    const strategyInvestments = {};
     const strategyFirstDate = {};
+    const strategyTxNames = new Set();
     for (const tx of (transactions || [])) {
       const txName = (tx.name || "").trim();
       let strategyName = null;
@@ -48,32 +48,79 @@ export default async function handler(req, res) {
         strategyName = txName.replace("Purchased ", "").trim();
       }
       if (strategyName) {
-        if (!strategyInvestments[strategyName]) {
-          strategyInvestments[strategyName] = 0;
-        }
-        strategyInvestments[strategyName] += Math.abs(tx.amount || 0);
-        if (tx.transaction_date) {
-          if (!strategyFirstDate[strategyName] || tx.transaction_date < strategyFirstDate[strategyName]) {
-            strategyFirstDate[strategyName] = tx.transaction_date;
+        strategyTxNames.add(strategyName);
+        const txDate = tx.transaction_date || (tx.created_at ? tx.created_at.slice(0, 10) : null);
+        if (txDate) {
+          if (!strategyFirstDate[strategyName] || txDate < strategyFirstDate[strategyName]) {
+            strategyFirstDate[strategyName] = txDate;
           }
         }
       }
     }
 
-    const strategyNames = Object.keys(strategyInvestments);
+    const strategyNames = Array.from(strategyTxNames);
     if (strategyNames.length === 0) {
       return res.status(200).json({ success: true, strategies: [] });
     }
 
-    const { data: allStrategies, error: stratErr } = await db
-      .from("strategies")
-      .select(`
+    const { data: userHoldings, error: holdingsError } = await db
+      .from("stock_holdings")
+      .select("id, security_id, strategy_id, quantity, avg_fill")
+      .eq("user_id", userId)
+      .not("strategy_id", "is", null);
+
+    if (holdingsError) {
+      console.error("[user/strategies] Error fetching user holdings:", holdingsError);
+    }
+
+    const holdingsByStrategyId = {};
+    for (const h of (userHoldings || [])) {
+      if (!holdingsByStrategyId[h.strategy_id]) {
+        holdingsByStrategyId[h.strategy_id] = [];
+      }
+      holdingsByStrategyId[h.strategy_id].push(h);
+    }
+
+    const allSecurityIds = (userHoldings || []).map(h => h.security_id).filter(Boolean);
+    let livePriceMap = {};
+    let symbolMap = {};
+    if (allSecurityIds.length > 0) {
+      const { data: secs } = await db
+        .from("securities")
+        .select("id, symbol, last_price")
+        .in("id", allSecurityIds);
+      (secs || []).forEach(s => {
+        livePriceMap[s.id] = s.last_price || 0;
+        symbolMap[s.id] = s.symbol;
+      });
+    }
+
+    const symbolPnlMap = {};
+    for (const h of (userHoldings || [])) {
+      const sym = symbolMap[h.security_id];
+      if (!sym) continue;
+      const qty = Number(h.quantity || 0);
+      const avgFill = Number(h.avg_fill || 0);
+      const livePrice = livePriceMap[h.security_id] || avgFill;
+      symbolPnlMap[sym] = {
+        pnlRands: ((livePrice - avgFill) * qty) / 100,
+        pnlPct: avgFill > 0 ? ((livePrice - avgFill) / avgFill) * 100 : 0,
+        currentValue: (livePrice * qty) / 100,
+        costBasis: (avgFill * qty) / 100,
+      };
+    }
+
+    const [allStrategiesResult, allHoldingSymbolsResult] = await Promise.all([
+      db.from("strategies").select(`
         id, name, short_name, description, risk_level, sector, icon_url, image_url, holdings, status,
         strategy_metrics (
           as_of_date, last_close, change_pct, r_1w, r_1m, r_3m, r_ytd, r_1y
         )
-      `)
-      .eq("status", "active");
+      `).eq("status", "active"),
+    ]);
+
+    const allStrategies = allStrategiesResult.data || [];
+    const stratErr = allStrategiesResult.error;
 
     if (stratErr) {
       console.error("[user/strategies] Error fetching strategies:", stratErr);
@@ -81,7 +128,7 @@ export default async function handler(req, res) {
     }
 
     const allHoldingSymbols = new Set();
-    for (const strategy of (allStrategies || [])) {
+    for (const strategy of allStrategies) {
       const h = strategy.holdings || [];
       if (Array.isArray(h)) {
         h.forEach(item => { if (item.symbol) allHoldingSymbols.add(item.symbol); });
@@ -100,7 +147,7 @@ export default async function handler(req, res) {
     }
 
     const matchedStrategies = [];
-    for (const strategy of (allStrategies || [])) {
+    for (const strategy of allStrategies) {
       const matchKey = strategyNames.find(sn =>
         sn.toLowerCase() === (strategy.name || "").toLowerCase() ||
         sn.toLowerCase() === (strategy.short_name || "").toLowerCase()
@@ -108,11 +155,35 @@ export default async function handler(req, res) {
       if (matchKey) {
         const metrics = strategy.strategy_metrics;
         const latestMetric = Array.isArray(metrics) ? metrics[0] : metrics;
-        const enrichedHoldings = (strategy.holdings || []).map(h => ({
-          ...h,
-          logo_url: h.logo_url || securitiesMap[h.symbol]?.logo_url || null,
-          name: h.name || securitiesMap[h.symbol]?.name || h.symbol,
-        }));
+        const enrichedHoldings = (strategy.holdings || []).map(h => {
+          const pnlData = symbolPnlMap[h.symbol] || null;
+          return {
+            ...h,
+            logo_url: h.logo_url || securitiesMap[h.symbol]?.logo_url || null,
+            name: h.name || securitiesMap[h.symbol]?.name || h.symbol,
+            pnlRands: pnlData ? pnlData.pnlRands : null,
+            pnlPct: pnlData ? pnlData.pnlPct : null,
+            currentValue: pnlData ? pnlData.currentValue : null,
+            costBasis: pnlData ? pnlData.costBasis : null,
+          };
+        });
+
+        const stratHoldings = holdingsByStrategyId[strategy.id] || [];
+        let investedAmount = 0;
+        let currentMarketValue = 0;
+
+        if (stratHoldings.length > 0) {
+          for (const h of stratHoldings) {
+            const qty = Number(h.quantity || 0);
+            const avgFill = Number(h.avg_fill || 0);
+            const livePrice = livePriceMap[h.security_id] || avgFill;
+            investedAmount += (avgFill * qty) / 100;
+            currentMarketValue += (livePrice * qty) / 100;
+          }
+        }
+
+        console.log(`[user/strategies] Strategy ${strategy.name}: investedAmount=${investedAmount.toFixed(2)}, currentMarketValue=${currentMarketValue.toFixed(2)}`);
+
         matchedStrategies.push({
           id: strategy.id,
           name: strategy.name,
@@ -123,7 +194,8 @@ export default async function handler(req, res) {
           iconUrl: strategy.icon_url,
           imageUrl: strategy.image_url,
           holdings: enrichedHoldings,
-          investedAmount: strategyInvestments[matchKey] / 100,
+          investedAmount,
+          currentMarketValue,
           metrics: latestMetric || null,
           firstInvestedDate: strategyFirstDate[matchKey] || null,
         });

@@ -26,10 +26,23 @@ export default async function handler(req, res) {
     const db = supabaseAdmin || supabase;
     const userId = user.id;
 
-    const { data: holdings, error: holdingsError } = await db
+    let holdings, holdingsError;
+    const holdingsResult = await db
       .from("stock_holdings")
-      .select("id, user_id, security_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status")
+      .select("id, user_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status, settlement_status")
       .eq("user_id", userId);
+
+    if (holdingsResult.error && holdingsResult.error.message && holdingsResult.error.message.includes("settlement_status")) {
+      const fallback = await db
+        .from("stock_holdings")
+        .select("id, user_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status")
+        .eq("user_id", userId);
+      holdings = fallback.data;
+      holdingsError = fallback.error;
+    } else {
+      holdings = holdingsResult.data;
+      holdingsError = holdingsResult.error;
+    }
 
     if (holdingsError) {
       console.error("Error fetching holdings:", holdingsError);
@@ -39,32 +52,86 @@ export default async function handler(req, res) {
     const rawHoldings = holdings || [];
     const securityIds = rawHoldings.map(h => h.security_id).filter(Boolean);
     let securitiesMap = {};
+    let latestPricesMap = {};
 
     if (securityIds.length > 0) {
-      const { data: secData, error: secError } = await db
-        .from("securities")
-        .select("id, symbol, name, logo_url, last_price, sector, exchange")
-        .in("id", securityIds);
+      const [secResult, pricesResult] = await Promise.all([
+        db.from("securities")
+          .select("id, symbol, name, logo_url, last_price, change_price, change_percent, sector, exchange")
+          .in("id", securityIds),
+        db.from("security_prices")
+          .select("security_id, close_price, ts")
+          .in("security_id", securityIds)
+          .order("ts", { ascending: false })
+          .limit(securityIds.length * 2),
+      ]);
 
-      if (secError) {
-        console.error("Error fetching securities for holdings:", secError);
+      if (secResult.data) {
+        secResult.data.forEach(s => { securitiesMap[s.id] = s; });
       }
-      if (secData) {
-        secData.forEach(s => { securitiesMap[s.id] = s; });
+
+      const pricesBySecId = {};
+      (pricesResult.data || []).forEach(p => {
+        if (!pricesBySecId[p.security_id]) pricesBySecId[p.security_id] = [];
+        if (pricesBySecId[p.security_id].length < 2) {
+          pricesBySecId[p.security_id].push(p.close_price);
+        }
+      });
+      for (const [secId, prices] of Object.entries(pricesBySecId)) {
+        latestPricesMap[secId] = {
+          latestPrice: prices[0],
+          prevPrice: prices.length > 1 ? prices[1] : prices[0],
+        };
       }
     }
 
     const enrichedHoldings = rawHoldings
       .filter(h => securitiesMap[h.security_id])
-      .map(h => ({
-        ...h,
-        symbol: securitiesMap[h.security_id]?.symbol || "N/A",
-        name: securitiesMap[h.security_id]?.name || "Unknown",
-        asset_class: securitiesMap[h.security_id]?.sector || "Other",
-        logo_url: securitiesMap[h.security_id]?.logo_url || null,
-        last_price: securitiesMap[h.security_id]?.last_price || null,
-        exchange: securitiesMap[h.security_id]?.exchange || null,
-      }));
+      .map(h => {
+        const sec = securitiesMap[h.security_id];
+        const priceData = latestPricesMap[h.security_id];
+        const livePrice = sec?.last_price ?? priceData?.latestPrice ?? 0;
+        const dailyChange = sec?.change_price ?? (livePrice - (priceData?.prevPrice ?? livePrice));
+        const dailyChangePct = sec?.change_percent ?? (priceData?.prevPrice > 0 ? (dailyChange / priceData.prevPrice) * 100 : 0);
+        const quantity = h.quantity || 0;
+        const avgFill = Number(h.avg_fill || 0);
+        const isPending = !avgFill || avgFill === 0;
+
+        if (isPending) {
+          return {
+            ...h,
+            market_value: 0,
+            unrealized_pnl: 0,
+            settlement_status: "pending",
+            symbol: sec?.symbol || "N/A",
+            name: sec?.name || "Unknown",
+            asset_class: sec?.sector || "Other",
+            logo_url: sec?.logo_url || null,
+            last_price: 0,
+            change_price: 0,
+            change_percent: 0,
+            exchange: sec?.exchange || null,
+          };
+        }
+
+        const costBasis = avgFill * quantity;
+        const liveMarketValue = livePrice * quantity;
+        const pnl = liveMarketValue - costBasis;
+
+        return {
+          ...h,
+          market_value: liveMarketValue,
+          unrealized_pnl: pnl,
+          symbol: sec?.symbol || "N/A",
+          name: sec?.name || "Unknown",
+          asset_class: sec?.sector || "Other",
+          logo_url: sec?.logo_url || null,
+          last_price: livePrice,
+          change_price: dailyChange,
+          change_percent: Number(dailyChangePct.toFixed(2)),
+          exchange: sec?.exchange || null,
+        };
+      });
 
     return res.status(200).json({ success: true, holdings: enrichedHoldings });
   } catch (error) {

@@ -3,8 +3,9 @@ import { ArrowLeft, X, Info, Heart, Wallet, FileText } from "lucide-react";
 import generateFactsheetPdf from "../lib/generateFactsheetPdf";
 import { supabase } from "../lib/supabase";
 import { checkOnboardingComplete } from "../lib/checkOnboardingComplete";
+import { useOnboardingStatus } from "../lib/useOnboardingStatus";
 import { formatChangePct, getChangeColor } from "../lib/strategyData.js";
-import { buildHoldingsBySymbol, calculateMinInvestment, getAdjustedShares } from "../lib/strategyUtils";
+import { buildHoldingsBySymbol, calculateMinInvestment, getAdjustedShares, computeExtendedSummary } from "../lib/strategyUtils";
 import {
   Area,
   Line,
@@ -27,7 +28,8 @@ const timeframeOptions = [
 const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding }) => {
-  const [timeframe, setTimeframe] = useState("1M");
+  const { onboardingComplete, loading: onboardingLoading } = useOnboardingStatus();
+  const [timeframe, setTimeframe] = useState("YTD");
   const [activeLabel, setActiveLabel] = useState(null);
   const [selectedMetricModal, setSelectedMetricModal] = useState(null);
   const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
@@ -355,6 +357,8 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
         weightNorm,
         logoUrl: security?.logo_url,
         dailyChange: securityDailyChange,
+        // ── FIX: forward sector from securities table so PDF pie chart works ──
+        sector: security?.sector || null,
       };
     });
 
@@ -370,6 +374,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
       weightNorm: null,
       logoUrl: null,
       dailyChange: null,
+      sector: null,
     });
 
     return nonCashHoldings;
@@ -444,13 +449,29 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
                     if (totalInvested > 0 && analytics?.latest_value != null) {
                       const navRatio = Number(analytics.latest_value) / 100;
                       const currentValue = totalInvested * navRatio;
-                      const returnPct = ((currentValue - totalInvested) / totalInvested) * 100;
+                      const returnPct = (currentValue - totalInvested) / totalInvested;
                       userPosition = { invested: totalInvested / 100, currentValue: currentValue / 100, returnPct };
                     }
                   }
+
+                  // Enrich analytics with computed stats.
+                  // Uses DB values when present (after compute job runs),
+                  // falls back to client-side calculation from curve data.
+                  const extendedStats = computeExtendedSummary(analytics);
+                  const enrichedAnalytics = {
+                    ...analytics,
+                    summary: {
+                      ...analytics?.summary,
+                      volatility:           analytics?.summary?.volatility           ?? extendedStats.volatility,
+                      sharpe_ratio:         analytics?.summary?.sharpe_ratio         ?? extendedStats.sharpe_ratio,
+                      max_drawdown:         analytics?.summary?.max_drawdown         ?? extendedStats.max_drawdown,
+                      pct_positive_months:  analytics?.summary?.pct_positive_months  ?? extendedStats.pct_positive_months,
+                    },
+                  };
+
                   generateFactsheetPdf({
                     strategy: currentStrategy,
-                    analytics,
+                    analytics: enrichedAnalytics,
                     holdingsWithMetrics,
                     holdingsSecurities,
                     userPosition,
@@ -891,8 +912,8 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
           <h2 className="text-sm font-semibold text-slate-900">Fees & Disclaimers</h2>
           <ul className="mt-3 space-y-2 text-xs text-slate-600">
             <li>• Brokerage fee: 0.25% of investment amount</li>
-            <li>• Custody fee (ISIN): R62.00 per asset</li>
-            <li>• Transaction fee (Paystack): 2.9% of total</li>
+            <li>• Custody fee (ISIN): R69.00 per asset</li>
+            <li>• Transaction fee (Paystack): 3.5% of total</li>
             <li>• Past performance does not guarantee future results</li>
             <li>• All data is for informational purposes only</li>
           </ul>
@@ -1009,7 +1030,9 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
               const { data: { session } } = await supabase.auth.getSession();
               if (!session?.user) { setInvestChecking(false); return; }
 
-              const isOnboarded = await checkOnboardingComplete();
+              // Use the cached status from the hook instead of fresh fetch to avoid race conditions
+              if (onboardingLoading) return;
+              const isOnboarded = onboardingComplete;
               if (!isOnboarded) {
                 setShowOnboardingModal(true);
                 setInvestChecking(false);

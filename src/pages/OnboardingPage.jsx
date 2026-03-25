@@ -1,4 +1,5 @@
 import React from "react";
+import OriginButton from "../components/OriginButton";
 
 const OnboardingPage = ({ onCreateAccount, onLogin }) => {
   return (
@@ -23,20 +24,21 @@ const OnboardingPage = ({ onCreateAccount, onLogin }) => {
             </div>
 
             <div className="flex flex-col gap-4 animate-on-load delay-3 sm:items-start">
-              <button
-                type="button"
+              <OriginButton
                 onClick={onLogin}
-                className="inline-flex w-full items-center justify-center rounded-full border border-slate-200 bg-white px-6 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-slate-900 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 sm:w-auto"
+                circleColor="rgba(148,163,184,0.18)"
+                className="inline-flex w-full items-center justify-center rounded-full border border-slate-200 bg-white px-6 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-slate-900 shadow-sm sm:w-auto"
               >
                 Login
-              </button>
-              <button
-                type="button"
+              </OriginButton>
+
+              <OriginButton
                 onClick={onCreateAccount}
-                className="inline-flex w-full items-center justify-center rounded-full bg-slate-900 px-6 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5 sm:w-auto"
+                circleColor="rgba(255,255,255,0.12)"
+                className="inline-flex w-full items-center justify-center rounded-full bg-slate-900 px-6 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-white shadow-lg shadow-slate-900/20 sm:w-auto"
               >
                 Create Account
-              </button>
+              </OriginButton>
             </div>
           </div>
         </div>

@@ -2,21 +2,21 @@ import React, { useRef, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import {
   Home,
-  FileText,
   PieChart,
+  TrendingUp,
   MoreHorizontal,
 } from "lucide-react";
- 
+
 const Navbar = ({ activeTab, setActiveTab }) => {
   const navRef = useRef(null);
   const ImpactStyle = {
     Light: "LIGHT",
   };
- 
+
   const tabs = [
     { id: "home", label: "Home", icon: Home },
     { id: "investments", label: "Portfolio", icon: PieChart },
-    { id: "statements", label: "Statements", icon: FileText },
+    { id: "markets", label: "Markets", icon: TrendingUp },
     { id: "more", label: "More", icon: MoreHorizontal },
   ];
 
@@ -58,7 +58,7 @@ const Navbar = ({ activeTab, setActiveTab }) => {
     }, 100);
     return () => clearTimeout(interval);
   }, []);
- 
+
   return (
     <>
       {createPortal(
@@ -94,5 +94,5 @@ const Navbar = ({ activeTab, setActiveTab }) => {
     </>
   );
 };
- 
+
 export default Navbar;

@@ -52,7 +52,8 @@ export const calculateMinInvestment = (strategy, holdingsBySymbol) => {
   const holdings = getHoldingsArray(strategy);
   if (!holdings.length) {
     const strategyPrice = Number(strategy?.last_close || strategy?.nav || 0);
-    return getMinFromPrice(strategyPrice);
+    if (!strategyPrice || strategyPrice <= 0 || !isFinite(strategyPrice)) return null;
+    return Math.round(strategyPrice);
   }
   let total = 0;
   let matched = 0;
@@ -63,20 +64,17 @@ export const calculateMinInvestment = (strategy, holdingsBySymbol) => {
     if (security?.last_price != null) {
       const pricePerShare = Number(security.last_price) / 100;
       if (!pricePerShare || pricePerShare <= 0 || !isFinite(pricePerShare)) continue;
-      let shares = Number(holding.shares || holding.quantity || 1);
-      const holdingValue = shares * pricePerShare;
-      if (holdingValue < MIN_ASSET_VALUE) {
-        shares = Math.ceil(MIN_ASSET_VALUE / pricePerShare);
-      }
+      const shares = Number(holding.shares || holding.quantity || 1);
       total += shares * pricePerShare;
       matched++;
     }
   }
   if (matched === 0) {
     const strategyPrice = Number(strategy?.last_close || strategy?.nav || 0);
-    return getMinFromPrice(strategyPrice);
+    if (!strategyPrice || strategyPrice <= 0 || !isFinite(strategyPrice)) return null;
+    return Math.round(strategyPrice);
   }
-  return Math.max(Math.round(total), MIN_ASSET_VALUE);
+  return Math.round(total);
 };
 
 export const getAdjustedShares = (holding, holdingsBySymbol) => {
@@ -118,12 +116,58 @@ export const getStrategyHoldingsSnapshot = (strategy, holdingsBySymbol) => {
 export const getStrategyCurrentValue = (investedAmount, metrics) => {
   if (!investedAmount || investedAmount <= 0) return 0;
   if (!metrics) return investedAmount;
-  const bestReturn = metrics.r_ytd ?? metrics.r_1y ?? metrics.r_3m ?? metrics.r_1m ?? 0;
-  return investedAmount * (1 + bestReturn);
+  const raw = metrics.r_ytd ?? metrics.r_1y ?? metrics.r_3m ?? metrics.r_1m ?? 0;
+  // Sanity check: returns must be a decimal fraction (e.g. 0.10 = 10%).
+  // If the value is stored as a whole-number percentage (e.g. 10 instead of 0.10),
+  // or is otherwise corrupted, cap to a safe range to prevent absurd portfolio values.
+  const bestReturn = (typeof raw === "number" && isFinite(raw) && raw > -1 && raw < 5)
+    ? raw
+    : 0;
+  return Number((investedAmount * (1 + bestReturn)).toFixed(2));
 };
 
 export const getStrategyReturnPct = (metrics) => {
   if (!metrics) return 0;
-  const bestReturn = metrics.r_ytd ?? metrics.r_1y ?? metrics.r_3m ?? metrics.r_1m ?? 0;
+  const raw = metrics.r_ytd ?? metrics.r_1y ?? metrics.r_3m ?? metrics.r_1m ?? 0;
+  const bestReturn = (typeof raw === "number" && isFinite(raw) && raw > -1 && raw < 5)
+    ? raw
+    : 0;
   return bestReturn * 100;
+};
+
+export const computeExtendedSummary = (analytics) => {
+  const curves = analytics?.curves || {};
+  const allPoints = Object.values(curves).flat().map(p => p?.v).filter(v => v != null);
+
+  if (allPoints.length < 2) {
+    return { volatility: null, sharpe_ratio: null, max_drawdown: null, pct_positive_months: null };
+  }
+
+  // Daily returns from index values
+  const returns = [];
+  for (let i = 1; i < allPoints.length; i++) {
+    returns.push((allPoints[i] - allPoints[i - 1]) / allPoints[i - 1]);
+  }
+
+  const mean = returns.reduce((s, r) => s + r, 0) / returns.length;
+  const variance = returns.reduce((s, r) => s + (r - mean) ** 2, 0) / returns.length;
+  const volatility = Math.sqrt(variance * 252); // annualised
+
+  const sharpe_ratio = volatility > 0 ? (mean * 252) / volatility : null;
+
+  // Max drawdown
+  let peak = allPoints[0];
+  let max_drawdown = 0;
+  for (const v of allPoints) {
+    if (v > peak) peak = v;
+    const dd = (v - peak) / peak;
+    if (dd < max_drawdown) max_drawdown = dd;
+  }
+
+  // % positive months from calendar_returns
+  const calReturns = analytics?.calendar_returns || [];
+  const positiveMonths = calReturns.filter(r => r?.return > 0).length;
+  const pct_positive_months = calReturns.length > 0 ? positiveMonths / calReturns.length : null;
+
+  return { volatility, sharpe_ratio, max_drawdown, pct_positive_months };
 };

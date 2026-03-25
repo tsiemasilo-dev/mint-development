@@ -19,6 +19,7 @@ import {
   getStoredCredentials
 } from '../lib/biometrics.js';
 
+
 const OTP_LENGTH = 6;
 const OTP_EXPIRY_TIME = 180;
 const RESEND_COOLDOWN = 30;
@@ -34,6 +35,7 @@ const AuthForm = ({ initialStep = 'email', onSignupComplete, onLoginComplete, on
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);

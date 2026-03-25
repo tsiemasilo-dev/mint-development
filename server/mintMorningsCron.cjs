@@ -3,7 +3,10 @@ const { Resend } = require('resend');
 let _resend = null;
 function getResend() {
   if (!_resend) {
-    if (!process.env.RESEND_API_KEY) throw new Error('RESEND_API_KEY is not set');
+    if (!process.env.RESEND_API_KEY) {
+      // Return null instead of throwing an error to allow the app to run.
+      return null;
+    }
     _resend = new Resend(process.env.RESEND_API_KEY);
   }
   return _resend;
@@ -39,451 +42,206 @@ function textToHtml(text) {
   return text.replace(/\n/g, '<br/>');
 }
 
+function truncateNewsContent(text, maxCharsPerPara = 280, maxParas = 3) {
+  if (!text) return '';
+  const paras = text.split(/\n+/).map(p => p.trim()).filter(Boolean);
+  const limited = paras.slice(0, maxParas).map(p => {
+    if (p.length <= maxCharsPerPara) return p;
+    const cut = p.lastIndexOf(' ', maxCharsPerPara);
+    return (cut > 0 ? p.slice(0, cut) : p.slice(0, maxCharsPerPara)) + '\u2026';
+  });
+  return limited.join('\n');
+}
+
 function buildMintMorningsHtml(articles) {
-  const F = 'Inter,Segoe UI,Arial,sans-serif';
+  const F = `-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Inter,sans-serif`;
+  const LOGO = `https://mfxnghmuccevsxwcetej.supabase.co/storage/v1/object/public/Mint%20Assets/mint-logo.svg`;
+
   const heroArticle = articles[0];
   const heroBody = heroArticle.body_text || heroArticle.body || '';
-  const heroSource = heroArticle.source || 'Alliance News South Africa';
-  const heroAuthor = heroArticle.author || '';
   const parsed = parseArticleSections(heroBody);
 
   const marketSections = ['MARKETS'];
   const calendarSections = ['COMPANY CALENDAR', 'ECONOMIC CALENDAR'];
   const marketOpenSections = [...marketSections, ...calendarSections, 'ECONOMICS'];
 
-  const marketData = parsed.sections.filter(s => marketSections.includes(s.name));
-  const calendarData = parsed.sections.filter(s => calendarSections.includes(s.name));
-  const economicsData = parsed.sections.filter(s => s.name === 'ECONOMICS');
-  const newsSections = parsed.sections.filter(s => !marketOpenSections.includes(s.name));
+  const publishedDate = heroArticle.published_at ? new Date(heroArticle.published_at) : new Date();
+  const formattedDate = publishedDate.toLocaleDateString('en-ZA', { year: 'numeric', month: 'long', day: 'numeric' });
+  const formattedTime = publishedDate.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
 
-  const topHeadlines = newsSections.length > 0
-    ? newsSections.slice(0, 3).map(s => {
-        const firstLine = (s.content || '').split('\n')[0].trim();
-        return firstLine.length > 80 ? firstLine.substring(0, 80) + '...' : firstLine;
-      }).filter(Boolean)
-    : [];
-
-  const hasMarketOpen = marketData.length > 0 || calendarData.length > 0;
-
-  let marketOpenCard = '';
-  if (hasMarketOpen) {
-    let marketsBox = '';
-    if (marketData.length > 0) {
-      marketsBox = `
-                      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:14px;">
-<tr>
-<td style="padding:12px 12px;border-radius:18px;background:#FAFAFF;border:1px solid #ECEBFF;">
-<div style="font-family:${F};font-size:13px;color:#7B8194;font-weight:700;">
-                              MARKETS
-</div>
-
-                            <div style="margin-top:10px;font-family:${F};font-size:14px;line-height:20px;color:#121526;">
-                              ${textToHtml(marketData[0].content)}
-</div>
-
-                            <div style="margin-top:14px;font-family:${F};font-size:12px;line-height:17px;color:#7B8194;">
-                              Figures reflect changes since the prior Johannesburg equities close.
-</div>
-</td>
-</tr>
-</table>`;
-    }
-
-    let calendarBox = '';
-    if (calendarData.length > 0 || economicsData.length > 0) {
-      const calItems = [...calendarData, ...economicsData].map(s => {
-        return `
-                            <div style="margin-top:14px;font-family:${F};font-size:13px;color:#7B8194;font-weight:700;">
-                              ${s.name}
-</div>
-<div style="margin-top:8px;font-family:${F};font-size:14px;line-height:20px;color:#121526;">
-                              ${textToHtml(s.content)}
-</div>`;
-      }).join('');
-
-      calendarBox = `
-                      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:14px;">
-<tr>
-<td style="padding:12px 12px;border-radius:18px;background:#FFFFFF;border:1px solid #F0F1F6;">
-${calItems}
-</td>
-</tr>
-</table>`;
-    }
-
-    marketOpenCard = `
-            <!-- Before market open -->
-<tr>
-<td class="px" style="padding:16px 24px 0 24px;">
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"
-                  class="card" style="background:#FFFFFF;border-radius:26px;box-shadow:0 14px 38px rgba(28,22,58,0.08);overflow:hidden;">
-<tr>
-<td style="padding:18px 20px;">
-<div class="h2" style="font-family:${F};font-size:18px;line-height:24px;color:#121526;font-weight:800;">
-                        Before the market open
-</div>
-<div class="muted" style="margin-top:6px;font-family:${F};font-size:13px;line-height:18px;color:#7B8194;">
-                        Key levels and overnight moves
-</div>
-${marketsBox}
-${calendarBox}
-
-                      <div style="margin-top:16px;">
-<a href="https://www.mymint.co.za" class="btn"
-                          style="background:#6D28FF;border-radius:14px;color:#FFFFFF;display:inline-block;font-family:${F};font-size:14px;font-weight:700;line-height:16px;padding:12px 16px;text-decoration:none;">
-                          Read more on Mint
-</a>
-</div>
-</td>
-</tr>
-</table>
-</td>
-</tr>`;
+  function sectionTitle(name) {
+    return name.charAt(0) + name.slice(1).toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
   }
 
-  const newsCards = newsSections.map((section) => {
+  function sectionHeading(label) {
     return `
-            <!-- ${section.name} -->
-<tr>
-<td class="px" style="padding:16px 24px 0 24px;">
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"
-                  class="card" style="background:#FFFFFF;border-radius:26px;box-shadow:0 14px 38px rgba(28,22,58,0.08);overflow:hidden;">
-<tr>
-<td style="padding:18px 20px;">
-<div class="h2" style="font-family:${F};font-size:18px;line-height:24px;color:#121526;font-weight:800;">
-                        ${section.name.charAt(0) + section.name.slice(1).toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}
-</div>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:16px 0 8px;">
+        <tr>
+          <td style="width:1px;white-space:nowrap;padding-right:10px;font-family:${F};font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#0f172a;">${label}</td>
+          <td style="border-bottom:1px solid #e2e8f0;">&nbsp;</td>
+        </tr>
+      </table>`;
+  }
 
-                      <div style="margin-top:10px;font-family:${F};font-size:14px;line-height:20px;color:#4B5166;">
-                        ${textToHtml(section.content)}
-</div>
+  function articleCard(article, isHero) {
+    const body = article.body_text || article.body || '';
+    const src = article.source || 'Alliance News South Africa';
+    const author = article.author || '';
+    const artParsed = isHero ? parsed : parseArticleSections(body);
+    const artMarketData = artParsed.sections.filter(s => marketSections.includes(s.name));
+    const artCalendarData = artParsed.sections.filter(s => calendarSections.includes(s.name));
+    const artEconomicsData = artParsed.sections.filter(s => s.name === 'ECONOMICS');
+    const artNewsSections = artParsed.sections.filter(s => !marketOpenSections.includes(s.name));
+    const artIndustries = Array.isArray(article.industries) ? article.industries : [];
+    const artMarkets = Array.isArray(article.markets) ? article.markets : [];
+    const topics = [...artIndustries, ...artMarkets];
 
-                      <div style="margin-top:14px;">
-<a href="https://www.mymint.co.za" class="btn"
-                          style="background:#6D28FF;border-radius:14px;color:#FFFFFF;display:inline-block;font-family:${F};font-size:14px;font-weight:700;line-height:16px;padding:12px 16px;text-decoration:none;">
-                          Read more on Mint
-</a>
-</div>
-</td>
-</tr>
-</table>
-</td>
-</tr>`;
-  }).join('\n');
+    let bodyHtml = artParsed.intro
+      ? `<p style="margin:0 0 10px;font-family:${F};font-size:14px;line-height:1.6;color:#334155;">${textToHtml(artParsed.intro)}</p>`
+      : '';
 
-  const topHeadlinesBox = topHeadlines.length > 0
-    ? `
-                  <tr>
-<td style="padding:0 20px 18px 20px;">
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-<tr>
-<td style="padding:14px 14px;border-radius:18px;background:#F4F2FF;border:1px solid #E8E5FF;">
-<div class="h2" style="font-family:${F};font-size:17px;line-height:22px;color:#121526;font-weight:800;">
-                              Top side headlines
-</div>
-<div style="margin-top:8px;font-family:${F};font-size:14px;line-height:20px;color:#4B5166;">
-                              ${topHeadlines.join('<br/>')}
-</div>
-
-                            <div style="margin-top:14px;">
-<a href="https://www.mymint.co.za" class="btn"
-                                style="background:#6D28FF;border-radius:14px;color:#FFFFFF;display:inline-block;font-family:${F};font-size:14px;font-weight:700;line-height:16px;padding:12px 16px;text-decoration:none;">
-                                Read more on Mint
-</a>
-</div>
-</td>
-</tr>
-</table>
-</td>
-</tr>`
-    : `
-                  <tr>
-<td style="padding:0 20px 18px 20px;">
-<div>
-<a href="https://www.mymint.co.za" class="btn"
-                          style="background:#6D28FF;border-radius:14px;color:#FFFFFF;display:inline-block;font-family:${F};font-size:14px;font-weight:700;line-height:16px;padding:12px 16px;text-decoration:none;">
-                          Read more on Mint
-</a>
-</div>
-</td>
-</tr>`;
-
-  function buildArticleCards(article) {
-    const articleBody = article.body_text || article.body || '';
-    const articleParsed = parseArticleSections(articleBody);
-    const articleSource = article.source || 'Alliance News South Africa';
-    const articleAuthor = article.author || '';
-
-    const artMarketData = articleParsed.sections.filter(s => marketSections.includes(s.name));
-    const artCalendarData = articleParsed.sections.filter(s => calendarSections.includes(s.name));
-    const artEconomicsData = articleParsed.sections.filter(s => s.name === 'ECONOMICS');
-    const artNewsSections = articleParsed.sections.filter(s => !marketOpenSections.includes(s.name));
-    const artHasMarketOpen = artMarketData.length > 0 || artCalendarData.length > 0;
-
-    let cards = '';
-
-    cards += `
-            <!-- Article Hero -->
-<tr>
-<td class="px" style="padding:16px 24px 0 24px;">
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"
-                  class="card" style="background:#FFFFFF;border-radius:26px;box-shadow:0 14px 38px rgba(28,22,58,0.08);overflow:hidden;">
-<tr>
-<td style="padding:20px 20px 14px 20px;">
-<div style="font-family:${F};font-size:12px;color:#7B8194;">
-                        ${articleSource}, formatted for Mint
-</div>
-
-                      <div class="h2" style="margin-top:10px;font-family:${F};font-size:18px;line-height:24px;color:#121526;font-weight:800;">
-                        ${article.title}
-</div>
-
-                      <div style="margin-top:10px;font-family:${F};font-size:14px;line-height:20px;color:#4B5166;">
-                        ${textToHtml(articleParsed.intro)}
-</div>
-
-                      ${articleAuthor ? `<div style="margin-top:14px;font-family:${F};font-size:13px;color:#7B8194;">
-                        By ${articleAuthor}
-</div>` : ''}
-</td>
-</tr>
-<tr>
-<td style="padding:0 20px 18px 20px;">
-<div>
-<a href="https://www.mymint.co.za" class="btn"
-                          style="background:#6D28FF;border-radius:14px;color:#FFFFFF;display:inline-block;font-family:${F};font-size:14px;font-weight:700;line-height:16px;padding:12px 16px;text-decoration:none;">
-                          Read more on Mint
-</a>
-</div>
-</td>
-</tr>
-</table>
-</td>
-</tr>`;
-
-    if (artHasMarketOpen) {
-      let artMarketsBox = '';
-      if (artMarketData.length > 0) {
-        artMarketsBox = `
-                      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:14px;">
-<tr>
-<td style="padding:12px 12px;border-radius:18px;background:#FAFAFF;border:1px solid #ECEBFF;">
-<div style="font-family:${F};font-size:13px;color:#7B8194;font-weight:700;">MARKETS</div>
-<div style="margin-top:10px;font-family:${F};font-size:14px;line-height:20px;color:#121526;">
-                              ${textToHtml(artMarketData[0].content)}
-</div>
-<div style="margin-top:14px;font-family:${F};font-size:12px;line-height:17px;color:#7B8194;">
-                              Figures reflect changes since the prior close.
-</div>
-</td>
-</tr>
-</table>`;
-      }
-
-      let artCalendarBox = '';
-      if (artCalendarData.length > 0 || artEconomicsData.length > 0) {
-        const artCalItems = [...artCalendarData, ...artEconomicsData].map(s => {
-          return `
-<div style="margin-top:14px;font-family:${F};font-size:13px;color:#7B8194;font-weight:700;">${s.name}</div>
-<div style="margin-top:8px;font-family:${F};font-size:14px;line-height:20px;color:#121526;">${textToHtml(s.content)}</div>`;
-        }).join('');
-
-        artCalendarBox = `
-                      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:14px;">
-<tr>
-<td style="padding:12px 12px;border-radius:18px;background:#FFFFFF;border:1px solid #F0F1F6;">
-${artCalItems}
-</td>
-</tr>
-</table>`;
-      }
-
-      cards += `
-<tr>
-<td class="px" style="padding:16px 24px 0 24px;">
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"
-                  class="card" style="background:#FFFFFF;border-radius:26px;box-shadow:0 14px 38px rgba(28,22,58,0.08);overflow:hidden;">
-<tr>
-<td style="padding:18px 20px;">
-<div class="h2" style="font-family:${F};font-size:18px;line-height:24px;color:#121526;font-weight:800;">
-                        Before the market open
-</div>
-<div class="muted" style="margin-top:6px;font-family:${F};font-size:13px;line-height:18px;color:#7B8194;">
-                        Key levels and overnight moves
-</div>
-${artMarketsBox}
-${artCalendarBox}
-                      <div style="margin-top:16px;">
-<a href="https://www.mymint.co.za" class="btn"
-                          style="background:#6D28FF;border-radius:14px;color:#FFFFFF;display:inline-block;font-family:${F};font-size:14px;font-weight:700;line-height:16px;padding:12px 16px;text-decoration:none;">
-                          Read more on Mint
-</a>
-</div>
-</td>
-</tr>
-</table>
-</td>
-</tr>`;
+    if (artMarketData.length > 0) {
+      bodyHtml += sectionHeading('Markets');
+      bodyHtml += `
+        <div style="background:#fafafa;border:1px solid #f1f5f9;border-radius:10px;padding:12px 14px;margin-bottom:8px;">
+          <p style="margin:0;font-family:${F};font-size:13px;line-height:1.7;color:#334155;">${textToHtml(artMarketData[0].content)}</p>
+          <p style="margin:6px 0 0;font-family:${F};font-size:11px;color:#94a3b8;">Changes since prior Johannesburg equities close.</p>
+        </div>`;
     }
 
-    artNewsSections.forEach((section) => {
-      cards += `
-<tr>
-<td class="px" style="padding:16px 24px 0 24px;">
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"
-                  class="card" style="background:#FFFFFF;border-radius:26px;box-shadow:0 14px 38px rgba(28,22,58,0.08);overflow:hidden;">
-<tr>
-<td style="padding:18px 20px;">
-<div class="h2" style="font-family:${F};font-size:18px;line-height:24px;color:#121526;font-weight:800;">
-                        ${section.name.charAt(0) + section.name.slice(1).toLowerCase().replace(/\\b\\w/g, c => c.toUpperCase())}
-</div>
-<div style="margin-top:10px;font-family:${F};font-size:14px;line-height:20px;color:#4B5166;">
-                        ${textToHtml(section.content)}
-</div>
-                      <div style="margin-top:14px;">
-<a href="https://www.mymint.co.za" class="btn"
-                          style="background:#6D28FF;border-radius:14px;color:#FFFFFF;display:inline-block;font-family:${F};font-size:14px;font-weight:700;line-height:16px;padding:12px 16px;text-decoration:none;">
-                          Read more on Mint
-</a>
-</div>
-</td>
-</tr>
-</table>
-</td>
-</tr>`;
+    [...artCalendarData, ...artEconomicsData].forEach(s => {
+      bodyHtml += sectionHeading(sectionTitle(s.name));
+      bodyHtml += `
+        <div style="background:#fafafa;border:1px solid #f1f5f9;border-radius:10px;padding:12px 14px;margin-bottom:8px;">
+          <p style="margin:0;font-family:${F};font-size:13px;line-height:1.7;color:#334155;">${textToHtml(s.content)}</p>
+        </div>`;
     });
 
-    return cards;
+    artNewsSections.forEach(s => {
+      bodyHtml += sectionHeading(sectionTitle(s.name));
+      bodyHtml += `<p style="margin:0 0 10px;font-family:${F};font-size:14px;line-height:1.6;color:#334155;">${textToHtml(truncateNewsContent(s.content))}</p>`;
+    });
+
+    const authorHtml = author
+      ? `<p style="margin:10px 0 0;font-family:${F};font-size:11px;color:#94a3b8;font-style:italic;">By ${author}</p>`
+      : '';
+
+    const topicsHtml = topics.length > 0 ? `
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid #f1f5f9;">
+        <div style="font-family:${F};font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:#64748b;margin-bottom:8px;">Related Topics</div>
+        <div>${topics.map(t => `<span style="display:inline-block;border:1px solid #e2e8f0;border-radius:9999px;padding:3px 10px;font-family:${F};font-size:11px;font-weight:500;color:#64748b;margin:0 5px 5px 0;">${t}</span>`).join('')}</div>
+      </div>` : '';
+
+    const cardHeader = `
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-bottom:1px solid #f1f5f9;padding-bottom:16px;margin-bottom:16px;">
+        <tr>
+          <td style="padding-right:12px;vertical-align:middle;" width="44">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="width:44px;height:44px;border-radius:50%;background:#f1f5f9;text-align:center;vertical-align:middle;">
+                  <img src="${LOGO}" height="20" alt="Mint" style="display:inline-block;height:20px;border:0;outline:none;" />
+                </td>
+              </tr>
+            </table>
+          </td>
+          <td style="vertical-align:middle;">
+            <div style="font-family:${F};font-size:13px;font-weight:600;color:#0f172a;line-height:1.3;">Mint News</div>
+            <div style="font-family:${F};font-size:11px;color:#64748b;margin-top:2px;">${formattedDate} &bull; ${formattedTime}</div>
+          </td>
+        </tr>
+      </table>`;
+
+    const titleSize = isHero ? '22px' : '18px';
+    const titleWeight = '700';
+
+    return `
+    <tr>
+      <td style="padding:${isHero ? '0' : '12px'} 16px 0;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+          class="card" style="max-width:600px;background:#ffffff;border-radius:24px;box-shadow:0 2px 12px rgba(0,0,0,0.08);overflow:hidden;">
+          <tr>
+            <td style="padding:22px 22px 0 22px;">
+              ${cardHeader}
+              <div style="margin-bottom:10px;">
+                <span style="display:inline-block;background:#f1f5f9;border-radius:9999px;padding:3px 10px;font-family:${F};font-size:11px;font-weight:600;color:#475569;margin-right:6px;">${src}</span>
+                ${article.channel ? `<span style="display:inline-block;background:#ede9fe;border-radius:9999px;padding:3px 10px;font-family:${F};font-size:11px;font-weight:600;color:#6d28d9;">${article.channel}</span>` : ''}
+              </div>
+              <div style="font-family:${F};font-size:${titleSize};line-height:1.25;font-weight:${titleWeight};color:#0f172a;margin-bottom:12px;letter-spacing:-0.3px;">${article.title}</div>
+              ${bodyHtml}
+              ${authorHtml}
+              ${topicsHtml}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:16px 22px 22px;">
+              <a href="https://www.mymint.co.za" style="background:#6d28d9;border-radius:10px;color:#ffffff;display:inline-block;font-family:${F};font-size:13px;font-weight:700;line-height:1;padding:10px 18px;text-decoration:none;">Read more on Mint</a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>`;
   }
 
-  const restArticleCards = articles.slice(1).map(buildArticleCards).join('\n');
+  const heroCardHtml = articleCard(heroArticle, true);
+  const restCardsHtml = articles.slice(1).map(a => articleCard(a, false)).join('\n');
 
-  return `<!doctype html>
-<html lang="en">
+  return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html dir="ltr" lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<meta name="x-apple-disable-message-reformatting" />
-<title>Mint News</title>
-<style>
-      @media (max-width: 620px) {
-        .container { width: 100% !important; }
-        .px { padding-left: 16px !important; padding-right: 16px !important; }
-        .card { border-radius: 20px !important; }
-        .h1 { font-size: 22px !important; line-height: 28px !important; }
-        .h2 { font-size: 16px !important; line-height: 22px !important; }
-        .muted { font-size: 13px !important; }
-        .btn { display: block !important; width: 100% !important; }
-      }
-</style>
+  <meta content="width=device-width" name="viewport" />
+  <meta content="text/html; charset=UTF-8" http-equiv="Content-Type" />
+  <meta name="x-apple-disable-message-reformatting" />
+  <meta content="IE=edge" http-equiv="X-UA-Compatible" />
+  <style>
+    @media only screen and (max-width: 600px) {
+      .wrap { padding: 12px 8px !important; }
+      .card { border-radius: 16px !important; }
+      .card td { padding-left: 16px !important; padding-right: 16px !important; }
+    }
+  </style>
 </head>
-
-  <body style="margin:0;padding:0;background:#F6F7FB;">
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
-      Johannesburg market preview, SA news, global headlines.
-</div>
-
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#F6F7FB;">
-<tr>
-<td align="center" style="padding:24px 12px;">
-<table role="presentation" class="container" width="600" cellspacing="0" cellpadding="0" border="0" style="width:600px;max-width:600px;">
-
-            <!-- Header -->
-<tr>
-<td class="px" style="padding:6px 24px 14px 24px;">
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-<tr>
-<td align="left" style="padding:0;">
-<img
-                        src="https://www.mymint.co.za/assets/mint-logo.svg"
-                        width="110"
-                        alt="Mint"
-                        style="display:block;border:0;outline:none;text-decoration:none;height:auto;"
-                      />
-</td>
-<td align="right" style="padding:0;">
-<span style="font-family:${F};font-size:13px;color:#7B8194;">
-                        Market Brief
-</span>
-</td>
-</tr>
-</table>
-</td>
-</tr>
-
-            <!-- Hero -->
-<tr>
-<td class="px" style="padding:0 24px;">
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"
-                  class="card" style="background:#FFFFFF;border-radius:26px;box-shadow:0 14px 38px rgba(28,22,58,0.10);overflow:hidden;">
-<tr>
-<td style="padding:20px 20px 14px 20px;">
-<div style="font-family:${F};font-size:12px;color:#7B8194;">
-                        ${heroSource}, formatted for Mint
-</div>
-
-                      <div class="h1" style="margin-top:10px;font-family:${F};font-size:26px;line-height:32px;color:#121526;font-weight:800;">
-                        ${heroArticle.title}
-</div>
-
-                      <div style="margin-top:10px;font-family:${F};font-size:14px;line-height:20px;color:#4B5166;">
-                        ${textToHtml(parsed.intro)}
-</div>
-
-                      ${heroAuthor ? `<div style="margin-top:14px;font-family:${F};font-size:13px;color:#7B8194;">
-                        By ${heroAuthor}
-</div>` : ''}
-</td>
-</tr>
-
-${topHeadlinesBox}
-</table>
-</td>
-</tr>
-
-${marketOpenCard}
-
-${newsCards}
-
-${restArticleCards}
-
-            <!-- Footer -->
-<tr>
-<td class="px" style="padding:18px 24px 28px 24px;">
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-<tr>
-<td style="padding:16px 18px;background:#FFFFFF;border:1px solid #F0F1F6;border-radius:22px;">
-<div style="font-family:${F};font-size:12px;line-height:17px;color:#7B8194;">
-                        Alliance News South Africa covers every actively traded company listed on the Johannesburg Stock Exchange, large and small, and the global influences upon South African markets and the local economy.
-<br/><br/>
-                        Copyright &copy; ${new Date().getFullYear()} Alliance News Ltd. All rights reserved.
-</div>
-<div style="margin-top:12px;font-family:${F};font-size:12px;color:#7B8194;">
-                        You're receiving this on Mint. <a href="https://www.mymint.co.za" style="color:#6D28FF;text-decoration:none;font-weight:700;">Open Mint</a>
-</div>
-</td>
-</tr>
-</table>
-</td>
-</tr>
-
-          </table>
-</td>
-</tr>
-</table>
+<body style="margin:0;padding:0;background:#f1f5f9;">
+  <div style="display:none;overflow:hidden;line-height:1px;opacity:0;max-height:0;max-width:0;">
+    Johannesburg market preview, SA news, global headlines.
+  </div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f1f5f9">
+    <tr>
+      <td class="wrap" align="center" style="padding:32px 16px 40px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;">
+          ${heroCardHtml}
+          ${restCardsHtml}
+          <tr>
+            <td style="padding:12px 16px 0;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="padding:14px 18px;background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;">
+                    <div style="font-family:${F};font-size:11px;line-height:1.6;color:#94a3b8;">
+                      Alliance News South Africa covers every actively traded company listed on the Johannesburg Stock Exchange, large and small, and the global influences upon South African markets and the local economy.<br/><br/>
+                      &copy; ${new Date().getFullYear()} Alliance News Ltd. All rights reserved &nbsp;&bull;&nbsp;
+                      <a href="https://www.mymint.co.za" style="color:#6d28d9;text-decoration:none;font-weight:700;">Open Mint</a>
+                    </div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>`;
 }
 
 async function sendEmailToAllUsers(supabaseAdmin, article) {
-  if (!process.env.RESEND_API_KEY) {
-    console.error('[MINT MORNINGS] No RESEND_API_KEY configured');
+  const resend = getResend();
+  if (!resend) {
+    console.warn('[MINT MORNINGS] No RESEND_API_KEY configured, cannot send emails.');
     return;
   }
 
   const docId = article.doc_id;
   console.log(`[MINT MORNINGS] Sending article doc_id=${docId} "${article.title}" to all users...`);
-
   const html = buildMintMorningsHtml([article]);
 
   const { data: { users }, error: usersError } = await supabaseAdmin.auth.admin.listUsers();
@@ -507,7 +265,7 @@ async function sendEmailToAllUsers(supabaseAdmin, article) {
   for (let i = 0; i < confirmedUsers.length; i++) {
     const user = confirmedUsers[i];
     try {
-      const resp = await getResend().emails.send({
+      const resp = await resend.emails.send({
         from: 'MINT MORNINGS <mornings@mymint.co.za>',
         to: [user.email],
         subject: `MINT MORNINGS — ${article.title}`,
@@ -671,8 +429,8 @@ function startMintMorningsListener(supabaseAdmin) {
     return null;
   }
 
-  if (!process.env.RESEND_API_KEY) {
-    console.error('[MINT MORNINGS] No RESEND_API_KEY — listener not started');
+  if (!getResend()) {
+    console.warn('[MINT MORNINGS] No RESEND_API_KEY configured. Mint Mornings email listener will not start.');
     return null;
   }
 
@@ -694,23 +452,30 @@ function startMintMorningsListener(supabaseAdmin) {
   return pollingInterval;
 }
 
-async function sendTestEmail(supabaseAdmin, testEmail) {
+async function sendTestEmail(supabaseAdmin, testEmail, titleSearch) {
   if (!supabaseAdmin) {
     console.error('[MINT MORNINGS TEST] No Supabase admin client available');
     return { success: false, error: 'No database connection' };
   }
-  if (!process.env.RESEND_API_KEY) {
+  const resend = getResend();
+  if (!resend) {
     console.error('[MINT MORNINGS TEST] No RESEND_API_KEY configured');
     return { success: false, error: 'No RESEND_API_KEY' };
   }
-  console.log(`[MINT MORNINGS TEST] Sending test email to ${testEmail}...`);
+  console.log(`[MINT MORNINGS TEST] Sending test email to ${testEmail}${titleSearch ? ` (search: "${titleSearch}")` : ''}...`);
 
-  const { data: articles, error: articlesError } = await supabaseAdmin
+  let query = supabaseAdmin
     .from('News_articles')
     .select('*')
     .filter('content_types', 'cs', '"ALLBRF"')
     .order('published_at', { ascending: false })
-    .limit(1);
+    .limit(titleSearch ? 50 : 1);
+
+  if (titleSearch) {
+    query = query.ilike('title', `%${titleSearch}%`);
+  }
+
+  const { data: articles, error: articlesError } = await query;
 
   if (articlesError) {
     console.error('[MINT MORNINGS TEST] Error fetching articles:', articlesError.message);
@@ -726,7 +491,7 @@ async function sendTestEmail(supabaseAdmin, testEmail) {
   const html = buildMintMorningsHtml([article]);
 
   try {
-    const resendResponse = await getResend().emails.send({
+    const resendResponse = await resend.emails.send({
       from: 'MINT MORNINGS <mornings@mymint.co.za>',
       to: [testEmail],
       subject: `MINT MORNINGS — ${article.title}`,

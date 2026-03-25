@@ -9,6 +9,6 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.error('VITE_SUPABASE_ANON_KEY:', supabaseAnonKey ? 'set' : 'not set');
 }
 
-export const supabase = supabaseUrl && supabaseAnonKey 
+export const supabase = supabaseUrl && supabaseAnonKey
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
