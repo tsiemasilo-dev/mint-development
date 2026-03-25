@@ -901,7 +901,6 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
                      <img src="/assets/mint-logo.png" alt="Mint" className="h-5" />
                      <span className="text-[10px] font-black uppercase tracking-widest opacity-70">credit</span>
                   </div>
-                  <NotificationBell onClick={onOpenNotifications} />
                </header>
 
                <div className="px-6 pb-6 pt-2 w-full flex items-center justify-between bg-white border-b border-slate-100 sticky top-0 z-10 shadow-sm">
