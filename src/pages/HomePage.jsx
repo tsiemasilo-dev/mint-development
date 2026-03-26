@@ -663,7 +663,13 @@ const HomePage = ({
                 >
                   Wealth
                 </button>
-                <span className="px-2 py-1.5 text-xs font-semibold text-white/30 cursor-default">Credit</span>
+                <button
+                  type="button"
+                  onClick={onOpenCredit}
+                  className="rounded-full px-3 py-1.5 text-xs font-semibold text-white/70 transition-all hover:bg-white/10 hover:text-white"
+                >
+                  Credit
+                </button>
                 <span className="px-2 py-1.5 text-xs font-semibold text-white/30 cursor-default">Transact</span>
               </div>
             </div>
