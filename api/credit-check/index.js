@@ -246,10 +246,20 @@ export default async function handler(req, res) {
       const packLastName = info?.lastNameEn || info?.lastName || idCardDoc?.lastNameEn || idCardDoc?.lastName || null;
       const packPhone = pack?.phone || null;
 
+      const deriveGenderFromSaId = (idValue) => {
+        const raw = String(idValue || '').replace(/\D/g, '');
+        if (raw.length !== 13) return null;
+        const genderDigits = Number(raw.slice(6, 10));
+        if (!Number.isFinite(genderDigits)) return null;
+        return genderDigits >= 5000 ? 'M' : 'F';
+      };
+      const inferredGender = deriveGenderFromSaId(packIdentity || normalizedOverrides.identity_number);
+
       if (!normalizedOverrides.identity_number && packIdentity) normalizedOverrides.identity_number = packIdentity;
       if (!normalizedOverrides.forename && packFirstName) normalizedOverrides.forename = packFirstName;
       if (!normalizedOverrides.surname && packLastName) normalizedOverrides.surname = packLastName;
       if (!normalizedOverrides.date_of_birth && packDob) normalizedOverrides.date_of_birth = packDob;
+      if (!normalizedOverrides.gender && inferredGender) normalizedOverrides.gender = inferredGender;
       if (!normalizedOverrides.address1 && packStreet) normalizedOverrides.address1 = packStreet;
       if (!normalizedOverrides.address2 && packTown) normalizedOverrides.address2 = packTown;
       if (!normalizedOverrides.address4 && packTown) normalizedOverrides.address4 = packTown;
