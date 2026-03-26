@@ -4041,6 +4041,52 @@ app.post("/api/credit-check", async (req, res) => {
       }
     }
 
+    // Sumsub pack_details enrichment — fallback for postal/address/identity fields
+    if (db && userId && userId !== 'anon-dev') {
+      try {
+        const { data: packRow } = await db
+          .from('user_onboarding_pack_details')
+          .select('pack_details')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        const pack = packRow?.pack_details || {};
+        const info = pack?.info || {};
+        const addresses = Array.isArray(info?.addresses) ? info.addresses : [];
+        const idDocs = Array.isArray(info?.idDocs) ? info.idDocs : [];
+
+        const firstAddress = addresses.find(a => a && (a.postCode || a.street || a.town)) || null;
+        const addressDoc = idDocs.find(d => d?.address?.postCode || d?.rawAddress || d?.address?.street) || null;
+        const idCardDoc = idDocs.find(d => d?.number) || null;
+
+        const packPostalCode = firstAddress?.postCode || addressDoc?.address?.postCode || null;
+        const packStreet = firstAddress?.street || addressDoc?.address?.street || null;
+        const packTown = firstAddress?.town || addressDoc?.address?.town || null;
+        const packFormatted = firstAddress?.formattedAddress || addressDoc?.address?.formattedAddress || addressDoc?.rawAddress || null;
+        const packDob = info?.dob || idCardDoc?.dob || null;
+        const packIdentity = idCardDoc?.number || null;
+        const packFirstName = info?.firstNameEn || info?.firstName || idCardDoc?.firstNameEn || idCardDoc?.firstName || null;
+        const packLastName = info?.lastNameEn || info?.lastName || idCardDoc?.lastNameEn || idCardDoc?.lastName || null;
+        const packPhone = pack?.phone || null;
+
+        if (!normalizedOverrides.identity_number && packIdentity) normalizedOverrides.identity_number = packIdentity;
+        if (!normalizedOverrides.forename && packFirstName) normalizedOverrides.forename = packFirstName;
+        if (!normalizedOverrides.surname && packLastName) normalizedOverrides.surname = packLastName;
+        if (!normalizedOverrides.date_of_birth && packDob) normalizedOverrides.date_of_birth = packDob;
+        if (!normalizedOverrides.address1 && packStreet) normalizedOverrides.address1 = packStreet;
+        if (!normalizedOverrides.address2 && packTown) normalizedOverrides.address2 = packTown;
+        if (!normalizedOverrides.address4 && packTown) normalizedOverrides.address4 = packTown;
+        if (!normalizedOverrides.postal_code && packPostalCode) normalizedOverrides.postal_code = String(packPostalCode);
+        if (!normalizedOverrides.cell_tel_no && packPhone) normalizedOverrides.cell_tel_no = packPhone;
+
+        if (!normalizedOverrides.address1 && packFormatted) {
+          normalizedOverrides.address1 = packFormatted;
+        }
+      } catch (err) {
+        console.warn('Pack details lookup failed:', err?.message);
+      }
+    }
+
     // Onboarding enrichment
     if (db && userId && userId !== 'anon-dev') {
       try {
