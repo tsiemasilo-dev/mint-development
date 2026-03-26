@@ -4218,8 +4218,17 @@ app.post("/api/credit-check", async (req, res) => {
       ? result.creditScore : (result?.creditScoreData || {});
 
     function normalizeCreditScore(r) {
-      const c = r?.extracted?.extractedCreditScore ?? r?.creditScore ?? r?.creditScoreData?.creditScore ?? r?.creditScore?.score ?? r?.creditScoreData?.score;
-      const s = Number(c); return Number.isFinite(s) ? s : 0;
+      const candidates = [
+        r?.extracted?.extractedCreditScore,
+        typeof r?.creditScore === 'number' ? r.creditScore : r?.creditScore?.score,
+        typeof r?.creditScoreData === 'number' ? r.creditScoreData : r?.creditScoreData?.score,
+        r?.creditScoreData?.creditScore
+      ];
+      for (const c of candidates) {
+        const s = Number(c);
+        if (Number.isFinite(s) && s > 0) return s;
+      }
+      return 0;
     }
 
     const creditScoreValue = normalizeCreditScore({ ...result, creditScoreData, creditScore: creditScoreData });

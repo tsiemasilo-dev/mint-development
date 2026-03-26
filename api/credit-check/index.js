@@ -54,15 +54,17 @@ function buildUserData(overrides = {}) {
 }
 
 function normalizeCreditScore(result) {
-  const scoreCandidate =
-    result?.extracted?.extractedCreditScore ??
-    result?.creditScore ??
-    result?.creditScoreData?.creditScore ??
-    result?.creditScore?.score ??
-    result?.creditScoreData?.score;
-
-  const score = Number(scoreCandidate);
-  return Number.isFinite(score) ? score : 0;
+  const candidates = [
+    result?.extracted?.extractedCreditScore,
+    typeof result?.creditScore === 'number' ? result.creditScore : result?.creditScore?.score,
+    typeof result?.creditScoreData === 'number' ? result.creditScoreData : result?.creditScoreData?.score,
+    result?.creditScoreData?.creditScore
+  ];
+  for (const c of candidates) {
+    const s = Number(c);
+    if (Number.isFinite(s) && s > 0) return s;
+  }
+  return 0;
 }
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
