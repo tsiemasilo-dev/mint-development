@@ -4141,6 +4141,7 @@ app.post("/api/credit-check", async (req, res) => {
       ...normalizedOverrides
     };
     userPayload.postal_code = String(userPayload.postal_code || '0152').trim() || '0152';
+    userPayload.client_ref = String(userPayload.client_ref || `MINT${Date.now()}`).trim().slice(0, 20);
     if (userPayload.date_of_birth) userPayload.date_of_birth = normalizeDob(userPayload.date_of_birth);
     userPayload.user_id = overrides?.user_id || userId;
 

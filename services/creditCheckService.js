@@ -400,6 +400,13 @@ function buildCreditCheckXML(userData) {
 </soapenv:Envelope>`;
 }
 
+function sanitizeClientRef(value) {
+    const raw = String(value ?? '').trim();
+    const fallback = `MINT${Date.now()}`;
+    const base = raw || fallback;
+    return base.slice(0, 20);
+}
+
 /**
  * Parse Experian SOAP response and extract retdata
  */
@@ -774,7 +781,7 @@ async function performCreditCheck(userData, applicationId, authToken = null) {
         // Build SOAP XML request
         const soapRequest = buildCreditCheckXML({
             ...experianPayload,
-            client_ref: applicationId.toString()
+            client_ref: sanitizeClientRef(applicationId)
         });
 
         console.log('[experian] Sending SOAP request to Experian...');

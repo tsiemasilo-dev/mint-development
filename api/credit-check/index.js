@@ -48,6 +48,7 @@ function buildUserData(overrides = {}) {
   if (merged.date_of_birth) {
     merged.date_of_birth = normalizeDobForExperian(merged.date_of_birth);
   }
+  merged.client_ref = String(merged.client_ref || `MINT${Date.now()}`).trim().slice(0, 20);
 
   return merged;
 }
