@@ -227,7 +227,7 @@ const App = () => {
     if (page === currentPage) return;
     
     // Protected routes that REQUIRE onboarding
-    const protectedPages = ["deposit", "creditApply", "creditRepay"];
+    const protectedPages = ["deposit", "creditRepay"];
 
 
     if (protectedPages.includes(page) && !onboardingRef.current.loading && !onboardingRef.current.complete) {
