@@ -179,40 +179,7 @@ export default async function handler(req, res) {
     }
   }
 
-  // Profile enrichment — always fetch, fill only missing fields
-  if (supabase && userId && userId !== 'anon-dev') {
-    try {
-      const dbClient = accessToken
-        ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-            global: { headers: { Authorization: `Bearer ${accessToken}` } }
-          })
-        : supabase;
-
-      const { data: profile } = await dbClient
-        .from('profiles')
-        .select('id_number,first_name,last_name,date_of_birth,gender,phone,address_line1,address_line2,city,postal_code')
-        .eq('id', userId)
-        .maybeSingle();
-
-      if (profile) {
-        if (!normalizedOverrides.identity_number && profile.id_number) normalizedOverrides.identity_number = profile.id_number;
-        if (!normalizedOverrides.surname && profile.last_name) normalizedOverrides.surname = profile.last_name;
-        if (!normalizedOverrides.forename && profile.first_name) normalizedOverrides.forename = profile.first_name;
-        if (!normalizedOverrides.date_of_birth && profile.date_of_birth) normalizedOverrides.date_of_birth = profile.date_of_birth;
-        if (!normalizedOverrides.gender && profile.gender) normalizedOverrides.gender = profile.gender;
-        if (!normalizedOverrides.cell_tel_no && profile.phone) normalizedOverrides.cell_tel_no = profile.phone;
-        if (!normalizedOverrides.address1 && profile.address_line1) normalizedOverrides.address1 = profile.address_line1;
-        if (!normalizedOverrides.address2 && profile.address_line2) normalizedOverrides.address2 = profile.address_line2;
-        if (!normalizedOverrides.address4 && profile.city) normalizedOverrides.address4 = profile.city;
-        // Always fill postal_code from profile if not supplied by form
-        if (!normalizedOverrides.postal_code && profile.postal_code) normalizedOverrides.postal_code = profile.postal_code;
-      }
-    } catch (profileError) {
-      console.warn('Profile lookup failed:', profileError?.message || profileError);
-    }
-  }
-
-  // Sumsub pack_details enrichment — fallback for postal/address/identity fields
+  // ── PRIMARY ENRICHMENT: Sumsub pack_details (KYC-verified address/identity) ──
   if (supabase && userId && userId !== 'anon-dev') {
     try {
       const dbClient = accessToken
@@ -226,6 +193,8 @@ export default async function handler(req, res) {
         .select('pack_details')
         .eq('user_id', userId)
         .maybeSingle();
+
+      console.log('[credit-check] pack_details row found:', !!packRow);
 
       const pack = packRow?.pack_details || {};
       const info = pack?.info || {};
@@ -245,6 +214,18 @@ export default async function handler(req, res) {
       const packFirstName = info?.firstNameEn || info?.firstName || idCardDoc?.firstNameEn || idCardDoc?.firstName || null;
       const packLastName = info?.lastNameEn || info?.lastName || idCardDoc?.lastNameEn || idCardDoc?.lastName || null;
       const packPhone = pack?.phone || null;
+
+      console.log('[credit-check] pack_details extracted:', {
+        packPostalCode,
+        packStreet: packStreet ? packStreet.substring(0, 30) : null,
+        packTown,
+        packIdentity: packIdentity ? packIdentity.slice(0, 6) + '***' : null,
+        packFirstName,
+        packLastName,
+        packDob,
+        addressesCount: addresses.length,
+        idDocsCount: idDocs.length
+      });
 
       const deriveGenderFromSaId = (idValue) => {
         const raw = String(idValue || '').replace(/\D/g, '');
@@ -269,8 +250,42 @@ export default async function handler(req, res) {
       if (!normalizedOverrides.address1 && packFormatted) {
         normalizedOverrides.address1 = packFormatted;
       }
+
+      console.log('[credit-check] after pack_details enrichment, postal_code =', normalizedOverrides.postal_code || '[STILL EMPTY]');
     } catch (packError) {
       console.warn('Pack details lookup failed:', packError?.message || packError);
+    }
+  }
+
+  // Profile enrichment — secondary source, fill only still-missing fields
+  if (supabase && userId && userId !== 'anon-dev') {
+    try {
+      const dbClient = accessToken
+        ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            global: { headers: { Authorization: `Bearer ${accessToken}` } }
+          })
+        : supabase;
+
+      const { data: profile } = await dbClient
+        .from('profiles')
+        .select('id_number,first_name,last_name,date_of_birth,gender,phone,address_line1,address_line2,city,postal_code')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (profile) {
+        if (!normalizedOverrides.identity_number && profile.id_number) normalizedOverrides.identity_number = profile.id_number;
+        if (!normalizedOverrides.surname && profile.last_name) normalizedOverrides.surname = profile.last_name;
+        if (!normalizedOverrides.forename && profile.first_name) normalizedOverrides.forename = profile.first_name;
+        if (!normalizedOverrides.date_of_birth && profile.date_of_birth) normalizedOverrides.date_of_birth = profile.date_of_birth;
+        if (!normalizedOverrides.gender && profile.gender) normalizedOverrides.gender = profile.gender;
+        if (!normalizedOverrides.cell_tel_no && profile.phone) normalizedOverrides.cell_tel_no = profile.phone;
+        if (!normalizedOverrides.address1 && profile.address_line1) normalizedOverrides.address1 = profile.address_line1;
+        if (!normalizedOverrides.address2 && profile.address_line2) normalizedOverrides.address2 = profile.address_line2;
+        if (!normalizedOverrides.address4 && profile.city) normalizedOverrides.address4 = profile.city;
+        if (!normalizedOverrides.postal_code && profile.postal_code) normalizedOverrides.postal_code = profile.postal_code;
+      }
+    } catch (profileError) {
+      console.warn('Profile lookup failed:', profileError?.message || profileError);
     }
   }
 
