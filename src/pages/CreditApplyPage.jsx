@@ -447,6 +447,10 @@ const ResultStage = ({ score, isCalculating, engineFailed, breakdown, engineResu
       const safeResult = engineResult ? sanitizeData(engineResult) : null;
       const scoreReasons = engineResult?.scoreReasons || [];
       const tenureMonths = engineResult?.breakdown?.employmentTenure?.monthsInCurrentJob;
+      const isMissingIdentityFieldsError =
+         /missing required identity fields/i.test(engineResult?.error || "") ||
+         (Array.isArray(engineResult?.required)
+         && ["identity_number", "surname", "forename"].every((field) => engineResult.required.includes(field)));
 
       const hasAssessment = score > 0 || isCalculating || engineFailed;
       const isDeclined = !isCalculating && score > 0 && score < 50;
@@ -550,6 +554,11 @@ const ResultStage = ({ score, isCalculating, engineFailed, breakdown, engineResu
                         >
                            Retry Assessment
                         </button>
+                        {isMissingIdentityFieldsError && (
+                           <p className="mx-auto max-w-[280px] rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-medium text-amber-800">
+                              Please complete your onboarding process to access Credit
+                           </p>
+                        )}
                      </div>
                   )}
 
