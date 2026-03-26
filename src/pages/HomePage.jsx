@@ -665,7 +665,7 @@ const HomePage = ({
                 </button>
                 <button
                   type="button"
-                  onClick={onOpenCredit}
+                  onClick={onOpenCreditApply}
                   className="rounded-full px-3 py-1.5 text-xs font-semibold text-white/70 transition-all hover:bg-white/10 hover:text-white"
                 >
                   Credit
