@@ -650,6 +650,7 @@ async function performCreditCheck(userData, applicationId, authToken = null) {
     try {
         console.log('Starting credit check for application:', applicationId);
         console.log('Experian endpoint:', EXPERIAN_CONFIG.url);
+        console.log('Experian mock mode:', EXPERIAN_CONFIG.mockMode);
 
         if (EXPERIAN_CONFIG.mockMode) {
             console.log('Experian mock mode enabled - returning synthetic payload');
@@ -697,6 +698,10 @@ async function performCreditCheck(userData, applicationId, authToken = null) {
         
         // Parse response and extract retdata
         const retdata = await parseExperianResponse(response.data);
+        console.log('Experian retdata length:', typeof retdata === 'string' ? retdata.length : 0);
+        if (typeof retdata === 'string' && retdata.length > 0) {
+            console.log('Experian retdata preview:', retdata.slice(0, 120));
+        }
         
         // Decode and extract ZIP contents
         const { pdfBuffer, pdfFilename, xmlContent } = await decodeReportAssets(retdata);
@@ -721,6 +726,7 @@ async function performCreditCheck(userData, applicationId, authToken = null) {
                 success: true,
                 creditScore,
                 zipData: retdata, // Include ZIP data as base64 for download
+                zipDataLength: typeof retdata === 'string' ? retdata.length : 0,
                 databaseId: savedRecord.id,
                 recommendation: savedRecord.recommendation,
                 riskFlags: savedRecord.risk_flags,

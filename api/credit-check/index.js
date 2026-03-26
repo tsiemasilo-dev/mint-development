@@ -123,6 +123,20 @@ export default async function handler(req, res) {
     contract_type: overrides?.contract_type || overrides?.contractType
   };
 
+  const mockModeEnv = process.env.EXPERIAN_MOCK === 'true';
+  const maskedIdentity = normalizedOverrides?.identity_number
+    ? String(normalizedOverrides.identity_number).slice(0, 6).padEnd(String(normalizedOverrides.identity_number).length, '*')
+    : null;
+  console.log('[credit-check/api] incoming request', {
+    applicationId,
+    userId,
+    mockModeEnv,
+    hasPostalCode: Boolean(normalizedOverrides?.postal_code),
+    postalCode: normalizedOverrides?.postal_code || null,
+    hasAddress1: Boolean(normalizedOverrides?.address1),
+    identity: maskedIdentity
+  });
+
   if (normalizedOverrides?.annual_income && !normalizedOverrides?.gross_monthly_income) {
     const annualIncome = Number(normalizedOverrides.annual_income);
     if (Number.isFinite(annualIncome)) {
@@ -261,6 +275,18 @@ export default async function handler(req, res) {
 
   try {
     const result = await performCreditCheck(userPayload, applicationId, accessToken);
+    const zipDataLength = typeof result?.zipData === 'string' ? result.zipData.length : 0;
+    console.log('[credit-check/api] experian response summary', {
+      applicationId,
+      success: result?.success === true,
+      mockModeReturned: result?.mockMode,
+      zipDataLength,
+      message: result?.message || null,
+      error: result?.error || null
+    });
+    if (zipDataLength > 0) {
+      console.log('[credit-check/api] retdata preview:', String(result.zipData).slice(0, 120));
+    }
 
     const creditScoreData = (result && typeof result.creditScore === 'object' && result.creditScore)
       ? result.creditScore

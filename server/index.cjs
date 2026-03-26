@@ -3909,6 +3909,8 @@ app.get("/api/debug/user-investments", async (req, res) => {
   }
 });
 
+let lastCreditCheckDebug = null;
+
 app.post("/api/credit-check", async (req, res) => {
   try {
     // Dynamic import for ESM service modules
@@ -3961,6 +3963,20 @@ app.post("/api/credit-check", async (req, res) => {
       address1: overrides?.address1 || overrides?.address,
       contract_type: overrides?.contract_type || overrides?.contractType
     };
+
+    const mockModeEnv = process.env.EXPERIAN_MOCK === 'true';
+    const maskedIdentity = normalizedOverrides?.identity_number
+      ? String(normalizedOverrides.identity_number).slice(0, 6).padEnd(String(normalizedOverrides.identity_number).length, '*')
+      : null;
+    console.log('[credit-check] incoming request', {
+      applicationId,
+      userId,
+      mockModeEnv,
+      hasPostalCode: Boolean(normalizedOverrides?.postal_code),
+      postalCode: normalizedOverrides?.postal_code || null,
+      hasAddress1: Boolean(normalizedOverrides?.address1),
+      identity: maskedIdentity
+    });
 
     if (normalizedOverrides?.annual_income && !normalizedOverrides?.gross_monthly_income) {
       const annualIncome = Number(normalizedOverrides.annual_income);
@@ -4075,6 +4091,34 @@ app.post("/api/credit-check", async (req, res) => {
     }
 
     const result = await performCreditCheck(userPayload, applicationId, accessToken);
+    const zipDataLength = typeof result?.zipData === 'string' ? result.zipData.length : 0;
+    const retdataPreview = zipDataLength > 0 ? String(result.zipData).slice(0, 120) : null;
+    console.log('[credit-check] experian response summary', {
+      applicationId,
+      success: result?.success === true,
+      mockModeReturned: result?.mockMode,
+      zipDataLength,
+      message: result?.message || null,
+      error: result?.error || null
+    });
+    if (retdataPreview) {
+      console.log('[credit-check] retdata preview:', retdataPreview);
+    }
+
+    lastCreditCheckDebug = {
+      checkedAt: new Date().toISOString(),
+      applicationId,
+      userId,
+      mockModeEnv,
+      mockModeReturned: result?.mockMode,
+      success: result?.success === true,
+      hasPostalCode: Boolean(userPayload?.postal_code),
+      postalCode: userPayload?.postal_code || null,
+      experianEndpoint: process.env.EXPERIAN_URL || 'https://apis.experian.co.za/NormalSearchService',
+      zipDataLength,
+      retdataPreview,
+      error: result?.error || null
+    };
 
     const creditScoreData = (result && typeof result.creditScore === 'object' && result.creditScore)
       ? result.creditScore : (result?.creditScoreData || {});
@@ -4148,7 +4192,8 @@ app.post("/api/credit-check", async (req, res) => {
           employment_sector: normalizedOverrides?.employment_sector_type || null,
           employer_name: normalizedOverrides?.employment_employer_name || null,
           score_reasons: scoreReasons,
-          engine_result: breakdown
+          engine_result: breakdown,
+          created_at: new Date().toISOString()
         };
         const { error: insertError } = await db.from('loan_engine_score').insert(loanEngineInsert);
         if (insertError) console.warn('Loan engine score insert failed:', insertError.message);
@@ -4174,6 +4219,14 @@ app.post("/api/credit-check", async (req, res) => {
 app.get("/api/mock-mode", (req, res) => {
   const mockMode = process.env.EXPERIAN_MOCK === 'true';
   res.json({ mock: mockMode, mockMode });
+});
+
+app.get("/api/credit-check-debug", (req, res) => {
+  res.json({
+    mockMode: process.env.EXPERIAN_MOCK === 'true',
+    endpoint: process.env.EXPERIAN_URL || 'https://apis.experian.co.za/NormalSearchService',
+    lastCreditCheck: lastCreditCheckDebug
+  });
 });
 
 app.post("/api/sessions/record", async (req, res) => {
