@@ -99,24 +99,29 @@ const CreditHome = ({ profile, onOpenNotifications, onTabChange }) => {
         </svg>
       </div>
 
-      <header className="relative flex items-center justify-between mb-12 z-20 px-6 pt-6">
-          <div className="flex items-center gap-3">
-            {profile?.avatarUrl ? (
-              <img
-                src={profile.avatarUrl}
-                alt={displayName || "Profile"}
-                className="h-10 w-10 rounded-full border border-slate-200 object-cover bg-white"
-              />
-            ) : (
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 border border-slate-300 text-xs font-semibold text-slate-700">
-                {initials}
-              </div>
-            )}
-          </div>
-          
-          <NavigationPill activeTab="credit" onTabChange={onTabChange} theme="light" />
-          <NotificationBell onClick={onOpenNotifications} color="black" />
-        </header>
+      <header className="fixed top-0 left-0 right-0 px-6 pt-12 flex items-center justify-between z-50 pointer-events-none">
+        <div className="pointer-events-auto">
+          {profile?.avatarUrl ? (
+            <img
+              src={profile.avatarUrl}
+              alt={displayName || "Profile"}
+              className="h-10 w-10 rounded-full border border-white/20 object-cover bg-white/10 backdrop-blur-sm"
+            />
+          ) : (
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 border border-white/20 text-xs font-semibold text-white backdrop-blur-sm">
+              {initials}
+            </div>
+          )}
+        </div>
+        
+        <div className="pointer-events-auto">
+          <NavigationPill activeTab="credit" onTabChange={onTabChange} theme="dark" />
+        </div>
+        
+        <div className="pointer-events-auto">
+          <NotificationBell onClick={onOpenNotifications} color="white" />
+        </div>
+      </header>
 
       <div className="fixed bottom-[145px] left-6 right-6 z-30">
         <div className="mb-10">
