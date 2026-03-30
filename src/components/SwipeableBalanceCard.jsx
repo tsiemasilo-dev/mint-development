@@ -14,6 +14,7 @@ import {
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
+  XAxis,
 } from "recharts";
 import { supabase } from "../lib/supabase";
 import { getStrategyPriceHistory } from "../lib/strategyData";
@@ -44,7 +45,7 @@ const formatKMB = (value) => {
   return `${sign}R${formatted}`;
 };
 
-const TIMEFRAME_DAYS = { d: 7, w: 30, m: 90 };
+const TIMEFRAME_DAYS = { d: 2, w: 7, m: 30 };
 
 const SwipeableBalanceCard = ({
   userId,
@@ -321,7 +322,7 @@ const SwipeableBalanceCard = ({
       const startDateStr = cutoff.toISOString().split("T")[0];
 
       if (selectedAsset?.isStrategy && selectedAsset?.strategyId) {
-        const timeframeMap = { d: "1W", w: "1M", m: "3M" };
+        const timeframeMap = { d: "1D", w: "1W", m: "1M" };
         const tf = timeframeMap[activeTab] || "1M";
         let priceHistory = await getStrategyPriceHistory(
           selectedAsset.strategyId,
@@ -377,7 +378,7 @@ const SwipeableBalanceCard = ({
       );
 
       const strategyPnlByDate = {};
-      const timeframeMap = { d: "1W", w: "1M", m: "3M" };
+      const timeframeMap = { d: "1D", w: "1W", m: "1M" };
       const tf = timeframeMap[activeTab] || "1M";
       for (const sh of strategyHoldings) {
         try {
@@ -498,11 +499,8 @@ const SwipeableBalanceCard = ({
 
       const points = [];
 
-      if (sortedDates.length > 0) {
-        const anchorDate = new Date(sortedDates[0]);
-        anchorDate.setDate(anchorDate.getDate() - 1);
-        points.push({ d: anchorDate.toISOString().split("T")[0], v: 0 });
-      }
+      // Always anchor to the start of the requested timeframe window
+      points.push({ d: startDateStr, v: 0 });
 
       for (const dateKey of sortedDates) {
         let totalPnl = 0;
@@ -769,6 +767,7 @@ const SwipeableBalanceCard = ({
                     data={chartData}
                     margin={{ top: 2, right: 0, left: 0, bottom: 0 }}
                   >
+                    <XAxis dataKey="d" hide />
                     <Tooltip
                       content={({ active, payload }) => {
                         if (!active || !payload?.length) return null;

@@ -1733,16 +1733,15 @@ app.post("/api/banking/initiate", async (req, res) => {
       .eq("id", user.id)
       .maybeSingle();
 
-    if (profileError || !profile) {
-      console.error("Profile lookup error:", profileError?.message || "No profile found");
-      return res.status(400).json({
-        success: false,
-        error: { message: "User profile not found or missing required fields" }
-      });
+    if (profileError) {
+      console.error("Profile lookup error:", profileError.message);
+      return res.status(500).json({ success: false, error: { message: "Internal server error looking up profile" } });
     }
 
-    const fullName = [profile.first_name, profile.last_name].filter(Boolean).join(" ");
-    let idNumber = profile.id_number;
+    // Resilience: Fallback to metadata if profile record is missing or incomplete
+    let firstName = profile?.first_name || user.user_metadata?.first_name || "";
+    let lastName = profile?.last_name || user.user_metadata?.last_name || "";
+    let idNumber = profile?.id_number || "";
 
     if (!idNumber) {
       try {
@@ -1756,16 +1755,28 @@ app.post("/api/banking/initiate", async (req, res) => {
           idNumber = idDoc.number || null;
         }
         if (idNumber) {
-          console.log("ID number retrieved from Sumsub KYC data");
-          await db.from("profiles").update({ id_number: idNumber }).eq("id", user.id);
+          // Sync profile if it exists, otherwise create it
+          if (profile) {
+            await db.from("profiles").update({ id_number: idNumber }).eq("id", user.id);
+          } else {
+            // If no profile exists, create one with what we have
+            await db.from("profiles").insert({
+              id: user.id,
+              first_name: firstName,
+              last_name: lastName,
+              id_number: idNumber
+            });
+          }
         }
       } catch (sumsubErr) {
-        console.warn("Could not fetch ID from Sumsub:", sumsubErr.message);
+        console.warn("[initiate] Could not fetch ID from Sumsub:", sumsubErr.message);
       }
     }
 
+    const fullName = [firstName, lastName].filter(Boolean).join(" ");
+
     if (!fullName || !idNumber) {
-      console.error("Profile incomplete:", { hasName: !!fullName, hasIdNumber: !!idNumber });
+      console.error("[initiate] Profile incomplete:", { hasName: !!fullName, hasIdNumber: !!idNumber });
       return res.status(400).json({
         success: false,
         error: { message: "Profile is missing name or ID number. Please complete your profile first." }
@@ -1810,12 +1821,13 @@ app.post("/api/banking/initiate", async (req, res) => {
 
 app.post("/api/loan/email-agreement", async (req, res) => {
   try {
-    const { loanId, pdfBase64, fileName } = req.body;
+    const { loanId, pdfBase64, fileName, amount, assets } = req.body;
     if (!loanId || !pdfBase64) {
       return res.status(400).json({ success: false, error: { message: "Missing loanId or pdfBase64" } });
     }
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser(req.headers.authorization?.split(" ")[1]);
+    const authHeader = req.headers.authorization?.split(" ")[1];
+    const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader);
     if (authError || !user) return res.status(401).json({ success: false, error: { message: "Unauthorized" } });
 
     const resend = getResendClient();
@@ -1826,23 +1838,28 @@ app.post("/api/loan/email-agreement", async (req, res) => {
     // Convert data URL to base64 if needed
     const base64Data = pdfBase64.includes(",") ? pdfBase64.split(",")[1] : pdfBase64;
 
+    const formattedAmount = "R " + (amount || 0).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const assetList = (assets || []).join(", ");
+    const firstName = user.user_metadata?.first_name || 'Client';
+
     const { data, error } = await resend.emails.send({
       from: 'Mint Platforms <alerts@thealgohive.com>',
       to: [user.email],
-      subject: 'Your Signed Loan Agreement - Mint Securities',
+      subject: 'Order Received: Asset Sale Confirmation',
       html: `
-        <div style="font-family: sans-serif; color: #374151; line-height: 1.5; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; padding: 24px;">
-          <h2 style="color: #0d1b2e;">Loan Agreement Signed</h2>
-          <p>Hello,</p>
-          <p>Thank you for choosing Mint. Your loan agreement has been successfully signed and processed.</p>
-          <p>Please find the attached copy of your signed <b>Share Pledge and Secured Lending Agreement</b> for your records.</p>
-          <div style="background: #f8f9fa; border-radius: 8px; padding: 16px; margin-top: 20px;">
-            <p style="margin: 0; font-size: 13px; color: #6b7280;"><b>Loan ID:</b> ${loanId}</p>
-            <p style="margin: 0; font-size: 13px; color: #6b7280;"><b>Status:</b> Pending Payout</p>
+        <div style="font-family: sans-serif; color: #374151; line-height: 1.6; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; padding: 32px;">
+          <h2 style="color: #0d1b2e; margin-top: 0;">Order Received</h2>
+          <p>Hello <b>${firstName}</b>,</p>
+          <p>We have received your signed document. This email confirms that your order to sell <b>${assetList}</b> for the final amount of <b>${formattedAmount}</b> has been received and is currently being processed.</p>
+          <p>For your records, we have attached the signed <b>Share Pledge and Secured Lending Agreement</b> to this email.</p>
+          <div style="background: #f8f9fa; border-radius: 8px; padding: 20px; margin-top: 24px;">
+            <p style="margin: 0; font-size: 12px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;">Transaction Details</p>
+            <p style="margin: 8px 0 0; font-size: 14px; color: #374151;"><b>Order ID:</b> ${loanId}</p>
+            <p style="margin: 4px 0 0; font-size: 14px; color: #374151;"><b>Status:</b> Agreement Signed</p>
           </div>
-          <p style="margin-top: 24px; font-size: 14px; color: #9ca3af;">
+          <p style="margin-top: 32px; font-size: 14px; color: #6b7280;">
             Best regards,<br/>
-            The Mint Team
+            <b>The Mint Team</b>
           </p>
         </div>
       `,
@@ -1853,6 +1870,7 @@ app.post("/api/loan/email-agreement", async (req, res) => {
         },
       ],
     });
+
 
     if (error) throw error;
 

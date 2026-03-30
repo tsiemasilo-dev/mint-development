@@ -34,12 +34,14 @@ export default async function handler(req, res) {
       .eq("id", user.id)
       .maybeSingle();
 
-    if (profileError || !profile) {
-      return res.status(400).json({ success: false, error: { message: "User profile not found or missing required fields" } });
+    if (profileError) {
+      return res.status(500).json({ success: false, error: { message: "Database error looking up profile" } });
     }
 
-    const fullName = [profile.first_name, profile.last_name].filter(Boolean).join(" ");
-    let idNumber = profile.id_number;
+    // Resilience: Fallback to metadata if profile record is missing or incomplete
+    let firstName = profile?.first_name || user.user_metadata?.first_name || "";
+    let lastName = profile?.last_name || user.user_metadata?.last_name || "";
+    let idNumber = profile?.id_number || "";
 
     if (!idNumber) {
       try {
@@ -53,12 +55,24 @@ export default async function handler(req, res) {
           idNumber = idDoc.number || null;
         }
         if (idNumber) {
-          await supabaseAdmin.from("profiles").update({ id_number: idNumber }).eq("id", user.id);
+          // Sync profile if it exists, otherwise create it
+          if (profile) {
+            await supabaseAdmin.from("profiles").update({ id_number: idNumber }).eq("id", user.id);
+          } else {
+            await supabaseAdmin.from("profiles").insert({
+              id: user.id,
+              first_name: firstName,
+              last_name: lastName,
+              id_number: idNumber
+            });
+          }
         }
       } catch (sumsubErr) {
         console.warn("Could not fetch ID from Sumsub:", sumsubErr.message);
       }
     }
+
+    const fullName = [firstName, lastName].filter(Boolean).join(" ");
 
     if (!fullName || !idNumber) {
       return res.status(400).json({
