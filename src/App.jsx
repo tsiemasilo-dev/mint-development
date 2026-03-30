@@ -15,13 +15,15 @@ import InvestPage from "./pages/InvestPage.jsx";
 import InvestAmountPage from "./pages/InvestAmountPage.jsx";
 import PaymentPage from "./pages/PaymentPage.jsx";
 import PaymentSuccessPage from "./pages/PaymentSuccessPage.jsx";
+import PaymentPendingPage from "./pages/PaymentPendingPage.jsx";
+import PaymentMethodModal from "./components/PaymentMethodModal.jsx";
 import FactsheetPage from "./pages/FactsheetPage.jsx";
 import OpenStrategiesPage from "./pages/OpenStrategiesPage.jsx";
 import MorePage from "./pages/MorePage.jsx";
 import OnboardingPage from "./pages/OnboardingPage.jsx";
-import InstantLiquidityPage from "./pages/credit/InstantLiquidity.jsx"; 
+import InstantLiquidityPage from "./pages/credit/InstantLiquidity.jsx";
 import { useProfile } from "./lib/useProfile";
-import SettingsPage from "./pages/SettingsPage.jsx"; 
+import SettingsPage from "./pages/SettingsPage.jsx";
 import TransactPage from "./pages/TransactPage.jsx";
 import UserOnboardingPage from "./pages/UserOnboardingPage.jsx";
 import AppLayout from "./layouts/AppLayout.jsx";
@@ -41,6 +43,7 @@ import ProfileDetailsPage from "./pages/ProfileDetailsPage.jsx";
 import ChangePasswordPage from "./pages/ChangePasswordPage.jsx";
 import LegalDocumentationPage from "./pages/LegalDocumentationPage.jsx";
 import StatementsPage from "./pages/StatementsPage.jsx";
+import DepositPage from "./pages/DepositPage.jsx";
 import IdentityCheckPage from "./pages/IdentityCheckPage.jsx";
 import BankLinkPage from "./pages/BankLinkPage.jsx";
 import MintBankPage from "./pages/MintBankPage.jsx";
@@ -51,6 +54,8 @@ import { useInactivityTimeout } from "./lib/useInactivityTimeout.jsx";
 import PinLockScreen from "./components/PinLockScreen.jsx";
 import { isPinEnabled } from "./lib/usePin.js";
 import GoalLinkModal from "./components/GoalLinkModal.jsx";
+import { useOnboardingStatus } from "./lib/useOnboardingStatus.js";
+import { checkOnboardingComplete } from "./lib/checkOnboardingComplete.js";
 
 const PERSISTENT_KEYS = [
   'mint_device_id',
@@ -65,13 +70,13 @@ const clearUserStorage = () => {
     const value = localStorage.getItem(key);
     if (value !== null) keysToKeep[key] = value;
   });
-  
+
   localStorage.clear();
-  
+
   Object.entries(keysToKeep).forEach(([key, value]) => {
     localStorage.setItem(key, value);
   });
-  
+
   sessionStorage.clear();
 };
 
@@ -100,7 +105,7 @@ const getTokensFromHash = (hash) => {
 
 const recoveryTokens = isRecoveryMode ? getTokensFromHash(initialHash) : null;
 
-const mainTabs = ['home', 'credit', 'transact', 'investments', 'statements', 'more', 'welcome', 'auth'];
+const mainTabs = ['home', 'credit', 'transact', 'investments', 'markets', 'deposit', 'more', 'welcome', 'auth'];
 
 const App = () => {
   const [currentPage, setCurrentPage] = useState(hasError ? "linkExpired" : (isRecoveryMode ? "auth" : "welcome"));
@@ -108,27 +113,40 @@ const App = () => {
   const [authStep, setAuthStep] = useState(isRecoveryMode ? "newPassword" : "email");
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [sessionReady, setSessionReady] = useState(false);
-  const { profile, loading: profileLoading } = useProfile();
   const [notificationReturnPage, setNotificationReturnPage] = useState("home");
   const [modal, setModal] = useState(null);
   const [selectedSecurity, setSelectedSecurity] = useState(null);
   const [selectedStrategy, setSelectedStrategy] = useState(null);
   const [selectedArticleId, setSelectedArticleId] = useState(null);
   const [marketsInitialView, setMarketsInitialView] = useState(null);
+  const [portfolioDeepLink, setPortfolioDeepLink] = useState(null);
   const [investmentAmount, setInvestmentAmount] = useState(0);
-  const [stockCheckout, setStockCheckout] = useState({ security: null, amount: 0 });
+  const [baseInvestmentAmount, setBaseInvestmentAmount] = useState(0);
+  const [stockCheckout, setStockCheckout] = useState({ security: null, amount: 0, baseAmount: 0 });
   const [showGoalModal, setShowGoalModal] = useState(false);
+  const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
+  const [pendingPaymentMethod, setPendingPaymentMethod] = useState(null);
+  const [pendingPaymentInfo, setPendingPaymentInfo] = useState(null);
   const [pendingGoalFlow, setPendingGoalFlow] = useState(null);
   const [selectedGoalId, setSelectedGoalId] = useState(null);
   const selectedGoalIdRef = useRef(null);
   const goalInvestAmountRef = useRef(0);
+  const pendingPaymentTypeRef = useRef(null);
   const recoveryHandled = useRef(false);
   const { refetch: refetchNotifications, reset: resetNotifications } = useNotificationsContext();
   const [showPinLock, setShowPinLock] = useState(false);
 
+  const isAuthenticated = !['welcome', 'auth', 'linkExpired'].includes(currentPage);
+  const { profile, loading: profileLoading } = useProfile({ enabled: isAuthenticated });
+  const { onboardingComplete, loading: onboardingLoading } = useOnboardingStatus({ enabled: isAuthenticated });
+  const onboardingRef = useRef({ complete: false, loading: true });
+
+  useEffect(() => {
+    onboardingRef.current = { complete: onboardingComplete, loading: onboardingLoading };
+  }, [onboardingComplete, onboardingLoading]);
+
   const currentPageRef = useRef(currentPage);
   currentPageRef.current = currentPage;
-  const isAuthenticated = !['welcome', 'auth', 'linkExpired'].includes(currentPage);
   useInactivityTimeout({
     enabled: isAuthenticated,
     onLogout: () => {
@@ -140,6 +158,52 @@ const App = () => {
   });
 
   const justLoggedInRef = useRef(false);
+  // Read ozow param synchronously at init — before any effect can clear the URL
+  const ozowReturnParam = useRef(new URLSearchParams(window.location.search).get("ozow"));
+  const ozowRecordedRef = useRef(false);
+
+  useEffect(() => {
+    if (ozowReturnParam.current) {
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (currentPage !== "paymentSuccess" || ozowRecordedRef.current) return;
+    const pending = sessionStorage.getItem("ozow_pending");
+    if (!pending) return;
+    let parsed;
+    try { parsed = JSON.parse(pending); } catch { return; }
+    if (!parsed?.transactionRef || !parsed?.strategyId || !parsed?.amount) return;
+    ozowRecordedRef.current = true;
+    sessionStorage.removeItem("ozow_pending");
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+        const resp = await fetch("/api/ozow/record-success", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            transactionRef: parsed.transactionRef,
+            strategyId: parsed.strategyId,
+            amount: parsed.amount,
+          }),
+        });
+        const result = await resp.json();
+        if (result.success) {
+          console.log("[ozow] Investment recorded from success page", result.alreadyRecorded ? "(already done)" : "");
+        } else {
+          console.error("[ozow] record-success failed:", result.error);
+        }
+      } catch (err) {
+        console.error("[ozow] record-success error:", err);
+      }
+    })();
+  }, [currentPage]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -169,10 +233,10 @@ const App = () => {
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [isAuthenticated, isCheckingAuth]);
-  
+
   const navigationHistory = useRef([]);
   const pageStateCache = useRef({});
-  
+
   const cacheCurrentPageState = useCallback(() => {
     pageStateCache.current[currentPage] = {
       selectedSecurity,
@@ -184,9 +248,21 @@ const App = () => {
     };
   }, [currentPage, selectedSecurity, selectedStrategy, selectedArticleId, investmentAmount, stockCheckout, notificationReturnPage]);
 
+  const pendingProgrammaticBacks = useRef(0);
+
   const navigateTo = useCallback((page) => {
     if (page === currentPage) return;
-    
+
+    // Protected routes that REQUIRE onboarding
+    const protectedPages = ["deposit", "creditApply", "creditRepay"];
+
+
+    if (protectedPages.includes(page) && !onboardingRef.current.loading && !onboardingRef.current.complete) {
+      console.log(`[App] Onboarding required for page: ${page}. Redirecting.`);
+      setCurrentPage("userOnboarding"); // Redirect to the actual onboarding flow
+      return;
+    }
+
     if (!mainTabs.includes(page)) {
       cacheCurrentPageState();
       navigationHistory.current.push(currentPage);
@@ -194,48 +270,58 @@ const App = () => {
         navigationHistory.current = navigationHistory.current.slice(-20);
       }
       setPreviousPageName(currentPage);
+
+      if (!Capacitor.isNativePlatform()) {
+        window.history.pushState({ mintPage: page }, '');
+      }
     } else {
       navigationHistory.current = [];
       setPreviousPageName(null);
     }
-    
+
     setCurrentPage(page);
-  }, [currentPage, cacheCurrentPageState]);
+  }, [currentPage, cacheCurrentPageState, onboardingComplete]);
 
   const handleTabChange = useCallback((tab) => {
-    if (tab === 'statements') {
-      navigateTo(tab);
-    } else {
-      navigationHistory.current = [];
-      setPreviousPageName(null);
-      setCurrentPage(tab);
-    }
-  }, [navigateTo]);
+    navigationHistory.current = [];
+    setPreviousPageName(null);
+    setCurrentPage(tab);
+  }, []);
 
   const goBack = useCallback(() => {
     if (navigationHistory.current.length > 0) {
       const prevPage = navigationHistory.current.pop();
-      const newPreviousPage = navigationHistory.current.length > 0 
-        ? navigationHistory.current[navigationHistory.current.length - 1] 
+      const newPreviousPage = navigationHistory.current.length > 0
+        ? navigationHistory.current[navigationHistory.current.length - 1]
         : null;
       setPreviousPageName(newPreviousPage);
       setCurrentPage(prevPage);
+
+      if (!Capacitor.isNativePlatform()) {
+        pendingProgrammaticBacks.current++;
+        window.history.back();
+      }
       return true;
     }
-    
+
     if (!mainTabs.includes(currentPage)) {
       setPreviousPageName(null);
       setCurrentPage('home');
+
+      if (!Capacitor.isNativePlatform()) {
+        pendingProgrammaticBacks.current++;
+        window.history.back();
+      }
       return true;
     }
-    
+
     return false;
   }, [currentPage]);
 
   const canSwipeBack = !mainTabs.includes(currentPage);
 
   const lastBackPressRef = useRef(0);
-  
+
   useEffect(() => {
     if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') {
       return;
@@ -244,20 +330,20 @@ const App = () => {
     const handleBackButton = () => {
       if (navigationHistory.current.length > 0) {
         const prevPage = navigationHistory.current.pop();
-        const newPreviousPage = navigationHistory.current.length > 0 
-          ? navigationHistory.current[navigationHistory.current.length - 1] 
+        const newPreviousPage = navigationHistory.current.length > 0
+          ? navigationHistory.current[navigationHistory.current.length - 1]
           : null;
         setPreviousPageName(newPreviousPage);
         setCurrentPage(prevPage);
         return;
       }
-      
+
       if (!mainTabs.includes(currentPage)) {
         setPreviousPageName(null);
         setCurrentPage('home');
         return;
       }
-      
+
       const now = Date.now();
       if (now - lastBackPressRef.current < 2000) {
         CapacitorApp.exitApp();
@@ -273,6 +359,50 @@ const App = () => {
     };
   }, [currentPage]);
 
+  useEffect(() => {
+    const handleNavigationEvent = (e) => {
+      const page = e.detail?.page;
+      if (page) {
+        if (page === 'userOnboarding') {
+          setNotificationReturnPage(currentPage);
+        }
+        navigateTo(page);
+      }
+    };
+
+    window.addEventListener('navigate-within-app', handleNavigationEvent);
+    return () => window.removeEventListener('navigate-within-app', handleNavigationEvent);
+  }, [navigateTo, currentPage]);
+
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) return;
+
+    window.history.replaceState({ mintPage: 'root' }, '');
+
+    const handlePopState = () => {
+      if (pendingProgrammaticBacks.current > 0) {
+        pendingProgrammaticBacks.current--;
+        return;
+      }
+
+      if (navigationHistory.current.length > 0) {
+        const prevPage = navigationHistory.current.pop();
+        const newPreviousPage = navigationHistory.current.length > 0
+          ? navigationHistory.current[navigationHistory.current.length - 1]
+          : null;
+        setPreviousPageName(newPreviousPage);
+        setCurrentPage(prevPage);
+      } else if (!mainTabs.includes(currentPageRef.current)) {
+        setPreviousPageName(null);
+        setCurrentPage('home');
+      } else {
+        window.history.pushState({ mintPage: 'root' }, '');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -300,7 +430,7 @@ const App = () => {
             access_token: recoveryTokens.accessToken,
             refresh_token: recoveryTokens.refreshToken
           });
-          
+
           if (!error) {
             setSessionReady(true);
           }
@@ -311,21 +441,35 @@ const App = () => {
       }
       setIsCheckingAuth(false);
     };
-    
+
     const checkExistingSession = async () => {
+      // Safety timeout: never block on the black screen for more than 1s.
+      // Supabase auth lock can deadlock for 5s+ in React StrictMode causing
+      // the spinner to hang indefinitely. The timeout ensures the UI always
+      // unblocks; the session check still completes in the background.
+      const safetyTimer = setTimeout(() => setIsCheckingAuth(false), 1000);
+
       if (supabase && !isRecoveryMode && !hasError) {
         try {
           const { data: { session } } = await supabase.auth.getSession();
+          clearTimeout(safetyTimer);
           if (session) {
-            setCurrentPage("home");
+            if (ozowReturnParam.current === "success") {
+              setCurrentPage("paymentSuccess");
+            } else {
+              setCurrentPage("home");
+            }
             const alreadyUnlocked = sessionStorage.getItem('mint_pin_unlocked') === 'true';
             if (isPinEnabled() && !alreadyUnlocked) {
               setShowPinLock(true);
             }
           }
         } catch (err) {
+          clearTimeout(safetyTimer);
           console.error("Session check error:", err);
         }
+      } else {
+        clearTimeout(safetyTimer);
       }
       setIsCheckingAuth(false);
     };
@@ -341,7 +485,7 @@ const App = () => {
     if (!supabase || isRecoveryMode) {
       return;
     }
-    
+
     const handleRecoveryFlow = () => {
       if (recoveryHandled.current) return;
       recoveryHandled.current = true;
@@ -349,7 +493,7 @@ const App = () => {
       setCurrentPage("auth");
       window.history.replaceState({}, document.title, window.location.pathname);
     };
-    
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
         handleRecoveryFlow();
@@ -375,7 +519,7 @@ const App = () => {
         setSessionReady(true);
       }
     });
-    
+
     return () => {
       subscription?.unsubscribe();
     };
@@ -386,7 +530,6 @@ const App = () => {
 
   const sessionCheckSkipUntilRef = useRef(0);
 
-  const sessionCheckFailCountRef = useRef(0);
 
   useEffect(() => {
     if (!supabase || !isAuthenticated) return;
@@ -399,34 +542,26 @@ const App = () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
-          const { data: refreshed } = await supabase.auth.refreshSession();
-          if (!refreshed?.session) {
-            sessionCheckFailCountRef.current += 1;
-            console.log(`[session-check] No active session found (attempt ${sessionCheckFailCountRef.current}/3)`);
-            if (sessionCheckFailCountRef.current >= 3) {
-              sessionExpiredPageRef.current = currentPageRef.current;
-              setShowPinLock(false);
-              setShowSessionExpired(true);
-              sessionCheckFailCountRef.current = 0;
-            }
-            return;
-          }
+          // Silently try to refresh — if it succeeds great, if not we wait for
+          // onAuthStateChange(SIGNED_OUT) to show the expired screen.
+          await supabase.auth.refreshSession();
+          return;
         }
-        sessionCheckFailCountRef.current = 0;
-        const activeSession = session || (await supabase.auth.getSession()).data?.session;
         const fingerprint = localStorage.getItem('mint_session_fingerprint');
-        if (fingerprint && activeSession?.access_token) {
+        if (fingerprint && session?.access_token) {
           try {
             const res = await fetch(`/api/sessions/validate?fingerprint=${encodeURIComponent(fingerprint)}`, {
-              headers: { Authorization: `Bearer ${activeSession.access_token}` },
+              headers: { Authorization: `Bearer ${session.access_token}` },
             });
-            const json = await res.json();
-            if (json.success && json.valid === false) {
-              console.log('[session-check] Session revoked remotely');
-              await supabase.auth.signOut({ scope: 'local' });
-              setShowPinLock(false);
-              setCurrentPage("welcome");
-              return;
+            if (res.ok) {
+              const json = await res.json();
+              if (json.success && json.valid === false) {
+                console.log('[session-check] Session revoked remotely');
+                await supabase.auth.signOut({ scope: 'local' });
+                setShowPinLock(false);
+                setCurrentPage("welcome");
+                return;
+              }
             }
           } catch (valErr) {
             // ignore validation errors
@@ -437,8 +572,8 @@ const App = () => {
       }
     };
 
-    const initialDelay = setTimeout(() => checkSession(), 15000);
-    const interval = setInterval(checkSession, 30000);
+    const initialDelay = setTimeout(() => checkSession(), 60000);
+    const interval = setInterval(checkSession, 120000);
 
     return () => {
       clearTimeout(initialDelay);
@@ -498,8 +633,8 @@ const App = () => {
     const previewSecurity = isPreview ? (cachedState.selectedSecurity || selectedSecurity) : selectedSecurity;
     const previewStrategy = isPreview ? (cachedState.selectedStrategy || selectedStrategy) : selectedStrategy;
     const previewArticleId = isPreview ? (cachedState.selectedArticleId || selectedArticleId) : selectedArticleId;
-    
-    const noOp = () => {};
+
+    const noOp = () => { };
 
     switch (pageName) {
       case 'home':
@@ -529,10 +664,10 @@ const App = () => {
         );
       case "credit":
         return (
-          <CreditHome 
-            profile={profile} 
-            onOpenNotifications={() => setShowNotifications(true)} 
-            onTabChange={setCurrentPage} 
+          <CreditHome
+            profile={profile}
+            onOpenNotifications={() => setShowNotifications(true)}
+            onTabChange={setCurrentPage}
           />
         );
       case 'statements':
@@ -567,19 +702,19 @@ const App = () => {
           </AppLayout>
         );
 
-        case 'instantLiquidity':
-          return (
-            <AppLayout
-              activeTab="credit" // Keeps the credit tab highlighted in the layout
-              onTabChange={handleTabChange}
-              onWithdraw={handleWithdrawRequest}
-              onShowComingSoon={handleShowComingSoon}
-              modal={modal}
-              onCloseModal={closeModal}
-            >
+      case 'instantLiquidity':
+        return (
+          <AppLayout
+            activeTab="credit" // Keeps the credit tab highlighted in the layout
+            onTabChange={handleTabChange}
+            onWithdraw={handleWithdrawRequest}
+            onShowComingSoon={handleShowComingSoon}
+            modal={modal}
+            onCloseModal={closeModal}
+          >
             <InstantLiquidityPage profile={profile} onBack={goBack} />
-            </AppLayout>
-          );
+          </AppLayout>
+        );
 
       case 'more':
         return (
@@ -596,13 +731,35 @@ const App = () => {
         );
       case 'markets':
         return (
-          <MarketsPage
-            onBack={noOp}
-            onOpenNotifications={noOp}
-            onOpenStockDetail={noOp}
-            onOpenNewsArticle={noOp}
-            onOpenFactsheet={noOp}
-          />
+          <AppLayout
+            activeTab="markets"
+            onTabChange={noOp}
+            onWithdraw={noOp}
+            onShowComingSoon={noOp}
+            modal={null}
+            onCloseModal={noOp}
+          >
+            <MarketsPage
+              onBack={noOp}
+              onOpenNotifications={noOp}
+              onOpenStockDetail={noOp}
+              onOpenNewsArticle={noOp}
+              onOpenFactsheet={noOp}
+            />
+          </AppLayout>
+        );
+      case 'deposit':
+        return (
+          <AppLayout
+            activeTab="deposit"
+            onTabChange={noOp}
+            onWithdraw={noOp}
+            onShowComingSoon={noOp}
+            modal={null}
+            onCloseModal={noOp}
+          >
+            <DepositPage onBack={noOp} />
+          </AppLayout>
         );
       case 'stockDetail':
         return (
@@ -622,8 +779,8 @@ const App = () => {
         );
       case 'factsheet':
         return (
-          <FactsheetPage 
-            onBack={noOp} 
+          <FactsheetPage
+            onBack={noOp}
             strategy={previewStrategy}
             onOpenInvest={noOp}
           />
@@ -793,8 +950,11 @@ const App = () => {
             onBack={noOp}
             strategy={paymentItem}
             amount={previewStockCheckout.amount}
+            baseAmount={previewStockCheckout.baseAmount}
+            shareCount={previewStockCheckout.shareCount}
             onSuccess={noOp}
             onCancel={noOp}
+            onOpenDeposit={noOp}
           />
         );
       }
@@ -805,8 +965,11 @@ const App = () => {
             onBack={noOp}
             strategy={previewStrategy}
             amount={previewAmount}
+            baseAmount={isPreview ? cachedState.baseInvestmentAmount : baseInvestmentAmount}
             onSuccess={noOp}
             onCancel={noOp}
+            onOpenDeposit={() => navigateTo("deposit")}
+            initialMethod={pendingPaymentMethod}
           />
         );
       }
@@ -821,7 +984,7 @@ const App = () => {
 
   const previousPageComponent = useMemo(() => {
     if (!previousPageName || mainTabs.includes(currentPage)) return null;
-    
+
     // Skip background rendering for SDK-heavy pages to prevent duplicate listeners
     const sdkPages = ["identityCheck", "userOnboarding", "bankLink", "creditApply"];
     if (sdkPages.includes(previousPageName)) return null;
@@ -838,7 +1001,7 @@ const App = () => {
 
 
 
-  if (isCheckingAuth || profileLoading) {
+  if (isCheckingAuth) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0d0d12]">
         <div className="w-8 h-8 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
@@ -939,6 +1102,7 @@ const App = () => {
           onOpenSettings={() => navigateTo("settings")}
           onOpenStrategies={() => { setMarketsInitialView("openstrategies"); navigateTo("markets"); }}
           onOpenMarkets={() => { setMarketsInitialView("invest"); navigateTo("markets"); }}
+          onOpenDeposit={() => handleTabChange("deposit")}
           onOpenNews={() => { setMarketsInitialView("news"); navigateTo("markets"); }}
           onOpenNewsArticle={(articleId) => { setSelectedArticleId(articleId); navigateTo("newsArticle"); }}
           onOpenInstantLiquidity={() => navigateTo("instantLiquidity")}
@@ -967,7 +1131,7 @@ const App = () => {
       </AppLayout>
     );
   }
-  
+
   if (currentPage === "creditScore") {
     return (
       <AppLayout
@@ -993,16 +1157,16 @@ const App = () => {
   if (currentPage === "instantLiquidity") {
     return (
       <AppLayout
-        activeTab="instantLiquidity" 
+        activeTab="instantLiquidity"
         onTabChange={handleTabChange}
         onWithdraw={handleWithdrawRequest}
         onShowComingSoon={handleShowComingSoon}
         modal={modal}
         onCloseModal={closeModal}
       >
-        <InstantLiquidityPage 
-          profile={profile} 
-          onBack={goBack} 
+        <InstantLiquidityPage
+          profile={profile}
+          onBack={goBack}
           onTabChange={handleTabChange}
           onLinkBank={() => navigateTo("bankLink")}
           onOpenNotifications={() => {
@@ -1069,6 +1233,8 @@ const App = () => {
           }}
           onOpenInvest={() => navigateTo("markets")}
           onOpenStrategies={() => { setMarketsInitialView("openstrategies"); navigateTo("markets"); }}
+          deepLink={portfolioDeepLink}
+          onDeepLinkConsumed={() => setPortfolioDeepLink(null)}
         />
       </AppLayout>
     );
@@ -1098,28 +1264,52 @@ const App = () => {
   if (currentPage === "markets") {
     return (
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
-        <MarketsPage
-          onBack={goBack}
-          initialViewMode={marketsInitialView}
-          onViewModeChange={(mode) => setMarketsInitialView(mode)}
-          onOpenNotifications={() => {
-            setNotificationReturnPage("markets");
-            navigateTo("notifications");
-          }}
-          onOpenStockDetail={(security) => {
-            setSelectedSecurity(security);
-            navigateTo("stockDetail");
-          }}
-          onOpenNewsArticle={(articleId) => {
-            setSelectedArticleId(articleId);
-            navigateTo("newsArticle");
-          }}
-          onOpenFactsheet={(strategy) => {
-            setSelectedStrategy(strategy);
-            navigateTo("factsheet");
-          }}
-        />
+        <AppLayout
+          activeTab="markets"
+          onTabChange={handleTabChange}
+          onWithdraw={() => { }}
+          onShowComingSoon={() => { }}
+          modal={null}
+          onCloseModal={() => { }}
+        >
+          <MarketsPage
+            onBack={canSwipeBack ? goBack : undefined}
+            initialViewMode={marketsInitialView}
+            onViewModeChange={(mode) => setMarketsInitialView(mode)}
+            onOpenNotifications={() => {
+              setNotificationReturnPage("markets");
+              navigateTo("notifications");
+            }}
+            onOpenStockDetail={(security) => {
+              setSelectedSecurity(security);
+              navigateTo("stockDetail");
+            }}
+            onOpenNewsArticle={(articleId) => {
+              setSelectedArticleId(articleId);
+              navigateTo("newsArticle");
+            }}
+            onOpenFactsheet={(strategy) => {
+              setSelectedStrategy(strategy);
+              navigateTo("factsheet");
+            }}
+          />
+        </AppLayout>
       </SwipeBackWrapper>
+    );
+  }
+
+  if (currentPage === "deposit") {
+    return (
+      <AppLayout
+        activeTab="deposit"
+        onTabChange={handleTabChange}
+        onWithdraw={() => { }}
+        onShowComingSoon={() => { }}
+        modal={null}
+        onCloseModal={() => { }}
+      >
+        <DepositPage onBack={canSwipeBack ? goBack : () => handleTabChange("home")} />
+      </AppLayout>
     );
   }
 
@@ -1141,9 +1331,10 @@ const App = () => {
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <StockBuyPage
           security={selectedSecurity}
+          paymentMethod={pendingPaymentMethod}
           onBack={goBack}
           onContinue={(amount, security, baseAmount, shareCount) => {
-            setStockCheckout({ security, amount, shareCount });
+            setStockCheckout({ security, amount, baseAmount: baseAmount || amount, shareCount });
             setPendingGoalFlow({
               type: "stock",
               amount,
@@ -1157,16 +1348,107 @@ const App = () => {
         <GoalLinkModal
           isOpen={showGoalModal && pendingGoalFlow?.type === "stock"}
           onClose={() => { setShowGoalModal(false); setPendingGoalFlow(null); setSelectedGoalId(null); selectedGoalIdRef.current = null; goalInvestAmountRef.current = 0; }}
-          onConfirm={(goalId) => {
+          onConfirm={async (goalId) => {
             setSelectedGoalId(goalId);
             selectedGoalIdRef.current = goalId;
             goalInvestAmountRef.current = pendingGoalFlow?.baseAmount || pendingGoalFlow?.amount || stockCheckout.amount;
+            pendingPaymentTypeRef.current = "stock";
             setShowGoalModal(false);
             setPendingGoalFlow(null);
-            navigateTo("stockPayment");
+
+            // Use ref for latest status to avoid race conditions and destructuring bugs
+            if (!onboardingRef.current.complete) {
+              navigateTo("identityCheck");
+              return;
+            }
+            setShowPaymentMethodModal(true);
           }}
           investmentAmount={pendingGoalFlow?.baseAmount || pendingGoalFlow?.amount || stockCheckout.amount}
           assetName={pendingGoalFlow?.assetName || selectedSecurity?.name || "Stock"}
+        />
+        <PaymentMethodModal
+          isOpen={showPaymentMethodModal}
+          onClose={() => setShowPaymentMethodModal(false)}
+          amount={stockCheckout.amount}
+          strategyName={stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock"}
+          onSelectPaystack={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("paystack"); navigateTo("stockPayment"); }}
+          onSelectWallet={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("wallet"); navigateTo("stockPayment"); }}
+          onSelectOzow={async () => {
+            try {
+              const { data: { user } } = await supabase.auth.getUser();
+              const baseUrl = window.location.origin;
+              const resp = await fetch("/api/ozow/initiate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  amount: stockCheckout.amount,
+                  strategyName: stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock",
+                  strategyId: stockCheckout.security?.id || null,
+                  userId: user?.id || null,
+                  userEmail: user?.email || null,
+                  successUrl: `${baseUrl}/?ozow=success`,
+                  cancelUrl: `${baseUrl}/?ozow=cancel`,
+                  errorUrl: `${baseUrl}/?ozow=error`,
+                }),
+              });
+              const data = await resp.json();
+              if (data.success && data.action_url) {
+                sessionStorage.setItem("ozow_pending", JSON.stringify({
+                  transactionRef: data.TransactionReference,
+                  strategyId: data.Optional1,
+                  amount: data.Amount,
+                }));
+                const form = document.createElement("form");
+                form.method = "POST";
+                form.action = data.action_url;
+                const skipFields = ["success", "action_url"];
+                Object.entries(data).forEach(([key, value]) => {
+                  if (skipFields.includes(key)) return;
+                  const input = document.createElement("input");
+                  input.type = "hidden";
+                  input.name = key;
+                  input.value = value;
+                  form.appendChild(input);
+                });
+                document.body.appendChild(form);
+                form.submit();
+                document.body.removeChild(form);
+              } else {
+                alert(data.error || "Failed to initiate Ozow payment. Please try again.");
+              }
+            } catch (err) {
+              console.error("Ozow error:", err);
+              alert("Could not connect to Ozow. Please try another payment method.");
+            }
+          }}
+          onEFTConfirm={async () => {
+            setShowPaymentMethodModal(false);
+            try {
+              const { data: { session } } = await supabase.auth.getSession();
+              const token = session?.access_token;
+              const eftRef = `EFT-${Date.now()}`;
+              const headers = { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+              await fetch("/api/eft-deposit", {
+                method: "POST",
+                headers,
+                body: JSON.stringify({
+                  amount: stockCheckout.amount,
+                  baseAmount: stockCheckout.baseAmount || stockCheckout.amount,
+                  reference: eftRef,
+                  securityId: stockCheckout.security?.id,
+                  symbol: stockCheckout.security?.symbol || "",
+                  name: stockCheckout.security?.name || "",
+                  ...(stockCheckout.shareCount ? { shareCount: Number(stockCheckout.shareCount) } : {}),
+                }),
+              });
+            } catch (e) {
+              console.error("EFT record error:", e);
+            }
+            setPendingPaymentInfo({ strategy: stockCheckout.security?.name || stockCheckout.security?.symbol, amount: stockCheckout.amount });
+            navigationHistory.current = [];
+            setPreviousPageName(null);
+            setCurrentPage("paymentPending");
+          }}
         />
       </SwipeBackWrapper>
     );
@@ -1184,7 +1466,10 @@ const App = () => {
           onBack={goBack}
           strategy={paymentItem}
           amount={stockCheckout.amount}
+          baseAmount={stockCheckout.baseAmount}
           shareCount={stockCheckout.shareCount}
+          initialMethod={pendingPaymentMethod}
+          onOpenDeposit={() => navigateTo("deposit")}
           onSuccess={async (response) => {
             console.log("Payment successful:", response);
             const goalId = selectedGoalIdRef.current;
@@ -1259,8 +1544,8 @@ const App = () => {
   if (currentPage === "factsheet") {
     return (
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
-        <FactsheetPage 
-          onBack={goBack} 
+        <FactsheetPage
+          onBack={goBack}
           strategy={selectedStrategy}
           onOpenInvest={(strategy) => {
             setSelectedStrategy(strategy);
@@ -1278,8 +1563,10 @@ const App = () => {
         <InvestAmountPage
           onBack={goBack}
           strategy={selectedStrategy}
+          paymentMethod={pendingPaymentMethod}
           onContinue={(amount, baseAmount) => {
             setInvestmentAmount(amount);
+            setBaseInvestmentAmount(baseAmount || amount);
             setPendingGoalFlow({
               type: "strategy",
               amount,
@@ -1293,16 +1580,108 @@ const App = () => {
         <GoalLinkModal
           isOpen={showGoalModal && pendingGoalFlow?.type === "strategy"}
           onClose={() => { setShowGoalModal(false); setPendingGoalFlow(null); setSelectedGoalId(null); selectedGoalIdRef.current = null; goalInvestAmountRef.current = 0; }}
-          onConfirm={(goalId) => {
+          onConfirm={async (goalId) => {
             setSelectedGoalId(goalId);
             selectedGoalIdRef.current = goalId;
             goalInvestAmountRef.current = pendingGoalFlow?.baseAmount || pendingGoalFlow?.amount || investmentAmount;
+            pendingPaymentTypeRef.current = "strategy";
             setShowGoalModal(false);
             setPendingGoalFlow(null);
-            navigateTo("payment");
+
+            // Use ref for latest status to avoid race conditions and destructuring bugs
+            if (!onboardingRef.current.complete) {
+              navigateTo("identityCheck");
+              return;
+            }
+            setShowPaymentMethodModal(true);
           }}
           investmentAmount={pendingGoalFlow?.baseAmount || pendingGoalFlow?.amount || investmentAmount}
           assetName={pendingGoalFlow?.assetName || selectedStrategy?.name || "Strategy"}
+        />
+        <PaymentMethodModal
+          isOpen={showPaymentMethodModal}
+          onClose={() => setShowPaymentMethodModal(false)}
+          amount={investmentAmount}
+          strategyName={selectedStrategy?.name || "Investment"}
+          onSelectPaystack={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("paystack"); navigateTo("payment"); }}
+          onSelectWallet={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("wallet"); navigateTo("payment"); }}
+          onSelectOzow={async () => {
+            try {
+              const { data: { user } } = await supabase.auth.getUser();
+              const baseUrl = window.location.origin;
+              const resp = await fetch("/api/ozow/initiate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  amount: investmentAmount,
+                  strategyName: selectedStrategy?.name || "Investment",
+                  strategyId: selectedStrategy?.id || null,
+                  userId: user?.id || null,
+                  userEmail: user?.email || null,
+                  successUrl: `${baseUrl}/?ozow=success`,
+                  cancelUrl: `${baseUrl}/?ozow=cancel`,
+                  errorUrl: `${baseUrl}/?ozow=error`,
+                }),
+              });
+              const data = await resp.json();
+              if (data.success && data.action_url) {
+                sessionStorage.setItem("ozow_pending", JSON.stringify({
+                  transactionRef: data.TransactionReference,
+                  strategyId: data.Optional1,
+                  amount: data.Amount,
+                }));
+                const form = document.createElement("form");
+                form.method = "POST";
+                form.action = data.action_url;
+                const skipFields = ["success", "action_url"];
+                Object.entries(data).forEach(([key, value]) => {
+                  if (skipFields.includes(key)) return;
+                  const input = document.createElement("input");
+                  input.type = "hidden";
+                  input.name = key;
+                  input.value = value;
+                  form.appendChild(input);
+                });
+                document.body.appendChild(form);
+                form.submit();
+                document.body.removeChild(form);
+              } else {
+                alert(data.error || "Failed to initiate Ozow payment. Please try again.");
+              }
+            } catch (err) {
+              console.error("Ozow error:", err);
+              alert("Could not connect to Ozow. Please try another payment method.");
+            }
+          }}
+          onEFTConfirm={async () => {
+            setShowPaymentMethodModal(false);
+            try {
+              const { data: { session } } = await supabase.auth.getSession();
+              const token = session?.access_token;
+              const eftRef = `EFT-${Date.now()}`;
+              const stratId = selectedStrategy?.strategyId || selectedStrategy?.id || null;
+              const headers = { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+              await fetch("/api/eft-deposit", {
+                method: "POST",
+                headers,
+                body: JSON.stringify({
+                  amount: investmentAmount,
+                  baseAmount: baseInvestmentAmount || investmentAmount,
+                  reference: eftRef,
+                  securityId: selectedStrategy?.id,
+                  symbol: selectedStrategy?.symbol || selectedStrategy?.short_name || "",
+                  name: selectedStrategy?.name || "",
+                  strategyId: stratId,
+                }),
+              });
+            } catch (e) {
+              console.error("EFT record error:", e);
+            }
+            setPendingPaymentInfo({ strategy: selectedStrategy?.name, amount: investmentAmount });
+            navigationHistory.current = [];
+            setPreviousPageName(null);
+            setCurrentPage("paymentPending");
+          }}
         />
       </SwipeBackWrapper>
     );
@@ -1315,6 +1694,9 @@ const App = () => {
           onBack={goBack}
           strategy={selectedStrategy}
           amount={investmentAmount}
+          baseAmount={baseInvestmentAmount}
+          initialMethod={pendingPaymentMethod}
+          onOpenDeposit={() => navigateTo("deposit")}
           onSuccess={async (response) => {
             console.log("Payment successful:", response);
             const goalId = selectedGoalIdRef.current;
@@ -1363,6 +1745,16 @@ const App = () => {
 
   if (currentPage === "paymentSuccess") {
     return <PaymentSuccessPage onDone={() => setCurrentPage("home")} />;
+  }
+
+  if (currentPage === "paymentPending") {
+    return (
+      <PaymentPendingPage
+        strategy={pendingPaymentInfo?.strategy}
+        amount={pendingPaymentInfo?.amount}
+        onDone={() => { setPendingPaymentInfo(null); setCurrentPage("home"); }}
+      />
+    );
   }
 
   if (currentPage === "more") {
@@ -1505,8 +1897,8 @@ const App = () => {
   if (currentPage === "identityCheck") {
     return (
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
-        <IdentityCheckPage 
-          onBack={() => navigateTo("home")} 
+        <IdentityCheckPage
+          onBack={() => navigateTo("home")}
           onComplete={() => navigateTo("home")}
         />
       </SwipeBackWrapper>
@@ -1543,9 +1935,9 @@ const App = () => {
           modal={modal}
           onCloseModal={closeModal}
         >
-          <CreditApplyPage 
-            onBack={goBack} 
-            onTabChange={setCurrentPage} 
+          <CreditApplyPage
+            onBack={goBack}
+            onTabChange={setCurrentPage}
             onOpenNotifications={() => {
               setNotificationReturnPage("creditApply");
               navigateTo("notifications");
@@ -1659,8 +2051,8 @@ const App = () => {
       if (supabase) {
         const { data: userData } = await supabase.auth.getUser();
         if (userData?.user) {
-          await createWelcomeNotification(userData.user.id).catch(() => {});
-          await refetchNotifications().catch(() => {});
+          await createWelcomeNotification(userData.user.id).catch(() => { });
+          await refetchNotifications().catch(() => { });
         }
       }
     } catch (err) {
@@ -1686,7 +2078,7 @@ const App = () => {
       if (supabase) {
         const { data: userData } = await supabase.auth.getUser();
         if (userData?.user) {
-          await refetchNotifications().catch(() => {});
+          await refetchNotifications().catch(() => { });
         }
       }
     } catch (err) {
