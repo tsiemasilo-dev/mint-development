@@ -670,6 +670,7 @@ const HomePage = ({
             <NotificationBell onClick={onOpenNotifications} />
           </header>
 
+
           {homeTab === "balance" || homeTab === "invest" ? (
             <div className="relative select-none">
               <div className="relative w-full touch-pan-y h-auto">

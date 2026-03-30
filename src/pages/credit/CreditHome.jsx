@@ -120,6 +120,7 @@ const CreditHome = ({ profile, onOpenNotifications, onTabChange }) => {
 
             <NotificationBell onClick={onOpenNotifications} />
           </header>
+
         </div>
       </div>
       

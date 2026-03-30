@@ -363,7 +363,7 @@ function StepTruIDIntro({ onNext, onCancel }) {
         <svg width="24" height="24" fill="none" viewBox="0 0 24 24">
           <path d="M12 2L3 7v11l9 5 9-5V7l-9-5z" stroke="#6d28d9" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           <path d="M12 22V12" stroke="#6d28d9" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          <path d="M12 12l8.5-4.7s" stroke="#6d28d9" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M12 12l8.5-4.7" stroke="#6d28d9" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           <circle cx="12" cy="12" r="3" stroke="#6d28d9" strokeWidth="2"/>
         </svg>
       </ModalIcon>
@@ -852,17 +852,35 @@ export default function LiquidityFlow({ principal, profile, loanId, termMonths =
       // 2. Email the agreement to the client
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        fetch("/api/loan/email-agreement", {
+        const assetNames = selectedAssets.map(a => a.name || a.symbol || 'Asset');
+
+        console.log("[LiquidityFlow] Triggering agreement email...", { loanId, assets: assetNames });
+        
+        const emailResponse = await fetch("/api/loan/email-agreement", {
           method: "POST",
           headers: { 
             "Content-Type": "application/json",
             "Authorization": `Bearer ${session?.access_token}`
           },
-          body: JSON.stringify({ loanId, pdfBase64, fileName }),
-        }).catch(err => console.error("Email send failed:", err));
+          body: JSON.stringify({ 
+            loanId, 
+            pdfBase64, 
+            fileName,
+            amount: principal,
+            assets: assetNames
+          }),
+        });
+
+        if (!emailResponse.ok) {
+          const errorData = await emailResponse.json().catch(() => ({}));
+          console.error("[LiquidityFlow] Email send failed server-side:", errorData.error);
+        } else {
+          console.log("[LiquidityFlow] Email sent successfully");
+        }
       } catch (emailErr) {
-        console.warn("Could not initiate email send:", emailErr);
+        console.warn("[LiquidityFlow] Could not initiate email send:", emailErr);
       }
+
 
       // 3. Save to Database
       const { error } = await supabase
