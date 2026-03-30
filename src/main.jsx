@@ -7,11 +7,9 @@ import './styles/tailwind.css';
 import './styles/auth.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <LayoutGroup>
-      <NotificationsProvider>
-        <App />
-      </NotificationsProvider>
-    </LayoutGroup>
-  </React.StrictMode>
+  <LayoutGroup>
+    <NotificationsProvider>
+      <App />
+    </NotificationsProvider>
+  </LayoutGroup>
 );

@@ -45,7 +45,7 @@ const formatKMB = (value) => {
   return `${sign}R${formatted}`;
 };
 
-const TIMEFRAME_DAYS = { d: 2, w: 7, m: 30 };
+const TIMEFRAME_DAYS = { d: 5, w: 7, m: 30 };
 
 const SwipeableBalanceCard = ({
   userId,
@@ -318,7 +318,9 @@ const SwipeableBalanceCard = ({
       const holdingsToChart = selectedAsset ? [selectedAsset] : dbData.holdings;
       const days = TIMEFRAME_DAYS[activeTab] || 30;
       const cutoff = new Date();
+      cutoff.setHours(0, 0, 0, 0); // Start of today
       cutoff.setDate(cutoff.getDate() - days);
+      const startTime = cutoff.getTime();
       const startDateStr = cutoff.toISOString().split("T")[0];
 
       if (selectedAsset?.isStrategy && selectedAsset?.strategyId) {
@@ -354,10 +356,11 @@ const SwipeableBalanceCard = ({
             priceHistory.forEach((p) => {
               const valueAtDate = currentMarketValue * (p.nav / latestNav);
               const pnl = valueAtDate - costBasis;
-              points.push({
-                d: p.ts,
-                v: Number(pnl.toFixed(2)),
-              });
+                const pTime = new Date(p.ts).getTime();
+                points.push({
+                  d: pTime,
+                  v: Number(pnl.toFixed(2)),
+                });
             });
             setChartData(points);
           } else {
@@ -497,10 +500,9 @@ const SwipeableBalanceCard = ({
         }
       });
 
+      // Start with the calculated startTime to define the chart window bounds
       const points = [];
-
-      // Always anchor to the start of the requested timeframe window
-      points.push({ d: startDateStr, v: 0 });
+      const now = Date.now();
 
       for (const dateKey of sortedDates) {
         let totalPnl = 0;
@@ -520,7 +522,11 @@ const SwipeableBalanceCard = ({
         }
 
         if (hasData) {
-          points.push({ d: dateKey, v: Number(totalPnl.toFixed(2)) });
+          const pointTime = new Date(dateKey).getTime();
+          // Avoid duplicate or very close points at the start
+          if (pointTime > startTime) {
+            points.push({ d: pointTime, v: Number(totalPnl.toFixed(2)) });
+          }
         }
       }
 
@@ -550,6 +556,14 @@ const SwipeableBalanceCard = ({
       ? ((displayReturn / displayInvested) * 100).toFixed(1)
       : "0.0";
   const chartColor = isLoss ? "#FB7185" : "#10B981";
+  const now = Date.now();
+  const startTime = (() => {
+    const d = TIMEFRAME_DAYS[activeTab] || 30;
+    const cutoff = new Date();
+    cutoff.setHours(0, 0, 0, 0);
+    cutoff.setDate(cutoff.getDate() - d);
+    return cutoff.getTime();
+  })();
 
   const masked = "••••";
 
@@ -767,15 +781,31 @@ const SwipeableBalanceCard = ({
                     data={chartData}
                     margin={{ top: 2, right: 0, left: 0, bottom: 0 }}
                   >
-                    <XAxis dataKey="d" hide />
+                    <defs>
+                      <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={chartColor} stopOpacity={0.3} />
+                        <stop offset="95%" stopColor={chartColor} stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis 
+                      dataKey="d" 
+                      type="number" 
+                      domain={[startTime, now]} 
+                      hide 
+                    />
                     <Tooltip
                       content={({ active, payload }) => {
                         if (!active || !payload?.length) return null;
+                        const dateObj = new Date(payload[0]?.payload?.d);
+                        const dateFormatted = dateObj.toLocaleDateString("en-ZA", {
+                          day: "numeric",
+                          month: "short",
+                        });
                         return (
                           <div className="bg-white/95 backdrop-blur-sm border border-slate-200 rounded-lg px-2 py-1 shadow-md">
-                            <p className="text-[9px] text-slate-500">{payload[0]?.payload?.d}</p>
+                            <p className="text-[9px] text-slate-500">{dateFormatted}</p>
                             <p className="text-[10px] font-semibold text-slate-800">
-                              {formatKMB(payload[0]?.value)}
+                              R{Number(payload[0]?.value).toFixed(2)}
                             </p>
                           </div>
                         );
@@ -791,14 +821,14 @@ const SwipeableBalanceCard = ({
                       type="monotone"
                       dataKey="v"
                       stroke="none"
-                      fill={chartColor}
-                      fillOpacity={0.1}
+                      fill="url(#colorValue)"
+                      fillOpacity={1}
                     />
                     <Line
                       type="monotone"
                       dataKey="v"
                       stroke={chartColor}
-                      strokeWidth={2}
+                      strokeWidth={3}
                       dot={false}
                     />
                   </ComposedChart>

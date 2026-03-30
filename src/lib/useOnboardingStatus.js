@@ -2,12 +2,16 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "./supabase";
 import { parseOnboardingFlags } from "./checkOnboardingComplete";
 
-export const useOnboardingStatus = () => {
+export const useOnboardingStatus = ({ enabled = true } = {}) => {
   const [onboardingComplete, setOnboardingComplete] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState(null);
 
   const checkStatus = useCallback(async () => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
     if (!supabase) {
       setLoading(false);
       return;
@@ -60,9 +64,10 @@ export const useOnboardingStatus = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
     checkStatus();
 
     // Listen for changes
@@ -80,7 +85,7 @@ export const useOnboardingStatus = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [checkStatus]);
+  }, [checkStatus, enabled]);
 
   return { onboardingComplete, loading, error, refetch: checkStatus };
 };

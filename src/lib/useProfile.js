@@ -38,11 +38,15 @@ const buildProfile = ({ user, row }) => {
 
 let globalProfileCache = null;
 
-export const useProfile = () => {
+export const useProfile = ({ enabled = true } = {}) => {
   const [profile, setProfile] = useState(globalProfileCache || emptyProfile);
-  const [loading, setLoading] = useState(!globalProfileCache);
+  const [loading, setLoading] = useState(enabled && !globalProfileCache);
 
   const loadProfile = useCallback(async () => {
+    if (!enabled) {
+      if (!globalProfileCache) setLoading(false);
+      return;
+    }
     try {
       if (!supabase) {
         setLoading(false);
@@ -126,9 +130,10 @@ export const useProfile = () => {
       console.error("Failed to load profile", error);
       setLoading(false);
     }
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
     loadProfile();
 
     let authSub;
@@ -154,7 +159,7 @@ export const useProfile = () => {
       if (authSub) authSub.unsubscribe();
       window.removeEventListener("profile-updated", handleProfileUpdate);
     };
-  }, [loadProfile]);
+  }, [loadProfile, enabled]);
 
   const refetch = useCallback(() => {
     loadProfile();

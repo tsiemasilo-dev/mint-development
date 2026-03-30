@@ -21,9 +21,9 @@ import FactsheetPage from "./pages/FactsheetPage.jsx";
 import OpenStrategiesPage from "./pages/OpenStrategiesPage.jsx";
 import MorePage from "./pages/MorePage.jsx";
 import OnboardingPage from "./pages/OnboardingPage.jsx";
-import InstantLiquidityPage from "./pages/credit/InstantLiquidity.jsx"; 
+import InstantLiquidityPage from "./pages/credit/InstantLiquidity.jsx";
 import { useProfile } from "./lib/useProfile";
-import SettingsPage from "./pages/SettingsPage.jsx"; 
+import SettingsPage from "./pages/SettingsPage.jsx";
 import TransactPage from "./pages/TransactPage.jsx";
 import UserOnboardingPage from "./pages/UserOnboardingPage.jsx";
 import AppLayout from "./layouts/AppLayout.jsx";
@@ -70,13 +70,13 @@ const clearUserStorage = () => {
     const value = localStorage.getItem(key);
     if (value !== null) keysToKeep[key] = value;
   });
-  
+
   localStorage.clear();
-  
+
   Object.entries(keysToKeep).forEach(([key, value]) => {
     localStorage.setItem(key, value);
   });
-  
+
   sessionStorage.clear();
 };
 
@@ -113,7 +113,6 @@ const App = () => {
   const [authStep, setAuthStep] = useState(isRecoveryMode ? "newPassword" : "email");
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [sessionReady, setSessionReady] = useState(false);
-  const { profile, loading: profileLoading } = useProfile();
   const [notificationReturnPage, setNotificationReturnPage] = useState("home");
   const [modal, setModal] = useState(null);
   const [selectedSecurity, setSelectedSecurity] = useState(null);
@@ -136,7 +135,10 @@ const App = () => {
   const recoveryHandled = useRef(false);
   const { refetch: refetchNotifications, reset: resetNotifications } = useNotificationsContext();
   const [showPinLock, setShowPinLock] = useState(false);
-  const { onboardingComplete, loading: onboardingLoading } = useOnboardingStatus();
+
+  const isAuthenticated = !['welcome', 'auth', 'linkExpired'].includes(currentPage);
+  const { profile, loading: profileLoading } = useProfile({ enabled: isAuthenticated });
+  const { onboardingComplete, loading: onboardingLoading } = useOnboardingStatus({ enabled: isAuthenticated });
   const onboardingRef = useRef({ complete: false, loading: true });
 
   useEffect(() => {
@@ -145,7 +147,6 @@ const App = () => {
 
   const currentPageRef = useRef(currentPage);
   currentPageRef.current = currentPage;
-  const isAuthenticated = !['welcome', 'auth', 'linkExpired'].includes(currentPage);
   useInactivityTimeout({
     enabled: isAuthenticated,
     onLogout: () => {
@@ -232,10 +233,10 @@ const App = () => {
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [isAuthenticated, isCheckingAuth]);
-  
+
   const navigationHistory = useRef([]);
   const pageStateCache = useRef({});
-  
+
   const cacheCurrentPageState = useCallback(() => {
     pageStateCache.current[currentPage] = {
       selectedSecurity,
@@ -251,7 +252,7 @@ const App = () => {
 
   const navigateTo = useCallback((page) => {
     if (page === currentPage) return;
-    
+
     // Protected routes that REQUIRE onboarding
     const protectedPages = ["deposit", "creditApply", "creditRepay"];
 
@@ -277,7 +278,7 @@ const App = () => {
       navigationHistory.current = [];
       setPreviousPageName(null);
     }
-    
+
     setCurrentPage(page);
   }, [currentPage, cacheCurrentPageState, onboardingComplete]);
 
@@ -290,8 +291,8 @@ const App = () => {
   const goBack = useCallback(() => {
     if (navigationHistory.current.length > 0) {
       const prevPage = navigationHistory.current.pop();
-      const newPreviousPage = navigationHistory.current.length > 0 
-        ? navigationHistory.current[navigationHistory.current.length - 1] 
+      const newPreviousPage = navigationHistory.current.length > 0
+        ? navigationHistory.current[navigationHistory.current.length - 1]
         : null;
       setPreviousPageName(newPreviousPage);
       setCurrentPage(prevPage);
@@ -302,7 +303,7 @@ const App = () => {
       }
       return true;
     }
-    
+
     if (!mainTabs.includes(currentPage)) {
       setPreviousPageName(null);
       setCurrentPage('home');
@@ -313,14 +314,14 @@ const App = () => {
       }
       return true;
     }
-    
+
     return false;
   }, [currentPage]);
 
   const canSwipeBack = !mainTabs.includes(currentPage);
 
   const lastBackPressRef = useRef(0);
-  
+
   useEffect(() => {
     if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') {
       return;
@@ -329,20 +330,20 @@ const App = () => {
     const handleBackButton = () => {
       if (navigationHistory.current.length > 0) {
         const prevPage = navigationHistory.current.pop();
-        const newPreviousPage = navigationHistory.current.length > 0 
-          ? navigationHistory.current[navigationHistory.current.length - 1] 
+        const newPreviousPage = navigationHistory.current.length > 0
+          ? navigationHistory.current[navigationHistory.current.length - 1]
           : null;
         setPreviousPageName(newPreviousPage);
         setCurrentPage(prevPage);
         return;
       }
-      
+
       if (!mainTabs.includes(currentPage)) {
         setPreviousPageName(null);
         setCurrentPage('home');
         return;
       }
-      
+
       const now = Date.now();
       if (now - lastBackPressRef.current < 2000) {
         CapacitorApp.exitApp();
@@ -368,7 +369,7 @@ const App = () => {
         navigateTo(page);
       }
     };
-    
+
     window.addEventListener('navigate-within-app', handleNavigationEvent);
     return () => window.removeEventListener('navigate-within-app', handleNavigationEvent);
   }, [navigateTo, currentPage]);
@@ -429,7 +430,7 @@ const App = () => {
             access_token: recoveryTokens.accessToken,
             refresh_token: recoveryTokens.refreshToken
           });
-          
+
           if (!error) {
             setSessionReady(true);
           }
@@ -440,11 +441,18 @@ const App = () => {
       }
       setIsCheckingAuth(false);
     };
-    
+
     const checkExistingSession = async () => {
+      // Safety timeout: never block on the black screen for more than 1s.
+      // Supabase auth lock can deadlock for 5s+ in React StrictMode causing
+      // the spinner to hang indefinitely. The timeout ensures the UI always
+      // unblocks; the session check still completes in the background.
+      const safetyTimer = setTimeout(() => setIsCheckingAuth(false), 1000);
+
       if (supabase && !isRecoveryMode && !hasError) {
         try {
           const { data: { session } } = await supabase.auth.getSession();
+          clearTimeout(safetyTimer);
           if (session) {
             if (ozowReturnParam.current === "success") {
               setCurrentPage("paymentSuccess");
@@ -457,8 +465,11 @@ const App = () => {
             }
           }
         } catch (err) {
+          clearTimeout(safetyTimer);
           console.error("Session check error:", err);
         }
+      } else {
+        clearTimeout(safetyTimer);
       }
       setIsCheckingAuth(false);
     };
@@ -474,7 +485,7 @@ const App = () => {
     if (!supabase || isRecoveryMode) {
       return;
     }
-    
+
     const handleRecoveryFlow = () => {
       if (recoveryHandled.current) return;
       recoveryHandled.current = true;
@@ -482,7 +493,7 @@ const App = () => {
       setCurrentPage("auth");
       window.history.replaceState({}, document.title, window.location.pathname);
     };
-    
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
         handleRecoveryFlow();
@@ -508,7 +519,7 @@ const App = () => {
         setSessionReady(true);
       }
     });
-    
+
     return () => {
       subscription?.unsubscribe();
     };
@@ -622,8 +633,8 @@ const App = () => {
     const previewSecurity = isPreview ? (cachedState.selectedSecurity || selectedSecurity) : selectedSecurity;
     const previewStrategy = isPreview ? (cachedState.selectedStrategy || selectedStrategy) : selectedStrategy;
     const previewArticleId = isPreview ? (cachedState.selectedArticleId || selectedArticleId) : selectedArticleId;
-    
-    const noOp = () => {};
+
+    const noOp = () => { };
 
     switch (pageName) {
       case 'home':
@@ -653,10 +664,10 @@ const App = () => {
         );
       case "credit":
         return (
-          <CreditHome 
-            profile={profile} 
-            onOpenNotifications={() => setShowNotifications(true)} 
-            onTabChange={setCurrentPage} 
+          <CreditHome
+            profile={profile}
+            onOpenNotifications={() => setShowNotifications(true)}
+            onTabChange={setCurrentPage}
           />
         );
       case 'statements':
@@ -691,19 +702,19 @@ const App = () => {
           </AppLayout>
         );
 
-        case 'instantLiquidity':
-          return (
-            <AppLayout
-              activeTab="credit" // Keeps the credit tab highlighted in the layout
-              onTabChange={handleTabChange}
-              onWithdraw={handleWithdrawRequest}
-              onShowComingSoon={handleShowComingSoon}
-              modal={modal}
-              onCloseModal={closeModal}
-            >
+      case 'instantLiquidity':
+        return (
+          <AppLayout
+            activeTab="credit" // Keeps the credit tab highlighted in the layout
+            onTabChange={handleTabChange}
+            onWithdraw={handleWithdrawRequest}
+            onShowComingSoon={handleShowComingSoon}
+            modal={modal}
+            onCloseModal={closeModal}
+          >
             <InstantLiquidityPage profile={profile} onBack={goBack} />
-            </AppLayout>
-          );
+          </AppLayout>
+        );
 
       case 'more':
         return (
@@ -768,8 +779,8 @@ const App = () => {
         );
       case 'factsheet':
         return (
-          <FactsheetPage 
-            onBack={noOp} 
+          <FactsheetPage
+            onBack={noOp}
             strategy={previewStrategy}
             onOpenInvest={noOp}
           />
@@ -973,7 +984,7 @@ const App = () => {
 
   const previousPageComponent = useMemo(() => {
     if (!previousPageName || mainTabs.includes(currentPage)) return null;
-    
+
     // Skip background rendering for SDK-heavy pages to prevent duplicate listeners
     const sdkPages = ["identityCheck", "userOnboarding", "bankLink", "creditApply"];
     if (sdkPages.includes(previousPageName)) return null;
@@ -990,7 +1001,7 @@ const App = () => {
 
 
 
-  if (isCheckingAuth || profileLoading) {
+  if (isCheckingAuth) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0d0d12]">
         <div className="w-8 h-8 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
@@ -1120,7 +1131,7 @@ const App = () => {
       </AppLayout>
     );
   }
-  
+
   if (currentPage === "creditScore") {
     return (
       <AppLayout
@@ -1146,16 +1157,16 @@ const App = () => {
   if (currentPage === "instantLiquidity") {
     return (
       <AppLayout
-        activeTab="instantLiquidity" 
+        activeTab="instantLiquidity"
         onTabChange={handleTabChange}
         onWithdraw={handleWithdrawRequest}
         onShowComingSoon={handleShowComingSoon}
         modal={modal}
         onCloseModal={closeModal}
       >
-        <InstantLiquidityPage 
-          profile={profile} 
-          onBack={goBack} 
+        <InstantLiquidityPage
+          profile={profile}
+          onBack={goBack}
           onTabChange={handleTabChange}
           onLinkBank={() => navigateTo("bankLink")}
           onOpenNotifications={() => {
@@ -1256,10 +1267,10 @@ const App = () => {
         <AppLayout
           activeTab="markets"
           onTabChange={handleTabChange}
-          onWithdraw={() => {}}
-          onShowComingSoon={() => {}}
+          onWithdraw={() => { }}
+          onShowComingSoon={() => { }}
           modal={null}
-          onCloseModal={() => {}}
+          onCloseModal={() => { }}
         >
           <MarketsPage
             onBack={canSwipeBack ? goBack : undefined}
@@ -1292,10 +1303,10 @@ const App = () => {
       <AppLayout
         activeTab="deposit"
         onTabChange={handleTabChange}
-        onWithdraw={() => {}}
-        onShowComingSoon={() => {}}
+        onWithdraw={() => { }}
+        onShowComingSoon={() => { }}
         modal={null}
-        onCloseModal={() => {}}
+        onCloseModal={() => { }}
       >
         <DepositPage onBack={canSwipeBack ? goBack : () => handleTabChange("home")} />
       </AppLayout>
@@ -1344,7 +1355,7 @@ const App = () => {
             pendingPaymentTypeRef.current = "stock";
             setShowGoalModal(false);
             setPendingGoalFlow(null);
-            
+
             // Use ref for latest status to avoid race conditions and destructuring bugs
             if (!onboardingRef.current.complete) {
               navigateTo("identityCheck");
@@ -1533,8 +1544,8 @@ const App = () => {
   if (currentPage === "factsheet") {
     return (
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
-        <FactsheetPage 
-          onBack={goBack} 
+        <FactsheetPage
+          onBack={goBack}
           strategy={selectedStrategy}
           onOpenInvest={(strategy) => {
             setSelectedStrategy(strategy);
@@ -1576,7 +1587,7 @@ const App = () => {
             pendingPaymentTypeRef.current = "strategy";
             setShowGoalModal(false);
             setPendingGoalFlow(null);
-            
+
             // Use ref for latest status to avoid race conditions and destructuring bugs
             if (!onboardingRef.current.complete) {
               navigateTo("identityCheck");
@@ -1886,8 +1897,8 @@ const App = () => {
   if (currentPage === "identityCheck") {
     return (
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
-        <IdentityCheckPage 
-          onBack={() => navigateTo("home")} 
+        <IdentityCheckPage
+          onBack={() => navigateTo("home")}
           onComplete={() => navigateTo("home")}
         />
       </SwipeBackWrapper>
@@ -1924,9 +1935,9 @@ const App = () => {
           modal={modal}
           onCloseModal={closeModal}
         >
-          <CreditApplyPage 
-            onBack={goBack} 
-            onTabChange={setCurrentPage} 
+          <CreditApplyPage
+            onBack={goBack}
+            onTabChange={setCurrentPage}
             onOpenNotifications={() => {
               setNotificationReturnPage("creditApply");
               navigateTo("notifications");
@@ -2040,8 +2051,8 @@ const App = () => {
       if (supabase) {
         const { data: userData } = await supabase.auth.getUser();
         if (userData?.user) {
-          await createWelcomeNotification(userData.user.id).catch(() => {});
-          await refetchNotifications().catch(() => {});
+          await createWelcomeNotification(userData.user.id).catch(() => { });
+          await refetchNotifications().catch(() => { });
         }
       }
     } catch (err) {
@@ -2067,7 +2078,7 @@ const App = () => {
       if (supabase) {
         const { data: userData } = await supabase.auth.getUser();
         if (userData?.user) {
-          await refetchNotifications().catch(() => {});
+          await refetchNotifications().catch(() => { });
         }
       }
     } catch (err) {
