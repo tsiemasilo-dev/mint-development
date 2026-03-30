@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useEffect, useLayoutEffect, useRef } from "react";
 import {
   Eye,
   EyeOff,
@@ -9,12 +9,13 @@ import {
 } from "lucide-react";
 import {
   Area,
+  CartesianGrid,
   ComposedChart,
-  Line,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
+  YAxis,
 } from "recharts";
 import { supabase } from "../lib/supabase";
 import { getStrategyPriceHistory } from "../lib/strategyData";
@@ -46,6 +47,49 @@ const formatKMB = (value) => {
 };
 
 const TIMEFRAME_DAYS = { d: 5, w: 7, m: 30 };
+
+/**
+ * Recharts maps x from data values onto the axis domain. With domain [startTime, now],
+ * points only between first/last sample timestamps occupy a fraction of the width.
+ * Pad to window edges so the stroke uses the full chart width (flat carry of first/last value).
+ */
+function timeKey(d) {
+  return typeof d === "number" ? d : new Date(d).getTime();
+}
+
+function padChartSeriesPoints(points, windowStart, windowEnd) {
+  if (!points?.length) return [];
+  const sorted = [...points].sort((a, b) => timeKey(a.d) - timeKey(b.d));
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+  const out = [];
+  if (timeKey(first.d) > windowStart) {
+    out.push({ d: windowStart, v: first.v });
+  }
+  out.push(...sorted);
+  if (timeKey(last.d) < windowEnd) {
+    out.push({ d: windowEnd, v: last.v });
+  }
+  return out;
+}
+
+function BalanceChartTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null;
+  const raw = payload[0]?.payload?.d;
+  const dateObj = new Date(raw);
+  const dateFormatted = dateObj.toLocaleDateString("en-ZA", {
+    day: "numeric",
+    month: "short",
+  });
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white/95 px-2 py-1 shadow-md backdrop-blur-sm">
+      <p className="text-[9px] text-slate-500">{dateFormatted}</p>
+      <p className="text-[10px] font-semibold text-slate-800">
+        R{Number(payload[0]?.value).toFixed(2)}
+      </p>
+    </div>
+  );
+}
 
 const SwipeableBalanceCard = ({
   userId,
@@ -152,6 +196,10 @@ const SwipeableBalanceCard = ({
   const [chartLoading, setChartLoading] = useState(false);
   const holdingsScrollRef = useRef(null);
   const scrollTimerRef = useRef(null);
+  const chartWrapRef = useRef(null);
+  const [chartWidth, setChartWidth] = useState(0);
+  const [chartKey, setChartKey] = useState(0);
+  const lastMeasuredWidthRef = useRef(0);
 
   const scrollToHoldingIndex = (index) => {
     const container = holdingsScrollRef.current;
@@ -537,6 +585,33 @@ const SwipeableBalanceCard = ({
     fetchChartPrices();
   }, [userId, dbData.holdings, activeTab, selectedAsset, lastUpdated, loading]);
 
+  useLayoutEffect(() => {
+    const el = chartWrapRef.current;
+    if (!el) return;
+    const measure = () => {
+      const w = Math.round(el.getBoundingClientRect().width);
+      if (w < 1) return;
+      setChartWidth(w);
+      if (Math.abs(w - lastMeasuredWidthRef.current) > 1) {
+        lastMeasuredWidthRef.current = w;
+        setChartKey((k) => k + 1);
+      }
+    };
+    measure();
+    const ro =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(() => measure())
+        : null;
+    ro?.observe(el);
+    window.addEventListener("resize", measure);
+    window.addEventListener("orientationchange", measure);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("orientationchange", measure);
+    };
+  }, []);
+
   const displayMarketValue = selectedAsset
     ? Number(selectedAsset.market_value || 0) / 100
     : dbData.totalMarketValue;
@@ -564,6 +639,21 @@ const SwipeableBalanceCard = ({
     cutoff.setDate(cutoff.getDate() - d);
     return cutoff.getTime();
   })();
+
+  const paddedChartData = padChartSeriesPoints(chartData, startTime, now);
+
+  const yAxisDomain = useMemo(() => {
+    if (!paddedChartData.length) return ["auto", "auto"];
+    const values = paddedChartData.map((p) => p.v);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    if (min === max) {
+      const pad = Math.abs(min) * 0.1 || 1;
+      return [min - pad, max + pad];
+    }
+    const padding = (max - min) * 0.1;
+    return [min - padding, max + padding];
+  }, [paddedChartData]);
 
   const masked = "••••";
 
@@ -774,65 +864,111 @@ const SwipeableBalanceCard = ({
           )}
         </div>
 
-        <div className="mb-3 w-full overflow-hidden" style={{ minHeight: 100, height: 100 }}>
+        <div
+          ref={chartWrapRef}
+          className="mb-3 w-full min-w-0 overflow-hidden"
+          style={{ minHeight: 100, height: 100 }}
+        >
               {chartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={100}>
+                chartWidth > 0 ? (
+                <ResponsiveContainer
+                  key={`chart-${chartKey}-${activeTab}`}
+                  width={chartWidth}
+                  height={100}
+                >
                   <ComposedChart
-                    data={chartData}
-                    margin={{ top: 2, right: 0, left: 0, bottom: 0 }}
+                    data={paddedChartData}
+                    margin={{ top: 4, right: 4, left: 0, bottom: 2 }}
                   >
                     <defs>
-                      <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={chartColor} stopOpacity={0.3} />
+                      <linearGradient
+                        id={`colorValue-${chartKey}`}
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop offset="5%" stopColor={chartColor} stopOpacity={0.35} />
                         <stop offset="95%" stopColor={chartColor} stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <XAxis 
-                      dataKey="d" 
-                      type="number" 
-                      domain={[startTime, now]} 
-                      hide 
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="rgba(255,255,255,0.08)"
+                      vertical={false}
                     />
-                    <Tooltip
-                      content={({ active, payload }) => {
-                        if (!active || !payload?.length) return null;
-                        const dateObj = new Date(payload[0]?.payload?.d);
-                        const dateFormatted = dateObj.toLocaleDateString("en-ZA", {
-                          day: "numeric",
+                    <XAxis
+                      dataKey="d"
+                      type="number"
+                      domain={[startTime, now]}
+                      tickFormatter={(ts) => {
+                        const date = new Date(ts);
+                        if (activeTab === "d") {
+                          return date.toLocaleTimeString("en-ZA", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          });
+                        }
+                        return date.toLocaleDateString("en-ZA", {
                           month: "short",
+                          day: "numeric",
                         });
-                        return (
-                          <div className="bg-white/95 backdrop-blur-sm border border-slate-200 rounded-lg px-2 py-1 shadow-md">
-                            <p className="text-[9px] text-slate-500">{dateFormatted}</p>
-                            <p className="text-[10px] font-semibold text-slate-800">
-                              R{Number(payload[0]?.value).toFixed(2)}
-                            </p>
-                          </div>
-                        );
                       }}
+                      tick={{ fontSize: 9, fill: "rgba(148,163,184,0.85)" }}
+                      axisLine={false}
+                      tickLine={false}
+                      dy={4}
+                      minTickGap={28}
                     />
+                    <YAxis
+                      yAxisId="pnl"
+                      orientation="right"
+                      domain={yAxisDomain}
+                      width={44}
+                      tickFormatter={(v) => formatKMB(v)}
+                      tick={{ fontSize: 9, fill: "rgba(148,163,184,0.85)" }}
+                      axisLine={false}
+                      tickLine={false}
+                      dx={2}
+                    />
+                    <Tooltip content={<BalanceChartTooltip />} />
                     <ReferenceLine
+                      yAxisId="pnl"
                       y={0}
-                      stroke="rgba(148,163,184,0.5)"
+                      stroke="rgba(148,163,184,0.45)"
                       strokeDasharray="3 3"
                       strokeWidth={1}
                     />
                     <Area
-                      type="monotone"
-                      dataKey="v"
-                      stroke="none"
-                      fill="url(#colorValue)"
-                      fillOpacity={1}
-                    />
-                    <Line
+                      yAxisId="pnl"
                       type="monotone"
                       dataKey="v"
                       stroke={chartColor}
-                      strokeWidth={3}
+                      strokeWidth={2}
+                      fill={`url(#colorValue-${chartKey})`}
+                      fillOpacity={1}
                       dot={false}
+                      isAnimationActive={false}
+                      activeDot={{
+                        r: 3,
+                        fill: "#fff",
+                        stroke: chartColor,
+                        strokeWidth: 2,
+                      }}
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
+                ) : (
+                  <div className="flex h-full w-full items-end gap-1 py-2">
+                    {[40, 55, 35, 65, 50, 70, 45, 60, 75, 55].map((h, i) => (
+                      <div
+                        key={i}
+                        className="flex-1 rounded-sm bg-white/10"
+                        style={{ height: `${h}%` }}
+                      />
+                    ))}
+                  </div>
+                )
               ) : (
                 <div className="flex items-center justify-center h-full">
                   {chartLoading ? (
