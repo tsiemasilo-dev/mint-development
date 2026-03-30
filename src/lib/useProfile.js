@@ -36,9 +36,11 @@ const buildProfile = ({ user, row }) => {
   };
 };
 
+let globalProfileCache = null;
+
 export const useProfile = () => {
-  const [profile, setProfile] = useState(emptyProfile);
-  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState(globalProfileCache || emptyProfile);
+  const [loading, setLoading] = useState(!globalProfileCache);
 
   const loadProfile = useCallback(async () => {
     try {
@@ -95,6 +97,7 @@ export const useProfile = () => {
       }
 
       const built = buildProfile({ user, row: rowError ? null : rowData });
+      globalProfileCache = built;
       setProfile(built);
       setLoading(false);
 

@@ -31,8 +31,10 @@ async function fetchServerTransactions(token, limit = 50) {
   return json.transactions || [];
 }
 
+let financialDataCache = null;
+
 export const useFinancialData = () => {
-  const [data, setData] = useState({
+  const [data, setData] = useState(financialDataCache || {
     balance: 0,
     investments: 0,
     availableCredit: 0,
@@ -109,7 +111,7 @@ export const useFinancialData = () => {
       const availableCredit = Math.max(0, (totalIncome - totalExpenses) * 0.2);
       const walletBalance = walletResult.data?.balance ?? 0;
 
-      setData({
+      const newData = {
         balance: walletBalance,
         investments: totalInvestments,
         availableCredit,
@@ -119,7 +121,10 @@ export const useFinancialData = () => {
         bestAssets,
         loading: false,
         error: null,
-      });
+      };
+      
+      financialDataCache = newData;
+      setData(newData);
     } catch (err) {
       console.error("Error fetching financial data:", err);
       setData((prev) => ({
