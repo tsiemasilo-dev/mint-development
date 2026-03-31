@@ -878,18 +878,18 @@ const SwipeableBalanceCard = ({
         <div
           ref={chartWrapRef}
           className="mb-3 w-full min-w-0 overflow-hidden"
-          style={{ minHeight: 100, height: 100 }}
+          style={{ minHeight: 170, height: 170 }}
         >
               {chartData.length > 0 ? (
                 chartWidth > 0 ? (
                 <ResponsiveContainer
                   key={`chart-${chartKey}-${activeTab}`}
                   width={chartWidth}
-                  height={100}
+                  height={170}
                 >
                   <ComposedChart
                     data={paddedChartData}
-                    margin={{ top: 4, right: 4, left: 0, bottom: 2 }}
+                    margin={{ top: 8, right: 4, left: 0, bottom: 2 }}
                   >
                     <defs>
                       <linearGradient
@@ -903,11 +903,6 @@ const SwipeableBalanceCard = ({
                         <stop offset="95%" stopColor={chartColor} stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="rgba(255,255,255,0.08)"
-                      vertical={false}
-                    />
                     <XAxis
                       dataKey="d"
                       type="number"
