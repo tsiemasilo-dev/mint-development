@@ -217,55 +217,109 @@ const ConnectionStage = ({ onComplete, onError }) => {
    }
 
    return (
-      <MintCard title="Bank Verification" subtitle="Securely link your primary account to verify income." className="animate-in fade-in slide-in-from-bottom-8 duration-700">
-         <div className="flex flex-col items-center gap-6 py-4">
-            <div className={`h-20 w-20 rounded-full flex items-center justify-center transition-all duration-500 ${status === "capturing" ? "bg-amber-100 text-amber-600 animate-pulse"
-               : status === "success" ? "bg-emerald-100 text-emerald-600"
-                  : status === "cancelled" ? "bg-slate-100 text-slate-400"
-                     : status === "error" ? "bg-red-50 text-red-500"
-                        : "bg-slate-100 text-slate-400"
-               }`}>
-               {status === "cancelled" ? <XCircle size={32} /> : <Landmark size={32} />}
+      <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-6 duration-700">
+
+         {/* ── Hero banner ── */}
+         <div className="relative overflow-hidden rounded-3xl bg-[#0d0d12] px-6 pt-8 pb-9">
+            <div className="absolute -top-8 left-1/2 -translate-x-1/2 w-72 h-40 bg-violet-600/20 rounded-full blur-3xl pointer-events-none" />
+            <div className="relative z-10 flex flex-col items-center text-center gap-3">
+               <div className="h-16 w-16 rounded-2xl bg-white/10 backdrop-blur-sm flex items-center justify-center border border-white/10 shadow-inner">
+                  <Landmark className="h-7 w-7 text-white" />
+               </div>
+               <div>
+                  <h2 className="text-[19px] font-semibold text-white tracking-tight leading-snug">Link Your Bank Account</h2>
+                  <p className="text-[12px] text-white/45 mt-1 max-w-[230px] leading-relaxed">
+                     Securely connect your primary bank to verify affordability
+                  </p>
+               </div>
+               <div className="flex flex-wrap items-center justify-center gap-1.5 mt-1">
+                  {["ABSA", "FNB", "Standard", "Nedbank", "Capitec"].map(b => (
+                     <span key={b} className="text-[9px] font-black uppercase tracking-wider text-white/30 border border-white/10 rounded-full px-2.5 py-0.5">
+                        {b}
+                     </span>
+                  ))}
+               </div>
             </div>
-
-            <div className="text-center max-w-xs">
-               <p className="text-sm font-medium text-slate-600 mb-1">
-                  {message || "We use TruID to verify your affordability in real-time."}
-               </p>
-               {status === "error" && <p className="text-xs text-red-500 font-bold mt-2">{message}</p>}
-            </div>
-
-            {(status === "idle" || status === "error" || status === "cancelled") && (
-               <button
-                  onClick={startSession}
-                  className="w-full py-4 rounded-full bg-white/80 text-slate-800 border border-white/70 font-semibold text-sm shadow-sm shadow-black/5 hover:bg-white hover:text-slate-900 active:scale-95 transition-all flex items-center justify-center gap-2"
-               >
-                  <ShieldCheck size={18} />
-                  {status === "error" || status === "cancelled" ? "Try Again" : "Connect Bank"}
-               </button>
-            )}
-
-            {status === "connecting" && (
-               <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-500">
-                  <span className="w-2 h-2 rounded-full bg-slate-500 animate-ping" />
-                  Connecting...
-               </div>
-            )}
-
-            {status === "capturing" && (
-               <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-amber-600">
-                  <span className="w-2 h-2 rounded-full bg-amber-600 animate-spin" />
-                  Analyzing...
-               </div>
-            )}
-
-            {status === "success" && (
-               <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-emerald-600">
-                  <CheckCircle2 size={16} /> Verified
-               </div>
-            )}
          </div>
-      </MintCard>
+
+         {/* ── Process steps ── */}
+         <div className="space-y-2">
+            {[
+               { n: "1", label: "Consent & Authenticate", sub: "Approve read-only access via TruID" },
+               { n: "2", label: "Transaction Analysis", sub: "We scan your last 3 months of data" },
+               { n: "3", label: "Encrypted Handoff", sub: "Only an income summary is stored" },
+            ].map(row => (
+               <div key={row.n} className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-white border border-slate-100 shadow-sm">
+                  <span className="w-7 h-7 rounded-full bg-violet-50 text-violet-700 text-[11px] font-black flex items-center justify-center shrink-0 ring-1 ring-violet-100">
+                     {row.n}
+                  </span>
+                  <div>
+                     <p className="text-[13px] font-semibold text-slate-800 leading-tight">{row.label}</p>
+                     <p className="text-[11px] text-slate-400 leading-tight mt-0.5">{row.sub}</p>
+                  </div>
+               </div>
+            ))}
+         </div>
+
+         {/* ── Status messages ── */}
+         {status === "error" && (
+            <div className="px-4 py-3 rounded-xl bg-red-50 border border-red-100 flex items-start gap-2">
+               <XCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+               <p className="text-[12px] text-red-600 font-medium">{message}</p>
+            </div>
+         )}
+         {status === "cancelled" && (
+            <div className="px-4 py-3 rounded-xl bg-amber-50 border border-amber-100">
+               <p className="text-[12px] text-amber-700 font-medium">{message}</p>
+            </div>
+         )}
+
+         {/* ── CTA ── */}
+         {(status === "idle" || status === "error" || status === "cancelled") && (
+            <button
+               onClick={startSession}
+               className="w-full py-4 rounded-2xl bg-[#0d0d12] text-white font-bold text-[14px] tracking-wide shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 mt-1"
+            >
+               <ShieldCheck size={18} />
+               {status === "error" || status === "cancelled" ? "Try Again" : "Connect Bank Account"}
+            </button>
+         )}
+
+         {status === "connecting" && (
+            <div className="flex flex-col items-center gap-3 py-3">
+               <div className="flex gap-1.5">
+                  {[0, 1, 2].map(i => (
+                     <span key={i} className="w-2 h-2 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+                  ))}
+               </div>
+               <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Initializing secure session…</p>
+            </div>
+         )}
+
+         {status === "capturing" && (
+            <div className="flex flex-col items-center gap-3 py-3">
+               <div className="relative h-12 w-12">
+                  <div className="absolute inset-0 rounded-full border-2 border-violet-100" />
+                  <div className="absolute inset-0 rounded-full border-2 border-t-violet-600 animate-spin" />
+               </div>
+               <p className="text-[11px] font-bold text-violet-600 uppercase tracking-widest">Analyzing transactions…</p>
+            </div>
+         )}
+
+         {status === "success" && (
+            <div className="flex flex-col items-center gap-3 py-3">
+               <div className="h-12 w-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center ring-1 ring-emerald-100">
+                  <CheckCircle2 size={24} />
+               </div>
+               <p className="text-[11px] font-bold text-emerald-600 uppercase tracking-widest">Verified</p>
+            </div>
+         )}
+
+         {/* ── Trust strip ── */}
+         <p className="text-center text-[10px] text-slate-400 mt-1 flex items-center justify-center gap-1">
+            <Shield size={10} className="shrink-0" /> Powered by TruID · Bank-grade 256-bit encryption
+         </p>
+      </div>
    );
 };
 
@@ -309,84 +363,123 @@ const EnrichmentStage = ({ onSubmit, defaultValues, employerOptions, employerLoc
    );
 
    return (
-      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
-         <MintCard title="Employment Details" className="relative overflow-hidden">
-            <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-               <p className="text-slate-500 text-xs">Please confirm these details are correct.</p>
+      <div className="space-y-4 animate-in fade-in slide-in-from-bottom-8 duration-700">
 
-               <div className="space-y-3">
-                  <label className="block">
-                     <span className="text-xs font-bold text-slate-400 uppercase">Employer Name</span>
-                     <input
-                        list="employer-list"
-                        className="w-full mt-1 border-b border-slate-200 bg-transparent py-2 text-sm font-semibold focus:border-slate-900 focus:outline-none transition-colors"
-                        value={formData.employerName}
-                        onChange={(e) => handleChange("employerName", e.target.value)}
-                        placeholder="e.g. Acme Corp"
-                     />
-                     {employerOptions?.length > 0 && (
-                        <datalist id="employer-list">
-                           {employerOptions.map((name) => (
-                              <option key={name} value={name} />
-                           ))}
-                        </datalist>
-                     )}
-                  </label>
-
-                  <div className="grid grid-cols-2 gap-4">
-                     <label className="block">
-                        <span className="text-xs font-bold text-slate-400 uppercase">Sector</span>
-                        <select
-                           value={formData.employmentSector}
-                           onChange={(e) => handleChange('employmentSector', e.target.value)}
-                           className="w-full mt-1 border-b border-slate-200 bg-transparent py-2 text-sm font-semibold focus:border-slate-900 focus:outline-none"
-                        >
-                           <option value="">Select...</option>
-                           <option value="government">Government</option>
-                           <option value="private">Private</option>
-                           <option value="listed">Listed Company</option>
-                           <option value="other">Other</option>
-                        </select>
-                     </label>
-                     <label className="block">
-                        <span className="text-xs font-bold text-slate-400 uppercase">Contract</span>
-                        <select
-                           value={formData.contractType}
-                           onChange={(e) => handleChange('contractType', e.target.value)}
-                           className="w-full mt-1 border-b border-slate-200 bg-transparent py-2 text-sm font-semibold focus:border-slate-900 focus:outline-none"
-                        >
-                           <option value="">Select...</option>
-                           <option value="PERMANENT">Permanent</option>
-                           <option value="FIXED_TERM_12_PLUS">Fixed Term ({'>'}12m)</option>
-                           <option value="FIXED_TERM_LT_12">Fixed Term ({'<'}12m)</option>
-                           <option value="SELF_EMPLOYED_12_PLUS">Self Employed</option>
-                        </select>
-                     </label>
-                  </div>
-
-                  <label className="block">
-                     <span className="text-xs font-bold text-slate-400 uppercase">Years at current employer</span>
-                     <select
-                        value={formData.yearsCurrentEmployer}
-                        onChange={(e) => handleChange("yearsCurrentEmployer", e.target.value)}
-                        className="w-full mt-1 border-b border-slate-200 bg-transparent py-2 text-sm font-semibold focus:border-slate-900 focus:outline-none"
-                     >
-                        <option value="">Select...</option>
-                        <option value="<1">Less than 1</option>
-                        <option value="1">1</option>
-                        <option value="2">2</option>
-                        <option value="3">3</option>
-                        <option value="4+">4+</option>
-                     </select>
-                  </label>
-               </div>
+         {/* ── Header banner ── */}
+         <div className="relative overflow-hidden rounded-3xl bg-[#0d0d12] px-5 py-5 flex items-center gap-4">
+            <div className="absolute right-0 top-0 w-40 h-full bg-violet-600/10 blur-2xl pointer-events-none" />
+            <div className="h-12 w-12 rounded-2xl bg-white/10 flex items-center justify-center border border-white/10 shrink-0">
+               <Briefcase className="h-5 w-5 text-white" />
             </div>
-         </MintCard>
+            <div>
+               <h2 className="text-[17px] font-semibold text-white tracking-tight">Employment Details</h2>
+               <p className="text-[11px] text-white/45 mt-0.5">Used for your affordability assessment</p>
+            </div>
+         </div>
 
+         {/* ── Employer Name ── */}
+         <div className="rounded-2xl bg-white border border-slate-100 shadow-sm px-4 pt-4 pb-4">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2">Employer Name</span>
+            <input
+               list="employer-list"
+               className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm font-semibold text-slate-800 placeholder-slate-300 focus:border-violet-400 focus:ring-2 focus:ring-violet-100 focus:outline-none transition"
+               value={formData.employerName}
+               onChange={(e) => handleChange("employerName", e.target.value)}
+               placeholder="e.g. Acme Corporation"
+            />
+            {employerOptions?.length > 0 && (
+               <datalist id="employer-list">
+                  {employerOptions.map((name) => (
+                     <option key={name} value={name} />
+                  ))}
+               </datalist>
+            )}
+         </div>
+
+         {/* ── Sector pill grid ── */}
+         <div className="rounded-2xl bg-white border border-slate-100 shadow-sm px-4 pt-4 pb-4">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-3">Employment Sector</span>
+            <div className="grid grid-cols-2 gap-2">
+               {[
+                  { value: "government", label: "Government" },
+                  { value: "private", label: "Private" },
+                  { value: "listed", label: "Listed Company" },
+                  { value: "other", label: "Other" },
+               ].map(opt => (
+                  <button
+                     key={opt.value}
+                     type="button"
+                     onClick={() => handleChange("employmentSector", opt.value)}
+                     className={`py-3 rounded-xl text-[12px] font-bold transition-all border active:scale-95 ${
+                        formData.employmentSector === opt.value
+                           ? "bg-[#0d0d12] text-white border-[#0d0d12] shadow-md"
+                           : "bg-slate-50 text-slate-500 border-slate-200 hover:border-slate-300 hover:bg-slate-100"
+                     }`}
+                  >
+                     {opt.label}
+                  </button>
+               ))}
+            </div>
+         </div>
+
+         {/* ── Contract type pill grid ── */}
+         <div className="rounded-2xl bg-white border border-slate-100 shadow-sm px-4 pt-4 pb-4">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-3">Contract Type</span>
+            <div className="grid grid-cols-2 gap-2">
+               {[
+                  { value: "PERMANENT", label: "Permanent" },
+                  { value: "FIXED_TERM_12_PLUS", label: "Fixed Term >12m" },
+                  { value: "FIXED_TERM_LT_12", label: "Fixed Term <12m" },
+                  { value: "SELF_EMPLOYED_12_PLUS", label: "Self-Employed" },
+               ].map(opt => (
+                  <button
+                     key={opt.value}
+                     type="button"
+                     onClick={() => handleChange("contractType", opt.value)}
+                     className={`py-3 rounded-xl text-[12px] font-bold transition-all border active:scale-95 ${
+                        formData.contractType === opt.value
+                           ? "bg-violet-600 text-white border-violet-600 shadow-md"
+                           : "bg-slate-50 text-slate-500 border-slate-200 hover:border-slate-300 hover:bg-slate-100"
+                     }`}
+                  >
+                     {opt.label}
+                  </button>
+               ))}
+            </div>
+         </div>
+
+         {/* ── Years at employer chip row ── */}
+         <div className="rounded-2xl bg-white border border-slate-100 shadow-sm px-4 pt-4 pb-4">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-3">Years at Current Employer</span>
+            <div className="flex gap-2">
+               {[
+                  { value: "<1", label: "< 1yr" },
+                  { value: "1", label: "1yr" },
+                  { value: "2", label: "2yr" },
+                  { value: "3", label: "3yr" },
+                  { value: "4+", label: "4yr+" },
+               ].map(opt => (
+                  <button
+                     key={opt.value}
+                     type="button"
+                     onClick={() => handleChange("yearsCurrentEmployer", opt.value)}
+                     className={`flex-1 py-3 rounded-xl text-[11px] font-black transition-all border active:scale-95 ${
+                        formData.yearsCurrentEmployer === opt.value
+                           ? "bg-emerald-600 text-white border-emerald-600 shadow-md"
+                           : "bg-slate-50 text-slate-500 border-slate-200 hover:border-slate-300 hover:bg-slate-100"
+                     }`}
+                  >
+                     {opt.label}
+                  </button>
+               ))}
+            </div>
+         </div>
+
+         {/* ── Continue CTA ── */}
          <button
             onClick={() => onSubmit(formData)}
             disabled={!canContinue}
-            className="w-full py-4 rounded-full bg-slate-900 text-white font-semibold text-[17px] shadow-lg hover:bg-slate-800 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full py-4 rounded-2xl bg-[#0d0d12] text-white font-bold text-[14px] tracking-wide shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed mt-1"
          >
             Continue <ArrowRight size={18} />
          </button>
