@@ -96,6 +96,7 @@ export function useCreditCheck() {
   const [loanRecord, setLoanRecord] = useState(null);
   const [profile, setProfile] = useState(null);
   const [snapshot, setSnapshot] = useState(null);
+  const [bankLinked, setBankLinked] = useState(false);
   const [onboardingEmployerName, setOnboardingEmployerName] = useState(null);
   const [onboardingEmploymentType, setOnboardingEmploymentType] = useState(null);
   const [onboardingEmploymentSector, setOnboardingEmploymentSector] = useState(null);
@@ -186,6 +187,12 @@ export function useCreditCheck() {
         .limit(1)
         .maybeSingle();
 
+      const { data: actionsData } = await supabase
+        .from("required_actions")
+        .select("bank_linked")
+        .eq("user_id", session.user.id)
+        .maybeSingle();
+
       const { data: onboardingData } = await supabase
         .from("user_onboarding")
         .select("employer_name,employment_type,employer_industry")
@@ -210,6 +217,7 @@ export function useCreditCheck() {
 
       setProfile(profileData || null);
       setSnapshot(snapshotData || null);
+      setBankLinked(Boolean(snapshotData || actionsData?.bank_linked));
       const normalizedEmploymentType = normalizeContractTypeValue(onboardingData?.employment_type);
       const contractTypeLocked = Boolean(
         normalizedEmploymentType && CONTRACT_TYPE_VALUES.has(normalizedEmploymentType)
@@ -395,6 +403,7 @@ export function useCreditCheck() {
     normalizedContractType,
     profile,
     snapshot,
+    bankLinked,
     loadingProfile,
     intakeError,
     locked,

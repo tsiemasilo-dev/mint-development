@@ -713,6 +713,7 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
       employerCsv,
       lockInputs,
       snapshot,
+      bankLinked,
       proceedToStep3, // Import this to save progress to DB
       loadingProfile,
       onboardingEmployerName,
@@ -742,14 +743,14 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
 
    useEffect(() => {
       if (loadingProfile) return;
-      if (!snapshot || step !== 0) return;
+      if (!(snapshot || bankLinked) || step !== 0) return;
       setAutoAdvance(true);
       const timer = setTimeout(() => {
          setStep(2);
          setAutoAdvance(false);
       }, 900);
       return () => clearTimeout(timer);
-   }, [snapshot, step, loadingProfile]);
+   }, [snapshot, bankLinked, step, loadingProfile]);
 
 
 
@@ -800,7 +801,13 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
       loadLoanApplications().finally(() => setLoadingLoans(false));
    }, []);
 
-   const handleStart = () => setStep(1);
+   const handleStart = () => {
+      if (snapshot || bankLinked) {
+         setStep(2);
+      } else {
+         setStep(1);
+      }
+   };
 
    const handleConnectionComplete = (collectionId, snapshotData) => {
       if (snapshotData) {
