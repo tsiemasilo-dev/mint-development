@@ -789,7 +789,7 @@ const ResultStage = ({ score, isCalculating, engineFailed, breakdown, engineResu
 
 const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotifications }) => {
    const { profile } = useProfile();
-   const [step, setStep] = useState(0); // 0=Intro, 1=Connect, 2=Enrich, 3=Result
+   const [step, setStep] = useState(0); // 0=Intro, 1=Connect, 2=Enrich, 3=Result, 4=Next
    const [resolving, setResolving] = useState(true); // gate: hide UI while checkpoint resolves
    const [autoAdvance, setAutoAdvance] = useState(false);
    const [autoAdvanceCopy, setAutoAdvanceCopy] = useState({
@@ -874,7 +874,22 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
          const userId = sessionData?.session?.user?.id;
          if (!userId) { setResolving(false); return; }
 
-         // 1. Check loan_application checkpoint
+         // 1. If user already has loan_engine_score data, step 3 is considered complete.
+         const { data: existingStep3Data } = await supabase
+            .from("loan_engine_score")
+            .select("id")
+            .eq("user_id", userId)
+            .order("run_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+         if (existingStep3Data?.id) {
+            setStep(4);
+            setResolving(false);
+            return;
+         }
+
+         // 2. Check loan_application checkpoint
          const { data: latestLoan } = await supabase
             .from("loan_application")
             .select("step_number")
@@ -886,14 +901,14 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
 
          const checkpointStep = Number(latestLoan?.step_number || 0);
 
-         // 2. If checkpoint says step 3, go straight there
+         // 3. If checkpoint says step 3, go straight there
          if (checkpointStep >= 3) {
             setStep(3);
             setResolving(false);
             return;
          }
 
-         // 3. If checkpoint says step 2, or bank is linked, check employment too
+         // 4. If checkpoint says step 2, or bank is linked, check employment too
          if (checkpointStep >= 2 || snapshot || bankLinked) {
             const { data: empSnap } = await supabase
                .from("loan_engine_score")
@@ -914,7 +929,7 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
             return;
          }
 
-         // 4. Fresh user — stay on step 0
+         // 5. Fresh user — stay on step 0
          setResolving(false);
       };
 
@@ -1295,8 +1310,22 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
                breakdown={engineResult?.breakdown}
                engineResult={engineResult}
                onRunAssessment={handleRunAssessment}
-               onContinue={onComplete}
+               onContinue={() => setStep(4)}
             />;
+         case 4:
+            return (
+               <MintCard className="animate-in fade-in slide-in-from-bottom-6 duration-500">
+                  <div className="flex flex-col items-center text-center gap-3 py-8">
+                     <div className="h-14 w-14 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center">
+                        <CheckCircle2 size={24} />
+                     </div>
+                     <h3 className="text-lg font-semibold text-slate-900">Step 4 Ready</h3>
+                     <p className="text-sm text-slate-500 max-w-[280px]">
+                        Your step 3 assessment is complete. This is the new step 4 placeholder.
+                     </p>
+                  </div>
+               </MintCard>
+            );
          default:
             return null;
       }
@@ -1307,12 +1336,13 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
       if (step === 1) return "Link Accounts";
       if (step === 2) return "Confirm Details";
       if (step === 3) return "Assessment Result";
+      if (step === 4) return "Step 4";
       return "";
    };
 
    const getStepInfo = () => {
       if (step === 0) return "Start";
-      return `${step} / 3`;
+      return `${step} / 4`;
    };
 
    // ── Resolving gate: show branded loader while checkpoints resolve ──
@@ -1340,7 +1370,7 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
    return (
       <MintGradientLayout
          title={getTitle()}
-         subtitle={step === 1 ? "We need to verify your income via your primary bank account." : step === 2 ? "Review the details we found." : ""}
+         subtitle={step === 1 ? "We need to verify your income via your primary bank account." : step === 2 ? "Review the details we found." : step === 4 ? "Placeholder step for post-assessment flow." : ""}
          stepInfo={getStepInfo()}
          onBack={() => setStep(s => s - 1)}
       >
