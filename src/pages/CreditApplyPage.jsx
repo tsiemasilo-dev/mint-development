@@ -894,19 +894,12 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
          setResumeStep(checkpointStep);
 
          if (checkpointStep >= 3) {
-            triggerAutoAdvance(
-               3,
-               "Application checkpoint found",
-               "Taking you straight to your affordability result…",
-               "indigo"
-            );
+            // Instant resume — no pulse, no flash
+            setStep(3);
+            setCheckedEmploymentSnapshot(true); // skip step-2 check
          } else if (checkpointStep >= 2 || snapshot || bankLinked) {
-            triggerAutoAdvance(
-               2,
-               "Bank data already captured",
-               "Taking you to the review step…",
-               "emerald"
-            );
+            // Instant resume — no pulse, no flash
+            setStep(2);
          }
 
          setCheckedResumeCheckpoint(true);
@@ -966,17 +959,13 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
             && Boolean(employmentSnapshot?.employer_name);
 
          if (hasEmploymentDetails) {
-            triggerAutoAdvance(
-               3,
-               "Employment details already captured",
-               "Taking you to your affordability result…",
-               "violet"
-            );
+            // Instant skip — no pulse card flash
+            setStep(3);
          }
       };
 
       checkEmploymentSnapshot().finally(() => setCheckedEmploymentSnapshot(true));
-   }, [loadingProfile, step, checkedEmploymentSnapshot, triggerAutoAdvance]);
+   }, [loadingProfile, step, checkedEmploymentSnapshot]);
 
    useEffect(() => {
       const loadLoanApplications = async () => {
