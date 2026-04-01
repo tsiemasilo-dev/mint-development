@@ -791,11 +791,18 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
    const { profile } = useProfile();
    const [step, setStep] = useState(0); // 0=Intro, 1=Connect, 2=Enrich, 3=Result
    const [autoAdvance, setAutoAdvance] = useState(false);
+   const [autoAdvanceCopy, setAutoAdvanceCopy] = useState({
+      title: "Bank data already captured",
+      subtitle: "Taking you to the review step…"
+   });
    const [checkedExistingScore, setCheckedExistingScore] = useState(false);
    const [checkedEmploymentSnapshot, setCheckedEmploymentSnapshot] = useState(false);
+   const [checkedResumeCheckpoint, setCheckedResumeCheckpoint] = useState(false);
+   const [resumeStep, setResumeStep] = useState(0);
    const [loanApplications, setLoanApplications] = useState([]);
    const [loadingLoans, setLoadingLoans] = useState(true);
    const [showDetails, setShowDetails] = useState(false);
+   const autoAdvanceTimerRef = useRef(null);
 
    // Real Hook Integration
    const {
@@ -827,6 +834,28 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
       return `R ${numeric.toLocaleString("en-ZA", { maximumFractionDigits: 0 })}`;
    };
 
+   const triggerAutoAdvance = useCallback((nextStep, title, subtitle) => {
+      if (autoAdvanceTimerRef.current) {
+         clearTimeout(autoAdvanceTimerRef.current);
+      }
+
+      setAutoAdvanceCopy({ title, subtitle });
+      setAutoAdvance(true);
+
+      autoAdvanceTimerRef.current = setTimeout(() => {
+         setStep(nextStep);
+         setAutoAdvance(false);
+      }, 900);
+   }, []);
+
+   useEffect(() => {
+      return () => {
+         if (autoAdvanceTimerRef.current) {
+            clearTimeout(autoAdvanceTimerRef.current);
+         }
+      };
+   }, []);
+
    // Sync Supabase Snapshot to Form
    useEffect(() => {
       if (snapshot) {
@@ -836,15 +865,52 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
    }, [snapshot, setField]);
 
    useEffect(() => {
-      if (loadingProfile) return;
-      if (!(snapshot || bankLinked) || step !== 0) return;
-      setAutoAdvance(true);
-      const timer = setTimeout(() => {
-         setStep(2);
-         setAutoAdvance(false);
-      }, 900);
-      return () => clearTimeout(timer);
-   }, [snapshot, bankLinked, step, loadingProfile]);
+      if (loadingProfile || checkedResumeCheckpoint || step !== 0) return;
+
+      const resolveResumeCheckpoint = async () => {
+         if (!supabase) {
+            setCheckedResumeCheckpoint(true);
+            return;
+         }
+
+         const { data: sessionData } = await supabase.auth.getSession();
+         const userId = sessionData?.session?.user?.id;
+         if (!userId) {
+            setCheckedResumeCheckpoint(true);
+            return;
+         }
+
+         const { data: latestLoan } = await supabase
+            .from("loan_application")
+            .select("step_number")
+            .eq("user_id", userId)
+            .eq("status", "in_progress")
+            .order("updated_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+         const checkpointStep = Number(latestLoan?.step_number || 0);
+         setResumeStep(checkpointStep);
+
+         if (checkpointStep >= 3) {
+            triggerAutoAdvance(
+               3,
+               "Application checkpoint found",
+               "Taking you straight to your affordability result…"
+            );
+         } else if (checkpointStep >= 2 || snapshot || bankLinked) {
+            triggerAutoAdvance(
+               2,
+               "Bank data already captured",
+               "Taking you to the review step…"
+            );
+         }
+
+         setCheckedResumeCheckpoint(true);
+      };
+
+      resolveResumeCheckpoint();
+   }, [loadingProfile, checkedResumeCheckpoint, step, snapshot, bankLinked, triggerAutoAdvance]);
 
 
 
@@ -897,12 +963,16 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
             && Boolean(employmentSnapshot?.employer_name);
 
          if (hasEmploymentDetails) {
-            setStep(3);
+            triggerAutoAdvance(
+               3,
+               "Employment details already captured",
+               "Taking you to your affordability result…"
+            );
          }
       };
 
       checkEmploymentSnapshot().finally(() => setCheckedEmploymentSnapshot(true));
-   }, [loadingProfile, step, checkedEmploymentSnapshot]);
+   }, [loadingProfile, step, checkedEmploymentSnapshot, triggerAutoAdvance]);
 
    useEffect(() => {
       const loadLoanApplications = async () => {
@@ -927,7 +997,9 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
    }, []);
 
    const handleStart = () => {
-      if (snapshot || bankLinked) {
+      if (resumeStep >= 3) {
+         setStep(3);
+      } else if (resumeStep >= 2 || snapshot || bankLinked) {
          setStep(2);
       } else {
          setStep(1);
@@ -1094,31 +1166,32 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
          );
       }
 
+      if (autoAdvance && (step === 0 || step === 2)) {
+         return (
+            <MintCard className="animate-in fade-in zoom-in-95 duration-700">
+               <div className="flex flex-col items-center gap-4 py-8 text-center">
+                  <div className="h-16 w-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center animate-pulse">
+                     <CheckCircle2 size={28} />
+                  </div>
+                  <div className="space-y-2">
+                     <h3 className="text-lg font-bold text-slate-900">{autoAdvanceCopy.title}</h3>
+                     <p className="text-sm text-slate-500">{autoAdvanceCopy.subtitle}</p>
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-emerald-600">
+                     <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping"></span>
+                     Auto‑continue
+                  </div>
+               </div>
+            </MintCard>
+         );
+      }
+
       switch (step) {
          case 0:
             if (loadingProfile) {
                return <CreditApplySkeleton />;
             }
 
-            if (autoAdvance) {
-               return (
-                  <MintCard className="animate-in fade-in zoom-in-95 duration-700">
-                     <div className="flex flex-col items-center gap-4 py-8 text-center">
-                        <div className="h-16 w-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center animate-pulse">
-                           <CheckCircle2 size={28} />
-                        </div>
-                        <div className="space-y-2">
-                           <h3 className="text-lg font-bold text-slate-900">Bank data already captured</h3>
-                           <p className="text-sm text-slate-500">Taking you to the review step…</p>
-                        </div>
-                        <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-emerald-600">
-                           <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping"></span>
-                           Auto‑continue
-                        </div>
-                     </div>
-                  </MintCard>
-               );
-            }
             return (
                <div className="animate-in fade-in slide-in-from-bottom-8 duration-700 flex flex-col items-center px-6 pb-10 min-h-screen bg-white">
 
