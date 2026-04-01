@@ -745,7 +745,7 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
       if (!snapshot || step !== 0) return;
       setAutoAdvance(true);
       const timer = setTimeout(() => {
-         setStep("bank_success");
+         setStep(2);
          setAutoAdvance(false);
       }, 900);
       return () => clearTimeout(timer);
@@ -807,7 +807,7 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
          if (snapshotData.avg_monthly_income) setField("annualIncome", String(snapshotData.avg_monthly_income * 12));
          if (snapshotData.avg_monthly_expenses) setField("annualExpenses", String(snapshotData.avg_monthly_expenses * 12));
       }
-      setStep("bank_success");
+      setStep(2);
    };
 
    const handleEnrichmentSubmit = async (finalData) => {
