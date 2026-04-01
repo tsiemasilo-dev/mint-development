@@ -220,7 +220,7 @@ const ConnectionStage = ({ onComplete, onError }) => {
       <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-6 duration-700">
 
          {/* ── Hero banner ── */}
-         <div className="relative overflow-hidden rounded-3xl bg-[#0d0d12] px-6 pt-8 pb-9">
+         <div className="relative overflow-hidden rounded-3xl bg-[#160d2a] px-6 pt-8 pb-9">
             <div className="absolute -top-8 left-1/2 -translate-x-1/2 w-72 h-40 bg-violet-600/20 rounded-full blur-3xl pointer-events-none" />
             <div className="relative z-10 flex flex-col items-center text-center gap-3">
                <div className="h-16 w-16 rounded-2xl bg-white/10 backdrop-blur-sm flex items-center justify-center border border-white/10 shadow-inner">
@@ -278,7 +278,7 @@ const ConnectionStage = ({ onComplete, onError }) => {
          {(status === "idle" || status === "error" || status === "cancelled") && (
             <button
                onClick={startSession}
-               className="w-full py-4 rounded-2xl bg-[#0d0d12] text-white font-bold text-[14px] tracking-wide shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 mt-1"
+               className="w-full py-4 rounded-2xl bg-[#160d2a] text-white font-bold text-[14px] tracking-wide shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 mt-1"
             >
                <ShieldCheck size={18} />
                {status === "error" || status === "cancelled" ? "Try Again" : "Connect Bank Account"}
@@ -366,7 +366,7 @@ const EnrichmentStage = ({ onSubmit, defaultValues, employerOptions, employerLoc
       <div className="space-y-4 animate-in fade-in slide-in-from-bottom-8 duration-700">
 
          {/* ── Header banner ── */}
-         <div className="relative overflow-hidden rounded-3xl bg-[#0d0d12] px-5 py-5 flex items-center gap-4">
+         <div className="relative overflow-hidden rounded-3xl bg-[#160d2a] px-5 py-5 flex items-center gap-4">
             <div className="absolute right-0 top-0 w-40 h-full bg-violet-600/10 blur-2xl pointer-events-none" />
             <div className="h-12 w-12 rounded-2xl bg-white/10 flex items-center justify-center border border-white/10 shrink-0">
                <Briefcase className="h-5 w-5 text-white" />
@@ -412,7 +412,7 @@ const EnrichmentStage = ({ onSubmit, defaultValues, employerOptions, employerLoc
                      onClick={() => handleChange("employmentSector", opt.value)}
                      className={`py-3 rounded-xl text-[12px] font-bold transition-all border active:scale-95 ${
                         formData.employmentSector === opt.value
-                           ? "bg-[#0d0d12] text-white border-[#0d0d12] shadow-md"
+                           ? "bg-[#160d2a] text-white border-[#160d2a] shadow-md"
                            : "bg-slate-50 text-slate-500 border-slate-200 hover:border-slate-300 hover:bg-slate-100"
                      }`}
                   >
@@ -479,7 +479,7 @@ const EnrichmentStage = ({ onSubmit, defaultValues, employerOptions, employerLoc
          <button
             onClick={() => onSubmit(formData)}
             disabled={!canContinue}
-            className="w-full py-4 rounded-2xl bg-[#0d0d12] text-white font-bold text-[14px] tracking-wide shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed mt-1"
+            className="w-full py-4 rounded-2xl bg-[#160d2a] text-white font-bold text-[14px] tracking-wide shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed mt-1"
          >
             Continue <ArrowRight size={18} />
          </button>
@@ -635,7 +635,7 @@ const ResultStage = ({ score, isCalculating, engineFailed, breakdown, engineResu
                <p className="text-xs text-slate-500">{engineResult?.error || "Please try again."}</p>
                <button
                   onClick={onRunAssessment}
-                  className="w-full py-3 rounded-full bg-slate-900 text-white font-semibold text-sm shadow-lg hover:bg-slate-800 active:scale-95 transition-all"
+                  className="w-full py-3 rounded-full bg-[#160d2a] text-white font-semibold text-sm shadow-lg active:scale-95 transition-all"
                >
                   Retry Assessment
                </button>
@@ -773,7 +773,7 @@ const ResultStage = ({ score, isCalculating, engineFailed, breakdown, engineResu
                      type="button"
                      onClick={onContinue}
                      disabled={isDeclined}
-                     className="w-full mt-2 py-4 rounded-full bg-slate-900 text-white text-sm font-semibold uppercase tracking-[0.2em] shadow-lg shadow-slate-900/20 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                     className="w-full mt-2 py-4 rounded-full bg-[#160d2a] text-white text-sm font-semibold uppercase tracking-[0.2em] shadow-lg shadow-violet-950/25 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                      {isDeclined ? "Loan declined" : "Continue to loan configuration"}
                   </button>
@@ -893,7 +893,7 @@ const LoanCalculatorStep = () => {
       <div className="space-y-3 animate-in fade-in slide-in-from-bottom-6 duration-500">
 
          {/* ── Hero card ── */}
-         <div className="relative overflow-hidden rounded-[28px] bg-[#0d0d12] px-6 pt-5 pb-6">
+         <div className="relative overflow-hidden rounded-[28px] bg-[#160d2a] px-6 pt-5 pb-6">
             {/* Decorative blobs */}
             <div className="absolute -top-10 -right-10 w-48 h-48 rounded-full bg-blue-600/15 blur-3xl pointer-events-none" />
             <div className="absolute bottom-0 left-0 w-36 h-36 rounded-full bg-violet-600/10 blur-2xl pointer-events-none" />
@@ -960,7 +960,7 @@ const LoanCalculatorStep = () => {
                      className="absolute top-0 left-0 h-[54px] rounded-2xl overflow-hidden flex items-center justify-between px-4"
                      style={{
                         width: `${Math.max(4, amountPct * 100)}%`,
-                        background: "linear-gradient(90deg, #0d0d12 0%, #1c1c2e 100%)"
+                        background: "linear-gradient(90deg, #160d2a 0%, #2a1a46 100%)"
                      }}
                   >
                      <div className="flex items-baseline gap-1" style={{ opacity: amountPct < LIGHT_THRESHOLD ? 0 : 1 }}>
@@ -1008,7 +1008,7 @@ const LoanCalculatorStep = () => {
                      className="absolute top-0 left-0 h-[54px] rounded-2xl overflow-hidden flex items-center justify-between px-4"
                      style={{
                         width: `${Math.max(4, periodPct * 100)}%`,
-                        background: "linear-gradient(90deg, #0d0d12 0%, #1c1c2e 100%)"
+                        background: "linear-gradient(90deg, #160d2a 0%, #2a1a46 100%)"
                      }}
                   >
                      <div className="flex items-baseline gap-1.5" style={{ opacity: periodPct < LIGHT_THRESHOLD ? 0 : 1 }}>
@@ -1041,7 +1041,7 @@ const LoanCalculatorStep = () => {
 
             <div className="space-y-0">
                {[
-                  { label: "Principal Amount",   value: `R ${formatInt(loanAmount)}`,          dot: "bg-slate-900" },
+                  { label: "Principal Amount",   value: `R ${formatInt(loanAmount)}`,          dot: "bg-[#160d2a]" },
                   { label: "Loan Period",         value: `${loanPeriod} ${loanPeriod === 1 ? "month" : "months"}`, dot: "bg-slate-400" },
                   { label: "Monthly Repayment",   value: `R ${formatMoney(monthlyPayment)}`,    dot: "bg-blue-600" },
                   { label: "Interest Charged",    value: `R ${formatMoney(totalInterest)}`,     dot: "bg-blue-300" },
@@ -1068,7 +1068,7 @@ const LoanCalculatorStep = () => {
                      const prinPct = total > 0 ? (loanAmount / total) * 100 : 100;
                      return (
                         <>
-                           <div className="h-full bg-slate-900 rounded-l-full transition-all duration-500" style={{ width: `${prinPct}%` }} />
+                           <div className="h-full bg-[#160d2a] rounded-l-full transition-all duration-500" style={{ width: `${prinPct}%` }} />
                            <div className="h-full bg-blue-400 flex-1 rounded-r-full" />
                         </>
                      );
@@ -1093,7 +1093,7 @@ const LoanCalculatorStep = () => {
          {/* ── CTA ── */}
          <button
             type="button"
-            className="w-full py-[18px] rounded-full bg-slate-900 text-white text-[15px] font-semibold tracking-[0.01em] shadow-xl shadow-slate-900/20 active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
+            className="w-full py-[18px] rounded-full bg-[#160d2a] text-white text-[15px] font-semibold tracking-[0.01em] shadow-xl shadow-violet-950/30 active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
          >
             Apply for this loan
             <ArrowRight className="h-4 w-4" />
@@ -1431,7 +1431,7 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
       if (step === "bank_success") {
          return (
             <div className="animate-in fade-in slide-in-from-bottom-8 duration-700 flex flex-col items-center px-6 pb-10 min-h-screen bg-white">
-               <header className="px-5 pt-12 pb-8 flex items-center justify-between bg-[#0d0d12] text-white w-full relative">
+               <header className="px-5 pt-12 pb-8 flex items-center justify-between bg-[#160d2a] text-white w-full relative">
                   <div className="flex items-center gap-2">
                      <img src="/assets/mint-logo.png" alt="Mint" className="h-5" />
                      <span className="text-[10px] font-black uppercase tracking-widest opacity-70">credit</span>
@@ -1463,7 +1463,7 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
                   <button
                      type="button"
                      onClick={() => onBack ? onBack() : window.history.back()}
-                     className="inline-flex items-center justify-center rounded-full bg-slate-900 px-8 py-3.5 text-sm font-semibold uppercase tracking-[0.2em] text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5 active:scale-95"
+                     className="inline-flex items-center justify-center rounded-full bg-[#160d2a] px-8 py-3.5 text-sm font-semibold uppercase tracking-[0.2em] text-white shadow-lg shadow-violet-950/25 transition hover:-translate-y-0.5 active:scale-95"
                   >
                      Done
                   </button>
@@ -1596,7 +1596,7 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
 
                   <button
                      onClick={handleStart}
-                     className="w-full py-4 bg-slate-900 text-white rounded-full text-sm font-bold uppercase tracking-widest shadow-xl shadow-slate-900/20 active:scale-95 transition-all mt-4"
+                     className="w-full py-4 bg-[#160d2a] text-white rounded-full text-sm font-bold uppercase tracking-widest shadow-xl shadow-violet-950/30 active:scale-95 transition-all mt-4"
                   >
                      Initiate Application
                   </button>
