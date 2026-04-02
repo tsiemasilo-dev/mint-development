@@ -798,13 +798,43 @@ const LoanCalculatorStep = () => {
       return Math.round((limited - min) / step) * step + min;
    };
 
-   const monthlyRate = 0.068 / 12;
-   const monthlyPayment = (() => {
-      const numerator = loanAmount * monthlyRate * Math.pow(1 + monthlyRate, loanPeriod);
-      const denominator = Math.pow(1 + monthlyRate, loanPeriod) - 1;
-      return denominator > 0 ? numerator / denominator : 0;
+   // ── NCA Short-term credit fee engine ──
+   // Interest: 5% per month (NCA max for short-term unsecured ≤6mo)
+   // Initiation fee: R150 for first R1,000 + 10% of amount above R1,000, +15% VAT
+   // Service fee: R60/mo + 15% VAT = R69/mo
+   // Credit life insurance: R4.50 per R1,000 per month + 15% VAT
+   const VAT = 1.15;
+   const MONTHLY_RATE = 0.05; // 5% per month (60% p.a.)
+   const SERVICE_FEE_EXCL = 60; // R60 excl. VAT per month
+   const CREDIT_LIFE_PER_1K_EXCL = 4.50; // R4.50 per R1,000 excl. VAT
+
+   const initiationFee = (() => {
+      const base = loanAmount <= 1000
+         ? 150
+         : 150 + (loanAmount - 1000) * 0.10;
+      return Math.round(base * VAT * 100) / 100;
    })();
-   const totalInterest = Math.max(0, monthlyPayment * loanPeriod - loanAmount);
+
+   const monthlyServiceFee = Math.round(SERVICE_FEE_EXCL * VAT * 100) / 100; // R69
+   const monthlyCreditLife = Math.round((loanAmount / 1000) * CREDIT_LIFE_PER_1K_EXCL * VAT * 100) / 100;
+
+   // Amortized monthly payment (principal + interest only)
+   const monthlyPrincipalInterest = (() => {
+      const r = MONTHLY_RATE;
+      const n = loanPeriod;
+      const numerator = loanAmount * r * Math.pow(1 + r, n);
+      const denominator = Math.pow(1 + r, n) - 1;
+      return denominator > 0 ? numerator / denominator : loanAmount;
+   })();
+
+   const totalInterest = Math.max(0, monthlyPrincipalInterest * loanPeriod - loanAmount);
+   const totalServiceFees = monthlyServiceFee * loanPeriod;
+   const totalCreditLife = monthlyCreditLife * loanPeriod;
+   const totalCostOfCredit = totalInterest + initiationFee + totalServiceFees + totalCreditLife;
+   const totalRepayable = loanAmount + totalCostOfCredit;
+   const monthlyPayment = monthlyPrincipalInterest + monthlyServiceFee + monthlyCreditLife;
+
+   const [showFees, setShowFees] = useState(false);
 
    const formatMoney = (value) => value.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
    const formatInt = (value) => Math.round(value).toLocaleString("en-ZA");
@@ -938,14 +968,13 @@ const LoanCalculatorStep = () => {
                   <p className="text-[10px] font-medium text-white/30 uppercase tracking-[0.12em] mb-1.5">Monthly Repayment</p>
                   <div className="flex items-start gap-1 leading-none">
                      <span className="text-[18px] font-light text-white/50 mt-2">R</span>
-                     <span className="text-[52px] font-bold tracking-[-0.04em] text-white leading-none">{formatMoney(monthlyPayment)}</span>
+                     <span className="text-[48px] font-bold tracking-[-0.04em] text-white leading-none">{formatMoney(monthlyPayment)}</span>
                   </div>
                </div>
-               <div className="text-right mb-1">
-                  <p className="text-[10px] text-white/30 uppercase tracking-[0.1em] mb-2">Interest</p>
-                  <div className="flex items-center gap-1.5 justify-end">
-                     <span className="h-1.5 w-1.5 rounded-full bg-blue-400 shrink-0" />
-                     <span className="text-[18px] font-semibold text-white/75">R {formatMoney(totalInterest)}</span>
+               <div className="text-right mb-1 space-y-1.5">
+                  <div>
+                     <p className="text-[9px] text-white/25 uppercase tracking-[0.1em]">Cost of credit</p>
+                     <p className="text-[15px] font-semibold text-white/60">R {formatMoney(totalCostOfCredit)}</p>
                   </div>
                </div>
             </div>
@@ -953,7 +982,7 @@ const LoanCalculatorStep = () => {
             {/* Total repayable footer */}
             <div className="relative mt-4 pt-3 border-t border-white/[0.07] flex items-center justify-between">
                <span className="text-[11px] text-white/35 font-medium">Total repayable</span>
-               <span className="text-[13px] font-bold text-white/65">R {formatMoney(monthlyPayment * loanPeriod)}</span>
+               <span className="text-[13px] font-bold text-white/65">R {formatMoney(totalRepayable)}</span>
             </div>
          </div>
 
@@ -1057,10 +1086,10 @@ const LoanCalculatorStep = () => {
 
             <div className="space-y-0">
                {[
-                  { label: "Principal Amount",   value: `R ${formatInt(loanAmount)}`,          dot: "bg-[#160d2a]" },
-                  { label: "Loan Period",         value: `${loanPeriod} ${loanPeriod === 1 ? "month" : "months"}`, dot: "bg-slate-400" },
-                  { label: "Monthly Repayment",   value: `R ${formatMoney(monthlyPayment)}`,    dot: "bg-blue-600" },
-                  { label: "Interest Charged",    value: `R ${formatMoney(totalInterest)}`,     dot: "bg-blue-300" },
+                  { label: "Principal Amount",   value: `R ${formatInt(loanAmount)}`,                                    dot: "bg-[#160d2a]" },
+                  { label: "Loan Period",         value: `${loanPeriod} ${loanPeriod === 1 ? "month" : "months"}`,       dot: "bg-slate-400" },
+                  { label: "Monthly Repayment",   value: `R ${formatMoney(monthlyPayment)}`,                              dot: "bg-violet-600" },
+                  { label: "Total Repayable",     value: `R ${formatMoney(totalRepayable)}`,                              dot: "bg-blue-600" },
                ].map((row, i, arr) => (
                   <div key={row.label} className={`flex items-center justify-between py-3 ${i < arr.length - 1 ? "border-b border-slate-100" : ""}`}>
                      <div className="flex items-center gap-2.5">
@@ -1072,36 +1101,66 @@ const LoanCalculatorStep = () => {
                ))}
             </div>
 
-            {/* Principal vs Interest split bar */}
+            {/* Principal vs Cost of Credit split bar */}
             <div className="mt-4 pt-4 border-t border-slate-100">
                <div className="flex items-center justify-between mb-2">
                   <span className="text-[10px] text-slate-400 font-medium">Principal</span>
-                  <span className="text-[10px] text-slate-400 font-medium">Interest</span>
+                  <span className="text-[10px] text-slate-400 font-medium">Cost of credit</span>
                </div>
                <div className="h-2 rounded-full bg-slate-100 overflow-hidden flex">
                   {(() => {
-                     const total = monthlyPayment * loanPeriod;
-                     const prinPct = total > 0 ? (loanAmount / total) * 100 : 100;
+                     const prinPct = totalRepayable > 0 ? (loanAmount / totalRepayable) * 100 : 100;
                      return (
                         <>
                            <div className="h-full bg-[#160d2a] rounded-l-full transition-all duration-500" style={{ width: `${prinPct}%` }} />
-                           <div className="h-full bg-blue-400 flex-1 rounded-r-full" />
+                           <div className="h-full bg-violet-400 flex-1 rounded-r-full" />
                         </>
                      );
                   })()}
                </div>
                <div className="flex items-center justify-between mt-1.5">
                   <span className="text-[10px] font-bold text-slate-600">R {formatInt(loanAmount)}</span>
-                  <span className="text-[10px] font-bold text-blue-500">R {formatMoney(totalInterest)}</span>
+                  <span className="text-[10px] font-bold text-violet-500">R {formatMoney(totalCostOfCredit)}</span>
                </div>
             </div>
 
-            {/* NCA compliance inline */}
-            <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
+            {/* Fee disclosure toggle */}
+            <button
+               type="button"
+               onClick={() => setShowFees(f => !f)}
+               className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between w-full group"
+            >
                <div className="flex items-center gap-2">
-                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                  <span className="text-[11px] font-medium text-slate-500">NCA-compliant · Annual rate: <strong className="text-slate-700">6.8%</strong> p.a.</span>
+                  <Info className="h-3.5 w-3.5 text-slate-400" />
+                  <span className="text-[11px] font-semibold text-slate-500 group-active:text-slate-700">Fee Breakdown (NCA Schedule)</span>
                </div>
+               {showFees ? <ChevronUp className="h-3.5 w-3.5 text-slate-400" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-400" />}
+            </button>
+
+            {showFees && (
+               <div className="mt-3 space-y-0 animate-in fade-in slide-in-from-top-2 duration-300">
+                  {[
+                     { label: "Interest (5% p.m.)",       value: `R ${formatMoney(totalInterest)}` },
+                     { label: "Initiation fee (incl. VAT)", value: `R ${formatMoney(initiationFee)}` },
+                     { label: "Service fees (R69 × " + loanPeriod + ")", value: `R ${formatMoney(totalServiceFees)}` },
+                     { label: "Credit life ins. (incl. VAT)", value: `R ${formatMoney(totalCreditLife)}` },
+                  ].map((row, i, arr) => (
+                     <div key={row.label} className={`flex items-center justify-between py-2 ${i < arr.length - 1 ? "border-b border-dashed border-slate-100" : ""}`}>
+                        <span className="text-[11px] text-slate-400">{row.label}</span>
+                        <span className="text-[12px] font-semibold text-slate-700">{row.value}</span>
+                     </div>
+                  ))}
+                  <div className="flex items-center justify-between pt-2 mt-1 border-t border-slate-200">
+                     <span className="text-[11px] font-bold text-slate-600">Total cost of credit</span>
+                     <span className="text-[13px] font-bold text-slate-900">R {formatMoney(totalCostOfCredit)}</span>
+                  </div>
+               </div>
+            )}
+
+            {/* NCA compliance inline */}
+            <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2">
+               <ShieldCheck className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+               <span className="text-[11px] font-medium text-slate-500">NCA-compliant · Interest: <strong className="text-slate-700">5% p.m.</strong> (60% p.a.)</span>
             </div>
          </div>
 
