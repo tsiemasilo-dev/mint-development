@@ -240,81 +240,116 @@ const UnsecuredCreditDashboard = ({ profile, onTabChange, onOpenNotifications })
           <NotificationBell onClick={onOpenNotifications} />
         </div>
 
-        {/* Balance card */}
-        <div className="mx-5 bg-white/30 backdrop-blur-xl rounded-[28px] p-5 border border-white/60 shadow-xl">
-          {/* Inner dark card */}
-          <button
-            type="button"
-            onClick={() => loan && setShowLoanBreakdown((prev) => !prev)}
-            className="w-full text-left rounded-[22px] p-5"
-            style={{ background: "linear-gradient(135deg, #4c2e75, #2a1a46)" }}
+        {/* Balance card — 3D flip */}
+        <div
+          className="mx-5 border border-white/60 shadow-xl"
+          style={{ perspective: "1200px", borderRadius: "28px" }}
+        >
+          {/* Spinning wrapper */}
+          <div
+            style={{
+              position: "relative",
+              transformStyle: "preserve-3d",
+              transition: "transform 0.6s cubic-bezier(0.4, 0.2, 0.2, 1)",
+              transform: showLoanBreakdown ? "rotateY(180deg)" : "rotateY(0deg)",
+              minHeight: "200px",
+            }}
           >
-
-            {loading ? (
-              <div className="h-24 animate-pulse rounded-xl bg-white/10" />
-            ) : (
-              <>
-                <p className="text-[9px] font-bold text-white/50 uppercase tracking-[0.18em] mb-1">Outstanding loan balance</p>
-                <div className="flex items-baseline text-white">
-                  <span className="text-[30px] font-light leading-none">
-                    {formatZar(loanBalance)}
-                  </span>
-                </div>
-                <p className="text-[11px] text-white/45 mt-1.5">of {formatZar(facilityLimit)} credit facility</p>
-
-                <div className="flex items-center gap-1.5 mt-2.5 w-fit bg-white/10 border border-white/15 rounded-full px-3 py-1">
-                  <div className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                  <span className="text-[10px] text-white/80">
-                    {loan ? "Active · Good standing" : "No active loan"}
-                  </span>
-                </div>
-
-                {/* Progress */}
-                <div className="mt-3.5 h-[5px] bg-white/15 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-white/70 rounded-full transition-all"
-                    style={{ width: `${Math.min(usedPct, 100)}%` }}
-                  />
-                </div>
-                <div className="flex justify-between mt-1.5">
-                  <span className="text-[10px] text-white/45">{formatZar(loanBalance)} used</span>
-                  <span className="text-[10px] text-white/45">{formatZar(available)} available</span>
-                </div>
-
-                {loan ? (
-                  <p className="text-[10px] text-white/50 mt-3">Tap card to {showLoanBreakdown ? "hide" : "view"} loan breakdown</p>
-                ) : null}
-
-                {loan && showLoanBreakdown ? (
-                  <div className="mt-3.5 bg-white/10 border border-white/15 rounded-2xl p-3.5">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-white/70">Loan breakdown</p>
-                      <span className={`inline-flex items-center gap-1.5 text-[10px] font-medium px-2 py-1 rounded-full ${statusTone}`}>
-                        <span className={`h-1.5 w-1.5 rounded-full animate-pulse ${statusDotTone}`} />
-                        {statusLabel}
+            {/* ── FRONT FACE ── */}
+            <div
+              className="rounded-[28px] bg-white/30 backdrop-blur-xl p-5 w-full"
+              style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" }}
+            >
+              <button
+                type="button"
+                onClick={() => loan && setShowLoanBreakdown(true)}
+                className="w-full text-left rounded-[22px] p-5"
+                style={{ background: "linear-gradient(135deg, #4c2e75, #2a1a46)" }}
+              >
+                {loading ? (
+                  <div className="h-24 animate-pulse rounded-xl bg-white/10" />
+                ) : (
+                  <>
+                    <p className="text-[9px] font-bold text-white/50 uppercase tracking-[0.18em] mb-1">Outstanding loan balance</p>
+                    <div className="flex items-baseline text-white">
+                      <span className="text-[30px] font-light leading-none">
+                        {formatZar(loanBalance)}
                       </span>
                     </div>
-                    <div className="grid grid-cols-2 gap-y-2 gap-x-3">
-                      <p className="text-[11px] text-white/65">Principal</p>
-                      <p className="text-[11px] text-white text-right">{formatZar(principal)}</p>
+                    <p className="text-[11px] text-white/45 mt-1.5">of {formatZar(facilityLimit)} credit facility</p>
 
-                      <p className="text-[11px] text-white/65">Total repayable</p>
-                      <p className="text-[11px] text-white text-right">{formatZar(totalRepay)}</p>
-
-                      <p className="text-[11px] text-white/65">Monthly</p>
-                      <p className="text-[11px] text-white text-right">{formatZar(monthlyPay)}</p>
-
-                      <p className="text-[11px] text-white/65">Term</p>
-                      <p className="text-[11px] text-white text-right">{months > 0 ? `${months} months` : "—"}</p>
-
-                      <p className="text-[11px] text-white/65">Opened</p>
-                      <p className="text-[11px] text-white text-right">{loan?.created_at ? fmtDate(new Date(loan.created_at)) : "—"}</p>
+                    <div className="flex items-center gap-1.5 mt-2.5 w-fit bg-white/10 border border-white/15 rounded-full px-3 py-1">
+                      <div className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                      <span className="text-[10px] text-white/80">
+                        {loan ? "Active · Good standing" : "No active loan"}
+                      </span>
                     </div>
-                  </div>
-                ) : null}
-              </>
-            )}
-          </button>
+
+                    {/* Amount repaid row */}
+                    <div className="mt-3.5 flex items-center justify-between bg-white/10 border border-white/15 rounded-2xl px-3.5 py-2.5">
+                      <div>
+                        <p className="text-[9px] text-white/50 uppercase tracking-[0.12em]">Amount repaid</p>
+                        <p className="text-[15px] font-medium text-white mt-0.5">{formatZar(totalPaid)}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[9px] text-white/50 uppercase tracking-[0.12em]">Remaining</p>
+                        <p className="text-[15px] font-medium text-white mt-0.5">{formatZar(loanBalance)}</p>
+                      </div>
+                    </div>
+
+                    {loan ? (
+                      <p className="text-[10px] text-white/40 mt-3">Tap to flip and view loan breakdown →</p>
+                    ) : null}
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* ── BACK FACE ── */}
+            <div
+              className="rounded-[28px] bg-white/30 backdrop-blur-xl p-5 w-full absolute inset-0"
+              style={{
+                backfaceVisibility: "hidden",
+                WebkitBackfaceVisibility: "hidden",
+                transform: "rotateY(180deg)",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setShowLoanBreakdown(false)}
+                className="w-full text-left rounded-[22px] p-5 h-full"
+                style={{ background: "linear-gradient(135deg, #4c2e75, #2a1a46)" }}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-white/70">Loan breakdown</p>
+                  <span className={`inline-flex items-center gap-1.5 text-[10px] font-medium px-2 py-1 rounded-full ${statusTone}`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${statusDotTone}`} />
+                    {statusLabel}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-y-2.5 gap-x-3">
+                  <p className="text-[11px] text-white/65">Principal</p>
+                  <p className="text-[11px] text-white text-right">{formatZar(principal)}</p>
+
+                  <p className="text-[11px] text-white/65">Total repayable</p>
+                  <p className="text-[11px] text-white text-right">{formatZar(totalRepay)}</p>
+
+                  <p className="text-[11px] text-white/65">Monthly</p>
+                  <p className="text-[11px] text-white text-right">{formatZar(monthlyPay)}</p>
+
+                  <p className="text-[11px] text-white/65">Term</p>
+                  <p className="text-[11px] text-white text-right">{months > 0 ? `${months} months` : "—"}</p>
+
+                  <p className="text-[11px] text-white/65">Amount repaid</p>
+                  <p className="text-[11px] text-white text-right">{formatZar(totalPaid)}</p>
+
+                  <p className="text-[11px] text-white/65">Opened</p>
+                  <p className="text-[11px] text-white text-right">{loan?.created_at ? fmtDate(new Date(loan.created_at)) : "—"}</p>
+                </div>
+                <p className="text-[10px] text-white/40 mt-3">← Tap to flip back</p>
+              </button>
+            </div>
+          </div>
         </div>
 
         <div className="mt-4 flex justify-center">
