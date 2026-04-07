@@ -61,15 +61,19 @@ const UnsecuredCreditDashboard = ({ profile, onTabChange, onOpenNotifications })
     .join("")
     .toUpperCase() || "—";
 
-  // ── fetch most-recent unsecured loan ──────────────────────────────────────
+  // ── fetch most-recent active unsecured loan ────────────────────────────────
   useEffect(() => {
     async function fetchLoan() {
       if (!profile?.id || !supabase) { setLoading(false); return; }
       const { data } = await supabase
         .from("loan_application")
-        .select("*")
+        .select(
+          "id, principal_amount, amount_repayable, interest_rate, " +
+          "number_of_months, monthly_repayable, first_repayment_date, " +
+          "salary_date, status, repayment_schedule, created_at, updated_at, application_id"
+        )
         .eq("user_id", profile.id)
-        .neq("status", "repaid")
+        .in("status", ["active", "in_progress"])
         .order("updated_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -83,12 +87,21 @@ const UnsecuredCreditDashboard = ({ profile, onTabChange, onOpenNotifications })
   const principal     = loan?.principal_amount  ?? 0;
   const totalRepay    = loan?.amount_repayable  ?? 0;
   const months        = loan?.number_of_months  ?? 0;
-  const monthlyPay    = months > 0 ? totalRepay / months : 0;
-  const totalPaid     = 0; // extend when repayments table is wired
+  // Prefer DB-generated monthly_repayable; fallback to schedule or arithmetic
+  const monthlyPay    = parseFloat(loan?.monthly_repayable ?? 0) ||
+                        parseFloat(loan?.repayment_schedule?.monthly_payment ?? 0) ||
+                        (months > 0 ? totalRepay / months : 0);
+  // Count paid installments from repayment_schedule.schedule
+  const schedule      = loan?.repayment_schedule?.schedule ?? [];
+  const paidCount     = schedule.filter(s => s.status === "paid").length;
+  const totalPaid     = paidCount * monthlyPay;
   const loanBalance   = Math.max(0, totalRepay - totalPaid);
   const facilityLimit = totalRepay;
   const available     = Math.max(0, facilityLimit - loanBalance);
   const usedPct       = facilityLimit > 0 ? (loanBalance / facilityLimit) * 100 : 0;
+  // Store interest_rate from DB (5.00 = 5% p.m.)
+  const storedMonthlyRate = loan?.interest_rate ?? 5;
+  const storedAnnualRate  = storedMonthlyRate * 12;
 
   const nextDueDate = (() => {
     if (!loan?.first_repayment_date) return null;
@@ -111,9 +124,9 @@ const UnsecuredCreditDashboard = ({ profile, onTabChange, onOpenNotifications })
     daysUntilDue === 1 ? "Tomorrow" :
     `In ${daysUntilDue} days`;
 
-  // ─── NCR rate (unsecured short-term: 5% p.m. → 60% p.a.) ─────────────────
-  const annualRate = "60%";
-  const monthlyRate = "5%";
+  // ─── Display rate strings (from DB or NCR default) ──────────────────────
+  const annualRate  = `${storedAnnualRate.toFixed(1)}%`;
+  const monthlyRate = `${storedMonthlyRate.toFixed(1)}%`;
 
   // ─── helpers ─────────────────────────────────────────────────────────────
   const fmtDate = (d) => d
@@ -265,25 +278,41 @@ const UnsecuredCreditDashboard = ({ profile, onTabChange, onOpenNotifications })
                 icon={Check}
                 iconBg="bg-emerald-50"
                 iconColor="text-emerald-600"
-                title="Loan agreement signed"
-                date={loan.updated_at ? fmtDate(new Date(loan.updated_at)) + " · Activated" : "—"}
+                title={`Loan disbursed${loan.application_id ? ` · ${loan.application_id}` : ""}`}
+                date={loan.created_at ? fmtDate(new Date(loan.created_at)) + " · Activated" : "—"}
                 amount={`+${formatZar(principal)}`}
                 amountColor="text-emerald-600"
               />
-              <TxnRow
-                icon={Circle}
-                iconBg="bg-slate-100"
-                iconColor="text-slate-400"
-                title="First repayment due"
-                date={nextDueDate ? fmtDate(nextDueDate) : "—"}
-                amount={`−${formatZar(monthlyPay)}`}
-                amountColor="text-slate-900"
-                isLast
-              />
+              {/* Render up to 3 schedule entries */}
+              {schedule.slice(0, 3).map((entry, i) => (
+                <TxnRow
+                  key={i}
+                  icon={entry.status === "paid" ? Check : Circle}
+                  iconBg={entry.status === "paid" ? "bg-emerald-50" : "bg-slate-100"}
+                  iconColor={entry.status === "paid" ? "text-emerald-600" : "text-slate-400"}
+                  title={`Repayment ${entry.month}`}
+                  date={entry.due_date ? fmtDate(new Date(entry.due_date)) : "—"}
+                  amount={`−${formatZar(entry.amount)}`}
+                  amountColor={entry.status === "paid" ? "text-slate-900" : "text-slate-400"}
+                  isLast={i === Math.min(schedule.length, 3) - 1}
+                />
+              ))}
+              {schedule.length === 0 && (
+                <TxnRow
+                  icon={Circle}
+                  iconBg="bg-slate-100"
+                  iconColor="text-slate-400"
+                  title="First repayment due"
+                  date={nextDueDate ? fmtDate(nextDueDate) : "—"}
+                  amount={`−${formatZar(monthlyPay)}`}
+                  amountColor="text-slate-400"
+                  isLast
+                />
+              )}
             </>
           ) : (
             <div className="py-8 text-center text-[12px] text-slate-400">
-              No transactions yet.
+              No active loan found.
             </div>
           )}
         </div>

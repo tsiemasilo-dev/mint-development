@@ -1698,7 +1698,57 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
       try {
          const { data: sessionData } = await supabase.auth.getSession();
          const userId = sessionData?.session?.user?.id;
+
          if (userId) {
+            // ── Derived dates ──────────────────────────────────────────────────
+            const now = new Date();
+            // First repayment ~30 days from today
+            const firstRepayment = new Date(now);
+            firstRepayment.setDate(firstRepayment.getDate() + 30);
+            const firstRepaymentDateStr = firstRepayment.toISOString().split("T")[0]; // YYYY-MM-DD
+            const salaryDayOfMonth = firstRepayment.getDate(); // 1-31
+
+            // ── Repayment schedule JSON ────────────────────────────────────────
+            const months = quote?.loanPeriod ?? 1;
+            const monthly = quote?.monthlyPayment ?? 0;
+            const scheduleEntries = Array.from({ length: months }, (_, i) => {
+               const due = new Date(firstRepayment);
+               due.setMonth(due.getMonth() + i);
+               return {
+                  month: i + 1,
+                  due_date: due.toISOString().split("T")[0],
+                  amount: Math.round(monthly * 100) / 100,
+                  status: "pending",
+               };
+            });
+
+            const repaymentSchedule = {
+               monthly_payment: Math.round((quote?.monthlyPayment ?? 0) * 100) / 100,
+               total_repayable: Math.round((quote?.totalRepayable ?? 0) * 100) / 100,
+               initiation_fee: Math.round((quote?.initiationFee ?? 0) * 100) / 100,
+               total_interest: Math.round((quote?.totalInterest ?? 0) * 100) / 100,
+               total_service_fees: Math.round((quote?.totalServiceFees ?? 0) * 100) / 100,
+               total_credit_life: Math.round((quote?.totalCreditLife ?? 0) * 100) / 100,
+               total_cost_of_credit: Math.round((quote?.totalCostOfCredit ?? 0) * 100) / 100,
+               schedule: scheduleEntries,
+            };
+
+            // ── Full payload matching loan_application schema ─────────────────
+            // interest_rate stored as monthly % (5.00 = 5% p.m., NCR max for short-term)
+            // step_number max allowed by CHECK constraint is 4
+            const payload = {
+               principal_amount: Math.round((quote?.loanAmount ?? 0) * 100) / 100,
+               amount_repayable: Math.round((quote?.totalRepayable ?? 0) * 100) / 100,
+               interest_rate: 5.00,           // 5% per month (NCR max for unsecured short-term)
+               number_of_months: months,
+               first_repayment_date: firstRepaymentDateStr,
+               salary_date: salaryDayOfMonth, // day-of-month (1–31)
+               step_number: 4,                // max allowed by CHECK constraint
+               status: "active",
+               repayment_schedule: repaymentSchedule,
+               updated_at: new Date().toISOString(),
+            };
+
             const { data: existingLoan } = await supabase
                .from("loan_application")
                .select("id")
@@ -1708,28 +1758,21 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
                .limit(1)
                .maybeSingle();
 
-            const payload = {
-               principal_amount: quote?.loanAmount,
-               amount_repayable: quote?.totalRepayable,
-               number_of_months: quote?.loanPeriod,
-               step_number: 5,
-               updated_at: new Date().toISOString(),
-            };
-
             if (existingLoan?.id) {
-               await supabase
+               const { error: updateErr } = await supabase
                   .from("loan_application")
                   .update(payload)
                   .eq("id", existingLoan.id);
+               if (updateErr) throw updateErr;
             } else {
-               await supabase
+               const { error: insertErr } = await supabase
                   .from("loan_application")
                   .insert({
                      user_id: userId,
-                     status: "in_progress",
                      created_at: new Date().toISOString(),
                      ...payload,
                   });
+               if (insertErr) throw insertErr;
             }
          }
       } catch (error) {
