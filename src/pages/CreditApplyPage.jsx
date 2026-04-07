@@ -811,22 +811,11 @@ const LoanCalculatorStep = ({ onSignedContinue }) => {
 
    // ── NCA Short-term credit fee engine ──
    // Interest: 5% per month (NCA max for short-term unsecured ≤6mo)
-   // Initiation fee: R150 for first R1,000 + 10% of amount above R1,000, +15% VAT
-   // Service fee: R60/mo + 15% VAT = R69/mo
-   // Credit life insurance: R4.50 per R1,000 per month + 15% VAT
-   const VAT = 1.15;
+   // Admin/service fee: R69 per month (fixed)
+   // No initiation fee, no credit life insurance
    const MONTHLY_RATE = 0.05; // 5% per month (60% p.a.)
-   const CREDIT_LIFE_PER_1K_EXCL = 4.50; // R4.50 per R1,000 excl. VAT
 
-   const initiationFee = (() => {
-      const base = loanAmount <= MIN_LOAN_AMOUNT
-         ? 150
-         : 150 + (loanAmount - MIN_LOAN_AMOUNT) * 0.10;
-      return Math.round(base * VAT * 100) / 100;
-   })();
-
-   const monthlyServiceFee = 69; // Admin/service fee fixed at R69 per month
-   const monthlyCreditLife = Math.round((loanAmount / 1000) * CREDIT_LIFE_PER_1K_EXCL * VAT * 100) / 100;
+   const monthlyServiceFee = 69; // Admin fee fixed at R69 per month
 
    // Amortized monthly payment (principal + interest only)
    const monthlyPrincipalInterest = (() => {
@@ -839,10 +828,9 @@ const LoanCalculatorStep = ({ onSignedContinue }) => {
 
    const totalInterest = Math.max(0, monthlyPrincipalInterest * loanPeriod - loanAmount);
    const totalServiceFees = monthlyServiceFee * loanPeriod;
-   const totalCreditLife = monthlyCreditLife * loanPeriod;
-   const totalCostOfCredit = totalInterest + initiationFee + totalServiceFees + totalCreditLife;
+   const totalCostOfCredit = totalInterest + totalServiceFees;
    const totalRepayable = loanAmount + totalCostOfCredit;
-   const monthlyPayment = monthlyPrincipalInterest + monthlyServiceFee + monthlyCreditLife;
+   const monthlyPayment = monthlyPrincipalInterest + monthlyServiceFee;
 
    const [showFees, setShowFees] = useState(false);
    const [showContract, setShowContract] = useState(false);
@@ -1068,8 +1056,6 @@ const LoanCalculatorStep = ({ onSignedContinue }) => {
                totalCostOfCredit,
                totalInterest,
                totalServiceFees,
-               totalCreditLife,
-               initiationFee,
                signatureDataUrl,
             });
          }
@@ -1287,9 +1273,7 @@ const LoanCalculatorStep = ({ onSignedContinue }) => {
                <div className="mt-3 space-y-0 animate-in fade-in slide-in-from-top-2 duration-300">
                   {[
                      { label: "Interest (5% p.m.)",       value: `R ${formatMoney(totalInterest)}` },
-                     { label: "Initiation fee (incl. VAT)", value: `R ${formatMoney(initiationFee)}` },
-                     { label: "Service fees (R69 × " + loanPeriod + ")", value: `R ${formatMoney(totalServiceFees)}` },
-                     { label: "Credit life ins. (incl. VAT)", value: `R ${formatMoney(totalCreditLife)}` },
+                     { label: "Admin fees (R69 × " + loanPeriod + ")", value: `R ${formatMoney(totalServiceFees)}` },
                   ].map((row, i, arr) => (
                      <div key={row.label} className={`flex items-center justify-between py-2 ${i < arr.length - 1 ? "border-b border-dashed border-slate-100" : ""}`}>
                         <span className="text-[11px] text-slate-400">{row.label}</span>
@@ -1350,8 +1334,8 @@ const LoanCalculatorStep = ({ onSignedContinue }) => {
 
                      <div className="space-y-3 text-[12px] text-slate-600 leading-relaxed">
                         <p><strong className="text-slate-800">1. Facility:</strong> This unsecured credit facility is granted subject to affordability, identity verification, and final approval checks.</p>
-                        <p><strong className="text-slate-800">2. Pricing:</strong> Interest is charged at 5% per month in line with the NCA short-term credit category, plus applicable initiation, service, and credit life fees.</p>
-                        <p><strong className="text-slate-800">3. Fees Breakdown:</strong> Initiation fee R {formatMoney(initiationFee)}, service fees R {formatMoney(totalServiceFees)}, credit life insurance R {formatMoney(totalCreditLife)}, total interest R {formatMoney(totalInterest)}.</p>
+                        <p><strong className="text-slate-800">2. Pricing:</strong> Interest is charged at 5% per month in line with the NCA short-term credit category, plus a fixed R69 monthly admin fee.</p>
+                        <p><strong className="text-slate-800">3. Fees Breakdown:</strong> Admin fees R {formatMoney(totalServiceFees)}, total interest R {formatMoney(totalInterest)}.</p>
                         <p><strong className="text-slate-800">4. Payment Obligation:</strong> You agree to pay the installment on scheduled due dates. Missed payments may incur default collection processes as permitted by law.</p>
                         <p><strong className="text-slate-800">5. Early Settlement:</strong> You may settle early in accordance with the National Credit Act and receive an adjusted settlement quote where applicable.</p>
                         <p><strong className="text-slate-800">6. Consent:</strong> By signing below, you confirm you understood the repayment schedule, costs, and legal obligations of this loan agreement.</p>
@@ -1751,10 +1735,8 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
             const repaymentSchedule = {
                monthly_payment: Math.round((quote?.monthlyPayment ?? 0) * 100) / 100,
                total_repayable: Math.round((quote?.totalRepayable ?? 0) * 100) / 100,
-               initiation_fee: Math.round((quote?.initiationFee ?? 0) * 100) / 100,
                total_interest: Math.round((quote?.totalInterest ?? 0) * 100) / 100,
                total_service_fees: Math.round((quote?.totalServiceFees ?? 0) * 100) / 100,
-               total_credit_life: Math.round((quote?.totalCreditLife ?? 0) * 100) / 100,
                total_cost_of_credit: Math.round((quote?.totalCostOfCredit ?? 0) * 100) / 100,
                schedule: scheduleEntries,
             };
