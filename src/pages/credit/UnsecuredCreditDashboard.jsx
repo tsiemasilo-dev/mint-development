@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
   ArrowDown, Plus, FileText, Layers, ChevronRight,
-  Check, AlertTriangle, Circle, Bell
+  Check, AlertTriangle, Circle, Bell, Lock
 } from "lucide-react";
 import { formatZar } from "../../lib/formatCurrency";
 import NavigationPill from "../../components/NavigationPill";
@@ -44,7 +44,11 @@ const OfferRow = ({ icon: Icon, title, desc, onClick, disabled = false }) => (
       <p className="text-[13px] font-medium text-slate-900">{title}</p>
       <p className="text-[11px] text-slate-400 mt-0.5">{desc}</p>
     </div>
-    <ChevronRight size={14} className="text-slate-300 shrink-0" />
+    {disabled ? (
+      <Lock size={14} className="text-slate-400 shrink-0" />
+    ) : (
+      <ChevronRight size={14} className="text-slate-300 shrink-0" />
+    )}
   </button>
 );
 
@@ -102,9 +106,6 @@ const UnsecuredCreditDashboard = ({ profile, onTabChange, onOpenNotifications })
   const facilityLimit = totalRepay;
   const available     = Math.max(0, facilityLimit - loanBalance);
   const usedPct       = facilityLimit > 0 ? (loanBalance / facilityLimit) * 100 : 0;
-  // Store interest_rate from DB (5.00 = 5% p.m.)
-  const storedMonthlyRate = loan?.interest_rate ?? 5;
-  const storedAnnualRate  = storedMonthlyRate * 12;
 
   const nextDueDate = (() => {
     if (!loan?.first_repayment_date) return null;
@@ -127,9 +128,9 @@ const UnsecuredCreditDashboard = ({ profile, onTabChange, onOpenNotifications })
     daysUntilDue === 1 ? "Tomorrow" :
     `In ${daysUntilDue} days`;
 
-  // ─── Display rate strings (from DB or NCR default) ──────────────────────
-  const annualRate  = `${storedAnnualRate.toFixed(1)}%`;
-  const monthlyRate = `${storedMonthlyRate.toFixed(1)}%`;
+  // ─── Display rate strings ────────────────────────────────────────────────
+  const annualRate  = "60%";
+  const monthlyRate = "5%";
   const canStartNewLoan = !loan || loanBalance <= 0;
 
   // ─── helpers ─────────────────────────────────────────────────────────────
@@ -274,7 +275,10 @@ const UnsecuredCreditDashboard = ({ profile, onTabChange, onOpenNotifications })
               <div className="h-8 w-8 rounded-full bg-violet-50 flex items-center justify-center">
                 <Icon size={15} className="text-violet-600" />
               </div>
-              <span className="text-[11px] font-medium text-center leading-tight">{label}</span>
+              <span className="text-[11px] font-medium text-center leading-tight flex items-center gap-1">
+                {label}
+                {disabled ? <Lock size={11} className="text-slate-400" /> : null}
+              </span>
             </button>
           ))}
         </div>
