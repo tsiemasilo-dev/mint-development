@@ -570,7 +570,7 @@ const ResultStage = ({ score, isCalculating, engineFailed, breakdown, engineResu
 
    return (
       <MintCard className="animate-in zoom-in-95 duration-500 min-h-[400px]">
-         <div className="flex flex-col items-center justify-center py-12">
+         <div className="flex flex-col items-center justify-center py-16">
             <button
                onClick={hasAssessment ? undefined : onRunAssessment}
                disabled={hasAssessment}
@@ -633,6 +633,16 @@ const ResultStage = ({ score, isCalculating, engineFailed, breakdown, engineResu
                   </div>
                </div>
             </button>
+
+            {/* Instruction text — only visible before scoring starts */}
+            {!hasAssessment && (
+               <div className="mt-8 text-center animate-in fade-in slide-in-from-bottom-2 duration-500">
+                  <p className="text-[13px] font-semibold text-slate-700">Tap the button to start scoring</p>
+                  <p className="text-[11px] text-slate-400 mt-1.5 max-w-[240px] mx-auto leading-relaxed">
+                     We'll run a quick affordability check using your linked data to generate your trust score.
+                  </p>
+               </div>
+            )}
          </div>
 
          {engineFailed && !isCalculating && (
@@ -1476,17 +1486,20 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
          const userId = sessionData?.session?.user?.id;
          if (!userId) { setResolving(false); return; }
 
-         // 1. If user already has loan_engine_score data, step 3 is considered complete.
+         // 1. If user already has loan_engine_score data, check the score.
+         //    Score >= 50 → eligible, go to step 4 (calculator).
+         //    Score < 50  → declined, stay on step 3 (results screen).
          const { data: existingStep3Data } = await supabase
             .from("loan_engine_score")
-            .select("id")
+            .select("id, engine_score")
             .eq("user_id", userId)
             .order("run_at", { ascending: false })
             .limit(1)
             .maybeSingle();
 
          if (existingStep3Data?.id) {
-            setStep(4);
+            const score = Number(existingStep3Data.engine_score ?? 0);
+            setStep(score >= 50 ? 4 : 3);
             setResolving(false);
             return;
          }
