@@ -495,7 +495,7 @@ const SwipeableBalanceCard = ({
         if (asset.isStrategy && asset.strategyId) {
           const { data, error } = await supabase
             .from("client_strategy_returns_c")
-            .select("5d_pnl, 5d_pct")
+            .select('"5d_pnl", "5d_pct"')
             .eq("user_id", userId)
             .eq("strategy_id", asset.strategyId)
             .order("as_of_date", { ascending: false })
@@ -513,7 +513,7 @@ const SwipeableBalanceCard = ({
           // For stocks, fetch from stock_returns_c
           const { data, error } = await supabase
             .from("stock_returns_c")
-            .select("5d_pnl, 5d_pct")
+            .select('"5d_pnl", "5d_pct"')
             .eq("security_id", asset.security_id)
             .order("as_of_date", { ascending: false })
             .limit(1)
