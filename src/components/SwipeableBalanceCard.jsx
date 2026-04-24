@@ -57,7 +57,7 @@ const formatPrecise = (value) => {
   return `R${truncated.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
-const TIMEFRAME_DAYS = { d: 7, "5d": 5, m: 90, y: 365, all: 1825 };
+const TIMEFRAME_DAYS = { d: 7, "5d": 5, m: 30, ytd: 365, all: 1825 };
 
 const SwipeableBalanceCard = ({
   userId,
@@ -333,24 +333,32 @@ const SwipeableBalanceCard = ({
         const startDateStr = cutoff.toISOString().split("T")[0];
         console.log(`[SwipeableBalanceCard] Fetching history for tab: ${activeTab}, days: ${days}, startDate: ${startDateStr}`);
 
-        // Process strategies using client_strategy_returns_c table (basket_value from last 5 rows)
+        // Process strategies using client_strategy_returns_c table (basket_value for the period)
         const strategyBasketByDate = {};
         const endDateStr = new Date().toISOString().split("T")[0];
+        const limitValue = activeTab === "5d" ? 5 : undefined;
 
         const strategyHoldings = holdingsToChart.filter(h => h.isStrategy && h.strategyId);
         for (const sh of strategyHoldings) {
           try {
-            // Fetch last 5 rows of basket_value from client_strategy_returns_c
-            const { data, error } = await supabase
+            // Build query for basket_value from client_strategy_returns_c
+            let query = supabase
               .from("client_strategy_returns_c")
               .select("as_of_date, basket_value")
               .eq("user_id", userId)
               .eq("strategy_id", sh.strategyId)
-              .order("as_of_date", { ascending: false })
-              .limit(5);
+              .gte("as_of_date", startDateStr)
+              .order("as_of_date", { ascending: true });
+
+            // For 5d, limit to 5 rows; otherwise get all rows in the range
+            if (limitValue) {
+              query = query.limit(limitValue);
+            }
+
+            const { data, error } = await query;
 
             if (!error && data && data.length > 0) {
-              // Process the 5 rows and convert basket_value from cents to rands
+              // Process rows and convert basket_value from cents to rands
               data.forEach((row) => {
                 const dateKey = row.as_of_date;
                 const basketValueRands = (Number(row.basket_value || 0)) / 100;
@@ -503,12 +511,22 @@ const SwipeableBalanceCard = ({
   }, [userId, dbData.holdings, activeTab, selectedAsset, lastUpdated, loading]);
 
   useEffect(() => {
-    const fetch5dReturnData = async () => {
-      if (activeTab !== "5d" || !userId) return;
+    const fetchPeriodReturnData = async () => {
+      if (!["5d", "m", "ytd", "all"].includes(activeTab) || !userId) return;
 
       try {
         const asset = selectedAsset || (dbData.holdings.length > 0 ? dbData.holdings[0] : null);
         if (!asset) return;
+
+        // Map activeTab to column names
+        const columnMap = {
+          "5d": { pnl: "5d_pnl", pct: "5d_pct" },
+          "m": { pnl: "1m_pnl", pct: "1m_pct" },
+          "ytd": { pnl: "ytd_pnl", pct: "ytd_pct" },
+          "all": { pnl: "inception_pnl", pct: "inception_pct" }
+        };
+
+        const columns = columnMap[activeTab];
 
         // For strategies, fetch from client_strategy_returns_c
         if (asset.isStrategy && asset.strategyId) {
@@ -522,14 +540,12 @@ const SwipeableBalanceCard = ({
             .single();
 
           if (!error && data) {
-            // 5d_pnl is in cents, divide by 100 to get rands
-            const pnlValue = data["5d_pnl"] || 0;
-            const pctValue = data["5d_pct"] || 0;
+            const pnlValue = data[columns.pnl] || 0;
+            const pctValue = data[columns.pct] || 0;
             setReturnData5d({
               pnl: (Number(pnlValue)) / 100,
               pct: Number(pctValue)
             });
-            console.log("[5D Data]", { pnlValue, pctValue, data });
           }
         } else if (asset.security_id) {
           // For stocks, fetch from stock_returns_c
@@ -542,21 +558,20 @@ const SwipeableBalanceCard = ({
             .single();
 
           if (!error && data) {
-            const pnlValue = data["5d_pnl"] || 0;
-            const pctValue = data["5d_pct"] || 0;
+            const pnlValue = data[columns.pnl] || 0;
+            const pctValue = data[columns.pct] || 0;
             setReturnData5d({
               pnl: (Number(pnlValue)) / 100,
               pct: Number(pctValue)
             });
-            console.log("[5D Data]", { pnlValue, pctValue, data });
           }
         }
       } catch (e) {
-        console.warn("[SwipeableBalanceCard] Error fetching 5d return data:", e);
+        console.warn("[SwipeableBalanceCard] Error fetching period return data:", e);
       }
     };
 
-    fetch5dReturnData();
+    fetchPeriodReturnData();
   }, [activeTab, userId, selectedAsset, dbData.holdings]);
 
   const displayMarketValue = selectedAsset
@@ -576,7 +591,7 @@ const SwipeableBalanceCard = ({
   const displayBalance = displayMarketValue;
 
   const isLoss = displayReturn < 0;
-  const returnPct = activeTab === "5d"
+  const returnPct = ["5d", "m", "ytd", "all"].includes(activeTab)
     ? truncateDecimal(returnData5d.pct, 2).toFixed(2)
     : (displayInvested > 0
       ? truncateDecimal((displayReturn / displayInvested) * 100, 2).toFixed(2)
@@ -748,7 +763,7 @@ const SwipeableBalanceCard = ({
 
       {/* Period selector */}
       <div className="mt-4 flex bg-black/20 backdrop-blur-sm rounded-full p-0.5 relative">
-        {[["d","D"],["5d","5D"],["m","M"],["y","Y"],["all","All"]].map(([key, label]) => (
+        {[["d","D"],["5d","5D"],["m","M"],["ytd","YTD"],["all","All"]].map(([key, label]) => (
           <button
             key={key}
             onClick={() => setActiveTab(key)}
