@@ -120,9 +120,13 @@ export const useStrategyChartData = (strategyId, timeFilter = "W", purchaseDate 
         "W": "1W",
         "M": "1M",
         "ALL": "1Y",
+        "5d": "1W",
+        "m": "1M",
+        "ytd": "1Y",
+        "all": "1Y",
       };
 
-      const timeframe = timeframeMap[timeFilter] || "1W";
+      const timeframe = timeframeMap[timeFilter] || timeframeMap["D"] || "1D";
 
       try {
         const priceHistory = await getStrategyPriceHistory(strategyId, timeframe);
@@ -167,6 +171,64 @@ export const useStrategyChartData = (strategyId, timeFilter = "W", purchaseDate 
   return { chartData, loading };
 };
 
+// Fetch period-specific return data from client_strategy_returns_c
+export const useStrategyPeriodReturns = (userId, strategyId, activeTab = "m") => {
+  const [returnData, setReturnData] = useState({ pnl: 0, pct: 0, basketValue: 0 });
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchPeriodReturns = async () => {
+      if (!userId || !strategyId || !["D", "5d", "m", "ytd"].includes(activeTab)) {
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const columnMap = {
+          "D": { pnl: "1d_pnl", pct: "1d_pct" },
+          "5d": { pnl: "5d_pnl", pct: "5d_pct" },
+          "m": { pnl: "1m_pnl", pct: "1m_pct" },
+          "ytd": { pnl: "ytd_pnl", pct: "ytd_pct" }
+        };
+
+        const columns = columnMap[activeTab];
+
+        const { data, error } = await supabase
+          .from("client_strategy_returns_c")
+          .select("*")
+          .eq("user_id", userId)
+          .eq("strategy_id", strategyId)
+          .order("as_of_date", { ascending: false })
+          .limit(1)
+          .single();
+
+        if (!error && data) {
+          const pnlValue = data[columns.pnl] || 0;
+          const pctValue = data[columns.pct] || 0;
+          const basketValue = (Number(data.basket_value || 0)) / 100;
+          setReturnData({
+            pnl: (Number(pnlValue)) / 100,
+            pct: Number(pctValue),
+            basketValue: basketValue
+          });
+        } else {
+          setReturnData({ pnl: 0, pct: 0, basketValue: 0 });
+        }
+      } catch (err) {
+        console.warn("[useStrategyPeriodReturns] Error fetching period returns:", err);
+        setReturnData({ pnl: 0, pct: 0, basketValue: 0 });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPeriodReturns();
+  }, [userId, strategyId, activeTab]);
+
+  return { returnData, loading };
+};
+
 function parseDateParts(ts) {
   const dateStr = ts.split("T")[0];
   const [y, m, d] = dateStr.split("-").map(Number);
@@ -182,7 +244,8 @@ function formatChartData(priceHistory, timeFilter) {
 
   switch (timeFilter) {
     case "D":
-    case "W": {
+    case "W":
+    case "5d": {
       return priceHistory.map((p) => {
         const { day, month, dayOfWeek } = parseDateParts(p.ts);
         return {
@@ -192,7 +255,8 @@ function formatChartData(priceHistory, timeFilter) {
         };
       });
     }
-    case "M": {
+    case "M":
+    case "m": {
       return priceHistory.map((p) => {
         const { year, day, month } = parseDateParts(p.ts);
         return {
@@ -202,7 +266,9 @@ function formatChartData(priceHistory, timeFilter) {
         };
       });
     }
-    case "ALL": {
+    case "ALL":
+    case "ytd":
+    case "all": {
       const monthKeys = new Set();
       priceHistory.forEach((p) => {
         const { year, month } = parseDateParts(p.ts);

@@ -5,7 +5,7 @@ import { Area, ComposedChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, 
 import { useInvestments } from "../lib/useFinancialData";
 import { useRealtimePrices } from "../lib/useRealtimePrices";
 import { useProfile } from "../lib/useProfile";
-import { useUserStrategies, useStrategyChartData } from "../lib/useUserStrategies";
+import { useUserStrategies, useStrategyChartData, useStrategyPeriodReturns } from "../lib/useUserStrategies";
 import { getMonthlyReturns, getStockMonthlyReturns, getOverallPortfolioMonthlyReturns } from "../lib/strategyData";
 import { useStockQuotes, useStockChart } from "../lib/useStockData";
 import { clearMarketDataCache } from "../lib/marketData";
@@ -70,7 +70,7 @@ const getReturnColor = (value) => {
 const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies, onBack, deepLink, onDeepLinkConsumed, onOpenStockDetail }) => {
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [activeTab, setActiveTab] = useState("holdings");
-  const [timeFilter, setTimeFilter] = useState("W");
+  const [timeFilter, setTimeFilter] = useState("m");
   const [failedLogos, setFailedLogos] = useState({});
   const [currentView, setCurrentView] = useState("portfolio");
   const [showStrategyDropdown, setShowStrategyDropdown] = useState(false);
@@ -164,6 +164,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   const { profile } = useProfile();
   const { strategies, selectedStrategy: userSelectedStrategy, loading: strategiesLoading, selectStrategy, refetch: refetchStrategies } = useUserStrategies();
   const { chartData: realChartData, loading: chartLoading } = useStrategyChartData(userSelectedStrategy?.strategyId, timeFilter, userSelectedStrategy?.firstInvestedDate || null);
+  const { returnData: periodReturnData, loading: periodReturnLoading } = useStrategyPeriodReturns(profile?.id, userSelectedStrategy?.strategyId, timeFilter);
 
   const fullName = [profile?.firstName || profile?.first_name, profile?.lastName || profile?.last_name]
     .filter(Boolean).join(" ") || "User";
@@ -824,9 +825,9 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                         <div className="flex gap-1">
                           {[
                             { id: "D", label: "D" },
-                            { id: "W", label: "W" },
-                            { id: "M", label: "M" },
-                            { id: "ALL", label: "All" },
+                            { id: "5d", label: "5D" },
+                            { id: "m", label: "M" },
+                            { id: "ytd", label: "YTD" },
                           ].map((filter) => (
                             <button
                               key={filter.id}
@@ -850,8 +851,13 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                           const cv = currentStrategy.currentValue || 0;
                           const ia = currentStrategy.investedAmount || 0;
                           const isStratPending = cv === 0 && ia === 0;
-                          const pnl = cv - ia;
-                          const pnlPct = ia > 0 ? (pnl / ia) * 100 : 0;
+                          // Use period return data if available, otherwise fall back to current calculation
+                          const pnl = (periodReturnData?.pnl !== undefined && periodReturnData.pnl !== 0)
+                            ? periodReturnData.pnl
+                            : (cv - ia);
+                          const pnlPct = (periodReturnData?.pct !== undefined && periodReturnData.pct !== 0)
+                            ? periodReturnData.pct
+                            : (ia > 0 ? (pnl / ia) * 100 : 0);
                           const isPos = pnl >= 0;
                           if (isStratPending) {
                             return (
@@ -880,13 +886,13 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                         })()}
                       </div>
 
-                      <div style={{ width: '100%', height: 220, marginBottom: 8 }}>
+                      <div style={{ width: '100%', height: 220, marginBottom: 8, minWidth: 0 }}>
                         {currentChartData.length === 0 ? (
                           <div style={{ width: '100%', height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <div className="text-slate-400 text-sm">{isLoadingData ? 'Loading chart...' : 'No data available'}</div>
                           </div>
                         ) : (
-                          <ResponsiveContainer width="100%" height={220}>
+                          <ResponsiveContainer width="100%" height="100%">
                             <ComposedChart
                               data={currentChartData}
                               margin={{ top: 10, right: 15, left: 5, bottom: 30 }}

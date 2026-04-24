@@ -94,6 +94,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod }) => {
       fees.totalCost,   // total cost including all fees
       amount,           // base investment amount before fees
       shareCount,       // number of shares if calculable
+      fees              // pass full fees breakdown for accurate transaction splitting
     );
   };
 
@@ -204,7 +205,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod }) => {
                   Investment Amount
                 </p>
                 <p className="text-3xl font-bold text-slate-900">
-                  {formatCurrency(amount, currency)}
+                  {formatCurrency(amount * (1 + CASH_BUFFER_RATE), currency)}
                 </p>
               </div>
 

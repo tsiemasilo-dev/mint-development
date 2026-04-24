@@ -2753,10 +2753,11 @@ app.post("/api/record-investment", async (req, res) => {
     const db = supabaseAdmin || supabase;
     console.log("[record-investment] Using DB client:", supabaseAdmin ? "admin (service role)" : "anon");
 
-    const { securityId, symbol, name, amount, baseAmount, strategyId, paymentReference, shareCount, paymentMethod } = req.body;
+    const { securityId, symbol, name, amount, baseAmount, strategyId, paymentReference, shareCount, paymentMethod, feesBreakdown } = req.body;
     // baseAmount = investment amount excluding fees; amount = total charged including fees
     const investAmount = (baseAmount && baseAmount > 0) ? baseAmount : amount;
     console.log("[record-investment] Parsed fields - securityId:", securityId, "symbol:", symbol, "name:", name, "amount:", amount, "baseAmount:", baseAmount, "strategyId:", strategyId, "paymentReference:", paymentReference, "shareCount:", shareCount, "paymentMethod:", paymentMethod);
+    console.log("[record-investment] Fees breakdown:", feesBreakdown);
 
     if (!securityId || !amount || !paymentReference) {
       console.log("[record-investment] MISSING FIELDS - securityId:", !!securityId, "amount:", !!amount, "paymentReference:", !!paymentReference);
@@ -3079,10 +3080,21 @@ app.post("/api/record-investment", async (req, res) => {
 
     // Calculate investment amount with 8% buffer
     const CASH_BUFFER_RATE = 0.08;
-    const investmentAmount = baseAmount ? baseAmount * (1 + CASH_BUFFER_RATE) : amount * 0.9; // If no baseAmount, estimate 90% as investment
-    const feesAmount = amount - investmentAmount;
+    let investmentAmount, feesAmount;
 
-    console.log("[record-investment] Amount breakdown - Investment:", investmentAmount, "Fees:", feesAmount, "Total:", amount);
+    if (feesBreakdown && feesBreakdown.totalFees) {
+      // Use the actual fees breakdown from frontend
+      investmentAmount = baseAmount ? baseAmount * (1 + CASH_BUFFER_RATE) : amount * 0.9;
+      feesAmount = feesBreakdown.totalFees;
+      console.log("[record-investment] Using fees breakdown from frontend - bufferedBase:", feesBreakdown.bufferedBase, "fees:", feesAmount);
+    } else {
+      // Fallback to calculating fees from the difference
+      investmentAmount = baseAmount ? baseAmount * (1 + CASH_BUFFER_RATE) : amount * 0.9;
+      feesAmount = amount - investmentAmount;
+      console.log("[record-investment] Calculating fees from difference");
+    }
+
+    console.log("[record-investment] Amount breakdown - amount:", amount, "baseAmount:", baseAmount, "investmentAmount:", investmentAmount, "feesAmount:", feesAmount, "Total:", amount);
 
     // 1. Create investment transaction
     const investmentTxPayload = {
@@ -3110,6 +3122,15 @@ app.post("/api/record-investment", async (req, res) => {
       status: "posted",
       transaction_date: new Date().toISOString(),
       created_at: new Date().toISOString(),
+      ...(feesBreakdown ? {
+        fees_breakdown: {
+          bufferedBase: feesBreakdown.bufferedBase || 0,
+          brokerAmount: feesBreakdown.brokerAmount || 0,
+          isinTotal: feesBreakdown.isinTotal || 0,
+          transactionAmount: feesBreakdown.transactionAmount || 0,
+          totalFees: feesBreakdown.totalFees || feesAmount,
+        }
+      } : {}),
     };
 
     let txData, txError;

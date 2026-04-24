@@ -129,6 +129,7 @@ const App = () => {
   const [portfolioDeepLink, setPortfolioDeepLink] = useState(null);
   const [investmentAmount, setInvestmentAmount] = useState(0);
   const [baseInvestmentAmount, setBaseInvestmentAmount] = useState(0);
+  const [investmentFees, setInvestmentFees] = useState(null);
   const [stockCheckout, setStockCheckout] = useState({ security: null, amount: 0, baseAmount: 0 });
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
@@ -1516,6 +1517,7 @@ const App = () => {
           amount={stockCheckout.amount}
           baseAmount={stockCheckout.baseAmount}
           shareCount={stockCheckout.shareCount}
+          fees={stockCheckout.fees}
           initialMethod={pendingPaymentMethod}
           onOpenDeposit={() => navigateTo("deposit")}
           onSuccess={async (response) => {
@@ -1604,15 +1606,17 @@ const App = () => {
           onBack={goBack}
           strategy={selectedStrategy}
           paymentMethod={pendingPaymentMethod}
-          onContinue={(amount, baseAmount) => {
+          onContinue={(amount, baseAmount, shareCount, fees) => {
             setInvestmentAmount(amount);
             setBaseInvestmentAmount(baseAmount || amount);
+            setInvestmentFees(fees);
             setPendingGoalFlow({
               type: "strategy",
               amount,
               baseAmount: baseAmount || amount,
               assetName: selectedStrategy?.name || "Strategy",
               strategyId: selectedStrategy?.id || selectedStrategy?.strategyId || null,
+              fees // pass fees breakdown
             });
             setShowGoalModal(true);
           }}
@@ -1735,6 +1739,7 @@ const App = () => {
           strategy={selectedStrategy}
           amount={investmentAmount}
           baseAmount={baseInvestmentAmount}
+          fees={investmentFees || pendingGoalFlow?.fees}
           initialMethod={pendingPaymentMethod}
           onOpenDeposit={() => navigateTo("deposit")}
           onSuccess={async (response) => {

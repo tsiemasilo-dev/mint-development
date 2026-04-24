@@ -16,6 +16,7 @@ const PaymentPage = ({
   onCancel,
   onOpenDeposit,
   initialMethod,
+  fees,
 }) => {
   const { profile } = useProfile();
   const [paymentStatus, setPaymentStatus] = useState(
@@ -132,6 +133,15 @@ const PaymentPage = ({
             paymentReference,
             paymentMethod: finalMethod,
             ...(shareCount ? { shareCount: Number(shareCount) } : {}),
+            ...(fees ? {
+              feesBreakdown: {
+                bufferedBase: fees.bufferedBase,
+                brokerAmount: fees.brokerAmount,
+                isinTotal: fees.isinTotal,
+                transactionAmount: fees.transactionAmount,
+                totalFees: (fees.brokerAmount || 0) + (fees.isinTotal || 0) + (fees.transactionAmount || 0)
+              }
+            } : {}),
           };
 
           if (isStrategyPurchase) {
