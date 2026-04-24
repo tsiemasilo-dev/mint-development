@@ -17,7 +17,7 @@ import {
   Tooltip,
 } from "recharts";
 import { supabase } from "../lib/supabase";
-import { getStrategyPriceHistory } from "../lib/strategyData";
+import { getStrategyPriceHistory, getClientStrategyReturns } from "../lib/strategyData";
 import { useRealtimePrices } from "../lib/useRealtimePrices";
 import Skeleton from "./Skeleton";
 import SettlementBadge from "./PendingBadge";
@@ -320,44 +320,29 @@ const SwipeableBalanceCard = ({
         const startDateStr = cutoff.toISOString().split("T")[0];
         console.log(`[SwipeableBalanceCard] Fetching history for tab: ${activeTab}, days: ${days}, startDate: ${startDateStr}`);
 
-        // Process strategies first (serial to be safe, but with try/catch)
-        const strategyPnlByDate = {};
-        const timeframeMap = { d: "1W", w: "1M", m: "3M", y: "1Y", all: "All" };
-        const tf = timeframeMap[activeTab] || "1M";
+        // Process strategies using client_strategy_returns_c table (inception_pct)
+        const strategyInceptionByDate = {};
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - days);
+        const endDateStr = new Date().toISOString().split("T")[0];
+        const strategyStartDateStr = cutoff.toISOString().split("T")[0];
 
         const strategyHoldings = holdingsToChart.filter(h => h.isStrategy && h.strategyId);
         for (const sh of strategyHoldings) {
           try {
-            let priceHistory = await getStrategyPriceHistory(sh.strategyId, tf);
-            const pDateStr = sh.firstInvestedDate ? sh.firstInvestedDate.slice(0, 10) : null;
-            
-            if (pDateStr && priceHistory && priceHistory.length > 0) {
-              const afterP = priceHistory.filter(p => p.ts.split("T")[0] >= pDateStr);
-              if (afterP.length >= 1) priceHistory = afterP;
-              else {
-                const beforeP = priceHistory.filter(p => p.ts.split("T")[0] < pDateStr);
-                if (beforeP.length > 0) {
-                  const lastKnown = beforeP[beforeP.length - 1];
-                  priceHistory = [lastKnown, { ...lastKnown, ts: pDateStr + "T00:00:00Z" }];
-                }
-              }
-            }
+            // Fetch from client_strategy_returns_c table with inception_pct
+            const returns = await getClientStrategyReturns(userId, sh.strategyId, strategyStartDateStr, endDateStr);
 
-            if (priceHistory && priceHistory.length > 0) {
-              const latestNav = priceHistory[priceHistory.length - 1].nav;
-              const currentMV = Number(sh.market_value || 0) / 100;
-              const cost = (Number(sh.avg_fill || 0) * Number(sh.quantity || 1)) / 100;
-              if (latestNav > 0) {
-                priceHistory.forEach((p) => {
-                  const dateKey = p.ts.split("T")[0];
-                  const valueAtDate = currentMV * (p.nav / latestNav);
-                  const pnl = valueAtDate - cost;
-                  strategyPnlByDate[dateKey] = (strategyPnlByDate[dateKey] || 0) + pnl;
-                });
-              }
+            if (returns && returns.length > 0) {
+              // inception_pct is already in percentage form (1.00 for 1%, not 0.01)
+              returns.forEach((r) => {
+                const dateKey = r.d;
+                // Use inception_pct directly as the return value
+                strategyInceptionByDate[dateKey] = (strategyInceptionByDate[dateKey] || 0) + r.v;
+              });
             }
           } catch (e) {
-            console.warn(`[Chart] Failed to fetch strategy ${sh.strategyId}:`, e);
+            console.warn(`[Chart] Failed to fetch strategy returns for ${sh.strategyId}:`, e);
           }
         }
 
@@ -417,7 +402,7 @@ const SwipeableBalanceCard = ({
         });
 
         const allPriceData = (await Promise.all(pricePromises)).filter(Boolean);
-        const hasStrategyData = Object.keys(strategyPnlByDate).length > 0;
+        const hasStrategyData = Object.keys(strategyInceptionByDate).length > 0;
 
         if (allPriceData.length === 0 && !hasStrategyData) {
           // No price history in DB — synthesize a 2-point chart from cost basis → current market value
@@ -443,7 +428,7 @@ const SwipeableBalanceCard = ({
         // Merge dates and calculate PnL per point
         const dateSet = new Set();
         allPriceData.forEach(({ prices }) => prices.forEach((p) => dateSet.add(p.ts)));
-        Object.keys(strategyPnlByDate).forEach((d) => dateSet.add(d));
+        Object.keys(strategyInceptionByDate).forEach((d) => dateSet.add(d));
         const sortedDates = Array.from(dateSet).sort();
 
         const rawPriceByDate = {};
@@ -481,8 +466,9 @@ const SwipeableBalanceCard = ({
               hasVal = true;
             }
           }
-          if (strategyPnlByDate[dateKey] !== undefined) {
-            totalPnl += strategyPnlByDate[dateKey];
+          // Add strategy inception returns (already in percentage form)
+          if (strategyInceptionByDate[dateKey] !== undefined) {
+            totalPnl += strategyInceptionByDate[dateKey];
             hasVal = true;
           }
           if (hasVal) points.push({ d: dateKey, v: Number(totalPnl.toFixed(2)) });
