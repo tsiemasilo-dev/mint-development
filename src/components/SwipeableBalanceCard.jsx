@@ -466,7 +466,8 @@ const SwipeableBalanceCard = ({
         });
 
         const points = [];
-        if (sortedDates.length > 0) {
+        // Only add anchor point if we don't have strategy basket data (which shows actual values, not P&L)
+        if (sortedDates.length > 0 && !hasStrategyData) {
           const anchorD = new Date(sortedDates[0]);
           anchorD.setDate(anchorD.getDate() - 1);
           points.push({ d: anchorD.toISOString().split("T")[0], v: 0 });
