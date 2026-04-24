@@ -476,13 +476,7 @@ const SwipeableBalanceCard = ({
         });
 
         const points = [];
-        // Always add anchor point at bottom left (y=0)
-        if (sortedDates.length > 0) {
-          const anchorD = new Date(sortedDates[0]);
-          anchorD.setDate(anchorD.getDate() - 1);
-          points.push({ d: anchorD.toISOString().split("T")[0], v: 0 });
-        }
-
+        // Don't add anchor point - start with first actual value at bottom left
         for (const dateKey of sortedDates) {
           let totalPnl = 0;
           let hasVal = false;
