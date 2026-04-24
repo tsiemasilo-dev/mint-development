@@ -495,7 +495,7 @@ const SwipeableBalanceCard = ({
         if (asset.isStrategy && asset.strategyId) {
           const { data, error } = await supabase
             .from("client_strategy_returns_c")
-            .select('"5d_pnl", "5d_pct"')
+            .select("*")
             .eq("user_id", userId)
             .eq("strategy_id", asset.strategyId)
             .order("as_of_date", { ascending: false })
@@ -504,26 +504,32 @@ const SwipeableBalanceCard = ({
 
           if (!error && data) {
             // 5d_pnl is in cents, divide by 100 to get rands
+            const pnlValue = data["5d_pnl"] || 0;
+            const pctValue = data["5d_pct"] || 0;
             setReturnData5d({
-              pnl: (Number(data["5d_pnl"] || 0)) / 100,
-              pct: Number(data["5d_pct"] || 0)
+              pnl: (Number(pnlValue)) / 100,
+              pct: Number(pctValue)
             });
+            console.log("[5D Data]", { pnlValue, pctValue, data });
           }
         } else if (asset.security_id) {
           // For stocks, fetch from stock_returns_c
           const { data, error } = await supabase
             .from("stock_returns_c")
-            .select('"5d_pnl", "5d_pct"')
+            .select("*")
             .eq("security_id", asset.security_id)
             .order("as_of_date", { ascending: false })
             .limit(1)
             .single();
 
           if (!error && data) {
+            const pnlValue = data["5d_pnl"] || 0;
+            const pctValue = data["5d_pct"] || 0;
             setReturnData5d({
-              pnl: (Number(data["5d_pnl"] || 0)) / 100,
-              pct: Number(data["5d_pct"] || 0)
+              pnl: (Number(pnlValue)) / 100,
+              pct: Number(pctValue)
             });
+            console.log("[5D Data]", { pnlValue, pctValue, data });
           }
         }
       } catch (e) {
