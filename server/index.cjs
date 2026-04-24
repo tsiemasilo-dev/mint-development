@@ -3075,13 +3075,36 @@ app.post("/api/record-investment", async (req, res) => {
       ? `Invested in strategy ${name || "Strategy"}`
       : `Purchased ${(holdingResult.data ? "shares" : "units")} of ${name || symbol || "Unknown"}`;
 
-    console.log("[record-investment] Creating transaction record...");
-    const txPayload = {
+    console.log("[record-investment] Creating separate investment and fees transactions...");
+
+    // Calculate investment amount with 8% buffer
+    const CASH_BUFFER_RATE = 0.08;
+    const investmentAmount = baseAmount ? baseAmount * (1 + CASH_BUFFER_RATE) : amount * 0.9; // If no baseAmount, estimate 90% as investment
+    const feesAmount = amount - investmentAmount;
+
+    console.log("[record-investment] Amount breakdown - Investment:", investmentAmount, "Fees:", feesAmount, "Total:", amount);
+
+    // 1. Create investment transaction
+    const investmentTxPayload = {
       user_id: userId,
       direction: "debit",
       name: isStrategyInvestment ? `Strategy Investment: ${name || symbol || "Strategy"}` : `Purchased ${name || symbol || "Stock"}`,
       description: descriptionText,
-      amount: Math.round(amount * 100),
+      amount: Math.round(investmentAmount * 100),
+      store_reference: paymentReference || null,
+      currency: "ZAR",
+      status: "posted",
+      transaction_date: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+    };
+
+    // 2. Create fees transaction
+    const feesTxPayload = {
+      user_id: userId,
+      direction: "debit",
+      name: isStrategyInvestment ? `Fees: Strategy Investment` : `Fees: Stock Purchase`,
+      description: `Fees and charges for ${isStrategyInvestment ? 'strategy investment' : 'stock purchase'}`,
+      amount: Math.round(feesAmount * 100),
       store_reference: paymentReference || null,
       currency: "ZAR",
       status: "posted",
@@ -3090,21 +3113,31 @@ app.post("/api/record-investment", async (req, res) => {
     };
 
     let txData, txError;
-    const txResult1 = await db.from("transactions").insert(txPayload).select();
-    txData = txResult1.data;
-    txError = txResult1.error;
+
+    // Insert both transactions
+    const [investResult, feesResult] = await Promise.all([
+      db.from("transactions").insert(investmentTxPayload).select(),
+      feesAmount > 0 ? db.from("transactions").insert(feesTxPayload).select() : Promise.resolve({ data: null, error: null })
+    ]);
+
+    txData = investResult.data;
+    txError = investResult.error;
 
     if (txError && txError.message && txError.message.includes("settlement_status")) {
       console.log("[record-investment] Retrying transaction insert without settlement_status...");
-      const txResult2 = await db.from("transactions").insert(txPayload).select();
-      txData = txResult2.data;
-      txError = txResult2.error;
+      const investRetry = await db.from("transactions").insert(investmentTxPayload).select();
+      txData = investRetry.data;
+      txError = investRetry.error;
+
+      if (!txError && feesAmount > 0) {
+        await db.from("transactions").insert(feesTxPayload).select();
+      }
     }
 
     if (txError) {
       console.error("[record-investment] TRANSACTION INSERT ERROR:", JSON.stringify(txError));
     } else {
-      console.log("[record-investment] Transaction created OK:", JSON.stringify(txData));
+      console.log("[record-investment] Transactions created OK - Investment:", investmentAmount, "Fees:", feesAmount);
     }
 
     if (isStrategyInvestment) {
@@ -3118,7 +3151,7 @@ app.post("/api/record-investment", async (req, res) => {
           .maybeSingle();
 
         if (existingUS) {
-          const newInvested = (existingUS.invested_amount || 0) + Math.round(amount * 100);
+          const newInvested = (existingUS.invested_amount || 0) + Math.round(investmentAmount * 100);
           const { error: usUpdateErr } = await db
             .from("user_strategies")
             .update({ invested_amount: newInvested, updated_at: new Date().toISOString() })
@@ -3132,7 +3165,7 @@ app.post("/api/record-investment", async (req, res) => {
           const usPayload = {
             user_id: userId,
             strategy_id: strategyId,
-            invested_amount: Math.round(amount * 100),
+            invested_amount: Math.round(investmentAmount * 100),
             status: "active",
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
