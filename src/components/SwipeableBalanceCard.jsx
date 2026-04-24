@@ -668,7 +668,7 @@ const SwipeableBalanceCard = ({
       <div className="flex items-end justify-between mt-2 relative">
         <div className="flex-1 min-w-0 pr-3">
           <h2 className="text-3xl font-bold tracking-tight text-white leading-none">
-            {isVisible ? (selectedAsset ? formatKMB(displayBalance) : formatFull(displayBalance)) : masked}
+            {isVisible ? formatFull(displayBalance) : masked}
           </h2>
           <div className="flex items-center gap-2 mt-2">
             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${isLoss ? "bg-destructive/20 text-destructive" : "bg-success/20 text-success"}`}>
@@ -731,20 +731,13 @@ const SwipeableBalanceCard = ({
         >
           <LayoutGrid size={12} className="text-violet-400" />
           <span className="text-[11px] font-medium text-slate-200 whitespace-nowrap">
-            {selectedAsset ? selectedAsset.symbol : "All Investments"}
+            {selectedAsset ? selectedAsset.symbol : (dbData.holdings.length > 0 ? dbData.holdings[0].symbol : "Investments")}
           </span>
           {isOpen ? <ChevronUp size={12} className="text-slate-300" /> : <ChevronDown size={12} className="text-slate-300" />}
         </button>
         {isOpen && (
           <div className="absolute top-full mt-1 left-0 w-48 bg-white rounded-xl z-[120] overflow-hidden border border-slate-200 shadow-lg">
             <div className="py-1 overflow-y-auto max-h-[140px]">
-              <button
-                onClick={() => { setSelectedAsset(null); setIsOpen(false); scrollToHoldingIndex(-1); }}
-                className={`w-full flex items-center gap-2 px-3 py-1.5 text-left ${!selectedAsset ? "bg-slate-100" : "hover:bg-slate-50"}`}
-              >
-                <LayoutGrid size={10} className="text-violet-400 shrink-0" />
-                <span className="text-[9px] font-medium text-slate-700 truncate">All Investments</span>
-              </button>
               {dbData.holdings.map((item, idx) => (
                 <button
                   key={idx}
