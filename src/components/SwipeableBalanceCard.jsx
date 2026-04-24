@@ -322,16 +322,13 @@ const SwipeableBalanceCard = ({
 
         // Process strategies using client_strategy_returns_c table (inception_pct)
         const strategyInceptionByDate = {};
-        const cutoff = new Date();
-        cutoff.setDate(cutoff.getDate() - days);
         const endDateStr = new Date().toISOString().split("T")[0];
-        const strategyStartDateStr = cutoff.toISOString().split("T")[0];
 
         const strategyHoldings = holdingsToChart.filter(h => h.isStrategy && h.strategyId);
         for (const sh of strategyHoldings) {
           try {
             // Fetch from client_strategy_returns_c table with inception_pct
-            const returns = await getClientStrategyReturns(userId, sh.strategyId, strategyStartDateStr, endDateStr);
+            const returns = await getClientStrategyReturns(userId, sh.strategyId, startDateStr, endDateStr);
 
             if (returns && returns.length > 0) {
               // inception_pct is already in percentage form (1.00 for 1%, not 0.01)
