@@ -522,8 +522,9 @@ const SwipeableBalanceCard = ({
       if (!["5d", "m", "ytd", "all"].includes(activeTab) || !userId) return;
 
       try {
-        const asset = selectedAsset || (dbData.holdings.length > 0 ? dbData.holdings[0] : null);
-        if (!asset) return;
+        // If an asset is selected, show its returns
+        // Otherwise, calculate portfolio-wide returns
+        const asset = selectedAsset;
 
         // Map activeTab to column names
         const columnMap = {
@@ -535,47 +536,115 @@ const SwipeableBalanceCard = ({
 
         const columns = columnMap[activeTab];
 
-        // For strategies, fetch from client_strategy_returns_c
-        if (asset.isStrategy && asset.strategyId) {
-          const { data, error } = await supabase
-            .from("client_strategy_returns_c")
-            .select("*")
-            .eq("user_id", userId)
-            .eq("strategy_id", asset.strategyId)
-            .order("as_of_date", { ascending: false })
-            .limit(1)
-            .single();
+        if (asset) {
+          // For selected asset, fetch from appropriate table
+          if (asset.isStrategy && asset.strategyId) {
+            const { data, error } = await supabase
+              .from("client_strategy_returns_c")
+              .select("*")
+              .eq("user_id", userId)
+              .eq("strategy_id", asset.strategyId)
+              .order("as_of_date", { ascending: false })
+              .limit(1)
+              .single();
 
-          if (!error && data) {
-            const pnlValue = data[columns.pnl] || 0;
-            const pctValue = data[columns.pct] || 0;
-            const basketValue = (Number(data.basket_value || 0)) / 100;
-            setReturnData5d({
-              pnl: (Number(pnlValue)) / 100,
-              pct: Number(pctValue)
-            });
-            setLatestBasketValue(basketValue);
-          }
-        } else if (asset.security_id) {
-          // For stocks, fetch from stock_returns_c
-          const { data, error } = await supabase
-            .from("stock_returns_c")
-            .select("*")
-            .eq("security_id", asset.security_id)
-            .order("as_of_date", { ascending: false })
-            .limit(1)
-            .single();
+            if (!error && data) {
+              const pnlValue = data[columns.pnl] || 0;
+              const pctValue = data[columns.pct] || 0;
+              const basketValue = (Number(data.basket_value || 0)) / 100;
+              setReturnData5d({
+                pnl: (Number(pnlValue)) / 100,
+                pct: Number(pctValue)
+              });
+              setLatestBasketValue(basketValue);
+            }
+          } else if (asset.security_id) {
+            const { data, error } = await supabase
+              .from("stock_returns_c")
+              .select("*")
+              .eq("security_id", asset.security_id)
+              .order("as_of_date", { ascending: false })
+              .limit(1)
+              .single();
 
-          if (!error && data) {
-            const pnlValue = data[columns.pnl] || 0;
-            const pctValue = data[columns.pct] || 0;
-            const basketValue = (Number(data.basket_value || 0)) / 100;
-            setReturnData5d({
-              pnl: (Number(pnlValue)) / 100,
-              pct: Number(pctValue)
-            });
-            setLatestBasketValue(basketValue);
+            if (!error && data) {
+              const pnlValue = data[columns.pnl] || 0;
+              const pctValue = data[columns.pct] || 0;
+              const basketValue = (Number(data.basket_value || 0)) / 100;
+              setReturnData5d({
+                pnl: (Number(pnlValue)) / 100,
+                pct: Number(pctValue)
+              });
+              setLatestBasketValue(basketValue);
+            }
           }
+        } else if (dbData.holdings.length > 0) {
+          // For portfolio-wide returns, sum returns from all holdings
+          let totalPnl = 0;
+          let weightedPct = 0;
+          let totalValue = dbData.totalMarketValue;
+          let totalInvested = dbData.totalInvestedAmount;
+
+          const strategyIds = dbData.holdings
+            .filter(h => h.isStrategy && h.strategyId)
+            .map(h => h.strategyId);
+
+          const securityIds = dbData.holdings
+            .filter(h => h.security_id && !h.isStrategy)
+            .map(h => h.security_id);
+
+          // Fetch latest return data for each strategy
+          if (strategyIds.length > 0) {
+            for (const strategyId of strategyIds) {
+              const { data: row, error: err } = await supabase
+                .from("client_strategy_returns_c")
+                .select("*")
+                .eq("user_id", userId)
+                .eq("strategy_id", strategyId)
+                .order("as_of_date", { ascending: false })
+                .limit(1)
+                .single();
+
+              if (!err && row) {
+                const pnlValue = row[columns.pnl] || 0;
+                const pctValue = row[columns.pct] || 0;
+                const basketValue = (Number(row.basket_value || 0)) / 100;
+                const weight = dbData.totalMarketValue > 0 ? basketValue / dbData.totalMarketValue : 0;
+                totalPnl += (Number(pnlValue)) / 100;
+                weightedPct += Number(pctValue) * weight;
+              }
+            }
+          }
+
+          // Fetch latest return data for each stock
+          if (securityIds.length > 0) {
+            for (const securityId of securityIds) {
+              const { data: row, error: err } = await supabase
+                .from("stock_returns_c")
+                .select("*")
+                .eq("security_id", securityId)
+                .order("as_of_date", { ascending: false })
+                .limit(1)
+                .single();
+
+              if (!err && row) {
+                const pnlValue = row[columns.pnl] || 0;
+                const pctValue = row[columns.pct] || 0;
+                const basketValue = (Number(row.basket_value || 0)) / 100;
+                const weight = dbData.totalMarketValue > 0 ? basketValue / dbData.totalMarketValue : 0;
+                totalPnl += (Number(pnlValue)) / 100;
+                weightedPct += Number(pctValue) * weight;
+              }
+            }
+          }
+
+          // Calculate portfolio return percentage
+          const portfolioPct = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0;
+
+          setReturnData5d({
+            pnl: totalPnl,
+            pct: portfolioPct
+          });
         }
       } catch (e) {
         console.warn("[SwipeableBalanceCard] Error fetching period return data:", e);
