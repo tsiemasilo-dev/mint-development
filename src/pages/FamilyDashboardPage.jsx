@@ -1075,6 +1075,7 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
   const [portfolioChange, setPortfolioChange] = useState(0);
   const [addingType, setAddingType] = useState(null);
   const [walletBalanceCents, setWalletBalanceCents] = useState(0);
+  const [headBalance, setHeadBalance] = useState(0);
   const [memberBalances, setMemberBalances] = useState({});
   const [confirmRemove, setConfirmRemove] = useState(null);
   const [removingId, setRemovingId] = useState(null);
@@ -1108,15 +1109,24 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
     const allUserIds = [userId, ...spouseUserIds];
     
     try {
-      const [holdingsRes, childHoldingsRes, walletRes] = await Promise.all([
+      const [holdingsRes, childHoldingsRes, walletRes, childWalletRes] = await Promise.all([
         supabase.from("stock_holdings_c").select("user_id, security_id, quantity, avg_fill").in("user_id", allUserIds).eq("Status", "active"),
         supabase.from("stock_holdings_c").select("family_member_id, security_id, quantity, avg_fill").in("family_member_id", childMemberIds).eq("Status", "active"),
         supabase.from("wallets").select("user_id, balance").in("user_id", allUserIds),
+        childMemberIds.length
+          ? supabase.from("family_members").select("id, available_balance").in("id", childMemberIds)
+          : Promise.resolve({ data: [] }),
       ]);
 
       const holdings = holdingsRes.data || [];
       const childHoldings = childHoldingsRes.data || [];
       const wallets = walletRes.data || [];
+      const childWallets = childWalletRes.data || [];
+      // family_members.available_balance is stored in cents
+      const childBalanceCentsMap = Object.fromEntries(
+        childWallets.map(c => [c.id, Number(c.available_balance || 0)])
+      );
+      const totalChildWalletCents = childWallets.reduce((s, c) => s + Number(c.available_balance || 0), 0);
 
       // Fetch live prices (stored in rands) for all security_ids and normalize to cents
       const securityIds = Array.from(new Set(
@@ -1155,7 +1165,7 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
       // Total wallet (converted to cents)
       const totalWalletRands = wallets.reduce((s, w) => s + (w.balance || 0), 0);
 
-      setPortfolioValue(totalHoldingsValue + (totalWalletRands * 100));
+      setPortfolioValue(totalHoldingsValue + (totalWalletRands * 100) + totalChildWalletCents);
       setPortfolioChange(totalHoldingsChange);
 
       // Map individual member balances
@@ -1166,6 +1176,7 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
       const mainWallet = wallets.find(w => w.user_id === userId);
       const headTotal = mainHoldings.reduce((s, h) => s + marketValueCents(h), 0) + Math.round((mainWallet?.balance || 0) * 100);
       setWalletBalanceCents(Math.round((mainWallet?.balance || 0) * 100));
+      setHeadBalance(headTotal);
 
       // Calculate other member balances
       members.forEach(m => {
@@ -1175,7 +1186,7 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
           balances[m.id] = sHoldings.reduce((s, h) => s + marketValueCents(h), 0) + Math.round((sWallet?.balance || 0) * 100);
         } else if (m.relationship === "child") {
           const cHoldings = childHoldings.filter(h => h.family_member_id === m.id);
-          balances[m.id] = cHoldings.reduce((s, h) => s + marketValueCents(h), 0);
+          balances[m.id] = cHoldings.reduce((s, h) => s + marketValueCents(h), 0) + (childBalanceCentsMap[m.id] || 0);
         }
       });
       setMemberBalances(balances);
@@ -1332,7 +1343,7 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
                 role="Head"
                 roleIcon={<Crown className="h-2.5 w-2.5 mr-0.5" />}
                 detail="Main Account"
-                amount={portfolioValue - Object.values(memberBalances).reduce((a, b) => a + b, 0)}
+                amount={headBalance}
                 onClick={() => {}}
               />
 
