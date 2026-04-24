@@ -149,13 +149,6 @@ const SwipeableBalanceCard = ({
     };
   }, [lastUpdated]);
 
-  useEffect(() => {
-    // Auto-select first investment on load (only once)
-    if (!autoSelectDoneRef.current && dbData.holdings.length > 0) {
-      setSelectedAsset(dbData.holdings[0]);
-      autoSelectDoneRef.current = true;
-    }
-  }, [dbData.holdings]);
 
   useEffect(() => {
     if (!isBackFacing) setIsOpen(false);
@@ -183,7 +176,6 @@ const SwipeableBalanceCard = ({
   const [returnData5d, setReturnData5d] = useState({ pnl: 0, pct: 0 });
   const [latestBasketValue, setLatestBasketValue] = useState(0);
   const holdingsScrollRef = useRef(null);
-  const autoSelectDoneRef = useRef(false);
 
   const scrollToHoldingIndex = (index) => {
     const container = holdingsScrollRef.current;
