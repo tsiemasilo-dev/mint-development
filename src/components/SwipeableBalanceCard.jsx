@@ -45,7 +45,7 @@ const formatKMB = (value) => {
   return `${sign}R${formatted}`;
 };
 
-const TIMEFRAME_DAYS = { d: 7, w: 30, m: 90, y: 365, all: 1825 };
+const TIMEFRAME_DAYS = { d: 7, "5d": 5, m: 90, y: 365, all: 1825 };
 
 const SwipeableBalanceCard = ({
   userId,
@@ -160,6 +160,7 @@ const SwipeableBalanceCard = ({
   const [loading, setLoading] = useState(true);
   const [chartData, setChartData] = useState([]);
   const [chartLoading, setChartLoading] = useState(false);
+  const [returnData5d, setReturnData5d] = useState({ pnl: 0, pct: 0 });
   const holdingsScrollRef = useRef(null);
 
   const scrollToHoldingIndex = (index) => {
@@ -482,6 +483,57 @@ const SwipeableBalanceCard = ({
     fetchChartPrices();
   }, [userId, dbData.holdings, activeTab, selectedAsset, lastUpdated, loading]);
 
+  useEffect(() => {
+    const fetch5dReturnData = async () => {
+      if (activeTab !== "5d" || !userId) return;
+
+      try {
+        const asset = selectedAsset || (dbData.holdings.length > 0 ? dbData.holdings[0] : null);
+        if (!asset) return;
+
+        // For strategies, fetch from client_strategy_returns_c
+        if (asset.isStrategy && asset.strategyId) {
+          const { data, error } = await supabase
+            .from("client_strategy_returns_c")
+            .select("5d_pnl, 5d_pct")
+            .eq("user_id", userId)
+            .eq("strategy_id", asset.strategyId)
+            .order("as_of_date", { ascending: false })
+            .limit(1)
+            .single();
+
+          if (!error && data) {
+            // 5d_pnl is in cents, divide by 100 to get rands
+            setReturnData5d({
+              pnl: (Number(data["5d_pnl"] || 0)) / 100,
+              pct: Number(data["5d_pct"] || 0)
+            });
+          }
+        } else if (asset.security_id) {
+          // For stocks, fetch from stock_returns_c
+          const { data, error } = await supabase
+            .from("stock_returns_c")
+            .select("5d_pnl, 5d_pct")
+            .eq("security_id", asset.security_id)
+            .order("as_of_date", { ascending: false })
+            .limit(1)
+            .single();
+
+          if (!error && data) {
+            setReturnData5d({
+              pnl: (Number(data["5d_pnl"] || 0)) / 100,
+              pct: Number(data["5d_pct"] || 0)
+            });
+          }
+        }
+      } catch (e) {
+        console.warn("[SwipeableBalanceCard] Error fetching 5d return data:", e);
+      }
+    };
+
+    fetch5dReturnData();
+  }, [activeTab, userId, selectedAsset, dbData.holdings]);
+
   const displayMarketValue = selectedAsset
     ? Number(selectedAsset.market_value || 0) / 100
     : dbData.totalMarketValue;
@@ -495,14 +547,15 @@ const SwipeableBalanceCard = ({
         ? Number(selectedAsset.invested_amount) / 100 
         : (Number(selectedAsset.avg_fill || 0) * Number(selectedAsset.quantity || 0)) / 100)
     : dbData.totalInvestedAmount;
-  const displayReturn = displayMarketValue - displayInvested;
+  const displayReturn = activeTab === "5d" ? returnData5d.pnl : (displayMarketValue - displayInvested);
   const displayBalance = displayMarketValue;
 
   const isLoss = displayReturn < 0;
-  const returnPct =
-    displayInvested > 0
+  const returnPct = activeTab === "5d"
+    ? returnData5d.pct.toFixed(1)
+    : (displayInvested > 0
       ? ((displayReturn / displayInvested) * 100).toFixed(1)
-      : "0.0";
+      : "0.0");
   const chartColor = isLoss ? "hsl(0,84%,60%)" : "hsl(160,70%,45%)";
 
   const masked = "••••";
@@ -670,7 +723,7 @@ const SwipeableBalanceCard = ({
 
       {/* Period selector */}
       <div className="mt-4 flex bg-black/20 backdrop-blur-sm rounded-full p-0.5 relative">
-        {[["d","D"],["w","W"],["m","M"],["y","Y"],["all","All"]].map(([key, label]) => (
+        {[["d","D"],["5d","5D"],["m","M"],["y","Y"],["all","All"]].map(([key, label]) => (
           <button
             key={key}
             onClick={() => setActiveTab(key)}
