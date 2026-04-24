@@ -494,6 +494,17 @@ const SwipeableBalanceCard = ({
           }
           if (hasVal) points.push({ d: dateKey, v: Number(totalPnl.toFixed(2)) });
         }
+
+        // Normalize chart to start value: subtract first value from all points
+        if (points.length > 0) {
+          const firstValue = points[0].v;
+          points.forEach(point => {
+            point.v = Number((point.v - firstValue).toFixed(2));
+          });
+          // Add the first value back as the baseline
+          points[0].v = firstValue;
+        }
+
         console.log(`[SwipeableBalanceCard] Final chart points: ${points.length}`);
         setChartData(points);
       } catch (err) {
