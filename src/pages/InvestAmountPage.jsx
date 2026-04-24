@@ -73,8 +73,8 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod }) => {
     if (paymentMethod === "direct_eft") {
       return "You'll receive banking details to complete your EFT payment.";
     }
-    // Default — Paystack or not yet selected
-    return "You'll be redirected to complete payment securely via Paystack.";
+    // Default — multiple payment methods available
+    return "You'll be guided through our secure payment process with multiple payment options available.";
   };
 
   // ── FIX 4: Pass baseAmount and shareCount through to PaymentPage ──────────
