@@ -4,11 +4,13 @@ import {
   ArrowLeft, ArrowUpRight, ArrowDownLeft, X, TrendingUp, TrendingDown,
   ShieldCheck, Baby, Wallet, BarChart3, ChevronRight,
   RefreshCw, Search, Star, AlertCircle, Check, ClipboardList,
+  BookOpen, Target,
 } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
 import { supabase } from "../lib/supabase";
 import MinorProofOfAddressDeclaration from "../components/MinorProofOfAddressDeclaration";
 import ChildResponsibilityAgreement from "../components/ChildResponsibilityAgreement";
+import SwipeableBalanceCard from "../components/SwipeableBalanceCard";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -1104,73 +1106,70 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
             </motion.div>
           )}
 
-          {/* ── Unified Wallet + Portfolio Card ── */}
-          <motion.div
-            variants={item}
-            className="rounded-3xl relative overflow-hidden"
-            style={{
-              background: "linear-gradient(160deg, #1e1b4b 0%, #312e81 45%, #4c1d95 100%)",
-              boxShadow: "0 24px 48px -12px rgba(79,70,229,0.45)",
-            }}
-          >
-            {/* Subtle glare orbs */}
-            <div className="pointer-events-none absolute -top-16 -right-16 h-64 w-64 rounded-full" style={{ background: "radial-gradient(circle, rgba(255,255,255,0.07), transparent 70%)" }} />
-            <div className="pointer-events-none absolute -bottom-12 -left-12 h-48 w-48 rounded-full" style={{ background: "radial-gradient(circle, rgba(168,85,247,0.18), transparent 70%)" }} />
+          {/* ── Portfolio Card with Period Filters & Chart ── */}
+          <motion.div variants={item}>
+            <SwipeableBalanceCard userId={child?.id} />
+          </motion.div>
 
-            <div className="relative px-6 pt-7 pb-6">
+          {/* ── Account Info Badge ── */}
+          <motion.div variants={item} className="flex items-center justify-center gap-2 px-1 py-2">
+            <span className="text-xs text-slate-500 font-medium">
+              Managed by {parentName}
+              {age !== null && ` · Age ${age}`}
+              · Independent at 18
+            </span>
+          </motion.div>
 
-              {/* Label row */}
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-[11px] font-semibold tracking-[0.18em] text-white/50 uppercase">Available Balance</p>
-                <span className="text-[10px] font-semibold tracking-wider text-white/35 uppercase">{child?.first_name}'s Wallet</span>
+          {/* ── Quick Actions ── */}
+          <motion.div variants={item} className="grid grid-cols-4 gap-2">
+            <button
+              onClick={() => setShowInvest(true)}
+              className="flex flex-col items-center gap-2 rounded-2xl p-4 bg-white border border-slate-100 shadow-sm hover:bg-slate-50 hover:border-purple-200 transition active:scale-[0.95]"
+            >
+              <div className="h-10 w-10 rounded-lg flex items-center justify-center bg-purple-100">
+                <BarChart3 className="h-5 w-5 text-purple-600" />
               </div>
+              <span className="text-xs font-semibold text-slate-900">Invest</span>
+            </button>
 
-              {/* Wallet balance */}
-              <p className="text-[2.85rem] font-bold text-white tracking-tight leading-none mb-6">{fmt(childBalance)}</p>
-
-              {/* Hairline divider */}
-              <div className="h-px w-full mb-5" style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent)" }} />
-
-              {/* Portfolio row */}
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <p className="text-[10px] font-semibold tracking-[0.16em] text-white/45 uppercase mb-1">Portfolio Value</p>
-                  <p className="text-2xl font-bold text-white tracking-tight">{fmt(totalPortfolio)}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[10px] font-semibold tracking-[0.16em] text-white/45 uppercase mb-1">All-time return</p>
-                  <span
-                    className="inline-flex items-center gap-1 text-sm font-bold"
-                    style={{ color: isPortUp ? "#86efac" : "#fca5a5" }}
-                  >
-                    {isPortUp ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
-                    {isPortUp ? "+" : ""}{fmt(totalPnl)}&nbsp;
-                    <span className="font-semibold opacity-80">({pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(1)}%)</span>
-                  </span>
-                </div>
+            <button
+              onClick={openTransferModal}
+              disabled={openingTransfer}
+              className="flex flex-col items-center gap-2 rounded-2xl p-4 bg-white border border-slate-100 shadow-sm hover:bg-slate-50 hover:border-purple-200 transition active:scale-[0.95] disabled:opacity-50"
+            >
+              <div className="h-10 w-10 rounded-lg flex items-center justify-center bg-emerald-100">
+                <ArrowDownLeft className="h-5 w-5 text-emerald-600" />
               </div>
+              <span className="text-xs font-semibold text-slate-900">Transfer</span>
+            </button>
 
-              {/* Action buttons */}
-              <div className="flex gap-3">
-                <button
-                  onClick={openTransferModal}
-                  disabled={openingTransfer}
-                  className="flex-1 flex items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-semibold text-white transition active:scale-[0.97]"
-                  style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.14)", backdropFilter: "blur(12px)" }}
-                >
-                  <ArrowDownLeft className="h-4 w-4" />
-                  {openingTransfer ? "Loading…" : "Transfer"}
-                </button>
-                <button
-                  onClick={() => setShowInvest(true)}
-                  className="flex-1 flex items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-semibold text-white transition active:scale-[0.97]"
-                  style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.14)", backdropFilter: "blur(12px)" }}
-                >
-                  <BarChart3 className="h-4 w-4" />
-                  Invest
-                </button>
+            <button
+              disabled
+              className="relative flex flex-col items-center gap-2 rounded-2xl p-4 bg-slate-100/70 border border-slate-200/60 cursor-not-allowed transition"
+            >
+              <div className="h-10 w-10 rounded-lg flex items-center justify-center bg-slate-200">
+                <BookOpen className="h-5 w-5 text-slate-400" />
               </div>
-            </div>
+              <span className="text-xs font-semibold text-slate-400">Learn</span>
+              <span
+                className="absolute -bottom-1 left-1/2 -translate-x-1/2 inline-flex items-center px-1.5 py-px rounded-full text-[7px] font-bold uppercase tracking-wider text-white"
+                style={{
+                  background: "linear-gradient(135deg, #6d28d9 0%, #8b5cf6 100%)",
+                  boxShadow: "0 1px 4px rgba(109,40,217,0.3)",
+                }}
+              >
+                Soon
+              </span>
+            </button>
+
+            <button
+              className="flex flex-col items-center gap-2 rounded-2xl p-4 bg-white border border-slate-100 shadow-sm hover:bg-slate-50 hover:border-purple-200 transition active:scale-[0.95]"
+            >
+              <div className="h-10 w-10 rounded-lg flex items-center justify-center bg-amber-100">
+                <Target className="h-5 w-5 text-amber-600" />
+              </div>
+              <span className="text-xs font-semibold text-slate-900">Goals</span>
+            </button>
           </motion.div>
 
           {/* ── Holdings ── */}
