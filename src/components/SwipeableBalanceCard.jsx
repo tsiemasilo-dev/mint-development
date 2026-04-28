@@ -17,7 +17,7 @@ import {
   Tooltip,
 } from "recharts";
 import { supabase } from "../lib/supabase";
-import { getStrategyPriceHistory } from "../lib/strategyData";
+import { getStrategyPriceHistory, getClientStrategyReturns } from "../lib/strategyData";
 import { useRealtimePrices } from "../lib/useRealtimePrices";
 import Skeleton from "./Skeleton";
 import SettlementBadge from "./PendingBadge";
@@ -28,9 +28,15 @@ import {
 
 const VISIBILITY_STORAGE_KEY = "mintBalanceVisible";
 
+const truncateDecimal = (num, decimals) => {
+  const factor = Math.pow(10, decimals);
+  return Math.floor(num * factor) / factor;
+};
+
 const formatFull = (value) => {
   const num = Number(value);
-  return `R${num.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const truncated = truncateDecimal(num, 2);
+  return `R${truncated.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
 const formatKMB = (value) => {
@@ -38,14 +44,20 @@ const formatKMB = (value) => {
   const sign = num < 0 ? "-" : "";
   const absNum = Math.abs(num);
   let formatted = absNum;
-  if (absNum >= 1e9) formatted = (absNum / 1e9).toFixed(1) + "b";
-  else if (absNum >= 1e6) formatted = (absNum / 1e6).toFixed(1) + "m";
-  else if (absNum >= 1e3) formatted = (absNum / 1e3).toFixed(1) + "k";
-  else formatted = absNum.toFixed(2);
+  if (absNum >= 1e9) formatted = (truncateDecimal(absNum / 1e9, 1)).toString() + "b";
+  else if (absNum >= 1e6) formatted = (truncateDecimal(absNum / 1e6, 1)).toString() + "m";
+  else if (absNum >= 1e3) formatted = (truncateDecimal(absNum / 1e3, 1)).toString() + "k";
+  else formatted = truncateDecimal(absNum, 2).toString();
   return `${sign}R${formatted}`;
 };
 
-const TIMEFRAME_DAYS = { d: 7, w: 30, m: 90, y: 365, all: 1825 };
+const formatPrecise = (value) => {
+  const num = Number(value);
+  const truncated = truncateDecimal(num, 2);
+  return `R${truncated.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+
+const TIMEFRAME_DAYS = { d: 7, "5d": 5, m: 30, ytd: 365, all: 1825 };
 
 const SwipeableBalanceCard = ({
   userId,
@@ -137,6 +149,7 @@ const SwipeableBalanceCard = ({
     };
   }, [lastUpdated]);
 
+
   useEffect(() => {
     if (!isBackFacing) setIsOpen(false);
   }, [isBackFacing]);
@@ -160,6 +173,8 @@ const SwipeableBalanceCard = ({
   const [loading, setLoading] = useState(true);
   const [chartData, setChartData] = useState([]);
   const [chartLoading, setChartLoading] = useState(false);
+  const [returnData5d, setReturnData5d] = useState({ pnl: 0, pct: 0 });
+  const [latestBasketValue, setLatestBasketValue] = useState(0);
   const holdingsScrollRef = useRef(null);
 
   const scrollToHoldingIndex = (index) => {
@@ -320,44 +335,40 @@ const SwipeableBalanceCard = ({
         const startDateStr = cutoff.toISOString().split("T")[0];
         console.log(`[SwipeableBalanceCard] Fetching history for tab: ${activeTab}, days: ${days}, startDate: ${startDateStr}`);
 
-        // Process strategies first (serial to be safe, but with try/catch)
-        const strategyPnlByDate = {};
-        const timeframeMap = { d: "1W", w: "1M", m: "3M", y: "1Y", all: "All" };
-        const tf = timeframeMap[activeTab] || "1M";
+        // Process strategies using client_strategy_returns_c table (basket_value for the period)
+        const strategyBasketByDate = {};
+        const endDateStr = new Date().toISOString().split("T")[0];
+        const limitValue = activeTab === "5d" ? 5 : undefined;
 
         const strategyHoldings = holdingsToChart.filter(h => h.isStrategy && h.strategyId);
         for (const sh of strategyHoldings) {
           try {
-            let priceHistory = await getStrategyPriceHistory(sh.strategyId, tf);
-            const pDateStr = sh.firstInvestedDate ? sh.firstInvestedDate.slice(0, 10) : null;
-            
-            if (pDateStr && priceHistory && priceHistory.length > 0) {
-              const afterP = priceHistory.filter(p => p.ts.split("T")[0] >= pDateStr);
-              if (afterP.length >= 1) priceHistory = afterP;
-              else {
-                const beforeP = priceHistory.filter(p => p.ts.split("T")[0] < pDateStr);
-                if (beforeP.length > 0) {
-                  const lastKnown = beforeP[beforeP.length - 1];
-                  priceHistory = [lastKnown, { ...lastKnown, ts: pDateStr + "T00:00:00Z" }];
-                }
-              }
+            // Build query for basket_value from client_strategy_returns_c
+            let query = supabase
+              .from("client_strategy_returns_c")
+              .select("as_of_date, basket_value")
+              .eq("user_id", userId)
+              .eq("strategy_id", sh.strategyId)
+              .gte("as_of_date", startDateStr)
+              .order("as_of_date", { ascending: true });
+
+            // For 5d, limit to 5 rows; otherwise get all rows in the range
+            if (limitValue) {
+              query = query.limit(limitValue);
             }
 
-            if (priceHistory && priceHistory.length > 0) {
-              const latestNav = priceHistory[priceHistory.length - 1].nav;
-              const currentMV = Number(sh.market_value || 0) / 100;
-              const cost = (Number(sh.avg_fill || 0) * Number(sh.quantity || 1)) / 100;
-              if (latestNav > 0) {
-                priceHistory.forEach((p) => {
-                  const dateKey = p.ts.split("T")[0];
-                  const valueAtDate = currentMV * (p.nav / latestNav);
-                  const pnl = valueAtDate - cost;
-                  strategyPnlByDate[dateKey] = (strategyPnlByDate[dateKey] || 0) + pnl;
-                });
-              }
+            const { data, error } = await query;
+
+            if (!error && data && data.length > 0) {
+              // Process rows and convert basket_value from cents to rands
+              data.forEach((row) => {
+                const dateKey = row.as_of_date;
+                const basketValueRands = (Number(row.basket_value || 0)) / 100;
+                strategyBasketByDate[dateKey] = (strategyBasketByDate[dateKey] || 0) + basketValueRands;
+              });
             }
           } catch (e) {
-            console.warn(`[Chart] Failed to fetch strategy ${sh.strategyId}:`, e);
+            console.warn(`[Chart] Failed to fetch strategy basket values for ${sh.strategyId}:`, e);
           }
         }
 
@@ -417,7 +428,7 @@ const SwipeableBalanceCard = ({
         });
 
         const allPriceData = (await Promise.all(pricePromises)).filter(Boolean);
-        const hasStrategyData = Object.keys(strategyPnlByDate).length > 0;
+        const hasStrategyData = Object.keys(strategyBasketByDate).length > 0;
 
         if (allPriceData.length === 0 && !hasStrategyData) {
           // No price history in DB — synthesize a 2-point chart from cost basis → current market value
@@ -443,7 +454,7 @@ const SwipeableBalanceCard = ({
         // Merge dates and calculate PnL per point
         const dateSet = new Set();
         allPriceData.forEach(({ prices }) => prices.forEach((p) => dateSet.add(p.ts)));
-        Object.keys(strategyPnlByDate).forEach((d) => dateSet.add(d));
+        Object.keys(strategyBasketByDate).forEach((d) => dateSet.add(d));
         const sortedDates = Array.from(dateSet).sort();
 
         const rawPriceByDate = {};
@@ -465,12 +476,7 @@ const SwipeableBalanceCard = ({
         });
 
         const points = [];
-        if (sortedDates.length > 0) {
-          const anchorD = new Date(sortedDates[0]);
-          anchorD.setDate(anchorD.getDate() - 1);
-          points.push({ d: anchorD.toISOString().split("T")[0], v: 0 });
-        }
-
+        // Don't add anchor point - start with first actual value at bottom left
         for (const dateKey of sortedDates) {
           let totalPnl = 0;
           let hasVal = false;
@@ -481,12 +487,24 @@ const SwipeableBalanceCard = ({
               hasVal = true;
             }
           }
-          if (strategyPnlByDate[dateKey] !== undefined) {
-            totalPnl += strategyPnlByDate[dateKey];
+          // Add strategy basket value from last 5 rows (in rands)
+          if (strategyBasketByDate[dateKey] !== undefined) {
+            totalPnl += strategyBasketByDate[dateKey];
             hasVal = true;
           }
           if (hasVal) points.push({ d: dateKey, v: Number(totalPnl.toFixed(2)) });
         }
+
+        // Normalize chart to start value: subtract first value from all points
+        if (points.length > 0) {
+          const firstValue = points[0].v;
+          points.forEach(point => {
+            point.v = Number((point.v - firstValue).toFixed(2));
+          });
+          // Add the first value back as the baseline
+          points[0].v = firstValue;
+        }
+
         console.log(`[SwipeableBalanceCard] Final chart points: ${points.length}`);
         setChartData(points);
       } catch (err) {
@@ -499,6 +517,143 @@ const SwipeableBalanceCard = ({
     fetchChartPrices();
   }, [userId, dbData.holdings, activeTab, selectedAsset, lastUpdated, loading]);
 
+  useEffect(() => {
+    const fetchPeriodReturnData = async () => {
+      if (!["5d", "m", "ytd", "all"].includes(activeTab) || !userId) return;
+
+      try {
+        // If an asset is selected, show its returns
+        // Otherwise, calculate portfolio-wide returns
+        const asset = selectedAsset;
+
+        // Map activeTab to column names
+        const columnMap = {
+          "5d": { pnl: "5d_pnl", pct: "5d_pct" },
+          "m": { pnl: "1m_pnl", pct: "1m_pct" },
+          "ytd": { pnl: "ytd_pnl", pct: "ytd_pct" },
+          "all": { pnl: "inception_pnl", pct: "inception_pct" }
+        };
+
+        const columns = columnMap[activeTab];
+
+        if (asset) {
+          // For selected asset, fetch from appropriate table
+          if (asset.isStrategy && asset.strategyId) {
+            const { data, error } = await supabase
+              .from("client_strategy_returns_c")
+              .select("*")
+              .eq("user_id", userId)
+              .eq("strategy_id", asset.strategyId)
+              .order("as_of_date", { ascending: false })
+              .limit(1)
+              .single();
+
+            if (!error && data) {
+              const pnlValue = data[columns.pnl] || 0;
+              const pctValue = data[columns.pct] || 0;
+              const basketValue = (Number(data.basket_value || 0)) / 100;
+              setReturnData5d({
+                pnl: (Number(pnlValue)) / 100,
+                pct: Number(pctValue)
+              });
+              setLatestBasketValue(basketValue);
+            }
+          } else if (asset.security_id) {
+            const { data, error } = await supabase
+              .from("stock_returns_c")
+              .select("*")
+              .eq("security_id", asset.security_id)
+              .order("as_of_date", { ascending: false })
+              .limit(1)
+              .single();
+
+            if (!error && data) {
+              const pnlValue = data[columns.pnl] || 0;
+              const pctValue = data[columns.pct] || 0;
+              const basketValue = (Number(data.basket_value || 0)) / 100;
+              setReturnData5d({
+                pnl: (Number(pnlValue)) / 100,
+                pct: Number(pctValue)
+              });
+              setLatestBasketValue(basketValue);
+            }
+          }
+        } else if (dbData.holdings.length > 0) {
+          // For portfolio-wide returns, sum returns from all holdings
+          let totalPnl = 0;
+          let weightedPct = 0;
+          let totalValue = dbData.totalMarketValue;
+          let totalInvested = dbData.totalInvestedAmount;
+
+          const strategyIds = dbData.holdings
+            .filter(h => h.isStrategy && h.strategyId)
+            .map(h => h.strategyId);
+
+          const securityIds = dbData.holdings
+            .filter(h => h.security_id && !h.isStrategy)
+            .map(h => h.security_id);
+
+          // Fetch latest return data for each strategy
+          if (strategyIds.length > 0) {
+            for (const strategyId of strategyIds) {
+              const { data: row, error: err } = await supabase
+                .from("client_strategy_returns_c")
+                .select("*")
+                .eq("user_id", userId)
+                .eq("strategy_id", strategyId)
+                .order("as_of_date", { ascending: false })
+                .limit(1)
+                .single();
+
+              if (!err && row) {
+                const pnlValue = row[columns.pnl] || 0;
+                const pctValue = row[columns.pct] || 0;
+                const basketValue = (Number(row.basket_value || 0)) / 100;
+                const weight = dbData.totalMarketValue > 0 ? basketValue / dbData.totalMarketValue : 0;
+                totalPnl += (Number(pnlValue)) / 100;
+                weightedPct += Number(pctValue) * weight;
+              }
+            }
+          }
+
+          // Fetch latest return data for each stock
+          if (securityIds.length > 0) {
+            for (const securityId of securityIds) {
+              const { data: row, error: err } = await supabase
+                .from("stock_returns_c")
+                .select("*")
+                .eq("security_id", securityId)
+                .order("as_of_date", { ascending: false })
+                .limit(1)
+                .single();
+
+              if (!err && row) {
+                const pnlValue = row[columns.pnl] || 0;
+                const pctValue = row[columns.pct] || 0;
+                const basketValue = (Number(row.basket_value || 0)) / 100;
+                const weight = dbData.totalMarketValue > 0 ? basketValue / dbData.totalMarketValue : 0;
+                totalPnl += (Number(pnlValue)) / 100;
+                weightedPct += Number(pctValue) * weight;
+              }
+            }
+          }
+
+          // Calculate portfolio return percentage
+          const portfolioPct = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0;
+
+          setReturnData5d({
+            pnl: totalPnl,
+            pct: portfolioPct
+          });
+        }
+      } catch (e) {
+        console.warn("[SwipeableBalanceCard] Error fetching period return data:", e);
+      }
+    };
+
+    fetchPeriodReturnData();
+  }, [activeTab, userId, selectedAsset, dbData.holdings]);
+
   const displayMarketValue = selectedAsset
     ? Number(selectedAsset.market_value || 0) / 100
     : dbData.totalMarketValue;
@@ -508,18 +663,24 @@ const SwipeableBalanceCard = ({
     100
     : dbData.totalInvested;
   const displayInvestedAmount = selectedAsset
-    ? (selectedAsset.invested_amount !== undefined 
-        ? Number(selectedAsset.invested_amount) / 100 
+    ? (selectedAsset.invested_amount !== undefined
+        ? Number(selectedAsset.invested_amount) / 100
         : (Number(selectedAsset.avg_fill || 0) * Number(selectedAsset.quantity || 0)) / 100)
     : dbData.totalInvestedAmount;
-  const displayReturn = displayMarketValue - displayInvested;
-  const displayBalance = displayMarketValue;
+  const displayReturn = ["5d", "m", "ytd", "all"].includes(activeTab)
+    ? returnData5d.pnl
+    : (displayMarketValue - displayInvested);
+  // Show latest basket_value for period views, otherwise use market value
+  const displayBalance = ["5d", "m", "ytd", "all"].includes(activeTab) && latestBasketValue > 0
+    ? latestBasketValue
+    : displayMarketValue;
 
   const isLoss = displayReturn < 0;
-  const returnPct =
-    displayInvested > 0
-      ? ((displayReturn / displayInvested) * 100).toFixed(1)
-      : "0.0";
+  const returnPct = ["5d", "m", "ytd", "all"].includes(activeTab)
+    ? truncateDecimal(returnData5d.pct, 2).toFixed(2)
+    : (displayInvested > 0
+      ? truncateDecimal((displayReturn / displayInvested) * 100, 2).toFixed(2)
+      : "0.00");
   const chartColor = isLoss ? "hsl(0,84%,60%)" : "hsl(160,70%,45%)";
 
   const masked = "••••";
@@ -582,12 +743,23 @@ const SwipeableBalanceCard = ({
       <div className="flex items-end justify-between mt-2 relative">
         <div className="flex-1 min-w-0 pr-3">
           <h2 className="text-3xl font-bold tracking-tight text-white leading-none">
-            {isVisible ? (selectedAsset ? formatKMB(displayBalance) : formatFull(displayBalance)) : masked}
+            {isVisible ? formatFull(displayBalance) : masked}
           </h2>
           <div className="flex items-center gap-2 mt-2">
             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${isLoss ? "bg-destructive/20 text-destructive" : "bg-success/20 text-success"}`}>
               <TrendIcon size={11} strokeWidth={2.5} />
-              {isVisible ? formatKMB(Math.abs(displayReturn)) : masked}
+              {isVisible ? (
+                <>
+                  {["5d", "m", "ytd", "all"].includes(activeTab) && (
+                    <span className="text-[10px] opacity-75">
+                      {activeTab === "5d" && "5D:"}{activeTab === "m" && "1M:"}{activeTab === "ytd" && "YTD:"}{activeTab === "all" && "Inc:"}
+                    </span>
+                  )}
+                  {formatKMB(Math.abs(displayReturn))}
+                </>
+              ) : (
+                masked
+              )}
             </span>
             <span className={`text-[11px] font-medium ${isLoss ? "text-destructive" : "text-success"}`}>
               {isVisible ? `${isLoss ? "-" : "+"}${returnPct}%` : masked}
@@ -606,7 +778,7 @@ const SwipeableBalanceCard = ({
                     return (
                       <div className="bg-white/95 backdrop-blur-sm border border-slate-200 rounded-lg px-2 py-1 shadow-md">
                         <p className="text-[9px] text-slate-500">{payload[0]?.payload?.d}</p>
-                        <p className="text-[10px] font-semibold text-slate-800">{formatKMB(payload[0]?.value)}</p>
+                        <p className="text-[10px] font-semibold text-slate-800">{formatPrecise(payload[0]?.value)}</p>
                       </div>
                     );
                   }}
@@ -634,20 +806,13 @@ const SwipeableBalanceCard = ({
         >
           <LayoutGrid size={12} className="text-violet-400" />
           <span className="text-[11px] font-medium text-slate-200 whitespace-nowrap">
-            {selectedAsset ? selectedAsset.symbol : "All Investments"}
+            {selectedAsset ? selectedAsset.symbol : (dbData.holdings.length > 0 ? dbData.holdings[0].symbol : "Investments")}
           </span>
           {isOpen ? <ChevronUp size={12} className="text-slate-300" /> : <ChevronDown size={12} className="text-slate-300" />}
         </button>
         {isOpen && (
           <div className="absolute top-full mt-1 left-0 w-48 bg-white rounded-xl z-[120] overflow-hidden border border-slate-200 shadow-lg">
             <div className="py-1 overflow-y-auto max-h-[140px]">
-              <button
-                onClick={() => { setSelectedAsset(null); setIsOpen(false); scrollToHoldingIndex(-1); }}
-                className={`w-full flex items-center gap-2 px-3 py-1.5 text-left ${!selectedAsset ? "bg-slate-100" : "hover:bg-slate-50"}`}
-              >
-                <LayoutGrid size={10} className="text-violet-400 shrink-0" />
-                <span className="text-[9px] font-medium text-slate-700 truncate">All Investments</span>
-              </button>
               {dbData.holdings.map((item, idx) => (
                 <button
                   key={idx}
@@ -687,7 +852,7 @@ const SwipeableBalanceCard = ({
 
       {/* Period selector */}
       <div className="mt-4 flex bg-black/20 backdrop-blur-sm rounded-full p-0.5 relative">
-        {[["d","D"],["w","W"],["m","M"],["y","Y"],["all","All"]].map(([key, label]) => (
+        {[["5d","5D"],["m","M"],["ytd","YTD"],["all","All"]].map(([key, label]) => (
           <button
             key={key}
             onClick={() => setActiveTab(key)}

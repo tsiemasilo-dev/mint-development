@@ -171,7 +171,6 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const [addressDone, setAddressDone] = useState(false);
   const [addressLoading, setAddressLoading] = useState(false);
   const [termsDone, setTermsDone] = useState(false);
-  const [agreementSignedDone, setAgreementSignedDone] = useState(false);
   const [authStatus, setAuthStatus] = useState({
     isChecked: false,
     isAuthenticated: false,
@@ -824,7 +823,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   className="text-xs uppercase tracking-[0.2em] mb-2"
                   style={{ color: "hsl(270 20% 55%)" }}
                 >
-                  Step 1 of 10
+                  Step 1 of 11
                 </p>
                 <h2
                   className="text-3xl font-light tracking-tight mb-2"
@@ -874,10 +873,29 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 </div>
               </div>
             </div>
-          ) : step === 2 ? (() => {
-            setTimeout(() => goToStep(getNextIncompleteStep(2)), 0);
-            return <div />;
-          })() : step === 3 ? (
+          ) : step === 2 ? (
+            <div className="w-full max-w-xl mx-auto">
+              <div className="text-center mb-8 animate-fade-in delay-1">
+                <p className="text-xs uppercase tracking-[0.2em] mb-2" style={{ color: "hsl(270 20% 55%)" }}>
+                  Step 2 of 11
+                </p>
+                <div className="hero-icon">
+                  <CheckCircleIcon width={48} height={48} />
+                </div>
+                <h2 className="text-3xl font-light tracking-tight mb-2" style={{ color: "hsl(270 30% 25%)" }}>
+                  KYC Verification
+                </h2>
+                <p className="text-sm" style={{ color: "hsl(270 20% 50%)" }}>
+                  Verifying your identity...
+                </p>
+              </div>
+              <div className="text-center">
+                <div className="inline-flex items-center justify-center">
+                  <div className="animate-spin h-8 w-8 border-4 border-violet-200 border-t-violet-600 rounded-full"></div>
+                </div>
+              </div>
+            </div>
+          ) : step === 3 ? (
             <div className="w-full max-w-xl mx-auto">
               <div className="text-center mb-8 animate-fade-in delay-1">
                 <p className="text-xs uppercase tracking-[0.2em] mb-2" style={{ color: "hsl(270 20% 55%)" }}>
@@ -1371,7 +1389,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               
               <div className="text-center mt-6 animate-fade-in delay-4">
                 <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  Step 6 of 11
+                  Step 7 of 11
                 </p>
               </div>
             </div>
@@ -1877,10 +1895,9 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   className={`continue-button agreement-continue ${agreementReady ? "enabled" : ""}`}
                   disabled={!agreementReady}
                   onClick={async () => {
-                    const { data: { flags: updatedFlags } } = await saveProgressFlag("terms_accepted");
-                    setTermsDone(updatedFlags.terms_accepted);
-                    setAgreementSignedDone(updatedFlags.agreement_signed); // Assuming agreement_signed is a flag
-                    goToStep(getNextIncompleteStep(10, 10));
+                    await saveProgressFlag("terms_accepted");
+                    setTermsDone(true);
+                    goToStep(getNextIncompleteStep(10));
                   }}
                 >
                   Continue

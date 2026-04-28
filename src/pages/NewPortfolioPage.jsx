@@ -5,7 +5,7 @@ import { Area, ComposedChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, 
 import { useInvestments } from "../lib/useFinancialData";
 import { useRealtimePrices } from "../lib/useRealtimePrices";
 import { useProfile } from "../lib/useProfile";
-import { useUserStrategies, useStrategyChartData } from "../lib/useUserStrategies";
+import { useUserStrategies, useStrategyChartData, useStrategyPeriodReturns } from "../lib/useUserStrategies";
 import { getMonthlyReturns, getStockMonthlyReturns, getOverallPortfolioMonthlyReturns } from "../lib/strategyData";
 import { useStockQuotes, useStockChart } from "../lib/useStockData";
 import { clearMarketDataCache } from "../lib/marketData";
@@ -70,7 +70,7 @@ const getReturnColor = (value) => {
 const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies, onBack, deepLink, onDeepLinkConsumed, onOpenStockDetail }) => {
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [activeTab, setActiveTab] = useState("holdings");
-  const [timeFilter, setTimeFilter] = useState("W");
+  const [timeFilter, setTimeFilter] = useState("m");
   const [failedLogos, setFailedLogos] = useState({});
   const [currentView, setCurrentView] = useState("portfolio");
   const [showStrategyDropdown, setShowStrategyDropdown] = useState(false);
@@ -164,6 +164,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   const { profile } = useProfile();
   const { strategies, selectedStrategy: userSelectedStrategy, loading: strategiesLoading, selectStrategy, refetch: refetchStrategies } = useUserStrategies();
   const { chartData: realChartData, loading: chartLoading } = useStrategyChartData(userSelectedStrategy?.strategyId, timeFilter, userSelectedStrategy?.firstInvestedDate || null);
+  const { returnData: periodReturnData, loading: periodReturnLoading } = useStrategyPeriodReturns(profile?.id, userSelectedStrategy?.strategyId, timeFilter);
 
   const fullName = [profile?.firstName || profile?.first_name, profile?.lastName || profile?.last_name]
     .filter(Boolean).join(" ") || "User";
@@ -499,6 +500,10 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
 
   // All Allocations View
   if (currentView === "allocations") {
+    const topHoldings = Array.isArray(currentStrategy.holdings)
+      ? currentStrategy.holdings.slice(0, 3)
+      : [];
+
     return (
       <SwipeBackWrapper onBack={() => setCurrentView("portfolio")} enabled={true}>
         <div className="min-h-screen pb-[env(safe-area-inset-bottom)] text-white relative overflow-x-hidden">
@@ -526,85 +531,78 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
               >
                 <ArrowLeft className="h-5 w-5 text-white" />
               </button>
-              <h1 className="text-xl font-bold text-white">{currentStrategy.name || "Strategy"} Allocations</h1>
+              <h1 className="text-xl font-bold text-white">{currentStrategy.name || "Strategy"}</h1>
             </header>
           </div>
 
-          {/* Allocation History Cards - sorted most recent first */}
+          {/* Portfolio Overview Card */}
           <div className="mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-6">
-            {strategies.length === 0 ? (
-              <div className="rounded-3xl p-8 backdrop-blur-xl shadow-sm border border-slate-100/50 text-center" style={{ background: 'rgba(255,255,255,0.7)' }}>
-                <p className="text-sm font-semibold text-slate-900 mb-1">No allocations yet</p>
-                <p className="text-xs text-slate-500">Your strategy allocations will appear here once you start investing.</p>
+            <div className="rounded-3xl p-6 backdrop-blur-xl shadow-sm border border-slate-100/50" style={{ background: 'rgba(255,255,255,0.7)' }}>
+              {/* Amount and Return */}
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Portfolio Value</p>
+                  <p className="text-3xl font-bold text-slate-900">
+                    {formatCurrency(currentStrategy.currentValue || 0)}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-slate-500 mb-1">Period Return</p>
+                  <p className={`text-2xl font-bold ${periodReturnLoading ? 'text-slate-400' : (periodReturnData.pct || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {periodReturnLoading ? '...' : `${(periodReturnData.pct || 0) >= 0 ? '+' : ''}${(periodReturnData.pct || 0).toFixed(2)}%`}
+                  </p>
+                </div>
               </div>
-            ) : (
-              [...strategies].sort((a, b) => new Date(b.entryDate || 0) - new Date(a.entryDate || 0)).map((allocation) => {
-                const topPerformers = Array.isArray(allocation.holdings) ? allocation.holdings.slice(0, 3) : [];
-                return (
-                  <div
-                    key={allocation.id}
-                    className="rounded-3xl p-5 backdrop-blur-xl shadow-sm border border-slate-100/50"
-                    style={{
-                      background: 'rgba(255,255,255,0.7)',
-                    }}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div>
-                        <p className="text-xs text-slate-500 mb-1">Amount</p>
-                        <p className="text-xl font-bold text-slate-900">
-                          {formatCurrency(allocation.investedAmount || 0)}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs text-slate-500 mb-1">Return</p>
-                        <p className={`text-xl font-bold ${(allocation.previousMonthChange || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                          {(allocation.previousMonthChange || 0) >= 0 ? '+' : ''}{(allocation.previousMonthChange || 0).toFixed(1)}%
-                        </p>
-                      </div>
-                    </div>
 
+              {/* Period Filter Tabs */}
+              <div className="flex items-center justify-between gap-2 pt-4 border-t border-slate-100">
+                <div className="flex gap-2">
+                  {["5D", "M", "YTD"].map((period) => (
+                    <button
+                      key={period}
+                      onClick={() => setTimeFilter(period.toLowerCase())}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition ${
+                        timeFilter === period.toLowerCase()
+                          ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {period}
+                    </button>
+                  ))}
+                </div>
 
-                    <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-                      <div>
-                        <p className="text-xs text-slate-500 mb-1">{allocation.entryDate ? 'Date' : 'Strategy'}</p>
-                        <p className="text-sm font-medium text-slate-700">
-                          {allocation.entryDate ? formatDate(allocation.entryDate) : allocation.name}
-                        </p>
-                      </div>
-
-                      {topPerformers.length > 0 && (
-                        <div className="flex items-center -space-x-2">
-                          {topPerformers.map((asset, index) => {
-                            const matchedStock = stocksList.find(st => st.ticker === asset.symbol);
-                            const logo = asset.logo_url || asset.logo || matchedStock?.logo || null;
-                            return (
-                              <div
-                                key={asset.symbol}
-                                className="h-9 w-9 rounded-full bg-white border-2 border-white shadow-md overflow-hidden"
-                                style={{ zIndex: 3 - index }}
-                              >
-                                {failedLogos[asset.symbol] || !logo ? (
-                                  <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-100 to-purple-100 text-[10px] font-bold text-violet-700">
-                                    {asset.symbol.slice(0, 2)}
-                                  </div>
-                                ) : (
-                                  <img
-                                    src={logo}
-                                    alt={asset.symbol}
-                                    className="h-full w-full object-cover"
-                                    onError={() => setFailedLogos(prev => ({ ...prev, [asset.symbol]: true }))}
-                                  />
-                                )}
-                              </div>
-                            );
-                          })}
+                {/* Holdings Preview */}
+                {topHoldings.length > 0 && (
+                  <div className="flex items-center -space-x-2">
+                    {topHoldings.map((asset, index) => {
+                      const matchedStock = stocksList.find(st => st.ticker === asset.symbol);
+                      const logo = asset.logo_url || asset.logo || matchedStock?.logo || null;
+                      return (
+                        <div
+                          key={asset.symbol}
+                          className="h-8 w-8 rounded-full bg-white border-2 border-white shadow-md overflow-hidden"
+                          style={{ zIndex: 3 - index }}
+                        >
+                          {failedLogos[asset.symbol] || !logo ? (
+                            <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-100 to-purple-100 text-[8px] font-bold text-violet-700">
+                              {asset.symbol.slice(0, 2)}
+                            </div>
+                          ) : (
+                            <img
+                              src={logo}
+                              alt={asset.symbol}
+                              className="h-full w-full object-cover"
+                              onError={() => setFailedLogos(prev => ({ ...prev, [asset.symbol]: true }))}
+                            />
+                          )}
                         </div>
-                      )}
-                    </div>
+                      );
+                    })}
                   </div>
-                );
-              })
-            )}
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </SwipeBackWrapper>
@@ -824,9 +822,9 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                         <div className="flex gap-1">
                           {[
                             { id: "D", label: "D" },
-                            { id: "W", label: "W" },
-                            { id: "M", label: "M" },
-                            { id: "ALL", label: "All" },
+                            { id: "5d", label: "5D" },
+                            { id: "m", label: "M" },
+                            { id: "ytd", label: "YTD" },
                           ].map((filter) => (
                             <button
                               key={filter.id}
@@ -850,8 +848,13 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                           const cv = currentStrategy.currentValue || 0;
                           const ia = currentStrategy.investedAmount || 0;
                           const isStratPending = cv === 0 && ia === 0;
-                          const pnl = cv - ia;
-                          const pnlPct = ia > 0 ? (pnl / ia) * 100 : 0;
+                          // Use period return data if available, otherwise fall back to current calculation
+                          const pnl = (periodReturnData?.pnl !== undefined && periodReturnData.pnl !== 0)
+                            ? periodReturnData.pnl
+                            : (cv - ia);
+                          const pnlPct = (periodReturnData?.pct !== undefined && periodReturnData.pct !== 0)
+                            ? periodReturnData.pct
+                            : (ia > 0 ? (pnl / ia) * 100 : 0);
                           const isPos = pnl >= 0;
                           if (isStratPending) {
                             return (
@@ -880,13 +883,13 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                         })()}
                       </div>
 
-                      <div style={{ width: '100%', height: 220, marginBottom: 8 }}>
+                      <div style={{ width: '100%', height: 220, marginBottom: 8, minWidth: 0 }}>
                         {currentChartData.length === 0 ? (
                           <div style={{ width: '100%', height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <div className="text-slate-400 text-sm">{isLoadingData ? 'Loading chart...' : 'No data available'}</div>
                           </div>
                         ) : (
-                          <ResponsiveContainer width="100%" height={220}>
+                          <ResponsiveContainer width="100%" height="100%">
                             <ComposedChart
                               data={currentChartData}
                               margin={{ top: 10, right: 15, left: 5, bottom: 30 }}

@@ -73,8 +73,8 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod }) => {
     if (paymentMethod === "direct_eft") {
       return "You'll receive banking details to complete your EFT payment.";
     }
-    // Default — Paystack or not yet selected
-    return "You'll be redirected to complete payment securely via Paystack.";
+    // Default — multiple payment methods available
+    return "You'll be guided through our secure payment process with multiple payment options available.";
   };
 
   // ── FIX 4: Pass baseAmount and shareCount through to PaymentPage ──────────
@@ -94,6 +94,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod }) => {
       fees.totalCost,   // total cost including all fees
       amount,           // base investment amount before fees
       shareCount,       // number of shares if calculable
+      fees              // pass full fees breakdown for accurate transaction splitting
     );
   };
 
@@ -204,7 +205,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod }) => {
                   Investment Amount
                 </p>
                 <p className="text-3xl font-bold text-slate-900">
-                  {formatCurrency(amount, currency)}
+                  {formatCurrency(amount * (1 + CASH_BUFFER_RATE), currency)}
                 </p>
               </div>
 
@@ -240,9 +241,15 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod }) => {
           {feeExpanded && (
             <div className="px-4 pb-4 space-y-2">
               <div className="flex items-center justify-between">
-                <p className="text-xs text-slate-600">Investment Amount</p>
+                <div className="flex items-center gap-1 group relative">
+                  <p className="text-xs text-slate-600">Investment Amount</p>
+                  <span className="text-xs text-slate-400">*</span>
+                  <div className="absolute bottom-full left-0 mb-2 px-2 py-1 bg-white text-violet-600 text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition pointer-events-none z-10 shadow-md border border-violet-100">
+                    Includes 8% cash reserve
+                  </div>
+                </div>
                 <p className="text-xs font-semibold text-slate-900">
-                  {formatCurrency(amount, currency)}
+                  {formatCurrency(fees.bufferedBase, currency)}
                 </p>
               </div>
               <div className="flex items-center justify-between">
