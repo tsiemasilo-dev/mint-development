@@ -770,8 +770,8 @@ const SwipeableBalanceCard = ({
         {/* Inline sparkline */}
         <div className="opacity-90 shrink-0">
           {chartData.length > 1 ? (
-            <ResponsiveContainer width={110} height={48}>
-              <ComposedChart data={chartData} margin={{ top: 2, right: 0, left: 0, bottom: 2 }}>
+            <ResponsiveContainer width={110} height={48} key={`chart-${activeTab}`}>
+              <ComposedChart data={chartData} margin={{ top: 2, right: 0, left: 0, bottom: 2 }} key={`composed-${activeTab}`}>
                 <Tooltip
                   content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
