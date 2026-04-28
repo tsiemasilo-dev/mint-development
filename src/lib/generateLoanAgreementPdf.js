@@ -287,5 +287,8 @@ export default async function generateLoanAgreementPdf({
 
   const pdfBase64 = doc.output("datauristring");
 
+  // Auto-download the agreement PDF to the user's device
+  doc.save(fileName);
+
   return { doc, agreementId, fileName, pdfBase64 };
 }
