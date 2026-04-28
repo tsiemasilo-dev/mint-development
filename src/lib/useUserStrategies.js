@@ -178,7 +178,7 @@ export const useStrategyPeriodReturns = (userId, strategyId, activeTab = "m") =>
 
   useEffect(() => {
     const fetchPeriodReturns = async () => {
-      if (!userId || !strategyId || !["D", "5d", "m", "ytd"].includes(activeTab)) {
+      if (!userId || !strategyId || !["5d", "m", "ytd", "all"].includes(activeTab)) {
         setLoading(false);
         return;
       }
@@ -186,10 +186,10 @@ export const useStrategyPeriodReturns = (userId, strategyId, activeTab = "m") =>
       setLoading(true);
       try {
         const columnMap = {
-          "D": { pnl: "1d_pnl", pct: "1d_pct" },
           "5d": { pnl: "5d_pnl", pct: "5d_pct" },
           "m": { pnl: "1m_pnl", pct: "1m_pct" },
-          "ytd": { pnl: "ytd_pnl", pct: "ytd_pct" }
+          "ytd": { pnl: "ytd_pnl", pct: "ytd_pct" },
+          "all": { pnl: "inception_pnl", pct: "inception_pct" }
         };
 
         const columns = columnMap[activeTab];
