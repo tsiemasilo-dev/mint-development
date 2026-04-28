@@ -88,7 +88,6 @@ const HomePage = ({
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [loadingNews, setLoadingNews] = useState(false);
   const [homeTab, setHomeTab] = useState("balance");
-  const [userId, setUserId] = useState(null);
   const [localBestAssets, setLocalBestAssets] = useState([]);
   const [hasAnyHoldings, setHasAnyHoldings] = useState(false);
   const { onboardingComplete, loading: onboardingLoading, refetch: fetchOnboardingStatus } = useOnboardingStatus();
@@ -294,14 +293,6 @@ const HomePage = ({
       setLoadingGoals(false);
     }
   }, [profile?.id]);
-
-  useEffect(() => {
-    const getUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) setUserId(session.user.id);
-    };
-    getUser();
-  }, []);
 
   useEffect(() => {
     if (!profile?.id || profile?.mintNumber) return;
@@ -696,7 +687,7 @@ const HomePage = ({
           <header className="relative flex items-center justify-between text-white">
             <FamilyDropdown
               profile={profile}
-              userId={userId}
+              userId={profile?.id}
               initials={initials}
               avatarUrl={profile.avatarUrl}
               onOpenFamily={onOpenFamily}
@@ -723,7 +714,7 @@ const HomePage = ({
               <div className="relative w-full touch-pan-y h-auto">
                 <div className="relative h-auto rounded-[28px] border border-white/10">
                   <SwipeableBalanceCard
-                    userId={userId}
+                    userId={profile?.id}
                     isBackFacing
                     forceVisible={isCardVisible}
                     mintNumber={profile.mintNumber}
@@ -732,7 +723,7 @@ const HomePage = ({
               </div>
             </div>
           ) : (
-            <SwipeableBalanceCard userId={userId} mintNumber={profile.mintNumber} />
+            <SwipeableBalanceCard userId={profile?.id} mintNumber={profile.mintNumber} />
           )}
         </div>
       </div>

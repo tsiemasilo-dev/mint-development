@@ -515,7 +515,7 @@ const SwipeableBalanceCard = ({
     };
 
     fetchChartPrices();
-  }, [userId, dbData.holdings, activeTab, selectedAsset, lastUpdated, loading]);
+  }, [dbData.holdings, activeTab, selectedAsset, lastUpdated, loading]);
 
   useEffect(() => {
     const fetchPeriodReturnData = async () => {
