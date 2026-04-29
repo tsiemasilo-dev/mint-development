@@ -338,29 +338,30 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod }) => {
           </label>
         </section>
 
-        {/* Strategy Mandate PDF Modal */}
-        {showMandateModal && (
-          <div className="fixed inset-0 z-50 flex flex-col bg-white">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-              <h2 className="text-sm font-semibold text-slate-900">
-                Strategy Mandate
-              </h2>
-              <button
-                type="button"
-                onClick={() => setShowMandateModal(false)}
-                className="p-1.5 rounded-full hover:bg-slate-100 transition-colors"
-              >
-                <X className="h-5 w-5 text-slate-600" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-hidden">
-              <PdfViewer
-                file="/strategy-disclosures.pdf"
-                style={{ height: "100%" }}
-              />
-            </div>
+        {/* Strategy Mandate PDF Modal — always mounted so PDF pre-loads in background */}
+        <div
+          className="fixed inset-0 z-50 flex flex-col bg-white"
+          style={{ display: showMandateModal ? "flex" : "none" }}
+        >
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+            <h2 className="text-sm font-semibold text-slate-900">
+              Strategy Mandate
+            </h2>
+            <button
+              type="button"
+              onClick={() => setShowMandateModal(false)}
+              className="p-1.5 rounded-full hover:bg-slate-100 transition-colors"
+            >
+              <X className="h-5 w-5 text-slate-600" />
+            </button>
           </div>
-        )}
+          <div className="flex-1 overflow-hidden">
+            <PdfViewer
+              file="/strategy-disclosures.pdf"
+              style={{ height: "100%" }}
+            />
+          </div>
+        </div>
 
         {/* ── FIX 3: Dynamic info banner ── */}
         <div className="mb-6 flex items-start gap-2 rounded-lg bg-violet-50 p-3">
