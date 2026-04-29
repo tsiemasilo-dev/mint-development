@@ -4,6 +4,7 @@ import {
   ArrowLeft, ArrowUpRight, ArrowDownLeft, X, TrendingUp, TrendingDown,
   ShieldCheck, Baby, Wallet, BarChart3, ChevronRight,
   RefreshCw, Search, Star, AlertCircle, Check, ClipboardList,
+  Target, Users, BookOpen, LayoutGrid, ArrowDownToLine,
 } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
 import { supabase } from "../lib/supabase";
@@ -25,6 +26,12 @@ function getAge(dob) {
 function fmt(cents) {
   const val = (cents || 0) / 100;
   return `R\u202F${val.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function navigate(page) {
+  window.dispatchEvent(
+    new CustomEvent("navigate-within-app", { detail: { page } })
+  );
 }
 
 
@@ -600,6 +607,84 @@ function TransactionRow({ tx }) {
 
 // ─── CompleteProfileModal ────────────────────────────────────────────────────
 
+function ChildQuickAction({ label, icon: Icon, onClick, delay = 0, disabled = false }) {
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`relative flex min-w-0 flex-col items-center gap-2 rounded-2xl px-1 py-3 text-[10.5px] font-medium transition-all active:shadow-sm ${
+        disabled
+          ? "cursor-wait border border-slate-200/60 bg-slate-100/70 text-slate-400"
+          : "bg-white text-slate-700 shadow-md active:scale-95"
+      }`}
+      variants={item}
+      transition={{ type: "spring", stiffness: 300, damping: 26, delay }}
+      whileTap={{ scale: disabled ? 1 : 0.95 }}
+    >
+      <span className={`flex h-8 w-8 items-center justify-center rounded-full ${
+        disabled ? "bg-slate-200 text-slate-400" : "bg-violet-50 text-violet-700"
+      }`}>
+        <Icon className="h-4 w-4" />
+      </span>
+      <span className="max-w-full truncate text-center leading-tight">{label}</span>
+    </motion.button>
+  );
+}
+
+function LearnModal({ childName, onClose }) {
+  const lessons = [
+    { title: "Saving", text: "Cash set aside for plans, surprises, and short-term needs." },
+    { title: "Investing", text: "Money placed into assets that can grow or fall over time." },
+    { title: "Goals", text: "A target amount with a clear reason and time horizon." },
+  ];
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-50 flex items-end justify-center"
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+    >
+      <motion.div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <motion.div
+        className="relative w-full max-w-md overflow-hidden rounded-t-3xl bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl"
+        initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
+        transition={{ type: "spring", stiffness: 380, damping: 38 }}
+      >
+        <div className="flex justify-center pt-3 pb-1"><div className="h-1 w-10 rounded-full bg-slate-200" /></div>
+        <div className="px-6 pt-3 pb-8">
+          <div className="mb-5 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ background: "linear-gradient(135deg,#a78bfa,#7c3aed)" }}>
+                <BookOpen className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <p className="text-base font-bold text-slate-900">Learn</p>
+                <p className="text-xs text-slate-400">{childName}'s money basics</p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200 active:scale-95"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            {lessons.map((lesson) => (
+              <div key={lesson.title} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3.5">
+                <p className="text-sm font-bold text-slate-900">{lesson.title}</p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-500">{lesson.text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
   const poaComplete = !!child.poa_declaration_url;
   const [step, setStep] = useState(() => {
@@ -886,6 +971,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
   const [showTransfer, setShowTransfer] = useState(false);
   const [openingTransfer, setOpeningTransfer] = useState(false);
   const [showInvest, setShowInvest] = useState(false);
+  const [showLearn, setShowLearn] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
 
   const childName = [child?.first_name, child?.last_name].filter(Boolean).join(" ") || "Child";
@@ -1112,71 +1198,70 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
             variants={item}
             className="rounded-3xl relative overflow-hidden"
             style={{
-              background: "linear-gradient(160deg, #1e1b4b 0%, #312e81 45%, #4c1d95 100%)",
-              boxShadow: "0 24px 48px -12px rgba(79,70,229,0.45)",
+              background: "linear-gradient(135deg, #3b1d72 0%, #5b21b6 40%, #7c3aed 75%, #9d5cf6 100%)",
+              boxShadow: "0 12px 40px rgba(91,33,182,0.42), 0 2px 8px rgba(91,33,182,0.2)",
             }}
           >
             {/* Subtle glare orbs */}
-            <div className="pointer-events-none absolute -top-16 -right-16 h-64 w-64 rounded-full" style={{ background: "radial-gradient(circle, rgba(255,255,255,0.07), transparent 70%)" }} />
-            <div className="pointer-events-none absolute -bottom-12 -left-12 h-48 w-48 rounded-full" style={{ background: "radial-gradient(circle, rgba(168,85,247,0.18), transparent 70%)" }} />
+            <div className="pointer-events-none absolute -top-10 -right-10 h-44 w-44 rounded-full" style={{ background: "rgba(255,255,255,0.07)" }} />
+            <div className="pointer-events-none absolute -bottom-8 left-8 h-28 w-28 rounded-full" style={{ background: "rgba(255,255,255,0.05)" }} />
 
-            <div className="relative px-6 pt-7 pb-6">
+            <div className="relative p-6">
 
               {/* Label row */}
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-[11px] font-semibold tracking-[0.18em] text-white/50 uppercase">Available Balance</p>
-                <span className="text-[10px] font-semibold tracking-wider text-white/35 uppercase">{child?.first_name}'s Wallet</span>
+              <div className="mb-1.5 flex items-center justify-between">
+                <p className="text-[11px] font-medium text-white/70 uppercase tracking-[0.07em]">Available Balance</p>
+                <span className="text-[10px] font-medium text-white/55 uppercase tracking-[0.07em]">{child?.first_name}'s Wallet</span>
               </div>
 
               {/* Wallet balance */}
-              <p className="text-[2.85rem] font-bold text-white tracking-tight leading-none mb-6">{fmt(childBalance)}</p>
-
-              {/* Hairline divider */}
-              <div className="h-px w-full mb-5" style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent)" }} />
+              <p
+                className="mb-6 text-[34px] font-extrabold text-white"
+                style={{ letterSpacing: 0, fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+              >
+                {fmt(childBalance)}
+              </p>
 
               {/* Portfolio row */}
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <p className="text-[10px] font-semibold tracking-[0.16em] text-white/45 uppercase mb-1">Portfolio Value</p>
-                  <p className="text-2xl font-bold text-white tracking-tight">{fmt(totalPortfolio)}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[10px] font-semibold tracking-[0.16em] text-white/45 uppercase mb-1">All-time return</p>
-                  <span
-                    className="inline-flex items-center gap-1 text-sm font-bold"
-                    style={{ color: isPortUp ? "#86efac" : "#fca5a5" }}
+              <div className="grid grid-cols-2 gap-2.5">
+                {[
+                  { label: "Wallet", value: fmt(childBalance), detail: childKycLabel },
+                  {
+                    label: "Portfolio",
+                    value: fmt(totalPortfolio),
+                    detail: `${isPortUp ? "+" : ""}${fmt(totalPnl)} (${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(1)}%)`,
+                    positive: isPortUp,
+                  },
+                ].map(({ label, value, detail, positive }) => (
+                  <div
+                    key={label}
+                    className="rounded-2xl border p-3"
+                    style={{
+                      background: "rgba(255,255,255,0.13)",
+                      borderColor: "rgba(255,255,255,0.15)",
+                      backdropFilter: "blur(10px)",
+                    }}
                   >
-                    {isPortUp ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
-                    {isPortUp ? "+" : ""}{fmt(totalPnl)}&nbsp;
-                    <span className="font-semibold opacity-80">({pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(1)}%)</span>
-                  </span>
-                </div>
-              </div>
-
-              {/* Action buttons */}
-              <div className="flex gap-3">
-                <button
-                  onClick={openTransferModal}
-                  disabled={openingTransfer}
-                  className="flex-1 flex items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-semibold text-white transition active:scale-[0.97]"
-                  style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.14)", backdropFilter: "blur(12px)" }}
-                >
-                  <ArrowDownLeft className="h-4 w-4" />
-                  {openingTransfer ? "Loading…" : "Transfer"}
-                </button>
-                <button
-                  onClick={() => setShowInvest(true)}
-                  className="flex-1 flex items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-semibold text-white transition active:scale-[0.97]"
-                  style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.14)", backdropFilter: "blur(12px)" }}
-                >
-                  <BarChart3 className="h-4 w-4" />
-                  Invest
-                </button>
+                    <p className="mb-1.5 text-[10px] font-medium text-white/60 uppercase tracking-[0.06em]">{label}</p>
+                    <p className="text-[14px] font-bold text-white">{value}</p>
+                    <p className="mt-1 truncate text-[10px] font-semibold" style={{ color: positive === undefined ? "rgba(255,255,255,0.58)" : positive ? "#86efac" : "#fca5a5" }}>
+                      {detail}
+                    </p>
+                  </div>
+                ))}
               </div>
             </div>
           </motion.div>
 
-          {/* ── Holdings ── */}
+          {/* Quick actions */}
+          <motion.div variants={container} className="grid grid-cols-5 gap-2">
+            <ChildQuickAction label="Invest" icon={LayoutGrid} onClick={() => setShowInvest(true)} delay={0.02} />
+            <ChildQuickAction label="Goals" icon={Target} onClick={() => navigate("investments")} delay={0.04} />
+            <ChildQuickAction label={openingTransfer ? "Loading" : "Deposit"} icon={ArrowDownToLine} onClick={openTransferModal} disabled={openingTransfer} delay={0.06} />
+            <ChildQuickAction label="Family" icon={Users} onClick={() => navigate("family")} delay={0.08} />
+            <ChildQuickAction label="Learn" icon={BookOpen} onClick={() => setShowLearn(true)} delay={0.10} />
+          </motion.div>
+
           <motion.div variants={item}>
             <div className="flex items-center gap-2 mb-3 px-1">
               <div className="h-2 w-2 rounded-full bg-slate-300" />
@@ -1313,6 +1398,14 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
             child={child}
             onInvest={handleInvestDone}
             onClose={() => setShowInvest(false)}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showLearn && (
+          <LearnModal
+            childName={child?.first_name || childName}
+            onClose={() => setShowLearn(false)}
           />
         )}
       </AnimatePresence>
