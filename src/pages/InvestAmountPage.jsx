@@ -11,6 +11,14 @@ const TRANSACTION_FEE_RATE = 0.038;
 const CASH_BUFFER_RATE = 0.08;
 const MONTHLY_STRATEGY_FEE = 29;
 
+function firstBillingDate() {
+  const d = new Date();
+  const day = d.getDate();
+  d.setMonth(d.getMonth() + 1);
+  if (d.getDate() < day) d.setDate(0);
+  return d.toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" });
+}
+
 const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod }) => {
   const currentStrategy = strategy || {
     name: "",
@@ -50,10 +58,9 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod }) => {
     const brokerAmount = bufferedBase * BROKER_FEE_RATE;
     const isinTotal = ISIN_FEE_PER_ASSET * numAssets;
     const transactionAmount = bufferedBase * TRANSACTION_FEE_RATE;
-    const monthlyStrategyFee = isAdditionalStrategy ? MONTHLY_STRATEGY_FEE : 0;
-    const totalCost = bufferedBase + brokerAmount + isinTotal + transactionAmount + monthlyStrategyFee;
+    const totalCost = bufferedBase + brokerAmount + isinTotal + transactionAmount;
     
-    return { brokerAmount, isinTotal, transactionAmount, totalCost, bufferedBase, monthlyStrategyFee };
+    return { brokerAmount, isinTotal, transactionAmount, totalCost, bufferedBase };
   }, [amount, numAssets, isAdditionalStrategy]);
 
   const step = minimumInvestment || 0;
@@ -281,9 +288,12 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod }) => {
                 </div>
               </div>
               {isAdditionalStrategy && (
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-slate-600">Strategy Fee (recurring)</p>
-                  <p className="text-xs font-semibold text-slate-900">
+                <div className="flex items-center justify-between pt-1 border-t border-dashed border-violet-100 mt-1">
+                  <div>
+                    <p className="text-xs text-violet-700 font-medium">Monthly Strategy Fee</p>
+                    <p className="text-[10px] text-violet-500">First charge on {firstBillingDate()}</p>
+                  </div>
+                  <p className="text-xs font-semibold text-violet-700">
                     {formatCurrency(MONTHLY_STRATEGY_FEE, currency)}/month
                   </p>
                 </div>
@@ -293,9 +303,9 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod }) => {
 
           <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-t border-slate-100">
             <div>
-              <p className="text-xs font-semibold text-slate-700">Total Cost</p>
+              <p className="text-xs font-semibold text-slate-700">Total Due Today</p>
               {isAdditionalStrategy && (
-                <p className="text-[10px] text-violet-600">Includes R29/month strategy fee</p>
+                <p className="text-[10px] text-violet-600">R29/month billed from {firstBillingDate()}</p>
               )}
             </div>
             <p className="text-sm font-bold text-slate-900">
