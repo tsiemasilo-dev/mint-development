@@ -628,7 +628,7 @@ async function ensureUserSessionsTable() {
 }
 ensureUserSessionsTable();
 runFuneralCoverMigration(pgPool);
-runStrategySubscriptionMigration(pgPool);
+runStrategySubscriptionMigration(pgPool, supabaseAdmin);
 
 // ── Monthly strategy subscription billing cron ─────────────────────────────
 // Runs daily at 22:00 UTC (midnight SAST). Charges R29 for each due subscription.
