@@ -4,7 +4,7 @@ import {
   ArrowLeft, ArrowUpRight, ArrowDownLeft, X, TrendingUp, TrendingDown,
   Wallet, BarChart3, ChevronRight,
   RefreshCw, Search, Star, AlertCircle, Check, ClipboardList,
-  Target, Users, BookOpen, LayoutGrid, ArrowDownToLine,
+  Target, Users, BookOpen, LayoutGrid, ArrowDownToLine, Info,
 } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
 import { supabase } from "../lib/supabase";
@@ -963,6 +963,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
   const [showInvest, setShowInvest] = useState(false);
   const [showLearn, setShowLearn] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [childStrategies, setChildStrategies] = useState([]);
   const [isCardVisible] = useState(() => {
     if (typeof window !== "undefined") {
       return window.localStorage.getItem(CARD_VISIBILITY_KEY) !== "false";
@@ -1012,6 +1013,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
       fetchParentWallet(),
       fetchTransactions(),
       fetchChildBalance(),
+      fetchChildStrategies(),
     ]);
     if (isMounted.current) setLoading(false);
   }
@@ -1031,7 +1033,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
       if (!supabase) return;
       const { data } = await supabase
         .from("stock_holdings_c")
-        .select("id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id, securities(symbol, name)")
+        .select("id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id, securities(symbol, name, logo_url)")
         .eq("family_member_id", child.id)
         .order("market_value", { ascending: false });
       if (isMounted.current) setHoldings(data || []);
@@ -1066,6 +1068,37 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
       setShowTransfer(true);
       setOpeningTransfer(false);
     }
+  }
+
+  async function fetchChildStrategies() {
+    try {
+      if (!supabase || !child?.id) return;
+      const { data: stratHoldings } = await supabase
+        .from("stock_holdings_c")
+        .select("strategy_id, market_value, unrealized_pnl, securities(symbol, name, logo_url)")
+        .eq("family_member_id", child.id)
+        .not("strategy_id", "is", null);
+      if (!stratHoldings?.length) { if (isMounted.current) setChildStrategies([]); return; }
+      const stratMap = {};
+      stratHoldings.forEach(h => {
+        if (!h.strategy_id) return;
+        if (!stratMap[h.strategy_id]) stratMap[h.strategy_id] = { holdings: [], totalValue: 0, totalPnl: 0 };
+        stratMap[h.strategy_id].holdings.push(h);
+        stratMap[h.strategy_id].totalValue += (h.market_value || 0);
+        stratMap[h.strategy_id].totalPnl += (h.unrealized_pnl || 0);
+      });
+      const stratIds = Object.keys(stratMap);
+      const { data: strategies } = await supabase.from("strategies_c").select("id, name, risk_level").in("id", stratIds);
+      const formatted = (strategies || []).map(s => {
+        const g = stratMap[s.id];
+        const invested = g.totalValue - g.totalPnl;
+        const pct = invested > 0 ? (g.totalPnl / invested) * 100 : 0;
+        return { ...s, currentValue: g.totalValue, investedAmount: invested, pnlRands: g.totalPnl, pnlPct: pct,
+          holdingLogos: g.holdings.filter(h => h.securities?.logo_url).map(h => ({ symbol: h.securities.symbol, logo_url: h.securities.logo_url, name: h.securities.name })).slice(0, 4),
+        };
+      }).sort((a, b) => (b.pnlPct || 0) - (a.pnlPct || 0));
+      if (isMounted.current) setChildStrategies(formatted);
+    } catch (e) { console.error("[child-dash] strategies", e); }
   }
 
   async function fetchTransactions() {
@@ -1104,6 +1137,19 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
   const totalPnl = holdings.reduce((s, h) => s + (h.unrealized_pnl || 0), 0);
   const pnlPct = totalPortfolio > 0 ? ((totalPnl / Math.max(totalPortfolio - totalPnl, 1)) * 100) : 0;
   const isPortUp = totalPnl >= 0;
+
+  const bestChildAssets = React.useMemo(() => {
+    return holdings
+      .filter(h => h.market_value && h.unrealized_pnl != null)
+      .map(h => {
+        const cost = (h.market_value || 0) - (h.unrealized_pnl || 0);
+        const pnl = h.unrealized_pnl || 0;
+        const pct = cost > 0 ? (pnl / cost) * 100 : 0;
+        return { symbol: h.securities?.symbol || 'N/A', name: h.securities?.name || 'Security', logo_url: h.securities?.logo_url, pnlCents: pnl, pnlPct: pct };
+      })
+      .sort((a, b) => b.pnlPct - a.pnlPct)
+      .slice(0, 5);
+  }, [holdings]);
 
   return (
     <div
@@ -1176,65 +1222,178 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
             </motion.div>
           )}
 
-          {/* Quick actions */}
-          <motion.div variants={container} className="grid grid-cols-2 gap-2">
-            <ChildQuickAction label="Invest" icon={LayoutGrid} onClick={() => setShowInvest(true)} delay={0.02} />
-            <ChildQuickAction label={openingTransfer ? "Loading" : "Transfer"} icon={ArrowDownToLine} onClick={openTransferModal} disabled={openingTransfer} delay={0.04} />
-          </motion.div>
-
-          <motion.div variants={item}>
-            <div className="flex items-center gap-2 mb-3 px-1">
-              <div className="h-2 w-2 rounded-full bg-slate-300" />
-              <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Holdings</p>
-              <span className="text-[10px] text-slate-400 ml-auto">{holdings.length} investment{holdings.length !== 1 ? "s" : ""}</span>
+          {/* Quick actions — matching home page 4-col grid */}
+          <section className="flex flex-col gap-3">
+            <div className="grid grid-cols-4 gap-2 text-[11px] font-medium">
+              {[
+                { label: "Invest", icon: LayoutGrid, onClick: () => setShowInvest(true) },
+                { label: openingTransfer ? "Loading" : "Transfer", icon: ArrowDownToLine, onClick: openTransferModal, disabled: openingTransfer },
+                { label: "Learn", icon: BookOpen, onClick: () => setShowLearn(true) },
+                { label: "Goals", icon: Target, onClick: () => {} },
+              ].map((a, i) => {
+                const Icon = a.icon;
+                return (
+                  <button key={i} type="button" onClick={a.onClick} disabled={a.disabled}
+                    className={`flex flex-col items-center gap-2 rounded-2xl px-1 py-3 shadow-md transition-all active:scale-95 active:shadow-sm ${a.disabled ? "cursor-wait border border-slate-200/60 bg-slate-100/70 text-slate-400" : "bg-white text-slate-700"}`}>
+                    <span className={`flex h-8 w-8 items-center justify-center rounded-full ${a.disabled ? "bg-slate-200 text-slate-400" : "bg-violet-50 text-violet-700"}`}>
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <span className="text-center leading-tight">{a.label}</span>
+                  </button>
+                );
+              })}
             </div>
+          </section>
 
-            {holdings.length > 0 ? (
-              <div className="space-y-2">
-                {holdings.map((h) => (
-                  <HoldingRow key={h.id} holding={h} />
-                ))}
+          {/* ── Best performing assets (matching HomePage) ── */}
+          <section>
+            <div className="flex items-end justify-between px-5 mb-3">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-slate-900">{child?.first_name}'s best performing assets</p>
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 text-slate-500"><Info className="h-3 w-3" /></span>
+                  <span>Based on investment portfolio</span>
+                </div>
+              </div>
+            </div>
+            {bestChildAssets.length > 0 ? (
+              <div className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {bestChildAssets.map((asset) => {
+                  const isUp = asset.pnlCents >= 0;
+                  return (
+                    <div key={asset.symbol} className="flex min-w-[260px] flex-1 snap-start items-center gap-4 rounded-3xl bg-white p-4 shadow-md">
+                      <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">
+                        {asset.logo_url ? (
+                          <img src={asset.logo_url} alt={asset.name} className="h-10 w-10 object-contain" referrerPolicy="no-referrer" crossOrigin="anonymous" />
+                        ) : (
+                          <span className="text-sm font-semibold text-slate-600">{asset.symbol?.substring(0, 3)}</span>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-slate-900">{asset.symbol}</p>
+                        <p className="text-xs text-slate-500 line-clamp-1">{asset.name}</p>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className={`text-sm font-semibold ${isUp ? 'text-emerald-500' : 'text-rose-500'}`}>
+                          {isUp ? '+' : ''}R{Math.abs(asset.pnlCents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
+                        <p className={`text-xs font-semibold ${isUp ? 'text-emerald-500' : 'text-rose-500'}`}>
+                          ({isUp ? '+' : ''}{asset.pnlPct.toFixed(2)}%)
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
-              <div className="rounded-2xl border border-slate-200 p-8 text-center shadow-lg bg-white">
-                <div className="h-16 w-16 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: "linear-gradient(135deg,#e9d5ff,#d8b4fe)" }}>
-                  <BarChart3 className="h-7 w-7 text-purple-600" />
-                </div>
-                <p className="text-sm font-bold text-slate-900">No investments yet</p>
-                <p className="text-xs text-slate-600 mt-2 leading-relaxed">
-                  Start investing on {child?.first_name}'s behalf to build their future portfolio.
-                </p>
-                <button
-                  onClick={() => setShowInvest(true)}
-                  className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-purple-600 hover:text-purple-700 transition"
-                >
-                  <BarChart3 className="h-4 w-4" /> Browse Strategies
+              <div className="rounded-3xl bg-white p-6 shadow-md text-center">
+                <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-full bg-violet-50 text-violet-600 mb-4"><TrendingUp className="h-8 w-8" /></div>
+                <p className="text-sm font-semibold text-slate-900 mb-1">No investments yet</p>
+                <p className="text-xs text-slate-500 mb-4">Start investing to see {child?.first_name}'s best performers here</p>
+                <button type="button" onClick={() => setShowInvest(true)} className="inline-flex items-center justify-center rounded-full bg-slate-900 px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.15em] text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5">
+                  Make first investment
                 </button>
               </div>
             )}
-          </motion.div>
+          </section>
 
-          {/* ── Recent Activity ── */}
-          <motion.div variants={item}>
-            <div className="flex items-center gap-2 mb-3 px-1">
-              <div className="h-2 w-2 rounded-full bg-slate-300" />
-              <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Recent Activity</p>
-            </div>
-
-            {transactions.length > 0 ? (
-              <div className="rounded-2xl overflow-hidden shadow-lg border border-slate-200 bg-white">
-                <div className="divide-y divide-slate-100 px-5">
-                  {transactions.map((tx) => (
-                    <TransactionRow key={tx.id} tx={tx} />
-                  ))}
+          {/* ── Best performing strategies (matching HomePage) ── */}
+          <section>
+            <div className="flex items-end justify-between px-5 mb-3">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-slate-900">{child?.first_name}'s best performing strategies</p>
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 text-slate-500"><LayoutGrid className="h-3 w-3" /></span>
+                  <span>Top performing curated portfolios</span>
                 </div>
               </div>
+            </div>
+            {childStrategies.length > 0 ? (
+              <div className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {childStrategies.map((strategy) => {
+                  const pct = strategy.pnlPct || 0;
+                  return (
+                    <div key={strategy.id} className="flex-shrink-0 w-[280px] snap-start rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)]">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="text-left space-y-1 min-w-0">
+                          <p className="truncate text-sm font-semibold text-slate-900">{strategy.name}</p>
+                          <p className="text-xs text-slate-600 line-clamp-1">{strategy.risk_level || 'Balanced'}</p>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-sm font-semibold text-slate-900">{fmt(strategy.currentValue || 0)}</p>
+                          <p className={`text-xs font-semibold ${pct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                            {pct >= 0 ? '+' : ''}R{Math.abs((strategy.pnlRands || 0) / 100).toFixed(2)} ({pct >= 0 ? '+' : ''}{pct.toFixed(2)}%)
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex items-center justify-between">
+                        {strategy.risk_level && (<span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">{strategy.risk_level}</span>)}
+                        {strategy.holdingLogos?.length > 0 && (
+                          <div className="flex items-center gap-2">
+                            <div className="flex -space-x-2">
+                              {strategy.holdingLogos.slice(0, 3).map((h) => (
+                                <div key={h.symbol} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-sm">
+                                  {h.logo_url ? (<img src={h.logo_url} alt={h.name} className="h-full w-full object-cover" />) : (
+                                    <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">{h.symbol?.substring(0, 2)}</div>
+                                  )}
+                                </div>
+                              ))}
+                              {strategy.holdingLogos.length > 3 && (<div className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500">+{strategy.holdingLogos.length - 3}</div>)}
+                            </div>
+                            <span className="text-[11px] text-slate-400">Holdings</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             ) : (
-              <div className="rounded-2xl border border-slate-200 p-6 text-center shadow-lg bg-white">
-                <p className="text-xs text-slate-600">No activity yet. Transfer or invest to get started.</p>
+              <div className="rounded-3xl bg-white p-6 shadow-md text-center">
+                <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-full bg-slate-50 text-slate-400 mb-4"><LayoutGrid className="h-8 w-8" /></div>
+                <p className="text-sm font-semibold text-slate-900 mb-1">No strategies yet</p>
+                <p className="text-xs text-slate-500 mb-4">Invest in a strategy for {child?.first_name}</p>
+                <button type="button" onClick={() => setShowInvest(true)} className="inline-flex items-center justify-center rounded-full bg-slate-900 px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.15em] text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5">
+                  Browse Strategies
+                </button>
               </div>
             )}
-          </motion.div>
+          </section>
+
+          {/* ── Transaction history (matching HomePage) ── */}
+          <section className="rounded-3xl bg-white shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] overflow-hidden">
+            <div className="flex items-end justify-between px-5 py-4 border-b border-slate-100">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-slate-900">Transaction history</p>
+              </div>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {transactions.length > 0 ? (
+                transactions.slice(0, 5).map((tx) => {
+                  const isCredit = tx.direction === "credit" || tx.type === "transfer_in";
+                  const date = tx.created_at ? new Date(tx.created_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short" }) : "";
+                  const rawAmt = Math.abs(Number(tx.amount || 0));
+                  const amtDisplay = rawAmt > 10000 ? rawAmt / 100 : rawAmt;
+                  return (
+                    <div key={tx.id} className="flex items-center gap-3.5 px-5 py-4">
+                      <div className="h-10 w-10 rounded-2xl flex items-center justify-center" style={{ background: isCredit ? "rgba(34,197,94,0.10)" : "rgba(124,58,237,0.08)" }}>
+                        {isCredit ? <ArrowDownLeft className="h-4 w-4 text-green-600" /> : <ArrowUpRight className="h-4 w-4 text-purple-600" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-semibold text-slate-900 truncate">{tx.description || tx.type || "Transaction"}</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">{date}</p>
+                      </div>
+                      <p className="text-[13px] font-bold tabular-nums text-slate-900">R{amtDisplay.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="p-6 text-center">
+                  <p className="text-xs text-slate-400">No activity yet. Transfer or invest to get started.</p>
+                </div>
+              )}
+            </div>
+          </section>
 
           {/* ── Account Info ── */}
           <motion.div variants={item}>
