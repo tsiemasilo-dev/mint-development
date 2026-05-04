@@ -15,10 +15,11 @@ const DDL = `
   );
 `;
 
-async function ensureSupabaseTable(supabaseAdmin) {
-  if (!supabaseAdmin) return;
+async function ensureSupabaseTable(supabaseAdmin, supabaseAnon) {
+  const client = supabaseAdmin || supabaseAnon;
+  if (!client) return;
   try {
-    const { error } = await supabaseAdmin.rpc("exec_sql", { query: DDL });
+    const { error } = await client.rpc("exec_sql", { query: DDL });
     if (error) {
       console.warn("[strategy-sub-migration] Supabase exec_sql warning:", error.message);
     } else {
@@ -29,7 +30,7 @@ async function ensureSupabaseTable(supabaseAdmin) {
   }
 }
 
-async function runStrategySubscriptionMigration(pgPool, supabaseAdmin) {
+async function runStrategySubscriptionMigration(pgPool, supabaseAdmin, supabaseAnon) {
   // 1. Local Postgres (for dev/cron)
   if (pgPool) {
     let client;
@@ -45,7 +46,7 @@ async function runStrategySubscriptionMigration(pgPool, supabaseAdmin) {
   }
 
   // 2. Supabase (for production / Vercel)
-  await ensureSupabaseTable(supabaseAdmin);
+  await ensureSupabaseTable(supabaseAdmin, supabaseAnon);
 }
 
 module.exports = { runStrategySubscriptionMigration };

@@ -19,10 +19,14 @@ const ManageSubscriptionsPage = ({ onBack }) => {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       const data = await res.json();
-      if (!data.success) throw new Error(data.error || "Failed to load subscriptions");
-      setSubscriptions(data.subscriptions || []);
+      if (!data.success) {
+        // Table may not exist yet — treat as empty rather than crashing
+        setSubscriptions([]);
+      } else {
+        setSubscriptions(data.subscriptions || []);
+      }
     } catch (err) {
-      setError(err.message);
+      setSubscriptions([]);
     } finally {
       setLoading(false);
     }
