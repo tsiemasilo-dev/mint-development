@@ -720,7 +720,7 @@ const SwipeableBalanceCard = ({
     ? overrideBalance
     : (["5d", "m", "ytd", "all"].includes(activeTab) && latestBasketValue > 0
       ? latestBasketValue
-      : (defaultPortfolioBasketValue > 0 ? defaultPortfolioBasketValue : displayMarketValue));
+      : defaultPortfolioBasketValue);
 
   const isLoss = displayReturn < 0;
   const returnPct = ["5d", "m", "ytd", "all"].includes(activeTab)
