@@ -2807,7 +2807,6 @@ app.get("/api/user/strategy-subscriptions", async (req, res) => {
     const { user, token, error: authError } = await authenticateUser(req);
     if (authError || !user) return res.status(401).json({ success: false, error: "Unauthorized" });
 
-    const token = (req.headers.authorization || "").replace("Bearer ", "");
     const db = getAuthenticatedDb(token);
 
     const { data: subs, error: subsErr } = await db
@@ -2840,7 +2839,6 @@ app.patch("/api/user/strategy-subscriptions/:id", async (req, res) => {
       return res.status(400).json({ success: false, error: "status must be 'active' or 'cancelled'" });
     }
 
-    const token = (req.headers.authorization || "").replace("Bearer ", "");
     const db = getAuthenticatedDb(token);
 
     const { data, error: updateErr } = await db
