@@ -226,8 +226,8 @@ async function sendOrderConfirmationEmail(db, { userId, userEmail, assetName, as
   }
 }
 
-const pgPool = process.env.DATABASE_URL ? new Pool({
-  connectionString: process.env.DATABASE_URL,
+const pgPool = (process.env.SUPABASE_DB_URL || process.env.DATABASE_URL) ? new Pool({
+  connectionString: process.env.SUPABASE_DB_URL || process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
   max: 5,
 }) : null;
