@@ -374,24 +374,24 @@ const SwipeableBalanceCard = ({
         const startDateStr = cutoff.toISOString().split("T")[0];
         console.log(`[SwipeableBalanceCard] Fetching history for tab: ${activeTab}, days: ${days}, startDate: ${startDateStr}`);
 
-        // Process strategies using client_strategy_returns_c table (basket_value for the period)
+        // Process strategies: cumulative sum of 1d_pnl from client_strategy_returns_c
         const strategyBasketByDate = {};
         const endDateStr = new Date().toISOString().split("T")[0];
         const limitValue = activeTab === "5d" ? 5 : undefined;
 
         const strategyHoldings = holdingsToChart.filter(h => h.isStrategy && h.strategyId);
+        // Collect daily 1d_pnl per date (summed across all strategies)
+        const strategyDailyPnl = {};
         for (const sh of strategyHoldings) {
           try {
-            // Build query for basket_value from client_strategy_returns_c
             let query = supabase
               .from("client_strategy_returns_c")
-              .select("as_of_date, basket_value")
+              .select("as_of_date, 1d_pnl")
               .eq("user_id", userId)
               .eq("strategy_id", sh.strategyId)
               .gte("as_of_date", startDateStr)
               .order("as_of_date", { ascending: true });
 
-            // For 5d, limit to 5 rows; otherwise get all rows in the range
             if (limitValue) {
               query = query.limit(limitValue);
             }
@@ -399,16 +399,23 @@ const SwipeableBalanceCard = ({
             const { data, error } = await query;
 
             if (!error && data && data.length > 0) {
-              // Process rows and convert basket_value from cents to rands
               data.forEach((row) => {
                 const dateKey = row.as_of_date;
-                const basketValueRands = (Number(row.basket_value || 0)) / 100;
-                strategyBasketByDate[dateKey] = (strategyBasketByDate[dateKey] || 0) + basketValueRands;
+                const dailyPnlRands = (Number(row["1d_pnl"] || 0)) / 100;
+                strategyDailyPnl[dateKey] = (strategyDailyPnl[dateKey] || 0) + dailyPnlRands;
               });
             }
           } catch (e) {
-            console.warn(`[Chart] Failed to fetch strategy basket values for ${sh.strategyId}:`, e);
+            console.warn(`[Chart] Failed to fetch strategy 1d_pnl for ${sh.strategyId}:`, e);
           }
+        }
+
+        // Build cumulative sum of 1d_pnl across all dates
+        const sortedStrategyDates = Object.keys(strategyDailyPnl).sort();
+        let runningTotal = 0;
+        for (const dateKey of sortedStrategyDates) {
+          runningTotal += strategyDailyPnl[dateKey];
+          strategyBasketByDate[dateKey] = runningTotal;
         }
 
         // Process stocks
