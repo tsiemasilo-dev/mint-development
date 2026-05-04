@@ -484,6 +484,19 @@ function computeIncomeStabilityContribution(overrides = {}) {
   } else if (rawSector === 'GOVERNMENT' && employerName) {
     valuePercent = 100;
     stabilityReason = 'Government employee - automatic 100%';
+  } else if (Number.isFinite(monthsCaptured) && monthsCaptured >= 1) {
+    // Partial TruID snapshot (1–2 months) — not enough history for a full salary pattern,
+    // but the bank is connected. Grant 50% if we can see any income in the available months.
+    const avgMonthlyIncome = Number(overrides.truid_avg_monthly_income);
+    const hasIncomeSignal = (Number.isFinite(avgMonthlyIncome) && avgMonthlyIncome > 0)
+      || (Number.isFinite(mainSalary) && mainSalary > 0);
+    if (hasIncomeSignal) {
+      valuePercent = 50;
+      stabilityReason = `TruID snapshot: ${monthsCaptured} month(s) — income signal present, insufficient history for full assessment`;
+    } else {
+      valuePercent = 0;
+      stabilityReason = `TruID snapshot: ${monthsCaptured} month(s) — no recurring income detected`;
+    }
   } else {
     valuePercent = 0;
     stabilityReason = 'Pending bank statement or payroll analysis';
