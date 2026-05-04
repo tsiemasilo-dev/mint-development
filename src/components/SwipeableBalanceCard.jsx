@@ -181,6 +181,7 @@ const SwipeableBalanceCard = ({
   const [chartLoading, setChartLoading] = useState(false);
   const [returnData5d, setReturnData5d] = useState({ pnl: 0, pct: 0 });
   const [latestBasketValue, setLatestBasketValue] = useState(0);
+  const [defaultPortfolioBasketValue, setDefaultPortfolioBasketValue] = useState(0);
   const holdingsScrollRef = useRef(null);
 
   const scrollToHoldingIndex = (index) => {
@@ -314,6 +315,26 @@ const SwipeableBalanceCard = ({
           totalInvestedAmount: investedAmount,
           holdingsCount: enrichedHoldings.length,
         });
+
+        // Fetch latest basket_value from client_strategy_returns_c for all strategies
+        const strategyIds = (strategiesRes.strategies || []).map(s => s.id).filter(Boolean);
+        let totalBasketValue = 0;
+        for (const stratId of strategyIds) {
+          const { data: row } = await supabase
+            .from("client_strategy_returns_c")
+            .select("basket_value")
+            .eq("user_id", userId)
+            .eq("strategy_id", stratId)
+            .order("as_of_date", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (row?.basket_value) {
+            totalBasketValue += Number(row.basket_value) / 100;
+          }
+        }
+        if (totalBasketValue > 0) {
+          setDefaultPortfolioBasketValue(totalBasketValue);
+        }
       } catch (err) {
         console.error("❌ [SwipeableBalanceCard] Load data error:", err);
       } finally {
@@ -353,24 +374,28 @@ const SwipeableBalanceCard = ({
         const startDateStr = cutoff.toISOString().split("T")[0];
         console.log(`[SwipeableBalanceCard] Fetching history for tab: ${activeTab}, days: ${days}, startDate: ${startDateStr}`);
 
-        // Process strategies using client_strategy_returns_c table (basket_value for the period)
+        // Process strategies: cumulative sum of 1d_pnl from client_strategy_returns_c
         const strategyBasketByDate = {};
         const endDateStr = new Date().toISOString().split("T")[0];
         const limitValue = activeTab === "5d" ? 5 : undefined;
 
         const strategyHoldings = holdingsToChart.filter(h => h.isStrategy && h.strategyId);
+        // Collect daily 1d_pnl per date (summed across all strategies)
+        const strategyDailyPnl = {};
         for (const sh of strategyHoldings) {
           try {
-            // Build query for basket_value from client_strategy_returns_c
             let query = supabase
               .from("client_strategy_returns_c")
-              .select("as_of_date, basket_value")
+              .select("as_of_date, 1d_pnl")
               .eq("user_id", userId)
               .eq("strategy_id", sh.strategyId)
-              .gte("as_of_date", startDateStr)
               .order("as_of_date", { ascending: true });
 
-            // For 5d, limit to 5 rows; otherwise get all rows in the range
+            // For all tabs except "all", filter by the start date
+            if (activeTab !== "all") {
+              query = query.gte("as_of_date", startDateStr);
+            }
+
             if (limitValue) {
               query = query.limit(limitValue);
             }
@@ -378,16 +403,23 @@ const SwipeableBalanceCard = ({
             const { data, error } = await query;
 
             if (!error && data && data.length > 0) {
-              // Process rows and convert basket_value from cents to rands
               data.forEach((row) => {
                 const dateKey = row.as_of_date;
-                const basketValueRands = (Number(row.basket_value || 0)) / 100;
-                strategyBasketByDate[dateKey] = (strategyBasketByDate[dateKey] || 0) + basketValueRands;
+                const dailyPnlRands = (Number(row["1d_pnl"] || 0)) / 100;
+                strategyDailyPnl[dateKey] = (strategyDailyPnl[dateKey] || 0) + dailyPnlRands;
               });
             }
           } catch (e) {
-            console.warn(`[Chart] Failed to fetch strategy basket values for ${sh.strategyId}:`, e);
+            console.warn(`[Chart] Failed to fetch strategy 1d_pnl for ${sh.strategyId}:`, e);
           }
+        }
+
+        // Build cumulative sum of 1d_pnl across all dates
+        const sortedStrategyDates = Object.keys(strategyDailyPnl).sort();
+        let runningTotal = 0;
+        for (const dateKey of sortedStrategyDates) {
+          runningTotal += strategyDailyPnl[dateKey];
+          strategyBasketByDate[dateKey] = runningTotal;
         }
 
         // Process stocks
@@ -694,12 +726,12 @@ const SwipeableBalanceCard = ({
   const displayReturn = ["5d", "m", "ytd", "all"].includes(activeTab)
     ? returnData5d.pnl
     : (displayMarketValue - displayInvested);
-  // Show latest basket_value for period views, otherwise use market value
+  // Show latest basket_value for period views; default view uses client_strategy_returns_c basket_value
   const displayBalance = overrideBalance !== undefined
     ? overrideBalance
     : (["5d", "m", "ytd", "all"].includes(activeTab) && latestBasketValue > 0
       ? latestBasketValue
-      : displayMarketValue);
+      : defaultPortfolioBasketValue);
 
   const isLoss = displayReturn < 0;
   const returnPct = ["5d", "m", "ytd", "all"].includes(activeTab)
@@ -793,10 +825,10 @@ const SwipeableBalanceCard = ({
           </div>
         </div>
 
-        {/* Inline sparkline */}
-        <div className="opacity-90 shrink-0">
+        {/* Inline sparkline — absolute so it doesn't expand card height */}
+        <div className="opacity-90 absolute right-4 -bottom-10">
           {chartData.length > 1 ? (
-            <ResponsiveContainer width={110} height={48}>
+            <ResponsiveContainer width={185} height={85}>
               <ComposedChart data={chartData} margin={{ top: 2, right: 0, left: 0, bottom: 2 }}>
                 <Tooltip
                   content={({ active, payload }) => {
@@ -815,7 +847,7 @@ const SwipeableBalanceCard = ({
               </ComposedChart>
             </ResponsiveContainer>
           ) : chartLoading ? (
-            <div className="flex items-end gap-0.5 w-[110px] h-12">
+            <div className="flex items-end gap-0.5 w-[185px] h-[85px]">
               {[40, 55, 35, 65, 50, 70, 45, 60].map((h, i) => (
                 <Skeleton key={i} className="flex-1 rounded-sm bg-white/10" style={{ height: `${h}%` }} />
               ))}
