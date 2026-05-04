@@ -73,6 +73,7 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange, onLinkBan
   const [activeLoanId, setActiveLoanId] = useState(null);
   const [nextSalaryDate, setNextSalaryDate] = useState(new Date().toISOString().split('T')[0]);
   const [termMonths, setTermMonths] = useState(1);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => { setPortalTarget(document.body); }, []);
 
@@ -95,7 +96,7 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange, onLinkBan
           .from('stock_holdings_c')
           .select(`
           quantity,
-          securities!inner (
+          securities_c!inner (
             id, symbol, name, last_price, market_cap, sector,
             logo_url,
             liquidity_grading, collateral_score, collateral_tier, 
@@ -104,15 +105,15 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange, onLinkBan
           )
         `)
           .eq('user_id', profile.id)
-          .neq('securities.exchange', 'MINT');
+          .neq('securities_c.exchange', 'MINT');
 
         if (error) throw error;
 
         if (data) {
           const formatted = await Promise.all(data.map(async item => {
-            const sec = item.securities;
+            const sec = item.securities_c;
             const { data: prices } = await supabase
-              .from('security_prices')
+              .from('security_prices_c')
               .select('close_price')
               .eq('security_id', sec.id)
               .order('ts', { ascending: false })
@@ -122,7 +123,7 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange, onLinkBan
               ? prices.map(p => parseFloat(p.close_price)).reverse()
               : [0, 0, 0, 0, 0, 0, 0];
 
-            const balance = (item.quantity * (sec.last_price || 0)) / 100;
+            const balance = (item.quantity * (sec.last_price || 0));
 
             return {
               id: sec.id,
@@ -161,6 +162,22 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange, onLinkBan
           }
         }
 
+        // 3. Fetch latest active secured loan to pre-populate the Active Liquidity card
+        const { data: activeLoan } = await supabase
+          .from('loan_application')
+          .select('id, principal_amount')
+          .eq('user_id', profile.id)
+          .eq('Secured_Unsecured', 'secured')
+          .neq('status', 'repaid')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (activeLoan?.id) {
+          setActiveLoanId(activeLoan.id);
+          setPledgeAmount(activeLoan.principal_amount || 0);
+        }
+
       } catch (err) {
         console.error("Initialization error:", err.message);
       } finally {
@@ -168,7 +185,7 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange, onLinkBan
       }
     }
     initData();
-  }, [profile?.id]);
+  }, [profile?.id, refreshKey]);
 
   // --- CALCULATIONS & FILTER LOGIC ---
   const totalPortfolioValue = useMemo(() => portfolioItems.reduce((acc, item) => acc + item.balance, 0), [portfolioItems]);
@@ -263,7 +280,6 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange, onLinkBan
 
       if (loanErr) throw loanErr;
 
-      // Insert actual pledges so details work correctly
       if (selectedAssets?.length > 0) {
         const totalSelectedBalance = selectedAssets.reduce((sum, item) => sum + item.balance, 0);
         const pledgesToInsert = selectedAssets.map(asset => {
@@ -276,11 +292,17 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange, onLinkBan
             pledged_quantity: asset.quantity,
             pledged_value: asset.balance,
             loan_value: principal * weight,
-            recognised_value: asset.available
+            recognised_value: asset.available,
+            ltv_applied: asset.ltv
           };
         });
+
         const { error: pledgeErr } = await supabase.from('pbc_collateral_pledges').insert(pledgesToInsert);
-        if (pledgeErr) console.error("Failed to insert pledges", pledgeErr);
+
+        if (pledgeErr) {
+          console.error("Failed to insert pledges", pledgeErr);
+          throw pledgeErr;
+        }
       }
 
       setActiveLoanId(loan.id);
@@ -340,6 +362,7 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange, onLinkBan
       */
 
       setWorkflowStep("liquidity_flow");
+      setRefreshKey(k => k + 1);
     } catch (err) {
       console.error("Pledge failed:", err);
     } finally {
@@ -856,8 +879,8 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange, onLinkBan
           </div>
 
           <div className="p-6 bg-white border-t border-slate-100 pb-28">
-            <button disabled={!pledgeAmount || pledgeAmount <= 0} onClick={handleConfirmPledge} className="w-full h-14 rounded-2xl bg-slate-900 text-white font-black uppercase tracking-widest text-[10px] shadow-xl active:scale-95 transition-all disabled:opacity-30">
-              Review & Sign Agreement
+            <button disabled={!pledgeAmount || pledgeAmount <= 0 || isProcessing} onClick={handleConfirmPledge} className="w-full h-14 rounded-2xl bg-slate-900 text-white font-black uppercase tracking-widest text-[10px] shadow-xl active:scale-95 transition-all disabled:opacity-30">
+              {isProcessing ? "Processing..." : "Review & Sign Agreement"}
             </button>
           </div>
         </div>
@@ -879,7 +902,7 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange, onLinkBan
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">New Credit Balance</p>
                 <h2 className="text-2xl font-bold text-slate-900" style={{ fontFamily: fonts.display }}>{formatZar(pledgeAmount)}</h2>
               </div>
-              <button onClick={closeDetail} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg">Return to Wealth</button>
+              <button onClick={() => { closeDetail(); setRefreshKey(k => k + 1); }} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg">Return to Wealth</button>
             </div>
           )}
         </div>

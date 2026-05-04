@@ -6,14 +6,14 @@ import {
   computeCreditScoreContribution,
   computeAdverseListingsContribution,
   computeCreditUtilizationContribution,
-  computeDeviceFingerprintContribution,
   computeDTIContribution,
   computeEmploymentTenureContribution,
   computeContractTypeContribution,
   computeEmploymentCategoryContribution,
   computeIncomeStabilityContribution,
-  computeAlgolendRepaymentContribution,
-  computeAglRetrievalContribution
+  summarizeTruidSummaryData,
+  computeBankStatementCashflowsContribution,
+  computeAlgoHiveBehaviouralContribution
 } from "../../services/loanEngine.js";
 
 function normalizeDobForExperian(dob) {
@@ -163,7 +163,7 @@ export default async function handler(req, res) {
 
       const { data: snapshotData } = await dbClient
         .from('truid_bank_snapshots')
-        .select('months_captured,main_salary')
+        .select('months_captured,main_salary,avg_monthly_income,avg_monthly_expenses,net_monthly_income,summary_data')
         .eq('user_id', userId)
         .order('captured_at', { ascending: false })
         .limit(1)
@@ -171,8 +171,27 @@ export default async function handler(req, res) {
 
       truidSnapshot = snapshotData || null;
       if (snapshotData) {
+        const truidSummary = summarizeTruidSummaryData(snapshotData.summary_data || []);
         normalizedOverrides.truid_months_captured = snapshotData.months_captured;
         normalizedOverrides.truid_main_salary = snapshotData.main_salary;
+        normalizedOverrides.truid_summary_data = snapshotData.summary_data;
+        normalizedOverrides.truid_avg_monthly_income = truidSummary.monthCount
+          ? truidSummary.averageMonthlyIncome
+          : snapshotData.avg_monthly_income;
+        normalizedOverrides.truid_avg_monthly_expenses = truidSummary.monthCount
+          ? truidSummary.averageMonthlyExpenses
+          : snapshotData.avg_monthly_expenses;
+        normalizedOverrides.truid_net_monthly_income = truidSummary.monthCount
+          ? truidSummary.averageMonthlyNetCashflow
+          : snapshotData.net_monthly_income;
+        normalizedOverrides.truid_average_monthly_debt_repayments = truidSummary.averageMonthlyDebtRepayments;
+
+        if (truidSummary.monthCount) {
+          normalizedOverrides.annual_income = truidSummary.averageMonthlyIncome * 12;
+          normalizedOverrides.annual_expenses = truidSummary.averageMonthlyExpenses * 12;
+          normalizedOverrides.gross_monthly_income = truidSummary.incomeForDti;
+          normalizedOverrides.net_monthly_income = truidSummary.averageMonthlyNetCashflow;
+        }
       }
     } catch (snapshotError) {
       console.warn('TruID snapshot lookup failed:', snapshotError?.message || snapshotError);
@@ -198,6 +217,7 @@ export default async function handler(req, res) {
 
       const pack = packRow?.pack_details || {};
       const info = pack?.info || {};
+      const review = pack?.review || pack?.reviewResult || pack?.inspectionResult || {};
       const addresses = Array.isArray(info?.addresses) ? info.addresses : [];
       const idDocs = Array.isArray(info?.idDocs) ? info.idDocs : [];
 
@@ -214,6 +234,7 @@ export default async function handler(req, res) {
       const packFirstName = info?.firstNameEn || info?.firstName || idCardDoc?.firstNameEn || idCardDoc?.firstName || null;
       const packLastName = info?.lastNameEn || info?.lastName || idCardDoc?.lastNameEn || idCardDoc?.lastName || null;
       const packPhone = pack?.phone || null;
+      const kycResult = review?.reviewAnswer || review?.answer || review?.reviewResult || review?.status || null;
 
       console.log('[credit-check] pack_details extracted:', {
         packPostalCode,
@@ -246,6 +267,10 @@ export default async function handler(req, res) {
       if (!normalizedOverrides.address4 && packTown) normalizedOverrides.address4 = packTown;
       if (!normalizedOverrides.postal_code && packPostalCode) normalizedOverrides.postal_code = String(packPostalCode);
       if (!normalizedOverrides.cell_tel_no && packPhone) normalizedOverrides.cell_tel_no = packPhone;
+      normalizedOverrides.kyc_has_pack_details = Boolean(packRow?.pack_details);
+      normalizedOverrides.kyc_identity_verified = Boolean(packIdentity);
+      normalizedOverrides.kyc_address_verified = Boolean(packPostalCode || packStreet || packFormatted);
+      if (!normalizedOverrides.kyc_result && kycResult) normalizedOverrides.kyc_result = kycResult;
 
       if (!normalizedOverrides.address1 && packFormatted) {
         normalizedOverrides.address1 = packFormatted;
@@ -393,31 +418,29 @@ export default async function handler(req, res) {
     const creditScoreBreakdown = computeCreditScoreContribution(creditScoreValue);
     const adverseListingsBreakdown = computeAdverseListingsContribution(creditScoreData);
     const creditUtilizationBreakdown = computeCreditUtilizationContribution(accountMetrics);
-    const deviceFingerprintBreakdown = computeDeviceFingerprintContribution(deviceFingerprint);
 
     const totalMonthlyDebt = accountMetrics.totalMonthlyInstallment || 0;
     const grossMonthlyIncome = Number(userPayload.gross_monthly_income || 0);
-    const dtiBreakdown = computeDTIContribution(totalMonthlyDebt, grossMonthlyIncome);
+    const dtiBreakdown = computeDTIContribution(totalMonthlyDebt, grossMonthlyIncome, userPayload);
 
     const employmentTenureBreakdown = computeEmploymentTenureContribution(userPayload.months_in_current_job);
     const contractTypeBreakdown = computeContractTypeContribution(userPayload.contract_type);
     const employmentCategoryBreakdown = computeEmploymentCategoryContribution(userPayload);
     const incomeStabilityBreakdown = computeIncomeStabilityContribution(userPayload);
-    const algolendRepaymentBreakdown = computeAlgolendRepaymentContribution(userPayload.algolend_is_new_borrower);
-    const aglRetrievalBreakdown = computeAglRetrievalContribution();
+    const bankStatementCashflowsBreakdown = computeBankStatementCashflowsContribution(userPayload);
+    const algoHiveBehaviouralBreakdown = computeAlgoHiveBehaviouralContribution(userPayload, deviceFingerprint);
 
     const breakdown = {
       creditScore: creditScoreBreakdown,
       creditUtilization: creditUtilizationBreakdown,
       adverseListings: adverseListingsBreakdown,
-      deviceFingerprint: deviceFingerprintBreakdown,
-      dti: dtiBreakdown,
-      employmentTenure: employmentTenureBreakdown,
-      contractType: contractTypeBreakdown,
-      employmentCategory: employmentCategoryBreakdown,
       incomeStability: incomeStabilityBreakdown,
-      algolendRepayment: algolendRepaymentBreakdown,
-      aglRetrieval: aglRetrievalBreakdown
+      dti: dtiBreakdown,
+      bankStatementCashflows: bankStatementCashflowsBreakdown,
+      employmentTenure: employmentTenureBreakdown,
+      employmentCategory: employmentCategoryBreakdown,
+      contractType: contractTypeBreakdown,
+      algoHiveBehavioural: algoHiveBehaviouralBreakdown
     };
 
     const experianSnapshot = {
