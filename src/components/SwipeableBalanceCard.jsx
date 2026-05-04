@@ -64,6 +64,8 @@ const SwipeableBalanceCard = ({
   isBackFacing = true,
   forceVisible,
   mintNumber: mintNumberProp,
+  overrideBalance,       // Rands — replaces the big portfolio number
+  overrideWalletBalance, // Rands — replaces the CASH footer value
 }) => {
   const [activeTab, setActiveTab] = useState("m");
   const [isOpen, setIsOpen] = useState(false);
@@ -78,7 +80,11 @@ const SwipeableBalanceCard = ({
   const [walletBalance, setWalletBalance] = useState(0);
   const [walletLoading, setWalletLoading] = useState(true);
 
+  const effectiveWalletBalance = overrideWalletBalance !== undefined ? overrideWalletBalance : walletBalance;
+  const effectiveWalletLoading = overrideWalletBalance !== undefined ? false : walletLoading;
+
   useEffect(() => {
+    if (overrideWalletBalance !== undefined) return;
     if (!userId) return;
     const fetchWallet = async () => {
       setWalletLoading(true);
@@ -689,9 +695,11 @@ const SwipeableBalanceCard = ({
     ? returnData5d.pnl
     : (displayMarketValue - displayInvested);
   // Show latest basket_value for period views, otherwise use market value
-  const displayBalance = ["5d", "m", "ytd", "all"].includes(activeTab) && latestBasketValue > 0
-    ? latestBasketValue
-    : displayMarketValue;
+  const displayBalance = overrideBalance !== undefined
+    ? overrideBalance
+    : (["5d", "m", "ytd", "all"].includes(activeTab) && latestBasketValue > 0
+      ? latestBasketValue
+      : displayMarketValue);
 
   const isLoss = displayReturn < 0;
   const returnPct = ["5d", "m", "ytd", "all"].includes(activeTab)
@@ -888,7 +896,7 @@ const SwipeableBalanceCard = ({
         <div className="flex-1">
           <div className="text-[9px] tracking-[0.15em] text-white/50 font-semibold">CASH</div>
           <div className="text-sm font-bold text-white mt-0.5">
-            {isVisible ? (walletLoading ? "..." : formatFull(walletBalance)) : masked}
+            {isVisible ? (effectiveWalletLoading ? "..." : formatFull(effectiveWalletBalance)) : masked}
           </div>
         </div>
         <div className="w-px bg-white/10" />

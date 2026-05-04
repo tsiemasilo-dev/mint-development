@@ -1138,6 +1138,8 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
                   isBackFacing
                   forceVisible={isCardVisible}
                   mintNumber={profile?.mintNumber}
+                  overrideBalance={childBalance / 100}
+                  overrideWalletBalance={childBalance / 100}
                 />
               </div>
             </div>
@@ -1170,66 +1172,6 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
               </button>
             </motion.div>
           )}
-
-          {/* ── Unified Wallet + Portfolio Card ── */}
-          <motion.div
-            variants={item}
-            className="rounded-3xl relative overflow-hidden"
-            style={{
-              background: "linear-gradient(135deg, #3b1d72 0%, #5b21b6 40%, #7c3aed 75%, #9d5cf6 100%)",
-              boxShadow: "0 12px 40px rgba(91,33,182,0.42), 0 2px 8px rgba(91,33,182,0.2)",
-            }}
-          >
-            {/* Subtle glare orbs */}
-            <div className="pointer-events-none absolute -top-10 -right-10 h-44 w-44 rounded-full" style={{ background: "rgba(255,255,255,0.07)" }} />
-            <div className="pointer-events-none absolute -bottom-8 left-8 h-28 w-28 rounded-full" style={{ background: "rgba(255,255,255,0.05)" }} />
-
-            <div className="relative p-6">
-
-              {/* Label row */}
-              <div className="mb-1.5 flex items-center justify-between">
-                <p className="text-[11px] font-medium text-white/70 uppercase tracking-[0.07em]">Available Balance</p>
-                <span className="text-[10px] font-medium text-white/55 uppercase tracking-[0.07em]">{child?.first_name}'s Wallet</span>
-              </div>
-
-              {/* Wallet balance */}
-              <p
-                className="mb-6 text-[34px] font-extrabold text-white"
-                style={{ letterSpacing: 0, fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-              >
-                {fmt(childBalance)}
-              </p>
-
-              {/* Portfolio row */}
-              <div className="grid grid-cols-2 gap-2.5">
-                {[
-                  { label: "Wallet", value: fmt(childBalance), detail: childKycLabel },
-                  {
-                    label: "Portfolio",
-                    value: fmt(totalPortfolio),
-                    detail: `${isPortUp ? "+" : ""}${fmt(totalPnl)} (${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(1)}%)`,
-                    positive: isPortUp,
-                  },
-                ].map(({ label, value, detail, positive }) => (
-                  <div
-                    key={label}
-                    className="rounded-2xl border p-3"
-                    style={{
-                      background: "rgba(255,255,255,0.13)",
-                      borderColor: "rgba(255,255,255,0.15)",
-                      backdropFilter: "blur(10px)",
-                    }}
-                  >
-                    <p className="mb-1.5 text-[10px] font-medium text-white/60 uppercase tracking-[0.06em]">{label}</p>
-                    <p className="text-[14px] font-bold text-white">{value}</p>
-                    <p className="mt-1 truncate text-[10px] font-semibold" style={{ color: positive === undefined ? "rgba(255,255,255,0.58)" : positive ? "#86efac" : "#fca5a5" }}>
-                      {detail}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </motion.div>
 
           {/* Quick actions */}
           <motion.div variants={container} className="grid grid-cols-5 gap-2">
