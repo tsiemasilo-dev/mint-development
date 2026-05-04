@@ -34,6 +34,8 @@ const { Pool } = require("pg");
 const truIDClient = require("./truidClient.cjs");
 const { Resend } = require("resend");
 const { runFuneralCoverMigration } = require("./funeralCoverMigration.cjs");
+const { runStrategySubscriptionMigration } = require("./strategySubscriptionMigration.cjs");
+const cron = require("node-cron");
 
 // Helper to check both standard and VITE_ prefixed env vars
 const readEnv = (key) => process.env[key] || process.env[`VITE_${key}`];
@@ -626,6 +628,68 @@ async function ensureUserSessionsTable() {
 }
 ensureUserSessionsTable();
 runFuneralCoverMigration(pgPool);
+runStrategySubscriptionMigration(pgPool);
+
+// ── Monthly strategy subscription billing cron ─────────────────────────────
+// Runs daily at 22:00 UTC (midnight SAST). Charges R29 for each due subscription.
+cron.schedule("0 22 * * *", async () => {
+  console.log("[strategy-sub-cron] Running subscription billing check...");
+  const db = supabaseAdmin || supabase;
+  if (!db) { console.warn("[strategy-sub-cron] No db client — skipping"); return; }
+
+  const today = new Date().toISOString().split("T")[0];
+
+  const { data: dueSubs, error: fetchErr } = await db
+    .from("strategy_subscriptions")
+    .select("id, user_id, strategy_id, strategy_name, amount_cents, next_billing_date")
+    .eq("status", "active")
+    .lte("next_billing_date", today);
+
+  if (fetchErr) { console.error("[strategy-sub-cron] Fetch error:", fetchErr.message); return; }
+  if (!dueSubs || dueSubs.length === 0) { console.log("[strategy-sub-cron] No subscriptions due today."); return; }
+
+  console.log(`[strategy-sub-cron] Processing ${dueSubs.length} subscription(s)...`);
+
+  for (const sub of dueSubs) {
+    try {
+      const amountRands = sub.amount_cents / 100;
+
+      // Deduct from wallet (allow negative balance)
+      const { data: wallet } = await db.from("wallets").select("balance").eq("user_id", sub.user_id).maybeSingle();
+      const currentBalance = wallet ? Number(wallet.balance) : 0;
+      const newBalance = currentBalance - amountRands;
+      await db.from("wallets").upsert({ user_id: sub.user_id, balance: newBalance }, { onConflict: "user_id" });
+
+      // Record transaction
+      const now = new Date().toISOString();
+      await db.from("transactions").insert({
+        user_id: sub.user_id,
+        direction: "debit",
+        name: `Strategy Subscription Fee: ${sub.strategy_name || "Strategy"}`,
+        description: `Monthly R29 subscription fee for ${sub.strategy_name || "strategy"}`,
+        amount: sub.amount_cents,
+        store_reference: `sub-${sub.id}-${today}`,
+        currency: "ZAR",
+        status: "posted",
+        transaction_date: now,
+        created_at: now,
+      });
+
+      // Advance next_billing_date by one month
+      const billing = new Date(sub.next_billing_date);
+      const day = billing.getDate();
+      billing.setMonth(billing.getMonth() + 1);
+      if (billing.getDate() < day) billing.setDate(0);
+      const nextDate = billing.toISOString().split("T")[0];
+
+      await db.from("strategy_subscriptions").update({ next_billing_date: nextDate, updated_at: now }).eq("id", sub.id);
+
+      console.log(`[strategy-sub-cron] Billed R${amountRands} for user ${sub.user_id} (${sub.strategy_name}). New balance: R${newBalance}. Next billing: ${nextDate}`);
+    } catch (err) {
+      console.error(`[strategy-sub-cron] Error processing sub ${sub.id}:`, err.message);
+    }
+  }
+});
 
 function generateChildMintNumber(firstName, idNumber, dateOfBirth) {
   const normalized = (firstName || 'CHD').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
