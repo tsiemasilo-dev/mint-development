@@ -181,6 +181,7 @@ const SwipeableBalanceCard = ({
   const [chartLoading, setChartLoading] = useState(false);
   const [returnData5d, setReturnData5d] = useState({ pnl: 0, pct: 0 });
   const [latestBasketValue, setLatestBasketValue] = useState(0);
+  const [defaultPortfolioBasketValue, setDefaultPortfolioBasketValue] = useState(0);
   const holdingsScrollRef = useRef(null);
 
   const scrollToHoldingIndex = (index) => {
@@ -314,6 +315,26 @@ const SwipeableBalanceCard = ({
           totalInvestedAmount: investedAmount,
           holdingsCount: enrichedHoldings.length,
         });
+
+        // Fetch latest basket_value from client_strategy_returns_c for all strategies
+        const strategyIds = (strategiesRes.strategies || []).map(s => s.id).filter(Boolean);
+        let totalBasketValue = 0;
+        for (const stratId of strategyIds) {
+          const { data: row } = await supabase
+            .from("client_strategy_returns_c")
+            .select("basket_value")
+            .eq("user_id", userId)
+            .eq("strategy_id", stratId)
+            .order("as_of_date", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (row?.basket_value) {
+            totalBasketValue += Number(row.basket_value) / 100;
+          }
+        }
+        if (totalBasketValue > 0) {
+          setDefaultPortfolioBasketValue(totalBasketValue);
+        }
       } catch (err) {
         console.error("❌ [SwipeableBalanceCard] Load data error:", err);
       } finally {
@@ -694,12 +715,12 @@ const SwipeableBalanceCard = ({
   const displayReturn = ["5d", "m", "ytd", "all"].includes(activeTab)
     ? returnData5d.pnl
     : (displayMarketValue - displayInvested);
-  // Show latest basket_value for period views, otherwise use market value
+  // Show latest basket_value for period views; default view uses client_strategy_returns_c basket_value
   const displayBalance = overrideBalance !== undefined
     ? overrideBalance
     : (["5d", "m", "ytd", "all"].includes(activeTab) && latestBasketValue > 0
       ? latestBasketValue
-      : displayMarketValue);
+      : (defaultPortfolioBasketValue > 0 ? defaultPortfolioBasketValue : displayMarketValue));
 
   const isLoss = displayReturn < 0;
   const returnPct = ["5d", "m", "ytd", "all"].includes(activeTab)
