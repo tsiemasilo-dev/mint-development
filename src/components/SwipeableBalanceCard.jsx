@@ -825,6 +825,35 @@ const SwipeableBalanceCard = ({
           </div>
         </div>
 
+        {/* Inline sparkline */}
+        <div className="opacity-90 shrink-0">
+          {chartData.length > 1 ? (
+            <ResponsiveContainer width={160} height={70}>
+              <ComposedChart data={chartData} margin={{ top: 2, right: 0, left: 0, bottom: 2 }}>
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null;
+                    return (
+                      <div className="bg-white/95 backdrop-blur-sm border border-slate-200 rounded-lg px-2 py-1 shadow-md">
+                        <p className="text-[9px] text-slate-500">{payload[0]?.payload?.d}</p>
+                        <p className="text-[10px] font-semibold text-slate-800">{formatPrecise(payload[0]?.value)}</p>
+                      </div>
+                    );
+                  }}
+                />
+                <ReferenceLine y={0} stroke="rgba(148,163,184,0.3)" strokeDasharray="3 3" strokeWidth={1} />
+                <Area type="monotone" dataKey="v" stroke="none" fill={chartColor} fillOpacity={0.15} />
+                <Line type="monotone" dataKey="v" stroke={chartColor} strokeWidth={2} dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          ) : chartLoading ? (
+            <div className="flex items-end gap-0.5 w-[160px] h-[70px]">
+              {[40, 55, 35, 65, 50, 70, 45, 60].map((h, i) => (
+                <Skeleton key={i} className="flex-1 rounded-sm bg-white/10" style={{ height: `${h}%` }} />
+              ))}
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {/* Asset selector */}
@@ -892,36 +921,6 @@ const SwipeableBalanceCard = ({
             {label}
           </button>
         ))}
-      </div>
-
-      {/* Full-width chart */}
-      <div className="mt-3 w-full h-[140px]">
-        {chartData.length > 1 ? (
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: 4, bottom: 4 }}>
-              <Tooltip
-                content={({ active, payload }) => {
-                  if (!active || !payload?.length) return null;
-                  return (
-                    <div className="bg-white/95 backdrop-blur-sm border border-slate-200 rounded-lg px-2 py-1 shadow-md">
-                      <p className="text-[9px] text-slate-500">{payload[0]?.payload?.d}</p>
-                      <p className="text-[10px] font-semibold text-slate-800">{formatPrecise(payload[0]?.value)}</p>
-                    </div>
-                  );
-                }}
-              />
-              <ReferenceLine y={0} stroke="rgba(148,163,184,0.3)" strokeDasharray="3 3" strokeWidth={1} />
-              <Area type="monotone" dataKey="v" stroke="none" fill={chartColor} fillOpacity={0.18} />
-              <Line type="monotone" dataKey="v" stroke={chartColor} strokeWidth={2.5} dot={false} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        ) : chartLoading ? (
-          <div className="flex items-end gap-0.5 w-full h-full">
-            {[40, 55, 35, 65, 50, 70, 45, 60, 55, 72].map((h, i) => (
-              <Skeleton key={i} className="flex-1 rounded-sm bg-white/10" style={{ height: `${h}%` }} />
-            ))}
-          </div>
-        ) : null}
       </div>
 
       {/* Footer */}
