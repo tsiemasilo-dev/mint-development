@@ -30,7 +30,10 @@ const RepayLiquidity = ({ onBack, profile, fonts }) => {
 
   // --- DATA FETCHING ---
   const fetchRepayable = async () => {
-    if (!profile?.id) return;
+    if (!profile?.id) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -38,6 +41,7 @@ const RepayLiquidity = ({ onBack, profile, fonts }) => {
         .select('*')
         .neq('status', 'repaid')
         .eq('user_id', profile.id)
+        .eq('Secured_Unsecured', 'secured')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -104,7 +108,23 @@ const RepayLiquidity = ({ onBack, profile, fonts }) => {
 
       if (loanError) throw loanError;
 
-      // 4. Cleanup & Show Success
+      // 4. INSERT INTO LEDGER (CRITICAL FOR HISTORY PAGE)
+      const { error: historyError } = await supabase
+        .from('credit_transactions_history')
+        .insert({
+          user_id: profile.id,
+          loan_application_id: selectedLoan.id,
+          loan_type: 'secured',
+          transaction_type: 'repayment',
+          direction: 'debit',
+          amount: amount,
+          description: 'Facility Settlement (EFT)',
+          occurred_at: new Date().toISOString()
+        });
+
+      if (historyError) throw historyError;
+
+      // 5. Cleanup & Show Success
       setShowEftModal(false);
       setPopFile(null);
       setPaymentAmount("");
@@ -191,19 +211,19 @@ const RepayLiquidity = ({ onBack, profile, fonts }) => {
               Fetching Records...
             </div>
           ) : loans.length === 0 ? (
-            <div className="bg-white rounded-[36px] p-10 text-center border border-slate-100 shadow-sm mt-4">
+            <div className="bg-white rounded-[36px] p-10 text-center border border-slate-100 shadow-sm mt-4 animate-in fade-in duration-700">
               <div className="h-20 w-20 rounded-full bg-slate-50 flex items-center justify-center mx-auto mb-6 text-slate-300">
                 <ShieldCheck size={32} />
               </div>
-              <h3 className="text-lg font-bold text-slate-900 mb-2">You're Debt Free</h3>
+              <h3 className="text-lg font-bold text-slate-900 mb-2">No Active Obligations</h3>
               <p className="text-xs text-slate-500 font-medium mb-8 leading-relaxed">
-                You have no active obligations to settle. Your portfolio is fully unlocked.
+                You have no active loans to settle. Utilize your portfolio to generate instant capital.
               </p>
               <button
                 onClick={onBack}
                 className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg flex justify-center items-center gap-2 active:scale-95 transition-all"
               >
-                Return to Wealth <ArrowRight size={14} />
+                Start Application <ArrowRight size={14} />
               </button>
             </div>
           ) : (
@@ -306,6 +326,90 @@ const RepayLiquidity = ({ onBack, profile, fonts }) => {
             <p className="text-xs text-slate-500 mb-6 leading-relaxed">
               Transfer funds to the MINT account and upload your POP to settle.
             </p>
+
+            {/* ── Loan Summary Section ── */}
+            {(() => {
+              const principal = Number(selectedLoan.principal_amount || 0);
+              const totalRepayable = Number(selectedLoan.amount_repayable || 0);
+              const months = Number(selectedLoan.number_of_months || 1);
+              const monthlyDue = totalRepayable > 0 ? totalRepayable / months : 0;
+              const interestRate = Number(selectedLoan.interest_rate || 0);
+              const annualRate = (interestRate * 12 * 100);
+              const amountPaid = Math.max(0, totalRepayable - principal);
+              const progressPct = totalRepayable > 0 ? Math.min(100, (amountPaid / totalRepayable) * 100) : 0;
+              const nextDate = selectedLoan.first_repayment_date
+                ? new Date(selectedLoan.first_repayment_date).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })
+                : 'TBD';
+              const originDate = selectedLoan.created_at
+                ? new Date(selectedLoan.created_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })
+                : '—';
+
+              return (
+                <div className="mb-6">
+                  {/* Hero amount card */}
+                  <div className="bg-gradient-to-br from-[#0d0d12] via-[#25173e] to-[#5b21b6] rounded-[24px] p-5 text-white mb-4 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-40 h-40 bg-violet-500/30 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none"></div>
+                    <div className="relative z-10">
+                      <p className="text-[9px] font-black uppercase tracking-[0.2em] text-white/50 mb-1">This Month's Instalment</p>
+                      <p className="text-3xl font-light tracking-tight mb-4" style={{ fontFamily: fonts?.display }}>
+                        {formatZar(monthlyDue)}
+                      </p>
+                      <div className="flex justify-between items-end">
+                        <div>
+                          <p className="text-[8px] font-black uppercase tracking-[0.15em] text-white/40 mb-0.5">Outstanding Balance</p>
+                          <p className="text-sm font-bold text-white">{formatZar(principal)}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[8px] font-black uppercase tracking-[0.15em] text-white/40 mb-0.5">Total Repayable</p>
+                          <p className="text-sm font-bold text-white">{formatZar(totalRepayable)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="mb-4">
+                    <div className="flex justify-between text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                      <span>Repayment Progress</span>
+                      <span className="text-violet-600">{progressPct.toFixed(0)}%</span>
+                    </div>
+                    <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden shadow-inner">
+                      <div
+                        className="h-full rounded-full transition-all duration-700"
+                        style={{
+                          width: `${progressPct}%`,
+                          background: progressPct >= 75 ? '#10b981' : progressPct >= 40 ? '#6d28d9' : '#6d28d9'
+                        }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[9px] text-slate-400 mt-1.5 font-medium">
+                      <span>Paid: {formatZar(amountPaid)}</span>
+                      <span>Remaining: {formatZar(principal)}</span>
+                    </div>
+                  </div>
+
+                  {/* Detail grid */}
+                  <div className="bg-slate-50 rounded-[20px] p-4 border border-slate-100 space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Loan Term</span>
+                      <span className="text-xs font-bold text-slate-900">{months} Month{months > 1 ? 's' : ''}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Interest Rate</span>
+                      <span className="text-xs font-bold text-slate-900">{annualRate > 0 ? `${annualRate.toFixed(2)}% p.a.` : '—'}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Next Payment</span>
+                      <span className="text-xs font-bold text-violet-600">{nextDate}</span>
+                    </div>
+                    <div className="flex justify-between items-center pt-3 border-t border-slate-200/60">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Originated</span>
+                      <span className="text-xs font-bold text-slate-900">{originDate}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Bank Details from Account Confirmation PDF */}
             <div className="bg-slate-50 rounded-[24px] p-5 mb-6 border border-slate-100 space-y-4">
