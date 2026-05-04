@@ -826,7 +826,7 @@ const SwipeableBalanceCard = ({
         </div>
 
         {/* Inline sparkline — absolute so it doesn't expand card height */}
-        <div className="opacity-90 absolute right-4 bottom-0">
+        <div className="opacity-90 absolute right-4 -bottom-10">
           {chartData.length > 1 ? (
             <ResponsiveContainer width={185} height={85}>
               <ComposedChart data={chartData} margin={{ top: 2, right: 0, left: 0, bottom: 2 }}>
