@@ -222,15 +222,27 @@ const SwipeableBalanceCard = ({
   const loadDataRef = React.useRef(null);
 
   useEffect(() => {
+    let cancelled = false;
+
+    // Safety timeout — always exit skeleton after 10s even if fetch stalls
+    const safetyTimer = setTimeout(() => {
+      if (!cancelled) setLoading(false);
+    }, 10000);
+
     const loadData = async () => {
       if (!userId) return;
       setLoading(true);
 
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        const token = session?.access_token;
+        // Use a race so getSession() can't block forever (e.g. auth lock on app resume)
+        const sessionResult = await Promise.race([
+          supabase.auth.getSession(),
+          new Promise(resolve =>
+            setTimeout(() => resolve({ data: { session: null } }), 5000)
+          ),
+        ]);
+        if (cancelled) return;
+        const token = sessionResult?.data?.session?.access_token;
 
         const [holdingsRes, strategiesRes] = token
           ? await Promise.all([
@@ -345,11 +357,22 @@ const SwipeableBalanceCard = ({
     loadDataRef.current = loadData;
     loadData();
 
+    // Debounce visibility handler — prevents multiple concurrent loadData calls
+    // when the OS rapidly fires visibilitychange events on app resume
+    let visibilityDebounce = null;
     const handleVisibility = () => {
-      if (document.visibilityState === "visible") loadDataRef.current?.();
+      if (document.visibilityState === "visible") {
+        clearTimeout(visibilityDebounce);
+        visibilityDebounce = setTimeout(() => loadDataRef.current?.(), 300);
+      }
     };
     document.addEventListener("visibilitychange", handleVisibility);
-    return () => document.removeEventListener("visibilitychange", handleVisibility);
+    return () => {
+      cancelled = true;
+      clearTimeout(safetyTimer);
+      clearTimeout(visibilityDebounce);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [userId, lastUpdated]);
 
   useEffect(() => {
