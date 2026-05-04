@@ -1811,7 +1811,12 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
    const handleRunAssessment = async () => {
       lockInputs();
       if (proceedToStep3) proceedToStep3();
-      await runEngine();
+      const result = await runEngine();
+      if (result?.errorCode === 'TRUID_REQUIRED') {
+         // Bank not linked — redirect back to TruID connect step
+         setStep(1);
+         setAutoStartTruID(true);
+      }
    };
 
    const handleLoanAgreementAccepted = useCallback(async (quote) => {

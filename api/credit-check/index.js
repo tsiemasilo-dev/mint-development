@@ -110,6 +110,32 @@ export default async function handler(req, res) {
 
   const userId = userData.user.id;
 
+  // ── Retry cooldown: max 1 live Experian run per 30 minutes per user ──
+  {
+    const cooldownMs = 30 * 60 * 1000;
+    const cutoff = new Date(Date.now() - cooldownMs).toISOString();
+    const { data: recentRun } = await supabase
+      .from('loan_engine_score')
+      .select('created_at')
+      .eq('user_id', userId)
+      .gte('created_at', cutoff)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (recentRun?.created_at) {
+      const nextEligibleAt = new Date(new Date(recentRun.created_at).getTime() + cooldownMs);
+      const minsRemaining = Math.max(1, Math.ceil((nextEligibleAt - Date.now()) / 60000));
+      return res.status(200).json({
+        success: false,
+        ok: false,
+        errorCode: 'COOLDOWN_ACTIVE',
+        error: `You already ran an assessment recently. Please wait ${minsRemaining} more minute${minsRemaining !== 1 ? 's' : ''} before trying again.`,
+        nextEligibleAt: nextEligibleAt.toISOString(),
+      });
+    }
+  }
+
   let loanApplicationId = body.loanApplicationId || body.loan_application_id || null;
   const applicationId = body.applicationId || loanApplicationId || `app_${Date.now()}`;
   const overrides = body.userData || body;
@@ -196,6 +222,18 @@ export default async function handler(req, res) {
     } catch (snapshotError) {
       console.warn('TruID snapshot lookup failed:', snapshotError?.message || snapshotError);
     }
+  }
+
+  // ── TruID gate: bank cashflow analysis is mandatory ──
+  // Savings accounts hide real spending — only a transactional/cheque account
+  // gives us the cashflow signals the engine needs.
+  if (!truidSnapshot) {
+    return res.status(200).json({
+      success: false,
+      ok: false,
+      errorCode: 'TRUID_REQUIRED',
+      error: 'Your primary bank account must be linked before we can run your credit assessment. Please connect a cheque or transactional account — savings accounts cannot be used for affordability scoring.',
+    });
   }
 
   // ── PRIMARY ENRICHMENT: Sumsub pack_details (KYC-verified address/identity) ──
