@@ -1473,108 +1473,108 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
                 </button>
               </div>
             )}
-        </motion.div>
+          </section>
 
-        {/* ── Best performing strategies (matching HomePage) ── */}
-        <section>
-          <div className="flex items-end justify-between px-5 mb-3">
-            <div className="space-y-1">
-              <p className="text-sm font-semibold text-slate-900">{child?.first_name}'s best performing strategies</p>
-              <div className="flex items-center gap-2 text-xs text-slate-500">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 text-slate-500"><LayoutGrid className="h-3 w-3" /></span>
-                <span>Top performing curated portfolios</span>
+          {/* ── Best performing strategies (matching HomePage) ── */}
+          <section>
+            <div className="flex items-end justify-between px-5 mb-3">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-slate-900">{child?.first_name}'s best performing strategies</p>
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 text-slate-500"><LayoutGrid className="h-3 w-3" /></span>
+                  <span>Top performing curated portfolios</span>
+                </div>
               </div>
             </div>
-          </div>
-          {childStrategies.length > 0 ? (
-            <div className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {childStrategies.map((strategy) => {
-                const pct = strategy.pnlPct || 0;
-                return (
-                  <div key={strategy.id} className="flex-shrink-0 w-[280px] snap-start rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)]">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="text-left space-y-1 min-w-0">
-                        <p className="truncate text-sm font-semibold text-slate-900">{strategy.name}</p>
-                        <p className="text-xs text-slate-600 line-clamp-1">{strategy.risk_level || 'Balanced'}</p>
-                      </div>
-                      <div className="text-right flex-shrink-0">
-                        <p className="text-sm font-semibold text-slate-900">{fmt(strategy.currentValue || 0)}</p>
-                        <p className={`text-xs font-semibold ${pct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                          {pct >= 0 ? '+' : ''}R{Math.abs((strategy.pnlRands || 0) / 100).toFixed(2)} ({pct >= 0 ? '+' : ''}{pct.toFixed(2)}%)
-                        </p>
-                      </div>
-                    </div>
-                    <div className="mt-3 flex items-center justify-between">
-                      {strategy.risk_level && (<span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">{strategy.risk_level}</span>)}
-                      {strategy.holdingLogos?.length > 0 && (
-                        <div className="flex items-center gap-2">
-                          <div className="flex -space-x-2">
-                            {strategy.holdingLogos.slice(0, 3).map((h) => (
-                              <div key={h.symbol} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-sm">
-                                {h.logo_url ? (<img src={h.logo_url} alt={h.name} className="h-full w-full object-cover" />) : (
-                                  <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">{h.symbol?.substring(0, 2)}</div>
-                                )}
-                              </div>
-                            ))}
-                            {strategy.holdingLogos.length > 3 && (<div className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500">+{strategy.holdingLogos.length - 3}</div>)}
-                          </div>
-                          <span className="text-[11px] text-slate-400">Holdings</span>
+            {childStrategies.length > 0 ? (
+              <div className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {childStrategies.map((strategy) => {
+                  const pct = strategy.pnlPct || 0;
+                  return (
+                    <div key={strategy.id} className="flex-shrink-0 w-[280px] snap-start rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)]">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="text-left space-y-1 min-w-0">
+                          <p className="truncate text-sm font-semibold text-slate-900">{strategy.name}</p>
+                          <p className="text-xs text-slate-600 line-clamp-1">{strategy.risk_level || 'Balanced'}</p>
                         </div>
-                      )}
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-sm font-semibold text-slate-900">{fmt(strategy.currentValue || 0)}</p>
+                          <p className={`text-xs font-semibold ${pct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                            {pct >= 0 ? '+' : ''}R{Math.abs((strategy.pnlRands || 0) / 100).toFixed(2)} ({pct >= 0 ? '+' : ''}{pct.toFixed(2)}%)
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex items-center justify-between">
+                        {strategy.risk_level && (<span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">{strategy.risk_level}</span>)}
+                        {strategy.holdingLogos?.length > 0 && (
+                          <div className="flex items-center gap-2">
+                            <div className="flex -space-x-2">
+                              {strategy.holdingLogos.slice(0, 3).map((h) => (
+                                <div key={h.symbol} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-sm">
+                                  {h.logo_url ? (<img src={h.logo_url} alt={h.name} className="h-full w-full object-cover" />) : (
+                                    <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">{h.symbol?.substring(0, 2)}</div>
+                                  )}
+                                </div>
+                              ))}
+                              {strategy.holdingLogos.length > 3 && (<div className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500">+{strategy.holdingLogos.length - 3}</div>)}
+                            </div>
+                            <span className="text-[11px] text-slate-400">Holdings</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="rounded-3xl bg-white p-6 shadow-md text-center">
-              <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-full bg-slate-50 text-slate-400 mb-4"><LayoutGrid className="h-8 w-8" /></div>
-              <p className="text-sm font-semibold text-slate-900 mb-1">No strategies yet</p>
-              <p className="text-xs text-slate-500 mb-4">Invest in a strategy for {child?.first_name}</p>
-              <button type="button" onClick={() => setShowInvest(true)} className="inline-flex items-center justify-center rounded-full bg-slate-900 px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.15em] text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5">
-                Browse Strategies
-              </button>
-            </div>
-          )}
-        </section>
-
-        {/* ── Transaction history (matching HomePage) ── */}
-        <section className="rounded-3xl bg-white shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] overflow-hidden">
-          <div className="flex items-end justify-between px-5 py-4 border-b border-slate-100">
-            <div className="space-y-1">
-              <p className="text-sm font-semibold text-slate-900">Transaction history</p>
-            </div>
-          </div>
-          <div className="divide-y divide-slate-100">
-            {transactions.length > 0 ? (
-              transactions.slice(0, 5).map((tx) => {
-                const isCredit = tx.direction === "credit" || tx.type === "transfer_in";
-                const date = tx.created_at ? new Date(tx.created_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short" }) : "";
-                const rawAmt = Math.abs(Number(tx.amount || 0));
-                const amtDisplay = rawAmt > 10000 ? rawAmt / 100 : rawAmt;
-                return (
-                  <div key={tx.id} className="flex items-center gap-3.5 px-5 py-4">
-                    <div className="h-10 w-10 rounded-2xl flex items-center justify-center" style={{ background: isCredit ? "rgba(34,197,94,0.10)" : "rgba(124,58,237,0.08)" }}>
-                      {isCredit ? <ArrowDownLeft className="h-4 w-4 text-green-600" /> : <ArrowUpRight className="h-4 w-4 text-purple-600" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-semibold text-slate-900 truncate">{tx.description || tx.type || "Transaction"}</p>
-                      <p className="text-[11px] text-slate-400 mt-0.5">{date}</p>
-                    </div>
-                    <p className="text-[13px] font-bold tabular-nums text-slate-900">R{amtDisplay.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                  </div>
-                );
-              })
+                  );
+                })}
+              </div>
             ) : (
-              <div className="p-6 text-center">
-                <p className="text-xs text-slate-400">No activity yet. Transfer or invest to get started.</p>
+              <div className="rounded-3xl bg-white p-6 shadow-md text-center">
+                <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-full bg-slate-50 text-slate-400 mb-4"><LayoutGrid className="h-8 w-8" /></div>
+                <p className="text-sm font-semibold text-slate-900 mb-1">No strategies yet</p>
+                <p className="text-xs text-slate-500 mb-4">Invest in a strategy for {child?.first_name}</p>
+                <button type="button" onClick={() => setShowInvest(true)} className="inline-flex items-center justify-center rounded-full bg-slate-900 px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.15em] text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5">
+                  Browse Strategies
+                </button>
               </div>
             )}
-          </div>
-        </section>
+          </section>
 
-        {/* ── Account Info ── */}
-        <motion.div variants={item}>
+          {/* ── Transaction history (matching HomePage) ── */}
+          <section className="rounded-3xl bg-white shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] overflow-hidden">
+            <div className="flex items-end justify-between px-5 py-4 border-b border-slate-100">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-slate-900">Transaction history</p>
+              </div>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {transactions.length > 0 ? (
+                transactions.slice(0, 5).map((tx) => {
+                  const isCredit = tx.direction === "credit" || tx.type === "transfer_in";
+                  const date = tx.created_at ? new Date(tx.created_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short" }) : "";
+                  const rawAmt = Math.abs(Number(tx.amount || 0));
+                  const amtDisplay = rawAmt > 10000 ? rawAmt / 100 : rawAmt;
+                  return (
+                    <div key={tx.id} className="flex items-center gap-3.5 px-5 py-4">
+                      <div className="h-10 w-10 rounded-2xl flex items-center justify-center" style={{ background: isCredit ? "rgba(34,197,94,0.10)" : "rgba(124,58,237,0.08)" }}>
+                        {isCredit ? <ArrowDownLeft className="h-4 w-4 text-green-600" /> : <ArrowUpRight className="h-4 w-4 text-purple-600" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-semibold text-slate-900 truncate">{tx.description || tx.type || "Transaction"}</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">{date}</p>
+                      </div>
+                      <p className="text-[13px] font-bold tabular-nums text-slate-900">R{amtDisplay.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="p-6 text-center">
+                  <p className="text-xs text-slate-400">No activity yet. Transfer or invest to get started.</p>
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* ── Account Info ── */}
+          <motion.div variants={item}>
           <div className="flex items-center gap-2 mb-3 px-1">
             <div className="h-2 w-2 rounded-full bg-slate-300" />
             <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Account Details</p>
