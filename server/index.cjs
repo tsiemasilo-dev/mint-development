@@ -6287,7 +6287,7 @@ app.post("/api/ozow/initiate", async (req, res) => {
     const optional1 = strategyId || "";
     const optional2 = userEmail || "";
     const optional3 = userId || "";
-    const isTest = process.env.OZOW_IS_TEST === "true" ? "true" : "false";
+    const isTest = "false";
 
     const baseUrl = process.env.APP_URL || "https://mymint.co.za";
     const resolvedSuccessUrl = successUrl || `${baseUrl}/?ozow=success`;
