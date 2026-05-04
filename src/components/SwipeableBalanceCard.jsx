@@ -389,8 +389,12 @@ const SwipeableBalanceCard = ({
               .select("as_of_date, 1d_pnl")
               .eq("user_id", userId)
               .eq("strategy_id", sh.strategyId)
-              .gte("as_of_date", startDateStr)
               .order("as_of_date", { ascending: true });
+
+            // For all tabs except "all", filter by the start date
+            if (activeTab !== "all") {
+              query = query.gte("as_of_date", startDateStr);
+            }
 
             if (limitValue) {
               query = query.limit(limitValue);
