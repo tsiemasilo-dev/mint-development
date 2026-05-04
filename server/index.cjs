@@ -3836,14 +3836,29 @@ app.get("/api/user/holdings", async (req, res) => {
 
     const db = getAuthenticatedDb(token);
     const userId = user.id;
+    const familyMemberId = req.query.family_member_id;
+
+    // If family_member_id is provided, verify it belongs to this user
+    if (familyMemberId) {
+      const { data: familyMember, error: fmErr } = await db
+        .from("family_members")
+        .select("id, primary_user_id")
+        .eq("id", familyMemberId)
+        .maybeSingle();
+      if (fmErr || !familyMember || familyMember.primary_user_id !== userId) {
+        return res.status(403).json({ success: false, error: "Child account not found or access denied" });
+      }
+    }
 
     let holdings, holdingsError;
+    const filterColumn = familyMemberId ? "family_member_id" : "user_id";
+    const filterValue = familyMemberId || userId;
 
     // Attempt queries with progressively fewer optional columns to handle missing DB columns
     const holdingsFull = await db
       .from("stock_holdings_c")
-      .select("id, user_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status, settlement_status, is_active, exit_price")
-      .eq("user_id", userId);
+      .select("id, user_id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status, settlement_status, is_active, exit_price")
+      .eq(filterColumn, filterValue);
 
     if (!holdingsFull.error) {
       holdings = holdingsFull.data;
@@ -3852,8 +3867,8 @@ app.get("/api/user/holdings", async (req, res) => {
       // One or more optional columns missing — try without settlement_status
       const noSettlement = await db
         .from("stock_holdings_c")
-        .select("id, user_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status, is_active, exit_price")
-        .eq("user_id", userId);
+        .select("id, user_id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status, is_active, exit_price")
+        .eq(filterColumn, filterValue);
 
       if (!noSettlement.error) {
         holdings = noSettlement.data;
@@ -3862,8 +3877,8 @@ app.get("/api/user/holdings", async (req, res) => {
         // Try without is_active and exit_price too
         const noExtras = await db
           .from("stock_holdings_c")
-          .select("id, user_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status")
-          .eq("user_id", userId);
+          .select("id, user_id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status")
+          .eq(filterColumn, filterValue);
         holdings = (noExtras.data || []).map(h => ({ ...h, is_active: true, exit_price: null }));
         holdingsError = noExtras.error;
       } else {
@@ -3882,8 +3897,21 @@ app.get("/api/user/holdings", async (req, res) => {
 
     const rawHoldings = holdings || [];
     const securityIds = rawHoldings.map(h => h.security_id).filter(Boolean);
+    const strategyIds = rawHoldings.map(h => h.strategy_id).filter(Boolean);
     let securitiesMap = {};
     let latestPricesMap = {};
+    let strategiesMap = {};
+
+    // Fetch strategies if any holdings have strategy_id
+    if (strategyIds.length > 0) {
+      const stratResult = await db
+        .from("strategies_c")
+        .select("id, name")
+        .in("id", strategyIds);
+      if (stratResult.data) {
+        stratResult.data.forEach(s => { strategiesMap[s.id] = s; });
+      }
+    }
 
     if (securityIds.length > 0) {
       const [secResult, pricesResult] = await Promise.all([
@@ -3952,6 +3980,7 @@ app.get("/api/user/holdings", async (req, res) => {
             change_price: 0,
             change_percent: 0,
             exchange: sec?.exchange || null,
+            strategy_name: h.strategy_id ? strategiesMap[h.strategy_id]?.name : null,
           };
         }
         const costBasis = avgFill * quantity;
@@ -3972,6 +4001,7 @@ app.get("/api/user/holdings", async (req, res) => {
           change_price: dailyChange,
           change_percent: Number(dailyChangePct.toFixed(2)),
           exchange: sec?.exchange || null,
+          strategy_name: h.strategy_id ? strategiesMap[h.strategy_id]?.name : null,
         };
       });
 
@@ -4059,10 +4089,12 @@ app.get("/api/user/strategies", async (req, res) => {
     console.log("[user/strategies] Strategy names from transactions:", strategyNames);
 
     // Also check stock_holdings_c for holdings with strategy_id (fallback when transactions are empty or RLS blocks them)
+    // Filter to only parent's direct investments (family_member_id IS NULL) to exclude child-only strategies
     const { data: userStratHoldings } = await db
       .from("stock_holdings_c")
       .select("id, security_id, strategy_id, quantity, avg_fill")
       .eq("user_id", userId)
+      .is("family_member_id", null)
       .not("strategy_id", "is", null);
 
     const holdingStrategyIds = [...new Set((userStratHoldings || []).map(h => h.strategy_id).filter(Boolean))];
@@ -4174,7 +4206,18 @@ app.get("/api/user/strategies", async (req, res) => {
         sn.toLowerCase() === (strategy.short_name || "").toLowerCase()
       );
       const matchedByHoldings = holdingStrategyIds.includes(strategy.id);
-      if (matchKey || matchedByHoldings) {
+
+      // Exclude child-only strategies from parent view
+      const strategyNameLower = (strategy.name || "").toLowerCase().trim();
+      const descriptionLower = (strategy.description || "").toLowerCase();
+      const isChildStrategy = strategyNameLower.includes("child") ||
+                            strategyNameLower.includes("growth") ||
+                            descriptionLower.includes("child") ||
+                            descriptionLower.includes("for a child") ||
+                            strategyNameLower === "mygrowthfund" ||
+                            strategy.id === "eb95d956-cfac-4fd4-b74f-294d4a2ec21d";  // Hardcode MyGrowthFund ID
+
+      if ((matchKey || matchedByHoldings) && !isChildStrategy) {
         const metrics = strategy.strategy_metrics;
         const latestMetric = Array.isArray(metrics) ? metrics[0] : metrics;
         const enrichedHoldings = (strategy.holdings || []).map(h => {
@@ -7551,6 +7594,339 @@ app.post('/api/admin/set-ytd-prices', async (req, res) => {
   } catch (err) {
     console.error('[admin] set-ytd-prices error:', err.message);
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Child: wallet & investment endpoints ──
+app.get('/api/child-wallet', async (req, res) => {
+  const { family_member_id } = req.query;
+  if (!family_member_id) {
+    return res.status(400).json({ error: 'family_member_id is required' });
+  }
+  try {
+    const db = supabaseAdmin || supabase;
+    if (!db) return res.status(500).json({ error: 'Database not available' });
+    const { data, error } = await db
+      .from('family_members')
+      .select('available_balance')
+      .eq('id', family_member_id)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: 'Child not found' });
+    return res.json({ balance: data.available_balance || 0 });
+  } catch (e) {
+    console.error('[child-wallet] error:', e.message);
+    return res.status(500).json({ error: 'Failed to fetch child wallet' });
+  }
+});
+
+app.post('/api/child-wallet', async (req, res) => {
+  const { action, family_member_id, amount } = req.body || {};
+  if (!family_member_id) {
+    return res.status(400).json({ error: 'family_member_id is required' });
+  }
+  if (action === 'transfer') {
+    if (!amount || typeof amount !== 'number' || amount <= 0) {
+      return res.status(400).json({ error: 'Amount must be a positive number (in cents)' });
+    }
+    try {
+      const { user, error: authError } = await authenticateUser(req);
+      if (authError || !user) {
+        return res.status(401).json({ error: authError || 'Not authenticated' });
+      }
+      const parentUserId = user.id;
+
+      const db = supabaseAdmin || supabase;
+      if (!db) return res.status(500).json({ error: 'Database not available' });
+
+      const { data: child, error: childErr } = await db
+        .from('family_members')
+        .select('id, available_balance, primary_user_id')
+        .eq('id', family_member_id)
+        .maybeSingle();
+      if (childErr || !child) return res.status(404).json({ error: 'Child not found' });
+      if (child.primary_user_id !== parentUserId) {
+        return res.status(403).json({ error: 'You can only transfer to your own children' });
+      }
+
+      const { data: parent } = await db
+        .from('wallets')
+        .select('balance')
+        .eq('user_id', parentUserId)
+        .maybeSingle();
+      const parentBalance = Math.round((parent?.balance || 0) * 100);
+      if (parentBalance < amount) {
+        return res.status(400).json({ error: 'Insufficient balance' });
+      }
+
+      const parentNewBalance = parentBalance - amount;
+      const childNewBalance = (child.available_balance || 0) + amount;
+
+      await db.from('wallets').update({ balance: parentNewBalance / 100 }).eq('user_id', parentUserId);
+      await db.from('family_members').update({ available_balance: childNewBalance }).eq('id', family_member_id);
+
+      const now = new Date().toISOString();
+      const ref = `TXN-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      await db.from('transactions').insert({
+        user_id: parentUserId,
+        family_member_id: family_member_id,
+        name: 'Transfer to child',
+        direction: 'credit',
+        amount: amount,
+        description: 'Transfer to child wallet',
+        store_reference: ref,
+        currency: 'ZAR',
+        status: 'completed',
+        transaction_date: now,
+        created_at: now,
+      });
+
+      return res.json({ success: true, parent_balance: parentNewBalance, child_balance: childNewBalance });
+    } catch (e) {
+      console.error('[child-wallet] transfer error:', e.message);
+      return res.status(500).json({ error: 'Transfer failed' });
+    }
+  }
+  return res.status(400).json({ error: 'Invalid action' });
+});
+
+app.get('/api/child-transactions', async (req, res) => {
+  try {
+    const { family_member_id } = req.query;
+    if (!family_member_id) {
+      return res.status(400).json({ error: 'family_member_id is required' });
+    }
+
+    const { user, error: authError } = await authenticateUser(req);
+    if (authError || !user) {
+      return res.status(401).json({ error: authError || 'Not authenticated' });
+    }
+
+    const db = supabaseAdmin || supabase;
+    if (!db) return res.status(500).json({ error: 'Database not available' });
+
+    // Verify family_member_id belongs to this user
+    const { data: familyMember, error: fmErr } = await db
+      .from('family_members')
+      .select('id, primary_user_id')
+      .eq('id', family_member_id)
+      .maybeSingle();
+
+    if (fmErr || !familyMember || familyMember.primary_user_id !== user.id) {
+      return res.status(403).json({ error: 'Child account not found or access denied' });
+    }
+
+    // Fetch transactions for the child
+    const { data: transactions, error: txErr } = await db
+      .from('transactions')
+      .select('id, direction, amount, description, transaction_date, created_at')
+      .eq('family_member_id', family_member_id)
+      .order('transaction_date', { ascending: false })
+      .limit(50);
+
+    if (txErr) {
+      console.error('[child-transactions] error:', txErr);
+      return res.status(500).json({ error: 'Failed to fetch transactions' });
+    }
+
+    return res.json({ transactions: transactions || [] });
+  } catch (e) {
+    console.error('[child-transactions]', e.message);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/child-invest', async (req, res) => {
+  const db = supabaseAdmin || supabase;
+  if (!db) return res.status(500).json({ error: 'Database not available.' });
+
+  const { family_member_id, strategy_id, amount } = req.body || {};
+
+  if (!family_member_id) return res.status(400).json({ error: 'family_member_id is required.' });
+  if (!strategy_id) return res.status(400).json({ error: 'strategy_id is required.' });
+  if (!amount || typeof amount !== 'number' || amount <= 0) {
+    return res.status(400).json({ error: 'Amount must be a positive number (in cents).' });
+  }
+
+  let parentUserId;
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    parentUserId = session?.user?.id;
+  } catch {}
+  if (!parentUserId) {
+    try {
+      const { data: fm } = await db
+        .from('family_members')
+        .select('primary_user_id')
+        .eq('id', family_member_id)
+        .maybeSingle();
+      parentUserId = fm?.primary_user_id;
+    } catch {}
+  }
+  if (!parentUserId) return res.status(401).json({ error: 'Could not identify parent.' });
+
+  let originalChildBalance = null;
+
+  try {
+    const { data: child, error: childErr } = await db
+      .from('family_members')
+      .select('id, primary_user_id, available_balance, first_name, relationship')
+      .eq('id', family_member_id)
+      .maybeSingle();
+
+    if (childErr) throw childErr;
+    if (!child) return res.status(404).json({ error: 'Child account not found.' });
+    if (child.relationship !== 'child') return res.status(400).json({ error: 'Investments only supported for child accounts.' });
+    if (child.primary_user_id !== parentUserId) {
+      return res.status(403).json({ error: 'You can only invest for your own children.' });
+    }
+
+    originalChildBalance = child.available_balance || 0;
+    if (originalChildBalance < amount) {
+      return res.status(400).json({ error: 'Insufficient funds in child\'s wallet. Transfer funds first.' });
+    }
+
+    const { data: strategy, error: stratErr } = await db
+      .from('strategies_c')
+      .select('id, name, holdings, min_investment, status')
+      .eq('id', strategy_id)
+      .maybeSingle();
+
+    if (stratErr) throw stratErr;
+    if (!strategy) return res.status(404).json({ error: 'Strategy not found.' });
+    if (strategy.status !== 'active') return res.status(400).json({ error: 'This strategy is no longer active.' });
+    if (strategy.min_investment && amount < strategy.min_investment) {
+      return res.status(400).json({ error: `Minimum investment is R${(strategy.min_investment / 100).toFixed(2)}.` });
+    }
+
+    const newChildBalance = originalChildBalance - amount;
+    const { error: deductErr } = await db
+      .from('family_members')
+      .update({ available_balance: newChildBalance })
+      .eq('id', family_member_id);
+    if (deductErr) throw deductErr;
+
+    const investAmountRands = amount / 100;
+    const holdings = strategy.holdings || [];
+    let holdingsCreated = 0;
+
+    if (holdings.length > 0) {
+      const symbols = holdings.map(h => h.symbol).filter(Boolean);
+      const { data: securities } = await db
+        .from('securities_c')
+        .select('id, symbol, name, last_price')
+        .in('symbol', symbols);
+
+      const secMap = {};
+      (securities || []).forEach(s => { secMap[s.symbol] = s; });
+
+      let totalBasketCostRands = 0;
+      for (const h of holdings) {
+        const sec = secMap[h.symbol];
+        if (sec?.last_price) {
+          totalBasketCostRands += sec.last_price * (h.weight || 1);
+        }
+      }
+
+      if (totalBasketCostRands > 0) {
+        const scale = investAmountRands / totalBasketCostRands;
+
+        for (const h of holdings) {
+          const sec = secMap[h.symbol];
+          if (!sec?.last_price) continue;
+
+          const qty = Math.floor((h.weight || 1) * scale);
+          const marketValue = Math.round(qty * sec.last_price);
+          if (qty <= 0) continue;
+
+          try {
+            const { data: existing } = await db
+              .from('stock_holdings_c')
+              .select('id, quantity, avg_fill')
+              .eq('family_member_id', family_member_id)
+              .eq('security_id', sec.id)
+              .eq('strategy_id', strategy_id)
+              .maybeSingle();
+
+            if (existing) {
+              const oldQty = Number(existing.quantity || 0);
+              const oldAvgFill = Number(existing.avg_fill || 0);
+              const newQty = Math.floor(oldQty + qty);
+              const newAvgFill = newQty > 0
+                ? ((oldAvgFill * oldQty) + (sec.last_price * qty)) / newQty
+                : sec.last_price;
+
+              await db
+                .from('stock_holdings_c')
+                .update({
+                  quantity: newQty,
+                  avg_fill: Math.round(newAvgFill),
+                  market_value: newQty * sec.last_price,
+                  unrealized_pnl: 0,
+                  as_of_date: new Date().toISOString().split('T')[0],
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', existing.id);
+            } else {
+              await db
+                .from('stock_holdings_c')
+                .insert({
+                  user_id: parentUserId,
+                  family_member_id: family_member_id,
+                  security_id: sec.id,
+                  quantity: qty,
+                  avg_fill: sec.last_price,
+                  market_value: marketValue,
+                  unrealized_pnl: 0,
+                  as_of_date: new Date().toISOString().split('T')[0],
+                  strategy_id: strategy_id,
+                  Status: 'active',
+                });
+            }
+            holdingsCreated++;
+          } catch (e) {
+            console.warn(`[child-invest] holding upsert for ${h.symbol}:`, e.message);
+          }
+        }
+      }
+    }
+
+    const ref = `CHILD-INV-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const now = new Date().toISOString();
+    try {
+      await db.from('transactions').insert({
+        user_id: parentUserId,
+        family_member_id: family_member_id,
+        name: `${strategy.name} investment`,
+        direction: 'debit',
+        amount: amount,
+        description: `${strategy.name} investment for ${child.first_name}`,
+        store_reference: ref,
+        currency: 'ZAR',
+        status: 'completed',
+        transaction_date: now,
+        created_at: now,
+      });
+    } catch (e) { console.warn('[child-invest] tx insert:', e.message); }
+
+    return res.json({
+      success: true,
+      child_balance: newChildBalance,
+      holdings_created: holdingsCreated,
+      strategy_name: strategy.name,
+      transaction_ref: ref,
+    });
+  } catch (e) {
+    console.error('[child-invest] error:', e.message, e.stack);
+    if (originalChildBalance !== null) {
+      try {
+        await db
+          .from('family_members')
+          .update({ available_balance: originalChildBalance })
+          .eq('id', family_member_id);
+      } catch (rb) { console.error('[child-invest] rollback failed:', rb.message); }
+    }
+    return res.status(500).json({ error: 'Investment failed. Please try again.', debug: e.message });
   }
 });
 

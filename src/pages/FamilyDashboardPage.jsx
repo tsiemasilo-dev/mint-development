@@ -1100,7 +1100,7 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       const res = await fetch(`/api/family-members?user_id=${userId}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
       const json = await res.json();
       setMembers(json.members || []);

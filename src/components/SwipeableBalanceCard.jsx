@@ -61,14 +61,13 @@ const TIMEFRAME_DAYS = { d: 7, "5d": 5, m: 30, ytd: 365, all: 1825 };
 
 const SwipeableBalanceCard = ({
   userId,
+  familyMemberId,        // For child dashboard — fetch child-specific holdings instead of parent
   isBackFacing = true,
   forceVisible,
   mintNumber: mintNumberProp,
   overrideBalance,       // Rands — replaces the big portfolio number
   overrideWalletBalance, // Rands — replaces the CASH footer value
-  childMode = false,     // hides parent holdings, shows managed-by bar
-  parentName,
-  childAge,
+  managedByLabel,        // For child cards: "Managed by parent · Age X · Independent at Y"
 }) => {
   const [activeTab, setActiveTab] = useState("m");
   const [isOpen, setIsOpen] = useState(false);
@@ -233,64 +232,91 @@ const SwipeableBalanceCard = ({
     }, 10000);
 
     const loadData = async () => {
-      if (!userId) return;
+      if (!userId && !familyMemberId) return;
       setLoading(true);
 
       try {
-        // Use a race so getSession() can't block forever (e.g. auth lock on app resume)
-        const sessionResult = await Promise.race([
-          supabase.auth.getSession(),
-          new Promise(resolve =>
-            setTimeout(() => resolve({ data: { session: null } }), 5000)
-          ),
-        ]);
-        if (cancelled) return;
-        const token = sessionResult?.data?.session?.access_token;
+        let enrichedHoldings = [];
+        let strategiesRes = { strategies: [] }; // Initialize to avoid ReferenceError
 
-        const [holdingsRes, strategiesRes] = token
-          ? await Promise.all([
-            fetch("/api/user/holdings", {
-              headers: { Authorization: `Bearer ${token}` },
-            }).then((r) => (r.ok ? r.json() : { holdings: [] })),
-            fetch("/api/user/strategies", {
-              headers: { Authorization: `Bearer ${token}` },
-            }).then((r) => (r.ok ? r.json() : { strategies: [] })),
-          ])
-          : [{ holdings: [] }, { strategies: [] }];
+        // Child mode: fetch from stock_holdings_c directly
+        if (familyMemberId) {
+          const { data: childHoldings, error } = await supabase
+            .from("stock_holdings_c")
+            .select("id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id, securities(symbol, name, logo_url)")
+            .eq("family_member_id", familyMemberId);
 
-        const stockHoldings = (holdingsRes.holdings || []).filter(h => !h.strategy_id);
-        const strategyItems = await Promise.all((strategiesRes.strategies || []).map(async (s) => {
-          const holdingsArr = s.holdings || [];
-          const topLogos = holdingsArr
-            .sort((a, b) => (b.weight || 0) - (a.weight || 0))
-            .slice(0, 3)
-            .map((h) => h.logo_url || null)
-            .filter(Boolean);
-          const investedRands = s.investedAmount || 0;
-          const liveRands = s.currentMarketValue != null ? s.currentMarketValue : investedRands;
-          const purchaseDate = s.firstInvestedDate;
-          let changePct = investedRands > 0 ? ((liveRands - investedRands) / investedRands) * 100 : 0;
+          if (!error && childHoldings) {
+            enrichedHoldings = childHoldings.map((h) => ({
+              id: h.id,
+              symbol: h.securities?.symbol || `SEC-${String(h.security_id || "").slice(0, 6)}`,
+              name: h.securities?.name || "Security",
+              market_value: Math.round((h.market_value || 0) * 100), // Convert to cents
+              invested_amount: Math.round((h.avg_fill * h.quantity) * 100),
+              avg_fill: Math.round(h.avg_fill * 100),
+              quantity: h.quantity,
+              logo_url: h.securities?.logo_url || null,
+              security_id: h.security_id,
+              strategy_id: h.strategy_id,
+              isStrategy: false,
+            }));
+          }
+        } else {
+          // Parent mode: fetch from API endpoints
+          const sessionResult = await Promise.race([
+            supabase.auth.getSession(),
+            new Promise(resolve =>
+              setTimeout(() => resolve({ data: { session: null } }), 5000)
+            ),
+          ]);
+          if (cancelled) return;
+          const token = sessionResult?.data?.session?.access_token;
 
-          const investedCents = Math.round(investedRands * 100);
-          const currentCents = Math.round(liveRands * 100);
-          return {
-            symbol: s.shortName || s.name || "Strategy",
-            name: s.name || "Strategy",
-            market_value: currentCents,
-            invested_amount: investedCents,
-            avg_fill: investedCents,
-            quantity: 1,
-            logo_url: null,
-            security_id: null,
-            isStrategy: true,
-            strategyId: s.id,
-            topLogos: topLogos,
-            changePct: changePct,
-            holdings: holdingsArr,
-            firstInvestedDate: purchaseDate,
-          };
-        }));
-        const enrichedHoldings = [...stockHoldings, ...strategyItems];
+          const [holdingsRes, strategiesRes] = token
+            ? await Promise.all([
+              fetch("/api/user/holdings", {
+                headers: { Authorization: `Bearer ${token}` },
+              }).then((r) => (r.ok ? r.json() : { holdings: [] })),
+              fetch("/api/user/strategies", {
+                headers: { Authorization: `Bearer ${token}` },
+              }).then((r) => (r.ok ? r.json() : { strategies: [] })),
+            ])
+            : [{ holdings: [] }, { strategies: [] }];
+
+          const stockHoldings = (holdingsRes.holdings || []).filter(h => !h.strategy_id);
+          const strategyItems = await Promise.all((strategiesRes.strategies || []).map(async (s) => {
+            const holdingsArr = s.holdings || [];
+            const topLogos = holdingsArr
+              .sort((a, b) => (b.weight || 0) - (a.weight || 0))
+              .slice(0, 3)
+              .map((h) => h.logo_url || null)
+              .filter(Boolean);
+            const investedRands = s.investedAmount || 0;
+            const liveRands = s.currentMarketValue != null ? s.currentMarketValue : investedRands;
+            const purchaseDate = s.firstInvestedDate;
+            let changePct = investedRands > 0 ? ((liveRands - investedRands) / investedRands) * 100 : 0;
+
+            const investedCents = Math.round(investedRands * 100);
+            const currentCents = Math.round(liveRands * 100);
+            return {
+              symbol: s.shortName || s.name || "Strategy",
+              name: s.name || "Strategy",
+              market_value: currentCents,
+              invested_amount: investedCents,
+              avg_fill: investedCents,
+              quantity: 1,
+              logo_url: null,
+              security_id: null,
+              isStrategy: true,
+              strategyId: s.id,
+              topLogos: topLogos,
+              changePct: changePct,
+              holdings: holdingsArr,
+              firstInvestedDate: purchaseDate,
+            };
+          }));
+          enrichedHoldings = [...stockHoldings, ...strategyItems];
+        }
 
         const mValue = enrichedHoldings.reduce(
           (acc, h) => acc + Number(h.market_value || 0) / 100,
@@ -331,24 +357,26 @@ const SwipeableBalanceCard = ({
           holdingsCount: enrichedHoldings.length,
         });
 
-        // Fetch latest basket_value from client_strategy_returns_c for all strategies
-        const strategyIds = (strategiesRes.strategies || []).map(s => s.id).filter(Boolean);
-        let totalBasketValue = 0;
-        for (const stratId of strategyIds) {
-          const { data: row } = await supabase
-            .from("client_strategy_returns_c")
-            .select("basket_value")
-            .eq("user_id", userId)
-            .eq("strategy_id", stratId)
-            .order("as_of_date", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          if (row?.basket_value) {
-            totalBasketValue += Number(row.basket_value) / 100;
+        // Fetch latest basket_value from client_strategy_returns_c for all strategies (parent mode only)
+        if (strategiesRes) {
+          const strategyIds = (strategiesRes.strategies || []).map(s => s.id).filter(Boolean);
+          let totalBasketValue = 0;
+          for (const stratId of strategyIds) {
+            const { data: row } = await supabase
+              .from("client_strategy_returns_c")
+              .select("basket_value")
+              .eq("user_id", userId)
+              .eq("strategy_id", stratId)
+              .order("as_of_date", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (row?.basket_value) {
+              totalBasketValue += Number(row.basket_value) / 100;
+            }
           }
-        }
-        if (totalBasketValue > 0) {
-          setDefaultPortfolioBasketValue(totalBasketValue);
+          if (totalBasketValue > 0) {
+            setDefaultPortfolioBasketValue(totalBasketValue);
+          }
         }
       } catch (err) {
         console.error("❌ [SwipeableBalanceCard] Load data error:", err);
@@ -376,11 +404,11 @@ const SwipeableBalanceCard = ({
       clearTimeout(visibilityDebounce);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [userId, lastUpdated]);
+  }, [userId, familyMemberId, lastUpdated]);
 
   useEffect(() => {
     const fetchChartPrices = async () => {
-      if (!userId) return;
+      if (!userId && !familyMemberId) return;
 
       // Ensure we don't leave chart stuck in loading if no holdings
       if (dbData.holdings.length === 0) {
@@ -401,51 +429,54 @@ const SwipeableBalanceCard = ({
         console.log(`[SwipeableBalanceCard] Fetching history for tab: ${activeTab}, days: ${days}, startDate: ${startDateStr}`);
 
         // Process strategies: cumulative sum of 1d_pnl from client_strategy_returns_c
+        // Only for parent mode (userId); child mode has limited strategy returns tracking
         const strategyBasketByDate = {};
         const endDateStr = new Date().toISOString().split("T")[0];
         const limitValue = activeTab === "5d" ? 5 : undefined;
 
-        const strategyHoldings = holdingsToChart.filter(h => h.isStrategy && h.strategyId);
-        // Collect daily 1d_pnl per date (summed across all strategies)
-        const strategyDailyPnl = {};
-        for (const sh of strategyHoldings) {
-          try {
-            let query = supabase
-              .from("client_strategy_returns_c")
-              .select("as_of_date, 1d_pnl")
-              .eq("user_id", userId)
-              .eq("strategy_id", sh.strategyId)
-              .order("as_of_date", { ascending: true });
+        if (userId) {
+          const strategyHoldings = holdingsToChart.filter(h => h.isStrategy && h.strategyId);
+          // Collect daily 1d_pnl per date (summed across all strategies)
+          const strategyDailyPnl = {};
+          for (const sh of strategyHoldings) {
+            try {
+              let query = supabase
+                .from("client_strategy_returns_c")
+                .select("as_of_date, 1d_pnl")
+                .eq("user_id", userId)
+                .eq("strategy_id", sh.strategyId)
+                .order("as_of_date", { ascending: true });
 
-            // For all tabs except "all", filter by the start date
-            if (activeTab !== "all") {
-              query = query.gte("as_of_date", startDateStr);
+              // For all tabs except "all", filter by the start date
+              if (activeTab !== "all") {
+                query = query.gte("as_of_date", startDateStr);
+              }
+
+              if (limitValue) {
+                query = query.limit(limitValue);
+              }
+
+              const { data, error } = await query;
+
+              if (!error && data && data.length > 0) {
+                data.forEach((row) => {
+                  const dateKey = row.as_of_date;
+                  const dailyPnlRands = (Number(row["1d_pnl"] || 0)) / 100;
+                  strategyDailyPnl[dateKey] = (strategyDailyPnl[dateKey] || 0) + dailyPnlRands;
+                });
+              }
+            } catch (e) {
+              console.warn(`[Chart] Failed to fetch strategy 1d_pnl for ${sh.strategyId}:`, e);
             }
-
-            if (limitValue) {
-              query = query.limit(limitValue);
-            }
-
-            const { data, error } = await query;
-
-            if (!error && data && data.length > 0) {
-              data.forEach((row) => {
-                const dateKey = row.as_of_date;
-                const dailyPnlRands = (Number(row["1d_pnl"] || 0)) / 100;
-                strategyDailyPnl[dateKey] = (strategyDailyPnl[dateKey] || 0) + dailyPnlRands;
-              });
-            }
-          } catch (e) {
-            console.warn(`[Chart] Failed to fetch strategy 1d_pnl for ${sh.strategyId}:`, e);
           }
-        }
 
-        // Build cumulative sum of 1d_pnl across all dates
-        const sortedStrategyDates = Object.keys(strategyDailyPnl).sort();
-        let runningTotal = 0;
-        for (const dateKey of sortedStrategyDates) {
-          runningTotal += strategyDailyPnl[dateKey];
-          strategyBasketByDate[dateKey] = runningTotal;
+          // Build cumulative sum of 1d_pnl across all dates
+          const sortedStrategyDates = Object.keys(strategyDailyPnl).sort();
+          let runningTotal = 0;
+          for (const dateKey of sortedStrategyDates) {
+            runningTotal += strategyDailyPnl[dateKey];
+            strategyBasketByDate[dateKey] = runningTotal;
+          }
         }
 
         // Process stocks
@@ -591,11 +622,11 @@ const SwipeableBalanceCard = ({
     };
 
     fetchChartPrices();
-  }, [userId, dbData.holdings, activeTab, selectedAsset, lastUpdated, loading]);
+  }, [userId, familyMemberId, dbData.holdings, activeTab, selectedAsset, lastUpdated, loading]);
 
   useEffect(() => {
     const fetchPeriodReturnData = async () => {
-      if (!["5d", "m", "ytd", "all"].includes(activeTab) || !userId) return;
+      if (!["5d", "m", "ytd", "all"].includes(activeTab) || (!userId && !familyMemberId)) return;
 
       try {
         // If an asset is selected, show its returns
@@ -614,7 +645,7 @@ const SwipeableBalanceCard = ({
 
         if (asset) {
           // For selected asset, fetch from appropriate table
-          if (asset.isStrategy && asset.strategyId) {
+          if (asset.isStrategy && asset.strategyId && userId) {
             const { data, error } = await supabase
               .from("client_strategy_returns_c")
               .select("*")
@@ -675,8 +706,8 @@ const SwipeableBalanceCard = ({
             .filter(h => h.security_id && !h.isStrategy)
             .map(h => h.security_id);
 
-          // Fetch latest return data for each strategy
-          if (strategyIds.length > 0) {
+          // Fetch latest return data for each strategy (parent mode only)
+          if (strategyIds.length > 0 && userId) {
             for (const strategyId of strategyIds) {
               const { data: row, error: err } = await supabase
                 .from("client_strategy_returns_c")
@@ -734,7 +765,7 @@ const SwipeableBalanceCard = ({
     };
 
     fetchPeriodReturnData();
-  }, [activeTab, userId, selectedAsset, dbData.holdings]);
+  }, [activeTab, userId, familyMemberId, selectedAsset, dbData.holdings]);
 
   const displayMarketValue = selectedAsset
     ? Number(selectedAsset.market_value || 0) / 100
@@ -966,18 +997,11 @@ const SwipeableBalanceCard = ({
         </div>
       </div>
 
-      {/* Managed-by bar — child accounts only */}
-      {childMode && (
-        <div
-          className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2 rounded-full"
-          style={{ background: "rgba(0,0,0,0.25)", border: "1px solid rgba(255,255,255,0.08)" }}
-        >
-          <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "#34d399" }} />
-          <span className="text-[10px] font-medium tracking-wide" style={{ color: "rgba(255,255,255,0.65)" }}>
-            Managed by {parentName || "parent"}
-            {childAge != null ? ` · Age ${childAge}` : ""}
-            {" · Independent at 18"}
-          </span>
+      {managedByLabel && (
+        <div className="mt-3 pt-3 border-t border-white/10 text-center">
+          <div className="text-[10px] text-white/60 font-medium">
+            {managedByLabel}
+          </div>
         </div>
       )}
 
