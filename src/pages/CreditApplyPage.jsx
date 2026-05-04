@@ -504,23 +504,44 @@ const EnrichmentStage = ({ onSubmit, defaultValues, employerOptions, employerLoc
 const ResultStage = ({ score, isCalculating, engineFailed, breakdown, engineResult, onRunAssessment, onContinue, isPrefetching = false, onReapply }) => {
    const [showAllData, setShowAllData] = useState(false);
    const [loaderValue, setLoaderValue] = useState(0);
+   const tweenRef = useRef(null);
 
    useEffect(() => {
-      let interval;
+      let countInterval;
+      let peakTimeout;
+
+      const clearAll = () => {
+         clearInterval(countInterval);
+         clearInterval(tweenRef.current);
+         clearTimeout(peakTimeout);
+      };
+      clearAll();
+
       if (isCalculating) {
          setLoaderValue(0);
-         interval = setInterval(() => {
-            setLoaderValue(prev => {
-               if (prev >= 99) return 99;
-               return prev + 0.5;
-            });
+         countInterval = setInterval(() => {
+            setLoaderValue(prev => (prev >= 100 ? 100 : prev + 0.5));
          }, 20);
       } else if (score > 0) {
-         setLoaderValue(score);
+         // Peak at 100, pause briefly, then tween down to the real score
+         setLoaderValue(100);
+         peakTimeout = setTimeout(() => {
+            tweenRef.current = setInterval(() => {
+               setLoaderValue(prev => {
+                  const diff = score - prev;
+                  if (Math.abs(diff) <= 0.8) {
+                     clearInterval(tweenRef.current);
+                     return score;
+                  }
+                  return prev + (diff > 0 ? 0.8 : -0.8);
+               });
+            }, 16);
+         }, 700);
       } else if (engineFailed) {
          setLoaderValue(0);
       }
-      return () => clearInterval(interval);
+
+      return clearAll;
    }, [isCalculating, score, engineFailed]);
 
    const sanitizeData = (value) => {
@@ -559,7 +580,7 @@ const ResultStage = ({ score, isCalculating, engineFailed, breakdown, engineResu
             ? "Borderline – manual review"
             : "Decline";
 
-   const progressDeg = (isCalculating ? loaderValue : score) * 3.6;
+   const progressDeg = loaderValue * 3.6;
 
    const statusMessages = [
       'Initializing...',
@@ -645,7 +666,7 @@ const ResultStage = ({ score, isCalculating, engineFailed, breakdown, engineResu
                            filter: 'drop-shadow(0 1px 2px rgba(75, 34, 214, 0.1))'
                         }}
                      >
-                        {Math.round(isCalculating ? loaderValue : score)}%
+                        {Math.round(loaderValue)}%
                      </span>
                      <span className="text-[11px] font-medium text-slate-400 mt-2 tracking-widest uppercase">
                         {statusText}

@@ -513,13 +513,38 @@ export default async function handler(req, res) {
     };
 
     const scoreReasons = [];
+
+    // --- Credit bureau ---
     if (creditScoreValue < 580) scoreReasons.push('Low credit score');
     if (creditUtilizationBreakdown.ratioPercent !== null && creditUtilizationBreakdown.ratioPercent > 75) {
       scoreReasons.push('High credit utilization');
     }
     if ((adverseListingsBreakdown.totalAdverse || 0) > 0) scoreReasons.push('Adverse listings present');
     if (dtiBreakdown.dtiPercent !== null && dtiBreakdown.dtiPercent > 50) scoreReasons.push('High debt-to-income ratio');
+
+    // --- Employment ---
     if ((employmentTenureBreakdown.monthsInCurrentJob || 0) < 6) scoreReasons.push('Short employment tenure');
+    const ct = contractTypeBreakdown.contractType;
+    if (ct === 'FIXED_TERM_LT_12') scoreReasons.push('Fixed-term contract under 12 months');
+    else if (ct === 'PART_TIME') scoreReasons.push('Part-time employment');
+    else if (ct === 'UNEMPLOYED_OR_UNKNOWN') scoreReasons.push('Employment status unverified');
+
+    // --- Bank / income stability ---
+    if (incomeStabilityBreakdown.valuePercent === 0) {
+      scoreReasons.push('Bank statement not linked or insufficient income history');
+    } else if (incomeStabilityBreakdown.valuePercent === 50) {
+      scoreReasons.push('Partial bank history — less than 3 months captured');
+    }
+    if (bankStatementCashflowsBreakdown.netCashflowRatio !== null && bankStatementCashflowsBreakdown.netCashflowRatio < 0.05) {
+      scoreReasons.push('Weak monthly cashflow margin');
+    }
+    if (bankStatementCashflowsBreakdown.volatilityRatio !== null && bankStatementCashflowsBreakdown.volatilityRatio > 0.75) {
+      scoreReasons.push('High income volatility');
+    }
+
+    // --- Behavioural ---
+    if (algoHiveBehaviouralBreakdown.isNewBorrower) scoreReasons.push('No prior credit history detected');
+    if (!algoHiveBehaviouralBreakdown.hasAnyInvestment) scoreReasons.push('No investment activity on file');
 
     const success = result?.success === true;
     const ok = success;
