@@ -397,7 +397,11 @@ async function getSumsubRequiredDocsStatus(applicantId) {
 
 const SUPABASE_URL = readEnv('SUPABASE_URL') || readEnv('VITE_SUPABASE_URL');
 const SUPABASE_ANON_KEY = readEnv('SUPABASE_ANON_KEY') || readEnv('VITE_SUPABASE_ANON_KEY');
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_SERVICE_ROLE_KEY = readEnv('SUPABASE_SERVICE_ROLE_KEY');
+
+console.log('[startup] Supabase URL set:', !!SUPABASE_URL);
+console.log('[startup] Supabase anon key set:', !!SUPABASE_ANON_KEY);
+console.log('[startup] Supabase service role key set:', !!SUPABASE_SERVICE_ROLE_KEY);
 
 let supabase = null;
 let supabaseAdmin = null;
@@ -2565,17 +2569,17 @@ app.get("/api/stocks/chart", async (req, res) => {
 async function authenticateUser(req) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return { user: null, error: "Missing or invalid Authorization header" };
+    return { user: null, token: null, error: "Missing or invalid Authorization header" };
   }
   const token = authHeader.replace("Bearer ", "");
   if (!supabase) {
-    return { user: null, error: "Database client not initialized" };
+    return { user: null, token: null, error: "Database client not initialized" };
   }
   const { data, error } = await supabase.auth.getUser(token);
   if (error || !data?.user) {
-    return { user: null, error: error?.message || "Invalid token" };
+    return { user: null, token: null, error: error?.message || "Invalid token" };
   }
-  return { user: data.user, error: null };
+  return { user: data.user, token, error: null };
 }
 
 async function verifyPaystackPayment(reference) {
@@ -2606,7 +2610,7 @@ app.post("/api/reconcile-payments", async (req, res) => {
       return res.status(500).json({ success: false, error: "Database not connected" });
     }
 
-    const { user, error: authError } = await authenticateUser(req);
+    const { user, token, error: authError } = await authenticateUser(req);
     if (authError || !user) {
       return res.status(401).json({ success: false, error: authError || "Unauthorized" });
     }
@@ -2674,7 +2678,7 @@ app.post("/api/reconcile-payments", async (req, res) => {
 
     const recovered = [];
     const skipped = [];
-    const db = supabaseAdmin || supabase;
+    const db = getAuthenticatedDb(token);
 
     for (const candidate of candidates) {
       const ref = candidate.reference;
@@ -2800,7 +2804,7 @@ app.post("/api/reconcile-payments", async (req, res) => {
 // ── GET user's strategy subscriptions ─────────────────────────────────────
 app.get("/api/user/strategy-subscriptions", async (req, res) => {
   try {
-    const { user, error: authError } = await authenticateUser(req);
+    const { user, token, error: authError } = await authenticateUser(req);
     if (authError || !user) return res.status(401).json({ success: false, error: "Unauthorized" });
 
     const token = (req.headers.authorization || "").replace("Bearer ", "");
@@ -2827,7 +2831,7 @@ app.get("/api/user/strategy-subscriptions", async (req, res) => {
 // ── PATCH update strategy subscription status ──────────────────────────────
 app.patch("/api/user/strategy-subscriptions/:id", async (req, res) => {
   try {
-    const { user, error: authError } = await authenticateUser(req);
+    const { user, token, error: authError } = await authenticateUser(req);
     if (authError || !user) return res.status(401).json({ success: false, error: "Unauthorized" });
 
     const { id } = req.params;
@@ -2873,14 +2877,14 @@ app.post("/api/record-investment", async (req, res) => {
       return res.status(500).json({ success: false, error: "Database not connected" });
     }
 
-    const { user, error: authError } = await authenticateUser(req);
+    const { user, token, error: authError } = await authenticateUser(req);
     if (authError || !user) {
       console.log("[record-investment] AUTH FAILED:", authError || "No user");
       return res.status(401).json({ success: false, error: authError || "Unauthorized" });
     }
     const userId = user.id;
     console.log("[record-investment] Authenticated user:", userId);
-    const db = supabaseAdmin || supabase;
+    const db = getAuthenticatedDb(token);
     console.log("[record-investment] Using DB client:", supabaseAdmin ? "admin (service role)" : "anon");
 
     const { securityId, symbol, name, amount, baseAmount, strategyId, paymentReference, shareCount, paymentMethod, feesBreakdown } = req.body;
@@ -3404,7 +3408,7 @@ app.post("/api/record-investment", async (req, res) => {
     // Rollback wallet deduction if anything failed after deduction was successful
     if (typeof paymentMethod !== 'undefined' && paymentMethod === "wallet" && typeof deductionSuccessful !== 'undefined' && deductionSuccessful && typeof originalWalletBalance !== 'undefined' && originalWalletBalance !== null) {
       try {
-        const db = supabaseAdmin || supabase;
+        const db = getAuthenticatedDb(token);
         console.log(`[Wallet] Rollback — Attempting to restore user wallet balance to ${originalWalletBalance}`);
         await db.from("wallets").update({ balance: originalWalletBalance }).eq("user_id", userId);
       } catch (rollbackErr) {
@@ -3420,10 +3424,10 @@ app.post("/api/eft-deposit", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   try {
     if (!supabase) return res.status(500).json({ success: false, error: "Database not connected" });
-    const { user, error: authError } = await authenticateUser(req);
+    const { user, token, error: authError } = await authenticateUser(req);
     if (authError || !user) return res.status(401).json({ success: false, error: "Unauthorized" });
 
-    const db = supabaseAdmin || supabase;
+    const db = getAuthenticatedDb(token);
     const userId = user.id;
     const { amount, reference, securityId, symbol, name, strategyId, baseAmount, shareCount } = req.body;
 
@@ -3757,7 +3761,7 @@ app.post("/api/user/ensure-mint-number", async (req, res) => {
     if (!mintColumnAvailable) {
       return res.json({ success: true, mint_number: null });
     }
-    const { user, error: authError } = await authenticateUser(req);
+    const { user, token, error: authError } = await authenticateUser(req);
     if (authError || !user) {
       return res.status(401).json({ success: false, error: authError || "Unauthorized" });
     }
@@ -3827,12 +3831,12 @@ app.get("/api/user/holdings", async (req, res) => {
       return res.status(500).json({ success: false, error: "Database not connected" });
     }
 
-    const { user, error: authError } = await authenticateUser(req);
+    const { user, token, error: authError } = await authenticateUser(req);
     if (authError || !user) {
       return res.status(401).json({ success: false, error: authError || "Unauthorized" });
     }
 
-    const db = supabaseAdmin || supabase;
+    const db = getAuthenticatedDb(token);
     const userId = user.id;
 
     let holdings, holdingsError;
@@ -4008,7 +4012,7 @@ app.get("/api/user/strategies", async (req, res) => {
       return res.status(503).json({ success: false, error: "Database not available. Please check server configuration." });
     }
 
-    const { user, error: authError } = await authenticateUser(req);
+    const { user, token, error: authError } = await authenticateUser(req);
     if (authError || !user) {
       console.log("[user/strategies] Auth error:", authError);
       return res.status(401).json({ success: false, error: authError || "Unauthorized" });
@@ -4016,7 +4020,7 @@ app.get("/api/user/strategies", async (req, res) => {
 
     console.log("[user/strategies] User authenticated:", user.id);
 
-    const db = supabaseAdmin || supabase;
+    const db = getAuthenticatedDb(token);
     const userId = user.id;
 
     // First, get user's strategy investments from transactions
@@ -4263,12 +4267,12 @@ app.get("/api/user/transactions", async (req, res) => {
       return res.status(500).json({ success: false, error: "Database not connected" });
     }
 
-    const { user, error: authError } = await authenticateUser(req);
+    const { user, token, error: authError } = await authenticateUser(req);
     if (authError || !user) {
       return res.status(401).json({ success: false, error: authError || "Unauthorized" });
     }
 
-    const db = supabaseAdmin || supabase;
+    const db = getAuthenticatedDb(token);
     const userId = user.id;
     const limit = parseInt(req.query.limit) || 50;
 
@@ -4401,12 +4405,12 @@ app.get("/api/debug/user-investments", async (req, res) => {
       return res.status(500).json({ success: false, error: "Database not connected" });
     }
 
-    const { user, error: authError } = await authenticateUser(req);
+    const { user, token, error: authError } = await authenticateUser(req);
     if (authError || !user) {
       return res.status(401).json({ success: false, error: authError || "Unauthorized" });
     }
 
-    const db = supabaseAdmin || supabase;
+    const db = getAuthenticatedDb(token);
     const userId = user.id;
 
     const [holdingsResult, transactionsResult] = await Promise.all([
@@ -6353,7 +6357,7 @@ app.post("/api/ozow/initiate", async (req, res) => {
 // Called from the success page to record the investment when the notify webhook hasn't fired yet
 app.post("/api/ozow/record-success", async (req, res) => {
   try {
-    const { user, error: authError } = await authenticateUser(req);
+    const { user, token, error: authError } = await authenticateUser(req);
     if (authError || !user) {
       return res.status(401).json({ success: false, error: "Unauthorized" });
     }
@@ -6370,7 +6374,7 @@ app.post("/api/ozow/record-success", async (req, res) => {
       return res.status(400).json({ success: false, error: "Invalid transaction reference" });
     }
 
-    const db = supabaseAdmin || supabase;
+    const db = getAuthenticatedDb(token);
     if (!db) return res.status(500).json({ success: false, error: "DB unavailable" });
 
     // Deduplication
