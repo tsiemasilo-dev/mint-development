@@ -21,6 +21,7 @@ import PaymentMethodModal from "./components/PaymentMethodModal.jsx";
 import FactsheetPage from "./pages/FactsheetPage.jsx";
 import OpenStrategiesPage from "./pages/OpenStrategiesPage.jsx";
 import MorePage from "./pages/MorePage.jsx";
+import ManageSubscriptionsPage from "./pages/ManageSubscriptionsPage.jsx";
 import OnboardingPage from "./pages/OnboardingPage.jsx";
 import InstantLiquidityPage from "./pages/credit/InstantLiquidity.jsx";
 import { useProfile } from "./lib/useProfile";
@@ -1814,6 +1815,14 @@ const App = () => {
       >
         <MorePage onNavigate={navigateTo} />
       </AppLayout>
+    );
+  }
+
+  if (currentPage === "manageSubscriptions") {
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <ManageSubscriptionsPage onBack={goBack} />
+      </SwipeBackWrapper>
     );
   }
 

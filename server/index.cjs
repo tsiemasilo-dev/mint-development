@@ -2797,6 +2797,66 @@ app.post("/api/reconcile-payments", async (req, res) => {
   }
 });
 
+// ── GET user's strategy subscriptions ─────────────────────────────────────
+app.get("/api/user/strategy-subscriptions", async (req, res) => {
+  try {
+    const { user, error: authError } = await authenticateUser(req);
+    if (authError || !user) return res.status(401).json({ success: false, error: "Unauthorized" });
+
+    const client = await pgPool.connect();
+    try {
+      const result = await client.query(
+        `SELECT id, strategy_id, strategy_name, next_billing_date, amount_cents, status, created_at
+         FROM strategy_subscriptions
+         WHERE user_id = $1
+         ORDER BY created_at DESC`,
+        [user.id]
+      );
+      return res.json({ success: true, subscriptions: result.rows });
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error("[strategy-subscriptions] GET error:", err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ── PATCH update strategy subscription status ──────────────────────────────
+app.patch("/api/user/strategy-subscriptions/:id", async (req, res) => {
+  try {
+    const { user, error: authError } = await authenticateUser(req);
+    if (authError || !user) return res.status(401).json({ success: false, error: "Unauthorized" });
+
+    const { id } = req.params;
+    const { status } = req.body;
+    if (!["active", "cancelled"].includes(status)) {
+      return res.status(400).json({ success: false, error: "status must be 'active' or 'cancelled'" });
+    }
+
+    const client = await pgPool.connect();
+    try {
+      const result = await client.query(
+        `UPDATE strategy_subscriptions
+         SET status = $1, updated_at = NOW()
+         WHERE id = $2 AND user_id = $3
+         RETURNING id, status`,
+        [status, id, user.id]
+      );
+      if (result.rowCount === 0) {
+        return res.status(404).json({ success: false, error: "Subscription not found" });
+      }
+      console.log(`[strategy-subscriptions] User ${user.id} set subscription ${id} to ${status}`);
+      return res.json({ success: true, subscription: result.rows[0] });
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error("[strategy-subscriptions] PATCH error:", err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.post("/api/record-investment", async (req, res) => {
   try {
     console.log("[record-investment] === ENDPOINT CALLED ===");
