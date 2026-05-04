@@ -69,6 +69,7 @@ const SwipeableBalanceCard = ({
   overrideWalletBalance, // Rands — replaces the CASH footer value
   managedByLabel,        // For child cards: "Managed by parent · Age X · Independent at Y"
 }) => {
+  const childMode = !!familyMemberId;
   const [activeTab, setActiveTab] = useState("m");
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
