@@ -1222,28 +1222,11 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
             </motion.div>
           )}
 
-          {/* Quick actions — matching home page 4-col grid */}
-          <section className="flex flex-col gap-3">
-            <div className="grid grid-cols-4 gap-2 text-[11px] font-medium">
-              {[
-                { label: "Invest", icon: LayoutGrid, onClick: () => setShowInvest(true) },
-                { label: openingTransfer ? "Loading" : "Transfer", icon: ArrowDownToLine, onClick: openTransferModal, disabled: openingTransfer },
-                { label: "Learn", icon: BookOpen, onClick: () => setShowLearn(true) },
-                { label: "Goals", icon: Target, onClick: () => {} },
-              ].map((a, i) => {
-                const Icon = a.icon;
-                return (
-                  <button key={i} type="button" onClick={a.onClick} disabled={a.disabled}
-                    className={`flex flex-col items-center gap-2 rounded-2xl px-1 py-3 shadow-md transition-all active:scale-95 active:shadow-sm ${a.disabled ? "cursor-wait border border-slate-200/60 bg-slate-100/70 text-slate-400" : "bg-white text-slate-700"}`}>
-                    <span className={`flex h-8 w-8 items-center justify-center rounded-full ${a.disabled ? "bg-slate-200 text-slate-400" : "bg-violet-50 text-violet-700"}`}>
-                      <Icon className="h-4 w-4" />
-                    </span>
-                    <span className="text-center leading-tight">{a.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
+          {/* Quick actions */}
+          <motion.div variants={container} className="grid grid-cols-2 gap-2">
+            <ChildQuickAction label="Invest" icon={LayoutGrid} onClick={() => setShowInvest(true)} delay={0.02} />
+            <ChildQuickAction label={openingTransfer ? "Loading" : "Transfer"} icon={ArrowDownToLine} onClick={openTransferModal} disabled={openingTransfer} delay={0.04} />
+          </motion.div>
 
           {/* ── Best performing assets (matching HomePage) ── */}
           <section>
