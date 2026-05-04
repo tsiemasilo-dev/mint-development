@@ -67,9 +67,14 @@ function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onCl
     setSaving(true);
     setError("");
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
       const res = await fetch("/api/child-wallet", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           action: "transfer",
           family_member_id: child.id,
@@ -92,19 +97,17 @@ function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onCl
 
   return (
     <motion.div
-      className="fixed inset-0 z-50 flex items-end justify-center"
+      className="fixed inset-0 z-50 flex items-center justify-center px-4"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
     >
       <motion.div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <motion.div
-        className="relative w-full max-w-md bg-white rounded-t-3xl shadow-2xl overflow-hidden pb-[env(safe-area-inset-bottom)]"
-        initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
+        className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden"
+        initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
         transition={{ type: "spring", stiffness: 380, damping: 38 }}
       >
-        <div className="flex justify-center pt-3 pb-1"><div className="h-1 w-10 rounded-full bg-slate-200" /></div>
-
-        <div className="px-6 pt-3 pb-8">
+        <div className="px-6 pt-5 pb-8">
           {!success ? (
             <>
               <div className="flex items-center justify-between mb-6">
@@ -253,8 +256,9 @@ function InvestModal({ child, onInvest, onClose }) {
       if (!supabase) return;
       const { data } = await supabase
         .from("strategies_c")
-        .select("id, name, description, risk_level, min_investment, is_featured, strategy_metrics(*)")
-        .eq("is_active", true)
+        .select("id, name, description, risk_level, min_investment, is_featured, is_kid_strategy, strategy_metrics(*)")
+        .eq("status", "active")
+        .eq("is_kid_strategy", true)
         .order("is_featured", { ascending: false })
         .order("name")
         .order("as_of_date", { foreignTable: "strategy_metrics", ascending: false })
@@ -314,20 +318,18 @@ function InvestModal({ child, onInvest, onClose }) {
 
   return (
     <motion.div
-      className="fixed inset-0 z-50 flex items-end justify-center"
+      className="fixed inset-0 z-50 flex items-center justify-center px-4"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
     >
       <motion.div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <motion.div
-        className="relative w-full max-w-md bg-white rounded-t-3xl shadow-2xl overflow-hidden pb-[env(safe-area-inset-bottom)]"
+        className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden"
         style={{ maxHeight: "85vh" }}
-        initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
+        initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
         transition={{ type: "spring", stiffness: 380, damping: 38 }}
       >
-        <div className="flex justify-center pt-3 pb-1"><div className="h-1 w-10 rounded-full bg-slate-200" /></div>
-
-        <div className="px-6 pt-3 pb-8 overflow-y-auto" style={{ maxHeight: "calc(85vh - 24px)" }}>
+        <div className="px-6 pt-5 pb-8 overflow-y-auto" style={{ maxHeight: "85vh" }}>
           {!success ? (
             <>
               <div className="flex items-center justify-between mb-4">
@@ -602,18 +604,16 @@ function ChildQuickAction({ label, icon: Icon, onClick, delay = 0, disabled = fa
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`relative flex min-w-0 flex-col items-center gap-2 rounded-2xl px-1 py-3 text-[10.5px] font-medium transition-all active:shadow-sm ${
-        disabled
+      className={`relative flex min-w-0 flex-col items-center gap-2 rounded-2xl px-1 py-3 text-[10.5px] font-medium transition-all active:shadow-sm ${disabled
           ? "cursor-wait border border-slate-200/60 bg-slate-100/70 text-slate-400"
           : "bg-white text-slate-700 shadow-md active:scale-95"
-      }`}
+        }`}
       variants={item}
       transition={{ type: "spring", stiffness: 300, damping: 26, delay }}
       whileTap={{ scale: disabled ? 1 : 0.95 }}
     >
-      <span className={`flex h-8 w-8 items-center justify-center rounded-full ${
-        disabled ? "bg-slate-200 text-slate-400" : "bg-violet-50 text-violet-700"
-      }`}>
+      <span className={`flex h-8 w-8 items-center justify-center rounded-full ${disabled ? "bg-slate-200 text-slate-400" : "bg-violet-50 text-violet-700"
+        }`}>
         <Icon className="h-4 w-4" />
       </span>
       <span className="max-w-full truncate text-center leading-tight">{label}</span>
@@ -871,8 +871,8 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
                 <p className="text-base font-bold text-slate-900">Complete Profile</p>
                 <p className="text-xs text-slate-400">
                   {step === "id" ? "Step 1 — ID number" :
-                   step === "poa" ? "Proof of address" :
-                   "Responsibility agreement"}
+                    step === "poa" ? "Proof of address" :
+                      "Responsibility agreement"}
                 </p>
               </div>
             </div>
@@ -1134,12 +1134,15 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
             <div className="relative w-full touch-pan-y h-auto">
               <div className="relative h-auto rounded-[28px] border border-white/10">
                 <SwipeableBalanceCard
-                  userId={userId}
+                  userId={null}
                   isBackFacing
                   forceVisible={isCardVisible}
-                  mintNumber={profile?.mintNumber}
+                  mintNumber={child?.mint_number}
                   overrideBalance={childBalance / 100}
                   overrideWalletBalance={childBalance / 100}
+                  childMode
+                  parentName={parentName}
+                  childAge={age}
                 />
               </div>
             </div>
@@ -1174,12 +1177,9 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
           )}
 
           {/* Quick actions */}
-          <motion.div variants={container} className="grid grid-cols-5 gap-2">
+          <motion.div variants={container} className="grid grid-cols-2 gap-2">
             <ChildQuickAction label="Invest" icon={LayoutGrid} onClick={() => setShowInvest(true)} delay={0.02} />
-            <ChildQuickAction label="Goals" icon={Target} onClick={() => navigate("investments")} delay={0.04} />
-            <ChildQuickAction label={openingTransfer ? "Loading" : "Deposit"} icon={ArrowDownToLine} onClick={openTransferModal} disabled={openingTransfer} delay={0.06} />
-            <ChildQuickAction label="Family" icon={Users} onClick={() => navigate("family")} delay={0.08} />
-            <ChildQuickAction label="Learn" icon={BookOpen} onClick={() => setShowLearn(true)} delay={0.10} />
+            <ChildQuickAction label={openingTransfer ? "Loading" : "Transfer"} icon={ArrowDownToLine} onClick={openTransferModal} disabled={openingTransfer} delay={0.04} />
           </motion.div>
 
           <motion.div variants={item}>
@@ -1281,13 +1281,12 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600">KYC Status</span>
                   <span
-                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide border ${
-                      childKycStatus === "completed"
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide border ${childKycStatus === "completed"
                         ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                         : childKycStatus === "rejected"
                           ? "bg-red-50 text-red-700 border-red-200"
                           : "bg-amber-50 text-amber-700 border-amber-200"
-                    }`}
+                      }`}
                   >
                     <span className={`h-1.5 w-1.5 rounded-full ${childKycStatus === "pending" ? "animate-pulse" : ""}`} style={{ backgroundColor: "currentColor" }} />
                     {childKycLabel}

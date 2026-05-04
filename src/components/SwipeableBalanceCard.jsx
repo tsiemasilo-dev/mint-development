@@ -66,6 +66,9 @@ const SwipeableBalanceCard = ({
   mintNumber: mintNumberProp,
   overrideBalance,       // Rands — replaces the big portfolio number
   overrideWalletBalance, // Rands — replaces the CASH footer value
+  childMode = false,     // hides parent holdings, shows managed-by bar
+  parentName,
+  childAge,
 }) => {
   const [activeTab, setActiveTab] = useState("m");
   const [isOpen, setIsOpen] = useState(false);
@@ -879,8 +882,8 @@ const SwipeableBalanceCard = ({
         </div>
       </div>
 
-      {/* Asset selector */}
-      <div ref={dropdownRef} className="relative mt-3">
+      {/* Asset selector — hidden in child mode */}
+      <div ref={dropdownRef} className={`relative mt-3${childMode ? " hidden" : ""}`}>
         <button
           onClick={() => setIsOpen(!isOpen)}
           className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/15"
@@ -962,6 +965,21 @@ const SwipeableBalanceCard = ({
           </div>
         </div>
       </div>
+
+      {/* Managed-by bar — child accounts only */}
+      {childMode && (
+        <div
+          className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2 rounded-full"
+          style={{ background: "rgba(0,0,0,0.25)", border: "1px solid rgba(255,255,255,0.08)" }}
+        >
+          <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "#34d399" }} />
+          <span className="text-[10px] font-medium tracking-wide" style={{ color: "rgba(255,255,255,0.65)" }}>
+            Managed by {parentName || "parent"}
+            {childAge != null ? ` · Age ${childAge}` : ""}
+            {" · Independent at 18"}
+          </span>
+        </div>
+      )}
 
       <style>{`
         @keyframes pulse-dot {
