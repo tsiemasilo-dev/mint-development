@@ -1174,47 +1174,44 @@ const LoanCalculatorStep = ({ onSignedContinue }) => {
 
          {/* ── Sliders card ── */}
          <div className="bg-white rounded-[24px] px-5 py-5">
-            {/* Amount slider */}
+            {/* Amount input */}
             <div className="space-y-3">
                <div className="flex items-center justify-between">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Loan Amount</p>
-                  <div className="flex items-baseline gap-0.5">
-                     <span className="text-[12px] font-medium text-slate-400">R</span>
-                     <span className="text-[17px] font-bold tracking-[-0.02em] text-slate-900">{formatInt(loanAmount)}</span>
-                  </div>
+                  <span className="text-[10px] text-slate-400 font-medium">R {formatInt(MIN_LOAN_AMOUNT)} – R {formatInt(MAX_LOAN_AMOUNT)}</span>
                </div>
-               <div
-                  ref={amountTrackRef}
-                  className="relative h-[54px] rounded-2xl bg-slate-100 overflow-visible cursor-pointer select-none touch-none"
-                  onMouseDown={(e) => beginDrag("amount", e)}
-               >
-                  <div
-                     className="absolute top-0 left-0 h-[54px] rounded-2xl overflow-hidden flex items-center justify-between px-4"
-                     style={{
-                        width: `${Math.max(4, amountPct * 100)}%`,
-                        background: "linear-gradient(90deg, #160d2a 0%, #2a1a46 100%)"
+               <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[15px] font-semibold text-slate-400 pointer-events-none">R</span>
+                  <input
+                     type="number"
+                     inputMode="numeric"
+                     min={MIN_LOAN_AMOUNT}
+                     max={MAX_LOAN_AMOUNT}
+                     step={AMOUNT_STEP}
+                     value={loanAmount}
+                     onChange={(e) => {
+                        const raw = Number(e.target.value);
+                        if (!isNaN(raw)) setLoanAmount(clamp(raw, MIN_LOAN_AMOUNT, MAX_LOAN_AMOUNT));
                      }}
-                  >
-                     <div className="flex items-baseline gap-1" style={{ opacity: amountPct < LIGHT_THRESHOLD ? 0 : 1 }}>
-                        <span className="text-[12px] font-medium text-white/50">R</span>
-                        <span className="text-[22px] font-bold tracking-[-0.02em] text-white leading-none">{formatInt(loanAmount)}</span>
-                     </div>
-                     <div className="flex flex-col gap-[3px] ml-2 shrink-0">
-                        <span className="block w-[3px] h-[3px] rounded-full bg-white/20" />
-                        <span className="block w-[3px] h-[3px] rounded-full bg-white/20" />
-                        <span className="block w-[3px] h-[3px] rounded-full bg-white/20" />
-                     </div>
-                  </div>
-                  <div
-                     className={`absolute top-1/2 -translate-y-1/2 text-[13px] font-bold text-slate-700 whitespace-nowrap transition-opacity ${amountPct < LIGHT_THRESHOLD ? "opacity-100" : "opacity-0"}`}
-                     style={{ left: `calc(${Math.max(4, amountPct * 100)}% + 10px)` }}
-                  >
-                     R {formatInt(loanAmount)}
-                  </div>
+                     onBlur={(e) => {
+                        const raw = Number(e.target.value);
+                        const snapped = snap(isNaN(raw) ? MIN_LOAN_AMOUNT : raw, MIN_LOAN_AMOUNT, MAX_LOAN_AMOUNT, AMOUNT_STEP);
+                        setLoanAmount(snapped);
+                     }}
+                     className="w-full h-[54px] rounded-2xl bg-slate-100 pl-9 pr-4 text-[22px] font-bold tracking-[-0.02em] text-slate-900 outline-none focus:ring-2 focus:ring-[#2a1a46]/30 appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  />
                </div>
                <div className="flex justify-between px-0.5">
-                  <span className="text-[10px] text-slate-400 font-medium">R 1,000</span>
-                  <span className="text-[10px] text-slate-400 font-medium">R 9,000</span>
+                  <button
+                     type="button"
+                     onClick={() => setLoanAmount(a => snap(Math.max(MIN_LOAN_AMOUNT, a - AMOUNT_STEP), MIN_LOAN_AMOUNT, MAX_LOAN_AMOUNT, AMOUNT_STEP))}
+                     className="text-[11px] font-semibold text-[#2a1a46] bg-slate-100 rounded-xl px-3 py-1.5 active:opacity-70"
+                  >− R{formatInt(AMOUNT_STEP)}</button>
+                  <button
+                     type="button"
+                     onClick={() => setLoanAmount(a => snap(Math.min(MAX_LOAN_AMOUNT, a + AMOUNT_STEP), MIN_LOAN_AMOUNT, MAX_LOAN_AMOUNT, AMOUNT_STEP))}
+                     className="text-[11px] font-semibold text-[#2a1a46] bg-slate-100 rounded-xl px-3 py-1.5 active:opacity-70"
+                  >+ R{formatInt(AMOUNT_STEP)}</button>
                </div>
             </div>
 
