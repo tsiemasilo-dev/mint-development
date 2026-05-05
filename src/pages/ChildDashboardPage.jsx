@@ -252,16 +252,43 @@ function InvestModal({ child, onInvest, onClose }) {
     setLoading(true);
     try {
       if (!supabase) return;
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("strategies_c")
-        .select("id, name, description, risk_level, min_investment, is_featured, icon_url")
-        .eq("is_kid_strategy", true)
+        .select("id, name, short_name, description, risk_level, sector, tags, min_investment, is_featured, holdings, strategy_metrics(*)")
         .eq("status", "active")
+        .eq("is_kid_strategy", true)
         .eq("is_public", true)
         .order("is_featured", { ascending: false })
         .order("name");
-      if (error) console.error("[child-invest] strategies query error:", error.message);
-      setStrategies(data || []);
+
+      const rows = data || [];
+
+      // Collect all holding symbols to fetch logos
+      const allSymbols = [...new Set(
+        rows.flatMap(s => (Array.isArray(s.holdings) ? s.holdings : []).map(h => h.symbol || h.ticker).filter(Boolean))
+      )];
+      let secMap = {};
+      if (allSymbols.length > 0) {
+        const { data: secs } = await supabase
+          .from("securities_c")
+          .select("symbol, name, logo_url")
+          .in("symbol", allSymbols);
+        (secs || []).forEach(s => { secMap[s.symbol] = s; });
+      }
+
+      const enriched = rows.map(s => {
+        const metrics = Array.isArray(s.strategy_metrics)
+          ? [...s.strategy_metrics].sort((a, b) => (b.as_of_date || "").localeCompare(a.as_of_date || ""))[0]
+          : s.strategy_metrics;
+        const r_ytd = metrics?.r_ytd ?? metrics?.r_ytd_pct ?? metrics?.r_1y ?? null;
+        const ytd_as_of_date = metrics?.as_of_date ?? null;
+        const holdingsList = (Array.isArray(s.holdings) ? s.holdings : [])
+          .sort((a, b) => Number(b.weight || 0) - Number(a.weight || 0))
+          .map(h => ({ symbol: h.symbol || h.ticker, logo_url: secMap[h.symbol || h.ticker]?.logo_url || null }));
+        return { ...s, r_ytd, ytd_as_of_date, holdingsList };
+      });
+
+      setStrategies(enriched);
     } catch (e) { console.error("[child-invest] strategies", e); }
     finally { setLoading(false); }
   }
@@ -385,48 +412,125 @@ function InvestModal({ child, onInvest, onClose }) {
                   </div>
 
                   {loading ? (
-                    <div className="flex items-center justify-center py-10">
-                      <RefreshCw className="h-5 w-5 text-slate-300 animate-spin" />
+                    <div className="space-y-3">
+                      {[0, 1].map(i => (
+                        <div key={i} className="rounded-2xl border border-slate-100 bg-white p-4 space-y-3 animate-pulse">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="space-y-2 flex-1">
+                              <div className="h-4 w-32 bg-slate-100 rounded" />
+                              <div className="h-3 w-48 bg-slate-100 rounded" />
+                              <div className="h-3 w-24 bg-slate-100 rounded" />
+                            </div>
+                            <div className="h-12 w-24 bg-slate-100 rounded-xl" />
+                          </div>
+                          <div className="flex gap-2">
+                            <div className="h-6 w-16 bg-slate-100 rounded-full" />
+                            <div className="h-6 w-20 bg-slate-100 rounded-full" />
+                          </div>
+                          <div className="h-9 bg-slate-50 rounded-xl" />
+                        </div>
+                      ))}
                     </div>
                   ) : filtered.length === 0 ? (
                     <p className="text-center text-sm text-slate-400 py-8">No strategies found.</p>
                   ) : (
-                    <div className="space-y-2 max-h-[45vh] overflow-y-auto pr-1">
+                    <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-0.5">
                       {filtered.map((s) => {
-                        const risk = (s.risk_level || "medium").toLowerCase();
-                        const rc = riskColors[risk] || riskColors.medium;
+                        const ytd = s.r_ytd;
+                        const ytdPct = ytd != null ? ytd * 100 : null;
+                        const isUp = (ytdPct ?? 0) >= 0;
                         return (
                           <button
                             key={s.id}
                             onClick={() => { setSelected(s); setUnits(1); setError(""); }}
-                            className="w-full flex items-center gap-3 rounded-xl bg-slate-50 border border-slate-100 p-3.5 text-left hover:bg-purple-50/50 hover:border-purple-200 transition active:scale-[0.98]"
+                            className="w-full rounded-2xl border border-slate-100 bg-white shadow-sm p-4 text-left hover:shadow-md hover:border-violet-200 transition active:scale-[0.98]"
                           >
-                            <div
-                              className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden"
-                              style={{ background: "linear-gradient(135deg,#ede9fe,#ddd6fe)" }}
-                            >
-                              {s.icon_url
-                                ? <img src={s.icon_url} alt={s.name} className="h-10 w-10 object-cover" />
-                                : <TrendingUp className="h-4 w-4 text-purple-600" />}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-bold text-slate-900 truncate">{s.name}</p>
-                              <div className="flex items-center gap-1.5 mt-0.5">
-                                <span
-                                  className="text-[10px] font-bold rounded-full px-2 py-0.5"
-                                  style={{ background: rc.bg, color: rc.text }}
-                                >
-                                  {s.risk_level || "Medium"}
-                                </span>
-                                {s.is_featured && <Star className="h-3 w-3 text-purple-400" />}
+                            {/* Header row */}
+                            <div className="flex items-start gap-3 mb-3">
+                              <div className="flex-1 min-w-0 space-y-0.5">
+                                <p className="text-sm font-semibold text-slate-900 truncate">{s.short_name || s.name}</p>
+                                <p className="text-xs text-slate-500 line-clamp-1">
+                                  {s.risk_level || "Balanced"}{s.description ? ` • ${s.description.substring(0, 60)}${s.description.length > 60 ? "…" : ""}` : ""}
+                                </p>
                                 {s.min_investment > 0 && (
-                                  <span className="text-[10px] text-slate-400">Min {fmt(s.min_investment)}</span>
+                                  <p className="text-[11px] text-slate-400">Min. {fmt(Math.round(s.min_investment * 100))}</p>
+                                )}
+                              </div>
+                              {/* Sparkline */}
+                              <div className="flex-shrink-0 rounded-xl bg-slate-50 px-2 py-1.5">
+                                <svg width="64" height="32" viewBox="0 0 64 32">
+                                  <defs>
+                                    <linearGradient id={`sg-${s.id}`} x1="0" y1="0" x2="0" y2="1">
+                                      <stop offset="0%" stopColor={isUp ? "#7c3aed" : "#e11d48"} stopOpacity="0.15" />
+                                      <stop offset="100%" stopColor={isUp ? "#7c3aed" : "#e11d48"} stopOpacity="0" />
+                                    </linearGradient>
+                                  </defs>
+                                  <polyline
+                                    points="0,28 10,22 20,24 30,14 40,10 50,16 64,6"
+                                    fill="none"
+                                    stroke={isUp ? "#7c3aed" : "#e11d48"}
+                                    strokeWidth="1.8"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  />
+                                  <circle cx="64" cy="6" r="2.5" fill={isUp ? "#7c3aed" : "#e11d48"} />
+                                </svg>
+                              </div>
+                            </div>
+                            {/* Badges */}
+                            <div className="flex flex-wrap gap-1.5 mb-3">
+                              {s.risk_level && (
+                                <span className="rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-xs font-semibold text-slate-600">{s.risk_level}</span>
+                              )}
+                              {s.sector && (
+                                <span className="rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-xs font-semibold text-slate-600">{s.sector}</span>
+                              )}
+                              {s.is_featured && (
+                                <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-0.5 text-xs font-semibold text-violet-600">Featured</span>
+                              )}
+                            </div>
+                            {/* YTD return */}
+                            <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 mb-3">
+                              <span className="text-xs font-semibold text-slate-600">YTD return</span>
+                              <div className="flex items-center gap-2">
+                                {ytdPct != null ? (
+                                  <span className={`text-xs font-semibold ${isUp ? "text-emerald-600" : "text-red-500"}`}>
+                                    {isUp ? "+" : ""}{ytdPct.toFixed(2)}%
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-slate-400">—</span>
+                                )}
+                                {s.ytd_as_of_date && (
+                                  <span className="text-[10px] text-slate-400">
+                                    {new Date(s.ytd_as_of_date).toLocaleDateString("en-ZA", { month: "short", day: "numeric" })}
+                                  </span>
                                 )}
                               </div>
                             </div>
-                            <div className="text-right flex-shrink-0">
-                              <ChevronRight className="h-3.5 w-3.5 text-slate-300 ml-auto" />
-                            </div>
+                            {/* Holdings snapshot */}
+                            {s.holdingsList?.length > 0 && (
+                              <div className="flex items-center gap-2">
+                                <div className="flex -space-x-2">
+                                  {s.holdingsList.slice(0, 3).map((h) => (
+                                    <div key={h.symbol} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white shadow-sm">
+                                      {h.logo_url ? (
+                                        <img src={h.logo_url} alt={h.symbol} className="h-full w-full object-cover" />
+                                      ) : (
+                                        <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">
+                                          {h.symbol?.substring(0, 2)}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                  {s.holdingsList.length > 3 && (
+                                    <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-slate-100 text-[10px] font-semibold text-slate-500">
+                                      +{s.holdingsList.length - 3}
+                                    </div>
+                                  )}
+                                </div>
+                                <span className="text-xs font-semibold text-slate-500">Holdings snapshot</span>
+                              </div>
+                            )}
                           </button>
                         );
                       })}
