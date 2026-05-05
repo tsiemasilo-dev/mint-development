@@ -251,14 +251,15 @@ function InvestModal({ child, onInvest, onClose }) {
     setLoading(true);
     try {
       if (!supabase) return;
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("strategies_c")
-        .select("id, name, description, risk_level, min_investment, is_featured, strategy_metrics(*)")
-        .eq("is_active", true)
+        .select("id, name, description, risk_level, min_investment, is_featured, icon_url")
+        .eq("is_kid_strategy", true)
+        .eq("status", "active")
+        .eq("is_public", true)
         .order("is_featured", { ascending: false })
-        .order("name")
-        .order("as_of_date", { foreignTable: "strategy_metrics", ascending: false })
-        .limit(1, { foreignTable: "strategy_metrics" });
+        .order("name");
+      if (error) console.error("[child-invest] strategies query error:", error.message);
       setStrategies(data || []);
     } catch (e) { console.error("[child-invest] strategies", e); }
     finally { setLoading(false); }
@@ -391,9 +392,6 @@ function InvestModal({ child, onInvest, onClose }) {
                   ) : (
                     <div className="space-y-2 max-h-[45vh] overflow-y-auto pr-1">
                       {filtered.map((s) => {
-                        const metric = s.strategy_metrics?.[0] || {};
-                        const changePct = metric.change_pct || metric.r_1y || 0;
-                        const isUp = changePct >= 0;
                         const risk = (s.risk_level || "medium").toLowerCase();
                         const rc = riskColors[risk] || riskColors.medium;
                         return (
@@ -403,12 +401,12 @@ function InvestModal({ child, onInvest, onClose }) {
                             className="w-full flex items-center gap-3 rounded-xl bg-slate-50 border border-slate-100 p-3.5 text-left hover:bg-purple-50/50 hover:border-purple-200 transition active:scale-[0.98]"
                           >
                             <div
-                              className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                              style={{ background: isUp ? "linear-gradient(135deg,#ede9fe,#ddd6fe)" : "linear-gradient(135deg,#e9d5ff,#d8b4fe)" }}
+                              className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden"
+                              style={{ background: "linear-gradient(135deg,#ede9fe,#ddd6fe)" }}
                             >
-                              {isUp
-                                ? <TrendingUp className="h-4 w-4 text-purple-600" />
-                                : <TrendingDown className="h-4 w-4 text-purple-500" />}
+                              {s.icon_url
+                                ? <img src={s.icon_url} alt={s.name} className="h-10 w-10 object-cover" />
+                                : <TrendingUp className="h-4 w-4 text-purple-600" />}
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-bold text-slate-900 truncate">{s.name}</p>
@@ -426,10 +424,7 @@ function InvestModal({ child, onInvest, onClose }) {
                               </div>
                             </div>
                             <div className="text-right flex-shrink-0">
-                              <p className="text-sm font-bold tabular-nums text-purple-600">
-                                {isUp ? "+" : ""}{changePct.toFixed(1)}%
-                              </p>
-                              <ChevronRight className="h-3.5 w-3.5 text-slate-300 ml-auto mt-0.5" />
+                              <ChevronRight className="h-3.5 w-3.5 text-slate-300 ml-auto" />
                             </div>
                           </button>
                         );
