@@ -233,13 +233,14 @@ function InvestModal({ child, onInvest, onClose }) {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
-  const [amount, setAmount] = useState("");
+  const [units, setUnits] = useState(1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
   const childBalance = child.available_balance || 0;
-  const numAmount = parseFloat(amount) || 0;
+  const minUnit = selected ? Math.max(1, selected.min_investment || 0) : 0;
+  const numAmount = units * minUnit;
   const amountCents = Math.round(numAmount * 100);
   const insufficient = amountCents > childBalance;
 
@@ -270,7 +271,7 @@ function InvestModal({ child, onInvest, onClose }) {
     if (numAmount <= 0) { setError("Enter a valid amount."); return; }
     if (insufficient) { setError("Insufficient funds in child's wallet."); return; }
 
-    const minInv = (selected.min_investment || 0);
+    const minInv = Math.round((selected.min_investment || 0) * 100);
     if (amountCents < minInv) {
       setError(`Minimum investment is ${fmt(minInv)}.`);
       return;
@@ -335,7 +336,7 @@ function InvestModal({ child, onInvest, onClose }) {
                 <div className="flex items-center gap-3">
                   {selected && (
                     <button
-                      onClick={() => { setSelected(null); setAmount(""); setError(""); }}
+                      onClick={() => { setSelected(null); setUnits(1); setError(""); }}
                       className="h-8 w-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition active:scale-95 mr-1"
                     >
                       <ArrowLeft className="h-3.5 w-3.5" />
@@ -397,7 +398,7 @@ function InvestModal({ child, onInvest, onClose }) {
                         return (
                           <button
                             key={s.id}
-                            onClick={() => setSelected(s)}
+                            onClick={() => { setSelected(s); setUnits(1); setError(""); }}
                             className="w-full flex items-center gap-3 rounded-xl bg-slate-50 border border-slate-100 p-3.5 text-left hover:bg-purple-50/50 hover:border-purple-200 transition active:scale-[0.98]"
                           >
                             <div
@@ -437,34 +438,32 @@ function InvestModal({ child, onInvest, onClose }) {
               {/* Amount entry (after selecting strategy) */}
               {selected && (
                 <div className="mt-2">
-                  <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2 ml-0.5">
+                  <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3 ml-0.5">
                     Investment Amount (ZAR)
                   </label>
-                  <div className="relative mb-4">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-bold text-slate-400">R</span>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      placeholder="0.00"
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-lg font-bold text-slate-800 text-center placeholder-slate-400 focus:border-violet-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-100 transition tabular-nums pl-10"
-                      autoFocus
-                    />
+
+                  {/* Unit counter */}
+                  <div className="flex items-center justify-between gap-4 mb-2">
+                    <button
+                      type="button"
+                      onClick={() => setUnits(u => Math.max(1, u - 1))}
+                      disabled={units <= 1}
+                      className="h-12 w-12 rounded-xl bg-slate-100 flex items-center justify-center text-xl font-bold text-slate-700 active:scale-95 disabled:opacity-30 transition"
+                    >−</button>
+                    <div className="flex-1 text-center">
+                      <p className="text-[32px] font-bold tracking-tight text-slate-900 leading-none">R{numAmount.toLocaleString("en-ZA")}</p>
+                      <p className="text-[11px] text-slate-400 mt-1">{units} × R{minUnit.toLocaleString("en-ZA")} unit{units > 1 ? "s" : ""}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setUnits(u => u + 1)}
+                      className="h-12 w-12 rounded-xl bg-[#2a1a46] flex items-center justify-center text-xl font-bold text-white active:scale-95 transition"
+                    >+</button>
                   </div>
 
-                  {/* Quick amounts */}
-                  <div className="flex gap-2 mb-5">
-                    {[100, 250, 500, 1000].map((v) => (
-                      <button
-                        key={v}
-                        onClick={() => setAmount(String(v))}
-                        className="flex-1 rounded-lg py-2 text-xs font-bold text-purple-600 bg-purple-50 border border-purple-100 hover:bg-purple-100 transition active:scale-95"
-                      >
-                        R{v}
-                      </button>
-                    ))}
-                  </div>
+                  <p className="text-center text-[10px] text-slate-400 mb-5">
+                    Min investment: R{minUnit.toLocaleString("en-ZA")} · Each unit adds R{minUnit.toLocaleString("en-ZA")}
+                  </p>
 
                   {/* Strategy info */}
                   <div className="rounded-xl bg-slate-50 border border-slate-100 p-3.5 mb-4">
@@ -475,7 +474,7 @@ function InvestModal({ child, onInvest, onClose }) {
                     </div>
                     <div className="flex justify-between text-sm mt-1">
                       <span className="text-slate-500">Amount</span>
-                      <span className="font-bold text-slate-900">R{numAmount.toFixed(2)}</span>
+                      <span className="font-bold text-slate-900">R{numAmount.toLocaleString("en-ZA")}</span>
                     </div>
                     <div className="flex justify-between text-sm mt-1">
                       <span className="text-slate-500">From</span>
@@ -503,7 +502,7 @@ function InvestModal({ child, onInvest, onClose }) {
                     className="w-full rounded-xl py-3.5 text-sm font-bold text-white transition active:scale-[0.98] disabled:opacity-50"
                     style={{ background: "linear-gradient(135deg,#1e1b4b,#312e81)" }}
                   >
-                    {saving ? "Investing…" : `Invest R${numAmount.toFixed(2)}`}
+                    {saving ? "Investing…" : `Invest R${numAmount.toLocaleString("en-ZA")}`}
                   </button>
                 </div>
               )}
@@ -519,7 +518,7 @@ function InvestModal({ child, onInvest, onClose }) {
               </div>
               <p className="text-lg font-bold text-slate-900">Investment Placed!</p>
               <p className="text-sm text-slate-500 mt-2">
-                R{numAmount.toFixed(2)} invested in {selected?.name} for {child.first_name}.
+                R{numAmount.toLocaleString("en-ZA")} invested in {selected?.name} for {child.first_name}.
               </p>
               <button
                 onClick={onClose}
