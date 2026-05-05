@@ -121,8 +121,9 @@ class TruIDClient {
       const responseHeaders = response.headers || {};
 
       if (response.status >= 400) {
-        console.error(`truID API Error (${response.status}):`, JSON.stringify(response.data, null, 2));
-        const err = new Error(typeof response.data === 'string' ? response.data : JSON.stringify(response.data));
+        console.error(`truID API Error (${response.status}) at ${url}:`, JSON.stringify(response.data, null, 2));
+        const body = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+        const err = new Error(`TruID ${response.status} at ${url}: ${body}`);
         err.status = response.status;
         throw err;
       }
@@ -133,7 +134,7 @@ class TruIDClient {
       if (err.status) throw err;
       const msg = err.message || 'Unknown error';
       console.error(`truID axios error for ${method} ${url}: ${msg}`);
-      const wrapped = new Error(`TruID network error: ${msg}`);
+      const wrapped = new Error(`TruID network error calling ${url}: ${msg}`);
       wrapped.status = 503;
       throw wrapped;
     }
