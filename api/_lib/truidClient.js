@@ -92,8 +92,11 @@ class TruIDClient {
 
   async fetchApi(client, method, path, body = null) {
     const url = `${this.baseURL}/${client}${path}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
     const options = {
       method,
+      signal: controller.signal,
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
@@ -106,7 +109,18 @@ class TruIDClient {
     console.log(`truID API Call: ${method} ${url}`);
     if (body) console.log(`truID Request Body:`, JSON.stringify(body, null, 2));
 
-    const response = await fetch(url, options);
+    let response;
+    try {
+      response = await fetch(url, options);
+    } catch (fetchErr) {
+      clearTimeout(timeoutId);
+      const cause = fetchErr.cause ? ` (cause: ${fetchErr.cause?.message || fetchErr.cause})` : '';
+      console.error(`truID fetch error for ${method} ${url}: ${fetchErr.message}${cause}`);
+      const err = new Error(`TruID network error: ${fetchErr.message}${cause}`);
+      err.status = 503;
+      throw err;
+    }
+    clearTimeout(timeoutId);
     const responseHeaders = {};
     response.headers.forEach((value, key) => {
       responseHeaders[key.toLowerCase()] = value;
