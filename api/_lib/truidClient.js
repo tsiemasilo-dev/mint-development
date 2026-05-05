@@ -1,4 +1,9 @@
+import axios from 'axios';
+import https from 'https';
+
 const readEnv = (key) => process.env[key] || process.env[`VITE_${key}`];
+
+const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
 class TruIDClient {
   constructor() {
@@ -92,57 +97,46 @@ class TruIDClient {
 
   async fetchApi(client, method, path, body = null) {
     const url = `${this.baseURL}/${client}${path}`;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
-    const options = {
-      method,
-      signal: controller.signal,
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'x-api-key': this.apiKey,
-        'Ocp-Apim-Subscription-Key': this.subscriptionKey
-      }
+    const headers = {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      'x-api-key': this.apiKey,
+      'Ocp-Apim-Subscription-Key': this.subscriptionKey
     };
-    if (body) options.body = JSON.stringify(body);
 
     console.log(`truID API Call: ${method} ${url}`);
     if (body) console.log(`truID Request Body:`, JSON.stringify(body, null, 2));
 
-    let response;
     try {
-      response = await fetch(url, options);
-    } catch (fetchErr) {
-      clearTimeout(timeoutId);
-      const cause = fetchErr.cause ? ` (cause: ${fetchErr.cause?.message || fetchErr.cause})` : '';
-      console.error(`truID fetch error for ${method} ${url}: ${fetchErr.message}${cause}`);
-      const err = new Error(`TruID network error: ${fetchErr.message}${cause}`);
-      err.status = 503;
-      throw err;
-    }
-    clearTimeout(timeoutId);
-    const responseHeaders = {};
-    response.headers.forEach((value, key) => {
-      responseHeaders[key.toLowerCase()] = value;
-    });
+      const response = await axios({
+        method,
+        url,
+        headers,
+        data: body || undefined,
+        httpsAgent,
+        timeout: 15000,
+        validateStatus: null
+      });
 
-    let data;
-    const text = await response.text();
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = text;
-    }
+      const responseHeaders = response.headers || {};
 
-    if (!response.ok) {
-      console.error(`truID API Error (${response.status}):`, typeof data === 'string' ? data : JSON.stringify(data, null, 2));
-      const err = new Error(typeof data === 'string' ? data : JSON.stringify(data));
-      err.status = response.status;
-      throw err;
-    }
+      if (response.status >= 400) {
+        console.error(`truID API Error (${response.status}):`, JSON.stringify(response.data, null, 2));
+        const err = new Error(typeof response.data === 'string' ? response.data : JSON.stringify(response.data));
+        err.status = response.status;
+        throw err;
+      }
 
-    console.log(`truID API Success (${response.status})`);
-    return { status: response.status, data, headers: responseHeaders };
+      console.log(`truID API Success (${response.status})`);
+      return { status: response.status, data: response.data, headers: responseHeaders };
+    } catch (err) {
+      if (err.status) throw err;
+      const msg = err.message || 'Unknown error';
+      console.error(`truID axios error for ${method} ${url}: ${msg}`);
+      const wrapped = new Error(`TruID network error: ${msg}`);
+      wrapped.status = 503;
+      throw wrapped;
+    }
   }
 
   async createCollection(options = {}) {
