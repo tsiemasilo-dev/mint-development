@@ -6,7 +6,10 @@ class TruIDClient {
   constructor() {
     this.apiKey = readEnv('TRUID_API_KEY');
     this.subscriptionKey = readEnv('TRUID_SUBSCRIPTION_KEY') || this.apiKey;
-    const configuredBase = readEnv('TRUID_API_BASE') || 'https://api.truidconnect.io';
+    let configuredBase = readEnv('TRUID_API_BASE') || 'https://api.truidconnect.io';
+    if (configuredBase && !configuredBase.startsWith('http://') && !configuredBase.startsWith('https://')) {
+      configuredBase = `https://${configuredBase}`;
+    }
     this.baseURL = configuredBase.replace(/\/$/, '');
     this.companyId = readEnv('COMPANY_ID');
     this.brandId = readEnv('BRAND_ID');
