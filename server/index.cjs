@@ -1876,6 +1876,26 @@ app.post("/api/banking/initiate", async (req, res) => {
 
     if (!idNumber) {
       try {
+        idNumber = await getIdNumberWithFallback(db, user.id, null) || "";
+        if (idNumber) {
+          if (profile) {
+            await db.from("profiles").update({ id_number: idNumber }).eq("id", user.id);
+          } else {
+            await db.from("profiles").insert({
+              id: user.id,
+              first_name: firstName,
+              last_name: lastName,
+              id_number: idNumber
+            });
+          }
+        }
+      } catch (fallbackErr) {
+        console.warn("[initiate] Could not resolve ID from fallback:", fallbackErr.message);
+      }
+    }
+
+    if (!idNumber) {
+      try {
         const applicant = await getSumsubApplicantByExternalId(user.id);
         if (applicant?.info?.idDocs?.length) {
           const idDoc = applicant.info.idDocs.find(d => d.number) || {};
@@ -1886,11 +1906,9 @@ app.post("/api/banking/initiate", async (req, res) => {
           idNumber = idDoc.number || null;
         }
         if (idNumber) {
-          // Sync profile if it exists, otherwise create it
           if (profile) {
             await db.from("profiles").update({ id_number: idNumber }).eq("id", user.id);
           } else {
-            // If no profile exists, create one with what we have
             await db.from("profiles").insert({
               id: user.id,
               first_name: firstName,
