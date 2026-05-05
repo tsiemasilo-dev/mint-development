@@ -1,20 +1,16 @@
-import React, { useState, useEffect, useRef } from "react";
+﻿import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, ArrowUpRight, ArrowDownLeft, X, TrendingUp, TrendingDown,
-  Wallet, BarChart3, ChevronRight,
+  ShieldCheck, Baby, Wallet, BarChart3, ChevronRight,
   RefreshCw, Search, Star, AlertCircle, Check, ClipboardList,
-  Target, Users, BookOpen, LayoutGrid, ArrowDownToLine,
 } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
 import { supabase } from "../lib/supabase";
 import MinorProofOfAddressDeclaration from "../components/MinorProofOfAddressDeclaration";
 import ChildResponsibilityAgreement from "../components/ChildResponsibilityAgreement";
-import SwipeableBalanceCard from "../components/SwipeableBalanceCard";
 
-const CARD_VISIBILITY_KEY = "mintBalanceVisible";
-
-// ─── helpers ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function getAge(dob) {
   if (!dob) return null;
@@ -31,14 +27,7 @@ function fmt(cents) {
   return `R\u202F${val.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function navigate(page) {
-  window.dispatchEvent(
-    new CustomEvent("navigate-within-app", { detail: { page } })
-  );
-}
-
-
-// ─── Animation variants ─────────────────────────────────────────────────────
+// â”€â”€â”€ Animation variants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const container = {
   hidden: {},
@@ -49,7 +38,21 @@ const item = {
   show: { opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 340, damping: 28 } },
 };
 
-// ─── Transfer Modal (bottom-sheet) ───────────────────────────────────────────
+// â”€â”€â”€ Avatar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+function Avatar({ name, gradient, size = "h-14 w-14", text = "text-xl" }) {
+  const initial = (name || "?")[0].toUpperCase();
+  return (
+    <div
+      className={`${size} rounded-2xl flex items-center justify-center font-bold text-white flex-shrink-0`}
+      style={{ background: gradient, aspectRatio: "1" }}
+    >
+      <span className={text}>{initial}</span>
+    </div>
+  );
+}
+
+// â”€â”€â”€ Transfer Modal (bottom-sheet) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onClose }) {
   const [amount, setAmount] = useState("");
@@ -132,14 +135,14 @@ function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onCl
                 <div>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Your Wallet</p>
                   <p className="text-sm font-bold text-slate-900 tabular-nums mt-0.5">
-                    {balancesLoading ? "Loading…" : fmt(parentBalance)}
+                    {balancesLoading ? "Loadingâ€¦" : fmt(parentBalance)}
                   </p>
                 </div>
                 <ArrowUpRight className="h-4 w-4 text-slate-300" />
                 <div className="text-right">
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{child.first_name}'s Wallet</p>
                   <p className="text-sm font-bold text-slate-900 tabular-nums mt-0.5">
-                    {balancesLoading ? "Loading…" : fmt(child.available_balance || 0)}
+                    {balancesLoading ? "Loadingâ€¦" : fmt(child.available_balance || 0)}
                   </p>
                 </div>
               </div>
@@ -195,7 +198,7 @@ function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onCl
                 className="w-full rounded-xl py-3.5 text-sm font-bold text-white transition active:scale-[0.98] disabled:opacity-50"
                 style={{ background: "linear-gradient(135deg,#1e1b4b,#312e81)" }}
               >
-                {saving ? "Transferring…" : `Transfer R${numAmount.toFixed(2)}`}
+                {saving ? "Transferringâ€¦" : `Transfer R${numAmount.toFixed(2)}`}
               </button>
             </>
           ) : (
@@ -226,21 +229,20 @@ function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onCl
   );
 }
 
-// ─── Invest Modal (bottom-sheet) — browse strategies & invest ────────────────
+// â”€â”€â”€ Invest Modal (bottom-sheet) â€” browse strategies & invest â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function InvestModal({ child, onInvest, onClose }) {
   const [strategies, setStrategies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
-  const [units, setUnits] = useState(1);
+  const [amount, setAmount] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
   const childBalance = child.available_balance || 0;
-  const minUnit = selected ? Math.max(1, selected.min_investment || 0) : 0;
-  const numAmount = units * minUnit;
+  const numAmount = parseFloat(amount) || 0;
   const amountCents = Math.round(numAmount * 100);
   const insufficient = amountCents > childBalance;
 
@@ -257,7 +259,6 @@ function InvestModal({ child, onInvest, onClose }) {
         .select("id, name, short_name, description, risk_level, sector, tags, min_investment, is_featured, holdings, strategy_metrics(*)")
         .eq("status", "active")
         .eq("is_kid_strategy", true)
-        .eq("is_public", true)
         .order("is_featured", { ascending: false })
         .order("name");
 
@@ -298,7 +299,7 @@ function InvestModal({ child, onInvest, onClose }) {
     if (numAmount <= 0) { setError("Enter a valid amount."); return; }
     if (insufficient) { setError("Insufficient funds in child's wallet."); return; }
 
-    const minInv = Math.round((selected.min_investment || 0) * 100);
+    const minInv = (selected.min_investment || 0);
     if (amountCents < minInv) {
       setError(`Minimum investment is ${fmt(minInv)}.`);
       return;
@@ -331,30 +332,21 @@ function InvestModal({ child, onInvest, onClose }) {
     s.name?.toLowerCase().includes(search.toLowerCase())
   );
 
-  const riskColors = {
-    low: { bg: "#faf5ff", text: "#7c3aed" },
-    medium: { bg: "#f3e8ff", text: "#8b5cf6" },
-    high: { bg: "#ede9fe", text: "#6d28d9" },
-    aggressive: { bg: "#ede9fe", text: "#6d28d9" },
-  };
-
   const inputCls =
     "w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 placeholder-slate-400 focus:border-violet-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-100 transition";
 
   return (
     <motion.div
-      className="fixed inset-0 z-50 flex items-end justify-center"
+      className="fixed inset-0 z-50 flex items-center justify-center px-4"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
     >
       <motion.div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <motion.div
-        className="relative w-full max-w-md bg-white rounded-t-3xl shadow-2xl overflow-hidden pb-[env(safe-area-inset-bottom)]"
-        style={{ maxHeight: "85vh" }}
-        initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
+        className="relative w-full max-w-md bg-white rounded-[32px] shadow-2xl overflow-hidden max-h-[85vh] overflow-y-auto"
+        initial={{ opacity: 0, scale: 0.95, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 16 }}
         transition={{ type: "spring", stiffness: 380, damping: 38 }}
       >
-        <div className="flex justify-center pt-3 pb-1"><div className="h-1 w-10 rounded-full bg-slate-200" /></div>
 
         <div className="px-6 pt-3 pb-8 overflow-y-auto" style={{ maxHeight: "calc(85vh - 24px)" }}>
           {!success ? (
@@ -363,7 +355,7 @@ function InvestModal({ child, onInvest, onClose }) {
                 <div className="flex items-center gap-3">
                   {selected && (
                     <button
-                      onClick={() => { setSelected(null); setUnits(1); setError(""); }}
+                      onClick={() => { setSelected(null); setAmount(""); setError(""); }}
                       className="h-8 w-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition active:scale-95 mr-1"
                     >
                       <ArrowLeft className="h-3.5 w-3.5" />
@@ -406,7 +398,7 @@ function InvestModal({ child, onInvest, onClose }) {
                       type="text"
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
-                      placeholder="Search strategies…"
+                      placeholder="Search strategiesâ€¦"
                       className={inputCls + " pl-10"}
                     />
                   </div>
@@ -442,7 +434,7 @@ function InvestModal({ child, onInvest, onClose }) {
                         return (
                           <button
                             key={s.id}
-                            onClick={() => { setSelected(s); setUnits(1); setError(""); }}
+                            onClick={() => setSelected(s)}
                             className="w-full rounded-2xl border border-slate-100 bg-white shadow-sm p-4 text-left hover:shadow-md hover:border-violet-200 transition active:scale-[0.98]"
                           >
                             {/* Header row */}
@@ -450,10 +442,10 @@ function InvestModal({ child, onInvest, onClose }) {
                               <div className="flex-1 min-w-0 space-y-0.5">
                                 <p className="text-sm font-semibold text-slate-900 truncate">{s.short_name || s.name}</p>
                                 <p className="text-xs text-slate-500 line-clamp-1">
-                                  {s.risk_level || "Balanced"}{s.description ? ` • ${s.description.substring(0, 60)}${s.description.length > 60 ? "…" : ""}` : ""}
+                                  {s.risk_level || "Balanced"}{s.description ? ` â€¢ ${s.description.substring(0, 60)}${s.description.length > 60 ? "â€¦" : ""}` : ""}
                                 </p>
                                 {s.min_investment > 0 && (
-                                  <p className="text-[11px] text-slate-400">Min. {fmt(Math.round(s.min_investment * 100))}</p>
+                                  <p className="text-[11px] text-slate-400">Min. {fmt(s.min_investment)}</p>
                                 )}
                               </div>
                               {/* Sparkline */}
@@ -498,7 +490,7 @@ function InvestModal({ child, onInvest, onClose }) {
                                     {isUp ? "+" : ""}{ytdPct.toFixed(2)}%
                                   </span>
                                 ) : (
-                                  <span className="text-xs text-slate-400">—</span>
+                                  <span className="text-xs text-slate-400">â€”</span>
                                 )}
                                 {s.ytd_as_of_date && (
                                   <span className="text-[10px] text-slate-400">
@@ -542,32 +534,34 @@ function InvestModal({ child, onInvest, onClose }) {
               {/* Amount entry (after selecting strategy) */}
               {selected && (
                 <div className="mt-2">
-                  <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3 ml-0.5">
+                  <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2 ml-0.5">
                     Investment Amount (ZAR)
                   </label>
-
-                  {/* Unit counter */}
-                  <div className="flex items-center justify-between gap-4 mb-2">
-                    <button
-                      type="button"
-                      onClick={() => setUnits(u => Math.max(1, u - 1))}
-                      disabled={units <= 1}
-                      className="h-12 w-12 rounded-xl bg-slate-100 flex items-center justify-center text-xl font-bold text-slate-700 active:scale-95 disabled:opacity-30 transition"
-                    >−</button>
-                    <div className="flex-1 text-center">
-                      <p className="text-[32px] font-bold tracking-tight text-slate-900 leading-none">R{numAmount.toLocaleString("en-ZA")}</p>
-                      <p className="text-[11px] text-slate-400 mt-1">{units} × R{minUnit.toLocaleString("en-ZA")} unit{units > 1 ? "s" : ""}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setUnits(u => u + 1)}
-                      className="h-12 w-12 rounded-xl bg-[#2a1a46] flex items-center justify-center text-xl font-bold text-white active:scale-95 transition"
-                    >+</button>
+                  <div className="relative mb-4">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-bold text-slate-400">R</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-lg font-bold text-slate-800 text-center placeholder-slate-400 focus:border-violet-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-100 transition tabular-nums pl-10"
+                      autoFocus
+                    />
                   </div>
 
-                  <p className="text-center text-[10px] text-slate-400 mb-5">
-                    Min investment: R{minUnit.toLocaleString("en-ZA")} · Each unit adds R{minUnit.toLocaleString("en-ZA")}
-                  </p>
+                  {/* Quick amounts */}
+                  <div className="flex gap-2 mb-5">
+                    {[100, 250, 500, 1000].map((v) => (
+                      <button
+                        key={v}
+                        onClick={() => setAmount(String(v))}
+                        className="flex-1 rounded-lg py-2 text-xs font-bold text-purple-600 bg-purple-50 border border-purple-100 hover:bg-purple-100 transition active:scale-95"
+                      >
+                        R{v}
+                      </button>
+                    ))}
+                  </div>
 
                   {/* Strategy info */}
                   <div className="rounded-xl bg-slate-50 border border-slate-100 p-3.5 mb-4">
@@ -578,7 +572,7 @@ function InvestModal({ child, onInvest, onClose }) {
                     </div>
                     <div className="flex justify-between text-sm mt-1">
                       <span className="text-slate-500">Amount</span>
-                      <span className="font-bold text-slate-900">R{numAmount.toLocaleString("en-ZA")}</span>
+                      <span className="font-bold text-slate-900">R{numAmount.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm mt-1">
                       <span className="text-slate-500">From</span>
@@ -606,7 +600,7 @@ function InvestModal({ child, onInvest, onClose }) {
                     className="w-full rounded-xl py-3.5 text-sm font-bold text-white transition active:scale-[0.98] disabled:opacity-50"
                     style={{ background: "linear-gradient(135deg,#1e1b4b,#312e81)" }}
                   >
-                    {saving ? "Investing…" : `Invest R${numAmount.toLocaleString("en-ZA")}`}
+                    {saving ? "Investingâ€¦" : `Invest R${numAmount.toFixed(2)}`}
                   </button>
                 </div>
               )}
@@ -622,7 +616,7 @@ function InvestModal({ child, onInvest, onClose }) {
               </div>
               <p className="text-lg font-bold text-slate-900">Investment Placed!</p>
               <p className="text-sm text-slate-500 mt-2">
-                R{numAmount.toLocaleString("en-ZA")} invested in {selected?.name} for {child.first_name}.
+                R{numAmount.toFixed(2)} invested in {selected?.name} for {child.first_name}.
               </p>
               <button
                 onClick={onClose}
@@ -639,40 +633,13 @@ function InvestModal({ child, onInvest, onClose }) {
   );
 }
 
-// ─── HoldingRow ──────────────────────────────────────────────────────────────
 
-function HoldingRow({ holding }) {
-  const isUp = (holding.unrealized_pnl || 0) >= 0;
-  const securitySymbol = holding.securities?.symbol || `SEC-${String(holding.security_id || "").slice(0, 6)}`;
-  const securityName = holding.securities?.name || "Security";
-  return (
-    <div className="flex items-center gap-3.5 rounded-xl shadow-lg border border-slate-200 p-4 bg-white">
-      <div
-        className="h-11 w-11 rounded-xl flex items-center justify-center flex-shrink-0"
-        style={{ background: isUp ? "linear-gradient(135deg,#ede9fe,#ddd6fe)" : "linear-gradient(135deg,#e9d5ff,#d8b4fe)" }}
-      >
-        {isUp
-          ? <TrendingUp className="h-5 w-5 text-purple-600" />
-          : <TrendingDown className="h-5 w-5 text-purple-500" />}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-bold text-slate-900 truncate">{securitySymbol}</p>
-        <p className="text-[11px] text-slate-600 truncate font-medium">{securityName}</p>
-      </div>
-      <div className="text-right flex-shrink-0">
-        <p className="text-sm font-bold text-slate-900 tabular-nums">{fmt(holding.market_value || 0)}</p>
-        <p className="text-[11px] font-semibold tabular-nums text-purple-600">
-          {isUp ? "+" : ""}{fmt(holding.unrealized_pnl || 0)}
-        </p>
-      </div>
-    </div>
-  );
-}
 
-// ─── TransactionRow ──────────────────────────────────────────────────────────
+
+// â”€â”€â”€ TransactionRow â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function TransactionRow({ tx }) {
-  const isCredit = tx.direction === "credit" || tx.type === "transfer_in";
+  const isCredit = tx.direction === "credit";
   const date = tx.created_at ? new Date(tx.created_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short" }) : "";
   return (
     <div className="flex items-center gap-3.5 py-3.5">
@@ -682,95 +649,18 @@ function TransactionRow({ tx }) {
           : <ArrowUpRight className="h-4.5 w-4.5 text-purple-600" />}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-slate-900 truncate">{tx.description || tx.type || "Transaction"}</p>
+        <p className="text-sm font-semibold text-slate-900 truncate">{tx.description || tx.name || "Transaction"}</p>
         <p className="text-[11px] text-slate-600 mt-0.5">{date}</p>
       </div>
       <p className="text-sm font-bold tabular-nums text-purple-600">
-        {isCredit ? "+" : "-"}{fmt(Math.abs(tx.amount || 0))}
+        {isCredit ? "+" : "-"}{fmt(Math.round(Math.abs(tx.amount || 0) * 100))}
       </p>
     </div>
   );
 }
 
-// ─── CompleteProfileModal ────────────────────────────────────────────────────
+// â”€â”€â”€ CompleteProfileModal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-function ChildQuickAction({ label, icon: Icon, onClick, delay = 0, disabled = false }) {
-  return (
-    <motion.button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={`relative flex min-w-0 flex-col items-center gap-2 rounded-2xl px-1 py-3 text-[10.5px] font-medium transition-all active:shadow-sm ${
-        disabled
-          ? "cursor-wait border border-slate-200/60 bg-slate-100/70 text-slate-400"
-          : "bg-white text-slate-700 shadow-md active:scale-95"
-      }`}
-      variants={item}
-      transition={{ type: "spring", stiffness: 300, damping: 26, delay }}
-      whileTap={{ scale: disabled ? 1 : 0.95 }}
-    >
-      <span className={`flex h-8 w-8 items-center justify-center rounded-full ${
-        disabled ? "bg-slate-200 text-slate-400" : "bg-violet-50 text-violet-700"
-      }`}>
-        <Icon className="h-4 w-4" />
-      </span>
-      <span className="max-w-full truncate text-center leading-tight">{label}</span>
-    </motion.button>
-  );
-}
-
-function LearnModal({ childName, onClose }) {
-  const lessons = [
-    { title: "Saving", text: "Cash set aside for plans, surprises, and short-term needs." },
-    { title: "Investing", text: "Money placed into assets that can grow or fall over time." },
-    { title: "Goals", text: "A target amount with a clear reason and time horizon." },
-  ];
-
-  return (
-    <motion.div
-      className="fixed inset-0 z-50 flex items-end justify-center"
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
-    >
-      <motion.div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <motion.div
-        className="relative w-full max-w-md overflow-hidden rounded-t-3xl bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl"
-        initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
-        transition={{ type: "spring", stiffness: 380, damping: 38 }}
-      >
-        <div className="flex justify-center pt-3 pb-1"><div className="h-1 w-10 rounded-full bg-slate-200" /></div>
-        <div className="px-6 pt-3 pb-8">
-          <div className="mb-5 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ background: "linear-gradient(135deg,#a78bfa,#7c3aed)" }}>
-                <BookOpen className="h-5 w-5 text-white" />
-              </div>
-              <div>
-                <p className="text-base font-bold text-slate-900">Learn</p>
-                <p className="text-xs text-slate-400">{childName}'s money basics</p>
-              </div>
-            </div>
-            <button
-              onClick={onClose}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200 active:scale-95"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-
-          <div className="space-y-3">
-            {lessons.map((lesson) => (
-              <div key={lesson.title} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3.5">
-                <p className="text-sm font-bold text-slate-900">{lesson.title}</p>
-                <p className="mt-1 text-xs leading-relaxed text-slate-500">{lesson.text}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </motion.div>
-    </motion.div>
-  );
-}
 
 function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
   const poaComplete = !!child.poa_declaration_url;
@@ -818,7 +708,7 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
       if (!child.poa_declaration_url) { setStep("poa"); }
       else if (!child.signed_agreement_url) { setStep("agreement"); }
       else {
-        // All steps already done — mark address_completed
+        // All steps already done â€” mark address_completed
         await fetch(`/api/family-members/${child.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -844,11 +734,8 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
 
       if (livesWithParent && pdfBuffer) {
         const uint8 = new Uint8Array(pdfBuffer);
-        const CHUNK = 0x8000;
         let bin = "";
-        for (let i = 0; i < uint8.length; i += CHUNK) {
-          bin += String.fromCharCode.apply(null, uint8.subarray(i, i + CHUNK));
-        }
+        for (let i = 0; i < uint8.length; i++) bin += String.fromCharCode(uint8[i]);
         const pdfBase64 = btoa(bin);
         const res = await fetch("/api/onboarding/upload-agreement", {
           method: "POST",
@@ -941,17 +828,17 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
 
   return (
     <motion.div
-      className="fixed inset-0 z-50 flex items-end justify-center"
+      className="fixed inset-0 z-50 flex items-center justify-center px-4"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
     >
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => { if (!saving) onClose(); }} />
       <motion.div
-        className="relative w-full max-w-md bg-white rounded-t-3xl shadow-2xl pb-[env(safe-area-inset-bottom)]"
-        initial={{ y: "100%" }}
-        animate={{ y: 0 }}
-        exit={{ y: "100%" }}
+        className="relative w-full max-w-md bg-white rounded-[32px] shadow-2xl max-h-[85vh] overflow-y-auto"
+        initial={{ opacity: 0, scale: 0.95, y: 16 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 16 }}
         transition={{ type: "spring", stiffness: 380, damping: 38 }}
       >
         <div className="h-1 w-full" style={{ background: "linear-gradient(90deg,#8b5cf6,#6366f1)" }} />
@@ -968,7 +855,7 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
               <div>
                 <p className="text-base font-bold text-slate-900">Complete Profile</p>
                 <p className="text-xs text-slate-400">
-                  {step === "id" ? "Step 1 — ID number" :
+                  {step === "id" ? "Step 1 â€” ID number" :
                    step === "poa" ? "Proof of address" :
                    "Responsibility agreement"}
                 </p>
@@ -1007,7 +894,7 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
                 className="w-full rounded-xl py-3.5 text-sm font-bold text-white transition active:scale-[0.98] disabled:opacity-50"
                 style={{ background: "linear-gradient(135deg,#1e1b4b,#312e81)" }}
               >
-                {saving ? "Saving…" : "Save & Continue"}
+                {saving ? "Savingâ€¦" : "Save & Continue"}
               </button>
             </div>
           )}
@@ -1042,16 +929,16 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
   );
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ─── Main Page ──────────────────════════════════════════════════════════════
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// â”€â”€â”€ Main Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 export default function ChildDashboardPage({ child: initialChild, onBack }) {
   const { profile } = useProfile();
   const isMounted = useRef(true);
-  const [userId, setUserId] = useState(null);
   const [child, setChild] = useState(initialChild);
   const [holdings, setHoldings] = useState([]);
+  const [strategyMap, setStrategyMap] = useState({});
   const [transactions, setTransactions] = useState([]);
   const [parentBalance, setParentBalance] = useState(null);
   const [parentBalanceLoading, setParentBalanceLoading] = useState(true);
@@ -1059,14 +946,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
   const [showTransfer, setShowTransfer] = useState(false);
   const [openingTransfer, setOpeningTransfer] = useState(false);
   const [showInvest, setShowInvest] = useState(false);
-  const [showLearn, setShowLearn] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
-  const [isCardVisible] = useState(() => {
-    if (typeof window !== "undefined") {
-      return window.localStorage.getItem(CARD_VISIBILITY_KEY) !== "false";
-    }
-    return true;
-  });
 
   const childName = [child?.first_name, child?.last_name].filter(Boolean).join(" ") || "Child";
   const age = getAge(child?.date_of_birth);
@@ -1089,15 +969,6 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
   const isProfileIncomplete = !child?.address_completed;
 
   useEffect(() => {
-    const getUser = async () => {
-      if (!supabase) return;
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) setUserId(session.user.id);
-    };
-    getUser();
-  }, []);
-
-  useEffect(() => {
     isMounted.current = true;
     fetchAll();
     return () => { isMounted.current = false; };
@@ -1105,13 +976,18 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
 
   async function fetchAll() {
     setLoading(true);
-    await Promise.all([
-      fetchHoldings(),
-      fetchParentWallet(),
-      fetchTransactions(),
-      fetchChildBalance(),
-    ]);
-    if (isMounted.current) setLoading(false);
+    try {
+      await Promise.all([
+        fetchHoldings(),
+        fetchParentWallet(),
+        fetchTransactions(),
+        fetchChildBalance(),
+      ]);
+    } catch (e) {
+      console.error("[child-dash] fetchAll error", e);
+    } finally {
+      if (isMounted.current) setLoading(false);
+    }
   }
 
   async function fetchChildBalance() {
@@ -1127,12 +1003,42 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
   async function fetchHoldings() {
     try {
       if (!supabase) return;
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("stock_holdings_c")
-        .select("id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id, securities(symbol, name)")
+        .select("id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id")
         .eq("family_member_id", child.id)
+        .eq("Status", "active")
         .order("market_value", { ascending: false });
-      if (isMounted.current) setHoldings(data || []);
+      if (error) { console.error("[child-dash] holdings query error", error); return; }
+      const baseRows = data || [];
+
+      // Enrich with security info (symbol/name/logo_url live on securities_c)
+      const securityIds = [...new Set(baseRows.map(h => h.security_id).filter(Boolean))];
+      let secMap = {};
+      if (securityIds.length > 0) {
+        const { data: secs } = await supabase
+          .from("securities_c")
+          .select("id, symbol, name, logo_url")
+          .in("id", securityIds);
+        (secs || []).forEach(s => { secMap[s.id] = s; });
+      }
+      const rows = baseRows.map(h => {
+        const sec = secMap[h.security_id] || {};
+        return { ...h, symbol: sec.symbol || null, name: sec.name || null, logo_url: sec.logo_url || null };
+      });
+      if (isMounted.current) setHoldings(rows);
+
+      // Fetch strategy names for any strategy holdings
+      const stratIds = [...new Set(rows.map(h => h.strategy_id).filter(Boolean))];
+      if (stratIds.length > 0) {
+        const { data: strats } = await supabase
+          .from("strategies_c")
+          .select("id, name, short_name, risk_level, is_featured")
+          .in("id", stratIds);
+        const map = {};
+        (strats || []).forEach(s => { map[s.id] = s; });
+        if (isMounted.current) setStrategyMap(map);
+      }
     } catch (e) { console.error("[child-dash] holdings", e); }
   }
 
@@ -1169,12 +1075,13 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
   async function fetchTransactions() {
     try {
       if (!supabase) return;
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("transactions")
-        .select("id, type, direction, amount, description, created_at")
+        .select("id, name, direction, amount, description, created_at")
         .eq("family_member_id", child.id)
         .order("created_at", { ascending: false })
         .limit(10);
+      if (error) { console.error("[child-dash] txns query error", error); return; }
       if (isMounted.current) setTransactions(data || []);
     } catch (e) { console.error("[child-dash] txns", e); }
   }
@@ -1198,10 +1105,55 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
     fetchTransactions();
   }
 
-  const totalPortfolio = holdings.reduce((s, h) => s + (h.market_value || 0), 0);
-  const totalPnl = holdings.reduce((s, h) => s + (h.unrealized_pnl || 0), 0);
-  const pnlPct = totalPortfolio > 0 ? ((totalPnl / Math.max(totalPortfolio - totalPnl, 1)) * 100) : 0;
-  const isPortUp = totalPnl >= 0;
+  // market_value and avg_fill are stored in rands; convert to cents for fmt
+  const totalPortfolioCents = holdings.reduce((s, h) => s + Math.round((h.market_value || 0) * 100), 0);
+  const totalPnlCents = holdings.reduce((s, h) => {
+    const costRands = Number(h.avg_fill || 0) * Number(h.quantity || 0);
+    const marketRands = Number(h.market_value) || 0;
+    return s + Math.round((marketRands - costRands) * 100);
+  }, 0);
+  const pnlPct = totalPortfolioCents > 0 ? ((totalPnlCents / Math.max(totalPortfolioCents - totalPnlCents, 1)) * 100) : 0;
+  const isPortUp = totalPnlCents >= 0;
+
+  // Group holdings by strategy
+  const strategyGroups = holdings.reduce((acc, h) => {
+    if (!h.strategy_id) return acc;
+    if (!acc[h.strategy_id]) acc[h.strategy_id] = [];
+    acc[h.strategy_id].push(h);
+    return acc;
+  }, {});
+
+  const strategyCards = Object.entries(strategyGroups).map(([sid, hs]) => {
+    const strat = strategyMap[sid] || {};
+    const totalValueCents = hs.reduce((s, h) => s + Math.round((h.market_value || 0) * 100), 0);
+    const totalCostCents = hs.reduce((s, h) => s + Math.round(Number(h.avg_fill || 0) * Number(h.quantity || 0) * 100), 0);
+    const pnlCents = totalValueCents - totalCostCents;
+    const pnlP = totalCostCents > 0 ? (pnlCents / totalCostCents) * 100 : 0;
+    return { id: sid, name: strat.name || "Strategy", short_name: strat.short_name, risk_level: strat.risk_level, is_featured: strat.is_featured, totalValue: totalValueCents, pnl: pnlCents, pnlPct: pnlP, holdings: hs };
+  });
+
+  // Best performing individual assets (top 5 by unrealized_pnl %)
+  const bestAssets = [...holdings]
+    .filter(h => h.symbol && h.market_value > 0)
+    .map(h => {
+      const costRands = Number(h.avg_fill || 0) * Number(h.quantity || 0);
+      const marketRands = h.market_value || 0;
+      const pnlR = marketRands - costRands;
+      const pnlP = costRands > 0 ? ((marketRands - costRands) / costRands) * 100 : 0;
+      return { ...h, pnlR, pnlP };
+    })
+    .sort((a, b) => b.pnlP - a.pnlP)
+    .slice(0, 5);
+
+  // Avatar gradient based on first letter hash
+  const gradients = [
+    "linear-gradient(135deg,#7c3aed,#5b21b6)",
+    "linear-gradient(135deg,#a855f7,#7c3aed)",
+    "linear-gradient(135deg,#8b5cf6,#6366f1)",
+    "linear-gradient(135deg,#a78bfa,#7c3aed)",
+    "linear-gradient(135deg,#9333ea,#7c3aed)",
+  ];
+  const avatarGradient = gradients[(childName.charCodeAt(0) || 0) % gradients.length];
 
   return (
     <div
@@ -1214,7 +1166,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
         backgroundAttachment: "fixed",
       }}
     >
-      {/* ── Header ── */}
+      {/* â”€â”€ Header â”€â”€ */}
       <div className="px-4 pt-12 pb-6">
         <div className="mx-auto w-full max-w-sm md:max-w-md">
           <div className="flex items-center gap-3">
@@ -1227,29 +1179,44 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
             <div className="flex-1" />
           </div>
 
-          {/* Use the same landing-page card design and graph as HomePage */}
-          <div className="relative select-none mt-6">
-            <div className="relative w-full touch-pan-y h-auto">
-              <div className="relative h-auto rounded-[28px] border border-white/10">
-                <SwipeableBalanceCard
-                  userId={userId}
-                  isBackFacing
-                  forceVisible={isCardVisible}
-                  mintNumber={profile?.mintNumber}
-                  overrideBalance={childBalance / 100}
-                  overrideWalletBalance={childBalance / 100}
-                />
-              </div>
+          {/* Child profile card */}
+          <div className="flex flex-col items-center mt-6">
+            <Avatar name={childName} gradient={avatarGradient} size="h-24 w-24" text="text-4xl" />
+            <h1 className="text-2xl font-bold text-slate-800 mt-4 tracking-tight">{childName}</h1>
+            <div className="flex items-center gap-2 mt-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[11px] font-bold tracking-wide bg-white/90 backdrop-blur-md text-slate-700 border border-slate-200 shadow-sm">
+                <Baby className="h-3.5 w-3.5" />
+                {age !== null ? `${age} yr${age !== 1 ? "s" : ""} old` : "Child"}
+              </span>
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-bold tracking-wide border ${
+                  childKycStatus === "completed"
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    : childKycStatus === "rejected"
+                      ? "bg-red-50 text-red-700 border-red-200"
+                      : "bg-amber-50 text-amber-700 border-amber-200"
+                }`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${childKycStatus === "pending" ? "animate-pulse" : ""}`} style={{ backgroundColor: "currentColor" }} />
+                {childKycLabel}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 mt-2">
+              <ShieldCheck className="h-3.5 w-3.5 text-slate-500" />
+              <span className="text-[11px] text-slate-600">
+                Managed by {parentName}
+                {parentMintNumber ? ` Â· #${parentMintNumber}` : ""}
+              </span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ── Content ── */}
+      {/* â”€â”€ Content â”€â”€ */}
       <div className="mx-auto w-full max-w-sm px-4 pb-12 md:max-w-md">
         <motion.div variants={container} initial="hidden" animate="show" className="space-y-4">
 
-          {/* ── Incomplete profile banner ── */}
+          {/* â”€â”€ Incomplete profile banner â”€â”€ */}
           {isProfileIncomplete && (
             <motion.div variants={item}>
               <button
@@ -1271,27 +1238,141 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
             </motion.div>
           )}
 
-          {/* Quick actions */}
-          <motion.div variants={container} className="grid grid-cols-5 gap-2">
-            <ChildQuickAction label="Invest" icon={LayoutGrid} onClick={() => setShowInvest(true)} delay={0.02} />
-            <ChildQuickAction label="Goals" icon={Target} onClick={() => navigate("investments")} delay={0.04} />
-            <ChildQuickAction label={openingTransfer ? "Loading" : "Deposit"} icon={ArrowDownToLine} onClick={openTransferModal} disabled={openingTransfer} delay={0.06} />
-            <ChildQuickAction label="Family" icon={Users} onClick={() => navigate("family")} delay={0.08} />
-            <ChildQuickAction label="Learn" icon={BookOpen} onClick={() => setShowLearn(true)} delay={0.10} />
+          {/* â”€â”€ Unified Wallet + Portfolio Card â”€â”€ */}
+          <motion.div
+            variants={item}
+            className="rounded-3xl relative overflow-hidden"
+            style={{
+              background: "linear-gradient(160deg, #1e1b4b 0%, #312e81 45%, #4c1d95 100%)",
+              boxShadow: "0 24px 48px -12px rgba(79,70,229,0.45)",
+            }}
+          >
+            {/* Subtle glare orbs */}
+            <div className="pointer-events-none absolute -top-16 -right-16 h-64 w-64 rounded-full" style={{ background: "radial-gradient(circle, rgba(255,255,255,0.07), transparent 70%)" }} />
+            <div className="pointer-events-none absolute -bottom-12 -left-12 h-48 w-48 rounded-full" style={{ background: "radial-gradient(circle, rgba(168,85,247,0.18), transparent 70%)" }} />
+
+            <div className="relative px-6 pt-7 pb-6">
+
+              {/* Label row */}
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-[11px] font-semibold tracking-[0.18em] text-white/50 uppercase">Available Balance</p>
+                <span className="text-[10px] font-semibold tracking-wider text-white/35 uppercase">{child?.first_name}'s Wallet</span>
+              </div>
+
+              {/* Wallet balance */}
+              <p className="text-[2.85rem] font-bold text-white tracking-tight leading-none mb-6">{fmt(childBalance)}</p>
+
+              {/* Hairline divider */}
+              <div className="h-px w-full mb-5" style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent)" }} />
+
+              {/* Portfolio row */}
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <p className="text-[10px] font-semibold tracking-[0.16em] text-white/45 uppercase mb-1">Portfolio Value</p>
+                  <p className="text-2xl font-bold text-white tracking-tight">{fmt(totalPortfolioCents)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] font-semibold tracking-[0.16em] text-white/45 uppercase mb-1">All-time return</p>
+                  <span
+                    className={`inline-flex items-center gap-1.5 text-sm font-semibold tracking-tight ${isPortUp ? "text-emerald-300" : "text-red-300"}`}
+                    style={{ color: isPortUp ? "#86efac" : "#fca5a5" }}
+                  >
+                    {isPortUp ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
+                    {isPortUp ? "+" : ""}{fmt(totalPnlCents)}&nbsp;
+                    <span className="font-semibold opacity-80">({pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(1)}%)</span>
+                  </span>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={openTransferModal}
+                  disabled={openingTransfer}
+                  className="flex-1 flex items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-semibold text-white transition active:scale-[0.97]"
+                  style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.14)", backdropFilter: "blur(12px)" }}
+                >
+                  <ArrowDownLeft className="h-4 w-4" />
+                  {openingTransfer ? "Loadingâ€¦" : "Transfer"}
+                </button>
+                <button
+                  onClick={() => setShowInvest(true)}
+                  className="flex-1 flex items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-semibold text-white transition active:scale-[0.97]"
+                  style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.14)", backdropFilter: "blur(12px)" }}
+                >
+                  <BarChart3 className="h-4 w-4" />
+                  Invest
+                </button>
+              </div>
+            </div>
           </motion.div>
 
+          {/* â”€â”€ Strategy Holdings â”€â”€ */}
           <motion.div variants={item}>
             <div className="flex items-center gap-2 mb-3 px-1">
               <div className="h-2 w-2 rounded-full bg-slate-300" />
-              <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Holdings</p>
-              <span className="text-[10px] text-slate-400 ml-auto">{holdings.length} investment{holdings.length !== 1 ? "s" : ""}</span>
+              <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Strategies</p>
             </div>
 
-            {holdings.length > 0 ? (
-              <div className="space-y-2">
-                {holdings.map((h) => (
-                  <HoldingRow key={h.id} holding={h} />
-                ))}
+            {strategyCards.length > 0 ? (
+              <div className="space-y-3">
+                {strategyCards.map((sc) => {
+                  const isUp = sc.pnl >= 0;
+                  return (
+                    <div key={sc.id} className="rounded-2xl border border-slate-200 bg-white shadow-md p-4">
+                      {/* Header */}
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                            style={{ background: "linear-gradient(135deg,#ede9fe,#ddd6fe)" }}>
+                            <BarChart3 className="h-5 w-5 text-purple-600" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-slate-900 truncate">{sc.short_name || sc.name}</p>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              {sc.risk_level && (
+                                <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-violet-50 text-violet-600 border border-violet-100">{sc.risk_level}</span>
+                              )}
+                              {sc.is_featured && (
+                                <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-violet-100 text-violet-700">Featured</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-sm font-bold text-slate-900 tabular-nums">{fmt(sc.totalValue)}</p>
+                          <p className={`text-xs font-semibold tabular-nums ${isUp ? "text-emerald-600" : "text-red-500"}`}>
+                            {isUp ? "+" : ""}{fmt(sc.pnl)} ({isUp ? "+" : ""}{sc.pnlPct.toFixed(2)}%)
+                          </p>
+                        </div>
+                      </div>
+                      {/* Holdings avatar row */}
+                      {sc.holdings.length > 0 && (
+                        <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
+                          <div className="flex -space-x-2">
+                            {sc.holdings.slice(0, 4).map(h => (
+                              <div key={h.id} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white shadow-sm">
+                                {h.logo_url ? (
+                                  <img src={h.logo_url} alt={h.symbol} className="h-full w-full object-cover" />
+                                ) : (
+                                  <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">
+                                    {h.symbol?.substring(0, 2)}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                            {sc.holdings.length > 4 && (
+                              <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-slate-100 text-[10px] font-semibold text-slate-500">
+                                +{sc.holdings.length - 4}
+                              </div>
+                            )}
+                          </div>
+                          <span className="text-[11px] text-slate-400">{sc.holdings.length} holding{sc.holdings.length !== 1 ? "s" : ""}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div className="rounded-2xl border border-slate-200 p-8 text-center shadow-lg bg-white">
@@ -1312,7 +1393,45 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
             )}
           </motion.div>
 
-          {/* ── Recent Activity ── */}
+          {/* â”€â”€ Best Performing Assets â”€â”€ */}
+          {bestAssets.length > 0 && (
+            <motion.div variants={item}>
+              <div className="flex items-center gap-2 mb-3 px-1">
+                <div className="h-2 w-2 rounded-full bg-emerald-400" />
+                <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Best Performing Assets</p>
+              </div>
+              <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4 snap-x [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {bestAssets.map(a => {
+                  const isUp = a.pnlR >= 0;
+                  return (
+                    <div key={a.id} className="flex min-w-[220px] flex-shrink-0 snap-start items-center gap-3 rounded-2xl bg-white border border-slate-100 shadow-md p-3.5">
+                      <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-100">
+                        {a.logo_url ? (
+                          <img src={a.logo_url} alt={a.name} className="h-9 w-9 object-contain" />
+                        ) : (
+                          <span className="text-[10px] font-bold text-slate-600">{a.symbol?.substring(0, 3)}</span>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-slate-900 truncate">{a.symbol}</p>
+                        <p className="text-[10px] text-slate-500 truncate">{a.name}</p>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className={`text-sm font-bold tabular-nums ${isUp ? "text-emerald-500" : "text-red-500"}`}>
+                          {isUp ? "+" : ""}{fmt(Math.round(a.pnlR * 100))}
+                        </p>
+                        <p className={`text-[10px] font-semibold tabular-nums ${isUp ? "text-emerald-500" : "text-red-500"}`}>
+                          ({isUp ? "+" : ""}{a.pnlP.toFixed(2)}%)
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+
+          {/* â”€â”€ Recent Activity â”€â”€ */}
           <motion.div variants={item}>
             <div className="flex items-center gap-2 mb-3 px-1">
               <div className="h-2 w-2 rounded-full bg-slate-300" />
@@ -1334,7 +1453,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
             )}
           </motion.div>
 
-          {/* ── Account Info ── */}
+          {/* â”€â”€ Account Info â”€â”€ */}
           <motion.div variants={item}>
             <div className="flex items-center gap-2 mb-3 px-1">
               <div className="h-2 w-2 rounded-full bg-slate-300" />
@@ -1398,7 +1517,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
         </motion.div>
       </div>
 
-      {/* ── Modals ── */}
+      {/* â”€â”€ Modals â”€â”€ */}
       <AnimatePresence>
         {showTransfer && (
           <TransferModal
@@ -1416,14 +1535,6 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
             child={child}
             onInvest={handleInvestDone}
             onClose={() => setShowInvest(false)}
-          />
-        )}
-      </AnimatePresence>
-      <AnimatePresence>
-        {showLearn && (
-          <LearnModal
-            childName={child?.first_name || childName}
-            onClose={() => setShowLearn(false)}
           />
         )}
       </AnimatePresence>
