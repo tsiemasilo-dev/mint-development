@@ -268,14 +268,15 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const getNextIncompleteStep = (afterStep, justCompletedStep) => {
     const identityCheckDone = !!existingOnboardingId || kycAlreadyVerified;
     const financialDetailsDone = taxDone && bankDone && bankLetterDone && sofDone;
+    const finalAgreementsDone = riskDone && termsDone && agreementSignedDone;
     const steps = [
       { step: 1, done: identityCheckDone },
       { step: 2, done: kycVerificationDone },
       { step: 3, done: addressDone },
       { step: 4, done: financialDetailsDone },
       { step: 5, done: mandateDone },
-      { step: 6, done: riskDone },
-      { step: 7, done: termsDone && agreementSignedDone },
+      { step: 6, done: finalAgreementsDone },
+      { step: 7, done: finalAgreementsDone },
     ];
     for (const s of steps) {
       if (s.step > afterStep && !s.done && s.step !== justCompletedStep) return s.step;
@@ -359,8 +360,9 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const getPrevIncompleteStep = (beforeStep) => {
     const identityCheckDone = !!existingOnboardingId || kycAlreadyVerified;
     const financialDetailsDone = taxDone && bankDone && bankLetterDone && sofDone;
+    const finalAgreementsDone = riskDone && termsDone && agreementSignedDone;
     const steps = [
-      { step: 6, done: riskDone },
+      { step: 6, done: finalAgreementsDone },
       { step: 5, done: mandateDone },
       { step: 4, done: financialDetailsDone },
       { step: 3, done: addressDone },
@@ -794,8 +796,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   { done: addressDone, title: "Residential Address", doneDesc: "Address captured", pendingDesc: "Provide your current residential address", badge: "Captured" },
                   { done: financialDetailsDone, title: "Financial Details", doneDesc: "Financial details saved", pendingDesc: "Bank, tax, source of funds & more", badge: "Saved" },
                   { done: mandateDone, title: "Discretionary Mandate", doneDesc: "Mandate accepted", pendingDesc: "Review and accept the FSP investment mandate", badge: "Accepted" },
-                  { done: riskDone, title: "Risk Disclosure", doneDesc: "Risk disclosure acknowledged", pendingDesc: "Review investment risk disclosure", badge: "Acknowledged" },
-                  { done: termsDone && agreementSignedDone, title: "Final Agreements", doneDesc: "Agreements signed", pendingDesc: "Terms, privacy policy and account agreement", badge: "Signed" },
+                  { done: riskDone && termsDone && agreementSignedDone, title: "Final Agreements", doneDesc: "Agreements signed", pendingDesc: "Risk disclosure, terms & account agreement", badge: "Signed" },
                 ];
                 return (
                   <>
@@ -843,7 +844,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
               <div className="text-center mt-6 animate-fade-in delay-4">
                 <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  You'll be taken through our seven-step process
+                  You'll be taken through our six-step process
                 </p>
               </div>
             </div>
@@ -854,7 +855,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   className="text-xs uppercase tracking-[0.2em] mb-2"
                   style={{ color: "hsl(270 20% 55%)" }}
                 >
-                  Step 1 of 7
+                  Step 1 of 6
                 </p>
                 <h2
                   className="text-3xl font-light tracking-tight mb-2"
@@ -913,7 +914,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
             <div className="w-full max-w-xl mx-auto">
               <div className="text-center mb-8 animate-fade-in delay-1">
                 <p className="text-xs uppercase tracking-[0.2em] mb-2" style={{ color: "hsl(270 20% 55%)" }}>
-                  Step 3 of 7
+                  Step 3 of 6
                 </p>
                 <div className="hero-icon">
                   <WalletIcon width={48} height={48} />
@@ -986,7 +987,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
             <div className="w-full max-w-3xl mx-auto">
               <div className="text-center mb-6 animate-fade-in delay-1">
                 <p className="text-xs uppercase tracking-[0.2em] mb-2" style={{ color: "hsl(270 20% 55%)" }}>
-                  Step 4 of 7
+                  Step 4 of 6
                 </p>
                 <div className="hero-icon">
                   <FileContractIcon width={48} height={48} />
@@ -1004,7 +1005,6 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
-                <div className="progress-step"></div>
                 <div className="progress-step"></div>
                 <div className="progress-step"></div>
               </div>
@@ -1278,7 +1278,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 </button>
               </div>
               <div className="text-center mt-4 animate-fade-in delay-4">
-                <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>Step 4 of 7</p>
+                <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>Step 4 of 6</p>
               </div>
             </div>
 
@@ -1295,7 +1295,6 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
-                <div className="progress-step"></div>
                 <div className="progress-step"></div>
               </div>
               {(() => {
@@ -1364,77 +1363,17 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 </button>
               </div>
               <div className="text-center mt-6 animate-fade-in delay-4">
-                <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>Step 5 of 7</p>
+                <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>Step 5 of 6</p>
               </div>
             </div>
 
           ) : step === 6 ? (
-            <div className="w-full max-w-3xl mx-auto">
-              <div className="text-center animate-fade-in delay-1">
-                <div className="hero-icon"><ShieldIcon width={48} height={48} /></div>
-                <h2 className="text-3xl font-light tracking-tight mb-2" style={{ color: "hsl(270 30% 25%)" }}>Risk Disclosure</h2>
-                <p className="text-sm mb-6" style={{ color: "hsl(270 20% 50%)" }}>Please review the investment risk disclosure</p>
-              </div>
-              <div className="progress-bar animate-fade-in delay-1">
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step"></div>
-              </div>
-              <div className="agreement-card animate-fade-in delay-2">
-                <div className="agreement-title">Investment Risk Disclosure</div>
-                <div className="agreement-section">
-                  <div className="section-title">1. Investment Risk Warning</div>
-                  <div className="agreement-text">Investing in financial instruments involves risk, including the possible loss of some or all of your principal investment. Past performance is not indicative of future results. The value of investments and the income derived from them may go down as well as up.</div>
-                </div>
-                <div className="agreement-section">
-                  <div className="section-title">2. Market Volatility</div>
-                  <div className="agreement-text">Financial markets can be volatile and unpredictable. Prices of securities, including those listed on the JSE, can fluctuate significantly due to various factors including economic conditions, political events, company performance, and market sentiment.</div>
-                </div>
-                <div className="agreement-section">
-                  <div className="section-title">3. No Guaranteed Returns</div>
-                  <div className="agreement-text">MINT does not guarantee any returns on investments. All investment decisions are made at your own risk. You should only invest money that you can afford to lose without affecting your standard of living.</div>
-                </div>
-                <div className="agreement-section">
-                  <div className="section-title">4. Regulatory Compliance</div>
-                  <div className="agreement-text">MINT operates in compliance with South African financial regulations. We are committed to transparency and providing you with the information needed to make informed investment decisions. However, we do not provide personalised financial advice.</div>
-                </div>
-                <div className="agreement-section">
-                  <div className="section-title">5. Diversification Notice</div>
-                  <div className="agreement-text">Concentrating investments in a single security, sector, or asset class increases risk. We encourage you to diversify your portfolio and seek independent financial advice if needed.</div>
-                </div>
-              </div>
-              <div className="checkbox-container animate-fade-in delay-3" style={{ display: 'block' }}>
-                <label className="checkbox-item">
-                  <input type="checkbox" checked={agreedRiskDisclosure} onChange={(e) => setAgreedRiskDisclosure(e.target.checked)} />
-                  <span className="checkbox-label">I acknowledge that I have read and understand the investment risk disclosure</span>
-                </label>
-              </div>
-              <div className="text-center mt-8 animate-fade-in delay-4">
-                <button
-                  type="button"
-                  className={`continue-button agreement-continue ${agreedRiskDisclosure ? "enabled" : ""}`}
-                  disabled={!agreedRiskDisclosure}
-                  onClick={async () => { await saveProgressFlag("risk_disclosure_accepted"); setRiskDone(true); goToStep(getNextIncompleteStep(6, 6)); }}
-                >
-                  Continue
-                </button>
-              </div>
-              <div className="text-center mt-6 animate-fade-in delay-4">
-                <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>Step 6 of 7</p>
-              </div>
-            </div>
-
-          ) : step === 7 ? (
-            !termsDone ? (
+            !agreementSignedDone ? (
               <div className="w-full max-w-3xl mx-auto">
                 <div className="text-center animate-fade-in delay-1">
-                  <div className="hero-icon"><FileContractIcon width={48} height={48} /></div>
+                  <div className="hero-icon"><ShieldIcon width={48} height={48} /></div>
                   <h2 className="text-3xl font-light tracking-tight mb-2" style={{ color: "hsl(270 30% 25%)" }}>Final Agreements</h2>
-                  <p className="text-sm mb-6" style={{ color: "hsl(270 20% 50%)" }}>Review and accept our <span className="mint-brand">MINT</span> terms, then sign your account agreement</p>
+                  <p className="text-sm mb-6" style={{ color: "hsl(270 20% 50%)" }}>Review the risk disclosure, accept our terms, and sign your account agreement</p>
                 </div>
                 <div className="progress-bar animate-fade-in delay-1">
                   <div className="progress-step active"></div>
@@ -1443,53 +1382,110 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   <div className="progress-step active"></div>
                   <div className="progress-step active"></div>
                   <div className="progress-step active"></div>
-                  <div className="progress-step active"></div>
                 </div>
-                <div className="agreement-card animate-fade-in delay-2">
-                  <div className="agreement-title">Terms and Conditions</div>
-                  <div className="agreement-section">
-                    <div className="section-title">1. Introduction</div>
-                    <div className="agreement-text">Welcome to MINT. By accessing or using our services, you agree to be bound by these Terms and Conditions. Please read them carefully before proceeding. These terms govern your use of our platform and all related services.</div>
+
+                {/* ── Section 1: Risk Disclosure ── */}
+                <div className="animate-fade-in delay-2" style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', padding: '18px 20px', boxShadow: '0 2px 12px rgba(100,60,140,0.06)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+                    <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: riskDone ? '#22c55e' : 'hsl(270 30% 25%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      {riskDone ? <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg> : <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>1</span>}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Investment Risk Disclosure</div>
+                      <div style={{ fontSize: '12px', color: 'hsl(270 15% 60%)' }}>Review the risks before investing</div>
+                    </div>
                   </div>
-                  <div className="agreement-section">
-                    <div className="section-title">2. User Account</div>
-                    <div className="agreement-text">To use MINT, you must create an account. You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account. You agree to provide accurate and complete information during the onboarding process.</div>
+                  <div className="agreement-card" style={{ marginBottom: '14px' }}>
+                    <div className="agreement-section">
+                      <div className="section-title">1. Investment Risk Warning</div>
+                      <div className="agreement-text">Investing in financial instruments involves risk, including the possible loss of some or all of your principal investment. Past performance is not indicative of future results. The value of investments and the income derived from them may go down as well as up.</div>
+                    </div>
+                    <div className="agreement-section">
+                      <div className="section-title">2. Market Volatility</div>
+                      <div className="agreement-text">Financial markets can be volatile and unpredictable. Prices of securities, including those listed on the JSE, can fluctuate significantly due to various factors including economic conditions, political events, company performance, and market sentiment.</div>
+                    </div>
+                    <div className="agreement-section">
+                      <div className="section-title">3. No Guaranteed Returns</div>
+                      <div className="agreement-text">MINT does not guarantee any returns on investments. All investment decisions are made at your own risk. You should only invest money that you can afford to lose without affecting your standard of living.</div>
+                    </div>
+                    <div className="agreement-section">
+                      <div className="section-title">4. Regulatory Compliance</div>
+                      <div className="agreement-text">MINT operates in compliance with South African financial regulations. We are committed to transparency and providing you with the information needed to make informed investment decisions. However, we do not provide personalised financial advice.</div>
+                    </div>
+                    <div className="agreement-section">
+                      <div className="section-title">5. Diversification Notice</div>
+                      <div className="agreement-text">Concentrating investments in a single security, sector, or asset class increases risk. We encourage you to diversify your portfolio and seek independent financial advice if needed.</div>
+                    </div>
                   </div>
-                  <div className="agreement-section">
-                    <div className="section-title">3. Investment Services</div>
-                    <div className="agreement-text">MINT provides a platform for fractional investment in various assets. We are not a financial advisor, and the information provided through our platform does not constitute financial, investment, or tax advice. You should perform your own research or consult with a qualified advisor.</div>
-                  </div>
-                  <div className="agreement-section">
-                    <div className="section-title">4. Fees and Charges</div>
-                    <div className="agreement-text">MINT may charge fees for its services. These fees will be clearly disclosed to you. You agree to pay all fees associated with your use of our platform. We reserve the right to change our fee structure with prior notice to you.</div>
-                  </div>
-                  <div className="agreement-section">
-                    <div className="section-title">5. Privacy and Security</div>
-                    <div className="agreement-text">Your privacy is important to us. We collect and process your personal information in accordance with our Privacy Policy. We use industry-standard security measures to protect your data, but we cannot guarantee absolute security.</div>
-                  </div>
-                </div>
-                <div className="checkbox-container animate-fade-in delay-3">
                   <label className="checkbox-item">
-                    <input type="checkbox" checked={agreedTerms} onChange={(e) => setAgreedTerms(e.target.checked)} />
-                    <span className="checkbox-label">I agree to the Terms and Conditions</span>
-                  </label>
-                  <label className="checkbox-item">
-                    <input type="checkbox" checked={agreedPrivacy} onChange={(e) => setAgreedPrivacy(e.target.checked)} />
-                    <span className="checkbox-label">I agree to the Privacy Policy</span>
+                    <input type="checkbox" checked={agreedRiskDisclosure} onChange={(e) => setAgreedRiskDisclosure(e.target.checked)} />
+                    <span className="checkbox-label">I acknowledge that I have read and understand the investment risk disclosure</span>
                   </label>
                 </div>
+
+                {/* ── Section 2: Terms & Conditions ── */}
+                <div className="animate-fade-in delay-3" style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', padding: '18px 20px', boxShadow: '0 2px 12px rgba(100,60,140,0.06)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+                    <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: termsDone ? '#22c55e' : 'hsl(270 30% 25%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      {termsDone ? <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg> : <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>2</span>}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Terms &amp; Conditions</div>
+                      <div style={{ fontSize: '12px', color: 'hsl(270 15% 60%)' }}>Review and accept the MINT terms</div>
+                    </div>
+                  </div>
+                  <div className="agreement-card" style={{ marginBottom: '14px' }}>
+                    <div className="agreement-section">
+                      <div className="section-title">1. Introduction</div>
+                      <div className="agreement-text">Welcome to MINT. By accessing or using our services, you agree to be bound by these Terms and Conditions. Please read them carefully before proceeding. These terms govern your use of our platform and all related services.</div>
+                    </div>
+                    <div className="agreement-section">
+                      <div className="section-title">2. User Account</div>
+                      <div className="agreement-text">To use MINT, you must create an account. You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account. You agree to provide accurate and complete information during the onboarding process.</div>
+                    </div>
+                    <div className="agreement-section">
+                      <div className="section-title">3. Investment Services</div>
+                      <div className="agreement-text">MINT provides a platform for fractional investment in various assets. We are not a financial advisor, and the information provided through our platform does not constitute financial, investment, or tax advice. You should perform your own research or consult with a qualified advisor.</div>
+                    </div>
+                    <div className="agreement-section">
+                      <div className="section-title">4. Fees and Charges</div>
+                      <div className="agreement-text">MINT may charge fees for its services. These fees will be clearly disclosed to you. You agree to pay all fees associated with your use of our platform. We reserve the right to change our fee structure with prior notice to you.</div>
+                    </div>
+                    <div className="agreement-section">
+                      <div className="section-title">5. Privacy and Security</div>
+                      <div className="agreement-text">Your privacy is important to us. We collect and process your personal information in accordance with our Privacy Policy. We use industry-standard security measures to protect your data, but we cannot guarantee absolute security.</div>
+                    </div>
+                  </div>
+                  <div className="checkbox-container" style={{ display: 'block' }}>
+                    <label className="checkbox-item">
+                      <input type="checkbox" checked={agreedTerms} onChange={(e) => setAgreedTerms(e.target.checked)} />
+                      <span className="checkbox-label">I agree to the Terms and Conditions</span>
+                    </label>
+                    <label className="checkbox-item">
+                      <input type="checkbox" checked={agreedPrivacy} onChange={(e) => setAgreedPrivacy(e.target.checked)} />
+                      <span className="checkbox-label">I agree to the Privacy Policy</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* ── Continue: saves risk + terms, then shows account agreement ── */}
                 <div className="text-center mt-8 animate-fade-in delay-4">
                   <button
                     type="button"
-                    className={`continue-button agreement-continue ${agreementReady ? "enabled" : ""}`}
-                    disabled={!agreementReady}
-                    onClick={async () => { await saveProgressFlag("terms_accepted"); setTermsDone(true); }}
+                    className={`continue-button agreement-continue ${agreedRiskDisclosure && agreementReady ? "enabled" : ""}`}
+                    disabled={!(agreedRiskDisclosure && agreementReady)}
+                    onClick={async () => {
+                      await saveProgressFlag("risk_disclosure_accepted");
+                      await saveProgressFlag("terms_accepted");
+                      setRiskDone(true);
+                      setTermsDone(true);
+                    }}
                   >
-                    Continue to Account Agreement
+                    Continue to Sign Agreement
                   </button>
                 </div>
                 <div className="text-center mt-6 animate-fade-in delay-4">
-                  <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>Step 7 of 7 — Part 1 of 2</p>
+                  <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>Step 6 of 6</p>
                 </div>
               </div>
             ) : (
@@ -1497,9 +1493,107 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 profile={profile}
                 onboardingData={{ bankName, bankAccountNumber, bankBranchCode, bankAccountType, taxNumber, identityNumber, sourceOfFunds, sourceOfFundsOther, expectedMonthlyInvestment }}
                 existingOnboardingId={existingOnboardingId}
-                onComplete={handleFinalComplete}
+                onComplete={async (signingResults) => {
+                  await handleFinalComplete(signingResults);
+                  goToStep(7);
+                }}
               />
             )
+
+          ) : step === 7 ? (
+            <div className="w-full max-w-3xl mx-auto">
+              {(() => {
+                const tick = (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="16" height="16">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                );
+                const tickSm = (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="14" height="14">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                );
+                const identityCheckDone = !!existingOnboardingId || kycAlreadyVerified;
+                const financialDetailsDone = taxDone && bankDone && bankLetterDone && sofDone;
+                const reviewSteps = [
+                  { done: identityCheckDone, title: "Identity Check", doneDesc: "ID number confirmed", pendingDesc: "Confirm your South African ID number", badge: "Confirmed" },
+                  { done: kycAlreadyVerified, title: "Identity Verification", doneDesc: "Identity verification complete", pendingDesc: "Verify your identity with Sumsub", badge: "Verified" },
+                  { done: addressDone, title: "Residential Address", doneDesc: "Address captured", pendingDesc: "Provide your current residential address", badge: "Captured" },
+                  { done: financialDetailsDone, title: "Financial Details", doneDesc: "Financial details saved", pendingDesc: "Bank, tax, source of funds & more", badge: "Saved" },
+                  { done: mandateDone, title: "Discretionary Mandate", doneDesc: "Mandate accepted", pendingDesc: "Review and accept the FSP investment mandate", badge: "Accepted" },
+                  { done: riskDone && termsDone && agreementSignedDone, title: "Final Agreements", doneDesc: "Agreements signed", pendingDesc: "Risk disclosure, terms & account agreement", badge: "Signed" },
+                ];
+                const allDone = reviewSteps.every(s => s.done);
+                return (
+                  <>
+                    <div className="text-center animate-fade-in delay-1">
+                      <div className="hero-icon">
+                        {allDone
+                          ? <svg viewBox="0 0 24 24" fill="none" stroke="hsl(270 30% 25%)" strokeWidth="1.5" width="48" height="48"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+                          : <svg viewBox="0 0 24 24" fill="none" stroke="hsl(270 30% 25%)" strokeWidth="1.5" width="48" height="48"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V19.5a2.25 2.25 0 0 0 2.25 2.25h.75" /></svg>
+                        }
+                      </div>
+                      <h2 className="text-3xl font-light tracking-tight mb-2" style={{ color: "hsl(270 30% 25%)" }}>
+                        {allDone ? "You're all set!" : "Application Review"}
+                      </h2>
+                      <p className="text-sm mb-6" style={{ color: "hsl(270 20% 50%)" }}>
+                        {allDone ? "Your onboarding is complete. Welcome to MINT." : "Here's a summary of your onboarding progress"}
+                      </p>
+                    </div>
+                    <div className="steps-container animate-fade-in delay-2">
+                      {reviewSteps.map((s, i) => (
+                        <React.Fragment key={i}>
+                          <div className={`step-circle ${s.done ? 'step-circle-complete' : ''}`}>
+                            {s.done ? tick : i + 1}
+                          </div>
+                          {i < reviewSteps.length - 1 && <div className={`step-line ${s.done ? 'step-line-complete' : ''}`}></div>}
+                        </React.Fragment>
+                      ))}
+                    </div>
+                    <div className="step-info animate-fade-in delay-3">
+                      {reviewSteps.map((s, i) => (
+                        <div key={i} className={`step-item ${s.done ? 'step-item-complete' : ''}`}>
+                          <div className={`step-number ${s.done ? 'step-number-complete' : ''}`}>
+                            {s.done ? tickSm : i + 1}
+                          </div>
+                          <div className="step-content">
+                            <div className="step-title">
+                              {s.title}
+                              {s.done && <span className="step-verified-badge">{s.badge}</span>}
+                            </div>
+                            <div className="step-description">
+                              {s.done ? s.doneDesc : s.pendingDesc}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {allDone && (
+                      <div className="text-center mt-8 animate-fade-in delay-4">
+                        <button
+                          type="button"
+                          className="continue-button agreement-continue enabled"
+                          onClick={() => { if (onComplete) onComplete(); }}
+                        >
+                          Go to Dashboard
+                        </button>
+                      </div>
+                    )}
+                    {!allDone && (
+                      <div className="text-center mt-8 animate-fade-in delay-4">
+                        <button
+                          type="button"
+                          className="continue-button agreement-continue enabled"
+                          onClick={() => goToStep(getNextIncompleteStep(0))}
+                        >
+                          Continue Where I Left Off
+                        </button>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
           ) : null}
         </div>
       </div>
