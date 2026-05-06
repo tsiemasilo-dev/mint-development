@@ -1375,15 +1375,6 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <h2 className="text-3xl font-light tracking-tight mb-2" style={{ color: "hsl(270 30% 25%)" }}>Final Agreements</h2>
                 <p className="text-sm mb-6" style={{ color: "hsl(270 20% 50%)" }}>Review the risk disclosure, accept our terms, and sign your account agreement</p>
               </div>
-              <div className="progress-bar animate-fade-in delay-1">
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-              </div>
-
               {/* ── Section 1: Risk Disclosure (accordion) ── */}
               <div className="animate-fade-in delay-2" style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', boxShadow: '0 2px 12px rgba(100,60,140,0.06)', overflow: 'hidden' }}>
                 <button type="button" onClick={() => setSec1Open(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '18px 20px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
