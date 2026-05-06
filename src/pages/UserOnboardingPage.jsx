@@ -1464,14 +1464,6 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 )}
               </div>
 
-              {/* ── Confirmation checkbox ── */}
-              <div className="animate-fade-in delay-3" style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', padding: '18px 20px', boxShadow: '0 2px 12px rgba(100,60,140,0.06)' }}>
-                <label className="checkbox-item">
-                  <input type="checkbox" checked={agreedAll} onChange={(e) => setAgreedAll(e.target.checked)} />
-                  <span className="checkbox-label">I confirm that I have read and agree to the investment risk disclosure and terms &amp; conditions</span>
-                </label>
-              </div>
-
               {/* ── Section 3: Account Agreement signing (accordion, always visible) ── */}
               <div className="animate-fade-in delay-4" style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', boxShadow: '0 2px 12px rgba(100,60,140,0.06)', overflow: 'hidden' }}>
                 <button type="button" onClick={() => setSec3Open(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '18px 20px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
@@ -1486,26 +1478,20 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 </button>
                 {sec3Open && (
                   <div style={{ padding: '0 20px 18px' }}>
-                    {!agreedAll ? (
-                      <div style={{ textAlign: 'center', padding: '24px 0', color: 'hsl(270 15% 60%)', fontSize: '13px' }}>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="32" height="32" style={{ margin: '0 auto 10px', display: 'block', opacity: 0.5 }}><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" /></svg>
-                        Please confirm the checkbox above to unlock signing
-                      </div>
-                    ) : (
-                      <AccountAgreementStep
-                        profile={profile}
-                        onboardingData={{ bankName, bankAccountNumber, bankBranchCode, bankAccountType, taxNumber, identityNumber, sourceOfFunds, sourceOfFundsOther, expectedMonthlyInvestment }}
-                        existingOnboardingId={existingOnboardingId}
-                        onComplete={async (signingResults) => {
-                          await saveProgressFlag("risk_disclosure_accepted");
-                          await saveProgressFlag("terms_accepted");
-                          setRiskDone(true);
-                          setTermsDone(true);
-                          await handleFinalComplete(signingResults);
-                          goToStep(7);
-                        }}
-                      />
-                    )}
+                    <AccountAgreementStep
+                      profile={profile}
+                      onboardingData={{ bankName, bankAccountNumber, bankBranchCode, bankAccountType, taxNumber, identityNumber, sourceOfFunds, sourceOfFundsOther, expectedMonthlyInvestment }}
+                      existingOnboardingId={existingOnboardingId}
+                      initialPhase="sign"
+                      onComplete={async (signingResults) => {
+                        await saveProgressFlag("risk_disclosure_accepted");
+                        await saveProgressFlag("terms_accepted");
+                        setRiskDone(true);
+                        setTermsDone(true);
+                        await handleFinalComplete(signingResults);
+                        goToStep(7);
+                      }}
+                    />
                   </div>
                 )}
               </div>

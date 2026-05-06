@@ -462,6 +462,7 @@ export default function AccountAgreementStep({
   existingOnboardingId,
   onBack,
   onComplete,
+  initialPhase = "review",
 }) {
   const {
     bankName = "", bankAccountNumber = "", bankBranchCode = "",
@@ -471,7 +472,7 @@ export default function AccountAgreementStep({
     bankAccountType = "SAVINGS",
   } = onboardingData;
 
-  const [phase, setPhase] = useState("review");
+  const [phase, setPhase] = useState(initialPhase);
   const [error, setError] = useState("");
   const [pdfUrl, setPdfUrl] = useState("");
   const [signedAt, setSignedAt] = useState(null);
