@@ -946,8 +946,8 @@ export default function AccountAgreementStep({
       return (
         <div>
           {/* ── Parties ── */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 0, marginBottom: 20, borderRadius: 12, overflow: "hidden", border: `1px solid ${purpleBorder}` }}>
-            <div style={{ padding: "16px 18px", background: "hsl(270 30% 24%)" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 20 }}>
+            <div style={{ padding: "16px 18px", borderRadius: 12, background: "hsl(270 30% 24%)" }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Service Provider</div>
               <div style={{ fontSize: 13, fontWeight: 700, color: "white", marginBottom: 3 }}>Mint Platforms (Pty) Ltd</div>
               <div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", lineHeight: 1.5 }}>
@@ -955,10 +955,7 @@ export default function AccountAgreementStep({
                 Reg: 2024/644796/07
               </div>
             </div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "0 12px", background: purpleBorder }}>
-              <span style={{ fontSize: 10, fontWeight: 700, color: purpleMid, textTransform: "uppercase", letterSpacing: "0.08em" }}>and</span>
-            </div>
-            <div style={{ padding: "16px 18px", background: purplePale }}>
+            <div style={{ padding: "16px 18px", borderRadius: 12, background: purplePale, border: `1px solid ${purpleBorder}` }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: purpleMid, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Client</div>
               <div style={{ fontSize: 13, fontWeight: 700, color: purple, marginBottom: 3 }}>{fullName || "—"}</div>
               <div style={{ fontSize: 11, color: purpleMid, lineHeight: 1.5 }}>
