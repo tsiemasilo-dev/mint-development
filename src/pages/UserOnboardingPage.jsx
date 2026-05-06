@@ -1011,178 +1011,129 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
               {/* ── Section 1: Tax Reference Number ── */}
               <div className="animate-fade-in delay-2" style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', padding: '18px 20px', boxShadow: '0 2px 12px rgba(100,60,140,0.06)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: taxDone ? 0 : '14px' }}>
-                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: taxDone ? '#22c55e' : 'hsl(270 30% 25%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    {taxDone ? (
-                      <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
-                    ) : <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>1</span>}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'hsl(270 30% 25%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>1</span>
                   </div>
-                  <div style={{ flex: 1 }}>
+                  <div>
                     <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Tax Reference Number</div>
                     <div style={{ fontSize: '12px', color: 'hsl(270 15% 60%)' }}>Required by SARS for investment reporting</div>
                   </div>
-                  {taxDone && <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '20px', background: '#dcfce7', color: '#16a34a', fontWeight: '600' }}>Saved</span>}
                 </div>
-                {!taxDone && (
-                  <>
-                    <div className="glass-field">
-                      <input
-                        type="text"
-                        placeholder="Enter your 10-digit tax number"
-                        value={taxNumber}
-                        onChange={(e) => setTaxNumber(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                        inputMode="numeric"
-                        autoComplete="off"
-                      />
-                    </div>
-                    <div style={{ textAlign: 'right', marginTop: '10px' }}>
-                      <button
-                        type="button"
-                        className={`continue-button agreement-continue${taxNumber && taxNumber.length >= 6 ? ' enabled' : ''}`}
-                        style={{ padding: '9px 22px', fontSize: '13px' }}
-                        disabled={!taxNumber || taxNumber.length < 6}
-                        onClick={async () => {
-                          await saveProgressFlag("tax_details_saved", { tax_details: { tax_number: taxNumber, savedAt: new Date().toISOString() } });
-                          setTaxDone(true);
-                        }}
-                      >
-                        Save
-                      </button>
-                    </div>
-                  </>
-                )}
+                <div className="glass-field">
+                  <input
+                    type="text"
+                    placeholder="Enter your 10-digit tax number"
+                    value={taxNumber}
+                    onChange={(e) => setTaxNumber(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                    inputMode="numeric"
+                    autoComplete="off"
+                  />
+                </div>
               </div>
 
               {/* ── Section 2: Bank Account Details ── */}
               <div className={`animate-fade-in delay-2 bank-step-wrapper${bankDropdownOpen ? ' dropdown-open' : ''}`} style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', padding: '18px 20px', boxShadow: '0 2px 12px rgba(100,60,140,0.06)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: bankDone ? 0 : '14px' }}>
-                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: bankDone ? '#22c55e' : 'hsl(270 30% 25%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    {bankDone ? (
-                      <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
-                    ) : <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>2</span>}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'hsl(270 30% 25%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>2</span>
                   </div>
-                  <div style={{ flex: 1 }}>
+                  <div>
                     <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Bank Account Details</div>
                     <div style={{ fontSize: '12px', color: 'hsl(270 15% 60%)' }}>Link your South African bank account</div>
                   </div>
-                  {bankDone && <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '20px', background: '#dcfce7', color: '#16a34a', fontWeight: '600' }}>Saved</span>}
                 </div>
-                {!bankDone && (
-                  <>
-                    <div className="bank-section">
-                      <div className="bank-section-label">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0 0 12 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75Z" /></svg>
-                        Select Your Bank
-                      </div>
-                      <div className="custom-select" ref={bankDropdownRef}>
-                        <div
-                          className={`bank-select-trigger ${bankDropdownOpen ? "active" : ""}`}
-                          role="button" tabIndex={0}
-                          onClick={() => setBankDropdownOpen((p) => !p)}
-                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setBankDropdownOpen((p) => !p); } }}
-                        >
-                          {bankName ? (
-                            <span className="bank-select-value">
-                              {selectedBankOption?.logo && <img src={selectedBankOption.logo} alt="" className="bank-option-logo" onError={(e) => { e.target.style.display = "none"; }} />}
-                              <span>{selectedBankOption?.label}</span>
-                            </span>
-                          ) : <span className="bank-select-placeholder">Choose a bank</span>}
-                          <svg className="bank-select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16"><path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
-                        </div>
-                        <div className={`bank-dropdown-list ${bankDropdownOpen ? "active" : ""}`}>
-                          {southAfricanBanks.map((option) => (
-                            <div key={option.value || "placeholder"} className={`bank-dropdown-option ${bankName === option.value ? "selected" : ""}`} role="button" tabIndex={0} onClick={() => handleBankSelect(option.value)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleBankSelect(option.value); } }}>
-                              {option.logo && <img src={option.logo} alt="" className="bank-option-logo" onError={(e) => { e.target.style.display = "none"; }} />}
-                              <span>{option.label}</span>
-                              {bankName === option.value && <svg className="bank-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="16" height="16"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>}
-                            </div>
-                          ))}
-                        </div>
-                        <input type="hidden" value={bankName} />
-                      </div>
+                <div className="bank-section">
+                  <div className="bank-section-label">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0 0 12 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75Z" /></svg>
+                    Select Your Bank
+                  </div>
+                  <div className="custom-select" ref={bankDropdownRef}>
+                    <div
+                      className={`bank-select-trigger ${bankDropdownOpen ? "active" : ""}`}
+                      role="button" tabIndex={0}
+                      onClick={() => setBankDropdownOpen((p) => !p)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setBankDropdownOpen((p) => !p); } }}
+                    >
+                      {bankName ? (
+                        <span className="bank-select-value">
+                          {selectedBankOption?.logo && <img src={selectedBankOption.logo} alt="" className="bank-option-logo" onError={(e) => { e.target.style.display = "none"; }} />}
+                          <span>{selectedBankOption?.label}</span>
+                        </span>
+                      ) : <span className="bank-select-placeholder">Choose a bank</span>}
+                      <svg className="bank-select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16"><path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
                     </div>
-                    <div className="bank-account-fields hide-when-dropdown-open">
-                      <div className="bank-section-label">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" d="M5.25 8.25h15m-16.5 7.5h15m-1.8-13.5-3.9 19.5m-2.1-19.5-3.9 19.5" /></svg>
-                        Account Details
-                      </div>
-                      <div className="bank-inputs-card">
-                        <div className="bank-input-row">
-                          <label htmlFor="bank-account-name2">Account Holder Name</label>
-                          <div className="bank-input-field">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="18" height="18" className="bank-input-icon"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6.75a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.5 20.118a7.5 7.5 0 0 1 15 0A17.933 17.933 0 0 1 12 21.75a17.933 17.933 0 0 1-7.5-1.632Z" /></svg>
-                            <input type="text" id="bank-account-name2" placeholder="Enter account holder full name" value={bankAccountName} onChange={(e) => setBankAccountName(e.target.value)} autoComplete="name" />
-                          </div>
+                    <div className={`bank-dropdown-list ${bankDropdownOpen ? "active" : ""}`}>
+                      {southAfricanBanks.map((option) => (
+                        <div key={option.value || "placeholder"} className={`bank-dropdown-option ${bankName === option.value ? "selected" : ""}`} role="button" tabIndex={0} onClick={() => handleBankSelect(option.value)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleBankSelect(option.value); } }}>
+                          {option.logo && <img src={option.logo} alt="" className="bank-option-logo" onError={(e) => { e.target.style.display = "none"; }} />}
+                          <span>{option.label}</span>
+                          {bankName === option.value && <svg className="bank-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="16" height="16"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>}
                         </div>
-                        <div className="bank-input-divider"></div>
-                        <div className="bank-input-row">
-                          <label htmlFor="bank-account-type2">Account Type</label>
-                          <div className="bank-input-field">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="18" height="18" className="bank-input-icon"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5m-16.5 5.25h16.5m-16.5 5.25h10.5" /></svg>
-                            <select id="bank-account-type2" value={bankAccountType} onChange={(e) => setBankAccountType(e.target.value)}>
-                              <option value="">Select account type</option>
-                              <option value="savings">Savings</option>
-                              <option value="cheque">Cheque / Current</option>
-                              <option value="business">Business</option>
-                              <option value="transmission">Transmission</option>
-                              <option value="other">Other</option>
-                            </select>
-                          </div>
-                        </div>
-                        <div className="bank-input-divider"></div>
-                        <div className="bank-input-row">
-                          <label htmlFor="bank-account-number2">Account Number</label>
-                          <div className="bank-input-field">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="18" height="18" className="bank-input-icon"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z" /></svg>
-                            <input type="text" id="bank-account-number2" placeholder="Enter your account number" value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value.replace(/\D/g, ""))} inputMode="numeric" autoComplete="off" />
-                          </div>
-                        </div>
-                        <div className="bank-input-divider"></div>
-                        <div className="bank-input-row">
-                          <label htmlFor="bank-branch-code2">Branch Code</label>
-                          <div className="bank-input-field">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="18" height="18" className="bank-input-icon"><path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>
-                            <input type="text" id="bank-branch-code2" placeholder={bankName === "other" ? "Enter your branch code" : "Select a bank above"} value={bankBranchCode} onChange={(e) => setBankBranchCode(e.target.value.replace(/\D/g, ""))} readOnly={bankName !== "other" && bankName !== ""} style={bankName !== "other" && bankName !== "" ? { opacity: 0.7, cursor: "default" } : {}} inputMode="numeric" autoComplete="off" />
-                          </div>
-                        </div>
+                      ))}
+                    </div>
+                    <input type="hidden" value={bankName} />
+                  </div>
+                </div>
+                <div className="bank-account-fields hide-when-dropdown-open">
+                  <div className="bank-section-label">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" d="M5.25 8.25h15m-16.5 7.5h15m-1.8-13.5-3.9 19.5m-2.1-19.5-3.9 19.5" /></svg>
+                    Account Details
+                  </div>
+                  <div className="bank-inputs-card">
+                    <div className="bank-input-row">
+                      <label htmlFor="bank-account-name2">Account Holder Name</label>
+                      <div className="bank-input-field">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="18" height="18" className="bank-input-icon"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6.75a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.5 20.118a7.5 7.5 0 0 1 15 0A17.933 17.933 0 0 1 12 21.75a17.933 17.933 0 0 1-7.5-1.632Z" /></svg>
+                        <input type="text" id="bank-account-name2" placeholder="Enter account holder full name" value={bankAccountName} onChange={(e) => setBankAccountName(e.target.value)} autoComplete="name" />
                       </div>
                     </div>
-                    <div className="bank-security-notice hide-when-dropdown-open">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="16" height="16" className="bank-security-icon"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" /></svg>
-                      <span>Your banking details are encrypted and stored securely.</span>
+                    <div className="bank-input-divider"></div>
+                    <div className="bank-input-row">
+                      <label htmlFor="bank-account-type2">Account Type</label>
+                      <div className="bank-input-field">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="18" height="18" className="bank-input-icon"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5m-16.5 5.25h16.5m-16.5 5.25h10.5" /></svg>
+                        <select id="bank-account-type2" value={bankAccountType} onChange={(e) => setBankAccountType(e.target.value)}>
+                          <option value="">Select account type</option>
+                          <option value="savings">Savings</option>
+                          <option value="cheque">Cheque / Current</option>
+                          <option value="business">Business</option>
+                          <option value="transmission">Transmission</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
                     </div>
-                    <div style={{ textAlign: 'right', marginTop: '12px' }} className="hide-when-dropdown-open">
-                      <button
-                        type="button"
-                        className={`continue-button agreement-continue${bankDetailsReady ? ' enabled' : ''}`}
-                        style={{ padding: '9px 22px', fontSize: '13px' }}
-                        disabled={!bankDetailsReady}
-                        onClick={async () => {
-                          try {
-                            const { data: { session } } = await supabase.auth.getSession();
-                            const userId = session?.user?.id;
-                            if (userId) {
-                              await supabase.from("user_onboarding").update({ bank_name: bankName || null, bank_account_number: bankAccountNumber || null, bank_branch_code: bankBranchCode || null }).eq("user_id", userId);
-                            }
-                          } catch { }
-                          await saveProgressFlag("bank_details_saved", { bank_details: { bank_name: bankName || null, bank_account_name: bankAccountName || null, bank_account_type: bankAccountType || null, bank_account_number: bankAccountNumber || null, bank_branch_code: bankBranchCode || null, savedAt: new Date().toISOString() } });
-                          setBankDone(true);
-                        }}
-                      >
-                        Save
-                      </button>
+                    <div className="bank-input-divider"></div>
+                    <div className="bank-input-row">
+                      <label htmlFor="bank-account-number2">Account Number</label>
+                      <div className="bank-input-field">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="18" height="18" className="bank-input-icon"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z" /></svg>
+                        <input type="text" id="bank-account-number2" placeholder="Enter your account number" value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value.replace(/\D/g, ""))} inputMode="numeric" autoComplete="off" />
+                      </div>
                     </div>
-                  </>
-                )}
+                    <div className="bank-input-divider"></div>
+                    <div className="bank-input-row">
+                      <label htmlFor="bank-branch-code2">Branch Code</label>
+                      <div className="bank-input-field">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="18" height="18" className="bank-input-icon"><path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>
+                        <input type="text" id="bank-branch-code2" placeholder={bankName === "other" ? "Enter your branch code" : "Select a bank above"} value={bankBranchCode} onChange={(e) => setBankBranchCode(e.target.value.replace(/\D/g, ""))} readOnly={bankName !== "other" && bankName !== ""} style={bankName !== "other" && bankName !== "" ? { opacity: 0.7, cursor: "default" } : {}} inputMode="numeric" autoComplete="off" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="bank-security-notice hide-when-dropdown-open">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="16" height="16" className="bank-security-icon"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" /></svg>
+                  <span>Your banking details are encrypted and stored securely.</span>
+                </div>
               </div>
 
               {/* ── Section 3: Bank Confirmation Letter ── */}
               <div className="animate-fade-in delay-3" style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', padding: '18px 20px', boxShadow: '0 2px 12px rgba(100,60,140,0.06)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: bankLetterDone ? 0 : '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
                   <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: bankLetterDone ? '#22c55e' : 'hsl(270 30% 25%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    {bankLetterDone ? (
-                      <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
-                    ) : <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>3</span>}
+                    {bankLetterDone
+                      ? <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+                      : <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>3</span>}
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Bank Confirmation Letter</div>
@@ -1190,7 +1141,9 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   </div>
                   {bankLetterDone && <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '20px', background: '#dcfce7', color: '#16a34a', fontWeight: '600' }}>Uploaded</span>}
                 </div>
-                {!bankLetterDone && (
+                {bankLetterDone ? (
+                  <p style={{ fontSize: '13px', color: 'hsl(270 15% 55%)' }}>Your letter has been uploaded successfully.</p>
+                ) : (
                   <>
                     <div
                       className="glass-field py-6 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-xl cursor-pointer hover:border-slate-400 transition-colors"
@@ -1247,83 +1200,79 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
               {/* ── Section 4: Source of Funds ── */}
               <div className={`animate-fade-in delay-3${sofDropdownOpen ? ' dropdown-open' : ''}`} style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', padding: '18px 20px', boxShadow: '0 2px 12px rgba(100,60,140,0.06)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: sofDone ? 0 : '14px' }}>
-                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: sofDone ? '#22c55e' : 'hsl(270 30% 25%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    {sofDone ? (
-                      <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
-                    ) : <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>4</span>}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'hsl(270 30% 25%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>4</span>
                   </div>
-                  <div style={{ flex: 1 }}>
+                  <div>
                     <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Source of Funds</div>
                     <div style={{ fontSize: '12px', color: 'hsl(270 15% 60%)' }}>Declare the origin of your investment funds</div>
                   </div>
-                  {sofDone && <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '20px', background: '#dcfce7', color: '#16a34a', fontWeight: '600' }}>Saved</span>}
                 </div>
-                {!sofDone && (
-                  <div className="space-y-4">
-                    <div>
-                      <label htmlFor="source-of-funds2" style={{ fontSize: '13px', fontWeight: '500', color: 'hsl(270 30% 25%)', display: 'block', marginBottom: '6px' }}>Primary Source of Funds</label>
-                      <div className="custom-select" ref={sofDropdownRef}>
-                        <div className={`glass-field select-trigger ${sofDropdownOpen ? "active" : ""}`} role="button" tabIndex={0} onClick={() => setSofDropdownOpen((p) => !p)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSofDropdownOpen((p) => !p); } }}>
-                          <div className="selected-value" data-placeholder="Select source of funds">{sourceOfFunds ? selectedSofOption?.label : ""}</div>
-                        </div>
-                        <div className={`custom-dropdown ${sofDropdownOpen ? "active" : ""}`}>
-                          {sourceOfFundsOptions.map((option) => (
-                            <div key={option.value || "placeholder"} className={`custom-option ${sourceOfFunds === option.value ? "selected" : ""}`} role="button" tabIndex={0} onClick={() => handleSofSelect(option.value)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleSofSelect(option.value); } }}>
-                              {option.label}
-                            </div>
-                          ))}
-                        </div>
-                        <input type="hidden" id="source-of-funds2" value={sourceOfFunds} />
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="source-of-funds2" style={{ fontSize: '13px', fontWeight: '500', color: 'hsl(270 30% 25%)', display: 'block', marginBottom: '6px' }}>Primary Source of Funds</label>
+                    <div className="custom-select" ref={sofDropdownRef}>
+                      <div className={`glass-field select-trigger ${sofDropdownOpen ? "active" : ""}`} role="button" tabIndex={0} onClick={() => setSofDropdownOpen((p) => !p)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSofDropdownOpen((p) => !p); } }}>
+                        <div className="selected-value" data-placeholder="Select source of funds">{sourceOfFunds ? selectedSofOption?.label : ""}</div>
                       </div>
-                    </div>
-                    {sourceOfFunds === "other" && (
-                      <div className="hide-when-dropdown-open">
-                        <label style={{ fontSize: '13px', fontWeight: '500', color: 'hsl(270 30% 25%)', display: 'block', marginBottom: '6px' }}>Please describe your source of funds</label>
-                        <div className="glass-field"><input type="text" placeholder="Describe your source of funds" value={sourceOfFundsOther} onChange={(e) => setSourceOfFundsOther(e.target.value)} /></div>
+                      <div className={`custom-dropdown ${sofDropdownOpen ? "active" : ""}`}>
+                        {sourceOfFundsOptions.map((option) => (
+                          <div key={option.value || "placeholder"} className={`custom-option ${sourceOfFunds === option.value ? "selected" : ""}`} role="button" tabIndex={0} onClick={() => handleSofSelect(option.value)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleSofSelect(option.value); } }}>
+                            {option.label}
+                          </div>
+                        ))}
                       </div>
-                    )}
-                    <div className="hide-when-dropdown-open">
-                      <label htmlFor="expected-monthly-investment2" style={{ fontSize: '13px', fontWeight: '500', color: 'hsl(270 30% 25%)', display: 'block', marginBottom: '6px' }}>Expected Monthly Investment Amount</label>
-                      <div className="glass-field">
-                        <select id="expected-monthly-investment2" value={expectedMonthlyInvestment} onChange={(e) => setExpectedMonthlyInvestment(e.target.value)}>
-                          {monthlyInvestmentOptions.map((option) => (
-                            <option key={option.value || "placeholder"} value={option.value}>{option.label}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                    <div className="hide-when-dropdown-open">
-                      <label className="checkbox-item" style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                        <input type="checkbox" checked={agreedSourceOfFunds} onChange={(e) => setAgreedSourceOfFunds(e.target.checked)} />
-                        <span className="checkbox-label" style={{ fontSize: '13px' }}>I declare that the funds I will use for investing are from legitimate sources and I am the beneficial owner of these funds</span>
-                      </label>
-                    </div>
-                    <div style={{ textAlign: 'right' }} className="hide-when-dropdown-open">
-                      <button
-                        type="button"
-                        className={`continue-button agreement-continue${sofReady ? ' enabled' : ''}`}
-                        style={{ padding: '9px 22px', fontSize: '13px' }}
-                        disabled={!sofReady}
-                        onClick={async () => {
-                          await saveProgressFlag("source_of_funds_accepted", { source_of_funds_details: { source_of_funds: sourceOfFunds, source_of_funds_other: sourceOfFunds === "other" ? sourceOfFundsOther : null, expected_monthly_investment: expectedMonthlyInvestment } });
-                          setSofDone(true);
-                        }}
-                      >
-                        Save
-                      </button>
+                      <input type="hidden" id="source-of-funds2" value={sourceOfFunds} />
                     </div>
                   </div>
-                )}
+                  {sourceOfFunds === "other" && (
+                    <div className="hide-when-dropdown-open">
+                      <label style={{ fontSize: '13px', fontWeight: '500', color: 'hsl(270 30% 25%)', display: 'block', marginBottom: '6px' }}>Please describe your source of funds</label>
+                      <div className="glass-field"><input type="text" placeholder="Describe your source of funds" value={sourceOfFundsOther} onChange={(e) => setSourceOfFundsOther(e.target.value)} /></div>
+                    </div>
+                  )}
+                  <div className="hide-when-dropdown-open">
+                    <label htmlFor="expected-monthly-investment2" style={{ fontSize: '13px', fontWeight: '500', color: 'hsl(270 30% 25%)', display: 'block', marginBottom: '6px' }}>Expected Monthly Investment Amount</label>
+                    <div className="glass-field">
+                      <select id="expected-monthly-investment2" value={expectedMonthlyInvestment} onChange={(e) => setExpectedMonthlyInvestment(e.target.value)}>
+                        {monthlyInvestmentOptions.map((option) => (
+                          <option key={option.value || "placeholder"} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="hide-when-dropdown-open">
+                    <label className="checkbox-item" style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                      <input type="checkbox" checked={agreedSourceOfFunds} onChange={(e) => setAgreedSourceOfFunds(e.target.checked)} />
+                      <span className="checkbox-label" style={{ fontSize: '13px' }}>I declare that the funds I will use for investing are from legitimate sources and I am the beneficial owner of these funds</span>
+                    </label>
+                  </div>
+                </div>
               </div>
 
-              {/* ── Continue ── */}
+              {/* ── Continue: saves everything at once ── */}
               <div className="text-center mt-8 animate-fade-in delay-4">
                 <button
                   type="button"
-                  className={`continue-button agreement-continue${taxDone && bankDone && bankLetterDone && sofDone ? ' enabled' : ''}`}
-                  disabled={!(taxDone && bankDone && bankLetterDone && sofDone)}
-                  onClick={() => goToStep(getNextIncompleteStep(4, 4))}
+                  className={`continue-button agreement-continue${taxNumber && taxNumber.length >= 6 && bankDetailsReady && bankLetterDone && sofReady ? ' enabled' : ''}`}
+                  disabled={!(taxNumber && taxNumber.length >= 6 && bankDetailsReady && bankLetterDone && sofReady)}
+                  onClick={async () => {
+                    try {
+                      const { data: { session } } = await supabase.auth.getSession();
+                      const userId = session?.user?.id;
+                      if (userId) {
+                        await supabase.from("user_onboarding").update({ bank_name: bankName || null, bank_account_number: bankAccountNumber || null, bank_branch_code: bankBranchCode || null }).eq("user_id", userId);
+                      }
+                    } catch { }
+                    await saveProgressFlag("tax_details_saved", { tax_details: { tax_number: taxNumber, savedAt: new Date().toISOString() } });
+                    await saveProgressFlag("bank_details_saved", { bank_details: { bank_name: bankName || null, bank_account_name: bankAccountName || null, bank_account_type: bankAccountType || null, bank_account_number: bankAccountNumber || null, bank_branch_code: bankBranchCode || null, savedAt: new Date().toISOString() } });
+                    await saveProgressFlag("source_of_funds_accepted", { source_of_funds_details: { source_of_funds: sourceOfFunds, source_of_funds_other: sourceOfFunds === "other" ? sourceOfFundsOther : null, expected_monthly_investment: expectedMonthlyInvestment } });
+                    setTaxDone(true);
+                    setBankDone(true);
+                    setSofDone(true);
+                    goToStep(getNextIncompleteStep(4, 4));
+                  }}
                 >
                   Continue
                 </button>
