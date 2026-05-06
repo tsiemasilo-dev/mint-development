@@ -1483,17 +1483,38 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                       onboardingData={{ bankName, bankAccountNumber, bankBranchCode, bankAccountType, taxNumber, identityNumber, sourceOfFunds, sourceOfFundsOther, expectedMonthlyInvestment }}
                       existingOnboardingId={existingOnboardingId}
                       initialPhase="sign"
-                      onComplete={async (signingResults) => {
-                        await saveProgressFlag("risk_disclosure_accepted");
-                        await saveProgressFlag("terms_accepted");
-                        setRiskDone(true);
-                        setTermsDone(true);
-                        await handleFinalComplete(signingResults);
-                        goToStep(7);
-                      }}
+                      mode="text-only"
                     />
                   </div>
                 )}
+              </div>
+
+              {/* ── Standalone Signature Section ── */}
+              <div className="animate-fade-in delay-4" style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', boxShadow: '0 2px 12px rgba(100,60,140,0.06)', overflow: 'hidden' }}>
+                <div style={{ padding: '18px 20px', borderBottom: '1px solid hsl(270 20% 90%)', background: 'hsl(270 50% 98%)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="hsl(270 30% 25%)" strokeWidth="1.5" width="20" height="20" style={{ flexShrink: 0 }}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" />
+                  </svg>
+                  <div>
+                    <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Your Signature</div>
+                    <div style={{ fontSize: '12px', color: 'hsl(270 15% 60%)' }}>Sign below to agree to all sections and complete onboarding</div>
+                  </div>
+                </div>
+                <div style={{ padding: '20px' }}>
+                  <AccountAgreementStep
+                    profile={profile}
+                    onboardingData={{ bankName, bankAccountNumber, bankBranchCode, bankAccountType, taxNumber, identityNumber, sourceOfFunds, sourceOfFundsOther, expectedMonthlyInvestment }}
+                    existingOnboardingId={existingOnboardingId}
+                    initialPhase="sign"
+                    mode="signature-only"
+                    onComplete={async (signingResults) => {
+                      setRiskDone(true);
+                      setTermsDone(true);
+                      await handleFinalComplete(signingResults);
+                      goToStep(7);
+                    }}
+                  />
+                </div>
               </div>
 
               <div className="text-center mt-4 animate-fade-in delay-4">

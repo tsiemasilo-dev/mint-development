@@ -463,6 +463,7 @@ export default function AccountAgreementStep({
   onBack,
   onComplete,
   initialPhase = "review",
+  mode = "full",
 }) {
   const {
     bankName = "", bankAccountNumber = "", bankBranchCode = "",
@@ -928,6 +929,126 @@ export default function AccountAgreementStep({
   if (phase === "sign") {
     const { day, month, year } = todayParts();
 
+    // ── text-only mode: just the scrollable agreement card ──────────────────
+    if (mode === "text-only") {
+      return (
+        <div style={{ fontSize: 13, lineHeight: 1.7, color: "#222" }}>
+          <p style={{ textAlign: "center", marginBottom: 16 }}><strong>Between</strong></p>
+          <p style={{ textAlign: "center", marginBottom: 4 }}>
+            <strong>Mint Platforms (Pty) Ltd</strong>, trading as <strong>Mint</strong><br />
+            Registration Number: 2024/644796/07<br />
+            (&quot;Mint&quot;)
+          </p>
+          <p style={{ textAlign: "center", margin: "12px 0" }}>and</p>
+          <div style={{ textAlign: "center", marginBottom: 24, padding: "12px 20px", borderRadius: 10, background: "hsl(270 50% 97%)", border: `1px solid hsl(270 40% 88%)` }}>
+            <strong style={{ fontSize: 14, color: purple }}>{fullName}</strong><br />
+            <span style={{ fontSize: 12, color: purpleMid }}>ID / Registration Number: {identityNumber || "—"}<br />{address}</span><br />
+            <span style={{ fontSize: 12 }}>(&quot;Client&quot;)</span>
+          </div>
+          <hr style={{ border: "none", borderTop: `1px solid ${purpleBorder}`, margin: "20px 0" }} />
+          <p><strong style={{ color: purple }}>1. APPOINTMENT</strong></p>
+          <p>The Client hereby appoints <strong>Mint Platforms (Pty) Ltd, trading as Mint</strong>, to act as its authorised securities administrator for purposes of facilitating the custody, administration and record-keeping of securities held by the Client.</p>
+          <p style={{ paddingLeft: 16 }}><strong>1.1</strong> Facilitate the opening and administration of the Client&apos;s securities account with the appointed nominee custodian.</p>
+          <p style={{ paddingLeft: 16 }}><strong>1.2</strong> Administer, record, and facilitate the holding of securities beneficially owned by the Client through the nominee and custody structure.</p>
+          <p style={{ paddingLeft: 16 }}><strong>1.3</strong> Interface and communicate with relevant transfer secretaries, custodians, central securities depositories, and settlement agents.</p>
+          <p style={{ paddingLeft: 16 }}><strong>1.4</strong> Provide relevant client and investment information to Strate, the appointed nominee custodian, and related service providers.</p>
+          <p><strong style={{ color: purple }}>2. NOMINEE AND UNDERLYING ACCOUNT ARRANGEMENTS</strong></p>
+          <p style={{ paddingLeft: 16 }}><strong>2.1</strong> Securities acquired through Mint may be held through a nominee structure or underlying accounts opened in the Client&apos;s name with a custodian or registry service provider.</p>
+          <p style={{ paddingLeft: 16 }}><strong>2.2</strong> Mint is authorised to facilitate the opening of such underlying accounts in the Client&apos;s name.</p>
+          <p style={{ paddingLeft: 16 }}><strong>2.3</strong> The Client consents to Mint providing the Client&apos;s information to relevant service providers for establishing such accounts.</p>
+          <p><strong style={{ color: purple }}>3. RECORD OF OWNERSHIP</strong></p>
+          <p style={{ paddingLeft: 16 }}><strong>3.1</strong> The Client remains the <strong>beneficial owner</strong> of any securities purchased or held through Mint.</p>
+          <p style={{ paddingLeft: 16 }}><strong>3.2</strong> Mint will maintain internal records reflecting the Client&apos;s beneficial ownership of securities.</p>
+          <p><strong style={{ color: purple }}>4. CLIENT INSTRUCTIONS</strong></p>
+          <p style={{ paddingLeft: 16 }}><strong>4.1</strong> Mint will act on instructions from the Client regarding subscriptions, transfers, disposals, corporate actions, and other administrative matters.</p>
+          <p><strong style={{ color: purple }}>5. INFORMATION SHARING</strong></p>
+          <p style={{ paddingLeft: 16 }}><strong>5.1</strong> The Client authorises Mint to share relevant client information with custodians, transfer secretaries, registry service providers, and settlement agents solely for administering the Client&apos;s securities holdings.</p>
+          <p><strong style={{ color: purple }}>6. TERM</strong></p>
+          <p>This Agreement shall commence on the date of signature and remain in effect until terminated by either party upon written notice.</p>
+          <p><strong style={{ color: purple }}>7. GOVERNING LAW</strong></p>
+          <p>This Agreement shall be governed by and interpreted in accordance with the laws of the <strong>Republic of South Africa</strong>.</p>
+          <p><strong style={{ color: purple }}>8. SIGNATURES</strong></p>
+          <p>Signed at <strong>MINT PLATFORMS</strong> on this <strong>{day}</strong> day of <strong>{month}</strong> 20<strong>{year}</strong>.</p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginTop: 16 }}>
+            <div style={{ borderTop: `2px solid ${purpleBorder}`, paddingTop: 10 }}>
+              <p style={{ margin: 0, fontSize: 12, fontWeight: 600 }}>For and on behalf of Mint Platforms (Pty) Ltd</p>
+              <p style={{ margin: "4px 0 0", fontSize: 12, color: purpleMid }}>Name: Lonwabo Damane</p>
+              <p style={{ margin: "2px 0 0", fontSize: 12, color: purpleMid }}>Title: Chief Executive Officer</p>
+            </div>
+            <div style={{ borderTop: `2px solid ${purpleBorder}`, paddingTop: 10 }}>
+              <p style={{ margin: 0, fontSize: 12, fontWeight: 600 }}>For and on behalf of the Client</p>
+              <p style={{ margin: "4px 0 0", fontSize: 12, color: purpleMid }}>Name: <strong style={{ color: purple }}>{fullName}</strong></p>
+              <p style={{ margin: "2px 0 0", fontSize: 11, color: purpleMid }}>ID: {identityNumber || "—"}</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ── signature-only mode: just the pad + disclaimer + button ─────────────
+    if (mode === "signature-only") {
+      return (
+        <div>
+          <div style={{
+            background: "white", border: `2px dashed ${purpleBorder}`,
+            borderRadius: 16, overflow: "hidden", marginBottom: 16, position: "relative",
+          }}>
+            <div style={{
+              padding: "10px 16px", borderBottom: `1px solid ${purpleBorder}`,
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+              background: purplePale,
+            }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: purpleMid, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                Signature of {fullName}
+              </span>
+              <button type="button" onClick={clearSignature} style={{
+                fontSize: 11, color: purpleMid, background: "none", border: "none",
+                cursor: "pointer", padding: "2px 8px", borderRadius: 6, fontFamily: "inherit",
+              }}>Clear</button>
+            </div>
+            {sigEmpty && (
+              <div style={{
+                position: "absolute", top: "55%", left: "50%",
+                transform: "translate(-50%,-50%)", pointerEvents: "none", textAlign: "center",
+              }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke={purpleBorder} strokeWidth="1" width={32} height={32} style={{ margin: "0 auto 6px" }}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" />
+                </svg>
+                <p style={{ fontSize: 12, color: purpleBorder, margin: 0 }}>Draw your signature here</p>
+              </div>
+            )}
+            <canvas ref={canvasRef} style={{ display: "block", width: "100%", height: 160, cursor: "crosshair", touchAction: "none" }} />
+          </div>
+          <div style={{
+            display: "flex", gap: 8, marginBottom: 20,
+            padding: "10px 14px", borderRadius: 8,
+            background: "hsl(270 50% 98%)", border: `1px solid ${purpleBorder}`,
+          }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke={mintAccent} strokeWidth="1.5" width={14} height={14} style={{ flexShrink: 0, marginTop: 1 }}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+            </svg>
+            <p style={{ margin: 0, fontSize: 11, color: purpleMid, lineHeight: 1.5 }}>
+              By drawing your signature you confirm that you have read and agree to the Investment Risk Disclosure,
+              Terms &amp; Conditions, and the Client Securities Administration and Nominee Appointment Agreement.
+              This constitutes a legally binding electronic signature.
+            </p>
+          </div>
+          {error && <p className="form-error" role="alert" style={{ textAlign: "center", marginBottom: 12 }}>{error}</p>}
+          <div className="text-center">
+            <button
+              type="button"
+              className={`continue-button agreement-continue ${!sigEmpty ? "enabled" : ""}`}
+              disabled={sigEmpty}
+              onClick={handleSign}
+            >
+              Sign &amp; Complete Onboarding
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // ── full mode (default): heading + text + signature ──────────────────────
     return (
       <div className="w-full max-w-3xl mx-auto">
         <div className="text-center mb-6 animate-fade-in delay-1">
