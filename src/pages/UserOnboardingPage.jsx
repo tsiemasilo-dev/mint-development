@@ -171,6 +171,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const bankDropdownRef = useRef(null);
   const [kycAlreadyVerified, setKycAlreadyVerified] = useState(false);
   const [kycVerificationDone, setKycVerificationDone] = useState(false);
+  const [identityCheckConfirmed, setIdentityCheckConfirmed] = useState(false);
   const [bankDone, setBankDone] = useState(false);
   const [bankLetterDone, setBankLetterDone] = useState(false);
   const [mandateDone, setMandateDone] = useState(false);
@@ -271,7 +272,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   };
 
   const getNextIncompleteStep = (afterStep, justCompletedStep) => {
-    const identityCheckDone = !!existingOnboardingId || kycAlreadyVerified;
+    const identityCheckDone = identityCheckConfirmed || kycAlreadyVerified;
     const financialDetailsDone = taxDone && bankDone && bankLetterDone && sofDone;
     const finalAgreementsDone = riskDone && termsDone && agreementSignedDone;
     const steps = [
@@ -291,7 +292,6 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
   const handleContinue = async () => {
     if (step === 0) {
-      await ensureOnboardingRecord();
       goToStep(getNextIncompleteStep(0));
     }
   };
@@ -354,6 +354,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
         identity_details: { identity_number: cleanIdNumber, applicantId: result.applicantId, savedAt: new Date().toISOString() },
       });
 
+      setIdentityCheckConfirmed(true);
       goToStep(getNextIncompleteStep(1));
     } catch (err) {
       setIdentityCheckError(err?.message || "Failed to verify ID number.");
@@ -363,7 +364,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   };
 
   const getPrevIncompleteStep = (beforeStep) => {
-    const identityCheckDone = !!existingOnboardingId || kycAlreadyVerified;
+    const identityCheckDone = identityCheckConfirmed || kycAlreadyVerified;
     const financialDetailsDone = taxDone && bankDone && bankLetterDone && sofDone;
     const finalAgreementsDone = riskDone && termsDone && agreementSignedDone;
     const steps = [
@@ -584,6 +585,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
             setAgreementSignedDone(true);
           } else {
             // For in-progress users, check each flag individually
+            if (raw.identity_details_saved === true || raw.identity_details?.identity_number) setIdentityCheckConfirmed(true);
             if (raw.tax_details?.tax_number || raw.tax_details_saved === true) setTaxDone(true);
             if (raw.address_details?.address || record.address || raw.address_saved === true) setAddressDone(true);
             if (raw.mandate_data?.agreedMandate === true || raw.mandate_accepted === true) setMandateDone(true);
@@ -810,7 +812,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                   </svg>
                 );
-                const identityCheckDone = !!existingOnboardingId || kycAlreadyVerified;
+                const identityCheckDone = identityCheckConfirmed || kycAlreadyVerified;
                 const financialDetailsDone = taxDone && bankDone && bankLetterDone && sofDone;
                 const steps = [
                   { done: identityCheckDone, title: "Identity Check", doneDesc: "ID number confirmed", pendingDesc: "Confirm your South African ID number", badge: "Confirmed" },
@@ -1566,7 +1568,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                   </svg>
                 );
-                const identityCheckDone = !!existingOnboardingId || kycAlreadyVerified;
+                const identityCheckDone = identityCheckConfirmed || kycAlreadyVerified;
                 const financialDetailsDone = taxDone && bankDone && bankLetterDone && sofDone;
                 const reviewSteps = [
                   { done: identityCheckDone, title: "Identity Check", doneDesc: "ID number confirmed", pendingDesc: "Confirm your South African ID number", badge: "Confirmed" },
