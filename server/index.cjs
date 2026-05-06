@@ -5454,6 +5454,8 @@ app.post("/api/onboarding/check-id-number", async (req, res) => {
         if (exists) {
           matchedUserId = result.rows[0].user_id || null;
         }
+      } catch (pgErr) {
+        console.warn("[Onboarding] pgPool ID precheck failed, falling back to Supabase client:", pgErr.message);
       } finally {
         client.release();
       }
