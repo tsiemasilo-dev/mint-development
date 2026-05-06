@@ -1671,6 +1671,8 @@ const App = () => {
           amount={investmentAmount}
           strategyName={selectedStrategy?.name || "Investment"}
           childFamilyMemberId={selectedChildForInvest?.id || null}
+          childFirstName={selectedChildForInvest?.first_name || "Child"}
+          childWalletBalanceCents={selectedChildForInvest?.available_balance ?? null}
           onSelectPaystack={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("paystack"); navigateTo("payment"); }}
           onSelectWallet={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("wallet"); navigateTo("payment"); }}
           onSelectOzow={async () => {

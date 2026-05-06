@@ -16,6 +16,8 @@ const PaymentMethodModal = ({
   onEFTConfirm,
   onSelectWallet,
   childFamilyMemberId,
+  childFirstName,
+  childWalletBalanceCents,
 }) => {
   const [eftExpanded, setEftExpanded] = useState(false);
   const [copied, setCopied] = useState(null);
@@ -29,12 +31,24 @@ const PaymentMethodModal = ({
   const [walletBalance, setWalletBalance] = useState(0);
   const [walletLabel, setWalletLabel] = useState("Wallet");
   const [walletLoading, setWalletLoading] = useState(true);
-  const isChildWallet = !!childFamilyMemberId;
+  const hasChildBalanceSnapshot = childWalletBalanceCents !== undefined && childWalletBalanceCents !== null;
+  const isChildWallet = !!childFamilyMemberId || !!childFirstName || hasChildBalanceSnapshot;
 
   useEffect(() => {
     const fetchWallet = async () => {
       setWalletLoading(true);
       if (isChildWallet) {
+        // Show child context immediately when provided by parent flow.
+        if (hasChildBalanceSnapshot) {
+          setWalletBalance(Number(childWalletBalanceCents || 0) / 100);
+          const first = childFirstName || "Child";
+          setWalletLabel(`${first}'s wallet`);
+          if (!childFamilyMemberId) {
+            setWalletLoading(false);
+            return;
+          }
+        }
+
         try {
           const res = await fetch(`/api/child-wallet?family_member_id=${encodeURIComponent(childFamilyMemberId)}`);
           const json = await res.json();
@@ -63,7 +77,7 @@ const PaymentMethodModal = ({
 
     if (!isChildWallet && !profile?.id) return;
     fetchWallet();
-  }, [childFamilyMemberId, isChildWallet, profile?.id]);
+  }, [childFamilyMemberId, childFirstName, childWalletBalanceCents, hasChildBalanceSnapshot, isChildWallet, profile?.id]);
 
   const handleCopy = (value, label) => {
     navigator.clipboard.writeText(value).then(() => {
