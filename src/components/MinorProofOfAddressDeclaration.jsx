@@ -562,7 +562,15 @@ export default function MinorProofOfAddressDeclaration({ childData, parentProfil
   // Init signature pads
   useEffect(() => {
     if (answer === "same" && sameCanvasRef.current && !samePadRef.current) {
-      samePadRef.current = new SignaturePad(sameCanvasRef.current, {
+      const canvas = sameCanvasRef.current;
+      const ratio = Math.max(window.devicePixelRatio || 1, 1);
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width > 0) {
+        canvas.width = Math.round(rect.width * ratio);
+        canvas.height = Math.round(rect.height * ratio);
+        canvas.getContext("2d").scale(ratio, ratio);
+      }
+      samePadRef.current = new SignaturePad(canvas, {
         backgroundColor: "rgb(255,255,255)", penColor: "rgb(30,27,75)", minWidth: 1, maxWidth: 2.5,
       });
     }
@@ -572,7 +580,15 @@ export default function MinorProofOfAddressDeclaration({ childData, parentProfil
     if (answer === "different" && addressStep === "sign" && diffCanvasRef.current && !diffPadRef.current) {
       setTimeout(() => {
         if (diffCanvasRef.current && !diffPadRef.current) {
-          diffPadRef.current = new SignaturePad(diffCanvasRef.current, {
+          const canvas = diffCanvasRef.current;
+          const ratio = Math.max(window.devicePixelRatio || 1, 1);
+          const rect = canvas.getBoundingClientRect();
+          if (rect.width > 0) {
+            canvas.width = Math.round(rect.width * ratio);
+            canvas.height = Math.round(rect.height * ratio);
+            canvas.getContext("2d").scale(ratio, ratio);
+          }
+          diffPadRef.current = new SignaturePad(canvas, {
             backgroundColor: "rgb(255,255,255)", penColor: "rgb(30,27,75)", minWidth: 1, maxWidth: 2.5,
           });
         }

@@ -728,14 +728,18 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
       let poaUrl = null;
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
-      if (!token && livesWithParent && pdfBuffer) {
+      if (!token && pdfBuffer) {
         throw new Error("Session expired. Please sign in again.");
       }
 
-      if (livesWithParent && pdfBuffer) {
+      if (pdfBuffer) {
+        // Use chunked fromCharCode to avoid freezing the JS thread on mobile
         const uint8 = new Uint8Array(pdfBuffer);
+        const CHUNK = 0x8000;
         let bin = "";
-        for (let i = 0; i < uint8.length; i++) bin += String.fromCharCode(uint8[i]);
+        for (let i = 0; i < uint8.length; i += CHUNK) {
+          bin += String.fromCharCode.apply(null, uint8.subarray(i, i + CHUNK));
+        }
         const pdfBase64 = btoa(bin);
         const res = await fetch("/api/onboarding/upload-agreement", {
           method: "POST",
@@ -747,7 +751,7 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
           throw new Error(j?.error || "Failed to upload proof of address.");
         }
         poaUrl = j.publicUrl;
-      } else if (!livesWithParent && fileUpload && supabase) {
+      } else if (fileUpload && supabase) {
         const safeName = fileUpload.name.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9._-]/g, "");
         const path = `poa/${child.id}/${Date.now()}-${safeName}`;
         const { error: upErr } = await supabase.storage
