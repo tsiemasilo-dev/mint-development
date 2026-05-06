@@ -1472,21 +1472,26 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 </label>
               </div>
 
-              {/* ── Section 3: Account Agreement signing (accordion, appears after checkbox) ── */}
-              {agreedAll && (
-                <div className="animate-fade-in delay-4" style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', boxShadow: '0 2px 12px rgba(100,60,140,0.06)', overflow: 'hidden' }}>
-                  <button type="button" onClick={() => setSec3Open(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '18px 20px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
-                    <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'hsl(270 30% 25%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>3</span>
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Sign Your Account Agreement</div>
-                      <div style={{ fontSize: '12px', color: 'hsl(270 15% 60%)' }}>Review and sign your client agreement</div>
-                    </div>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="hsl(270 20% 55%)" strokeWidth="2" width="18" height="18" style={{ flexShrink: 0, transition: 'transform 0.2s', transform: sec3Open ? 'rotate(180deg)' : 'rotate(0deg)' }}><path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" /></svg>
-                  </button>
-                  {sec3Open && (
-                    <div style={{ padding: '0 20px 18px' }}>
+              {/* ── Section 3: Account Agreement signing (accordion, always visible) ── */}
+              <div className="animate-fade-in delay-4" style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', boxShadow: '0 2px 12px rgba(100,60,140,0.06)', overflow: 'hidden' }}>
+                <button type="button" onClick={() => setSec3Open(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '18px 20px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'hsl(270 30% 25%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>3</span>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Sign Your Account Agreement</div>
+                    <div style={{ fontSize: '12px', color: 'hsl(270 15% 60%)' }}>Review and sign your client agreement</div>
+                  </div>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="hsl(270 20% 55%)" strokeWidth="2" width="18" height="18" style={{ flexShrink: 0, transition: 'transform 0.2s', transform: sec3Open ? 'rotate(180deg)' : 'rotate(0deg)' }}><path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" /></svg>
+                </button>
+                {sec3Open && (
+                  <div style={{ padding: '0 20px 18px' }}>
+                    {!agreedAll ? (
+                      <div style={{ textAlign: 'center', padding: '24px 0', color: 'hsl(270 15% 60%)', fontSize: '13px' }}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="32" height="32" style={{ margin: '0 auto 10px', display: 'block', opacity: 0.5 }}><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" /></svg>
+                        Please confirm the checkbox above to unlock signing
+                      </div>
+                    ) : (
                       <AccountAgreementStep
                         profile={profile}
                         onboardingData={{ bankName, bankAccountNumber, bankBranchCode, bankAccountType, taxNumber, identityNumber, sourceOfFunds, sourceOfFundsOther, expectedMonthlyInvestment }}
@@ -1500,10 +1505,10 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                           goToStep(7);
                         }}
                       />
-                    </div>
-                  )}
-                </div>
-              )}
+                    )}
+                  </div>
+                )}
+              </div>
 
               <div className="text-center mt-4 animate-fade-in delay-4">
                 <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>Step 6 of 6</p>
