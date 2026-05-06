@@ -217,11 +217,12 @@ function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onCl
 
 // --- Invest Modal (bottom-sheet) - browse strategies & invest ----------------
 
-function InvestModal({ child, onInvest, onClose }) {
+function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
   const [strategies, setStrategies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
+  const [step, setStep] = useState("browse");
   const [units, setUnits] = useState(1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -272,7 +273,16 @@ function InvestModal({ child, onInvest, onClose }) {
         const ytd_as_of_date = metrics?.as_of_date ?? null;
         const holdingsList = (Array.isArray(s.holdings) ? s.holdings : [])
           .sort((a, b) => Number(b.weight || 0) - Number(a.weight || 0))
-          .map(h => ({ symbol: h.symbol || h.ticker, logo_url: secMap[h.symbol || h.ticker]?.logo_url || null }));
+          .map(h => {
+            const symbol = h.symbol || h.ticker;
+            const security = secMap[symbol] || {};
+            return {
+              ...h,
+              symbol,
+              name: security.name || h.name || symbol,
+              logo_url: security.logo_url || null,
+            };
+          });
         return { ...s, r_ytd, ytd_as_of_date, holdingsList };
       });
 
@@ -313,6 +323,49 @@ function InvestModal({ child, onInvest, onClose }) {
     s.name?.toLowerCase().includes(search.toLowerCase())
   );
 
+  const getYtdPct = (strategy) => {
+    if (strategy?.r_ytd == null) return null;
+    const value = Number(strategy.r_ytd);
+    if (!Number.isFinite(value)) return null;
+    return Math.abs(value) > 1 ? value : value * 100;
+  };
+
+  const getPreviewTags = (strategy) => {
+    const tags = Array.isArray(strategy?.tags)
+      ? strategy.tags
+      : typeof strategy?.tags === "string"
+        ? strategy.tags.split(",").map((tag) => tag.trim()).filter(Boolean)
+        : [];
+    return tags.length ? tags : [strategy?.risk_level || "Balanced", strategy?.sector].filter(Boolean);
+  };
+
+  const goBackOneStep = () => {
+    setError("");
+    if (step === "amount") {
+      setStep("preview");
+      return;
+    }
+    if (step === "preview") {
+      setSelected(null);
+      setStep("browse");
+      setUnits(1);
+    }
+  };
+
+  const openFactsheet = () => {
+    if (!selected || !onOpenFactsheet) return;
+    onClose();
+    onOpenFactsheet({
+      ...selected,
+      calculatedMinInvestment: selected.min_investment ? Math.round(selected.min_investment / 100) : null,
+      holdingsWithLogos: (selected.holdingsList || []).map((h) => ({
+        ...h,
+        ticker: h.ticker || h.symbol,
+        logo_url: h.logo_url || null,
+      })),
+    });
+  };
+
   const inputCls =
     "w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 placeholder-slate-400 focus:border-violet-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-100 transition";
 
@@ -336,7 +389,7 @@ function InvestModal({ child, onInvest, onClose }) {
                 <div className="flex items-center gap-3">
                   {selected && (
                     <button
-                      onClick={() => { setSelected(null); setUnits(1); setError(""); }}
+                      onClick={goBackOneStep}
                       className="h-8 w-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition active:scale-95 mr-1"
                     >
                       <ArrowLeft className="h-3.5 w-3.5" />
@@ -347,7 +400,7 @@ function InvestModal({ child, onInvest, onClose }) {
                   </div>
                   <div>
                     <p className="text-base font-bold text-slate-900">
-                      {selected ? "Invest Amount" : "Invest for " + child.first_name}
+                      {step === "amount" ? "Invest Amount" : step === "preview" ? "Strategy Preview" : "Invest for " + child.first_name}
                     </p>
                     <p className="text-xs text-slate-400">
                       {selected ? selected.name : "Choose a strategy to invest in"}
@@ -370,7 +423,7 @@ function InvestModal({ child, onInvest, onClose }) {
               </div>
 
               {/* Strategy list */}
-              {!selected && (
+              {step === "browse" && (
                 <>
                   {/* Search */}
                   <div className="relative mb-3">
@@ -409,13 +462,12 @@ function InvestModal({ child, onInvest, onClose }) {
                   ) : (
                     <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-0.5">
                       {filtered.map((s) => {
-                        const ytd = s.r_ytd;
-                        const ytdPct = ytd != null ? ytd * 100 : null;
+                        const ytdPct = getYtdPct(s);
                         const isUp = (ytdPct ?? 0) >= 0;
                         return (
                           <button
                             key={s.id}
-                            onClick={() => setSelected(s)}
+                            onClick={() => { setSelected(s); setStep("preview"); setUnits(1); setError(""); }}
                             className="w-full rounded-2xl border border-slate-100 bg-white shadow-sm p-4 text-left hover:shadow-md hover:border-violet-200 transition active:scale-[0.98]"
                           >
                             {/* Header row */}
@@ -512,8 +564,102 @@ function InvestModal({ child, onInvest, onClose }) {
                 </>
               )}
 
+              {/* Strategy preview (after selecting strategy) */}
+              {selected && step === "preview" && (
+                <div className="mt-2 space-y-4">
+                  {(() => {
+                    const ytdPct = getYtdPct(selected);
+                    const isUp = (ytdPct ?? 0) >= 0;
+                    return (
+                      <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">YTD return</p>
+                            <p className={`mt-1 text-2xl font-bold tabular-nums ${isUp ? "text-emerald-600" : "text-red-500"}`}>
+                              {ytdPct != null ? `${isUp ? "+" : ""}${ytdPct.toFixed(2)}%` : "-"}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Min investment</p>
+                            <p className="mt-1 text-lg font-bold text-slate-900 tabular-nums">
+                              {selected.min_investment > 0 ? fmt(selected.min_investment) : "N/A"}
+                            </p>
+                          </div>
+                        </div>
+                        {selected.ytd_as_of_date && (
+                          <p className="mt-2 text-[10px] font-semibold text-slate-400">
+                            As of {new Date(selected.ytd_as_of_date).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {selected.description && (
+                    <p className="text-sm leading-relaxed text-slate-600">{selected.description}</p>
+                  )}
+
+                  <div className="flex flex-wrap gap-1.5">
+                    {getPreviewTags(selected).map((tag) => (
+                      <span key={tag} className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+                        {tag}
+                      </span>
+                    ))}
+                    {selected.is_featured && (
+                      <span className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-600">Featured</span>
+                    )}
+                  </div>
+
+                  {selected.holdingsList?.length > 0 && (
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Top Holdings</p>
+                      <div className="mt-3 space-y-2">
+                        {selected.holdingsList.slice(0, 5).map((holding) => (
+                          <div key={holding.symbol} className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-slate-100 bg-white">
+                              {holding.logo_url ? (
+                                <img src={holding.logo_url} alt={holding.name || holding.symbol} className="h-full w-full object-cover" />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center bg-slate-100 text-xs font-bold text-slate-600">
+                                  {holding.symbol?.substring(0, 2)}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="truncate text-sm font-semibold text-slate-900">{holding.name || holding.symbol}</p>
+                              <p className="text-xs text-slate-500">{holding.symbol}</p>
+                            </div>
+                            {holding.weight != null && (
+                              <p className="text-sm font-semibold text-slate-600 tabular-nums">{Number(holding.weight).toFixed(1)}%</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={openFactsheet}
+                      className="rounded-xl border border-slate-200 bg-white py-3 text-sm font-bold text-slate-700 transition active:scale-[0.98]"
+                    >
+                      View Factsheet
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setStep("amount"); setError(""); }}
+                      className="rounded-xl py-3 text-sm font-bold text-white transition active:scale-[0.98]"
+                      style={{ background: "linear-gradient(135deg,#1e1b4b,#312e81)" }}
+                    >
+                      Invest Now
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Amount entry (after selecting strategy) */}
-              {selected && (
+              {selected && step === "amount" && (
                 <div className="mt-2">
                   <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2 ml-0.5">
                     Units to invest
@@ -919,7 +1065,7 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
 
 // --- Main Page ---------------------------------------------------------------
 
-export default function ChildDashboardPage({ child: initialChild, onBack }) {
+export default function ChildDashboardPage({ child: initialChild, onBack, onOpenFactsheet }) {
   const { profile } = useProfile();
   const isMounted = useRef(true);
   const [child, setChild] = useState(initialChild);
@@ -1457,6 +1603,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
             child={child}
             onInvest={handleInvestDone}
             onClose={() => setShowInvest(false)}
+            onOpenFactsheet={onOpenFactsheet}
           />
         )}
       </AnimatePresence>
