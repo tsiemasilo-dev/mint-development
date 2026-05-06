@@ -222,14 +222,15 @@ function InvestModal({ child, onInvest, onClose }) {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
-  const [amount, setAmount] = useState("");
+  const [units, setUnits] = useState(1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
   const childBalance = child.available_balance || 0;
-  const numAmount = parseFloat(amount) || 0;
-  const amountCents = Math.round(numAmount * 100);
+  const minInvCents = selected?.min_investment || 0;
+  const amountCents = units * minInvCents;
+  const numAmount = amountCents / 100;
   const insufficient = amountCents > childBalance;
 
   useEffect(() => {
@@ -282,14 +283,8 @@ function InvestModal({ child, onInvest, onClose }) {
 
   async function handleInvest() {
     if (!selected) return;
-    if (numAmount <= 0) { setError("Enter a valid amount."); return; }
+    if (amountCents <= 0) { setError("Select a valid investment amount."); return; }
     if (insufficient) { setError("Insufficient funds in child's wallet."); return; }
-
-    const minInv = (selected.min_investment || 0);
-    if (amountCents < minInv) {
-      setError(`Minimum investment is ${fmt(minInv)}.`);
-      return;
-    }
 
     setSaving(true);
     setError("");
@@ -341,7 +336,7 @@ function InvestModal({ child, onInvest, onClose }) {
                 <div className="flex items-center gap-3">
                   {selected && (
                     <button
-                      onClick={() => { setSelected(null); setAmount(""); setError(""); }}
+                      onClick={() => { setSelected(null); setUnits(1); setError(""); }}
                       className="h-8 w-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition active:scale-95 mr-1"
                     >
                       <ArrowLeft className="h-3.5 w-3.5" />
@@ -384,7 +379,7 @@ function InvestModal({ child, onInvest, onClose }) {
                       type="text"
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
-                      placeholder="Search strategiesâ€¦"
+                      placeholder="Search strategies..."
                       className={inputCls + " pl-10"}
                     />
                   </div>
@@ -521,32 +516,35 @@ function InvestModal({ child, onInvest, onClose }) {
               {selected && (
                 <div className="mt-2">
                   <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2 ml-0.5">
-                    Investment Amount (ZAR)
+                    Units to invest
                   </label>
-                  <div className="relative mb-4">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-bold text-slate-400">R</span>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      placeholder="0.00"
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-lg font-bold text-slate-800 text-center placeholder-slate-400 focus:border-violet-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-100 transition tabular-nums pl-10"
-                      autoFocus
-                    />
+
+                  {/* Unit stepper */}
+                  <div className="flex items-center justify-center gap-6 py-4 mb-3">
+                    <button
+                      type="button"
+                      onClick={() => setUnits(u => Math.max(1, u - 1))}
+                      disabled={units <= 1}
+                      className="h-12 w-12 rounded-full bg-slate-100 text-slate-700 text-2xl font-bold flex items-center justify-center transition active:scale-90 disabled:opacity-40"
+                    >−</button>
+                    <div className="text-center min-w-[60px]">
+                      <p className="text-4xl font-bold text-slate-900 tabular-nums">{units}</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">unit{units !== 1 ? "s" : ""}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setUnits(u => u + 1)}
+                      className="h-12 w-12 rounded-full bg-violet-600 text-white text-2xl font-bold flex items-center justify-center transition active:scale-90"
+                    >+</button>
                   </div>
 
-                  {/* Quick amounts */}
-                  <div className="flex gap-2 mb-5">
-                    {[100, 250, 500, 1000].map((v) => (
-                      <button
-                        key={v}
-                        onClick={() => setAmount(String(v))}
-                        className="flex-1 rounded-lg py-2 text-xs font-bold text-purple-600 bg-purple-50 border border-purple-100 hover:bg-purple-100 transition active:scale-95"
-                      >
-                        R{v}
-                      </button>
-                    ))}
+                  {/* Price breakdown */}
+                  <div className="flex items-center justify-center gap-1.5 text-sm mb-5 text-slate-500">
+                    <span className="font-semibold text-slate-700">{fmt(minInvCents)}</span>
+                    <span>×</span>
+                    <span className="font-semibold text-slate-700">{units}</span>
+                    <span>=</span>
+                    <span className="font-bold text-violet-700 text-base">{fmt(amountCents)}</span>
                   </div>
 
                   {/* Strategy info */}
