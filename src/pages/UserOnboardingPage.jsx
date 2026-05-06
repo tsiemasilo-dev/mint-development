@@ -276,8 +276,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
     const financialDetailsDone = taxDone && bankDone && bankLetterDone && sofDone;
     const finalAgreementsDone = riskDone && termsDone && agreementSignedDone;
     const steps = [
-      { step: 1, done: identityCheckDone },
-      { step: 2, done: kycVerificationDone },
+      { step: 1, done: identityCheckDone && kycVerificationDone },
       { step: 3, done: addressDone },
       { step: 4, done: financialDetailsDone },
       { step: 5, done: mandateDone },
@@ -355,7 +354,6 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
       });
 
       setIdentityCheckConfirmed(true);
-      goToStep(getNextIncompleteStep(1));
     } catch (err) {
       setIdentityCheckError(err?.message || "Failed to verify ID number.");
     } finally {
@@ -372,8 +370,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
       { step: 5, done: mandateDone },
       { step: 4, done: financialDetailsDone },
       { step: 3, done: addressDone },
-      { step: 2, done: true },
-      { step: 1, done: identityCheckDone },
+      { step: 1, done: identityCheckDone && kycVerificationDone },
     ];
     for (const s of steps) {
       if (s.step < beforeStep && !s.done) return s.step;
@@ -617,7 +614,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   }, [profile, profileLoading, bankAccountName]);
 
   useEffect(() => {
-    if (step !== 2) {
+    if (step !== 1) {
       setShowProceed(false);
     }
     if (step !== 7) {
@@ -641,7 +638,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
           setKycAlreadyVerified(true);
           setKycVerificationDone(true);
 
-          if (step === 2) {
+          if (step === 1) {
             setShowProceed(true);
 
             try {
@@ -815,8 +812,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 const identityCheckDone = identityCheckConfirmed || kycAlreadyVerified;
                 const financialDetailsDone = taxDone && bankDone && bankLetterDone && sofDone;
                 const steps = [
-                  { done: identityCheckDone, title: "Identity Check", doneDesc: "ID number confirmed", pendingDesc: "Confirm your South African ID number", badge: "Confirmed" },
-                  { done: kycAlreadyVerified, title: "Identity Verification", doneDesc: "Identity verification complete", pendingDesc: "Verify your identity with Sumsub", badge: "Verified" },
+                  { done: identityCheckDone && kycVerificationDone, title: "Identity & Verification", doneDesc: "Identity verified", pendingDesc: "Confirm your ID and complete identity verification", badge: "Verified" },
                   { done: addressDone, title: "Residential Address", doneDesc: "Address captured", pendingDesc: "Provide your current residential address", badge: "Captured" },
                   { done: financialDetailsDone, title: "Financial Details", doneDesc: "Financial details saved", pendingDesc: "Bank, tax, source of funds & more", badge: "Saved" },
                   { done: mandateDone, title: "Discretionary Mandate", doneDesc: "Mandate accepted", pendingDesc: "Review and accept the FSP investment mandate", badge: "Accepted" },
@@ -868,66 +864,64 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
               <div className="text-center mt-6 animate-fade-in delay-4">
                 <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  You'll be taken through our six-step process
+                  You'll be taken through our five-step process
                 </p>
               </div>
             </div>
           ) : step === 1 ? (
             <div className="w-full max-w-xl mx-auto">
-              <div className="text-center mb-8 animate-fade-in delay-1">
-                <p
-                  className="text-xs uppercase tracking-[0.2em] mb-2"
-                  style={{ color: "hsl(270 20% 55%)" }}
-                >
-                  Step 1 of 6
-                </p>
-                <h2
-                  className="text-3xl font-light tracking-tight mb-2"
-                  style={{ color: "hsl(270 30% 25%)" }}
-                >
-                  Identity Check
-                </h2>
-                <p className="text-sm" style={{ color: "hsl(270 20% 50%)" }}>
-                  Enter your South African ID number before continuing
-                </p>
-              </div>
-
-              <div className="space-y-5">
-                <div className="animate-fade-in delay-2">
-                  <label htmlFor="identity-number">ID Number</label>
-                  <div className="glass-field">
-                    <input
-                      type="text"
-                      id="identity-number"
-                      placeholder="Enter your 13-digit ID number"
-                      value={identityNumber}
-                      onChange={(event) => setIdentityNumber(event.target.value.replace(/\D/g, "").slice(0, 13))}
-                      inputMode="numeric"
-                      autoComplete="off"
-                    />
-                  </div>
-                </div>
-
-                <div className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  We will check this number in onboarding pack records before allowing you to proceed.
-                </div>
-
-                <div className="pt-2 animate-fade-in delay-3">
-                  <button
-                    type="button"
-                    className="submit-btn"
-                    onClick={handleIdentityCheckContinue}
-                    disabled={identityCheckLoading}
-                  >
-                    {identityCheckLoading ? "Checking..." : "Continue"}
-                  </button>
-                  {identityCheckError ? (
-                    <p className="form-error" role="alert">
-                      {identityCheckError}
+              {!identityCheckConfirmed ? (
+                <>
+                  <div className="text-center mb-8 animate-fade-in delay-1">
+                    <p className="text-xs uppercase tracking-[0.2em] mb-2" style={{ color: "hsl(270 20% 55%)" }}>
+                      Step 1 of 5
                     </p>
-                  ) : null}
-                </div>
-              </div>
+                    <h2 className="text-3xl font-light tracking-tight mb-2" style={{ color: "hsl(270 30% 25%)" }}>
+                      Identity & Verification
+                    </h2>
+                    <p className="text-sm" style={{ color: "hsl(270 20% 50%)" }}>
+                      Enter your South African ID number to get started
+                    </p>
+                  </div>
+                  <div className="space-y-5">
+                    <div className="animate-fade-in delay-2">
+                      <label htmlFor="identity-number">ID Number</label>
+                      <div className="glass-field">
+                        <input
+                          type="text"
+                          id="identity-number"
+                          placeholder="Enter your 13-digit ID number"
+                          value={identityNumber}
+                          onChange={(event) => setIdentityNumber(event.target.value.replace(/\D/g, "").slice(0, 13))}
+                          inputMode="numeric"
+                          autoComplete="off"
+                        />
+                      </div>
+                    </div>
+                    <div className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
+                      We will check this number in onboarding pack records before allowing you to proceed.
+                    </div>
+                    <div className="pt-2 animate-fade-in delay-3">
+                      <button
+                        type="button"
+                        className="submit-btn"
+                        onClick={handleIdentityCheckContinue}
+                        disabled={identityCheckLoading}
+                      >
+                        {identityCheckLoading ? "Checking..." : "Continue"}
+                      </button>
+                      {identityCheckError ? (
+                        <p className="form-error" role="alert">{identityCheckError}</p>
+                      ) : null}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <SumsubVerification onVerified={() => {
+                  setKycVerificationDone(true);
+                  goToStep(getNextIncompleteStep(2));
+                }} />
+              )}
             </div>
           ) : step === 2 ? (
             <SumsubVerification onVerified={() => {
@@ -938,7 +932,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
             <div className="w-full max-w-xl mx-auto">
               <div className="text-center mb-8 animate-fade-in delay-1">
                 <p className="text-xs uppercase tracking-[0.2em] mb-2" style={{ color: "hsl(270 20% 55%)" }}>
-                  Step 3 of 6
+                  Step 2 of 5
                 </p>
                 <div className="hero-icon">
                   <WalletIcon width={48} height={48} />
@@ -1013,7 +1007,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
             <div className="w-full max-w-3xl mx-auto">
               <div className="text-center mb-6 animate-fade-in delay-1">
                 <p className="text-xs uppercase tracking-[0.2em] mb-2" style={{ color: "hsl(270 20% 55%)" }}>
-                  Step 4 of 6
+                  Step 3 of 5
                 </p>
                 <div className="hero-icon">
                   <FileContractIcon width={48} height={48} />
@@ -1304,7 +1298,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 </button>
               </div>
               <div className="text-center mt-4 animate-fade-in delay-4">
-                <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>Step 4 of 6</p>
+                <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>Step 3 of 5</p>
               </div>
             </div>
 
@@ -1389,7 +1383,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 </button>
               </div>
               <div className="text-center mt-6 animate-fade-in delay-4">
-                <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>Step 5 of 6</p>
+                <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>Step 4 of 5</p>
               </div>
             </div>
 
@@ -1552,7 +1546,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
               {!signingStarted && (
                 <div className="text-center mt-4 animate-fade-in delay-4">
-                  <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>Step 6 of 6</p>
+                  <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>Step 5 of 5</p>
                 </div>
               )}
             </div>
@@ -1573,8 +1567,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 const identityCheckDone = identityCheckConfirmed || kycAlreadyVerified;
                 const financialDetailsDone = taxDone && bankDone && bankLetterDone && sofDone;
                 const reviewSteps = [
-                  { done: identityCheckDone, title: "Identity Check", doneDesc: "ID number confirmed", pendingDesc: "Confirm your South African ID number", badge: "Confirmed" },
-                  { done: kycAlreadyVerified, title: "Identity Verification", doneDesc: "Identity verification complete", pendingDesc: "Verify your identity with Sumsub", badge: "Verified" },
+                  { done: identityCheckDone && kycVerificationDone, title: "Identity & Verification", doneDesc: "Identity verified", pendingDesc: "Confirm your ID and complete identity verification", badge: "Verified" },
                   { done: addressDone, title: "Residential Address", doneDesc: "Address captured", pendingDesc: "Provide your current residential address", badge: "Captured" },
                   { done: financialDetailsDone, title: "Financial Details", doneDesc: "Financial details saved", pendingDesc: "Bank, tax, source of funds & more", badge: "Saved" },
                   { done: mandateDone, title: "Discretionary Mandate", doneDesc: "Mandate accepted", pendingDesc: "Review and accept the FSP investment mandate", badge: "Accepted" },
