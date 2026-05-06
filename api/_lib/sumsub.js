@@ -2,7 +2,7 @@ import crypto from "crypto";
 
 const SUMSUB_APP_TOKEN = process.env.SUMSUB_APP_TOKEN;
 const SUMSUB_SECRET_KEY = process.env.SUMSUB_SECRET_KEY;
-const SUMSUB_BASE_URL = "https://api.sumsub.com";
+const SUMSUB_BASE_URL = process.env.SUMSUB_BASE_URL || "https://api.sumsub.com";
 
 const createSignature = (ts, method, path, body = "") => {
   const data = ts + method.toUpperCase() + path + body;
