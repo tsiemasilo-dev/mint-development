@@ -551,32 +551,49 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
           }
           let raw = {};
           try { raw = typeof record.sumsub_raw === "string" ? JSON.parse(record.sumsub_raw) : (record.sumsub_raw || {}); } catch { }
+
+          // Populate field values from stored data
           if (raw.bank_details?.bank_account_name) setBankAccountName(raw.bank_details.bank_account_name);
-          if (raw.identity_details?.identity_number) {
-            setIdentityNumber(raw.identity_details.identity_number);
-          }
+          if (raw.identity_details?.identity_number) setIdentityNumber(raw.identity_details.identity_number);
           if (raw.bank_details?.bank_account_type) setBankAccountType(raw.bank_details.bank_account_type);
-          if (raw.tax_details?.tax_number) {
-            setTaxNumber(raw.tax_details.tax_number);
-            setTaxDone(true);
-          }
-          if (raw.address_details?.address || record.address) {
-            setAddress(raw.address_details?.address || record.address);
-            setAddressDone(true);
-          }
-          if (raw.mandate_data?.agreedMandate === true || raw.mandate_accepted === true) setMandateDone(true);
-          if (raw.risk_disclosure_accepted === true) setRiskDone(true);
-          if (raw.source_of_funds_accepted === true) setSofDone(true);
+          if (raw.tax_details?.tax_number) setTaxNumber(raw.tax_details.tax_number);
+          if (raw.address_details?.address || record.address) setAddress(raw.address_details?.address || record.address);
           if (raw.source_of_funds_details) {
             const { source_of_funds, source_of_funds_other, expected_monthly_investment } = raw.source_of_funds_details;
             if (source_of_funds) setSourceOfFunds(source_of_funds);
             if (source_of_funds_other) setSourceOfFundsOther(source_of_funds_other);
             if (expected_monthly_investment) setExpectedMonthlyInvestment(expected_monthly_investment);
           }
-          if (raw.bank_details_saved === true) setBankDone(true);
-          if (raw.bank_letter_uploaded === true) setBankLetterDone(true);
-          if (raw.address_saved === true) setAddressDone(true);
-          if (raw.terms_accepted === true) setTermsDone(true);
+
+          // If the user has fully completed onboarding, mark all steps done
+          const fullyComplete =
+            record.kyc_status === "onboarding_complete" ||
+            (!!raw?.signed_at) ||
+            (!!raw?.account_agreement_signed);
+
+          if (fullyComplete) {
+            setTaxDone(true);
+            setBankDone(true);
+            setBankLetterDone(true);
+            setSofDone(true);
+            setAddressDone(true);
+            setMandateDone(true);
+            setRiskDone(true);
+            setTermsDone(true);
+            setAgreementSignedDone(true);
+          } else {
+            // For in-progress users, check each flag individually
+            if (raw.tax_details?.tax_number || raw.tax_details_saved === true) setTaxDone(true);
+            if (raw.address_details?.address || record.address || raw.address_saved === true) setAddressDone(true);
+            if (raw.mandate_data?.agreedMandate === true || raw.mandate_accepted === true) setMandateDone(true);
+            if (raw.risk_disclosure_accepted === true) setRiskDone(true);
+            if (raw.source_of_funds_accepted === true) setSofDone(true);
+            if (raw.bank_details_saved === true) setBankDone(true);
+            if (raw.bank_letter_uploaded === true) setBankLetterDone(true);
+            if (raw.address_saved === true) setAddressDone(true);
+            if (raw.terms_accepted === true) setTermsDone(true);
+            if (raw.account_agreement_signed === true || raw.signed_at) setAgreementSignedDone(true);
+          }
         }
       } catch (err) {
         // ignore; user can still proceed normally
