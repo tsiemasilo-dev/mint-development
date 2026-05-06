@@ -954,13 +954,15 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               <div className="space-y-6">
                 <div className="animate-fade-in delay-2">
                   <label htmlFor="residential-address">Street Address</label>
-                  <AddressAutocomplete
-                    value={address}
-                    onChange={(value) => setAddress(value)}
-                    placeholder="Search for your residential address"
-                    containerClassName="glass-field-container"
-                    inputClassName="w-full bg-transparent border-none focus:ring-0 text-base py-1 pl-10 pr-10"
-                  />
+                  <div className="glass-field">
+                    <AddressAutocomplete
+                      value={address}
+                      onChange={(value) => setAddress(value)}
+                      placeholder="Search for your residential address"
+                      containerClassName=""
+                      inputClassName="w-full pl-10 pr-10"
+                    />
+                  </div>
                   <p className="text-xs mt-2" style={{ color: "hsl(270 15% 60%)" }}>
                     Your address is required for regulatory compliance and credit assessment.
                   </p>
