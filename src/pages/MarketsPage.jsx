@@ -203,8 +203,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const [kidInvestError, setKidInvestError] = useState("");
   const [kidInvestSuccess, setKidInvestSuccess] = useState(false);
 
-  function fmtR(cents) {
-    const val = (cents || 0) / 100;
+  function fmtR(rands) {
+    const val = rands || 0;
     return `R\u202F${val.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
 
@@ -2203,11 +2203,47 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                     <button onClick={closeKidInvest} className="h-8 w-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition active:scale-95"><X className="h-3.5 w-3.5" /></button>
                   </div>
 
-                  <div className="flex items-center gap-2 rounded-xl bg-purple-50 border border-purple-100 px-4 py-2.5 mb-5">
+                  <div className="flex items-center gap-2 rounded-xl bg-purple-50 border border-purple-100 px-4 py-2.5 mb-4">
                     <Wallet className="h-3.5 w-3.5 text-purple-500" />
                     <span className="text-xs font-semibold text-purple-600">{kidChildPick.first_name}'s balance:</span>
                     <span className="text-xs font-bold text-purple-800 ml-auto tabular-nums">{fmtR(kidChildPick.available_balance || 0)}</span>
                   </div>
+
+                  {/* Sparkline chart */}
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Performance</span>
+                      {kidStrategyPick.r_ytd != null && (
+                        <span className={`text-xs font-semibold ${ kidStrategyPick.r_ytd >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                          {kidStrategyPick.r_ytd >= 0 ? '+' : ''}{(kidStrategyPick.r_ytd * 100).toFixed(2)}% YTD
+                        </span>
+                      )}
+                    </div>
+                    <div className="h-28 w-full">
+                      <StrategyMiniChart values={kidStrategyPick.sparkline || [20,22,21,24,26,25,28,30,29,32]} />
+                    </div>
+                  </div>
+
+                  {/* Top holdings */}
+                  {(kidStrategyPick.holdingsList || []).length > 0 && (
+                    <div className="mb-4">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Top Holdings</p>
+                      <div className="space-y-2">
+                        {kidStrategyPick.holdingsList.slice(0, 4).map(h => (
+                          <div key={h.symbol} className="flex items-center gap-3">
+                            <div className="h-9 w-9 flex-shrink-0 rounded-full border border-slate-100 bg-white overflow-hidden flex items-center justify-center shadow-sm">
+                              {h.logo_url
+                                ? <img src={h.logo_url} alt={h.symbol} className="h-full w-full object-cover" />
+                                : <span className="text-[10px] font-bold text-slate-600">{h.symbol?.substring(0,2)}</span>}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-slate-900 truncate">{h.symbol}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Unit stepper */}
                   <div className="flex items-center justify-center gap-6 py-4 mb-3">
