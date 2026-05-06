@@ -664,7 +664,10 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
 
   const filteredStrategies = useMemo(() => {
     // Use publicStrategies for OpenStrategies view
+    // Exclude kid-only strategies — they appear in the dedicated "For Kids" section above
     const results = publicStrategiesWithMetrics.filter((strategy) => {
+      const raw = strategy.is_kid_strategy;
+      if (raw === true || raw === 1 || String(raw).toLowerCase() === "true") return false;
       const matchesName =
         strategiesSearchQuery.length === 0
           ? true
