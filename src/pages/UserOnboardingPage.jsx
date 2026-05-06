@@ -4,6 +4,7 @@ import MandateViewer from "../components/MandateViewer";
 import AccountAgreementStep from "../components/AccountAgreementStep";
 import { supabase } from "../lib/supabase";
 import { useProfile } from "../lib/useProfile";
+import { markOnboardingComplete } from "../lib/useOnboardingStatus";
 import AddressAutocomplete from "../components/AddressAutocomplete";
 import "../styles/onboarding-process.css";
 
@@ -748,6 +749,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
         const result = await res.json();
         if (result.success) {
           completionSuccess = true;
+          markOnboardingComplete();
         } else {
           console.error("Failed to complete onboarding via API:", result.error);
           throw new Error(result.error?.message || "Failed to save completion status. Please try again.");
