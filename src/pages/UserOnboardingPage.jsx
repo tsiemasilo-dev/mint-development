@@ -146,6 +146,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const [sec1Open, setSec1Open] = useState(true);
   const [sec2Open, setSec2Open] = useState(true);
   const [sec3Open, setSec3Open] = useState(true);
+  const [signingStarted, setSigningStarted] = useState(false);
   const [existingOnboardingId, setExistingOnboardingId] = useState(null);
 
   const [agreedMandate, setAgreedMandate] = useState(false);
@@ -1371,12 +1372,15 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
           ) : step === 6 ? (
             <div className="w-full max-w-3xl mx-auto">
+              {!signingStarted && (
               <div className="text-center animate-fade-in delay-1">
                 <div className="hero-icon"><ShieldIcon width={48} height={48} /></div>
                 <h2 className="text-3xl font-light tracking-tight mb-2" style={{ color: "hsl(270 30% 25%)" }}>Final Agreements</h2>
                 <p className="text-sm mb-6" style={{ color: "hsl(270 20% 50%)" }}>Review the risk disclosure, accept our terms, and sign your account agreement</p>
               </div>
-              {/* ── Section 1: Risk Disclosure (accordion) ── */}
+              )}
+              {!signingStarted && (
+              <>{/* ── Section 1: Risk Disclosure (accordion) ── */}
               <div className="animate-fade-in delay-2" style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', boxShadow: '0 2px 12px rgba(100,60,140,0.06)', overflow: 'hidden' }}>
                 <button type="button" onClick={() => setSec1Open(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '18px 20px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
                   <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'hsl(270 30% 25%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -1480,25 +1484,39 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   </div>
                 )}
               </div>
+              </>)}
 
               {/* ── Standalone Signature Section ── */}
-              <div className="animate-fade-in delay-4" style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', boxShadow: '0 2px 12px rgba(100,60,140,0.06)', overflow: 'hidden' }}>
-                <div style={{ padding: '18px 20px', borderBottom: '1px solid hsl(270 20% 90%)', background: 'hsl(270 50% 98%)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="hsl(270 30% 25%)" strokeWidth="1.5" width="20" height="20" style={{ flexShrink: 0 }}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" />
-                  </svg>
-                  <div>
-                    <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Your Signature</div>
-                    <div style={{ fontSize: '12px', color: 'hsl(270 15% 60%)' }}>Sign below to agree to all sections and complete onboarding</div>
+              <div
+                className={signingStarted ? "animate-fade-in" : "animate-fade-in delay-4"}
+                style={{
+                  marginBottom: signingStarted ? '0' : '12px',
+                  background: 'white',
+                  borderRadius: '16px',
+                  border: '1px solid hsl(270 20% 90%)',
+                  boxShadow: signingStarted ? '0 4px 24px rgba(83,47,126,0.10)' : '0 2px 12px rgba(100,60,140,0.06)',
+                  overflow: 'hidden',
+                }}
+              >
+                {!signingStarted && (
+                  <div style={{ padding: '18px 20px', borderBottom: '1px solid hsl(270 20% 90%)', background: 'hsl(270 50% 98%)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="hsl(270 30% 25%)" strokeWidth="1.5" width="20" height="20" style={{ flexShrink: 0 }}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" />
+                    </svg>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Your Signature</div>
+                      <div style={{ fontSize: '12px', color: 'hsl(270 15% 60%)' }}>Sign below to agree to all sections and complete onboarding</div>
+                    </div>
                   </div>
-                </div>
-                <div style={{ padding: '20px' }}>
+                )}
+                <div style={{ padding: signingStarted ? '0' : '20px' }}>
                   <AccountAgreementStep
                     profile={profile}
                     onboardingData={{ bankName, bankAccountNumber, bankBranchCode, bankAccountType, taxNumber, identityNumber, sourceOfFunds, sourceOfFundsOther, expectedMonthlyInvestment }}
                     existingOnboardingId={existingOnboardingId}
                     initialPhase="sign"
                     mode="signature-only"
+                    onSignStart={() => setSigningStarted(true)}
                     onComplete={async (signingResults) => {
                       setRiskDone(true);
                       setTermsDone(true);
@@ -1509,9 +1527,11 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 </div>
               </div>
 
-              <div className="text-center mt-4 animate-fade-in delay-4">
-                <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>Step 6 of 6</p>
-              </div>
+              {!signingStarted && (
+                <div className="text-center mt-4 animate-fade-in delay-4">
+                  <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>Step 6 of 6</p>
+                </div>
+              )}
             </div>
 
           ) : step === 7 ? (
