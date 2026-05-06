@@ -942,7 +942,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                     onChange={(value) => setAddress(value)}
                     placeholder="Search for your residential address"
                     containerClassName="glass-field-container"
-                    inputClassName="w-full bg-transparent border-none focus:ring-0 text-base py-1"
+                    inputClassName="w-full bg-transparent border-none focus:ring-0 text-base py-1 pl-10 pr-10"
                   />
                   <p className="text-xs mt-2" style={{ color: "hsl(270 15% 60%)" }}>
                     Your address is required for regulatory compliance and credit assessment.
