@@ -150,6 +150,8 @@ function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onCl
               <div className="relative mb-4">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-bold text-slate-400">R</span>
                 <input
+                  id="child-transfer-amount"
+                  name="child-transfer-amount"
                   type="number"
                   inputMode="decimal"
                   value={amount}
@@ -779,6 +781,8 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
                   <div className="relative mb-3">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                     <input
+                      id="child-strategy-search"
+                      name="child-strategy-search"
                       type="text"
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
@@ -1191,6 +1195,8 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
                 Please provide <strong>{childName}'s</strong> SA ID number to complete their profile.
               </p>
               <input
+                id="child-id-number"
+                name="child-id-number"
                 type="text"
                 inputMode="numeric"
                 maxLength={13}
@@ -1315,14 +1321,36 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   async function fetchHoldings() {
     try {
       if (!supabase) return;
-      const { data, error } = await supabase
+      const linkedUserId = child?.linked_user_id || null;
+      const familyHoldingsQuery = supabase
         .from("stock_holdings_c")
-        .select("id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id")
+        .select("id, user_id, family_member_id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id")
         .eq("family_member_id", child.id)
         .eq("Status", "active")
         .order("market_value", { ascending: false });
-      if (error) { console.error("[child-dash] holdings query error", error); return; }
-      const baseRows = data || [];
+      const linkedHoldingsQuery = linkedUserId
+        ? supabase
+            .from("stock_holdings_c")
+            .select("id, user_id, family_member_id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id")
+            .eq("user_id", linkedUserId)
+            .eq("Status", "active")
+            .order("market_value", { ascending: false })
+        : Promise.resolve({ data: [], error: null });
+
+      const [familyHoldingsRes, linkedHoldingsRes] = await Promise.all([
+        familyHoldingsQuery,
+        linkedHoldingsQuery,
+      ]);
+
+      if (familyHoldingsRes.error) { console.error("[child-dash] family holdings query error", familyHoldingsRes.error); return; }
+      if (linkedHoldingsRes.error) { console.error("[child-dash] linked holdings query error", linkedHoldingsRes.error); return; }
+
+      const rowsById = new Map();
+      [...(familyHoldingsRes.data || []), ...(linkedHoldingsRes.data || [])].forEach((row) => {
+        if (row?.id) rowsById.set(row.id, row);
+      });
+      const baseRows = Array.from(rowsById.values())
+        .sort((a, b) => Number(b.market_value || 0) - Number(a.market_value || 0));
 
       // Enrich with security info (symbol/name/logo_url live on securities_c)
       const securityIds = [...new Set(baseRows.map(h => h.security_id).filter(Boolean))];
@@ -1387,14 +1415,34 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   async function fetchTransactions() {
     try {
       if (!supabase) return;
-      const { data, error } = await supabase
+      const linkedUserId = child?.linked_user_id || null;
+      const familyTxQuery = supabase
         .from("transactions")
-        .select("id, name, direction, amount, description, created_at")
+        .select("id, user_id, family_member_id, name, direction, amount, description, created_at, transaction_date")
         .eq("family_member_id", child.id)
         .order("created_at", { ascending: false })
         .limit(10);
-      if (error) { console.error("[child-dash] txns query error", error); return; }
-      if (isMounted.current) setTransactions(data || []);
+      const linkedTxQuery = linkedUserId
+        ? supabase
+            .from("transactions")
+            .select("id, user_id, family_member_id, name, direction, amount, description, created_at, transaction_date")
+            .eq("user_id", linkedUserId)
+            .order("created_at", { ascending: false })
+            .limit(10)
+        : Promise.resolve({ data: [], error: null });
+
+      const [familyTxRes, linkedTxRes] = await Promise.all([familyTxQuery, linkedTxQuery]);
+      if (familyTxRes.error) { console.error("[child-dash] family txns query error", familyTxRes.error); return; }
+      if (linkedTxRes.error) { console.error("[child-dash] linked txns query error", linkedTxRes.error); return; }
+
+      const txById = new Map();
+      [...(familyTxRes.data || []), ...(linkedTxRes.data || [])].forEach((tx) => {
+        if (tx?.id) txById.set(tx.id, tx);
+      });
+      const mergedTransactions = Array.from(txById.values())
+        .sort((a, b) => new Date(b.created_at || b.transaction_date || 0) - new Date(a.created_at || a.transaction_date || 0))
+        .slice(0, 10);
+      if (isMounted.current) setTransactions(mergedTransactions);
     } catch (e) { console.error("[child-dash] txns", e); }
   }
 

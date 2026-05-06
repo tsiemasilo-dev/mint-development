@@ -239,6 +239,8 @@ const GoalLinkModal = ({ isOpen, onClose, onConfirm, investmentAmount, assetName
                     <form onSubmit={handleCreateGoal} className="rounded-2xl border-2 border-violet-200 bg-violet-50 p-4 space-y-3">
                       <p className="text-xs font-semibold text-violet-700">New Goal</p>
                       <input
+                        id="goal-link-name"
+                        name="goal-link-name"
                         type="text"
                         value={newGoalName}
                         onChange={(e) => setNewGoalName(e.target.value)}
@@ -247,6 +249,8 @@ const GoalLinkModal = ({ isOpen, onClose, onConfirm, investmentAmount, assetName
                         required
                       />
                       <input
+                        id="goal-link-target"
+                        name="goal-link-target"
                         type="number"
                         min="1"
                         value={newGoalTarget}
@@ -256,6 +260,8 @@ const GoalLinkModal = ({ isOpen, onClose, onConfirm, investmentAmount, assetName
                         required
                       />
                       <input
+                        id="goal-link-date"
+                        name="goal-link-date"
                         type="date"
                         value={newGoalDate}
                         onChange={(e) => setNewGoalDate(e.target.value)}

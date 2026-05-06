@@ -1345,6 +1345,8 @@ const HomePage = ({
                     <div>
                       <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">Goal Name</label>
                       <input
+                        id="home-goal-name"
+                        name="home-goal-name"
                         type="text"
                         placeholder="e.g. New Car, Holiday"
                         value={newGoal.name}
@@ -1356,6 +1358,8 @@ const HomePage = ({
                     <div>
                       <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">Target Amount (R)</label>
                       <input
+                        id="home-goal-target"
+                        name="home-goal-target"
                         type="number"
                         placeholder="0.00"
                         value={newGoal.target_amount}
@@ -1367,6 +1371,8 @@ const HomePage = ({
                     <div>
                       <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">Target Date (Optional)</label>
                       <input
+                        id="home-goal-date"
+                        name="home-goal-date"
                         type="date"
                         value={newGoal.target_date}
                         onChange={(e) => setNewGoal(prev => ({ ...prev, target_date: e.target.value }))}
