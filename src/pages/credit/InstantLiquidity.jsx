@@ -105,6 +105,7 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange, onLinkBan
           )
         `)
           .eq('user_id', profile.id)
+          .is('family_member_id', null)
           .neq('securities_c.exchange', 'MINT');
 
         if (error) throw error;
