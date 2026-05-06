@@ -255,15 +255,21 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
     (async () => {
       setKidStrategiesLoading(true);
       try {
+        // Fetch all strategies_c with is_kid_strategy; filter status in JS to handle casing/value variance
         const { data, error: ksErr } = await supabase
           .from("strategies_c")
-          .select("id, name, short_name, risk_level, sector, objective, tags, min_investment, is_featured, sparkline, ytd_as_of_date, holdings, strategy_metrics(as_of_date, r_ytd_pct)")
-          .eq("status", "active")
+          .select("id, name, short_name, risk_level, sector, objective, tags, min_investment, is_featured, sparkline, ytd_as_of_date, holdings, status, is_kid_strategy, strategy_metrics(as_of_date, r_ytd_pct)")
           .eq("is_kid_strategy", true)
           .order("is_featured", { ascending: false })
           .order("name");
-        console.log("[markets] kid strategies DB →", { rows: (data||[]).length, error: ksErr });
-        const rows = data || [];
+        console.log("[markets] kid strategies DB (unfiltered by status) →", { rows: (data||[]).length, error: ksErr, rawData: data });
+        // Filter in JS: treat any truthy is_kid_strategy value as valid; include all non-rejected statuses
+        const rows = (data || []).filter(s => {
+          const kidFlag = s.is_kid_strategy === true || s.is_kid_strategy === "true" || s.is_kid_strategy === 1;
+          const statusOk = !s.status || !["rejected", "archived", "disabled"].includes(String(s.status).toLowerCase());
+          console.log("[markets] strategy candidate →", s.name, "| is_kid_strategy:", s.is_kid_strategy, "| status:", s.status, "| kidFlag:", kidFlag, "| statusOk:", statusOk);
+          return kidFlag && statusOk;
+        });
         const allSymbols = [...new Set(
           rows.flatMap(s => (Array.isArray(s.holdings) ? s.holdings : []).map(h => h.symbol || h.ticker).filter(Boolean))
         )];
