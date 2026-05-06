@@ -1760,6 +1760,7 @@ const App = () => {
           baseAmount={baseInvestmentAmount}
           fees={investmentFees || pendingGoalFlow?.fees}
           initialMethod={pendingPaymentMethod}
+          childId={selectedChildForInvest?.id || null}
           onOpenDeposit={() => navigateTo("deposit")}
           onSuccess={async (response) => {
             console.log("Payment successful:", response);
@@ -1797,6 +1798,7 @@ const App = () => {
             selectedGoalIdRef.current = null;
             goalInvestAmountRef.current = 0;
             setSelectedGoalId(null);
+            setSelectedChildForInvest(null);
             navigationHistory.current = [];
             setPreviousPageName(null);
             setCurrentPage("paymentSuccess");

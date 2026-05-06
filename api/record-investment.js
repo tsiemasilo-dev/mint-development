@@ -116,10 +116,12 @@ export default async function handler(req, res) {
 
     const db = supabaseAdmin || supabase;
     const userId = user.id;
-    const { securityId, symbol, name, amount, baseAmount, strategyId, paymentReference, paymentMethod, shareCount } = req.body;
+    const { securityId, symbol, name, amount, baseAmount, strategyId, paymentReference, paymentMethod, shareCount, childUserId } = req.body;
     // baseAmount = investment amount excluding fees (used for holdings/quantity calculations)
     // amount = total charged including fees (used for transaction records)
     const investAmount = (baseAmount && baseAmount > 0) ? baseAmount : amount;
+    // targetUserId: child's account for kid strategies, otherwise the investor themselves
+    const targetUserId = childUserId || userId;
 
     if ((!securityId && !strategyId) || !amount || Number(amount) <= 0 || !paymentReference) {
       return res.status(400).json({ success: false, error: "Missing required fields: securityId or strategyId, amount, paymentReference" });
@@ -274,7 +276,7 @@ export default async function handler(req, res) {
         const { data: existing, error: lookupErr } = await db
           .from("stock_holdings_c")
           .select("id, quantity, avg_fill")
-          .eq("user_id", userId)
+          .eq("user_id", targetUserId)
           .eq("security_id", sec.id)
           .eq("strategy_id", strategyId)
           .maybeSingle();
@@ -306,7 +308,7 @@ export default async function handler(req, res) {
           }
         } else {
           const { error: insertErr } = await db.from("stock_holdings_c").insert({
-            user_id: userId,
+            user_id: targetUserId,
             security_id: sec.id,
             strategy_id: strategyId,
             quantity: holdingQty,
@@ -335,7 +337,7 @@ export default async function handler(req, res) {
       const { data: existingUS } = await db
         .from("user_strategies")
         .select("id, invested_amount")
-        .eq("user_id", userId)
+        .eq("user_id", targetUserId)
         .eq("strategy_id", strategyId)
         .maybeSingle();
 
@@ -353,7 +355,7 @@ export default async function handler(req, res) {
         const { error: usInsertErr } = await db
           .from("user_strategies")
           .insert({
-            user_id: userId,
+            user_id: targetUserId,
             strategy_id: strategyId,
             invested_amount: investmentAmountCents,
             status: "active",
@@ -406,7 +408,7 @@ export default async function handler(req, res) {
       const { data: existing, error: fetchError } = await db
         .from("stock_holdings_c")
         .select("id, quantity, avg_fill, market_value")
-        .eq("user_id", userId)
+        .eq("user_id", targetUserId)
         .eq("security_id", securityId)
         .maybeSingle();
 
@@ -436,7 +438,7 @@ export default async function handler(req, res) {
         const { data, error } = await db
           .from("stock_holdings_c")
           .insert({
-            user_id: userId,
+            user_id: targetUserId,
             security_id: securityId,
             quantity: quantity,
             avg_fill: avgFillCents,
@@ -464,7 +466,7 @@ export default async function handler(req, res) {
     const { error: txError } = await db
       .from("transactions")
       .insert({
-        user_id: userId,
+        user_id: targetUserId,
         direction: "debit",
         name: isStrategyInvestment ? `Strategy Investment: ${name || symbol || "Strategy"}` : `Purchased ${name || symbol || "Stock"}`,
         description: descriptionText,
