@@ -110,6 +110,32 @@ export default async function handler(req, res) {
 
   const userId = userData.user.id;
 
+  // ── Retry cooldown: max 1 live Experian run per 30 minutes per user ──
+  {
+    const cooldownMs = 30 * 60 * 1000;
+    const cutoff = new Date(Date.now() - cooldownMs).toISOString();
+    const { data: recentRun } = await supabase
+      .from('loan_engine_score')
+      .select('created_at')
+      .eq('user_id', userId)
+      .gte('created_at', cutoff)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (recentRun?.created_at) {
+      const nextEligibleAt = new Date(new Date(recentRun.created_at).getTime() + cooldownMs);
+      const minsRemaining = Math.max(1, Math.ceil((nextEligibleAt - Date.now()) / 60000));
+      return res.status(200).json({
+        success: false,
+        ok: false,
+        errorCode: 'COOLDOWN_ACTIVE',
+        error: `You already ran an assessment recently. Please wait ${minsRemaining} more minute${minsRemaining !== 1 ? 's' : ''} before trying again.`,
+        nextEligibleAt: nextEligibleAt.toISOString(),
+      });
+    }
+  }
+
   let loanApplicationId = body.loanApplicationId || body.loan_application_id || null;
   const applicationId = body.applicationId || loanApplicationId || `app_${Date.now()}`;
   const overrides = body.userData || body;
@@ -196,6 +222,18 @@ export default async function handler(req, res) {
     } catch (snapshotError) {
       console.warn('TruID snapshot lookup failed:', snapshotError?.message || snapshotError);
     }
+  }
+
+  // ── TruID gate: bank cashflow analysis is mandatory ──
+  // Savings accounts hide real spending — only a transactional/cheque account
+  // gives us the cashflow signals the engine needs.
+  if (!truidSnapshot) {
+    return res.status(200).json({
+      success: false,
+      ok: false,
+      errorCode: 'TRUID_REQUIRED',
+      error: 'Your primary bank account must be linked before we can run your credit assessment. Please connect a cheque or transactional account — savings accounts cannot be used for affordability scoring.',
+    });
   }
 
   // ── PRIMARY ENRICHMENT: Sumsub pack_details (KYC-verified address/identity) ──
@@ -308,6 +346,42 @@ export default async function handler(req, res) {
       }
     } catch (profileError) {
       console.warn('Profile lookup failed:', profileError?.message || profileError);
+    }
+  }
+
+  // Investment activity — platform engagement signal for AlgoHive behavioural factor
+  if (supabase && userId) {
+    try {
+      const dbClient = accessToken
+        ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            global: { headers: { Authorization: `Bearer ${accessToken}` } }
+          })
+        : supabase;
+
+      const [stockRes, strategyRes] = await Promise.all([
+        dbClient
+          .from('stock_holdings_c')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('Status', 'active')
+          .limit(1)
+          .maybeSingle(),
+        dbClient
+          .from('stock_holdings_c')
+          .select('id')
+          .eq('user_id', userId)
+          .not('strategy_id', 'is', null)
+          .eq('Status', 'active')
+          .limit(1)
+          .maybeSingle(),
+      ]);
+
+      normalizedOverrides.algohive_has_stock_holdings = Boolean(stockRes.data?.id);
+      normalizedOverrides.algohive_has_strategy_investments = Boolean(strategyRes.data?.id);
+    } catch (investError) {
+      console.warn('Investment activity lookup failed:', investError?.message || investError);
+      normalizedOverrides.algohive_has_stock_holdings = false;
+      normalizedOverrides.algohive_has_strategy_investments = false;
     }
   }
 
@@ -477,13 +551,38 @@ export default async function handler(req, res) {
     };
 
     const scoreReasons = [];
+
+    // --- Credit bureau ---
     if (creditScoreValue < 580) scoreReasons.push('Low credit score');
     if (creditUtilizationBreakdown.ratioPercent !== null && creditUtilizationBreakdown.ratioPercent > 75) {
       scoreReasons.push('High credit utilization');
     }
     if ((adverseListingsBreakdown.totalAdverse || 0) > 0) scoreReasons.push('Adverse listings present');
     if (dtiBreakdown.dtiPercent !== null && dtiBreakdown.dtiPercent > 50) scoreReasons.push('High debt-to-income ratio');
+
+    // --- Employment ---
     if ((employmentTenureBreakdown.monthsInCurrentJob || 0) < 6) scoreReasons.push('Short employment tenure');
+    const ct = contractTypeBreakdown.contractType;
+    if (ct === 'FIXED_TERM_LT_12') scoreReasons.push('Fixed-term contract under 12 months');
+    else if (ct === 'PART_TIME') scoreReasons.push('Part-time employment');
+    else if (ct === 'UNEMPLOYED_OR_UNKNOWN') scoreReasons.push('Employment status unverified');
+
+    // --- Bank / income stability ---
+    if (incomeStabilityBreakdown.valuePercent === 0) {
+      scoreReasons.push('Bank statement not linked or insufficient income history');
+    } else if (incomeStabilityBreakdown.valuePercent === 50) {
+      scoreReasons.push('Partial bank history — less than 3 months captured');
+    }
+    if (bankStatementCashflowsBreakdown.netCashflowRatio !== null && bankStatementCashflowsBreakdown.netCashflowRatio < 0.05) {
+      scoreReasons.push('Weak monthly cashflow margin');
+    }
+    if (bankStatementCashflowsBreakdown.volatilityRatio !== null && bankStatementCashflowsBreakdown.volatilityRatio > 0.75) {
+      scoreReasons.push('High income volatility');
+    }
+
+    // --- Behavioural ---
+    if (algoHiveBehaviouralBreakdown.isNewBorrower) scoreReasons.push('No prior credit history detected');
+    if (!algoHiveBehaviouralBreakdown.hasAnyInvestment) scoreReasons.push('No investment activity on file');
 
     const success = result?.success === true;
     const ok = success;

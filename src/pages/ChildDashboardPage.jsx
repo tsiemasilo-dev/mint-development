@@ -1,20 +1,18 @@
-import React, { useState, useEffect, useRef } from "react";
+﻿import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ArrowLeft, ArrowUpRight, ArrowDownLeft, X, TrendingUp, TrendingDown,
+  ArrowLeft, ArrowUpRight, ArrowDownLeft, X,
   Wallet, BarChart3, ChevronRight,
   RefreshCw, Search, Star, AlertCircle, Check, ClipboardList,
-  Target, Users, BookOpen, LayoutGrid, ArrowDownToLine, Info,
+  BookOpen, LayoutGrid, ArrowDownToLine, Target,
 } from "lucide-react";
+import SwipeableBalanceCard from "../components/SwipeableBalanceCard";
 import { useProfile } from "../lib/useProfile";
 import { supabase } from "../lib/supabase";
 import MinorProofOfAddressDeclaration from "../components/MinorProofOfAddressDeclaration";
 import ChildResponsibilityAgreement from "../components/ChildResponsibilityAgreement";
-import SwipeableBalanceCard from "../components/SwipeableBalanceCard";
 
-const CARD_VISIBILITY_KEY = "mintBalanceVisible";
-
-// ─── helpers ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function getAge(dob) {
   if (!dob) return null;
@@ -31,14 +29,7 @@ function fmt(cents) {
   return `R\u202F${val.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function navigate(page) {
-  window.dispatchEvent(
-    new CustomEvent("navigate-within-app", { detail: { page } })
-  );
-}
-
-
-// ─── Animation variants ─────────────────────────────────────────────────────
+// â”€â”€â”€ Animation variants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const container = {
   hidden: {},
@@ -49,9 +40,7 @@ const item = {
   show: { opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 340, damping: 28 } },
 };
 
-// ─── Transfer Modal (bottom-sheet) ───────────────────────────────────────────
-
-function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onClose, authToken }) {
+function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onClose }) {
   const [amount, setAmount] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -130,14 +119,14 @@ function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onCl
                 <div>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Your Wallet</p>
                   <p className="text-sm font-bold text-slate-900 tabular-nums mt-0.5">
-                    {balancesLoading ? "Loading…" : fmt(parentBalance)}
+                    {balancesLoading ? "Loadingâ€¦" : fmt(parentBalance)}
                   </p>
                 </div>
                 <ArrowUpRight className="h-4 w-4 text-slate-300" />
                 <div className="text-right">
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{child.first_name}'s Wallet</p>
                   <p className="text-sm font-bold text-slate-900 tabular-nums mt-0.5">
-                    {balancesLoading ? "Loading…" : fmt(child.available_balance || 0)}
+                    {balancesLoading ? "Loadingâ€¦" : fmt(child.available_balance || 0)}
                   </p>
                 </div>
               </div>
@@ -193,7 +182,7 @@ function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onCl
                 className="w-full rounded-xl py-3.5 text-sm font-bold text-white transition active:scale-[0.98] disabled:opacity-50"
                 style={{ background: "linear-gradient(135deg,#1e1b4b,#312e81)" }}
               >
-                {saving ? "Transferring…" : `Transfer R${numAmount.toFixed(2)}`}
+                {saving ? "Transferringâ€¦" : `Transfer R${numAmount.toFixed(2)}`}
               </button>
             </>
           ) : (
@@ -224,21 +213,22 @@ function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onCl
   );
 }
 
-// ─── Invest Modal (bottom-sheet) — browse strategies & invest ────────────────
+// â”€â”€â”€ Invest Modal (bottom-sheet) â€” browse strategies & invest â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function InvestModal({ child, onInvest, onClose, authToken }) {
   const [strategies, setStrategies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
-  const [amount, setAmount] = useState("");
+  const [units, setUnits] = useState(1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
   const childBalance = child.available_balance || 0;
-  const numAmount = parseFloat(amount) || 0;
-  const amountCents = Math.round(numAmount * 100);
+  const minInvCents = selected?.min_investment || 0;
+  const amountCents = units * minInvCents;
+  const numAmount = amountCents / 100;
   const insufficient = amountCents > childBalance;
 
   useEffect(() => {
@@ -251,27 +241,48 @@ function InvestModal({ child, onInvest, onClose, authToken }) {
       if (!supabase) return;
       const { data } = await supabase
         .from("strategies_c")
-        .select("id, name, description, risk_level, min_investment, is_featured, strategy_metrics(*)")
-        .eq("is_active", true)
+        .select("id, name, short_name, description, risk_level, sector, tags, min_investment, is_featured, holdings, strategy_metrics(*)")
+        .eq("status", "active")
+        .eq("is_kid_strategy", true)
         .order("is_featured", { ascending: false })
-        .order("name")
-        .order("as_of_date", { foreignTable: "strategy_metrics", ascending: false })
-        .limit(1, { foreignTable: "strategy_metrics" });
-      setStrategies(data || []);
+        .order("name");
+
+      const rows = data || [];
+
+      // Collect all holding symbols to fetch logos
+      const allSymbols = [...new Set(
+        rows.flatMap(s => (Array.isArray(s.holdings) ? s.holdings : []).map(h => h.symbol || h.ticker).filter(Boolean))
+      )];
+      let secMap = {};
+      if (allSymbols.length > 0) {
+        const { data: secs } = await supabase
+          .from("securities_c")
+          .select("symbol, name, logo_url")
+          .in("symbol", allSymbols);
+        (secs || []).forEach(s => { secMap[s.symbol] = s; });
+      }
+
+      const enriched = rows.map(s => {
+        const metrics = Array.isArray(s.strategy_metrics)
+          ? [...s.strategy_metrics].sort((a, b) => (b.as_of_date || "").localeCompare(a.as_of_date || ""))[0]
+          : s.strategy_metrics;
+        const r_ytd = metrics?.r_ytd ?? metrics?.r_ytd_pct ?? metrics?.r_1y ?? null;
+        const ytd_as_of_date = metrics?.as_of_date ?? null;
+        const holdingsList = (Array.isArray(s.holdings) ? s.holdings : [])
+          .sort((a, b) => Number(b.weight || 0) - Number(a.weight || 0))
+          .map(h => ({ symbol: h.symbol || h.ticker, logo_url: secMap[h.symbol || h.ticker]?.logo_url || null }));
+        return { ...s, r_ytd, ytd_as_of_date, holdingsList };
+      });
+
+      setStrategies(enriched);
     } catch (e) { console.error("[child-invest] strategies", e); }
     finally { setLoading(false); }
   }
 
   async function handleInvest() {
     if (!selected) return;
-    if (numAmount <= 0) { setError("Enter a valid amount."); return; }
+    if (amountCents <= 0) { setError("Select a valid investment amount."); return; }
     if (insufficient) { setError("Insufficient funds in child's wallet."); return; }
-
-    const minInv = (selected.min_investment || 0);
-    if (amountCents < minInv) {
-      setError(`Minimum investment is ${fmt(minInv)}.`);
-      return;
-    }
 
     setSaving(true);
     setError("");
@@ -312,13 +323,6 @@ function InvestModal({ child, onInvest, onClose, authToken }) {
     s.name?.toLowerCase().includes(search.toLowerCase())
   );
 
-  const riskColors = {
-    low: { bg: "#faf5ff", text: "#7c3aed" },
-    medium: { bg: "#f3e8ff", text: "#8b5cf6" },
-    high: { bg: "#ede9fe", text: "#6d28d9" },
-    aggressive: { bg: "#ede9fe", text: "#6d28d9" },
-  };
-
   const inputCls =
     "w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 placeholder-slate-400 focus:border-violet-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-100 transition";
 
@@ -330,19 +334,19 @@ function InvestModal({ child, onInvest, onClose, authToken }) {
     >
       <motion.div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <motion.div
-        className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden"
-        style={{ maxHeight: "85vh" }}
-        initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+        className="relative w-full max-w-md bg-white rounded-[32px] shadow-2xl overflow-hidden max-h-[85vh] overflow-y-auto"
+        initial={{ opacity: 0, scale: 0.95, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 16 }}
         transition={{ type: "spring", stiffness: 380, damping: 38 }}
       >
-        <div className="px-6 pt-5 pb-8 overflow-y-auto" style={{ maxHeight: "85vh" }}>
+
+        <div className="px-6 pt-3 pb-8 overflow-y-auto" style={{ maxHeight: "calc(85vh - 24px)" }}>
           {!success ? (
             <>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   {selected && (
                     <button
-                      onClick={() => { setSelected(null); setAmount(""); setError(""); }}
+                      onClick={() => { setSelected(null); setUnits(1); setError(""); }}
                       className="h-8 w-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition active:scale-95 mr-1"
                     >
                       <ArrowLeft className="h-3.5 w-3.5" />
@@ -385,60 +389,131 @@ function InvestModal({ child, onInvest, onClose, authToken }) {
                       type="text"
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
-                      placeholder="Search strategies…"
+                      placeholder="Search strategies..."
                       className={inputCls + " pl-10"}
                     />
                   </div>
 
                   {loading ? (
-                    <div className="flex items-center justify-center py-10">
-                      <RefreshCw className="h-5 w-5 text-slate-300 animate-spin" />
+                    <div className="space-y-3">
+                      {[0, 1].map(i => (
+                        <div key={i} className="rounded-2xl border border-slate-100 bg-white p-4 space-y-3 animate-pulse">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="space-y-2 flex-1">
+                              <div className="h-4 w-32 bg-slate-100 rounded" />
+                              <div className="h-3 w-48 bg-slate-100 rounded" />
+                              <div className="h-3 w-24 bg-slate-100 rounded" />
+                            </div>
+                            <div className="h-12 w-24 bg-slate-100 rounded-xl" />
+                          </div>
+                          <div className="flex gap-2">
+                            <div className="h-6 w-16 bg-slate-100 rounded-full" />
+                            <div className="h-6 w-20 bg-slate-100 rounded-full" />
+                          </div>
+                          <div className="h-9 bg-slate-50 rounded-xl" />
+                        </div>
+                      ))}
                     </div>
                   ) : filtered.length === 0 ? (
                     <p className="text-center text-sm text-slate-400 py-8">No strategies found.</p>
                   ) : (
-                    <div className="space-y-2 max-h-[45vh] overflow-y-auto pr-1">
+                    <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-0.5">
                       {filtered.map((s) => {
-                        const metric = s.strategy_metrics?.[0] || {};
-                        const changePct = metric.change_pct || metric.r_1y || 0;
-                        const isUp = changePct >= 0;
-                        const risk = (s.risk_level || "medium").toLowerCase();
-                        const rc = riskColors[risk] || riskColors.medium;
+                        const ytd = s.r_ytd;
+                        const ytdPct = ytd != null ? ytd * 100 : null;
+                        const isUp = (ytdPct ?? 0) >= 0;
                         return (
                           <button
                             key={s.id}
                             onClick={() => setSelected(s)}
-                            className="w-full flex items-center gap-3 rounded-xl bg-slate-50 border border-slate-100 p-3.5 text-left hover:bg-purple-50/50 hover:border-purple-200 transition active:scale-[0.98]"
+                            className="w-full rounded-2xl border border-slate-100 bg-white shadow-sm p-4 text-left hover:shadow-md hover:border-violet-200 transition active:scale-[0.98]"
                           >
-                            <div
-                              className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                              style={{ background: isUp ? "linear-gradient(135deg,#ede9fe,#ddd6fe)" : "linear-gradient(135deg,#e9d5ff,#d8b4fe)" }}
-                            >
-                              {isUp
-                                ? <TrendingUp className="h-4 w-4 text-purple-600" />
-                                : <TrendingDown className="h-4 w-4 text-purple-500" />}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-bold text-slate-900 truncate">{s.name}</p>
-                              <div className="flex items-center gap-1.5 mt-0.5">
-                                <span
-                                  className="text-[10px] font-bold rounded-full px-2 py-0.5"
-                                  style={{ background: rc.bg, color: rc.text }}
-                                >
-                                  {s.risk_level || "Medium"}
-                                </span>
-                                {s.is_featured && <Star className="h-3 w-3 text-purple-400" />}
+                            {/* Header row */}
+                            <div className="flex items-start gap-3 mb-3">
+                              <div className="flex-1 min-w-0 space-y-0.5">
+                                <p className="text-sm font-semibold text-slate-900 truncate">{s.short_name || s.name}</p>
+                                <p className="text-xs text-slate-500 line-clamp-1">
+                                  {s.risk_level || "Balanced"}{s.description ? ` â€¢ ${s.description.substring(0, 60)}${s.description.length > 60 ? "â€¦" : ""}` : ""}
+                                </p>
                                 {s.min_investment > 0 && (
-                                  <span className="text-[10px] text-slate-400">Min {fmt(s.min_investment)}</span>
+                                  <p className="text-[11px] text-slate-400">Min. {fmt(s.min_investment)}</p>
+                                )}
+                              </div>
+                              {/* Sparkline */}
+                              <div className="flex-shrink-0 rounded-xl bg-slate-50 px-2 py-1.5">
+                                <svg width="64" height="32" viewBox="0 0 64 32">
+                                  <defs>
+                                    <linearGradient id={`sg-${s.id}`} x1="0" y1="0" x2="0" y2="1">
+                                      <stop offset="0%" stopColor={isUp ? "#7c3aed" : "#e11d48"} stopOpacity="0.15" />
+                                      <stop offset="100%" stopColor={isUp ? "#7c3aed" : "#e11d48"} stopOpacity="0" />
+                                    </linearGradient>
+                                  </defs>
+                                  <polyline
+                                    points="0,28 10,22 20,24 30,14 40,10 50,16 64,6"
+                                    fill="none"
+                                    stroke={isUp ? "#7c3aed" : "#e11d48"}
+                                    strokeWidth="1.8"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  />
+                                  <circle cx="64" cy="6" r="2.5" fill={isUp ? "#7c3aed" : "#e11d48"} />
+                                </svg>
+                              </div>
+                            </div>
+                            {/* Badges */}
+                            <div className="flex flex-wrap gap-1.5 mb-3">
+                              {s.risk_level && (
+                                <span className="rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-xs font-semibold text-slate-600">{s.risk_level}</span>
+                              )}
+                              {s.sector && (
+                                <span className="rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-xs font-semibold text-slate-600">{s.sector}</span>
+                              )}
+                              {s.is_featured && (
+                                <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-0.5 text-xs font-semibold text-violet-600">Featured</span>
+                              )}
+                            </div>
+                            {/* YTD return */}
+                            <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 mb-3">
+                              <span className="text-xs font-semibold text-slate-600">YTD return</span>
+                              <div className="flex items-center gap-2">
+                                {ytdPct != null ? (
+                                  <span className={`text-xs font-semibold ${isUp ? "text-emerald-600" : "text-red-500"}`}>
+                                    {isUp ? "+" : ""}{ytdPct.toFixed(2)}%
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-slate-400">â€”</span>
+                                )}
+                                {s.ytd_as_of_date && (
+                                  <span className="text-[10px] text-slate-400">
+                                    {new Date(s.ytd_as_of_date).toLocaleDateString("en-ZA", { month: "short", day: "numeric" })}
+                                  </span>
                                 )}
                               </div>
                             </div>
-                            <div className="text-right flex-shrink-0">
-                              <p className="text-sm font-bold tabular-nums text-purple-600">
-                                {isUp ? "+" : ""}{changePct.toFixed(1)}%
-                              </p>
-                              <ChevronRight className="h-3.5 w-3.5 text-slate-300 ml-auto mt-0.5" />
-                            </div>
+                            {/* Holdings snapshot */}
+                            {s.holdingsList?.length > 0 && (
+                              <div className="flex items-center gap-2">
+                                <div className="flex -space-x-2">
+                                  {s.holdingsList.slice(0, 3).map((h) => (
+                                    <div key={h.symbol} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white shadow-sm">
+                                      {h.logo_url ? (
+                                        <img src={h.logo_url} alt={h.symbol} className="h-full w-full object-cover" />
+                                      ) : (
+                                        <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">
+                                          {h.symbol?.substring(0, 2)}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                  {s.holdingsList.length > 3 && (
+                                    <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-slate-100 text-[10px] font-semibold text-slate-500">
+                                      +{s.holdingsList.length - 3}
+                                    </div>
+                                  )}
+                                </div>
+                                <span className="text-xs font-semibold text-slate-500">Holdings snapshot</span>
+                              </div>
+                            )}
                           </button>
                         );
                       })}
@@ -451,32 +526,35 @@ function InvestModal({ child, onInvest, onClose, authToken }) {
               {selected && (
                 <div className="mt-2">
                   <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2 ml-0.5">
-                    Investment Amount (ZAR)
+                    Units to invest
                   </label>
-                  <div className="relative mb-4">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-bold text-slate-400">R</span>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      placeholder="0.00"
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-lg font-bold text-slate-800 text-center placeholder-slate-400 focus:border-violet-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-100 transition tabular-nums pl-10"
-                      autoFocus
-                    />
+
+                  {/* Unit stepper */}
+                  <div className="flex items-center justify-center gap-6 py-4 mb-3">
+                    <button
+                      type="button"
+                      onClick={() => setUnits(u => Math.max(1, u - 1))}
+                      disabled={units <= 1}
+                      className="h-12 w-12 rounded-full bg-slate-100 text-slate-700 text-2xl font-bold flex items-center justify-center transition active:scale-90 disabled:opacity-40"
+                    >−</button>
+                    <div className="text-center min-w-[60px]">
+                      <p className="text-4xl font-bold text-slate-900 tabular-nums">{units}</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">unit{units !== 1 ? "s" : ""}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setUnits(u => u + 1)}
+                      className="h-12 w-12 rounded-full bg-violet-600 text-white text-2xl font-bold flex items-center justify-center transition active:scale-90"
+                    >+</button>
                   </div>
 
-                  {/* Quick amounts */}
-                  <div className="flex gap-2 mb-5">
-                    {[100, 250, 500, 1000].map((v) => (
-                      <button
-                        key={v}
-                        onClick={() => setAmount(String(v))}
-                        className="flex-1 rounded-lg py-2 text-xs font-bold text-purple-600 bg-purple-50 border border-purple-100 hover:bg-purple-100 transition active:scale-95"
-                      >
-                        R{v}
-                      </button>
-                    ))}
+                  {/* Price breakdown */}
+                  <div className="flex items-center justify-center gap-1.5 text-sm mb-5 text-slate-500">
+                    <span className="font-semibold text-slate-700">{fmt(minInvCents)}</span>
+                    <span>×</span>
+                    <span className="font-semibold text-slate-700">{units}</span>
+                    <span>=</span>
+                    <span className="font-bold text-violet-700 text-base">{fmt(amountCents)}</span>
                   </div>
 
                   {/* Strategy info */}
@@ -516,7 +594,7 @@ function InvestModal({ child, onInvest, onClose, authToken }) {
                     className="w-full rounded-xl py-3.5 text-sm font-bold text-white transition active:scale-[0.98] disabled:opacity-50"
                     style={{ background: "linear-gradient(135deg,#1e1b4b,#312e81)" }}
                   >
-                    {saving ? "Investing…" : `Invest R${numAmount.toFixed(2)}`}
+                    {saving ? "Investingâ€¦" : `Invest R${numAmount.toFixed(2)}`}
                   </button>
                 </div>
               )}
@@ -549,41 +627,13 @@ function InvestModal({ child, onInvest, onClose, authToken }) {
   );
 }
 
-// ─── HoldingRow ──────────────────────────────────────────────────────────────
 
-function HoldingRow({ holding }) {
-  const isUp = (holding.unrealized_pnl || 0) >= 0;
-  const isStrategy = !!holding.strategy_id && holding.strategy_name;
-  const mainLabel = isStrategy ? holding.strategy_name : (holding.symbol || `SEC-${String(holding.security_id || "").slice(0, 6)}`);
-  const sublabel = isStrategy ? "Strategy Investment" : (holding.name || "Security");
-  return (
-    <div className="flex items-center gap-3.5 rounded-xl shadow-lg border border-slate-200 p-4 bg-white">
-      <div
-        className="h-11 w-11 rounded-xl flex items-center justify-center flex-shrink-0"
-        style={{ background: isUp ? "linear-gradient(135deg,#ede9fe,#ddd6fe)" : "linear-gradient(135deg,#e9d5ff,#d8b4fe)" }}
-      >
-        {isUp
-          ? <TrendingUp className="h-5 w-5 text-purple-600" />
-          : <TrendingDown className="h-5 w-5 text-purple-500" />}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-bold text-slate-900 truncate">{mainLabel}</p>
-        <p className="text-[11px] text-slate-600 truncate font-medium">{sublabel}</p>
-      </div>
-      <div className="text-right flex-shrink-0">
-        <p className="text-sm font-bold text-slate-900 tabular-nums">{fmt(holding.market_value || 0)}</p>
-        <p className="text-[11px] font-semibold tabular-nums text-purple-600">
-          {isUp ? "+" : ""}{fmt(holding.unrealized_pnl || 0)}
-        </p>
-      </div>
-    </div>
-  );
-}
 
-// ─── TransactionRow ──────────────────────────────────────────────────────────
+
+// â”€â”€â”€ TransactionRow â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function TransactionRow({ tx }) {
-  const isCredit = tx.direction === "credit" || tx.type === "transfer_in";
+  const isCredit = tx.direction === "credit";
   const date = tx.created_at ? new Date(tx.created_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short" }) : "";
   return (
     <div className="flex items-center gap-3.5 py-3.5">
@@ -593,93 +643,18 @@ function TransactionRow({ tx }) {
           : <ArrowUpRight className="h-4.5 w-4.5 text-purple-600" />}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-slate-900 truncate">{tx.description || tx.type || "Transaction"}</p>
+        <p className="text-sm font-semibold text-slate-900 truncate">{tx.description || tx.name || "Transaction"}</p>
         <p className="text-[11px] text-slate-600 mt-0.5">{date}</p>
       </div>
       <p className="text-sm font-bold tabular-nums text-purple-600">
-        {isCredit ? "+" : "-"}{fmt(Math.abs(tx.amount || 0))}
+        {isCredit ? "+" : "-"}{fmt(Math.round(Math.abs(tx.amount || 0) * 100))}
       </p>
     </div>
   );
 }
 
-// ─── CompleteProfileModal ────────────────────────────────────────────────────
+// â”€â”€â”€ CompleteProfileModal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-function ChildQuickAction({ label, icon: Icon, onClick, delay = 0, disabled = false }) {
-  return (
-    <motion.button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={`relative flex min-w-0 flex-col items-center gap-2 rounded-2xl px-1 py-3 text-[10.5px] font-medium transition-all active:shadow-sm ${disabled
-        ? "cursor-wait border border-slate-200/60 bg-slate-100/70 text-slate-400"
-        : "bg-white text-slate-700 shadow-md active:scale-95"
-        }`}
-      variants={item}
-      transition={{ type: "spring", stiffness: 300, damping: 26, delay }}
-      whileTap={{ scale: disabled ? 1 : 0.95 }}
-    >
-      <span className={`flex h-8 w-8 items-center justify-center rounded-full ${disabled ? "bg-slate-200 text-slate-400" : "bg-violet-50 text-violet-700"
-        }`}>
-        <Icon className="h-4 w-4" />
-      </span>
-      <span className="max-w-full truncate text-center leading-tight">{label}</span>
-    </motion.button>
-  );
-}
-
-function LearnModal({ childName, onClose }) {
-  const lessons = [
-    { title: "Saving", text: "Cash set aside for plans, surprises, and short-term needs." },
-    { title: "Investing", text: "Money placed into assets that can grow or fall over time." },
-    { title: "Goals", text: "A target amount with a clear reason and time horizon." },
-  ];
-
-  return (
-    <motion.div
-      className="fixed inset-0 z-50 flex items-end justify-center"
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
-    >
-      <motion.div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <motion.div
-        className="relative w-full max-w-md overflow-hidden rounded-t-3xl bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl"
-        initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
-        transition={{ type: "spring", stiffness: 380, damping: 38 }}
-      >
-        <div className="flex justify-center pt-3 pb-1"><div className="h-1 w-10 rounded-full bg-slate-200" /></div>
-        <div className="px-6 pt-3 pb-8">
-          <div className="mb-5 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ background: "linear-gradient(135deg,#a78bfa,#7c3aed)" }}>
-                <BookOpen className="h-5 w-5 text-white" />
-              </div>
-              <div>
-                <p className="text-base font-bold text-slate-900">Learn</p>
-                <p className="text-xs text-slate-400">{childName}'s money basics</p>
-              </div>
-            </div>
-            <button
-              onClick={onClose}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200 active:scale-95"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-
-          <div className="space-y-3">
-            {lessons.map((lesson) => (
-              <div key={lesson.title} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3.5">
-                <p className="text-sm font-bold text-slate-900">{lesson.title}</p>
-                <p className="mt-1 text-xs leading-relaxed text-slate-500">{lesson.text}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </motion.div>
-    </motion.div>
-  );
-}
 
 function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
   const poaComplete = !!child.poa_declaration_url;
@@ -727,7 +702,7 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
       if (!child.poa_declaration_url) { setStep("poa"); }
       else if (!child.signed_agreement_url) { setStep("agreement"); }
       else {
-        // All steps already done — mark address_completed
+        // All steps already done â€” mark address_completed
         await fetch(`/api/family-members/${child.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -747,11 +722,12 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
       let poaUrl = null;
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
-      if (!token && livesWithParent && pdfBuffer) {
+      if (!token && pdfBuffer) {
         throw new Error("Session expired. Please sign in again.");
       }
 
-      if (livesWithParent && pdfBuffer) {
+      if (pdfBuffer) {
+        // Use chunked fromCharCode to avoid freezing the JS thread on mobile
         const uint8 = new Uint8Array(pdfBuffer);
         const CHUNK = 0x8000;
         let bin = "";
@@ -769,7 +745,7 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
           throw new Error(j?.error || "Failed to upload proof of address.");
         }
         poaUrl = j.publicUrl;
-      } else if (!livesWithParent && fileUpload && supabase) {
+      } else if (fileUpload && supabase) {
         const safeName = fileUpload.name.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9._-]/g, "");
         const path = `poa/${child.id}/${Date.now()}-${safeName}`;
         const { error: upErr } = await supabase.storage
@@ -850,17 +826,17 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
 
   return (
     <motion.div
-      className="fixed inset-0 z-50 flex items-end justify-center"
+      className="fixed inset-0 z-50 flex items-center justify-center px-4"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
     >
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => { if (!saving) onClose(); }} />
       <motion.div
-        className="relative w-full max-w-md bg-white rounded-t-3xl shadow-2xl pb-[env(safe-area-inset-bottom)]"
-        initial={{ y: "100%" }}
-        animate={{ y: 0 }}
-        exit={{ y: "100%" }}
+        className="relative w-full max-w-md bg-white rounded-[32px] shadow-2xl max-h-[85vh] overflow-y-auto"
+        initial={{ opacity: 0, scale: 0.95, y: 16 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 16 }}
         transition={{ type: "spring", stiffness: 380, damping: 38 }}
       >
         <div className="h-1 w-full" style={{ background: "linear-gradient(90deg,#8b5cf6,#6366f1)" }} />
@@ -877,9 +853,9 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
               <div>
                 <p className="text-base font-bold text-slate-900">Complete Profile</p>
                 <p className="text-xs text-slate-400">
-                  {step === "id" ? "Step 1 — ID number" :
-                    step === "poa" ? "Proof of address" :
-                      "Responsibility agreement"}
+                  {step === "id" ? "Step 1 â€” ID number" :
+                   step === "poa" ? "Proof of address" :
+                   "Responsibility agreement"}
                 </p>
               </div>
             </div>
@@ -916,7 +892,7 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
                 className="w-full rounded-xl py-3.5 text-sm font-bold text-white transition active:scale-[0.98] disabled:opacity-50"
                 style={{ background: "linear-gradient(135deg,#1e1b4b,#312e81)" }}
               >
-                {saving ? "Saving…" : "Save & Continue"}
+                {saving ? "Savingâ€¦" : "Save & Continue"}
               </button>
             </div>
           )}
@@ -951,17 +927,16 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
   );
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ─── Main Page ──────────────────════════════════════════════════════════════
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// â”€â”€â”€ Main Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 export default function ChildDashboardPage({ child: initialChild, onBack }) {
   const { profile } = useProfile();
   const isMounted = useRef(true);
-  const [userId, setUserId] = useState(null);
-  const [authToken, setAuthToken] = useState(null);
   const [child, setChild] = useState(initialChild);
   const [holdings, setHoldings] = useState([]);
+  const [strategyMap, setStrategyMap] = useState({});
   const [transactions, setTransactions] = useState([]);
   const [parentBalance, setParentBalance] = useState(null);
   const [parentBalanceLoading, setParentBalanceLoading] = useState(true);
@@ -969,14 +944,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
   const [showTransfer, setShowTransfer] = useState(false);
   const [openingTransfer, setOpeningTransfer] = useState(false);
   const [showInvest, setShowInvest] = useState(false);
-  const [showLearn, setShowLearn] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
-  const [isCardVisible] = useState(() => {
-    if (typeof window !== "undefined") {
-      return window.localStorage.getItem(CARD_VISIBILITY_KEY) !== "false";
-    }
-    return true;
-  });
 
   const childName = [child?.first_name, child?.last_name].filter(Boolean).join(" ") || "Child";
   const age = getAge(child?.date_of_birth);
@@ -997,18 +965,6 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
     !child?.signed_agreement_url && "responsibility agreement",
   ].filter(Boolean);
   const isProfileIncomplete = !child?.address_completed;
-
-  useEffect(() => {
-    const getUser = async () => {
-      if (!supabase) return;
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setUserId(session.user.id);
-        if (session.access_token) setAuthToken(session.access_token);
-      }
-    };
-    getUser();
-  }, []);
 
   useEffect(() => {
     isMounted.current = true;
@@ -1060,14 +1016,18 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
 
   async function fetchAll() {
     setLoading(true);
-    await Promise.all([
-      fetchHoldings(),
-      fetchParentWallet(),
-      fetchTransactions(),
-      fetchChildBalance(),
-      fetchChildStrategies(),
-    ]);
-    if (isMounted.current) setLoading(false);
+    try {
+      await Promise.all([
+        fetchHoldings(),
+        fetchParentWallet(),
+        fetchTransactions(),
+        fetchChildBalance(),
+      ]);
+    } catch (e) {
+      console.error("[child-dash] fetchAll error", e);
+    } finally {
+      if (isMounted.current) setLoading(false);
+    }
   }
 
   async function fetchChildBalance() {
@@ -1094,12 +1054,42 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
   async function fetchHoldings() {
     try {
       if (!supabase) return;
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("stock_holdings_c")
-        .select("id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id, securities(symbol, name)")
+        .select("id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id")
         .eq("family_member_id", child.id)
+        .eq("Status", "active")
         .order("market_value", { ascending: false });
-      if (isMounted.current) setHoldings(data || []);
+      if (error) { console.error("[child-dash] holdings query error", error); return; }
+      const baseRows = data || [];
+
+      // Enrich with security info (symbol/name/logo_url live on securities_c)
+      const securityIds = [...new Set(baseRows.map(h => h.security_id).filter(Boolean))];
+      let secMap = {};
+      if (securityIds.length > 0) {
+        const { data: secs } = await supabase
+          .from("securities_c")
+          .select("id, symbol, name, logo_url")
+          .in("id", securityIds);
+        (secs || []).forEach(s => { secMap[s.id] = s; });
+      }
+      const rows = baseRows.map(h => {
+        const sec = secMap[h.security_id] || {};
+        return { ...h, symbol: sec.symbol || null, name: sec.name || null, logo_url: sec.logo_url || null };
+      });
+      if (isMounted.current) setHoldings(rows);
+
+      // Fetch strategy names for any strategy holdings
+      const stratIds = [...new Set(rows.map(h => h.strategy_id).filter(Boolean))];
+      if (stratIds.length > 0) {
+        const { data: strats } = await supabase
+          .from("strategies_c")
+          .select("id, name, short_name, risk_level, is_featured")
+          .in("id", stratIds);
+        const map = {};
+        (strats || []).forEach(s => { map[s.id] = s; });
+        if (isMounted.current) setStrategyMap(map);
+      }
     } catch (e) { console.error("[child-dash] holdings", e); }
   }
 
@@ -1189,124 +1179,15 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
   async function fetchBestAssets() {
     try {
       if (!supabase) return;
-      const directHoldings = holdings.filter(h => !h.strategy_id && h.security_id);
-      if (directHoldings.length === 0) {
-        if (isMounted.current) setBestAssets([]);
-        return;
-      }
-
-      const securityIds = directHoldings.map(h => h.security_id).filter(Boolean);
-      const { data: secData } = await supabase
-        .from('securities_c')
-        .select('id, symbol, name, logo_url, last_price, change_percent')
-        .in('id', securityIds);
-      const secMap = Object.fromEntries((secData || []).map(s => [s.id, s]));
-
-      const formatted = directHoldings
-        .filter(h => secMap[h.security_id])
-        .map(h => {
-          const sec = secMap[h.security_id];
-          const qty = Number(h.quantity || 0);
-          const avgFill = Number(h.avg_fill || 0);
-          const isPending = !avgFill || avgFill === 0;
-          if (isPending) {
-            return {
-              symbol: sec.symbol,
-              name: sec.name,
-              logo: sec.logo_url,
-              value: 0,
-              change: 0,
-              pnlRands: 0,
-              pnlPct: 0,
-              isPending: true,
-            };
-          }
-          const livePriceCents = sec.last_price != null
-            ? Math.round(Number(sec.last_price) * 100)
-            : avgFill;
-          const marketVal = (livePriceCents * qty) / 100;
-          const costBasis = (avgFill * qty) / 100;
-          const pnlRands = marketVal - costBasis;
-          const pnlPct = costBasis > 0 ? ((pnlRands / costBasis) * 100) : 0;
-          return {
-            symbol: sec.symbol,
-            name: sec.name,
-            logo: sec.logo_url,
-            value: marketVal,
-            change: Number(sec.change_percent) || 0,
-            pnlRands,
-            pnlPct,
-          };
-        });
-
-      const profitable = formatted.filter(a => !a.isPending && a.pnlPct > 0).sort((a, b) => b.pnlPct - a.pnlPct);
-      if (isMounted.current) setBestAssets(profitable.slice(0, 5));
-    } catch (e) {
-      console.error("[child-dash] best assets", e);
-    }
-  }
-
-  async function fetchBestStrategies() {
-    try {
-      if (!supabase || !child?.id) return;
-
-      // Fetch child's strategy holdings
-      const { data: strategyHoldings, error: holdingsErr } = await supabase
-        .from("stock_holdings_c")
-        .select("strategy_id, quantity, avg_fill, market_value, unrealized_pnl")
+      const { data, error } = await supabase
+        .from("transactions")
+        .select("id, name, direction, amount, description, created_at")
         .eq("family_member_id", child.id)
-        .not("strategy_id", "is", null);
-
-      if (holdingsErr || !strategyHoldings?.length) {
-        if (isMounted.current) setBestStrategies([]);
-        return;
-      }
-
-      // Get unique strategy IDs
-      const strategyIds = [...new Set(strategyHoldings.map(h => h.strategy_id))];
-
-      // Fetch strategy details
-      const { data: strategyDetails, error: detailsErr } = await supabase
-        .from("strategies_c")
-        .select("id, name, is_featured, strategy_metrics(change_percent)")
-        .in("id", strategyIds)
-        .eq("status", "active");
-
-      if (detailsErr || !strategyDetails) {
-        if (isMounted.current) setBestStrategies([]);
-        return;
-      }
-
-      const strategyMap = Object.fromEntries(strategyDetails.map(s => [s.id, s]));
-
-      const formatted = strategyHoldings
-        .filter(h => strategyMap[h.strategy_id])
-        .map((h) => {
-          const strat = strategyMap[h.strategy_id];
-          const invested = (h.avg_fill * h.quantity) || 0;
-          const currentValue = h.market_value || invested;
-          const pnlRands = currentValue - invested;
-          const changePctVal = invested > 0 ? (pnlRands / invested) * 100 : 0;
-
-          return {
-            id: strat.id,
-            name: strat.name,
-            investedAmount: invested,
-            currentValue,
-            change_pct: changePctVal,
-            pnlRands,
-            pnlPct: changePctVal,
-          };
-        });
-
-      const sorted = formatted
-        .sort((a, b) => (b.change_pct || 0) - (a.change_pct || 0))
-        .slice(0, 5);
-      if (isMounted.current) setBestStrategies(sorted);
-    } catch (error) {
-      console.error("[child-dash] failed to load strategies", error);
-      if (isMounted.current) setBestStrategies([]);
-    }
+        .order("created_at", { ascending: false })
+        .limit(10);
+      if (error) { console.error("[child-dash] txns query error", error); return; }
+      if (isMounted.current) setTransactions(data || []);
+    } catch (e) { console.error("[child-dash] txns", e); }
   }
 
   function handleTransferDone(result) {
@@ -1328,10 +1209,41 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
     fetchTransactions();
   }
 
-  const totalPortfolio = holdings.reduce((s, h) => s + (h.market_value || 0), 0);
-  const totalPnl = holdings.reduce((s, h) => s + (h.unrealized_pnl || 0), 0);
-  const pnlPct = totalPortfolio > 0 ? ((totalPnl / Math.max(totalPortfolio - totalPnl, 1)) * 100) : 0;
-  const isPortUp = totalPnl >= 0;
+  // market_value and avg_fill are stored in rands; convert to cents for fmt
+  const totalPortfolioCents = holdings.reduce((s, h) => s + Math.round((h.market_value || 0) * 100), 0);
+
+
+  // Group holdings by strategy
+  const strategyGroups = holdings.reduce((acc, h) => {
+    if (!h.strategy_id) return acc;
+    if (!acc[h.strategy_id]) acc[h.strategy_id] = [];
+    acc[h.strategy_id].push(h);
+    return acc;
+  }, {});
+
+  const strategyCards = Object.entries(strategyGroups).map(([sid, hs]) => {
+    const strat = strategyMap[sid] || {};
+    const totalValueCents = hs.reduce((s, h) => s + Math.round((h.market_value || 0) * 100), 0);
+    const totalCostCents = hs.reduce((s, h) => s + Math.round(Number(h.avg_fill || 0) * Number(h.quantity || 0) * 100), 0);
+    const pnlCents = totalValueCents - totalCostCents;
+    const pnlP = totalCostCents > 0 ? (pnlCents / totalCostCents) * 100 : 0;
+    return { id: sid, name: strat.name || "Strategy", short_name: strat.short_name, risk_level: strat.risk_level, is_featured: strat.is_featured, totalValue: totalValueCents, pnl: pnlCents, pnlPct: pnlP, holdings: hs };
+  });
+
+  // Best performing individual assets (top 5 by unrealized_pnl %)
+  const bestAssets = [...holdings]
+    .filter(h => h.symbol && h.market_value > 0)
+    .map(h => {
+      const costRands = Number(h.avg_fill || 0) * Number(h.quantity || 0);
+      const marketRands = h.market_value || 0;
+      const pnlR = marketRands - costRands;
+      const pnlP = costRands > 0 ? ((marketRands - costRands) / costRands) * 100 : 0;
+      return { ...h, pnlR, pnlP };
+    })
+    .sort((a, b) => b.pnlP - a.pnlP)
+    .slice(0, 5);
+
+
 
   const bestChildAssets = React.useMemo(() => {
     return holdings
@@ -1357,7 +1269,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
         backgroundAttachment: "fixed",
       }}
     >
-      {/* ── Header ── */}
+      {/* â”€â”€ Header â”€â”€ */}
       <div className="px-4 pt-12 pb-6">
         <div className="mx-auto w-full max-w-sm md:max-w-md">
           <div className="flex items-center gap-3">
@@ -1370,29 +1282,22 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
             <div className="flex-1" />
           </div>
 
-          {/* Use the same landing-page card design and graph as HomePage */}
-          <div className="relative select-none mt-6">
-            <div className="relative w-full touch-pan-y h-auto">
-              <div className="relative h-auto rounded-[28px] border border-white/10">
-                <SwipeableBalanceCard
-                  userId={userId}
-                  isBackFacing
-                  forceVisible={isCardVisible}
-                  mintNumber={profile?.mintNumber}
-                  overrideBalance={childBalance / 100}
-                  overrideWalletBalance={childBalance / 100}
-                />
-              </div>
-            </div>
+          <div className="mt-4">
+            <SwipeableBalanceCard
+              userId={null}
+              mintNumber={parentMintNumber || null}
+              overrideBalance={totalPortfolioCents / 100}
+              overrideWalletBalance={childBalance / 100}
+            />
           </div>
         </div>
       </div>
 
-      {/* ── Content ── */}
+      {/* Content */}
       <div className="mx-auto w-full max-w-sm px-4 pb-12 md:max-w-md">
         <motion.div variants={container} initial="hidden" animate="show" className="space-y-4">
 
-          {/* ── Incomplete profile banner ── */}
+          {/* â”€â”€ Incomplete profile banner â”€â”€ */}
           {isProfileIncomplete && (
             <motion.div variants={item}>
               <button
@@ -1414,51 +1319,110 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
             </motion.div>
           )}
 
-          {/* Quick actions */}
-          <motion.div variants={container} className="grid grid-cols-2 gap-2">
-            <ChildQuickAction label="Invest" icon={LayoutGrid} onClick={() => setShowInvest(true)} delay={0.02} />
-            <ChildQuickAction label="Goals" icon={Target} onClick={() => navigate("investments")} delay={0.04} />
-            <ChildQuickAction label={openingTransfer ? "Loading" : "Deposit"} icon={ArrowDownToLine} onClick={openTransferModal} disabled={openingTransfer} delay={0.06} />
-            <ChildQuickAction label="Family" icon={Users} onClick={() => navigate("family")} delay={0.08} />
-            <ChildQuickAction label="Learn" icon={BookOpen} onClick={() => setShowLearn(true)} delay={0.10} />
+          {/* Quick Actions */}
+          <motion.div variants={item}>
+            <div className="grid grid-cols-4 gap-2 text-[11px] font-medium">
+              {[
+                { label: "Learn", icon: BookOpen, onClick: null, comingSoon: true },
+                { label: "Invest", icon: LayoutGrid, onClick: () => setShowInvest(true) },
+                { label: "Deposit", icon: ArrowDownToLine, onClick: openTransferModal, disabled: openingTransfer },
+                { label: "Goals", icon: Target, onClick: null, comingSoon: true },
+              ].map((btn, i) => {
+                const Icon = btn.icon;
+                return (
+                  <button
+                    key={i}
+                    disabled={btn.comingSoon || btn.disabled}
+                    onClick={btn.onClick}
+                    className={`relative flex flex-col items-center gap-2 rounded-2xl px-1 py-3 transition-all ${
+                      btn.comingSoon
+                        ? "bg-slate-100/70 cursor-not-allowed border border-slate-200/60"
+                        : "bg-white shadow-md active:scale-95 active:shadow-sm"
+                    } disabled:opacity-60`}
+                    type="button"
+                  >
+                    <span className={`flex h-8 w-8 items-center justify-center rounded-full ${
+                      btn.comingSoon ? "bg-slate-200 text-slate-400" : "bg-violet-50 text-violet-700"
+                    }`}>
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <span className={`text-center leading-tight font-medium ${
+                      btn.comingSoon ? "text-slate-400" : "text-slate-700"
+                    }`}>
+                      {btn.disabled && !btn.comingSoon ? "Loading…" : btn.label}
+                    </span>
+                    {btn.comingSoon && (
+                      <span className="absolute bottom-1.5 left-1/2 -translate-x-1/2 inline-flex items-center px-1.5 py-px rounded-full text-[7px] font-bold uppercase tracking-wider text-white" style={{ background: "linear-gradient(90deg,#7c3aed,#a855f7)" }}>Soon</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </motion.div>
 
-          {/* ── Best performing assets (matching HomePage) ── */}
-          <section>
-            <div className="flex items-end justify-between px-5 mb-3">
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-slate-900">{child?.first_name}'s best performing assets</p>
-                <div className="flex items-center gap-2 text-xs text-slate-500">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 text-slate-500"><Info className="h-3 w-3" /></span>
-                  <span>Based on investment portfolio</span>
-                </div>
-              </div>
+          {/* â”€â”€ Strategy Holdings â”€â”€ */}
+          <motion.div variants={item}>
+            <div className="flex items-center gap-2 mb-3 px-1">
+              <div className="h-2 w-2 rounded-full bg-slate-300" />
+              <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Strategies</p>
             </div>
-            {bestChildAssets.length > 0 ? (
-              <div className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {bestChildAssets.map((asset) => {
-                  const isUp = asset.pnlCents >= 0;
+
+            {strategyCards.length > 0 ? (
+              <div className="space-y-3">
+                {strategyCards.map((sc) => {
+                  const isUp = sc.pnl >= 0;
                   return (
-                    <div key={asset.symbol} className="flex min-w-[260px] flex-1 snap-start items-center gap-4 rounded-3xl bg-white p-4 shadow-md">
-                      <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">
-                        {asset.logo_url ? (
-                          <img src={asset.logo_url} alt={asset.name} className="h-10 w-10 object-contain" referrerPolicy="no-referrer" crossOrigin="anonymous" />
-                        ) : (
-                          <span className="text-sm font-semibold text-slate-600">{asset.symbol?.substring(0, 3)}</span>
-                        )}
+                    <div key={sc.id} className="rounded-2xl border border-slate-200 bg-white shadow-md p-4">
+                      {/* Header */}
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                            style={{ background: "linear-gradient(135deg,#ede9fe,#ddd6fe)" }}>
+                            <BarChart3 className="h-5 w-5 text-purple-600" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-slate-900 truncate">{sc.short_name || sc.name}</p>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              {sc.risk_level && (
+                                <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-violet-50 text-violet-600 border border-violet-100">{sc.risk_level}</span>
+                              )}
+                              {sc.is_featured && (
+                                <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-violet-100 text-violet-700">Featured</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-sm font-bold text-slate-900 tabular-nums">{fmt(sc.totalValue)}</p>
+                          <p className={`text-xs font-semibold tabular-nums ${isUp ? "text-emerald-600" : "text-red-500"}`}>
+                            {isUp ? "+" : ""}{fmt(sc.pnl)} ({isUp ? "+" : ""}{sc.pnlPct.toFixed(2)}%)
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-slate-900">{asset.symbol}</p>
-                        <p className="text-xs text-slate-500 line-clamp-1">{asset.name}</p>
-                      </div>
-                      <div className="text-right flex-shrink-0">
-                        <p className={`text-sm font-semibold ${isUp ? 'text-emerald-500' : 'text-rose-500'}`}>
-                          {isUp ? '+' : ''}R{Math.abs(asset.pnlCents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </p>
-                        <p className={`text-xs font-semibold ${isUp ? 'text-emerald-500' : 'text-rose-500'}`}>
-                          ({isUp ? '+' : ''}{asset.pnlPct.toFixed(2)}%)
-                        </p>
-                      </div>
+                      {/* Holdings avatar row */}
+                      {sc.holdings.length > 0 && (
+                        <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
+                          <div className="flex -space-x-2">
+                            {sc.holdings.slice(0, 4).map(h => (
+                              <div key={h.id} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white shadow-sm">
+                                {h.logo_url ? (
+                                  <img src={h.logo_url} alt={h.symbol} className="h-full w-full object-cover" />
+                                ) : (
+                                  <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">
+                                    {h.symbol?.substring(0, 2)}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                            {sc.holdings.length > 4 && (
+                              <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-slate-100 text-[10px] font-semibold text-slate-500">
+                                +{sc.holdings.length - 4}
+                              </div>
+                            )}
+                          </div>
+                          <span className="text-[11px] text-slate-400">{sc.holdings.length} holding{sc.holdings.length !== 1 ? "s" : ""}</span>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1473,16 +1437,59 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
                 </button>
               </div>
             )}
-          </section>
+          </motion.div>
 
-          {/* ── Best performing strategies (matching HomePage) ── */}
-          <section>
-            <div className="flex items-end justify-between px-5 mb-3">
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-slate-900">{child?.first_name}'s best performing strategies</p>
-                <div className="flex items-center gap-2 text-xs text-slate-500">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 text-slate-500"><LayoutGrid className="h-3 w-3" /></span>
-                  <span>Top performing curated portfolios</span>
+          {/* â”€â”€ Best Performing Assets â”€â”€ */}
+          {bestAssets.length > 0 && (
+            <motion.div variants={item}>
+              <div className="flex items-center gap-2 mb-3 px-1">
+                <div className="h-2 w-2 rounded-full bg-emerald-400" />
+                <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Best Performing Assets</p>
+              </div>
+              <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4 snap-x [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {bestAssets.map(a => {
+                  const isUp = a.pnlR >= 0;
+                  return (
+                    <div key={a.id} className="flex min-w-[220px] flex-shrink-0 snap-start items-center gap-3 rounded-2xl bg-white border border-slate-100 shadow-md p-3.5">
+                      <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-100">
+                        {a.logo_url ? (
+                          <img src={a.logo_url} alt={a.name} className="h-9 w-9 object-contain" />
+                        ) : (
+                          <span className="text-[10px] font-bold text-slate-600">{a.symbol?.substring(0, 3)}</span>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-slate-900 truncate">{a.symbol}</p>
+                        <p className="text-[10px] text-slate-500 truncate">{a.name}</p>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className={`text-sm font-bold tabular-nums ${isUp ? "text-emerald-500" : "text-red-500"}`}>
+                          {isUp ? "+" : ""}{fmt(Math.round(a.pnlR * 100))}
+                        </p>
+                        <p className={`text-[10px] font-semibold tabular-nums ${isUp ? "text-emerald-500" : "text-red-500"}`}>
+                          ({isUp ? "+" : ""}{a.pnlP.toFixed(2)}%)
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+
+          {/* â”€â”€ Recent Activity â”€â”€ */}
+          <motion.div variants={item}>
+            <div className="flex items-center gap-2 mb-3 px-1">
+              <div className="h-2 w-2 rounded-full bg-slate-300" />
+              <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Recent Activity</p>
+            </div>
+
+            {transactions.length > 0 ? (
+              <div className="rounded-2xl overflow-hidden shadow-lg border border-slate-200 bg-white">
+                <div className="divide-y divide-slate-100 px-5">
+                  {transactions.map((tx) => (
+                    <TransactionRow key={tx.id} tx={tx} />
+                  ))}
                 </div>
               </div>
             </div>
@@ -1573,7 +1580,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
             </div>
           </section>
 
-          {/* ── Account Info ── */}
+          {/* â”€â”€ Account Info â”€â”€ */}
           <motion.div variants={item}>
           <div className="flex items-center gap-2 mb-3 px-1">
             <div className="h-2 w-2 rounded-full bg-slate-300" />
@@ -1633,10 +1640,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
           </div>
         </motion.div>
 
-      </motion.div>
-    </div>
-
-      {/* ── Modals ── */ }
+      {/* â”€â”€ Modals â”€â”€ */}
       <AnimatePresence>
         {showTransfer && (
           <TransferModal
@@ -1656,14 +1660,6 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
             onInvest={handleInvestDone}
             onClose={() => setShowInvest(false)}
             authToken={authToken}
-          />
-        )}
-      </AnimatePresence>
-      <AnimatePresence>
-        {showLearn && (
-          <LearnModal
-            childName={child?.first_name || childName}
-            onClose={() => setShowLearn(false)}
           />
         )}
       </AnimatePresence>

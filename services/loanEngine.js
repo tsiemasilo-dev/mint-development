@@ -484,6 +484,19 @@ function computeIncomeStabilityContribution(overrides = {}) {
   } else if (rawSector === 'GOVERNMENT' && employerName) {
     valuePercent = 100;
     stabilityReason = 'Government employee - automatic 100%';
+  } else if (Number.isFinite(monthsCaptured) && monthsCaptured >= 1) {
+    // Partial TruID snapshot (1–2 months) — not enough history for a full salary pattern,
+    // but the bank is connected. Grant 50% if we can see any income in the available months.
+    const avgMonthlyIncome = Number(overrides.truid_avg_monthly_income);
+    const hasIncomeSignal = (Number.isFinite(avgMonthlyIncome) && avgMonthlyIncome > 0)
+      || (Number.isFinite(mainSalary) && mainSalary > 0);
+    if (hasIncomeSignal) {
+      valuePercent = 50;
+      stabilityReason = `TruID snapshot: ${monthsCaptured} month(s) — income signal present, insufficient history for full assessment`;
+    } else {
+      valuePercent = 0;
+      stabilityReason = `TruID snapshot: ${monthsCaptured} month(s) — no recurring income detected`;
+    }
   } else {
     valuePercent = 0;
     stabilityReason = 'Pending bank statement or payroll analysis';
@@ -663,19 +676,27 @@ function computeAlgoHiveBehaviouralContribution(overrides = {}, deviceFingerprin
     kycScore = (hasPackDetails ? 40 : 0) + (identityVerified ? 30 : 0) + (addressVerified ? 20 : 0);
   }
 
-  const deviceSignals = ['ip', 'userAgent'];
-  const deviceScore = deviceSignals.length
-    ? (deviceSignals.filter((key) => deviceFingerprint?.[key]).length / deviceSignals.length) * 100
-    : 0;
+  // Investment activity: any stock holdings or strategy investments on the platform
+  // Signals genuine platform engagement — a meaningful trust indicator
+  const hasStockHoldings = Boolean(overrides.algohive_has_stock_holdings);
+  const hasStrategyInvestments = Boolean(overrides.algohive_has_strategy_investments);
+  const hasAnyInvestment = hasStockHoldings || hasStrategyInvestments;
+  // Both types of investment present = full score; one type = partial; none = minimal
+  const investScore = hasStockHoldings && hasStrategyInvestments
+    ? 100
+    : hasAnyInvestment
+      ? 70
+      : 20;
 
+  // Borrower behaviour: returning customers in good standing are lower risk than brand-new applicants.
+  // New borrowers have no track record on this platform — they should score lower, not higher.
   const normalizedNewBorrower = typeof overrides.algolend_is_new_borrower === 'string'
     ? overrides.algolend_is_new_borrower.toLowerCase()
     : overrides.algolend_is_new_borrower;
-  const borrowerBehaviourScore = normalizedNewBorrower === true || normalizedNewBorrower === 'true' || normalizedNewBorrower === 'yes'
-    ? 100
-    : 60;
+  const isNewBorrower = normalizedNewBorrower === true || normalizedNewBorrower === 'true' || normalizedNewBorrower === 'yes';
+  const borrowerBehaviourScore = isNewBorrower ? 40 : 100;
 
-  const valuePercent = (kycScore * 0.70) + (deviceScore * 0.15) + (borrowerBehaviourScore * 0.15);
+  const valuePercent = (kycScore * 0.70) + (investScore * 0.15) + (borrowerBehaviourScore * 0.15);
   const contributionPercent = valuePercent * (ALGOHIVE_BEHAVIOURAL_WEIGHT / 100);
 
   return {
@@ -684,7 +705,11 @@ function computeAlgoHiveBehaviouralContribution(overrides = {}, deviceFingerprin
     addressVerified,
     kycResult: normalizedKycResult || null,
     kycScore,
-    deviceScore,
+    hasStockHoldings,
+    hasStrategyInvestments,
+    hasAnyInvestment,
+    investScore,
+    isNewBorrower,
     borrowerBehaviourScore,
     valuePercent,
     weightPercent: ALGOHIVE_BEHAVIOURAL_WEIGHT,

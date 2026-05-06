@@ -59,6 +59,7 @@ import { useInactivityTimeout } from "./lib/useInactivityTimeout.jsx";
 import PinLockScreen from "./components/PinLockScreen.jsx";
 import { isPinEnabled } from "./lib/usePin.js";
 import GoalLinkModal from "./components/GoalLinkModal.jsx";
+import KidStrategyChildPickerModal from "./components/KidStrategyChildPickerModal.jsx";
 import { useOnboardingStatus } from "./lib/useOnboardingStatus.js";
 import { checkOnboardingComplete } from "./lib/checkOnboardingComplete.js";
 import MaintenanceModal from "./components/MaintenanceModal.jsx";
@@ -133,6 +134,8 @@ const App = () => {
   const [investmentFees, setInvestmentFees] = useState(null);
   const [stockCheckout, setStockCheckout] = useState({ security: null, amount: 0, baseAmount: 0 });
   const [showGoalModal, setShowGoalModal] = useState(false);
+  const [showChildPickerModal, setShowChildPickerModal] = useState(false);
+  const [selectedChildForInvest, setSelectedChildForInvest] = useState(null);
   const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
   const [pendingPaymentMethod, setPendingPaymentMethod] = useState(null);
   const [pendingPaymentInfo, setPendingPaymentInfo] = useState(null);
@@ -1619,6 +1622,21 @@ const App = () => {
               strategyId: selectedStrategy?.id || selectedStrategy?.strategyId || null,
               fees // pass fees breakdown
             });
+            // Kid strategies: show child picker first (step 1), then goal link (step 2)
+            if (selectedStrategy?.is_kid_strategy) {
+              setSelectedChildForInvest(null);
+              setShowChildPickerModal(true);
+            } else {
+              setShowGoalModal(true);
+            }
+          }}
+        />
+        <KidStrategyChildPickerModal
+          isOpen={showChildPickerModal}
+          onClose={() => { setShowChildPickerModal(false); setPendingGoalFlow(null); }}
+          onSelectChild={(child) => {
+            setSelectedChildForInvest(child);
+            setShowChildPickerModal(false);
             setShowGoalModal(true);
           }}
         />
@@ -1742,6 +1760,7 @@ const App = () => {
           baseAmount={baseInvestmentAmount}
           fees={investmentFees || pendingGoalFlow?.fees}
           initialMethod={pendingPaymentMethod}
+          childId={selectedChildForInvest?.linked_user_id || null}
           onOpenDeposit={() => navigateTo("deposit")}
           onSuccess={async (response) => {
             console.log("Payment successful:", response);
@@ -1779,6 +1798,7 @@ const App = () => {
             selectedGoalIdRef.current = null;
             goalInvestAmountRef.current = 0;
             setSelectedGoalId(null);
+            setSelectedChildForInvest(null);
             navigationHistory.current = [];
             setPreviousPageName(null);
             setCurrentPage("paymentSuccess");
