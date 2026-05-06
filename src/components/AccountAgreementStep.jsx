@@ -929,56 +929,88 @@ export default function AccountAgreementStep({
   if (phase === "sign") {
     const { day, month, year } = todayParts();
 
-    // ── text-only mode: just the scrollable agreement card ──────────────────
+    // ── text-only mode: polished document view ──────────────────────────────
     if (mode === "text-only") {
+      const clauseHeading = (num, text) => (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "20px 0 8px" }}>
+          <span style={{ flexShrink: 0, width: 22, height: 22, borderRadius: 6, background: purple, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: "white" }}>{num}</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: purple, textTransform: "uppercase", letterSpacing: "0.08em" }}>{text}</span>
+        </div>
+      );
+      const subClause = (label, text) => (
+        <div style={{ display: "flex", gap: 10, marginBottom: 6, paddingLeft: 8 }}>
+          <span style={{ flexShrink: 0, fontSize: 12, fontWeight: 600, color: purpleMid, minWidth: 28 }}>{label}</span>
+          <span style={{ fontSize: 12, color: "#444", lineHeight: 1.6 }}>{text}</span>
+        </div>
+      );
       return (
-        <div style={{ fontSize: 13, lineHeight: 1.7, color: "#222" }}>
-          <p style={{ textAlign: "center", marginBottom: 16 }}><strong>Between</strong></p>
-          <p style={{ textAlign: "center", marginBottom: 4 }}>
-            <strong>Mint Platforms (Pty) Ltd</strong>, trading as <strong>Mint</strong><br />
-            Registration Number: 2024/644796/07<br />
-            (&quot;Mint&quot;)
-          </p>
-          <p style={{ textAlign: "center", margin: "12px 0" }}>and</p>
-          <div style={{ textAlign: "center", marginBottom: 24, padding: "12px 20px", borderRadius: 10, background: "hsl(270 50% 97%)", border: `1px solid hsl(270 40% 88%)` }}>
-            <strong style={{ fontSize: 14, color: purple }}>{fullName}</strong><br />
-            <span style={{ fontSize: 12, color: purpleMid }}>ID / Registration Number: {identityNumber || "—"}<br />{address}</span><br />
-            <span style={{ fontSize: 12 }}>(&quot;Client&quot;)</span>
-          </div>
-          <hr style={{ border: "none", borderTop: `1px solid ${purpleBorder}`, margin: "20px 0" }} />
-          <p><strong style={{ color: purple }}>1. APPOINTMENT</strong></p>
-          <p>The Client hereby appoints <strong>Mint Platforms (Pty) Ltd, trading as Mint</strong>, to act as its authorised securities administrator for purposes of facilitating the custody, administration and record-keeping of securities held by the Client.</p>
-          <p style={{ paddingLeft: 16 }}><strong>1.1</strong> Facilitate the opening and administration of the Client&apos;s securities account with the appointed nominee custodian.</p>
-          <p style={{ paddingLeft: 16 }}><strong>1.2</strong> Administer, record, and facilitate the holding of securities beneficially owned by the Client through the nominee and custody structure.</p>
-          <p style={{ paddingLeft: 16 }}><strong>1.3</strong> Interface and communicate with relevant transfer secretaries, custodians, central securities depositories, and settlement agents.</p>
-          <p style={{ paddingLeft: 16 }}><strong>1.4</strong> Provide relevant client and investment information to Strate, the appointed nominee custodian, and related service providers.</p>
-          <p><strong style={{ color: purple }}>2. NOMINEE AND UNDERLYING ACCOUNT ARRANGEMENTS</strong></p>
-          <p style={{ paddingLeft: 16 }}><strong>2.1</strong> Securities acquired through Mint may be held through a nominee structure or underlying accounts opened in the Client&apos;s name with a custodian or registry service provider.</p>
-          <p style={{ paddingLeft: 16 }}><strong>2.2</strong> Mint is authorised to facilitate the opening of such underlying accounts in the Client&apos;s name.</p>
-          <p style={{ paddingLeft: 16 }}><strong>2.3</strong> The Client consents to Mint providing the Client&apos;s information to relevant service providers for establishing such accounts.</p>
-          <p><strong style={{ color: purple }}>3. RECORD OF OWNERSHIP</strong></p>
-          <p style={{ paddingLeft: 16 }}><strong>3.1</strong> The Client remains the <strong>beneficial owner</strong> of any securities purchased or held through Mint.</p>
-          <p style={{ paddingLeft: 16 }}><strong>3.2</strong> Mint will maintain internal records reflecting the Client&apos;s beneficial ownership of securities.</p>
-          <p><strong style={{ color: purple }}>4. CLIENT INSTRUCTIONS</strong></p>
-          <p style={{ paddingLeft: 16 }}><strong>4.1</strong> Mint will act on instructions from the Client regarding subscriptions, transfers, disposals, corporate actions, and other administrative matters.</p>
-          <p><strong style={{ color: purple }}>5. INFORMATION SHARING</strong></p>
-          <p style={{ paddingLeft: 16 }}><strong>5.1</strong> The Client authorises Mint to share relevant client information with custodians, transfer secretaries, registry service providers, and settlement agents solely for administering the Client&apos;s securities holdings.</p>
-          <p><strong style={{ color: purple }}>6. TERM</strong></p>
-          <p>This Agreement shall commence on the date of signature and remain in effect until terminated by either party upon written notice.</p>
-          <p><strong style={{ color: purple }}>7. GOVERNING LAW</strong></p>
-          <p>This Agreement shall be governed by and interpreted in accordance with the laws of the <strong>Republic of South Africa</strong>.</p>
-          <p><strong style={{ color: purple }}>8. SIGNATURES</strong></p>
-          <p>Signed at <strong>MINT PLATFORMS</strong> on this <strong>{day}</strong> day of <strong>{month}</strong> 20<strong>{year}</strong>.</p>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginTop: 16 }}>
-            <div style={{ borderTop: `2px solid ${purpleBorder}`, paddingTop: 10 }}>
-              <p style={{ margin: 0, fontSize: 12, fontWeight: 600 }}>For and on behalf of Mint Platforms (Pty) Ltd</p>
-              <p style={{ margin: "4px 0 0", fontSize: 12, color: purpleMid }}>Name: Lonwabo Damane</p>
-              <p style={{ margin: "2px 0 0", fontSize: 12, color: purpleMid }}>Title: Chief Executive Officer</p>
+        <div>
+          {/* ── Parties ── */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 0, marginBottom: 20, borderRadius: 12, overflow: "hidden", border: `1px solid ${purpleBorder}` }}>
+            <div style={{ padding: "16px 18px", background: "hsl(270 30% 24%)" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Service Provider</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "white", marginBottom: 3 }}>Mint Platforms (Pty) Ltd</div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", lineHeight: 1.5 }}>
+                Trading as <strong style={{ color: "rgba(255,255,255,0.85)" }}>Mint</strong><br />
+                Reg: 2024/644796/07
+              </div>
             </div>
-            <div style={{ borderTop: `2px solid ${purpleBorder}`, paddingTop: 10 }}>
-              <p style={{ margin: 0, fontSize: 12, fontWeight: 600 }}>For and on behalf of the Client</p>
-              <p style={{ margin: "4px 0 0", fontSize: 12, color: purpleMid }}>Name: <strong style={{ color: purple }}>{fullName}</strong></p>
-              <p style={{ margin: "2px 0 0", fontSize: 11, color: purpleMid }}>ID: {identityNumber || "—"}</p>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "0 12px", background: purpleBorder }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: purpleMid, textTransform: "uppercase", letterSpacing: "0.08em" }}>and</span>
+            </div>
+            <div style={{ padding: "16px 18px", background: purplePale }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: purpleMid, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Client</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: purple, marginBottom: 3 }}>{fullName || "—"}</div>
+              <div style={{ fontSize: 11, color: purpleMid, lineHeight: 1.5 }}>
+                ID: {identityNumber || "—"}<br />
+                {address || ""}
+              </div>
+            </div>
+          </div>
+
+          <hr style={{ border: "none", borderTop: `1px solid ${purpleBorder}`, margin: "4px 0 4px" }} />
+
+          {/* ── Clauses ── */}
+          {clauseHeading("1", "Appointment")}
+          <p style={{ fontSize: 12, color: "#444", lineHeight: 1.6, margin: "0 0 8px" }}>The Client appoints <strong>Mint Platforms (Pty) Ltd</strong> as its authorised securities administrator for custody, administration and record-keeping of securities.</p>
+          {subClause("1.1", "Facilitate opening and administration of the Client's securities account with the appointed nominee custodian.")}
+          {subClause("1.2", "Administer and facilitate the holding of securities beneficially owned by the Client through the nominee and custody structure.")}
+          {subClause("1.3", "Interface with transfer secretaries, custodians, central securities depositories, and settlement agents.")}
+          {subClause("1.4", "Provide client and investment information to Strate, the appointed nominee custodian, and related service providers.")}
+
+          {clauseHeading("2", "Nominee & Underlying Account Arrangements")}
+          {subClause("2.1", "Securities acquired through Mint may be held through a nominee structure or underlying accounts in the Client's name.")}
+          {subClause("2.2", "Mint is authorised to facilitate the opening of such underlying accounts in the Client's name.")}
+          {subClause("2.3", "The Client consents to Mint providing the Client's information to relevant service providers for establishing such accounts.")}
+
+          {clauseHeading("3", "Record of Ownership")}
+          {subClause("3.1", "The Client remains the beneficial owner of any securities purchased or held through Mint.")}
+          {subClause("3.2", "Mint will maintain internal records reflecting the Client's beneficial ownership of securities.")}
+
+          {clauseHeading("4", "Client Instructions")}
+          {subClause("4.1", "Mint will act on Client instructions regarding subscriptions, transfers, disposals, corporate actions, and other administrative matters.")}
+
+          {clauseHeading("5", "Information Sharing")}
+          {subClause("5.1", "The Client authorises Mint to share relevant information with custodians, transfer secretaries, registry service providers, and settlement agents solely to administer the Client's securities holdings.")}
+
+          {clauseHeading("6", "Term")}
+          <p style={{ fontSize: 12, color: "#444", lineHeight: 1.6, margin: "0 0 8px", paddingLeft: 8 }}>This Agreement commences on the date of signature and remains in effect until terminated by either party upon written notice.</p>
+
+          {clauseHeading("7", "Governing Law")}
+          <p style={{ fontSize: 12, color: "#444", lineHeight: 1.6, margin: "0 0 8px", paddingLeft: 8 }}>This Agreement is governed by the laws of the <strong>Republic of South Africa</strong>.</p>
+
+          {clauseHeading("8", "Signatures")}
+          <p style={{ fontSize: 12, color: "#444", lineHeight: 1.6, margin: "0 0 12px", paddingLeft: 8 }}>Signed at <strong>Mint Platforms</strong> on this <strong>{day}</strong> day of <strong>{month}</strong> 20<strong>{year}</strong>.</p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div style={{ padding: "12px 14px", borderRadius: 10, background: purplePale, border: `1px solid ${purpleBorder}` }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: purpleMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>For Mint</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: purple }}>Lonwabo Damane</div>
+              <div style={{ fontSize: 11, color: purpleMid }}>Chief Executive Officer</div>
+            </div>
+            <div style={{ padding: "12px 14px", borderRadius: 10, background: purplePale, border: `1px solid ${purpleBorder}` }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: purpleMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>For the Client</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: purple }}>{fullName || "—"}</div>
+              <div style={{ fontSize: 11, color: purpleMid }}>ID: {identityNumber || "—"}</div>
             </div>
           </div>
         </div>
