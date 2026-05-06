@@ -142,10 +142,9 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const [submitSuccess, setSubmitSuccess] = useState("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [showProceed, setShowProceed] = useState(false);
-  const [agreedTerms, setAgreedTerms] = useState(false);
-  const [agreedPrivacy, setAgreedPrivacy] = useState(false);
+  const [agreedAll, setAgreedAll] = useState(false);
   const [existingOnboardingId, setExistingOnboardingId] = useState(null);
-  const [agreedRiskDisclosure, setAgreedRiskDisclosure] = useState(false);
+
   const [agreedMandate, setAgreedMandate] = useState(false);
   const [mandateValid, setMandateValid] = useState(false);
   const mandateDataRef = useRef(null);
@@ -597,8 +596,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
       setShowProceed(false);
     }
     if (step !== 7) {
-      setAgreedTerms(false);
-      setAgreedPrivacy(false);
+      setAgreedAll(false);
     }
   }, [step]);
 
@@ -661,7 +659,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
     employmentStatus === "contractor";
 
   const showStudentSection = employmentStatus === "student";
-  const agreementReady = agreedTerms && agreedPrivacy;
+  const agreementReady = agreedAll;
   const sofReady =
     sourceOfFunds &&
     (sourceOfFunds !== "other" || sourceOfFundsOther.trim().length > 0) &&
@@ -697,12 +695,12 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
         const completePayload = {
           existing_onboarding_id: existingOnboardingId || null,
-          risk_disclosure_agreed: agreedRiskDisclosure || false,
+          risk_disclosure_agreed: agreedAll || false,
           source_of_funds: sourceOfFunds || null,
           source_of_funds_other: sourceOfFunds === "other" ? (sourceOfFundsOther || null) : null,
           expected_monthly_investment: expectedMonthlyInvestment || null,
-          agreed_terms: agreedTerms || false,
-          agreed_privacy: agreedPrivacy || false,
+          agreed_terms: agreedAll || false,
+          agreed_privacy: agreedAll || false,
           tax_number: taxNumber || null,
           bank_name: bankName || null,
           bank_account_name: bankAccountName || null,
@@ -1417,10 +1415,6 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                       <div className="agreement-text">Concentrating investments in a single security, sector, or asset class increases risk. We encourage you to diversify your portfolio and seek independent financial advice if needed.</div>
                     </div>
                   </div>
-                  <label className="checkbox-item">
-                    <input type="checkbox" checked={agreedRiskDisclosure} onChange={(e) => setAgreedRiskDisclosure(e.target.checked)} />
-                    <span className="checkbox-label">I acknowledge that I have read and understand the investment risk disclosure</span>
-                  </label>
                 </div>
 
                 {/* ── Section 2: Terms & Conditions ── */}
@@ -1456,24 +1450,18 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                       <div className="agreement-text">Your privacy is important to us. We collect and process your personal information in accordance with our Privacy Policy. We use industry-standard security measures to protect your data, but we cannot guarantee absolute security.</div>
                     </div>
                   </div>
-                  <div className="checkbox-container" style={{ display: 'block' }}>
-                    <label className="checkbox-item">
-                      <input type="checkbox" checked={agreedTerms} onChange={(e) => setAgreedTerms(e.target.checked)} />
-                      <span className="checkbox-label">I agree to the Terms and Conditions</span>
-                    </label>
-                    <label className="checkbox-item">
-                      <input type="checkbox" checked={agreedPrivacy} onChange={(e) => setAgreedPrivacy(e.target.checked)} />
-                      <span className="checkbox-label">I agree to the Privacy Policy</span>
-                    </label>
-                  </div>
+                  <label className="checkbox-item">
+                    <input type="checkbox" checked={agreedAll} onChange={(e) => setAgreedAll(e.target.checked)} />
+                    <span className="checkbox-label">I confirm that I have read and agree to the investment risk disclosure and terms &amp; conditions</span>
+                  </label>
                 </div>
 
                 {/* ── Continue: saves risk + terms, then shows account agreement ── */}
                 <div className="text-center mt-8 animate-fade-in delay-4">
                   <button
                     type="button"
-                    className={`continue-button agreement-continue ${agreedRiskDisclosure && agreementReady ? "enabled" : ""}`}
-                    disabled={!(agreedRiskDisclosure && agreementReady)}
+                    className={`continue-button agreement-continue ${agreementReady ? "enabled" : ""}`}
+                    disabled={!agreementReady}
                     onClick={async () => {
                       await saveProgressFlag("risk_disclosure_accepted");
                       await saveProgressFlag("terms_accepted");
