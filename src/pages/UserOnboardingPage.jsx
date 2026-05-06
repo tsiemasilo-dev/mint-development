@@ -462,7 +462,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
       }
 
       setSubmitSuccess("Onboarding details saved successfully.");
-      goToStep(2);
+      goToStep(getNextIncompleteStep(3, 3));
     } catch (err) {
       setSubmitError(err?.message || "Failed to save onboarding details.");
     } finally {
