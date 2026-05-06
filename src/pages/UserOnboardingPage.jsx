@@ -255,7 +255,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
       try { raw = typeof record?.sumsub_raw === "string" ? JSON.parse(record.sumsub_raw) : (record?.sumsub_raw || {}); } catch { }
       raw[flagKey] = true;
       if (extraFields) Object.assign(raw, extraFields);
-      const updateQuery = supabase.from("user_onboarding").update({ sumsub_raw: JSON.stringify(raw) });
+      const updateQuery = supabase.from("user_onboarding").update({ sumsub_raw: raw });
       const { error } = id
         ? await updateQuery.eq("id", id).eq("user_id", userId)
         : await updateQuery.eq("user_id", userId);
