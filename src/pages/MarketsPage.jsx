@@ -250,22 +250,50 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   // Fetch kid strategies and child accounts when profile is ready
   // Derive kid strategies from publicStrategies (already fetched with correct RLS)
   useEffect(() => {
-    const rawKid = publicStrategies.filter(s => {
-      const raw = s.is_kid_strategy;
-      return raw === true || raw === 1 || String(raw).toLowerCase() === "true";
-    }).map(s => ({
-      ...s,
-      r_ytd: s.r_ytd != null ? s.r_ytd / 100 : null,
-      holdingsList: (Array.isArray(s.holdings)
-        ? s.holdings
-        : (() => { try { return JSON.parse(s.holdings || "[]"); } catch { return []; } })()
-      ).sort((a, b) => Number(b.weight || 0) - Number(a.weight || 0))
-        .map(h => ({ symbol: h.symbol || h.ticker, logo_url: null })),
-      sparkline: s.sparkline || [20, 22, 21, 24, 26, 25, 28, 30, 29, 32],
-    }));
-    console.log("[markets] kid strategies derived from publicStrategies →", rawKid.length, rawKid.map(s => s.name));
-    setKidStrategies(rawKid);
-    setKidStrategiesLoading(false);
+    if (!publicStrategies.length) return;
+    (async () => {
+      const kidSource = publicStrategies.filter(s => {
+        const raw = s.is_kid_strategy;
+        return raw === true || raw === 1 || String(raw).toLowerCase() === "true";
+      });
+      if (!kidSource.length) { setKidStrategies([]); setKidStrategiesLoading(false); return; }
+
+      // Parse holdings for all kid strategies
+      const withHoldings = kidSource.map(s => ({
+        ...s,
+        _parsedHoldings: (Array.isArray(s.holdings)
+          ? s.holdings
+          : (() => { try { return JSON.parse(s.holdings || "[]"); } catch { return []; } })()
+        ).sort((a, b) => Number(b.weight || 0) - Number(a.weight || 0)),
+      }));
+
+      // Collect all unique symbols and fetch logos in one query
+      const allSymbols = [...new Set(
+        withHoldings.flatMap(s => s._parsedHoldings.map(h => h.symbol || h.ticker).filter(Boolean))
+      )];
+      let secMap = {};
+      if (allSymbols.length > 0 && supabase) {
+        const { data: secs } = await supabase
+          .from("securities_c")
+          .select("symbol, logo_url")
+          .in("symbol", allSymbols);
+        (secs || []).forEach(s => { secMap[s.symbol] = s.logo_url || null; });
+      }
+
+      const enriched = withHoldings.map(s => ({
+        ...s,
+        r_ytd: s.r_ytd != null ? s.r_ytd / 100 : null,
+        holdingsList: s._parsedHoldings.map(h => ({
+          symbol: h.symbol || h.ticker,
+          logo_url: secMap[h.symbol || h.ticker] || null,
+        })),
+        sparkline: [20, 22, 21, 24, 26, 25, 28, 30, 29, 32],
+      }));
+
+      console.log("[markets] kid strategies →", enriched.length, enriched.map(s => s.name));
+      setKidStrategies(enriched);
+      setKidStrategiesLoading(false);
+    })();
   }, [publicStrategies]);
 
   useEffect(() => {
