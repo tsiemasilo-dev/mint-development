@@ -12,7 +12,7 @@ import { supabase } from "../lib/supabase";
 import MinorProofOfAddressDeclaration from "../components/MinorProofOfAddressDeclaration";
 import ChildResponsibilityAgreement from "../components/ChildResponsibilityAgreement";
 
-// â”€â”€â”€ helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- helpers ----------------------------------------------------------------
 
 function getAge(dob) {
   if (!dob) return null;
@@ -29,7 +29,7 @@ function fmt(cents) {
   return `R\u202F${val.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-// â”€â”€â”€ Animation variants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- Animation variants -----------------------------------------------------
 
 const container = {
   hidden: {},
@@ -215,7 +215,7 @@ function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onCl
   );
 }
 
-// â”€â”€â”€ Invest Modal (bottom-sheet) â€” browse strategies & invest â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- Invest Modal (bottom-sheet) - browse strategies & invest ----------------
 
 function InvestModal({ child, onInvest, onClose }) {
   const [strategies, setStrategies] = useState([]);
@@ -471,7 +471,7 @@ function InvestModal({ child, onInvest, onClose }) {
                                     {isUp ? "+" : ""}{ytdPct.toFixed(2)}%
                                   </span>
                                 ) : (
-                                  <span className="text-xs text-slate-400">â€”</span>
+                                  <span className="text-xs text-slate-400">-</span>
                                 )}
                                 {s.ytd_as_of_date && (
                                   <span className="text-[10px] text-slate-400">
@@ -620,7 +620,7 @@ function InvestModal({ child, onInvest, onClose }) {
 
 
 
-// â”€â”€â”€ TransactionRow â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- TransactionRow ----------------------------------------------------------
 
 function TransactionRow({ tx }) {
   const isCredit = tx.direction === "credit";
@@ -643,7 +643,7 @@ function TransactionRow({ tx }) {
   );
 }
 
-// â”€â”€â”€ CompleteProfileModal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- CompleteProfileModal ----------------------------------------------------
 
 
 function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
@@ -692,7 +692,7 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
       if (!child.poa_declaration_url) { setStep("poa"); }
       else if (!child.signed_agreement_url) { setStep("agreement"); }
       else {
-        // All steps already done â€” mark address_completed
+        // All steps already done - mark address_completed
         await fetch(`/api/family-members/${child.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -843,7 +843,7 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
               <div>
                 <p className="text-base font-bold text-slate-900">Complete Profile</p>
                 <p className="text-xs text-slate-400">
-                  {step === "id" ? "Step 1 â€” ID number" :
+                  {step === "id" ? "Step 1 - ID number" :
                    step === "poa" ? "Proof of address" :
                    "Responsibility agreement"}
                 </p>
@@ -917,9 +917,7 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
   );
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// â”€â”€â”€ Main Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// --- Main Page ---------------------------------------------------------------
 
 export default function ChildDashboardPage({ child: initialChild, onBack }) {
   const { profile } = useProfile();
@@ -1140,7 +1138,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
         backgroundAttachment: "fixed",
       }}
     >
-      {/* â”€â”€ Header â”€â”€ */}
+      {/* -- Header -- */}
       <div className="px-4 pt-12 pb-6">
         <div className="mx-auto w-full max-w-sm md:max-w-md">
           <div className="flex items-center gap-3">
@@ -1168,7 +1166,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
       <div className="mx-auto w-full max-w-sm px-4 pb-12 md:max-w-md">
         <motion.div variants={container} initial="hidden" animate="show" className="space-y-4">
 
-          {/* â”€â”€ Incomplete profile banner â”€â”€ */}
+          {/* -- Incomplete profile banner -- */}
           {isProfileIncomplete && (
             <motion.div variants={item}>
               <button
@@ -1231,7 +1229,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
             </div>
           </motion.div>
 
-          {/* â”€â”€ Strategy Holdings â”€â”€ */}
+          {/* -- Strategy Holdings -- */}
           <motion.div variants={item}>
             <div className="flex items-center gap-2 mb-3 px-1">
               <div className="h-2 w-2 rounded-full bg-slate-300" />
@@ -1317,7 +1315,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
             )}
           </motion.div>
 
-          {/* â”€â”€ Best Performing Assets â”€â”€ */}
+          {/* -- Best Performing Assets -- */}
           {bestAssets.length > 0 && (
             <motion.div variants={item}>
               <div className="flex items-center gap-2 mb-3 px-1">
@@ -1355,7 +1353,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
             </motion.div>
           )}
 
-          {/* â”€â”€ Recent Activity â”€â”€ */}
+          {/* -- Recent Activity -- */}
           <motion.div variants={item}>
             <div className="flex items-center gap-2 mb-3 px-1">
               <div className="h-2 w-2 rounded-full bg-slate-300" />
@@ -1377,7 +1375,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
             )}
           </motion.div>
 
-          {/* â”€â”€ Account Info â”€â”€ */}
+          {/* -- Account Info -- */}
           <motion.div variants={item}>
             <div className="flex items-center gap-2 mb-3 px-1">
               <div className="h-2 w-2 rounded-full bg-slate-300" />
@@ -1441,7 +1439,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
         </motion.div>
       </div>
 
-      {/* â”€â”€ Modals â”€â”€ */}
+      {/* -- Modals -- */}
       <AnimatePresence>
         {showTransfer && (
           <TransferModal
