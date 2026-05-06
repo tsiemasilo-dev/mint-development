@@ -116,12 +116,32 @@ export default async function handler(req, res) {
 
     const db = supabaseAdmin || supabase;
     const userId = user.id;
-    const { securityId, symbol, name, amount, baseAmount, strategyId, paymentReference, paymentMethod, shareCount, childUserId } = req.body;
+    const { securityId, symbol, name, amount, baseAmount, strategyId, paymentReference, paymentMethod, shareCount, childUserId, childFamilyMemberId } = req.body;
     // baseAmount = investment amount excluding fees (used for holdings/quantity calculations)
     // amount = total charged including fees (used for transaction records)
     const investAmount = (baseAmount && baseAmount > 0) ? baseAmount : amount;
-    // targetUserId: child's account for kid strategies, otherwise the investor themselves
+    // targetUserId: child's linked auth user for kid strategies, otherwise the investor themselves.
+    // targetFamilyMemberId: family_members.id used by child dashboards and holdings filters.
     const targetUserId = childUserId || userId;
+    let targetFamilyMemberId = childFamilyMemberId || null;
+
+    // Backfill family member id when only childUserId is provided.
+    if (!targetFamilyMemberId && childUserId) {
+      const { data: linkedChild } = await db
+        .from("family_members")
+        .select("id")
+        .eq("primary_user_id", userId)
+        .eq("linked_user_id", childUserId)
+        .eq("relationship", "child")
+        .maybeSingle();
+      targetFamilyMemberId = linkedChild?.id || null;
+    }
+
+    const withFamilyMemberFilter = (query) => {
+      return targetFamilyMemberId
+        ? query.eq("family_member_id", targetFamilyMemberId)
+        : query.is("family_member_id", null);
+    };
 
     if ((!securityId && !strategyId) || !amount || Number(amount) <= 0 || !paymentReference) {
       return res.status(400).json({ success: false, error: "Missing required fields: securityId or strategyId, amount, paymentReference" });
@@ -273,13 +293,15 @@ export default async function handler(req, res) {
           continue;
         }
 
-        const { data: existing, error: lookupErr } = await db
-          .from("stock_holdings_c")
-          .select("id, quantity, avg_fill")
-          .eq("user_id", targetUserId)
-          .eq("security_id", sec.id)
-          .eq("strategy_id", strategyId)
-          .maybeSingle();
+        const holdingsLookupQuery = withFamilyMemberFilter(
+          db
+            .from("stock_holdings_c")
+            .select("id, quantity, avg_fill")
+            .eq("user_id", targetUserId)
+            .eq("security_id", sec.id)
+            .eq("strategy_id", strategyId)
+        );
+        const { data: existing, error: lookupErr } = await holdingsLookupQuery.maybeSingle();
 
         if (lookupErr) {
           console.error("[record-investment] Error looking up holding for", holding.symbol, lookupErr.message);
@@ -309,6 +331,7 @@ export default async function handler(req, res) {
         } else {
           const { error: insertErr } = await db.from("stock_holdings_c").insert({
             user_id: targetUserId,
+            family_member_id: targetFamilyMemberId,
             security_id: sec.id,
             strategy_id: strategyId,
             quantity: holdingQty,
@@ -405,12 +428,14 @@ export default async function handler(req, res) {
       const marketValueCents = Math.round(quantity * (currentPriceCents || (avgFillCents)));
 
 
-      const { data: existing, error: fetchError } = await db
-        .from("stock_holdings_c")
-        .select("id, quantity, avg_fill, market_value")
-        .eq("user_id", targetUserId)
-        .eq("security_id", securityId)
-        .maybeSingle();
+      const securityLookupQuery = withFamilyMemberFilter(
+        db
+          .from("stock_holdings_c")
+          .select("id, quantity, avg_fill, market_value")
+          .eq("user_id", targetUserId)
+          .eq("security_id", securityId)
+      );
+      const { data: existing, error: fetchError } = await securityLookupQuery.maybeSingle();
 
       if (fetchError) {
         return res.status(500).json({ success: false, error: fetchError.message });
@@ -439,6 +464,7 @@ export default async function handler(req, res) {
           .from("stock_holdings_c")
           .insert({
             user_id: targetUserId,
+            family_member_id: targetFamilyMemberId,
             security_id: securityId,
             quantity: quantity,
             avg_fill: avgFillCents,
@@ -467,6 +493,7 @@ export default async function handler(req, res) {
       .from("transactions")
       .insert({
         user_id: targetUserId,
+        family_member_id: targetFamilyMemberId,
         direction: "debit",
         name: isStrategyInvestment ? `Strategy Investment: ${name || symbol || "Strategy"}` : `Purchased ${name || symbol || "Stock"}`,
         description: descriptionText,

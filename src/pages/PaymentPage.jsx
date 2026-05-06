@@ -18,6 +18,7 @@ const PaymentPage = ({
   initialMethod,
   fees,
   childId,
+  childFamilyMemberId,
 }) => {
   const { profile } = useProfile();
   const [paymentStatus, setPaymentStatus] = useState(
@@ -135,6 +136,7 @@ const PaymentPage = ({
             paymentMethod: finalMethod,
             ...(shareCount ? { shareCount: Number(shareCount) } : {}),
             ...(childId ? { childUserId: childId } : {}),
+            ...(childFamilyMemberId ? { childFamilyMemberId } : {}),
             ...(fees ? {
               feesBreakdown: {
                 bufferedBase: fees.bufferedBase,
@@ -188,7 +190,7 @@ const PaymentPage = ({
       }
       return { success: false, error: "Retries exhausted" };
     },
-    [amount, baseAmount, isStrategyPurchase, selectedMethod, shareCount, strategy],
+    [amount, baseAmount, childFamilyMemberId, childId, isStrategyPurchase, selectedMethod, shareCount, strategy],
   );
 
   const launchPaystack = useCallback(() => {
