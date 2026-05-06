@@ -143,6 +143,9 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [showProceed, setShowProceed] = useState(false);
   const [agreedAll, setAgreedAll] = useState(false);
+  const [sec1Open, setSec1Open] = useState(true);
+  const [sec2Open, setSec2Open] = useState(true);
+  const [sec3Open, setSec3Open] = useState(true);
   const [existingOnboardingId, setExistingOnboardingId] = useState(null);
 
   const [agreedMandate, setAgreedMandate] = useState(false);
@@ -1381,74 +1384,84 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <div className="progress-step active"></div>
               </div>
 
-              {/* ── Section 1: Risk Disclosure ── */}
-              <div className="animate-fade-in delay-2" style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', padding: '18px 20px', boxShadow: '0 2px 12px rgba(100,60,140,0.06)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+              {/* ── Section 1: Risk Disclosure (accordion) ── */}
+              <div className="animate-fade-in delay-2" style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', boxShadow: '0 2px 12px rgba(100,60,140,0.06)', overflow: 'hidden' }}>
+                <button type="button" onClick={() => setSec1Open(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '18px 20px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
                   <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'hsl(270 30% 25%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>1</span>
                   </div>
-                  <div>
+                  <div style={{ flex: 1 }}>
                     <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Investment Risk Disclosure</div>
                     <div style={{ fontSize: '12px', color: 'hsl(270 15% 60%)' }}>Review the risks before investing</div>
                   </div>
-                </div>
-                <div className="agreement-card">
-                  <div className="agreement-section">
-                    <div className="section-title">1. Investment Risk Warning</div>
-                    <div className="agreement-text">Investing in financial instruments involves risk, including the possible loss of some or all of your principal investment. Past performance is not indicative of future results. The value of investments and the income derived from them may go down as well as up.</div>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="hsl(270 20% 55%)" strokeWidth="2" width="18" height="18" style={{ flexShrink: 0, transition: 'transform 0.2s', transform: sec1Open ? 'rotate(180deg)' : 'rotate(0deg)' }}><path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" /></svg>
+                </button>
+                {sec1Open && (
+                  <div style={{ padding: '0 20px 18px' }}>
+                    <div className="agreement-card">
+                      <div className="agreement-section">
+                        <div className="section-title">1. Investment Risk Warning</div>
+                        <div className="agreement-text">Investing in financial instruments involves risk, including the possible loss of some or all of your principal investment. Past performance is not indicative of future results. The value of investments and the income derived from them may go down as well as up.</div>
+                      </div>
+                      <div className="agreement-section">
+                        <div className="section-title">2. Market Volatility</div>
+                        <div className="agreement-text">Financial markets can be volatile and unpredictable. Prices of securities, including those listed on the JSE, can fluctuate significantly due to various factors including economic conditions, political events, company performance, and market sentiment.</div>
+                      </div>
+                      <div className="agreement-section">
+                        <div className="section-title">3. No Guaranteed Returns</div>
+                        <div className="agreement-text">MINT does not guarantee any returns on investments. All investment decisions are made at your own risk. You should only invest money that you can afford to lose without affecting your standard of living.</div>
+                      </div>
+                      <div className="agreement-section">
+                        <div className="section-title">4. Regulatory Compliance</div>
+                        <div className="agreement-text">MINT operates in compliance with South African financial regulations. We are committed to transparency and providing you with the information needed to make informed investment decisions. However, we do not provide personalised financial advice.</div>
+                      </div>
+                      <div className="agreement-section">
+                        <div className="section-title">5. Diversification Notice</div>
+                        <div className="agreement-text">Concentrating investments in a single security, sector, or asset class increases risk. We encourage you to diversify your portfolio and seek independent financial advice if needed.</div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="agreement-section">
-                    <div className="section-title">2. Market Volatility</div>
-                    <div className="agreement-text">Financial markets can be volatile and unpredictable. Prices of securities, including those listed on the JSE, can fluctuate significantly due to various factors including economic conditions, political events, company performance, and market sentiment.</div>
-                  </div>
-                  <div className="agreement-section">
-                    <div className="section-title">3. No Guaranteed Returns</div>
-                    <div className="agreement-text">MINT does not guarantee any returns on investments. All investment decisions are made at your own risk. You should only invest money that you can afford to lose without affecting your standard of living.</div>
-                  </div>
-                  <div className="agreement-section">
-                    <div className="section-title">4. Regulatory Compliance</div>
-                    <div className="agreement-text">MINT operates in compliance with South African financial regulations. We are committed to transparency and providing you with the information needed to make informed investment decisions. However, we do not provide personalised financial advice.</div>
-                  </div>
-                  <div className="agreement-section">
-                    <div className="section-title">5. Diversification Notice</div>
-                    <div className="agreement-text">Concentrating investments in a single security, sector, or asset class increases risk. We encourage you to diversify your portfolio and seek independent financial advice if needed.</div>
-                  </div>
-                </div>
+                )}
               </div>
 
-              {/* ── Section 2: Terms & Conditions ── */}
-              <div className="animate-fade-in delay-3" style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', padding: '18px 20px', boxShadow: '0 2px 12px rgba(100,60,140,0.06)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+              {/* ── Section 2: Terms & Conditions (accordion) ── */}
+              <div className="animate-fade-in delay-3" style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', boxShadow: '0 2px 12px rgba(100,60,140,0.06)', overflow: 'hidden' }}>
+                <button type="button" onClick={() => setSec2Open(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '18px 20px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
                   <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'hsl(270 30% 25%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>2</span>
                   </div>
-                  <div>
+                  <div style={{ flex: 1 }}>
                     <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Terms &amp; Conditions</div>
                     <div style={{ fontSize: '12px', color: 'hsl(270 15% 60%)' }}>Review and accept the MINT terms</div>
                   </div>
-                </div>
-                <div className="agreement-card">
-                  <div className="agreement-section">
-                    <div className="section-title">1. Introduction</div>
-                    <div className="agreement-text">Welcome to MINT. By accessing or using our services, you agree to be bound by these Terms and Conditions. Please read them carefully before proceeding. These terms govern your use of our platform and all related services.</div>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="hsl(270 20% 55%)" strokeWidth="2" width="18" height="18" style={{ flexShrink: 0, transition: 'transform 0.2s', transform: sec2Open ? 'rotate(180deg)' : 'rotate(0deg)' }}><path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" /></svg>
+                </button>
+                {sec2Open && (
+                  <div style={{ padding: '0 20px 18px' }}>
+                    <div className="agreement-card">
+                      <div className="agreement-section">
+                        <div className="section-title">1. Introduction</div>
+                        <div className="agreement-text">Welcome to MINT. By accessing or using our services, you agree to be bound by these Terms and Conditions. Please read them carefully before proceeding. These terms govern your use of our platform and all related services.</div>
+                      </div>
+                      <div className="agreement-section">
+                        <div className="section-title">2. User Account</div>
+                        <div className="agreement-text">To use MINT, you must create an account. You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account. You agree to provide accurate and complete information during the onboarding process.</div>
+                      </div>
+                      <div className="agreement-section">
+                        <div className="section-title">3. Investment Services</div>
+                        <div className="agreement-text">MINT provides a platform for fractional investment in various assets. We are not a financial advisor, and the information provided through our platform does not constitute financial, investment, or tax advice. You should perform your own research or consult with a qualified advisor.</div>
+                      </div>
+                      <div className="agreement-section">
+                        <div className="section-title">4. Fees and Charges</div>
+                        <div className="agreement-text">MINT may charge fees for its services. These fees will be clearly disclosed to you. You agree to pay all fees associated with your use of our platform. We reserve the right to change our fee structure with prior notice to you.</div>
+                      </div>
+                      <div className="agreement-section">
+                        <div className="section-title">5. Privacy and Security</div>
+                        <div className="agreement-text">Your privacy is important to us. We collect and process your personal information in accordance with our Privacy Policy. We use industry-standard security measures to protect your data, but we cannot guarantee absolute security.</div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="agreement-section">
-                    <div className="section-title">2. User Account</div>
-                    <div className="agreement-text">To use MINT, you must create an account. You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account. You agree to provide accurate and complete information during the onboarding process.</div>
-                  </div>
-                  <div className="agreement-section">
-                    <div className="section-title">3. Investment Services</div>
-                    <div className="agreement-text">MINT provides a platform for fractional investment in various assets. We are not a financial advisor, and the information provided through our platform does not constitute financial, investment, or tax advice. You should perform your own research or consult with a qualified advisor.</div>
-                  </div>
-                  <div className="agreement-section">
-                    <div className="section-title">4. Fees and Charges</div>
-                    <div className="agreement-text">MINT may charge fees for its services. These fees will be clearly disclosed to you. You agree to pay all fees associated with your use of our platform. We reserve the right to change our fee structure with prior notice to you.</div>
-                  </div>
-                  <div className="agreement-section">
-                    <div className="section-title">5. Privacy and Security</div>
-                    <div className="agreement-text">Your privacy is important to us. We collect and process your personal information in accordance with our Privacy Policy. We use industry-standard security measures to protect your data, but we cannot guarantee absolute security.</div>
-                  </div>
-                </div>
+                )}
               </div>
 
               {/* ── Confirmation checkbox ── */}
@@ -1459,31 +1472,36 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 </label>
               </div>
 
-              {/* ── Section 3: Account Agreement signing (inline) ── */}
+              {/* ── Section 3: Account Agreement signing (accordion, appears after checkbox) ── */}
               {agreedAll && (
-                <div className="animate-fade-in delay-4" style={{ marginBottom: '12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px', paddingLeft: '4px' }}>
+                <div className="animate-fade-in delay-4" style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', boxShadow: '0 2px 12px rgba(100,60,140,0.06)', overflow: 'hidden' }}>
+                  <button type="button" onClick={() => setSec3Open(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '18px 20px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
                     <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'hsl(270 30% 25%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>3</span>
                     </div>
-                    <div>
+                    <div style={{ flex: 1 }}>
                       <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Sign Your Account Agreement</div>
                       <div style={{ fontSize: '12px', color: 'hsl(270 15% 60%)' }}>Review and sign your client agreement</div>
                     </div>
-                  </div>
-                  <AccountAgreementStep
-                    profile={profile}
-                    onboardingData={{ bankName, bankAccountNumber, bankBranchCode, bankAccountType, taxNumber, identityNumber, sourceOfFunds, sourceOfFundsOther, expectedMonthlyInvestment }}
-                    existingOnboardingId={existingOnboardingId}
-                    onComplete={async (signingResults) => {
-                      await saveProgressFlag("risk_disclosure_accepted");
-                      await saveProgressFlag("terms_accepted");
-                      setRiskDone(true);
-                      setTermsDone(true);
-                      await handleFinalComplete(signingResults);
-                      goToStep(7);
-                    }}
-                  />
+                    <svg viewBox="0 0 24 24" fill="none" stroke="hsl(270 20% 55%)" strokeWidth="2" width="18" height="18" style={{ flexShrink: 0, transition: 'transform 0.2s', transform: sec3Open ? 'rotate(180deg)' : 'rotate(0deg)' }}><path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" /></svg>
+                  </button>
+                  {sec3Open && (
+                    <div style={{ padding: '0 20px 18px' }}>
+                      <AccountAgreementStep
+                        profile={profile}
+                        onboardingData={{ bankName, bankAccountNumber, bankBranchCode, bankAccountType, taxNumber, identityNumber, sourceOfFunds, sourceOfFundsOther, expectedMonthlyInvestment }}
+                        existingOnboardingId={existingOnboardingId}
+                        onComplete={async (signingResults) => {
+                          await saveProgressFlag("risk_disclosure_accepted");
+                          await saveProgressFlag("terms_accepted");
+                          setRiskDone(true);
+                          setTermsDone(true);
+                          await handleFinalComplete(signingResults);
+                          goToStep(7);
+                        }}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
