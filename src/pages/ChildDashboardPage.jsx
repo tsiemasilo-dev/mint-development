@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, useMemo, useId } from "react";
+﻿import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, ArrowUpRight, ArrowDownLeft, X,
@@ -9,9 +9,6 @@ import {
 import SwipeableBalanceCard from "../components/SwipeableBalanceCard";
 import { useProfile } from "../lib/useProfile";
 import { supabase } from "../lib/supabase";
-import { formatChangePct, getChangeColor } from "../lib/strategyData.js";
-import { ChartContainer } from "../components/ui/line-charts-2";
-import { Area, ComposedChart, Line, ResponsiveContainer } from "recharts";
 import MinorProofOfAddressDeclaration from "../components/MinorProofOfAddressDeclaration";
 import ChildResponsibilityAgreement from "../components/ChildResponsibilityAgreement";
 
@@ -217,43 +214,6 @@ function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onCl
     </motion.div>
   );
 }
-
-// --- Mini sparkline for strategy browse cards ---
-const StrategyMiniChart = ({ values }) => {
-  const chartConfig = { returnPct: { label: "Return", color: "#5b21b6" } };
-  const data = useMemo(
-    () => (values || []).map((v, i) => ({ label: `P${i + 1}`, returnPct: v })),
-    [values],
-  );
-  const gradientId = useId();
-  const lastIndex = data.length - 1;
-  const renderLastDot = ({ cx, cy, index }) => {
-    if (index !== lastIndex) return null;
-    return (
-      <g>
-        <circle cx={cx} cy={cy} r={5} fill="#ffffff" opacity={0.95} />
-        <circle cx={cx} cy={cy} r={2.5} fill="#5b21b6" />
-      </g>
-    );
-  };
-  return (
-    <ChartContainer config={chartConfig} className="h-12 w-24">
-      <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={data} margin={{ top: 4, right: 6, left: 6, bottom: 4 }}>
-          <defs>
-            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#5b21b6" stopOpacity={0.22} />
-              <stop offset="70%" stopColor="#3b1b7a" stopOpacity={0.08} />
-              <stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <Area type="monotone" dataKey="returnPct" stroke="transparent" fill={`url(#${gradientId})`} dot={false} />
-          <Line type="monotone" dataKey="returnPct" stroke="#5b21b6" strokeWidth={2} dot={renderLastDot} activeDot={false} />
-        </ComposedChart>
-      </ResponsiveContainer>
-    </ChartContainer>
-  );
-};
 
 // â”€â”€â”€ Invest Modal (bottom-sheet) â€” browse strategies & invest â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -1270,114 +1230,6 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
               })}
             </div>
           </motion.div>
-
-
-          {/* -- Browse Kid Strategies -- */}
-          {(kidStrategiesLoading || kidStrategies.length > 0) && (
-            <motion.div variants={item}>
-              <div className="flex items-center gap-2 mb-3 px-1">
-                <div className="h-2 w-2 rounded-full bg-violet-400" />
-                <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Explore Strategies</p>
-              </div>
-
-              {kidStrategiesLoading ? (
-                <div className="flex gap-3 overflow-x-hidden pb-2">
-                  {[1, 2].map(n => (
-                    <div key={n} className="flex-shrink-0 w-72 h-52 rounded-2xl bg-white/70 animate-pulse" />
-                  ))}
-                </div>
-              ) : (
-                [...new Set(kidStrategies.map(s => s.sector || "General"))].map(sector => {
-                  const sectorStrats = kidStrategies.filter(s => (s.sector || "General") === sector);
-                  if (sectorStrats.length === 0) return null;
-                  return (
-                    <section key={sector} className="mb-4">
-                      <div className="mb-3 flex items-center justify-between">
-                        <h2 className="text-base font-bold text-slate-900">{sector}</h2>
-                        <ChevronRight className="h-4 w-4 text-slate-400" />
-                      </div>
-                      <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 scrollbar-hide" style={{ WebkitOverflowScrolling: "touch" }}>
-                        {sectorStrats.map(strategy => {
-                          const displayName = strategy.short_name || strategy.name;
-                          const minFmt = strategy.min_investment > 0 ? `Min. ${fmt(strategy.min_investment)}` : null;
-                          const hasYtd = strategy.r_ytd !== null && strategy.r_ytd !== undefined && strategy.r_ytd !== 0;
-                          const tags = strategy.tags && strategy.tags.length > 0 ? strategy.tags.slice(0, 2) : [strategy.risk_level || "Balanced"];
-                          return (
-                            <button
-                              key={strategy.id}
-                              type="button"
-                              onClick={() => setShowInvest(true)}
-                              className="flex-shrink-0 w-72 rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md hover:border-slate-200 p-4 transition-all snap-center text-left"
-                            >
-                              <div className="flex items-start justify-between gap-4">
-                                <div className="flex-1 space-y-1">
-                                  <p className="text-sm font-semibold text-slate-900">{displayName}</p>
-                                  <div>
-                                    <p className="text-xs text-slate-600 line-clamp-1">
-                                      {strategy.risk_level || "Balanced"}{strategy.objective ? ` • ${strategy.objective}` : ""}
-                                    </p>
-                                    {minFmt && <p className="text-[11px] text-slate-400">{minFmt}</p>}
-                                  </div>
-                                </div>
-                                <div className="flex items-center rounded-xl bg-slate-50 px-2">
-                                  <StrategyMiniChart values={strategy.sparkline} />
-                                </div>
-                              </div>
-
-                              <div className="mt-3 flex flex-wrap gap-2">
-                                {tags.map(tag => (
-                                  <span key={tag} className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">{tag}</span>
-                                ))}
-                                {strategy.is_featured && (
-                                  <span className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-600">Featured</span>
-                                )}
-                              </div>
-
-                              <div className="mt-3 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
-                                <span className="text-xs font-semibold text-slate-600">YTD return</span>
-                                <div className="flex flex-col items-end gap-0.5">
-                                  <span className={`text-xs font-semibold ${hasYtd ? getChangeColor(strategy.r_ytd) : "text-slate-400"}`}>
-                                    {hasYtd ? formatChangePct(strategy.r_ytd) : "—"}
-                                  </span>
-                                  {strategy.ytd_as_of_date && (
-                                    <span className="text-[10px] text-slate-500">
-                                      {new Date(strategy.ytd_as_of_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-
-                              {strategy.holdingsList.length > 0 && (
-                                <div className="mt-3 flex items-center gap-3">
-                                  <div className="flex -space-x-2">
-                                    {strategy.holdingsList.slice(0, 3).map(h => (
-                                      <div key={h.symbol} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-sm">
-                                        {h.logo_url ? (
-                                          <img src={h.logo_url} alt={h.symbol} className="h-full w-full object-cover" />
-                                        ) : (
-                                          <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">{h.symbol?.substring(0, 2)}</div>
-                                        )}
-                                      </div>
-                                    ))}
-                                    {strategy.holdingsList.length > 3 && (
-                                      <div className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500">
-                                        +{strategy.holdingsList.length - 3}
-                                      </div>
-                                    )}
-                                  </div>
-                                  <span className="text-xs font-semibold text-slate-500">Holdings snapshot</span>
-                                </div>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </section>
-                  );
-                })
-              )}
-            </motion.div>
-          )}
 
           {/* â”€â”€ Strategy Holdings â”€â”€ */}
           <motion.div variants={item}>
