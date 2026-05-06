@@ -248,53 +248,28 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   }, [profile]);
 
   // Fetch kid strategies and child accounts when profile is ready
+  // Derive kid strategies from publicStrategies (already fetched with correct RLS)
+  useEffect(() => {
+    const rawKid = publicStrategies.filter(s => {
+      const raw = s.is_kid_strategy;
+      return raw === true || raw === 1 || String(raw).toLowerCase() === "true";
+    }).map(s => ({
+      ...s,
+      r_ytd: s.r_ytd != null ? s.r_ytd / 100 : null,
+      holdingsList: (Array.isArray(s.holdings)
+        ? s.holdings
+        : (() => { try { return JSON.parse(s.holdings || "[]"); } catch { return []; } })()
+      ).sort((a, b) => Number(b.weight || 0) - Number(a.weight || 0))
+        .map(h => ({ symbol: h.symbol || h.ticker, logo_url: null })),
+      sparkline: s.sparkline || [20, 22, 21, 24, 26, 25, 28, 30, 29, 32],
+    }));
+    console.log("[markets] kid strategies derived from publicStrategies →", rawKid.length, rawKid.map(s => s.name));
+    setKidStrategies(rawKid);
+    setKidStrategiesLoading(false);
+  }, [publicStrategies]);
+
   useEffect(() => {
     if (!supabase) return;
-
-    // Fetch kid strategies
-    (async () => {
-      setKidStrategiesLoading(true);
-      try {
-        // Fetch ALL strategies_c (no is_kid_strategy DB filter — column type mismatch causes 0 rows)
-        // We filter in JS instead, handling boolean true / string "TRUE" / "true" / 1
-        const { data, error: ksErr } = await supabase
-          .from("strategies_c")
-          .select("id, name, short_name, risk_level, sector, objective, tags, min_investment, is_featured, sparkline, ytd_as_of_date, holdings, status, is_kid_strategy, strategy_metrics(as_of_date, r_ytd_pct)")
-          .order("is_featured", { ascending: false })
-          .order("name");
-        console.log("[markets] ALL strategies_c →", { rows: (data||[]).length, error: ksErr });
-        // Filter in JS: handle boolean true, string "true", "TRUE", or 1
-        const rows = (data || []).filter(s => {
-          const raw = s.is_kid_strategy;
-          const kidFlag = raw === true || raw === 1 || String(raw).toLowerCase() === "true";
-          const statusOk = !s.status || !["rejected", "archived", "disabled"].includes(String(s.status).toLowerCase());
-          console.log("[markets] strategy →", s.name, "| is_kid_strategy:", raw, "| status:", s.status, "| kidFlag:", kidFlag);
-          return kidFlag && statusOk;
-        });
-        const allSymbols = [...new Set(
-          rows.flatMap(s => (Array.isArray(s.holdings) ? s.holdings : []).map(h => h.symbol || h.ticker).filter(Boolean))
-        )];
-        let secMap = {};
-        if (allSymbols.length > 0) {
-          const { data: secs } = await supabase.from("securities_c").select("symbol, logo_url").in("symbol", allSymbols);
-          (secs || []).forEach(s => { secMap[s.symbol] = s; });
-        }
-        const enriched = rows.map(s => {
-          const metrics = Array.isArray(s.strategy_metrics)
-            ? [...s.strategy_metrics].sort((a, b) => (b.as_of_date || "").localeCompare(a.as_of_date || ""))[0]
-            : s.strategy_metrics;
-          const r_ytd = metrics?.r_ytd_pct != null ? metrics.r_ytd_pct / 100 : null;
-          const holdingsList = (Array.isArray(s.holdings) ? s.holdings : [])
-            .sort((a, b) => Number(b.weight || 0) - Number(a.weight || 0))
-            .map(h => ({ symbol: h.symbol || h.ticker, logo_url: secMap[h.symbol || h.ticker]?.logo_url || null }));
-          const sparkline = s.sparkline || [20, 22, 21, 24, 26, 25, 28, 30, 29, 32];
-          return { ...s, r_ytd, holdingsList, sparkline };
-        });
-        console.log("[markets] kid strategies enriched count →", enriched.length);
-        setKidStrategies(enriched);
-      } catch (e) { console.error("[markets] kid strategies ERROR", e); }
-      finally { setKidStrategiesLoading(false); }
-    })();
 
     // Fetch child accounts for this parent (DB first, API fallback)
     (async () => {
