@@ -488,6 +488,7 @@ const PaymentPage = ({
           onClose={() => onBack?.()}
           amount={amount}
           strategyName={strategy?.name}
+          childFamilyMemberId={childFamilyMemberId}
           onSelectPaystack={() => handleMethodSelection("paystack")}
           onSelectWallet={() => handleMethodSelection("wallet")}
           onEFTConfirm={() => handleMethodSelection("direct_eft")}

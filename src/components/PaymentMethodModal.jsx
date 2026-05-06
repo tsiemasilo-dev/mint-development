@@ -15,6 +15,7 @@ const PaymentMethodModal = ({
   onSelectOzow,
   onEFTConfirm,
   onSelectWallet,
+  childFamilyMemberId,
 }) => {
   const [eftExpanded, setEftExpanded] = useState(false);
   const [copied, setCopied] = useState(null);
@@ -26,24 +27,43 @@ const PaymentMethodModal = ({
 
   // ── FIX 2: Wallet balance fetched from the wallets table ─────────────────
   const [walletBalance, setWalletBalance] = useState(0);
+  const [walletLabel, setWalletLabel] = useState("Wallet");
   const [walletLoading, setWalletLoading] = useState(true);
+  const isChildWallet = !!childFamilyMemberId;
 
   useEffect(() => {
-    if (!profile?.id) return;
     const fetchWallet = async () => {
       setWalletLoading(true);
-      const { data, error } = await supabase
-        .from("wallets")
-        .select("balance")
-        .eq("user_id", profile.id)
-        .single();
-      if (!error && data?.balance !== undefined) {
-        setWalletBalance(Number(data.balance));
+      if (isChildWallet) {
+        try {
+          const res = await fetch(`/api/child-wallet?family_member_id=${encodeURIComponent(childFamilyMemberId)}`);
+          const json = await res.json();
+          if (!res.ok) throw new Error(json?.error || "Failed to fetch child wallet");
+          setWalletBalance(Number(json?.balance || 0) / 100);
+          const firstName = json?.first_name || "Child";
+          setWalletLabel(`${firstName}'s wallet`);
+        } catch (e) {
+          console.error("[payment-method-modal] child wallet fetch failed:", e);
+          setWalletBalance(0);
+          setWalletLabel("Child wallet");
+        }
+      } else if (profile?.id) {
+        const { data, error } = await supabase
+          .from("wallets")
+          .select("balance")
+          .eq("user_id", profile.id)
+          .single();
+        if (!error && data?.balance !== undefined) {
+          setWalletBalance(Number(data.balance));
+        }
+        setWalletLabel("Wallet");
       }
       setWalletLoading(false);
     };
+
+    if (!isChildWallet && !profile?.id) return;
     fetchWallet();
-  }, [profile?.id]);
+  }, [childFamilyMemberId, isChildWallet, profile?.id]);
 
   const handleCopy = (value, label) => {
     navigator.clipboard.writeText(value).then(() => {
@@ -171,10 +191,10 @@ const PaymentMethodModal = ({
                       {!isWalletReady
                         ? "Checking balance..."
                         : !hasAnyFunds
-                          ? "No wallet balance — please top up"
+                          ? `No balance in ${walletLabel.toLowerCase()} — please top up`
                           : !hasEnoughFunds
-                            ? "Insufficient wallet funds — top up to continue"
-                            : `Available: ${formatAmount(walletBalance)}`}
+                            ? `Insufficient funds in ${walletLabel.toLowerCase()} — top up to continue`
+                            : `Available in ${walletLabel}: ${formatAmount(walletBalance)}`}
                     </p>
                   </div>
                   <span
