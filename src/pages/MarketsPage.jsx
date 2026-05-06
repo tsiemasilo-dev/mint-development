@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase.js";
 import { getMarketsSecuritiesWithMetrics } from "../lib/marketData.js";
 import { getStrategiesWithMetrics, getPublicStrategies, formatChangePct, formatChangeAbs, getChangeColor } from "../lib/strategyData.js";
 import { useProfile } from "../lib/useProfile";
-import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Star, Users, ArrowLeft, Check, Wallet, AlertCircle, BarChart3 } from "lucide-react";
+import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Star } from "lucide-react";
 import { saveMarketsInvestFilters, loadMarketsInvestFilters, saveMarketsStrategyFilters, loadMarketsStrategyFilters, buildInvestChips, buildChipsFromFilters } from "../lib/usePersistedFilters.js";
 import NotificationBell from "../components/NotificationBell";
 import FamilyDropdown from "../components/FamilyDropdown";
@@ -192,53 +192,6 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
 
   const [watchlist, setWatchlist] = useState([]);
 
-  // ── Kid strategies & child picker state ──────────────────────────────────
-  const [kidStrategies, setKidStrategies] = useState([]);
-  const [kidStrategiesLoading, setKidStrategiesLoading] = useState(true);
-  const [childAccounts, setChildAccounts] = useState([]);
-  const [kidStrategyPick, setKidStrategyPick] = useState(null); // strategy being invested into for a child
-  const [kidChildPick, setKidChildPick] = useState(null);       // child chosen in picker
-  const [kidInvestUnits, setKidInvestUnits] = useState(1);
-  const [kidInvestSaving, setKidInvestSaving] = useState(false);
-  const [kidInvestError, setKidInvestError] = useState("");
-  const [kidInvestSuccess, setKidInvestSuccess] = useState(false);
-
-  function fmtR(rands) {
-    const val = rands || 0;
-    return `R\u202F${val.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  }
-
-  function closeKidInvest() {
-    setKidStrategyPick(null);
-    setKidChildPick(null);
-    setKidInvestUnits(1);
-    setKidInvestSaving(false);
-    setKidInvestError("");
-    setKidInvestSuccess(false);
-  }
-
-  async function handleKidInvest() {
-    if (!kidChildPick || !kidStrategyPick) return;
-    const amountCents = kidInvestUnits * (kidStrategyPick.min_investment || 0);
-    setKidInvestSaving(true);
-    setKidInvestError("");
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch("/api/child-invest", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ family_member_id: kidChildPick.id, strategy_id: kidStrategyPick.id, amount: amountCents }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || "Investment failed.");
-      setKidInvestSuccess(true);
-    } catch (e) {
-      setKidInvestError(e.message || "Something went wrong.");
-    } finally {
-      setKidInvestSaving(false);
-    }
-  }
-
   useEffect(() => { setPortalTarget(document.body); }, []);
 
   useEffect(() => {
@@ -246,103 +199,6 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       setWatchlist(profile.watchlist);
     }
   }, [profile]);
-
-  // Fetch kid strategies and child accounts when profile is ready
-  // Derive kid strategies from publicStrategies (already fetched with correct RLS)
-  useEffect(() => {
-    if (!publicStrategies.length) return;
-    (async () => {
-      const kidSource = publicStrategies.filter(s => {
-        const raw = s.is_kid_strategy;
-        return raw === true || raw === 1 || String(raw).toLowerCase() === "true";
-      });
-      if (!kidSource.length) { setKidStrategies([]); setKidStrategiesLoading(false); return; }
-
-      // Parse holdings for all kid strategies
-      const withHoldings = kidSource.map(s => ({
-        ...s,
-        _parsedHoldings: (Array.isArray(s.holdings)
-          ? s.holdings
-          : (() => { try { return JSON.parse(s.holdings || "[]"); } catch { return []; } })()
-        ).sort((a, b) => Number(b.weight || 0) - Number(a.weight || 0)),
-      }));
-
-      // Collect all unique symbols and fetch logos in one query
-      const allSymbols = [...new Set(
-        withHoldings.flatMap(s => s._parsedHoldings.map(h => h.symbol || h.ticker).filter(Boolean))
-      )];
-      let secMap = {};
-      if (allSymbols.length > 0 && supabase) {
-        const { data: secs } = await supabase
-          .from("securities_c")
-          .select("symbol, logo_url")
-          .in("symbol", allSymbols);
-        (secs || []).forEach(s => { secMap[s.symbol] = s.logo_url || null; });
-      }
-
-      const enriched = withHoldings.map(s => ({
-        ...s,
-        r_ytd: s.r_ytd != null ? s.r_ytd / 100 : null,
-        holdingsList: s._parsedHoldings.map(h => ({
-          symbol: h.symbol || h.ticker,
-          logo_url: secMap[h.symbol || h.ticker] || null,
-        })),
-        sparkline: [20, 22, 21, 24, 26, 25, 28, 30, 29, 32],
-      }));
-
-      console.log("[markets] kid strategies →", enriched.length, enriched.map(s => s.name));
-      setKidStrategies(enriched);
-      setKidStrategiesLoading(false);
-    })();
-  }, [publicStrategies]);
-
-  useEffect(() => {
-    if (!supabase) return;
-
-    // Fetch child accounts for this parent (DB first, API fallback)
-    (async () => {
-      try {
-        const authUser = (await supabase.auth.getUser())?.data?.user;
-        const uid = authUser?.id || profile?.id;
-        console.log("[markets] child detection → uid:", uid, "profile.id:", profile?.id, "authUser.id:", authUser?.id);
-        if (!uid) {
-          console.warn("[markets] child detection → no uid, giving up");
-          setChildAccounts([]);
-          return;
-        }
-
-        // Check both parent_id (primary FK) and primary_user_id (legacy) columns
-        const { data, error } = await supabase
-          .from("family_members")
-          .select("id, first_name, last_name, date_of_birth, available_balance, kyc_status, relationship, parent_id, primary_user_id")
-          .or(`parent_id.eq.${uid},primary_user_id.eq.${uid}`);
-
-        console.log("[markets] family_members DB →", { rows: (data||[]).length, error, rawData: data });
-
-        const dbChildren = (data || []).filter(
-          (m) => String(m.relationship || "").toLowerCase() === "child",
-        );
-        console.log("[markets] DB children found:", dbChildren.length, dbChildren);
-
-        if (dbChildren.length > 0) {
-          setChildAccounts(dbChildren);
-          return;
-        }
-
-        // Fallback endpoint used across family flows; handles policies/server-side access.
-        console.log("[markets] DB returned no children, trying API fallback /api/family-members?user_id=", uid);
-        const res = await fetch(`/api/family-members?user_id=${uid}`);
-        const json = await res.json().catch(() => ({}));
-        console.log("[markets] API fallback response →", json);
-        const members = Array.isArray(json?.members) ? json.members : [];
-        const apiChildren = members.filter(
-          (m) => String(m.relationship || "").toLowerCase() === "child",
-        );
-        console.log("[markets] API children found:", apiChildren.length, apiChildren);
-        setChildAccounts(apiChildren);
-      } catch (e) { console.error("[markets] child accounts ERROR", e); }
-    })();
-  }, [profile?.id]);
 
   const toggleWatchlist = async (e, symbol) => {
     e.stopPropagation();
@@ -664,10 +520,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
 
   const filteredStrategies = useMemo(() => {
     // Use publicStrategies for OpenStrategies view
-    // Exclude kid-only strategies — they appear in the dedicated "For Kids" section above
     const results = publicStrategiesWithMetrics.filter((strategy) => {
-      const raw = strategy.is_kid_strategy;
-      if (raw === true || raw === 1 || String(raw).toLowerCase() === "true") return false;
       const matchesName =
         strategiesSearchQuery.length === 0
           ? true
@@ -1821,105 +1674,6 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
               </div>
             ) : (
               <>
-                {/* ── For Kids section ── */}
-                {childAccounts.length > 0 && (
-                  <section className="mb-6">
-                    <div className="mb-3 flex items-center gap-2">
-                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-100">
-                        <Users className="h-3.5 w-3.5 text-violet-600" />
-                      </div>
-                      <h2 className="text-base font-bold text-slate-900">For Kids</h2>
-                      <span className="rounded-full bg-violet-50 border border-violet-200 px-2 py-0.5 text-[10px] font-bold text-violet-600 uppercase tracking-wide">Kid-Safe</span>
-                    </div>
-                    {kidStrategiesLoading ? (
-                      <div className="flex gap-3 pb-2">
-                        {[1,2].map(i => <div key={i} className="flex-shrink-0 w-72 h-36 rounded-2xl bg-slate-100 animate-pulse" />)}
-                      </div>
-                    ) : kidStrategies.length === 0 ? (
-                      <div className="rounded-2xl border border-violet-100 bg-violet-50 px-4 py-5 text-sm text-violet-700">
-                        Kid-safe strategies coming soon — check back shortly.
-                      </div>
-                    ) : (
-                  <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 scrollbar-hide">
-                      {kidStrategies.map((strategy) => {
-                        const ytdPct = strategy.r_ytd != null ? strategy.r_ytd * 100 : null;
-                        const isUp = (ytdPct ?? 0) >= 0;
-                        const calcMin = strategy.min_investment || 0;
-                        const holdingsSnap = strategy.holdingsList || [];
-                        return (
-                          <button
-                            key={strategy.id}
-                            type="button"
-                            onClick={() => {
-                              setKidStrategyPick(strategy);
-                              setKidInvestUnits(1);
-                              setKidInvestError("");
-                              setKidInvestSuccess(false);
-                              // auto-select if only one child
-                              setKidChildPick(childAccounts.length === 1 ? childAccounts[0] : null);
-                            }}
-                            className="flex-shrink-0 w-72 snap-center rounded-2xl border border-violet-100 bg-white shadow-sm hover:shadow-md hover:border-violet-300 p-4 transition-all active:scale-[0.98] text-left"
-                          >
-                            <div className="flex items-start justify-between gap-3 mb-3">
-                              <div className="flex-1 min-w-0 space-y-0.5">
-                                <p className="text-sm font-semibold text-slate-900 truncate">{strategy.short_name || strategy.name}</p>
-                                <p className="text-xs text-slate-500 line-clamp-1">
-                                  {strategy.risk_level || "Balanced"}{strategy.objective ? ` · ${strategy.objective}` : ""}
-                                </p>
-                                {calcMin > 0 && (
-                                  <p className="text-[11px] text-slate-400">Min. {fmtR(calcMin)}</p>
-                                )}
-                              </div>
-                              <StrategyMiniChart values={strategy.sparkline} />
-                            </div>
-                            <div className="flex flex-wrap gap-1.5 mb-3">
-                              {(strategy.tags || []).slice(0, 2).map(tag => (
-                                <span key={tag} className="rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-xs font-semibold text-slate-600">{tag}</span>
-                              ))}
-                              {strategy.is_featured && (
-                                <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-0.5 text-xs font-semibold text-violet-600">Featured</span>
-                              )}
-                            </div>
-                            <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 mb-3">
-                              <span className="text-xs font-semibold text-slate-600">YTD return</span>
-                              <div className="flex items-center gap-2">
-                                {ytdPct != null ? (
-                                  <span className={`text-xs font-semibold ${isUp ? "text-emerald-600" : "text-red-500"}`}>
-                                    {isUp ? "+" : ""}{ytdPct.toFixed(2)}%
-                                  </span>
-                                ) : <span className="text-xs text-slate-400">&mdash;</span>}
-                                {strategy.ytd_as_of_date && (
-                                  <span className="text-[10px] text-slate-400">
-                                    {new Date(strategy.ytd_as_of_date).toLocaleDateString("en-ZA", { month: "short", day: "numeric" })}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            {holdingsSnap.length > 0 && (
-                              <div className="flex items-center gap-2">
-                                <div className="flex -space-x-2">
-                                  {holdingsSnap.slice(0, 3).map(h => (
-                                    <div key={h.symbol} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white shadow-sm">
-                                      {h.logo_url ? <img src={h.logo_url} alt={h.symbol} className="h-full w-full object-cover" /> : (
-                                        <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">{h.symbol?.substring(0, 2)}</div>
-                                      )}
-                                    </div>
-                                  ))}
-                                  {holdingsSnap.length > 3 && (
-                                    <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-slate-100 text-[10px] font-semibold text-slate-500">+{holdingsSnap.length - 3}</div>
-                                  )}
-                                </div>
-                                <span className="text-xs font-semibold text-slate-500">Holdings snapshot</span>
-                              </div>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    )}
-                  </section>
-                )}
-
               {/* Strategies grouped by sector */}
               {[...new Set(filteredStrategies.map(s => s.sector || 'General'))].map((sector) => {
                 const sectorStrategies = filteredStrategies.filter(s => (s.sector || 'General') === sector);
