@@ -1,10 +1,11 @@
 ﻿import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ArrowLeft, ArrowUpRight, ArrowDownLeft, X, TrendingUp, TrendingDown,
-  ShieldCheck, Baby, Wallet, BarChart3, ChevronRight,
+  ArrowLeft, ArrowUpRight, ArrowDownLeft, X,
+  Wallet, BarChart3, ChevronRight,
   RefreshCw, Search, Star, AlertCircle, Check, ClipboardList,
 } from "lucide-react";
+import SwipeableBalanceCard from "../components/SwipeableBalanceCard";
 import { useProfile } from "../lib/useProfile";
 import { supabase } from "../lib/supabase";
 import MinorProofOfAddressDeclaration from "../components/MinorProofOfAddressDeclaration";
@@ -37,22 +38,6 @@ const item = {
   hidden: { opacity: 0, y: 16, scale: 0.98 },
   show: { opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 340, damping: 28 } },
 };
-
-// â”€â”€â”€ Avatar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-function Avatar({ name, gradient, size = "h-14 w-14", text = "text-xl" }) {
-  const initial = (name || "?")[0].toUpperCase();
-  return (
-    <div
-      className={`${size} rounded-2xl flex items-center justify-center font-bold text-white flex-shrink-0`}
-      style={{ background: gradient, aspectRatio: "1" }}
-    >
-      <span className={text}>{initial}</span>
-    </div>
-  );
-}
-
-// â”€â”€â”€ Transfer Modal (bottom-sheet) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onClose }) {
   const [amount, setAmount] = useState("");
@@ -1111,13 +1096,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
 
   // market_value and avg_fill are stored in rands; convert to cents for fmt
   const totalPortfolioCents = holdings.reduce((s, h) => s + Math.round((h.market_value || 0) * 100), 0);
-  const totalPnlCents = holdings.reduce((s, h) => {
-    const costRands = Number(h.avg_fill || 0) * Number(h.quantity || 0);
-    const marketRands = Number(h.market_value) || 0;
-    return s + Math.round((marketRands - costRands) * 100);
-  }, 0);
-  const pnlPct = totalPortfolioCents > 0 ? ((totalPnlCents / Math.max(totalPortfolioCents - totalPnlCents, 1)) * 100) : 0;
-  const isPortUp = totalPnlCents >= 0;
+
 
   // Group holdings by strategy
   const strategyGroups = holdings.reduce((acc, h) => {
@@ -1149,15 +1128,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
     .sort((a, b) => b.pnlP - a.pnlP)
     .slice(0, 5);
 
-  // Avatar gradient based on first letter hash
-  const gradients = [
-    "linear-gradient(135deg,#7c3aed,#5b21b6)",
-    "linear-gradient(135deg,#a855f7,#7c3aed)",
-    "linear-gradient(135deg,#8b5cf6,#6366f1)",
-    "linear-gradient(135deg,#a78bfa,#7c3aed)",
-    "linear-gradient(135deg,#9333ea,#7c3aed)",
-  ];
-  const avatarGradient = gradients[(childName.charCodeAt(0) || 0) % gradients.length];
+
 
   return (
     <div
@@ -1183,40 +1154,18 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
             <div className="flex-1" />
           </div>
 
-          {/* Child profile card */}
-          <div className="flex flex-col items-center mt-6">
-            <Avatar name={childName} gradient={avatarGradient} size="h-24 w-24" text="text-4xl" />
-            <h1 className="text-2xl font-bold text-slate-800 mt-4 tracking-tight">{childName}</h1>
-            <div className="flex items-center gap-2 mt-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[11px] font-bold tracking-wide bg-white/90 backdrop-blur-md text-slate-700 border border-slate-200 shadow-sm">
-                <Baby className="h-3.5 w-3.5" />
-                {age !== null ? `${age} yr${age !== 1 ? "s" : ""} old` : "Child"}
-              </span>
-              <span
-                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-bold tracking-wide border ${
-                  childKycStatus === "completed"
-                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                    : childKycStatus === "rejected"
-                      ? "bg-red-50 text-red-700 border-red-200"
-                      : "bg-amber-50 text-amber-700 border-amber-200"
-                }`}
-              >
-                <span className={`h-1.5 w-1.5 rounded-full ${childKycStatus === "pending" ? "animate-pulse" : ""}`} style={{ backgroundColor: "currentColor" }} />
-                {childKycLabel}
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5 mt-2">
-              <ShieldCheck className="h-3.5 w-3.5 text-slate-500" />
-              <span className="text-[11px] text-slate-600">
-                Managed by {parentName}
-                {parentMintNumber ? ` Â· #${parentMintNumber}` : ""}
-              </span>
-            </div>
+          <div className="mt-4">
+            <SwipeableBalanceCard
+              userId={null}
+              mintNumber={parentMintNumber || null}
+              overrideBalance={totalPortfolioCents / 100}
+              overrideWalletBalance={childBalance / 100}
+            />
           </div>
         </div>
       </div>
 
-      {/* â”€â”€ Content â”€â”€ */}
+      {/* Content */}
       <div className="mx-auto w-full max-w-sm px-4 pb-12 md:max-w-md">
         <motion.div variants={container} initial="hidden" animate="show" className="space-y-4">
 
@@ -1242,72 +1191,29 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
             </motion.div>
           )}
 
-          {/* â”€â”€ Unified Wallet + Portfolio Card â”€â”€ */}
-          <motion.div
-            variants={item}
-            className="rounded-3xl relative overflow-hidden"
-            style={{
-              background: "linear-gradient(160deg, #1e1b4b 0%, #312e81 45%, #4c1d95 100%)",
-              boxShadow: "0 24px 48px -12px rgba(79,70,229,0.45)",
-            }}
-          >
-            {/* Subtle glare orbs */}
-            <div className="pointer-events-none absolute -top-16 -right-16 h-64 w-64 rounded-full" style={{ background: "radial-gradient(circle, rgba(255,255,255,0.07), transparent 70%)" }} />
-            <div className="pointer-events-none absolute -bottom-12 -left-12 h-48 w-48 rounded-full" style={{ background: "radial-gradient(circle, rgba(168,85,247,0.18), transparent 70%)" }} />
-
-            <div className="relative px-6 pt-7 pb-6">
-
-              {/* Label row */}
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-[11px] font-semibold tracking-[0.18em] text-white/50 uppercase">Available Balance</p>
-                <span className="text-[10px] font-semibold tracking-wider text-white/35 uppercase">{child?.first_name}'s Wallet</span>
-              </div>
-
-              {/* Wallet balance */}
-              <p className="text-[2.85rem] font-bold text-white tracking-tight leading-none mb-6">{fmt(childBalance)}</p>
-
-              {/* Hairline divider */}
-              <div className="h-px w-full mb-5" style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent)" }} />
-
-              {/* Portfolio row */}
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <p className="text-[10px] font-semibold tracking-[0.16em] text-white/45 uppercase mb-1">Portfolio Value</p>
-                  <p className="text-2xl font-bold text-white tracking-tight">{fmt(totalPortfolioCents)}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[10px] font-semibold tracking-[0.16em] text-white/45 uppercase mb-1">All-time return</p>
-                  <span
-                    className={`inline-flex items-center gap-1.5 text-sm font-semibold tracking-tight ${isPortUp ? "text-emerald-300" : "text-red-300"}`}
-                    style={{ color: isPortUp ? "#86efac" : "#fca5a5" }}
+          {/* Quick Actions */}
+          <motion.div variants={item}>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { label: "Transfer", icon: ArrowDownLeft, onClick: openTransferModal, disabled: openingTransfer },
+                { label: "Invest", icon: BarChart3, onClick: () => setShowInvest(true) },
+              ].map((btn, i) => {
+                const Icon = btn.icon;
+                return (
+                  <button
+                    key={i}
+                    disabled={btn.disabled}
+                    onClick={btn.onClick}
+                    className="flex flex-col items-center gap-2 rounded-2xl bg-white px-2 py-3.5 text-[11px] font-medium text-slate-700 shadow-md transition-all active:scale-95 active:shadow-sm disabled:opacity-60"
+                    type="button"
                   >
-                    {isPortUp ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
-                    {isPortUp ? "+" : ""}{fmt(totalPnlCents)}&nbsp;
-                    <span className="font-semibold opacity-80">({pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(1)}%)</span>
-                  </span>
-                </div>
-              </div>
-
-              {/* Action buttons */}
-              <div className="flex gap-3">
-                <button
-                  onClick={openTransferModal}
-                  disabled={openingTransfer}
-                  className="flex-1 flex items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-semibold text-white transition active:scale-[0.97]"
-                  style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.14)", backdropFilter: "blur(12px)" }}
-                >
-                  <ArrowDownLeft className="h-4 w-4" />
-                  {openingTransfer ? "Loadingâ€¦" : "Transfer"}
-                </button>
-                <button
-                  onClick={() => setShowInvest(true)}
-                  className="flex-1 flex items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-semibold text-white transition active:scale-[0.97]"
-                  style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.14)", backdropFilter: "blur(12px)" }}
-                >
-                  <BarChart3 className="h-4 w-4" />
-                  Invest
-                </button>
-              </div>
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-violet-50 text-violet-700">
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <span className="text-center leading-tight">{btn.disabled ? "Loading…" : btn.label}</span>
+                  </button>
+                );
+              })}
             </div>
           </motion.div>
 
