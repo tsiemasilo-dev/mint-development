@@ -14,9 +14,10 @@ export default function KidStrategyChildPickerModal({ isOpen, onClose, onSelectC
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.user) { setLoading(false); return; }
         const { data } = await supabase
-          .from("user_profiles")
-          .select("id, first_name, last_name, available_balance")
-          .eq("parent_id", session.user.id);
+          .from("family_members")
+          .select("id, first_name, last_name, relationship, parent_id, primary_user_id")
+          .eq("primary_user_id", session.user.id)
+          .eq("relationship", "child");
         setChildren(data || []);
       } catch {
         setChildren([]);
@@ -87,7 +88,6 @@ export default function KidStrategyChildPickerModal({ isOpen, onClose, onSelectC
                   .filter(Boolean)
                   .map((n) => n[0])
                   .join("");
-                const bal = child.available_balance || 0;
                 return (
                   <button
                     key={child.id}
@@ -103,9 +103,6 @@ export default function KidStrategyChildPickerModal({ isOpen, onClose, onSelectC
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-slate-900">
                         {child.first_name} {child.last_name}
-                      </p>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        Balance: R{Number(bal).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </p>
                     </div>
                     <ChevronRight className="h-4 w-4 text-slate-400 flex-shrink-0" />
