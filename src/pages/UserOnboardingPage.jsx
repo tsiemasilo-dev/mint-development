@@ -1366,7 +1366,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
             </div>
 
           ) : step === 6 ? (
-            !agreementSignedDone ? (
+            !(termsDone && riskDone) ? (
               <div className="w-full max-w-3xl mx-auto">
                 <div className="text-center animate-fade-in delay-1">
                   <div className="hero-icon"><ShieldIcon width={48} height={48} /></div>
