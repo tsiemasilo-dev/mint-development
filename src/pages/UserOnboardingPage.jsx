@@ -219,6 +219,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
     window.setTimeout(() => {
       setStep(nextStep);
       setIsFading(false);
+      window.scrollTo({ top: 0, behavior: "instant" });
     }, 260);
   };
 
