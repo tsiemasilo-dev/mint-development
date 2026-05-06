@@ -1414,7 +1414,7 @@ const App = () => {
             setPendingGoalFlow(null);
 
             // Use ref for latest status to avoid race conditions and destructuring bugs
-            if (!onboardingRef.current.complete) {
+            if (!onboardingRef.current.loading && !onboardingRef.current.complete) {
               navigateTo("identityCheck");
               return;
             }
@@ -1656,7 +1656,7 @@ const App = () => {
             setPendingGoalFlow(null);
 
             // Use ref for latest status to avoid race conditions and destructuring bugs
-            if (!onboardingRef.current.complete) {
+            if (!onboardingRef.current.loading && !onboardingRef.current.complete) {
               navigateTo("identityCheck");
               return;
             }
