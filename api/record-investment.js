@@ -104,6 +104,13 @@ export default async function handler(req, res) {
     return res.status(405).json({ success: false, error: "Method not allowed" });
   }
 
+  let rollbackUserId = null;
+  let rollbackPaymentMethod = null;
+  let rollbackDeductionSuccessful = false;
+  let rollbackOriginalWalletBalance = null;
+  let rollbackChildFamilyMemberId = null;
+  let rollbackOriginalChildBalanceCents = null;
+
   try {
     if (!supabase) {
       return res.status(500).json({ success: false, error: "Database not connected" });
@@ -116,7 +123,9 @@ export default async function handler(req, res) {
 
     const db = supabaseAdmin || supabase;
     const userId = user.id;
+    rollbackUserId = userId;
     const { securityId, symbol, name, amount, baseAmount, strategyId, paymentReference, paymentMethod, shareCount, childUserId, childFamilyMemberId } = req.body;
+    rollbackPaymentMethod = paymentMethod;
     // baseAmount = investment amount excluding fees (used for holdings/quantity calculations)
     // amount = total charged including fees (used for transaction records)
     const investAmount = (baseAmount && baseAmount > 0) ? baseAmount : amount;
@@ -159,43 +168,83 @@ export default async function handler(req, res) {
     }
 
     // ── WALLET PAYMENT HANDLER (PROMPT 1) ───────────────────────────────────
-    let originalWalletBalance = null;
     let newWalletBalance = null;
-    let deductionSuccessful = false;
 
     if (paymentMethod === "wallet") {
-      const { data: wallet, error: walletQueryError } = await db
-        .from("wallets")
-        .select("balance")
-        .eq("user_id", userId)
-        .maybeSingle();
+      if (targetFamilyMemberId) {
+        const { data: childWallet, error: childWalletErr } = await db
+          .from("family_members")
+          .select("id, primary_user_id, relationship, available_balance")
+          .eq("id", targetFamilyMemberId)
+          .maybeSingle();
 
-      if (walletQueryError || !wallet) {
-        return res.status(400).json({ success: false, error: "Wallet not found" });
+        if (childWalletErr || !childWallet) {
+          return res.status(400).json({ success: false, error: "Child wallet not found" });
+        }
+        if (childWallet.primary_user_id !== userId || childWallet.relationship !== "child") {
+          return res.status(403).json({ success: false, error: "Unauthorized child wallet access" });
+        }
+
+        const chargeCents = Math.round(Number(amount) * 100);
+        const childBalanceCents = Number(childWallet.available_balance || 0);
+        if (childBalanceCents < chargeCents) {
+          return res.status(400).json({ success: false, error: "Insufficient child wallet funds" });
+        }
+
+        const newChildBalanceCents = childBalanceCents - chargeCents;
+        const { error: childDeductErr } = await db
+          .from("family_members")
+          .update({ available_balance: newChildBalanceCents })
+          .eq("id", targetFamilyMemberId)
+          .eq("available_balance", childBalanceCents);
+
+        if (childDeductErr) {
+          return res.status(409).json({ success: false, error: "Failed to deduct child wallet balance" });
+        }
+
+        rollbackDeductionSuccessful = true;
+        rollbackChildFamilyMemberId = targetFamilyMemberId;
+        rollbackOriginalChildBalanceCents = childBalanceCents;
+        newWalletBalance = newChildBalanceCents / 100;
+
+        const feeDeducted = amount - (baseAmount || amount);
+        console.log(`[Wallet] Deducted R${amount} from child wallet ${targetFamilyMemberId}. Base: R${baseAmount || amount}, Fee: R${feeDeducted.toFixed(2)}, Final balance: R${newWalletBalance}`);
+      } else {
+        const { data: wallet, error: walletQueryError } = await db
+          .from("wallets")
+          .select("balance")
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (walletQueryError || !wallet) {
+          return res.status(400).json({ success: false, error: "Wallet not found" });
+        }
+
+        const originalWalletBalance = Number(wallet.balance);
+        if (originalWalletBalance < amount) {
+          return res.status(400).json({ success: false, error: "Insufficient funds" });
+        }
+
+        newWalletBalance = originalWalletBalance - amount;
+        const { data: updatedWallet, error: deductError } = await db
+          .from("wallets")
+          .update({ balance: newWalletBalance })
+          .eq("user_id", userId)
+          .eq("balance", originalWalletBalance)
+          .select("balance")
+          .maybeSingle();
+
+        if (deductError || !updatedWallet) {
+          console.error("[record-investment] WALLET DEDUCTION ERROR:", deductError?.message || "balance changed concurrently");
+          return res.status(409).json({ success: false, error: deductError ? "Failed to deduct wallet balance" : "Wallet balance changed — please retry" });
+        }
+
+        rollbackDeductionSuccessful = true;
+        rollbackOriginalWalletBalance = originalWalletBalance;
+
+        const feeDeducted = amount - (baseAmount || amount);
+        console.log(`[Wallet] Deducted R${amount} from user ${userId}. Base: R${baseAmount || amount}, Fee: R${feeDeducted.toFixed(2)}, Final balance: R${newWalletBalance}`);
       }
-
-      originalWalletBalance = Number(wallet.balance);
-      if (originalWalletBalance < amount) {
-        return res.status(400).json({ success: false, error: "Insufficient funds" });
-      }
-
-      newWalletBalance = originalWalletBalance - amount;
-      const { data: updatedWallet, error: deductError } = await db
-        .from("wallets")
-        .update({ balance: newWalletBalance })
-        .eq("user_id", userId)
-        .eq("balance", originalWalletBalance)
-        .select("balance")
-        .maybeSingle();
-
-      if (deductError || !updatedWallet) {
-        console.error("[record-investment] WALLET DEDUCTION ERROR:", deductError?.message || "balance changed concurrently");
-        return res.status(409).json({ success: false, error: deductError ? "Failed to deduct wallet balance" : "Wallet balance changed — please retry" });
-      }
-      
-      deductionSuccessful = true;
-      const feeDeducted = amount - (baseAmount || amount);
-      console.log(`[Wallet] Deducted R${amount} from user ${userId}. Base: R${baseAmount || amount}, Fee: R${feeDeducted.toFixed(2)}, Final balance: R${newWalletBalance}`);
     }
 
     const { data: existingTx } = await db
@@ -581,11 +630,16 @@ export default async function handler(req, res) {
     console.error("[record-investment] Error:", error);
 
     // Rollback wallet deduction if anything failed after deduction was successful
-    if (typeof paymentMethod !== 'undefined' && paymentMethod === "wallet" && typeof deductionSuccessful !== 'undefined' && deductionSuccessful && typeof originalWalletBalance !== 'undefined' && originalWalletBalance !== null) {
+    if (rollbackPaymentMethod === "wallet" && rollbackDeductionSuccessful) {
       try {
         const db = supabaseAdmin || supabase;
-        console.log(`[Wallet] Rollback — Attempting to restore user wallet balance to ${originalWalletBalance}`);
-        await db.from("wallets").update({ balance: originalWalletBalance }).eq("user_id", userId);
+        if (rollbackChildFamilyMemberId && rollbackOriginalChildBalanceCents !== null) {
+          console.log(`[Wallet] Rollback — restoring child wallet ${rollbackChildFamilyMemberId} balance to ${rollbackOriginalChildBalanceCents} cents`);
+          await db.from("family_members").update({ available_balance: rollbackOriginalChildBalanceCents }).eq("id", rollbackChildFamilyMemberId);
+        } else if (rollbackOriginalWalletBalance !== null && rollbackUserId) {
+          console.log(`[Wallet] Rollback — Attempting to restore user wallet balance to ${rollbackOriginalWalletBalance}`);
+          await db.from("wallets").update({ balance: rollbackOriginalWalletBalance }).eq("user_id", rollbackUserId);
+        }
       } catch (rollbackErr) {
         console.error("[Wallet] Rollback CRITICAL FAILURE:", rollbackErr.message);
       }
