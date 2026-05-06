@@ -960,7 +960,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                       onChange={(value) => setAddress(value)}
                       placeholder="Search for your residential address"
                       containerClassName=""
-                      inputClassName="w-full pl-10 pr-10"
+                      inputClassName="w-full with-icon"
                     />
                   </div>
                   <p className="text-xs mt-2" style={{ color: "hsl(270 15% 60%)" }}>
