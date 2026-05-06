@@ -5749,6 +5749,70 @@ app.post("/api/onboarding/upload-agreement", async (req, res) => {
   }
 });
 
+app.post("/api/onboarding/upload-bank-letter", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (!token) return res.status(401).json({ success: false, error: "Missing token" });
+
+    const authClient = supabaseAdmin || supabase;
+    if (!authClient) return res.status(500).json({ success: false, error: "Database not connected" });
+
+    const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
+    if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
+
+    const { fileBase64, fileType } = req.body || {};
+    if (!fileBase64 || typeof fileBase64 !== "string") {
+      return res.status(400).json({ success: false, error: "Missing fileBase64 in request body" });
+    }
+
+    const normalizedBase64 = fileBase64.includes(",") ? fileBase64.split(",").pop() : fileBase64;
+    const fileBuffer = Buffer.from(normalizedBase64, "base64");
+    if (fileBuffer.length === 0) return res.status(400).json({ success: false, error: "File buffer is empty" });
+
+    const db = supabaseAdmin || supabase;
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const extension = fileType === "application/pdf" ? "pdf" : "png";
+    const filePath = `${user.id}/bank-confirmation-${timestamp}.${extension}`;
+
+    const { error: uploadError } = await db.storage
+      .from("signed-agreements")
+      .upload(filePath, fileBuffer, { contentType: fileType || "application/octet-stream", upsert: true });
+
+    if (uploadError) {
+      console.error("[upload-bank-letter] Storage upload error:", uploadError.message);
+      return res.status(500).json({ success: false, error: `Storage upload failed: ${uploadError.message}` });
+    }
+
+    const { data: urlData } = db.storage.from("signed-agreements").getPublicUrl(filePath);
+    const publicUrl = urlData?.publicUrl || "";
+
+    // Update onboarding record
+    const { data: onboardingRecord } = await db
+      .from("user_onboarding")
+      .select("id, sumsub_raw")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (onboardingRecord) {
+      let raw = {};
+      try { raw = typeof onboardingRecord.sumsub_raw === "string" ? JSON.parse(onboardingRecord.sumsub_raw) : (onboardingRecord.sumsub_raw || {}); } catch {}
+      raw.bank_letter_uploaded = true;
+      raw.bank_letter_url = publicUrl;
+      raw.bank_letter_uploaded_at = new Date().toISOString();
+      await db.from("user_onboarding").update({ sumsub_raw: JSON.stringify(raw) }).eq("id", onboardingRecord.id);
+    }
+
+    console.log(`[upload-bank-letter] Uploaded for user ${user.id}: ${publicUrl}`);
+    return res.json({ success: true, publicUrl });
+  } catch (error) {
+    console.error("[upload-bank-letter] Unexpected error:", error);
+    return res.status(500).json({ success: false, error: error.message || "Unexpected server error" });
+  }
+});
+
 app.post("/api/onboarding/complete", async (req, res) => {
   try {
     const authHeader = req.headers.authorization || "";
