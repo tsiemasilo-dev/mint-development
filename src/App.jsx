@@ -1017,6 +1017,10 @@ const App = () => {
           <ChildDashboardPage
             child={selectedFamilyChild}
             onBack={noOp}
+            onOpenFactsheet={(strategy) => {
+              setSelectedStrategy(strategy);
+              navigateTo("factsheet");
+            }}
           />
         );
       default:
@@ -1909,6 +1913,10 @@ const App = () => {
         <ChildDashboardPage
           child={selectedFamilyChild}
           onBack={goBack}
+          onOpenFactsheet={(strategy) => {
+            setSelectedStrategy(strategy);
+            navigateTo("factsheet");
+          }}
         />
       </SwipeBackWrapper>
     );
