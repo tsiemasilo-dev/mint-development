@@ -1683,7 +1683,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
               return (
                 <section key={sector}>
                   <div className="mb-4 flex items-center justify-between">
-                    <h2 className="text-lg font-bold text-slate-900">{sector}</h2>
+                    <h2 className="text-lg font-bold text-slate-900">{sector === 'General' ? 'Child Friendly' : sector}</h2>
                     <ChevronRight className="h-5 w-5 text-slate-400" />
                   </div>
                   <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 scrollbar-hide">
