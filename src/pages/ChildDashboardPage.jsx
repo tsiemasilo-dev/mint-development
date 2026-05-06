@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo, useId } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, ArrowUpRight, ArrowDownLeft, X,
@@ -11,6 +11,16 @@ import { useProfile } from "../lib/useProfile";
 import { supabase } from "../lib/supabase";
 import MinorProofOfAddressDeclaration from "../components/MinorProofOfAddressDeclaration";
 import ChildResponsibilityAgreement from "../components/ChildResponsibilityAgreement";
+import {
+  Area,
+  ComposedChart,
+  Line,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 // --- helpers ----------------------------------------------------------------
 
@@ -121,14 +131,14 @@ function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onCl
                 <div>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Your Wallet</p>
                   <p className="text-sm font-bold text-slate-900 tabular-nums mt-0.5">
-                    {balancesLoading ? "Loadingâ€¦" : fmt(parentBalance)}
+                    {balancesLoading ? "Loading..." : fmt(parentBalance)}
                   </p>
                 </div>
                 <ArrowUpRight className="h-4 w-4 text-slate-300" />
                 <div className="text-right">
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{child.first_name}'s Wallet</p>
                   <p className="text-sm font-bold text-slate-900 tabular-nums mt-0.5">
-                    {balancesLoading ? "Loadingâ€¦" : fmt(child.available_balance || 0)}
+                    {balancesLoading ? "Loading..." : fmt(child.available_balance || 0)}
                   </p>
                 </div>
               </div>
@@ -184,7 +194,7 @@ function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onCl
                 className="w-full rounded-xl py-3.5 text-sm font-bold text-white transition active:scale-[0.98] disabled:opacity-50"
                 style={{ background: "linear-gradient(135deg,#1e1b4b,#312e81)" }}
               >
-                {saving ? "Transferringâ€¦" : `Transfer R${numAmount.toFixed(2)}`}
+                {saving ? "Transferring..." : `Transfer R${numAmount.toFixed(2)}`}
               </button>
             </>
           ) : (
@@ -223,6 +233,10 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
   const [step, setStep] = useState("browse");
+  const [selectedStrategyAnalytics, setSelectedStrategyAnalytics] = useState(null);
+  const [selectedStrategyAnalyticsLoading, setSelectedStrategyAnalyticsLoading] = useState(false);
+  const [selectedStrategyActiveLabel, setSelectedStrategyActiveLabel] = useState(null);
+  const previewGradientId = useId();
   const [units, setUnits] = useState(1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -323,12 +337,142 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
     s.name?.toLowerCase().includes(search.toLowerCase())
   );
 
+  useEffect(() => {
+    if (!selected || step !== "preview") {
+      setSelectedStrategyAnalytics(null);
+      setSelectedStrategyAnalyticsLoading(false);
+      setSelectedStrategyActiveLabel(null);
+      return;
+    }
+
+    let isMounted = true;
+    const fetchAnalytics = async () => {
+      if (!supabase) {
+        if (isMounted) setSelectedStrategyAnalytics(null);
+        return;
+      }
+
+      setSelectedStrategyAnalyticsLoading(true);
+
+      try {
+        const strategyId = selected.id || selected.strategy_id;
+        if (!strategyId) {
+          setSelectedStrategyAnalytics(null);
+          return;
+        }
+
+        const currentYear = new Date().getFullYear();
+        const yearStart = `${currentYear}-01-01`;
+        const { data: dailyReturns, error } = await supabase
+          .from("strategies_returns_c")
+          .select("strategy_id, as_of_date, \"1d_pct\"")
+          .eq("strategy_id", strategyId)
+          .gte("as_of_date", yearStart)
+          .order("as_of_date", { ascending: true });
+
+        if (error) throw error;
+
+        if (!dailyReturns || dailyReturns.length === 0) {
+          if (isMounted) setSelectedStrategyAnalytics(null);
+          return;
+        }
+
+        const cumulativeData = [];
+        let cumulative = 0;
+        dailyReturns.forEach((day) => {
+          const dailyReturn = day["1d_pct"] ? day["1d_pct"] / 100 : 0;
+          cumulative += dailyReturn;
+          cumulativeData.push({
+            d: day.as_of_date,
+            v: Number((cumulative * 100).toFixed(2)),
+          });
+        });
+
+        if (isMounted) {
+          setSelectedStrategyAnalytics({
+            strategy_id: strategyId,
+            as_of_date: dailyReturns[dailyReturns.length - 1].as_of_date,
+            curves: { YTD: cumulativeData },
+          });
+        }
+      } catch (e) {
+        console.error("[child-invest] strategy analytics", e);
+        if (isMounted) setSelectedStrategyAnalytics(null);
+      } finally {
+        if (isMounted) setSelectedStrategyAnalyticsLoading(false);
+      }
+    };
+
+    fetchAnalytics();
+    return () => {
+      isMounted = false;
+    };
+  }, [selected, step]);
+
+  const { previewChartData, previewChartDomain, previewBaseIndexValue } = useMemo(() => {
+    const previewFallbackLength = 140;
+    const curves = selectedStrategyAnalytics?.curves || {};
+    const fallbackSeries = Array.from({ length: previewFallbackLength }, (_, index) => {
+      const wave = Math.sin(index / 18) * 1.1 + Math.cos(index / 9) * 0.4;
+      const drift = (index / previewFallbackLength) * 1.6;
+      const noise = ((index % 7) - 3) * 0.03;
+      return {
+        d: new Date(Date.now() - (previewFallbackLength - index) * 86400000).toISOString(),
+        v: Number((100 + wave + drift + noise).toFixed(2)),
+      };
+    });
+
+    let series = Array.isArray(curves.YTD) && curves.YTD.length > 0 ? curves.YTD : fallbackSeries;
+    if (series.length > 1) {
+      const firstVal = series[0]?.v ?? 0;
+      const lastVal = series[series.length - 1]?.v ?? 0;
+      const firstDate = series[0]?.d ? new Date(series[0].d) : null;
+      const lastDate = series[series.length - 1]?.d ? new Date(series[series.length - 1].d) : null;
+      if (firstDate && lastDate && firstDate > lastDate) {
+        series = [...series].reverse();
+      } else if (firstVal > lastVal * 1.05) {
+        series = [...series].reverse();
+      }
+    }
+
+    const labelIndices = series.length ? [0, Math.floor(series.length / 2), series.length - 1] : [];
+    const values = series.map((point) => point?.v ?? 0);
+    const minValue = values.length ? Math.min(...values) : 0;
+    const maxValue = values.length ? Math.max(...values) : 0;
+    const padding = (maxValue - minValue) * 0.2;
+    const domain = values.length ? [minValue - padding, maxValue + padding] : [0, 0];
+    const mapped = series.map((point, index) => {
+      const date = point?.d ? new Date(point.d) : null;
+      const dateLabel = labelIndices.includes(index) && date
+        ? date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+        : "";
+      return {
+        label: index + 1,
+        dateLabel,
+        returnPct: point?.v ?? 0,
+      };
+    });
+
+    return {
+      previewChartData: mapped,
+      previewChartDomain: domain,
+      previewBaseIndexValue: values.length ? values[0] : null,
+    };
+  }, [selectedStrategyAnalytics]);
+
   const getYtdPct = (strategy) => {
     if (strategy?.r_ytd == null) return null;
     const value = Number(strategy.r_ytd);
     if (!Number.isFinite(value)) return null;
     return Math.abs(value) > 1 ? value : value * 100;
   };
+
+  const selectedYtdPct = getYtdPct(selected);
+  const previewChartLineColor = (selectedYtdPct ?? 0) > 0
+    ? "#16a34a"
+    : (selectedYtdPct ?? 0) < 0
+      ? "#dc2626"
+      : "#94a3b8";
 
   const getPreviewTags = (strategy) => {
     const tags = Array.isArray(strategy?.tags)
@@ -352,6 +496,13 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
     }
   };
 
+  const closePreview = () => {
+    setSelected(null);
+    setStep("browse");
+    setUnits(1);
+    setError("");
+  };
+
   const openFactsheet = () => {
     if (!selected || !onOpenFactsheet) return;
     onClose();
@@ -368,6 +519,205 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
 
   const inputCls =
     "w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 placeholder-slate-400 focus:border-violet-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-100 transition";
+
+  if (selected && step === "preview") {
+    return (
+      <motion.div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 overscroll-contain"
+        style={{ paddingBottom: "calc(var(--navbar-height, 64px) + 8px)" }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
+      >
+        <button
+          type="button"
+          className="absolute inset-0 h-full w-full cursor-default"
+          aria-label="Close preview"
+          onClick={closePreview}
+        />
+        <motion.div
+          className="relative z-10 flex w-full max-w-sm flex-col overflow-hidden rounded-[32px] bg-white shadow-2xl"
+          style={{ maxHeight: "calc(90vh - var(--navbar-height, 64px) - 16px)" }}
+          initial={{ opacity: 0, scale: 0.95, y: 16 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 16 }}
+          transition={{ type: "spring", stiffness: 380, damping: 38 }}
+        >
+          <button
+            type="button"
+            onClick={closePreview}
+            className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 z-10"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+
+          <div
+            className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6"
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
+            <div className="flex items-start gap-3 mb-6">
+              <div className="flex-1">
+                <h2 className="text-lg font-semibold text-slate-900">{selected.name}</h2>
+                <p className="text-sm text-slate-500">
+                  {selected.min_investment > 0 ? `Min. ${fmt(selected.min_investment)}` : "Calculating..."}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 mb-6">
+              {selected.min_investment > 0 ? (
+                <>
+                  <p className="text-2xl font-semibold text-slate-900">{fmt(selected.min_investment)}</p>
+                  <span className="rounded-full px-2.5 py-1 text-xs font-semibold bg-slate-100 text-slate-500">
+                    Min. investment
+                  </span>
+                </>
+              ) : null}
+            </div>
+
+            <div className="mb-5">
+              <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500">
+                <span>YTD return</span>
+                <div className="flex flex-col items-end gap-1">
+                  <span className={selectedYtdPct > 0 ? "text-emerald-600" : selectedYtdPct < 0 ? "text-rose-600" : "text-slate-500"}>
+                    {selectedYtdPct != null ? `${selectedYtdPct >= 0 ? "+" : ""}${selectedYtdPct.toFixed(2)}%` : "-"}
+                  </span>
+                  {selected.ytd_as_of_date && (
+                    <span className="text-[10px] text-slate-400">
+                      {new Date(selected.ytd_as_of_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="h-44 w-full">
+                {selectedStrategyAnalyticsLoading ? (
+                  <div className="flex h-full items-end gap-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4">
+                    {[45, 65, 35, 80, 55, 70, 40, 90, 60, 50, 75, 85].map((h, i) => (
+                      <div key={i} className="flex-1 rounded-sm bg-slate-200 animate-pulse" style={{ height: `${h}%` }} />
+                    ))}
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart
+                      data={previewChartData}
+                      margin={{ top: 12, right: 16, left: 8, bottom: 28 }}
+                      onMouseMove={(state) => {
+                        if (state?.activeLabel) setSelectedStrategyActiveLabel(state.activeLabel);
+                      }}
+                      onMouseLeave={() => setSelectedStrategyActiveLabel(null)}
+                    >
+                      <defs>
+                        <linearGradient id={previewGradientId} x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor={previewChartLineColor} stopOpacity={0.25} />
+                          <stop offset="70%" stopColor={previewChartLineColor} stopOpacity={0.1} />
+                          <stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <ReferenceLine y={100} stroke="#e2e8f0" strokeDasharray="3 3" />
+                      {selectedStrategyActiveLabel ? (
+                        <>
+                          <ReferenceLine
+                            x={selectedStrategyActiveLabel}
+                            stroke="#CBD5E1"
+                            strokeOpacity={0.6}
+                            strokeDasharray="3 3"
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "#ffffff",
+                              border: "none",
+                              borderRadius: "20px",
+                              padding: "3px 8px",
+                              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                            }}
+                            labelStyle={{ display: "none" }}
+                            formatter={(value) => {
+                              if (!previewBaseIndexValue) return [`${Number(value).toFixed(2)}`, "Index"];
+                              const delta = ((Number(value) - previewBaseIndexValue) / previewBaseIndexValue) * 100;
+                              return [`${delta >= 0 ? "+" : ""}${delta.toFixed(2)}%`, "Change"];
+                            }}
+                            cursor={{ strokeDasharray: "3 3" }}
+                          />
+                        </>
+                      ) : null}
+                      <XAxis
+                        dataKey="dateLabel"
+                        tick={{ fontSize: 11, fill: "#64748b" }}
+                        axisLine={{ stroke: "#e2e8f0" }}
+                        tickLine={false}
+                        height={24}
+                      />
+                      <YAxis hide domain={previewChartDomain} />
+                      <Area
+                        type="monotone"
+                        dataKey="returnPct"
+                        stroke="transparent"
+                        fill={`url(#${previewGradientId})`}
+                        dot={false}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="returnPct"
+                        stroke={previewChartLineColor}
+                        strokeWidth={2}
+                        dot={false}
+                        activeDot={false}
+                      />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2 mb-6">
+              {getPreviewTags(selected).map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+
+            {selected.holdingsList?.length > 0 && (
+              <div className="mt-4">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Top Holdings</p>
+                <div className="mt-3 space-y-2">
+                  {selected.holdingsList.slice(0, 5).map((holding) => (
+                    <div key={holding.symbol} className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-slate-100 bg-white">
+                        {holding.logo_url ? (
+                          <img src={holding.logo_url} alt={holding.symbol} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center bg-slate-100 text-xs font-bold text-slate-600">
+                            {holding.symbol?.substring(0, 2)}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-slate-900">{holding.name || holding.symbol}</p>
+                        <p className="text-xs text-slate-500">{holding.symbol}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={openFactsheet}
+              className="mt-6 w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-4 font-semibold text-white shadow-lg transition-all active:scale-95"
+            >
+              View Factsheet
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div
@@ -475,7 +825,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
                               <div className="flex-1 min-w-0 space-y-0.5">
                                 <p className="text-sm font-semibold text-slate-900 truncate">{s.short_name || s.name}</p>
                                 <p className="text-xs text-slate-500 line-clamp-1">
-                                  {s.risk_level || "Balanced"}{s.description ? ` â€¢ ${s.description.substring(0, 60)}${s.description.length > 60 ? "â€¦" : ""}` : ""}
+                                  {s.risk_level || "Balanced"}{s.description ? ` - ${s.description.substring(0, 60)}${s.description.length > 60 ? "..." : ""}` : ""}
                                 </p>
                                 {s.min_investment > 0 && (
                                   <p className="text-[11px] text-slate-400">Min. {fmt(s.min_investment)}</p>
@@ -564,176 +914,6 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
                 </>
               )}
 
-              {/* Strategy preview (after selecting strategy) */}
-              {selected && step === "preview" && (
-                <div className="mt-2 space-y-4">
-                  {(() => {
-                    const ytdPct = getYtdPct(selected);
-                    const isUp = (ytdPct ?? 0) >= 0;
-                    return (
-                      <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">YTD return</p>
-                            <p className={`mt-1 text-2xl font-bold tabular-nums ${isUp ? "text-emerald-600" : "text-red-500"}`}>
-                              {ytdPct != null ? `${isUp ? "+" : ""}${ytdPct.toFixed(2)}%` : "-"}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Min investment</p>
-                            <p className="mt-1 text-lg font-bold text-slate-900 tabular-nums">
-                              {selected.min_investment > 0 ? fmt(selected.min_investment) : "N/A"}
-                            </p>
-                          </div>
-                        </div>
-                        {selected.ytd_as_of_date && (
-                          <p className="mt-2 text-[10px] font-semibold text-slate-400">
-                            As of {new Date(selected.ytd_as_of_date).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })}
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })()}
-
-                  {selected.description && (
-                    <p className="text-sm leading-relaxed text-slate-600">{selected.description}</p>
-                  )}
-
-                  <div className="flex flex-wrap gap-1.5">
-                    {getPreviewTags(selected).map((tag) => (
-                      <span key={tag} className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
-                        {tag}
-                      </span>
-                    ))}
-                    {selected.is_featured && (
-                      <span className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-600">Featured</span>
-                    )}
-                  </div>
-
-                  {selected.holdingsList?.length > 0 && (
-                    <div>
-                      <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Top Holdings</p>
-                      <div className="mt-3 space-y-2">
-                        {selected.holdingsList.slice(0, 5).map((holding) => (
-                          <div key={holding.symbol} className="flex items-center gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-slate-100 bg-white">
-                              {holding.logo_url ? (
-                                <img src={holding.logo_url} alt={holding.name || holding.symbol} className="h-full w-full object-cover" />
-                              ) : (
-                                <div className="flex h-full w-full items-center justify-center bg-slate-100 text-xs font-bold text-slate-600">
-                                  {holding.symbol?.substring(0, 2)}
-                                </div>
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="truncate text-sm font-semibold text-slate-900">{holding.name || holding.symbol}</p>
-                              <p className="text-xs text-slate-500">{holding.symbol}</p>
-                            </div>
-                            {holding.weight != null && (
-                              <p className="text-sm font-semibold text-slate-600 tabular-nums">{Number(holding.weight).toFixed(1)}%</p>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-2 gap-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={openFactsheet}
-                      className="rounded-xl border border-slate-200 bg-white py-3 text-sm font-bold text-slate-700 transition active:scale-[0.98]"
-                    >
-                      View Factsheet
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setStep("amount"); setError(""); }}
-                      className="rounded-xl py-3 text-sm font-bold text-white transition active:scale-[0.98]"
-                      style={{ background: "linear-gradient(135deg,#1e1b4b,#312e81)" }}
-                    >
-                      Invest Now
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Amount entry (after selecting strategy) */}
-              {selected && step === "amount" && (
-                <div className="mt-2">
-                  <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2 ml-0.5">
-                    Units to invest
-                  </label>
-
-                  {/* Unit stepper */}
-                  <div className="flex items-center justify-center gap-6 py-4 mb-3">
-                    <button
-                      type="button"
-                      onClick={() => setUnits(u => Math.max(1, u - 1))}
-                      disabled={units <= 1}
-                      className="h-12 w-12 rounded-full bg-slate-100 text-slate-700 text-2xl font-bold flex items-center justify-center transition active:scale-90 disabled:opacity-40"
-                    >−</button>
-                    <div className="text-center min-w-[60px]">
-                      <p className="text-4xl font-bold text-slate-900 tabular-nums">{units}</p>
-                      <p className="text-[11px] text-slate-400 mt-0.5">unit{units !== 1 ? "s" : ""}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setUnits(u => u + 1)}
-                      className="h-12 w-12 rounded-full bg-violet-600 text-white text-2xl font-bold flex items-center justify-center transition active:scale-90"
-                    >+</button>
-                  </div>
-
-                  {/* Price breakdown */}
-                  <div className="flex items-center justify-center gap-1.5 text-sm mb-5 text-slate-500">
-                    <span className="font-semibold text-slate-700">{fmt(minInvCents)}</span>
-                    <span>×</span>
-                    <span className="font-semibold text-slate-700">{units}</span>
-                    <span>=</span>
-                    <span className="font-bold text-violet-700 text-base">{fmt(amountCents)}</span>
-                  </div>
-
-                  {/* Strategy info */}
-                  <div className="rounded-xl bg-slate-50 border border-slate-100 p-3.5 mb-4">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Investment Summary</p>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-500">Strategy</span>
-                      <span className="font-semibold text-slate-800">{selected.name}</span>
-                    </div>
-                    <div className="flex justify-between text-sm mt-1">
-                      <span className="text-slate-500">Amount</span>
-                      <span className="font-bold text-slate-900">R{numAmount.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm mt-1">
-                      <span className="text-slate-500">From</span>
-                      <span className="font-semibold text-slate-800">{child.first_name}'s wallet</span>
-                    </div>
-                  </div>
-
-                  {insufficient && (
-                    <div className="flex items-start gap-2 rounded-xl bg-purple-50 px-4 py-3 border border-purple-100 mb-3">
-                      <AlertCircle className="h-3.5 w-3.5 text-purple-500 mt-0.5 flex-shrink-0" />
-                      <p className="text-xs text-purple-600">Insufficient balance. Transfer funds first.</p>
-                    </div>
-                  )}
-
-                  {error && (
-                    <div className="flex items-start gap-2 rounded-xl bg-red-50 px-4 py-3 border border-red-100 mb-3">
-                      <X className="h-3.5 w-3.5 text-red-400 mt-0.5 flex-shrink-0" />
-                      <p className="text-xs text-red-500">{error}</p>
-                    </div>
-                  )}
-
-                  <button
-                    onClick={handleInvest}
-                    disabled={saving || numAmount <= 0 || insufficient}
-                    className="w-full rounded-xl py-3.5 text-sm font-bold text-white transition active:scale-[0.98] disabled:opacity-50"
-                    style={{ background: "linear-gradient(135deg,#1e1b4b,#312e81)" }}
-                  >
-                    {saving ? "Investingâ€¦" : `Invest R${numAmount.toFixed(2)}`}
-                  </button>
-                </div>
-              )}
             </>
           ) : (
             <motion.div
@@ -1028,7 +1208,7 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
                 className="w-full rounded-xl py-3.5 text-sm font-bold text-white transition active:scale-[0.98] disabled:opacity-50"
                 style={{ background: "linear-gradient(135deg,#1e1b4b,#312e81)" }}
               >
-                {saving ? "Savingâ€¦" : "Save & Continue"}
+                {saving ? "Saving..." : "Save & Continue"}
               </button>
             </div>
           )}
@@ -1364,7 +1544,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                     <span className={`text-center leading-tight font-medium ${
                       btn.comingSoon ? "text-slate-400" : "text-slate-700"
                     }`}>
-                      {btn.disabled && !btn.comingSoon ? "Loading…" : btn.label}
+                      {btn.disabled && !btn.comingSoon ? "Loading..." : btn.label}
                     </span>
                     {btn.comingSoon && (
                       <span className="absolute bottom-1.5 left-1/2 -translate-x-1/2 inline-flex items-center px-1.5 py-px rounded-full text-[7px] font-bold uppercase tracking-wider text-white" style={{ background: "linear-gradient(90deg,#7c3aed,#a855f7)" }}>Soon</span>
