@@ -25,7 +25,7 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "Enter your addres
   return (
     <div ref={wrapperRef} className={`relative ${containerClassName}`}>
       <div className="relative">
-        <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "rgba(139, 92, 246, 0.45)" }} />
+        <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
         <input
           type="text"
           value={query}
