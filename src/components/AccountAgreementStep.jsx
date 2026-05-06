@@ -462,6 +462,7 @@ export default function AccountAgreementStep({
   existingOnboardingId,
   onBack,
   onComplete,
+  onSignStart,
   initialPhase = "review",
   mode = "full",
 }) {
@@ -480,6 +481,7 @@ export default function AccountAgreementStep({
   const [downloadedAt, setDownloadedAt] = useState(null);
   const [packDetail, setPackDetail] = useState(null);
   const [fetchedOnboarding, setFetchedOnboarding] = useState({});
+  const [isSigningInProgress, setIsSigningInProgress] = useState(false);
 
   const canvasRef = useRef(null);
   const sigPadRef = useRef(null);
@@ -605,7 +607,14 @@ export default function AccountAgreementStep({
       return;
     }
     setError("");
-    setPhase("processing");
+
+    if (mode === "signature-only") {
+      onSignStart?.();
+      setPhase("success");
+      setIsSigningInProgress(true);
+    } else {
+      setPhase("processing");
+    }
 
     try {
       const sigDataUrl = sigPadRef.current.toDataURL("image/png");
@@ -737,9 +746,8 @@ export default function AccountAgreementStep({
       const signingResults = { signed_agreement_url: publicUrl, signed_at: now, downloaded_at: now };
 
       if (mode === "signature-only") {
-        // In signature-only mode, store results and wait for the user to press OK
         pendingCompleteRef.current = signingResults;
-        setPhase("success");
+        setIsSigningInProgress(false);
       } else {
         setPhase("success");
         if (onComplete) {
@@ -754,6 +762,7 @@ export default function AccountAgreementStep({
       console.error("Sign error:", err);
       setError(err?.message || "Something went wrong. Please try again.");
       setPhase("sign");
+      setIsSigningInProgress(false);
     }
   };
 
@@ -1300,55 +1309,111 @@ export default function AccountAgreementStep({
   // PHASE: SUCCESS
   // ─────────────────────────────────────────────────────────────────────────
   if (phase === "success") {
-    // ── signature-only mode: compact inline success with OK button ───────────
+    // ── signature-only mode: full professional success screen ────────────────
     if (mode === "signature-only") {
+      const items = [
+        "Risk Disclosure accepted",
+        "Terms & Conditions accepted",
+        "Account Agreement signed",
+        "Signed PDF saved to your account",
+      ];
       return (
-        <div className="animate-fade-in" style={{ textAlign: "center", padding: "24px 0 8px" }}>
+        <div className="animate-fade-in" style={{ padding: "40px 24px 32px", textAlign: "center" }}>
+          <style>{`@keyframes sigSpin { to { transform: rotate(360deg); } }`}</style>
+
+          {/* Icon */}
           <div style={{
-            width: 64, height: 64, borderRadius: "50%", margin: "0 auto 18px",
-            background: "linear-gradient(135deg, hsl(152 70% 45%) 0%, hsl(152 60% 35%) 100%)",
+            width: 80, height: 80, borderRadius: "50%", margin: "0 auto 24px",
+            background: "linear-gradient(135deg, hsl(152 65% 42%) 0%, hsl(152 55% 32%) 100%)",
             display: "flex", alignItems: "center", justifyContent: "center",
-            boxShadow: "0 6px 24px rgba(16,185,129,0.28)",
+            boxShadow: "0 8px 32px rgba(16,185,129,0.28)",
           }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" width={32} height={32}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+            <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" width={40} height={40}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
             </svg>
           </div>
-          <h3 style={{ fontSize: 20, fontWeight: 500, color: purple, marginBottom: 8 }}>Agreement Signed</h3>
-          <p style={{ fontSize: 13, color: purpleMid, lineHeight: 1.6, marginBottom: 20 }}>
+
+          {/* Heading */}
+          <h2 style={{ fontSize: 26, fontWeight: 600, color: purple, marginBottom: 10, letterSpacing: "-0.3px" }}>
+            Agreement Signed
+          </h2>
+          <p style={{ fontSize: 14, color: purpleMid, lineHeight: 1.7, marginBottom: 28, maxWidth: 380, margin: "0 auto 28px" }}>
             Your signature has been recorded. You have agreed to the Risk Disclosure,
             Terms &amp; Conditions, and Client Securities Agreement.
           </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center", marginBottom: 24 }}>
-            {["Risk Disclosure accepted", "Terms & Conditions accepted", "Account Agreement signed", "Signed PDF saved to your account"].map(item => (
+
+          {/* Status list */}
+          <div style={{
+            background: "white", border: `1px solid hsl(270 20% 90%)`,
+            borderRadius: 16, overflow: "hidden", marginBottom: 28,
+            boxShadow: "0 2px 12px rgba(83,47,126,0.07)", textAlign: "left",
+          }}>
+            {items.map((item, i) => (
               <div key={item} style={{
-                display: "inline-flex", alignItems: "center", gap: 8,
-                padding: "5px 14px", borderRadius: 999,
-                background: "hsl(152 80% 95%)", color: "hsl(152 60% 28%)",
-                fontSize: 12, fontWeight: 500,
+                display: "flex", alignItems: "center", gap: 14,
+                padding: "14px 20px",
+                borderBottom: i < items.length - 1 ? `1px solid hsl(270 20% 93%)` : "none",
               }}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width={13} height={13}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                </svg>
-                {item}
+                <div style={{
+                  width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
+                  background: isSigningInProgress && i === 3
+                    ? "hsl(270 20% 93%)"
+                    : "hsl(152 65% 42%)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  {isSigningInProgress && i === 3 ? (
+                    <div style={{
+                      width: 14, height: 14, borderRadius: "50%",
+                      border: "2px solid hsl(270 20% 75%)",
+                      borderTopColor: purple,
+                      animation: "sigSpin 0.8s linear infinite",
+                    }} />
+                  ) : (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" width={14} height={14}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                    </svg>
+                  )}
+                </div>
+                <span style={{
+                  fontSize: 14, fontWeight: 500,
+                  color: isSigningInProgress && i === 3 ? purpleMid : purple,
+                }}>
+                  {item}
+                </span>
               </div>
             ))}
           </div>
+
+          {/* Continue button */}
           <button
             type="button"
+            disabled={isSigningInProgress}
             onClick={async () => {
               if (onComplete && pendingCompleteRef.current) {
                 try { await onComplete(pendingCompleteRef.current); } catch (e) { console.error("onComplete error:", e); }
               }
             }}
             style={{
-              padding: "13px 40px", borderRadius: 12, border: "none", cursor: "pointer",
-              background: "hsl(270 30% 25%)", color: "white",
-              fontSize: 15, fontWeight: 600, fontFamily: "inherit",
-              boxShadow: "0 4px 16px rgba(83,47,126,0.25)",
+              display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 10,
+              padding: "14px 48px", borderRadius: 14, border: "none",
+              cursor: isSigningInProgress ? "not-allowed" : "pointer",
+              background: isSigningInProgress ? "hsl(270 15% 80%)" : "hsl(270 30% 25%)",
+              color: "white", fontSize: 15, fontWeight: 600, fontFamily: "inherit",
+              boxShadow: isSigningInProgress ? "none" : "0 4px 18px rgba(83,47,126,0.28)",
+              transition: "all 0.2s",
+              width: "100%", maxWidth: 360,
             }}
           >
-            Continue to Dashboard
+            {isSigningInProgress && (
+              <div style={{
+                width: 16, height: 16, borderRadius: "50%",
+                border: "2px solid rgba(255,255,255,0.4)",
+                borderTopColor: "white",
+                animation: "sigSpin 0.8s linear infinite",
+                flexShrink: 0,
+              }} />
+            )}
+            {isSigningInProgress ? "Saving your agreement…" : "Continue to Dashboard"}
           </button>
         </div>
       );
