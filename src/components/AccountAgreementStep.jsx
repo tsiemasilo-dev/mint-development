@@ -483,6 +483,7 @@ export default function AccountAgreementStep({
 
   const canvasRef = useRef(null);
   const sigPadRef = useRef(null);
+  const pendingCompleteRef = useRef(null);
   const signatureDataUrlRef = useRef(null);
   const [sigEmpty, setSigEmpty] = useState(true);
 
@@ -733,17 +734,20 @@ export default function AccountAgreementStep({
         }
       }
 
-      setPhase("success");
+      const signingResults = { signed_agreement_url: publicUrl, signed_at: now, downloaded_at: now };
 
-      if (onComplete) {
-        try {
-          await onComplete({
-            signed_agreement_url: publicUrl,
-            signed_at: now,
-            downloaded_at: now,
-          });
-        } catch (completeErr) {
-          console.error("onComplete error:", completeErr);
+      if (mode === "signature-only") {
+        // In signature-only mode, store results and wait for the user to press OK
+        pendingCompleteRef.current = signingResults;
+        setPhase("success");
+      } else {
+        setPhase("success");
+        if (onComplete) {
+          try {
+            await onComplete(signingResults);
+          } catch (completeErr) {
+            console.error("onComplete error:", completeErr);
+          }
         }
       }
     } catch (err) {
@@ -1296,6 +1300,60 @@ export default function AccountAgreementStep({
   // PHASE: SUCCESS
   // ─────────────────────────────────────────────────────────────────────────
   if (phase === "success") {
+    // ── signature-only mode: compact inline success with OK button ───────────
+    if (mode === "signature-only") {
+      return (
+        <div className="animate-fade-in" style={{ textAlign: "center", padding: "24px 0 8px" }}>
+          <div style={{
+            width: 64, height: 64, borderRadius: "50%", margin: "0 auto 18px",
+            background: "linear-gradient(135deg, hsl(152 70% 45%) 0%, hsl(152 60% 35%) 100%)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: "0 6px 24px rgba(16,185,129,0.28)",
+          }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" width={32} height={32}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+            </svg>
+          </div>
+          <h3 style={{ fontSize: 20, fontWeight: 500, color: purple, marginBottom: 8 }}>Agreement Signed</h3>
+          <p style={{ fontSize: 13, color: purpleMid, lineHeight: 1.6, marginBottom: 20 }}>
+            Your signature has been recorded. You have agreed to the Risk Disclosure,
+            Terms &amp; Conditions, and Client Securities Agreement.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center", marginBottom: 24 }}>
+            {["Risk Disclosure accepted", "Terms & Conditions accepted", "Account Agreement signed", "Signed PDF saved to your account"].map(item => (
+              <div key={item} style={{
+                display: "inline-flex", alignItems: "center", gap: 8,
+                padding: "5px 14px", borderRadius: 999,
+                background: "hsl(152 80% 95%)", color: "hsl(152 60% 28%)",
+                fontSize: 12, fontWeight: 500,
+              }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width={13} height={13}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                </svg>
+                {item}
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              if (onComplete && pendingCompleteRef.current) {
+                try { await onComplete(pendingCompleteRef.current); } catch (e) { console.error("onComplete error:", e); }
+              }
+            }}
+            style={{
+              padding: "13px 40px", borderRadius: 12, border: "none", cursor: "pointer",
+              background: "hsl(270 30% 25%)", color: "white",
+              fontSize: 15, fontWeight: 600, fontFamily: "inherit",
+              boxShadow: "0 4px 16px rgba(83,47,126,0.25)",
+            }}
+          >
+            Continue to Dashboard
+          </button>
+        </div>
+      );
+    }
+
     return (
       <div className="w-full max-w-md mx-auto text-center animate-fade-in" style={{ paddingTop: 40 }}>
         <div style={{
