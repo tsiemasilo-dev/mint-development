@@ -784,12 +784,12 @@ const SwipeableBalanceCard = ({
   const displayReturn = ["5d", "m", "ytd", "all"].includes(activeTab)
     ? returnData5d.pnl
     : (displayMarketValue - displayInvested);
-  // Show latest basket_value for period views; default view uses client_strategy_returns_c basket_value
+  // Show latest basket_value for period views, otherwise use market value
   const displayBalance = overrideBalance !== undefined
     ? overrideBalance
     : (["5d", "m", "ytd", "all"].includes(activeTab) && latestBasketValue > 0
       ? latestBasketValue
-      : defaultPortfolioBasketValue);
+      : displayMarketValue);
 
   const isLoss = displayReturn < 0;
   const returnPct = ["5d", "m", "ytd", "all"].includes(activeTab)
