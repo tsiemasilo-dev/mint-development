@@ -991,7 +991,7 @@ function TransactionRow({ tx }) {
         <p className="text-[11px] text-slate-600 mt-0.5">{date}</p>
       </div>
       <p className="text-sm font-bold tabular-nums text-purple-600">
-        {isCredit ? "+" : "-"}{fmt(Math.round(Math.abs(tx.amount || 0) * 100))}
+        {isCredit ? "+" : "-"}{fmt(Math.round(Math.abs(tx.amount || 0)))}
       </p>
     </div>
   );
