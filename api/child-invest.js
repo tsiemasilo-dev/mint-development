@@ -123,57 +123,27 @@ export default async function handler(req, res) {
           if (!sec?.last_price) continue;
 
           const qty = Math.floor((h.weight || 1) * scale);
-          const marketValue = Math.round(qty * sec.last_price); // cents
           if (qty <= 0) continue;
 
-          // Upsert stock_holding for child
+          // Child strategy orders start as pending holdings until real fills arrive.
           try {
-            const { data: existing } = await db
+            await db
               .from("stock_holdings_c")
-              .select("id, quantity, avg_fill")
-              .eq("family_member_id", family_member_id)
-              .eq("security_id", sec.id)
-              .eq("strategy_id", strategy_id)
-              .maybeSingle();
-
-            if (existing) {
-              const oldQty = Number(existing.quantity || 0);
-              const oldAvgFill = Number(existing.avg_fill || 0);
-              const newQty = Math.floor(oldQty + qty);
-              const newAvgFill = newQty > 0
-                ? ((oldAvgFill * oldQty) + (sec.last_price * qty)) / newQty
-                : sec.last_price;
-
-              await db
-                .from("stock_holdings_c")
-                .update({
-                  quantity: newQty,
-                  avg_fill: Math.round(newAvgFill),
-                  market_value: newQty * sec.last_price,
-                  unrealized_pnl: 0,
-                  as_of_date: new Date().toISOString().split("T")[0],
-                  updated_at: new Date().toISOString(),
-                })
-                .eq("id", existing.id);
-            } else {
-              await db
-                .from("stock_holdings_c")
-                .insert({
-                  user_id: parentUserId,
-                  family_member_id: family_member_id,
-                  security_id: sec.id,
-                  quantity: qty,
-                  avg_fill: sec.last_price,
-                  market_value: marketValue,
-                  unrealized_pnl: 0,
-                  as_of_date: new Date().toISOString().split("T")[0],
-                  strategy_id: strategy_id,
-                  Status: "active",
-                });
-            }
+              .insert({
+                user_id: parentUserId,
+                family_member_id: family_member_id,
+                security_id: sec.id,
+                quantity: qty,
+                avg_fill: null,
+                market_value: 0,
+                unrealized_pnl: 0,
+                as_of_date: null,
+                strategy_id: strategy_id,
+                Status: "active",
+              });
             holdingsCreated++;
           } catch (e) {
-            console.warn(`[child-invest] holding upsert for ${h.symbol}:`, e.message);
+            console.warn(`[child-invest] pending holding insert for ${h.symbol}:`, e.message);
           }
         }
       }
