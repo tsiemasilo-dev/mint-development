@@ -92,7 +92,7 @@ export default async function handler(req, res) {
     const strategiesCResult = await db
       .from("strategies_c")
       .select(`
-        id, name, short_name, description, risk_level, sector, icon_url, image_url, holdings, status,
+        id, name, short_name, description, risk_level, sector, icon_url, image_url, holdings, status, is_kid_strategy,
         strategy_metrics (
           *
         )
@@ -103,7 +103,7 @@ export default async function handler(req, res) {
       const legacyStrategiesResult = await db
         .from("strategies")
         .select(`
-          id, name, short_name, description, risk_level, sector, icon_url, image_url, holdings, status,
+          id, name, short_name, description, risk_level, sector, icon_url, image_url, holdings, status, is_kid_strategy,
           strategy_metrics (
             *
           )
@@ -152,6 +152,8 @@ export default async function handler(req, res) {
 
     const matchedStrategies = [];
     for (const strategy of allStrategies) {
+      if (strategy.is_kid_strategy) continue;
+
       const hasHoldingsForStrategy = (holdingsByStrategyId[strategy.id] || []).length > 0;
       const isLinkedFromHoldings = strategyIdsFromHoldings.includes(strategy.id);
 
@@ -195,6 +197,7 @@ export default async function handler(req, res) {
           sector: strategy.sector || "",
           iconUrl: strategy.icon_url,
           imageUrl: strategy.image_url,
+          isKidStrategy: !!strategy.is_kid_strategy,
           holdings: enrichedHoldings,
           investedAmount,
           currentMarketValue,
