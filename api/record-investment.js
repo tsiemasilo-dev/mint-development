@@ -317,6 +317,7 @@ export default async function handler(req, res) {
       const today = now.split("T")[0];
       const insertedHoldings = [];
       const skippedSymbols = [];
+      const shouldDeferChildStrategyFill = Boolean(targetFamilyMemberId);
 
       for (const holding of strategyHoldings) {
         const sec = secBySymbol[holding.symbol];
@@ -339,6 +340,29 @@ export default async function handler(req, res) {
         if (priceCents <= 0) {
           console.warn("[record-investment] No price found for:", holding.symbol);
           skippedSymbols.push(holding.symbol);
+          continue;
+        }
+
+        if (shouldDeferChildStrategyFill) {
+          const { error: insertErr } = await db.from("stock_holdings_c").insert({
+            user_id: targetUserId,
+            family_member_id: targetFamilyMemberId,
+            security_id: sec.id,
+            strategy_id: strategyId,
+            quantity: holdingQty,
+            avg_fill: null,
+            market_value: 0,
+            unrealized_pnl: 0,
+            as_of_date: null,
+            Status: "active",
+          });
+
+          if (insertErr) {
+            console.error("[record-investment] Failed to insert pending child holding for", holding.symbol, insertErr.message);
+            return res.status(500).json({ success: false, error: `Failed to record pending child holding for ${holding.symbol}` });
+          }
+
+          insertedHoldings.push({ symbol: holding.symbol, quantity: holdingQty, priceCents: null, pendingFill: true });
           continue;
         }
 

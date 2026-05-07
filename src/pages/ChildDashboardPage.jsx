@@ -1361,14 +1361,14 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
       const linkedUserId = child?.linked_user_id || null;
       const familyHoldingsQuery = supabase
         .from("stock_holdings_c")
-        .select("id, user_id, family_member_id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id")
+        .select("id, user_id, family_member_id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id, fill_date, settlement_status, Status")
         .eq("family_member_id", child.id)
         .eq("Status", "active")
         .order("market_value", { ascending: false });
       const linkedHoldingsQuery = linkedUserId
         ? supabase
             .from("stock_holdings_c")
-            .select("id, user_id, family_member_id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id")
+            .select("id, user_id, family_member_id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id, fill_date, settlement_status, Status")
             .eq("user_id", linkedUserId)
             .eq("Status", "active")
             .order("market_value", { ascending: false })
@@ -1636,16 +1636,17 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
 
   const strategyCards = Object.entries(strategyGroups).map(([sid, hs]) => {
     const strat = strategyMap[sid] || {};
-    const totalValueCents = hs.reduce((s, h) => s + Math.round((h.market_value || 0) * 100), 0);
-    const totalCostCents = hs.reduce((s, h) => s + Math.round(Number(h.avg_fill || 0) * Number(h.quantity || 0) * 100), 0);
+    const isFilling = hs.some((h) => !Number(h.avg_fill || 0) || !h.fill_date);
+    const totalValueCents = isFilling ? 0 : hs.reduce((s, h) => s + Math.round((h.market_value || 0) * 100), 0);
+    const totalCostCents = isFilling ? 0 : hs.reduce((s, h) => s + Math.round(Number(h.avg_fill || 0) * Number(h.quantity || 0) * 100), 0);
     const pnlCents = totalValueCents - totalCostCents;
     const pnlP = totalCostCents > 0 ? (pnlCents / totalCostCents) * 100 : 0;
-    return { id: sid, name: strat.name || "Strategy", short_name: strat.short_name, risk_level: strat.risk_level, is_featured: strat.is_featured, totalValue: totalValueCents, pnl: pnlCents, pnlPct: pnlP, holdings: hs };
+    return { id: sid, name: strat.name || "Strategy", short_name: strat.short_name, risk_level: strat.risk_level, is_featured: strat.is_featured, totalValue: totalValueCents, pnl: pnlCents, pnlPct: pnlP, holdings: hs, isFilling };
   });
 
   // Best performing individual assets (top 5 by unrealized_pnl %)
   const bestAssets = [...holdings]
-    .filter(h => h.symbol && h.market_value > 0)
+    .filter(h => h.symbol && h.market_value > 0 && Number(h.avg_fill || 0) > 0 && h.fill_date)
     .map(h => {
       const costRands = Number(h.avg_fill || 0) * Number(h.quantity || 0);
       const marketRands = h.market_value || 0;
@@ -1771,8 +1772,11 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
               <div className="space-y-3">
                 {strategyCards.map((sc) => {
                   const isUp = sc.pnl >= 0;
+                  const cardClass = sc.isFilling
+                    ? "rounded-2xl border border-amber-200 bg-white shadow-md p-4 opacity-60 animate-pulse"
+                    : "rounded-2xl border border-slate-200 bg-white shadow-md p-4";
                   return (
-                    <div key={sc.id} className="rounded-2xl border border-slate-200 bg-white shadow-md p-4">
+                    <div key={sc.id} className={cardClass}>
                       {/* Header */}
                       <div className="flex items-start justify-between gap-3 mb-3">
                         <div className="flex items-center gap-3 min-w-0">
@@ -1789,14 +1793,26 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                               {sc.is_featured && (
                                 <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-violet-100 text-violet-700">Featured</span>
                               )}
+                              {sc.isFilling && (
+                                <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-amber-100 text-amber-700 border border-amber-200">Filling strategy</span>
+                              )}
                             </div>
                           </div>
                         </div>
                         <div className="text-right flex-shrink-0">
-                          <p className="text-sm font-bold text-slate-900 tabular-nums">{fmt(sc.totalValue)}</p>
-                          <p className={`text-xs font-semibold tabular-nums ${isUp ? "text-emerald-600" : "text-red-500"}`}>
-                            {isUp ? "+" : ""}{fmt(sc.pnl)} ({isUp ? "+" : ""}{sc.pnlPct.toFixed(2)}%)
-                          </p>
+                          {sc.isFilling ? (
+                            <>
+                              <p className="text-sm font-bold text-amber-700">Pending</p>
+                              <p className="text-xs font-semibold text-amber-600">Filling strategy</p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-sm font-bold text-slate-900 tabular-nums">{fmt(sc.totalValue)}</p>
+                              <p className={`text-xs font-semibold tabular-nums ${isUp ? "text-emerald-600" : "text-red-500"}`}>
+                                {isUp ? "+" : ""}{fmt(sc.pnl)} ({isUp ? "+" : ""}{sc.pnlPct.toFixed(2)}%)
+                              </p>
+                            </>
+                          )}
                         </div>
                       </div>
                       {/* Holdings avatar row */}
