@@ -40,6 +40,27 @@ function fmt(cents) {
   return `R\u202F${val.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+function withTimeout(promise, ms, message) {
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = window.setTimeout(() => reject(new Error(message)), ms);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timeoutId));
+}
+
+function fetchWithTimeout(url, options, ms, message) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), ms);
+
+  return fetch(url, { ...options, signal: controller.signal })
+    .catch((error) => {
+      if (error?.name === "AbortError") throw new Error(message);
+      throw error;
+    })
+    .finally(() => window.clearTimeout(timeoutId));
+}
+
 // --- Animation variants -----------------------------------------------------
 
 const container = {
@@ -1056,11 +1077,11 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
           bin += String.fromCharCode.apply(null, uint8.subarray(i, i + CHUNK));
         }
         const pdfBase64 = btoa(bin);
-        const res = await fetch("/api/onboarding/upload-agreement", {
+        const res = await fetchWithTimeout("/api/onboarding/upload-agreement", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({ pdfBase64, subjectId: child.id }),
-        });
+        }, 45000, "Upload is taking too long. Please check your connection and retry.");
         const j = await res.json();
         if (!res.ok || !j.publicUrl) {
           throw new Error(j?.error || "Failed to upload proof of address.");
@@ -1069,22 +1090,25 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
       } else if (fileUpload && supabase) {
         const safeName = fileUpload.name.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9._-]/g, "");
         const path = `poa/${child.id}/${Date.now()}-${safeName}`;
-        const { error: upErr } = await supabase.storage
-          .from("birth-certificates").upload(path, fileUpload, { upsert: true });
+        const { error: upErr } = await withTimeout(
+          supabase.storage.from("birth-certificates").upload(path, fileUpload, { upsert: true }),
+          45000,
+          "Document upload is taking too long. Please check your connection and retry."
+        );
         if (upErr) {
           throw new Error(upErr.message || "Failed to upload proof document.");
         }
         poaUrl = `storage://birth-certificates/${path}`;
       }
       if (poaUrl) {
-        const patchRes = await fetch(`/api/family-members/${child.id}`, {
+        const patchRes = await fetchWithTimeout(`/api/family-members/${child.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             poa_declaration_url: poaUrl,
             address_completed: true,
           }),
-        });
+        }, 30000, "Saving proof of address is taking too long. Please retry.");
         if (!patchRes.ok) {
           const patchJson = await patchRes.json().catch(() => ({}));
           throw new Error(patchJson?.error || "Failed to save proof of address.");
@@ -1115,21 +1139,21 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
         bin += String.fromCharCode.apply(null, uint8.subarray(i, i + CHUNK));
       }
       const pdfBase64 = btoa(bin);
-      const uploadRes = await fetch("/api/onboarding/upload-agreement", {
+      const uploadRes = await fetchWithTimeout("/api/onboarding/upload-agreement", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ pdfBase64, subjectId: child.id }),
-      });
+      }, 45000, "Upload is taking too long. Please check your connection and retry.");
       const uploadJson = await uploadRes.json();
       if (!uploadRes.ok || !uploadJson.publicUrl) {
         throw new Error(uploadJson?.error || "Failed to upload signed agreement.");
       }
 
-      const patchRes = await fetch(`/api/family-members/${child.id}`, {
+      const patchRes = await fetchWithTimeout(`/api/family-members/${child.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ signed_agreement_url: uploadJson.publicUrl, signed_at: signedAt, address_completed: true }),
-      });
+      }, 30000, "Saving signed agreement is taking too long. Please retry.");
       if (!patchRes.ok) {
         const patchJson = await patchRes.json().catch(() => ({}));
         throw new Error(patchJson?.error || "Failed to save signed agreement.");

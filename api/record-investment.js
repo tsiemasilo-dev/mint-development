@@ -575,7 +575,7 @@ export default async function handler(req, res) {
     }).catch(() => {});
 
     // ── Strategy subscription: create R29/month record if this is an additional strategy ──
-    if (isStrategyInvestment && strategyId) {
+    if (isStrategyInvestment && strategyId && !targetFamilyMemberId) {
       try {
         // Check if user has any OTHER active strategy (making this the 2nd+)
         const { data: otherStrategies } = await db
