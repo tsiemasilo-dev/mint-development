@@ -77,6 +77,7 @@ function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onCl
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const childFirstName = child?.first_name || "Child";
 
   const numAmount = parseFloat(amount) || 0;
   const amountCents = Math.round(numAmount * 100);
@@ -136,7 +137,7 @@ function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onCl
                   <div>
                     <p className="text-base font-bold text-slate-900">Transfer Funds</p>
                     <p className="text-xs text-slate-400">
-                      To {child.first_name}'s account
+                      {`To ${childFirstName}'s account`}
                     </p>
                   </div>
                 </div>
@@ -158,7 +159,7 @@ function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onCl
                 </div>
                 <ArrowUpRight className="h-4 w-4 text-slate-300" />
                 <div className="text-right">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{child.first_name}'s Wallet</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{`${childFirstName}'s Wallet`}</p>
                   <p className="text-sm font-bold text-slate-900 tabular-nums mt-0.5">
                     {balancesLoading ? "Loading..." : fmt(child.available_balance || 0)}
                   </p>
@@ -232,7 +233,7 @@ function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onCl
               </div>
               <p className="text-lg font-bold text-slate-900">Transfer Complete!</p>
               <p className="text-sm text-slate-500 mt-2">
-                R{numAmount.toFixed(2)} has been transferred to {child.first_name}'s wallet.
+                {`R${numAmount.toFixed(2)} has been transferred to ${childFirstName}'s wallet.`}
               </p>
               <button
                 onClick={onClose}
@@ -266,6 +267,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
+  const childFirstName = child?.first_name || "Child";
   const childBalance = child.available_balance || 0;
   const minInvCents = selected?.min_investment || 0;
   const amountCents = units * minInvCents;
@@ -774,7 +776,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
                   </div>
                   <div>
                     <p className="text-base font-bold text-slate-900">
-                      {step === "amount" ? "Invest Amount" : step === "preview" ? "Strategy Preview" : "Invest for " + child.first_name}
+                      {step === "amount" ? "Invest Amount" : step === "preview" ? "Strategy Preview" : `Invest for ${childFirstName}`}
                     </p>
                     <p className="text-xs text-slate-400">
                       {selected ? selected.name : "Choose a strategy to invest in"}
@@ -792,7 +794,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
               {/* Available balance pill */}
               <div className="flex items-center gap-2 rounded-xl bg-purple-50 border border-purple-100 px-4 py-2.5 mb-4">
                 <Wallet className="h-3.5 w-3.5 text-purple-500" />
-                <span className="text-xs font-semibold text-purple-600">{child.first_name}'s balance:</span>
+                <span className="text-xs font-semibold text-purple-600">{`${childFirstName}'s balance:`}</span>
                 <span className="text-xs font-bold text-purple-800 ml-auto tabular-nums">{fmt(childBalance)}</span>
               </div>
 
@@ -952,7 +954,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
               </div>
               <p className="text-lg font-bold text-slate-900">Investment Placed!</p>
               <p className="text-sm text-slate-500 mt-2">
-                R{numAmount.toFixed(2)} invested in {selected?.name} for {child.first_name}.
+                {`R${numAmount.toFixed(2)} invested in ${selected?.name} for ${childFirstName}.`}
               </p>
               <button
                 onClick={onClose}
@@ -1217,7 +1219,7 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
           {step === "id" && (
             <div className="space-y-4">
               <p className="text-sm text-slate-600 leading-relaxed">
-                Please provide <strong>{childName}'s</strong> SA ID number to complete their profile.
+                Please provide <strong>{`${childName}'s`}</strong> SA ID number to complete their profile.
               </p>
               <input
                 id="child-id-number"
@@ -1710,7 +1712,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                   <AlertCircle className="h-4.5 w-4.5 text-amber-600" style={{ height: "1.125rem", width: "1.125rem" }} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-amber-800">Complete {child?.first_name}'s profile</p>
+                  <p className="text-sm font-bold text-amber-800">{`Complete ${childName}'s profile`}</p>
                   <p className="text-xs text-amber-700 mt-0.5 truncate">
                     Missing: {missingItems.join(", ")}
                   </p>
@@ -1850,7 +1852,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                 </div>
                 <p className="text-sm font-bold text-slate-900">No investments yet</p>
                 <p className="text-xs text-slate-600 mt-2 leading-relaxed">
-                  Start investing on {child?.first_name}'s behalf to build their future portfolio.
+                  {`Start investing on ${childName}'s behalf to build their future portfolio.`}
                 </p>
                 <button
                   onClick={() => setShowInvest(true)}
