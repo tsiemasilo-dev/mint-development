@@ -4,9 +4,10 @@ import {
   ArrowLeft, ArrowUpRight, ArrowDownLeft, X,
   Wallet, BarChart3, ChevronRight,
   RefreshCw, Search, Star, AlertCircle, Check, ClipboardList,
-  BookOpen, LayoutGrid, ArrowDownToLine, Target,
+  BookOpen, LayoutGrid, ArrowDownToLine, Target, FileSignature, Plus,
 } from "lucide-react";
 import SwipeableBalanceCard from "../components/SwipeableBalanceCard";
+import Skeleton from "../components/Skeleton";
 import { useProfile } from "../lib/useProfile";
 import { supabase } from "../lib/supabase";
 import MinorProofOfAddressDeclaration from "../components/MinorProofOfAddressDeclaration";
@@ -1265,6 +1266,12 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   const [openingTransfer, setOpeningTransfer] = useState(false);
   const [showInvest, setShowInvest] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [showGoalsModal, setShowGoalsModal] = useState(false);
+  const [goals, setGoals] = useState([]);
+  const [loadingGoals, setLoadingGoals] = useState(false);
+  const [isCreatingGoal, setIsCreatingGoal] = useState(false);
+  const [editingGoalId, setEditingGoalId] = useState(null);
+  const [newGoal, setNewGoal] = useState({ name: "", target_amount: "", target_date: "" });
 
   const childName = [child?.first_name, child?.last_name].filter(Boolean).join(" ") || "Child";
   const age = getAge(child?.date_of_birth);
@@ -1291,6 +1298,12 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     fetchAll();
     return () => { isMounted.current = false; };
   }, [child?.id]);
+
+  useEffect(() => {
+    if (showGoalsModal && child?.id) {
+      fetchGoals();
+    }
+  }, [showGoalsModal, child?.id]);
 
   async function fetchAll() {
     setLoading(true);
@@ -1465,6 +1478,126 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     fetchTransactions();
   }
 
+  async function fetchGoals() {
+    if (!child?.id) return;
+    setLoadingGoals(true);
+    try {
+      let query = supabase
+        .from("investment_goals")
+        .select("id, name, target_amount, current_amount, is_active, target_date")
+        .eq("family_member_id", child.id)
+        .eq("is_active", true)
+        .order("created_at", { ascending: false });
+
+      if (profile?.id) query = query.eq("user_id", profile.id);
+
+      const { data, error } = await query;
+      if (error) throw error;
+      if (isMounted.current) setGoals(data || []);
+    } catch (error) {
+      console.error("[child-dash] goal fetch error", error);
+      if (isMounted.current) setGoals([]);
+    } finally {
+      if (isMounted.current) setLoadingGoals(false);
+    }
+  }
+
+  function resetGoalForm() {
+    setNewGoal({ name: "", target_amount: "", target_date: "" });
+    setEditingGoalId(null);
+    setIsCreatingGoal(false);
+  }
+
+  function closeGoalsModal() {
+    setShowGoalsModal(false);
+    resetGoalForm();
+  }
+
+  function handleEditClick(goal) {
+    setNewGoal({
+      name: goal.name,
+      target_amount: goal.target_amount,
+      target_date: goal.target_date || "",
+    });
+    setEditingGoalId(goal.id);
+    setIsCreatingGoal(true);
+    setShowGoalsModal(true);
+  }
+
+  async function handleCreateGoal(e) {
+    e.preventDefault();
+    if (!newGoal.name || !newGoal.target_amount || !child?.id || !profile?.id) return;
+
+    setLoadingGoals(true);
+    try {
+      const { error } = await supabase.from("investment_goals").insert({
+        user_id: profile.id,
+        family_member_id: child.id,
+        name: newGoal.name,
+        target_amount: parseFloat(newGoal.target_amount),
+        target_date: newGoal.target_date || null,
+        current_amount: 0,
+        is_active: true,
+      });
+
+      if (error) throw error;
+
+      setNewGoal({ name: "", target_amount: "", target_date: "" });
+      setIsCreatingGoal(false);
+      fetchGoals();
+    } catch (error) {
+      console.error("[child-dash] goal create error", error);
+    } finally {
+      setLoadingGoals(false);
+    }
+  }
+
+  async function handleUpdateGoal(e) {
+    e.preventDefault();
+    if (!editingGoalId) return;
+
+    setLoadingGoals(true);
+    try {
+      const updatePayload = {
+        name: newGoal.name,
+        target_amount: parseFloat(newGoal.target_amount),
+        target_date: newGoal.target_date || null,
+      };
+      const { error } = await supabase
+        .from("investment_goals")
+        .update(updatePayload)
+        .eq("id", editingGoalId)
+        .eq("family_member_id", child.id);
+
+      if (error) throw error;
+      resetGoalForm();
+      fetchGoals();
+    } catch (error) {
+      console.error("[child-dash] goal update error", error);
+    } finally {
+      setLoadingGoals(false);
+    }
+  }
+
+  async function handleDeleteGoal(goalId) {
+    if (!window.confirm("Are you sure you want to delete this goal?")) return;
+    setLoadingGoals(true);
+    try {
+      const { error } = await supabase
+        .from("investment_goals")
+        .delete()
+        .eq("id", goalId)
+        .eq("family_member_id", child.id);
+      if (error) throw error;
+      resetGoalForm();
+      fetchGoals();
+    } catch (error) {
+      console.error("[child-dash] goal delete error", error);
+    } finally {
+      setLoadingGoals(false);
+    }
+  }
+
   // market_value and avg_fill are stored in rands; convert to cents for fmt
   const totalPortfolioCents = holdings.reduce((s, h) => s + Math.round((h.market_value || 0) * 100), 0);
 
@@ -1569,7 +1702,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                 { label: "Learn", icon: BookOpen, onClick: null, comingSoon: true },
                 { label: "Invest", icon: LayoutGrid, onClick: () => setShowInvest(true) },
                 { label: "Deposit", icon: ArrowDownToLine, onClick: openTransferModal, disabled: openingTransfer },
-                { label: "Goals", icon: Target, onClick: null, comingSoon: true },
+                { label: "Goals", icon: Target, onClick: () => setShowGoalsModal(true) },
               ].map((btn, i) => {
                 const Icon = btn.icon;
                 return (
@@ -1845,6 +1978,168 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
           />
         )}
       </AnimatePresence>
+      {showGoalsModal && (
+        <div className="fixed inset-0 z-[950] flex items-end justify-center bg-slate-900/60 px-4 pb-20 sm:items-center sm:pb-0">
+          <button
+            type="button"
+            className="absolute inset-0 h-full w-full cursor-default backdrop-blur-sm"
+            aria-label="Close modal"
+            onClick={closeGoalsModal}
+          />
+          <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-[32px] bg-white shadow-2xl animate-in slide-in-from-bottom duration-300">
+            <div className="flex items-center justify-center pt-3">
+              <div className="h-1.5 w-12 rounded-full bg-slate-200" />
+            </div>
+            <div className="p-6">
+              <header className="mb-6 flex items-center justify-between">
+                <h2 className="text-xl font-bold text-slate-900">
+                  {editingGoalId ? "Edit Goal" : (isCreatingGoal || goals.length === 0) ? "New Goal" : "Your Goals"}
+                </h2>
+                <button
+                  type="button"
+                  onClick={closeGoalsModal}
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-50 text-slate-400"
+                  aria-label="Close"
+                >
+                  <X size={20} />
+                </button>
+              </header>
+
+              <div className="max-h-[60vh] overflow-y-auto pr-1">
+                {loadingGoals ? (
+                  <div className="space-y-4">
+                    {[0, 1].map((i) => (
+                      <div key={i} className="rounded-2xl border border-slate-100 p-4 space-y-3">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-48" />
+                        <Skeleton className="h-2 w-full rounded-full" />
+                      </div>
+                    ))}
+                  </div>
+                ) : isCreatingGoal || editingGoalId || goals.length === 0 ? (
+                  <form onSubmit={editingGoalId ? handleUpdateGoal : handleCreateGoal} className="space-y-4">
+                    <div>
+                      <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">Goal Name</label>
+                      <input
+                        id="child-goal-name"
+                        name="child-goal-name"
+                        type="text"
+                        placeholder="e.g. New Car, Holiday"
+                        value={newGoal.name}
+                        onChange={(e) => setNewGoal(prev => ({ ...prev, name: e.target.value }))}
+                        className="w-full rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">Target Amount (R)</label>
+                      <input
+                        id="child-goal-target"
+                        name="child-goal-target"
+                        type="number"
+                        placeholder="0.00"
+                        value={newGoal.target_amount}
+                        onChange={(e) => setNewGoal(prev => ({ ...prev, target_amount: e.target.value }))}
+                        className="w-full rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">Target Date (Optional)</label>
+                      <input
+                        id="child-goal-date"
+                        name="child-goal-date"
+                        type="date"
+                        value={newGoal.target_date}
+                        onChange={(e) => setNewGoal(prev => ({ ...prev, target_date: e.target.value }))}
+                        className="w-full rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-3 pt-2">
+                      <button
+                        type="submit"
+                        disabled={loadingGoals}
+                        className="w-full rounded-2xl bg-[#31005e] py-4 font-bold uppercase tracking-widest text-white shadow-lg transition-active active:scale-95"
+                      >
+                        {editingGoalId ? "Update Goal" : "Save Goal"}
+                      </button>
+                      {editingGoalId && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteGoal(editingGoalId)}
+                          className="w-full rounded-2xl bg-rose-50 py-4 text-xs font-bold uppercase tracking-widest text-rose-600 transition-active active:scale-95"
+                        >
+                          Delete Goal
+                        </button>
+                      )}
+                      {goals.length > 0 && !editingGoalId && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsCreatingGoal(false);
+                            setNewGoal({ name: "", target_amount: "", target_date: "" });
+                          }}
+                          className="w-full rounded-2xl border border-slate-200 py-3 text-sm font-semibold text-slate-600"
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+                  </form>
+                ) : (
+                  <div className="space-y-4">
+                    {goals.map((goal) => {
+                      const progress = goal.target_amount > 0
+                        ? Math.min(100, ((goal.current_amount || 0) / goal.target_amount) * 100)
+                        : 0;
+                      const left = Math.max(0, (goal.target_amount || 0) - (goal.current_amount || 0));
+                      return (
+                        <div key={goal.id} className="group relative rounded-3xl border border-slate-100 bg-white p-5 shadow-sm transition-all hover:shadow-md">
+                          <div className="mb-3 flex items-start justify-between">
+                            <div>
+                              <h3 className="font-bold text-slate-900">{goal.name}</h3>
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                Target: R{Number(goal.target_amount).toLocaleString()}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleEditClick(goal)}
+                              className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-50 text-slate-400 hover:bg-violet-50 hover:text-violet-600"
+                            >
+                              <FileSignature size={18} />
+                            </button>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
+                              <span className="text-violet-600">{Math.round(progress)}% Complete</span>
+                              <span className="text-slate-300">R{left.toLocaleString()} Left</span>
+                            </div>
+                            <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-gradient-to-r from-violet-600 to-purple-500 rounded-full transition-all duration-1000"
+                                style={{ width: `${progress}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => setIsCreatingGoal(true)}
+                      className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-200 py-4 text-sm font-bold text-slate-400 transition-all hover:border-violet-300 hover:bg-violet-50 active:scale-95"
+                    >
+                      <Plus size={18} />
+                      <span>Add New Goal</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

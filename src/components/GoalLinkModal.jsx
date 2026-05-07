@@ -3,7 +3,14 @@ import { X, Target, Plus, Check, ChevronRight } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { motion, AnimatePresence } from "framer-motion";
 
-const GoalLinkModal = ({ isOpen, onClose, onConfirm, investmentAmount, assetName }) => {
+const GoalLinkModal = ({
+  isOpen,
+  onClose,
+  onConfirm,
+  investmentAmount,
+  assetName,
+  childFamilyMemberId = null,
+}) => {
   const [goals, setGoals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedGoalId, setSelectedGoalId] = useState(null);
@@ -24,7 +31,12 @@ const GoalLinkModal = ({ isOpen, onClose, onConfirm, investmentAmount, assetName
       setNewGoalTarget("");
       setNewGoalDate("");
     }
-  }, [isOpen]);
+  }, [isOpen, childFamilyMemberId]);
+
+  const isMissingFamilyMemberColumn = (error) => (
+    error?.code === "42703" ||
+    String(error?.message || "").toLowerCase().includes("family_member_id")
+  );
 
   const fetchGoals = async () => {
     setLoading(true);
@@ -32,16 +44,38 @@ const GoalLinkModal = ({ isOpen, onClose, onConfirm, investmentAmount, assetName
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return;
 
-      let { data, error } = await supabase
+      let query = supabase
         .from("investment_goals")
-        .select("id, name, target_amount, current_amount, is_active")
+        .select("id, name, target_amount, current_amount, is_active, linked_asset_name")
         .eq("user_id", session.user.id)
         .eq("is_active", true)
         .order("created_at", { ascending: false });
 
+      query = childFamilyMemberId
+        ? query.eq("family_member_id", childFamilyMemberId)
+        : query.is("family_member_id", null);
+
+      let { data, error } = await query;
+
+      if (error && isMissingFamilyMemberColumn(error) && !childFamilyMemberId) {
+        const fallback = await supabase
+          .from("investment_goals")
+          .select("id, name, target_amount, current_amount, is_active, linked_asset_name")
+          .eq("user_id", session.user.id)
+          .eq("is_active", true)
+          .order("created_at", { ascending: false });
+        data = fallback.data;
+        error = fallback.error;
+      }
+
       if (!error) {
         setGoals(data || []);
       } else {
+        if (childFamilyMemberId && isMissingFamilyMemberColumn(error)) {
+          console.warn("Child goals need investment_goals.family_member_id. Run the child goals SQL migration.");
+          setGoals([]);
+          return;
+        }
         console.error("Error fetching goals:", error);
       }
     } catch (e) {
@@ -62,17 +96,34 @@ const GoalLinkModal = ({ isOpen, onClose, onConfirm, investmentAmount, assetName
 
       const payload = {
         user_id: session.user.id,
+        family_member_id: childFamilyMemberId || null,
         name: newGoalName,
         target_amount: parseFloat(newGoalTarget),
         target_date: newGoalDate || null,
         is_active: true,
       };
 
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from("investment_goals")
         .insert(payload)
         .select()
         .single();
+
+      if (error && isMissingFamilyMemberColumn(error) && !childFamilyMemberId) {
+        const fallbackPayload = { ...payload };
+        delete fallbackPayload.family_member_id;
+        const fallback = await supabase
+          .from("investment_goals")
+          .insert(fallbackPayload)
+          .select()
+          .single();
+        data = fallback.data;
+        error = fallback.error;
+      }
+
+      if (error && childFamilyMemberId && isMissingFamilyMemberColumn(error)) {
+        console.warn("Child goals need investment_goals.family_member_id. Run the child goals SQL migration.");
+      }
 
       if (error) throw error;
 
