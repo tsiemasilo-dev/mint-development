@@ -781,19 +781,20 @@ const SwipeableBalanceCard = ({
         ? Number(selectedAsset.invested_amount) / 100
         : (Number(selectedAsset.avg_fill || 0) * Number(selectedAsset.quantity || 0)) / 100)
     : dbData.totalInvestedAmount;
-  const displayReturn = ["5d", "m", "ytd", "all"].includes(activeTab)
+  const isPeriodTab = ["5d", "m", "ytd", "all"].includes(activeTab);
+  const displayReturn = isPeriodTab
     ? returnData5d.pnl
     : (displayMarketValue - displayInvested);
   // Show latest basket_value for period views, otherwise use market value
   const displayBalance = overrideBalance !== undefined
     ? overrideBalance
-    : (["5d", "m", "ytd", "all"].includes(activeTab) && latestBasketValue > 0
+    : (isPeriodTab && latestBasketValue > 0
       ? latestBasketValue
       : displayMarketValue);
 
-  const isLoss = displayReturn < 0;
-  const returnPct = ["5d", "m", "ytd", "all"].includes(activeTab)
-    ? truncateDecimal(returnData5d.pct, 2).toFixed(2)
+  const isLoss = displayReturn != null && displayReturn < 0;
+  const returnPct = isPeriodTab
+    ? (returnData5d.pct == null ? null : truncateDecimal(returnData5d.pct, 2).toFixed(2))
     : (displayInvested > 0
       ? truncateDecimal((displayReturn / displayInvested) * 100, 2).toFixed(2)
       : "0.00");
@@ -866,19 +867,21 @@ const SwipeableBalanceCard = ({
               <TrendIcon size={11} strokeWidth={2.5} />
               {isVisible ? (
                 <>
-                  {["5d", "m", "ytd", "all"].includes(activeTab) && (
+                  {isPeriodTab && (
                     <span className="text-[10px] opacity-75">
                       {activeTab === "5d" && "5D:"}{activeTab === "m" && "1M:"}{activeTab === "ytd" && "YTD:"}{activeTab === "all" && "Inc:"}
                     </span>
                   )}
-                  {formatKMB(Math.abs(displayReturn))}
+                  {displayReturn == null ? "N/A" : formatKMB(Math.abs(displayReturn))}
                 </>
               ) : (
                 masked
               )}
             </span>
             <span className={`text-[11px] font-medium ${isLoss ? "text-destructive" : "text-success"}`}>
-              {isVisible ? `${isLoss ? "-" : "+"}${returnPct}%` : masked}
+              {isVisible
+                ? (returnPct == null ? "N/A" : `${isLoss ? "-" : "+"}${returnPct}%`)
+                : masked}
             </span>
           </div>
         </div>
