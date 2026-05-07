@@ -281,8 +281,20 @@ const HomePage = ({
         .from('investment_goals')
         .select('id, name, target_amount, current_amount, is_active, target_date')
         .eq('user_id', profile.id)
+        .is('family_member_id', null)
         .eq('is_active', true)
         .order('created_at', { ascending: false });
+
+      if (error && (error.code === "42703" || String(error.message || "").includes("family_member_id"))) {
+        const fallback = await supabase
+          .from('investment_goals')
+          .select('id, name, target_amount, current_amount, is_active, target_date')
+          .eq('user_id', profile.id)
+          .eq('is_active', true)
+          .order('created_at', { ascending: false });
+        data = fallback.data;
+        error = fallback.error;
+      }
 
       if (error) throw error;
       setGoals(data || []);

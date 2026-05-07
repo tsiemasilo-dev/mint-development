@@ -1018,6 +1018,7 @@ const App = () => {
             child={selectedFamilyChild}
             onBack={noOp}
             onOpenFactsheet={(strategy) => {
+              setSelectedChildForInvest(selectedFamilyChild);
               setSelectedStrategy(strategy);
               navigateTo("factsheet");
             }}
@@ -1338,6 +1339,7 @@ const App = () => {
               navigateTo("notifications");
             }}
             onOpenStockDetail={(security) => {
+              setSelectedChildForInvest(null);
               setSelectedSecurity(security);
               navigateTo("stockDetail");
             }}
@@ -1346,6 +1348,7 @@ const App = () => {
               navigateTo("newsArticle");
             }}
             onOpenFactsheet={(strategy) => {
+              setSelectedChildForInvest(null);
               setSelectedStrategy(strategy);
               navigateTo("factsheet");
             }}
@@ -1626,11 +1629,16 @@ const App = () => {
               strategyId: selectedStrategy?.id || selectedStrategy?.strategyId || null,
               fees // pass fees breakdown
             });
-            // Kid strategies: show child picker first (step 1), then goal link (step 2)
+            // Kid strategies bought from Markets ask for the child first.
+            // A factsheet opened from a child dashboard already has that child in context.
             if (selectedStrategy?.is_kid_strategy) {
-              setSelectedChildForInvest(null);
-              setShowChildPickerModal(true);
+              if (selectedChildForInvest?.id) {
+                setShowGoalModal(true);
+              } else {
+                setShowChildPickerModal(true);
+              }
             } else {
+              setSelectedChildForInvest(null);
               setShowGoalModal(true);
             }
           }}
@@ -1664,6 +1672,7 @@ const App = () => {
           }}
           investmentAmount={pendingGoalFlow?.baseAmount || pendingGoalFlow?.amount || investmentAmount}
           assetName={pendingGoalFlow?.assetName || selectedStrategy?.name || "Strategy"}
+          childFamilyMemberId={selectedStrategy?.is_kid_strategy ? selectedChildForInvest?.id : null}
         />
         <PaymentMethodModal
           isOpen={showPaymentMethodModal}
@@ -1918,6 +1927,7 @@ const App = () => {
           child={selectedFamilyChild}
           onBack={goBack}
           onOpenFactsheet={(strategy) => {
+            setSelectedChildForInvest(selectedFamilyChild);
             setSelectedStrategy(strategy);
             navigateTo("factsheet");
           }}
