@@ -2,6 +2,12 @@ import { useEffect, useState } from "react";
 import { X, ChevronRight, Users } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
+const formatWalletCents = (value) =>
+  `R${(Number(value || 0) / 100).toLocaleString("en-ZA", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
 export default function KidStrategyChildPickerModal({ isOpen, onClose, onSelectChild }) {
   const [children, setChildren] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -48,7 +54,7 @@ export default function KidStrategyChildPickerModal({ isOpen, onClose, onSelectC
           <div className="flex items-center justify-between mb-5">
             <div>
               <p className="text-base font-bold text-slate-900">Who are you investing for?</p>
-              <p className="text-xs text-slate-400 mt-0.5">Step 1 of 2 — Select a child</p>
+              <p className="text-xs text-slate-400 mt-0.5">Step 1 of 2 - Select a child</p>
             </div>
             <button
               onClick={onClose}
@@ -105,7 +111,7 @@ export default function KidStrategyChildPickerModal({ isOpen, onClose, onSelectC
                         {child.first_name} {child.last_name}
                       </p>
                       <p className="text-xs text-slate-500 mt-0.5">
-                        Balance: R{Number(child.available_balance || 0).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        Balance: {formatWalletCents(child.available_balance)}
                       </p>
                     </div>
                     <ChevronRight className="h-4 w-4 text-slate-400 flex-shrink-0" />
