@@ -1097,7 +1097,11 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
   async function fetchMembers() {
     setLoading(true);
     try {
-      const res = await fetch(`/api/family-members?user_id=${userId}`);
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch(`/api/family-members?user_id=${userId}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
       const json = await res.json();
       const loadedMembers = json.members || [];
       setMembers(loadedMembers);

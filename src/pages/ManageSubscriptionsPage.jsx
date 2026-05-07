@@ -178,24 +178,10 @@ const ManageSubscriptionsPage = ({ onBack }) => {
                     {/* Toggle button */}
                     <button
                       type="button"
-                      disabled={isToggling}
-                      onClick={() => toggleStatus(sub)}
-                      className={`w-full rounded-xl py-2.5 text-xs font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed ${
-                        isActive
-                          ? "bg-rose-50 text-rose-600 border border-rose-100 hover:bg-rose-100"
-                          : "bg-violet-50 text-violet-700 border border-violet-100 hover:bg-violet-100"
-                      }`}
+                      disabled={true}
+                      className="w-full rounded-xl py-2.5 text-xs font-semibold bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60"
                     >
-                      {isToggling ? (
-                        <span className="flex items-center justify-center gap-1.5">
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          Updating…
-                        </span>
-                      ) : isActive ? (
-                        "Cancel Subscription"
-                      ) : (
-                        "Reactivate Subscription"
-                      )}
+                      {isActive ? "Cancel Subscription" : "Reactivate Subscription"}
                     </button>
                   </div>
                 </div>
