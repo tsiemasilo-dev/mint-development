@@ -1361,16 +1361,17 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     try {
       if (!supabase) return;
       const linkedUserId = child?.linked_user_id || null;
+      const holdingsSelect = "id, user_id, family_member_id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id, Fill_date, Status";
       const familyHoldingsQuery = supabase
         .from("stock_holdings_c")
-        .select("id, user_id, family_member_id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id, Fill_date, settlement_status, Status")
+        .select(holdingsSelect)
         .eq("family_member_id", child.id)
         .eq("Status", "active")
         .order("market_value", { ascending: false });
       const linkedHoldingsQuery = linkedUserId
         ? supabase
             .from("stock_holdings_c")
-            .select("id, user_id, family_member_id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id, Fill_date, settlement_status, Status")
+            .select(holdingsSelect)
             .eq("user_id", linkedUserId)
             .eq("Status", "active")
             .order("market_value", { ascending: false })
