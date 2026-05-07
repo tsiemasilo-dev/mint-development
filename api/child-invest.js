@@ -91,7 +91,6 @@ export default async function handler(req, res) {
     if (deductErr) throw deductErr;
 
     // 5. Build holdings from strategy basket
-    const investAmountRands = amount / 100;
     const holdings = strategy.holdings || [];
     let holdingsCreated = 0;
 
@@ -106,45 +105,33 @@ export default async function handler(req, res) {
       const secMap = {};
       (securities || []).forEach(s => { secMap[s.symbol] = s; });
 
-      // Calculate total basket cost for proportional allocation
-      let totalBasketCostRands = 0;
       for (const h of holdings) {
         const sec = secMap[h.symbol];
-        if (sec?.last_price) {
-          totalBasketCostRands += sec.last_price * (h.weight || 1);
-        }
-      }
+        if (!sec?.last_price) continue;
 
-      if (totalBasketCostRands > 0) {
-        const scale = investAmountRands / totalBasketCostRands;
+        // Use the exact basket quantity defined in strategies_c.holdings.
+        const qty = Math.floor(Number(h.quantity || h.shares || 0));
+        if (qty <= 0) continue;
 
-        for (const h of holdings) {
-          const sec = secMap[h.symbol];
-          if (!sec?.last_price) continue;
-
-          const qty = Math.floor((h.weight || 1) * scale);
-          if (qty <= 0) continue;
-
-          // Child strategy orders start as pending holdings until real fills arrive.
-          try {
-            await db
-              .from("stock_holdings_c")
-              .insert({
-                user_id: parentUserId,
-                family_member_id: family_member_id,
-                security_id: sec.id,
-                quantity: qty,
-                avg_fill: null,
-                market_value: 0,
-                unrealized_pnl: 0,
-                as_of_date: null,
-                strategy_id: strategy_id,
-                Status: "active",
-              });
-            holdingsCreated++;
-          } catch (e) {
-            console.warn(`[child-invest] pending holding insert for ${h.symbol}:`, e.message);
-          }
+        // Child strategy orders start as pending holdings until real fills arrive.
+        try {
+          await db
+            .from("stock_holdings_c")
+            .insert({
+              user_id: parentUserId,
+              family_member_id: family_member_id,
+              security_id: sec.id,
+              quantity: qty,
+              avg_fill: null,
+              market_value: 0,
+              unrealized_pnl: 0,
+              as_of_date: null,
+              strategy_id: strategy_id,
+              Status: "active",
+            });
+          holdingsCreated++;
+        } catch (e) {
+          console.warn(`[child-invest] pending holding insert for ${h.symbol}:`, e.message);
         }
       }
     }
