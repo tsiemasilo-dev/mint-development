@@ -120,8 +120,9 @@ const HomePage = ({
     try {
       const { data: holdings, error: holdingsError } = await supabase
         .from('stock_holdings_c')
-        .select('id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, Status')
+        .select('id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, Status')
         .eq('user_id', profile.id)
+        .is('family_member_id', null)
         .eq('Status', 'active');
 
       if (holdingsError) throw holdingsError;
@@ -280,8 +281,20 @@ const HomePage = ({
         .from('investment_goals')
         .select('id, name, target_amount, current_amount, is_active, target_date')
         .eq('user_id', profile.id)
+        .is('family_member_id', null)
         .eq('is_active', true)
         .order('created_at', { ascending: false });
+
+      if (error && (error.code === "42703" || String(error.message || "").includes("family_member_id"))) {
+        const fallback = await supabase
+          .from('investment_goals')
+          .select('id, name, target_amount, current_amount, is_active, target_date')
+          .eq('user_id', profile.id)
+          .eq('is_active', true)
+          .order('created_at', { ascending: false });
+        data = fallback.data;
+        error = fallback.error;
+      }
 
       if (error) throw error;
       setGoals(data || []);
@@ -410,7 +423,9 @@ const HomePage = ({
           return;
         }
 
-        const formatted = serverStrategies.map((s) => {
+        const formatted = serverStrategies
+          .filter((s) => !s.isKidStrategy && !s.is_kid_strategy)
+          .map((s) => {
           const invested = s.investedAmount || 0;
           const currentValue = s.currentMarketValue != null ? Number(s.currentMarketValue.toFixed(2)) : invested;
           const isPending = invested === 0 && currentValue === 0;
@@ -1345,6 +1360,8 @@ const HomePage = ({
                     <div>
                       <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">Goal Name</label>
                       <input
+                        id="home-goal-name"
+                        name="home-goal-name"
                         type="text"
                         placeholder="e.g. New Car, Holiday"
                         value={newGoal.name}
@@ -1356,6 +1373,8 @@ const HomePage = ({
                     <div>
                       <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">Target Amount (R)</label>
                       <input
+                        id="home-goal-target"
+                        name="home-goal-target"
                         type="number"
                         placeholder="0.00"
                         value={newGoal.target_amount}
@@ -1367,6 +1386,8 @@ const HomePage = ({
                     <div>
                       <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">Target Date (Optional)</label>
                       <input
+                        id="home-goal-date"
+                        name="home-goal-date"
                         type="date"
                         value={newGoal.target_date}
                         onChange={(e) => setNewGoal(prev => ({ ...prev, target_date: e.target.value }))}

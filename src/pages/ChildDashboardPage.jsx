@@ -1,18 +1,29 @@
-﻿import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo, useId } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, ArrowUpRight, ArrowDownLeft, X,
   Wallet, BarChart3, ChevronRight,
   RefreshCw, Search, Star, AlertCircle, Check, ClipboardList,
-  BookOpen, LayoutGrid, ArrowDownToLine, Target,
+  BookOpen, LayoutGrid, ArrowDownToLine, Target, FileSignature, Plus,
 } from "lucide-react";
 import SwipeableBalanceCard from "../components/SwipeableBalanceCard";
+import Skeleton from "../components/Skeleton";
 import { useProfile } from "../lib/useProfile";
 import { supabase } from "../lib/supabase";
 import MinorProofOfAddressDeclaration from "../components/MinorProofOfAddressDeclaration";
 import ChildResponsibilityAgreement from "../components/ChildResponsibilityAgreement";
+import {
+  Area,
+  ComposedChart,
+  Line,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
-// â”€â”€â”€ helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- helpers ----------------------------------------------------------------
 
 function getAge(dob) {
   if (!dob) return null;
@@ -29,7 +40,28 @@ function fmt(cents) {
   return `R\u202F${val.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-// â”€â”€â”€ Animation variants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function withTimeout(promise, ms, message) {
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = window.setTimeout(() => reject(new Error(message)), ms);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timeoutId));
+}
+
+function fetchWithTimeout(url, options, ms, message) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), ms);
+
+  return fetch(url, { ...options, signal: controller.signal })
+    .catch((error) => {
+      if (error?.name === "AbortError") throw new Error(message);
+      throw error;
+    })
+    .finally(() => window.clearTimeout(timeoutId));
+}
+
+// --- Animation variants -----------------------------------------------------
 
 const container = {
   hidden: {},
@@ -121,14 +153,14 @@ function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onCl
                 <div>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Your Wallet</p>
                   <p className="text-sm font-bold text-slate-900 tabular-nums mt-0.5">
-                    {balancesLoading ? "Loadingâ€¦" : fmt(parentBalance)}
+                    {balancesLoading ? "Loading..." : fmt(parentBalance)}
                   </p>
                 </div>
                 <ArrowUpRight className="h-4 w-4 text-slate-300" />
                 <div className="text-right">
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{child.first_name}'s Wallet</p>
                   <p className="text-sm font-bold text-slate-900 tabular-nums mt-0.5">
-                    {balancesLoading ? "Loadingâ€¦" : fmt(child.available_balance || 0)}
+                    {balancesLoading ? "Loading..." : fmt(child.available_balance || 0)}
                   </p>
                 </div>
               </div>
@@ -140,6 +172,8 @@ function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onCl
               <div className="relative mb-4">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-bold text-slate-400">R</span>
                 <input
+                  id="child-transfer-amount"
+                  name="child-transfer-amount"
                   type="number"
                   inputMode="decimal"
                   value={amount}
@@ -184,7 +218,7 @@ function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onCl
                 className="w-full rounded-xl py-3.5 text-sm font-bold text-white transition active:scale-[0.98] disabled:opacity-50"
                 style={{ background: "linear-gradient(135deg,#1e1b4b,#312e81)" }}
               >
-                {saving ? "Transferringâ€¦" : `Transfer R${numAmount.toFixed(2)}`}
+                {saving ? "Transferring..." : `Transfer R${numAmount.toFixed(2)}`}
               </button>
             </>
           ) : (
@@ -215,13 +249,18 @@ function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onCl
   );
 }
 
-// â”€â”€â”€ Invest Modal (bottom-sheet) â€” browse strategies & invest â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- Invest Modal (bottom-sheet) - browse strategies & invest ----------------
 
-function InvestModal({ child, onInvest, onClose }) {
+function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
   const [strategies, setStrategies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
+  const [step, setStep] = useState("browse");
+  const [selectedStrategyAnalytics, setSelectedStrategyAnalytics] = useState(null);
+  const [selectedStrategyAnalyticsLoading, setSelectedStrategyAnalyticsLoading] = useState(false);
+  const [selectedStrategyActiveLabel, setSelectedStrategyActiveLabel] = useState(null);
+  const previewGradientId = useId();
   const [units, setUnits] = useState(1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -272,7 +311,16 @@ function InvestModal({ child, onInvest, onClose }) {
         const ytd_as_of_date = metrics?.as_of_date ?? null;
         const holdingsList = (Array.isArray(s.holdings) ? s.holdings : [])
           .sort((a, b) => Number(b.weight || 0) - Number(a.weight || 0))
-          .map(h => ({ symbol: h.symbol || h.ticker, logo_url: secMap[h.symbol || h.ticker]?.logo_url || null }));
+          .map(h => {
+            const symbol = h.symbol || h.ticker;
+            const security = secMap[symbol] || {};
+            return {
+              ...h,
+              symbol,
+              name: security.name || h.name || symbol,
+              logo_url: security.logo_url || null,
+            };
+          });
         return { ...s, r_ytd, ytd_as_of_date, holdingsList };
       });
 
@@ -313,8 +361,387 @@ function InvestModal({ child, onInvest, onClose }) {
     s.name?.toLowerCase().includes(search.toLowerCase())
   );
 
+  useEffect(() => {
+    if (!selected || step !== "preview") {
+      setSelectedStrategyAnalytics(null);
+      setSelectedStrategyAnalyticsLoading(false);
+      setSelectedStrategyActiveLabel(null);
+      return;
+    }
+
+    let isMounted = true;
+    const fetchAnalytics = async () => {
+      if (!supabase) {
+        if (isMounted) setSelectedStrategyAnalytics(null);
+        return;
+      }
+
+      setSelectedStrategyAnalyticsLoading(true);
+
+      try {
+        const strategyId = selected.id || selected.strategy_id;
+        if (!strategyId) {
+          setSelectedStrategyAnalytics(null);
+          return;
+        }
+
+        const currentYear = new Date().getFullYear();
+        const yearStart = `${currentYear}-01-01`;
+        const { data: dailyReturns, error } = await supabase
+          .from("strategies_returns_c")
+          .select("strategy_id, as_of_date, \"1d_pct\"")
+          .eq("strategy_id", strategyId)
+          .gte("as_of_date", yearStart)
+          .order("as_of_date", { ascending: true });
+
+        if (error) throw error;
+
+        if (!dailyReturns || dailyReturns.length === 0) {
+          if (isMounted) setSelectedStrategyAnalytics(null);
+          return;
+        }
+
+        const cumulativeData = [];
+        let cumulative = 0;
+        dailyReturns.forEach((day) => {
+          const dailyReturn = day["1d_pct"] ? day["1d_pct"] / 100 : 0;
+          cumulative += dailyReturn;
+          cumulativeData.push({
+            d: day.as_of_date,
+            v: Number((cumulative * 100).toFixed(2)),
+          });
+        });
+
+        if (isMounted) {
+          setSelectedStrategyAnalytics({
+            strategy_id: strategyId,
+            as_of_date: dailyReturns[dailyReturns.length - 1].as_of_date,
+            curves: { YTD: cumulativeData },
+          });
+        }
+      } catch (e) {
+        console.error("[child-invest] strategy analytics", e);
+        if (isMounted) setSelectedStrategyAnalytics(null);
+      } finally {
+        if (isMounted) setSelectedStrategyAnalyticsLoading(false);
+      }
+    };
+
+    fetchAnalytics();
+    return () => {
+      isMounted = false;
+    };
+  }, [selected, step]);
+
+  const { previewChartData, previewChartDomain, previewBaseIndexValue } = useMemo(() => {
+    const previewFallbackLength = 140;
+    const curves = selectedStrategyAnalytics?.curves || {};
+    const fallbackSeries = Array.from({ length: previewFallbackLength }, (_, index) => {
+      const wave = Math.sin(index / 18) * 1.1 + Math.cos(index / 9) * 0.4;
+      const drift = (index / previewFallbackLength) * 1.6;
+      const noise = ((index % 7) - 3) * 0.03;
+      return {
+        d: new Date(Date.now() - (previewFallbackLength - index) * 86400000).toISOString(),
+        v: Number((100 + wave + drift + noise).toFixed(2)),
+      };
+    });
+
+    let series = Array.isArray(curves.YTD) && curves.YTD.length > 0 ? curves.YTD : fallbackSeries;
+    if (series.length > 1) {
+      const firstVal = series[0]?.v ?? 0;
+      const lastVal = series[series.length - 1]?.v ?? 0;
+      const firstDate = series[0]?.d ? new Date(series[0].d) : null;
+      const lastDate = series[series.length - 1]?.d ? new Date(series[series.length - 1].d) : null;
+      if (firstDate && lastDate && firstDate > lastDate) {
+        series = [...series].reverse();
+      } else if (firstVal > lastVal * 1.05) {
+        series = [...series].reverse();
+      }
+    }
+
+    const labelIndices = series.length ? [0, Math.floor(series.length / 2), series.length - 1] : [];
+    const values = series.map((point) => point?.v ?? 0);
+    const minValue = values.length ? Math.min(...values) : 0;
+    const maxValue = values.length ? Math.max(...values) : 0;
+    const padding = (maxValue - minValue) * 0.2;
+    const domain = values.length ? [minValue - padding, maxValue + padding] : [0, 0];
+    const mapped = series.map((point, index) => {
+      const date = point?.d ? new Date(point.d) : null;
+      const dateLabel = labelIndices.includes(index) && date
+        ? date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+        : "";
+      return {
+        label: index + 1,
+        dateLabel,
+        returnPct: point?.v ?? 0,
+      };
+    });
+
+    return {
+      previewChartData: mapped,
+      previewChartDomain: domain,
+      previewBaseIndexValue: values.length ? values[0] : null,
+    };
+  }, [selectedStrategyAnalytics]);
+
+  const getYtdPct = (strategy) => {
+    if (strategy?.r_ytd == null) return null;
+    const value = Number(strategy.r_ytd);
+    if (!Number.isFinite(value)) return null;
+    return Math.abs(value) > 1 ? value : value * 100;
+  };
+
+  const selectedYtdPct = getYtdPct(selected);
+  const previewChartLineColor = (selectedYtdPct ?? 0) > 0
+    ? "#16a34a"
+    : (selectedYtdPct ?? 0) < 0
+      ? "#dc2626"
+      : "#94a3b8";
+
+  const getPreviewTags = (strategy) => {
+    const tags = Array.isArray(strategy?.tags)
+      ? strategy.tags
+      : typeof strategy?.tags === "string"
+        ? strategy.tags.split(",").map((tag) => tag.trim()).filter(Boolean)
+        : [];
+    return tags.length ? tags : [strategy?.risk_level || "Balanced", strategy?.sector].filter(Boolean);
+  };
+
+  const goBackOneStep = () => {
+    setError("");
+    if (step === "amount") {
+      setStep("preview");
+      return;
+    }
+    if (step === "preview") {
+      setSelected(null);
+      setStep("browse");
+      setUnits(1);
+    }
+  };
+
+  const closePreview = () => {
+    setSelected(null);
+    setStep("browse");
+    setUnits(1);
+    setError("");
+  };
+
+  const openFactsheet = () => {
+    if (!selected || !onOpenFactsheet) return;
+    onClose();
+    onOpenFactsheet({
+      ...selected,
+      calculatedMinInvestment: selected.min_investment ? Math.round(selected.min_investment / 100) : null,
+      holdingsWithLogos: (selected.holdingsList || []).map((h) => ({
+        ...h,
+        ticker: h.ticker || h.symbol,
+        logo_url: h.logo_url || null,
+      })),
+    });
+  };
+
   const inputCls =
     "w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 placeholder-slate-400 focus:border-violet-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-100 transition";
+
+  if (selected && step === "preview") {
+    return (
+      <motion.div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 overscroll-contain"
+        style={{ paddingBottom: "calc(var(--navbar-height, 64px) + 8px)" }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
+      >
+        <button
+          type="button"
+          className="absolute inset-0 h-full w-full cursor-default"
+          aria-label="Close preview"
+          onClick={closePreview}
+        />
+        <motion.div
+          className="relative z-10 flex w-full max-w-sm flex-col overflow-hidden rounded-[32px] bg-white shadow-2xl"
+          style={{ maxHeight: "calc(90vh - var(--navbar-height, 64px) - 16px)" }}
+          initial={{ opacity: 0, scale: 0.95, y: 16 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 16 }}
+          transition={{ type: "spring", stiffness: 380, damping: 38 }}
+        >
+          <button
+            type="button"
+            onClick={closePreview}
+            className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 z-10"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+
+          <div
+            className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6"
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
+            <div className="flex items-start gap-3 mb-6">
+              <div className="flex-1">
+                <h2 className="text-lg font-semibold text-slate-900">{selected.name}</h2>
+                <p className="text-sm text-slate-500">
+                  {selected.min_investment > 0 ? `Min. ${fmt(selected.min_investment)}` : "Calculating..."}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 mb-6">
+              {selected.min_investment > 0 ? (
+                <>
+                  <p className="text-2xl font-semibold text-slate-900">{fmt(selected.min_investment)}</p>
+                  <span className="rounded-full px-2.5 py-1 text-xs font-semibold bg-slate-100 text-slate-500">
+                    Min. investment
+                  </span>
+                </>
+              ) : null}
+            </div>
+
+            <div className="mb-5">
+              <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500">
+                <span>YTD return</span>
+                <div className="flex flex-col items-end gap-1">
+                  <span className={selectedYtdPct > 0 ? "text-emerald-600" : selectedYtdPct < 0 ? "text-rose-600" : "text-slate-500"}>
+                    {selectedYtdPct != null ? `${selectedYtdPct >= 0 ? "+" : ""}${selectedYtdPct.toFixed(2)}%` : "-"}
+                  </span>
+                  {selected.ytd_as_of_date && (
+                    <span className="text-[10px] text-slate-400">
+                      {new Date(selected.ytd_as_of_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="h-44 w-full">
+                {selectedStrategyAnalyticsLoading ? (
+                  <div className="flex h-full items-end gap-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4">
+                    {[45, 65, 35, 80, 55, 70, 40, 90, 60, 50, 75, 85].map((h, i) => (
+                      <div key={i} className="flex-1 rounded-sm bg-slate-200 animate-pulse" style={{ height: `${h}%` }} />
+                    ))}
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart
+                      data={previewChartData}
+                      margin={{ top: 12, right: 16, left: 8, bottom: 28 }}
+                      onMouseMove={(state) => {
+                        if (state?.activeLabel) setSelectedStrategyActiveLabel(state.activeLabel);
+                      }}
+                      onMouseLeave={() => setSelectedStrategyActiveLabel(null)}
+                    >
+                      <defs>
+                        <linearGradient id={previewGradientId} x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor={previewChartLineColor} stopOpacity={0.25} />
+                          <stop offset="70%" stopColor={previewChartLineColor} stopOpacity={0.1} />
+                          <stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <ReferenceLine y={100} stroke="#e2e8f0" strokeDasharray="3 3" />
+                      {selectedStrategyActiveLabel ? (
+                        <>
+                          <ReferenceLine
+                            x={selectedStrategyActiveLabel}
+                            stroke="#CBD5E1"
+                            strokeOpacity={0.6}
+                            strokeDasharray="3 3"
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "#ffffff",
+                              border: "none",
+                              borderRadius: "20px",
+                              padding: "3px 8px",
+                              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                            }}
+                            labelStyle={{ display: "none" }}
+                            formatter={(value) => {
+                              if (!previewBaseIndexValue) return [`${Number(value).toFixed(2)}`, "Index"];
+                              const delta = ((Number(value) - previewBaseIndexValue) / previewBaseIndexValue) * 100;
+                              return [`${delta >= 0 ? "+" : ""}${delta.toFixed(2)}%`, "Change"];
+                            }}
+                            cursor={{ strokeDasharray: "3 3" }}
+                          />
+                        </>
+                      ) : null}
+                      <XAxis
+                        dataKey="dateLabel"
+                        tick={{ fontSize: 11, fill: "#64748b" }}
+                        axisLine={{ stroke: "#e2e8f0" }}
+                        tickLine={false}
+                        height={24}
+                      />
+                      <YAxis hide domain={previewChartDomain} />
+                      <Area
+                        type="monotone"
+                        dataKey="returnPct"
+                        stroke="transparent"
+                        fill={`url(#${previewGradientId})`}
+                        dot={false}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="returnPct"
+                        stroke={previewChartLineColor}
+                        strokeWidth={2}
+                        dot={false}
+                        activeDot={false}
+                      />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2 mb-6">
+              {getPreviewTags(selected).map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+
+            {selected.holdingsList?.length > 0 && (
+              <div className="mt-4">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Top Holdings</p>
+                <div className="mt-3 space-y-2">
+                  {selected.holdingsList.slice(0, 5).map((holding) => (
+                    <div key={holding.symbol} className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-slate-100 bg-white">
+                        {holding.logo_url ? (
+                          <img src={holding.logo_url} alt={holding.symbol} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center bg-slate-100 text-xs font-bold text-slate-600">
+                            {holding.symbol?.substring(0, 2)}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-slate-900">{holding.name || holding.symbol}</p>
+                        <p className="text-xs text-slate-500">{holding.symbol}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={openFactsheet}
+              className="mt-6 w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-4 font-semibold text-white shadow-lg transition-all active:scale-95"
+            >
+              View Factsheet
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div
@@ -336,7 +763,7 @@ function InvestModal({ child, onInvest, onClose }) {
                 <div className="flex items-center gap-3">
                   {selected && (
                     <button
-                      onClick={() => { setSelected(null); setUnits(1); setError(""); }}
+                      onClick={goBackOneStep}
                       className="h-8 w-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition active:scale-95 mr-1"
                     >
                       <ArrowLeft className="h-3.5 w-3.5" />
@@ -347,7 +774,7 @@ function InvestModal({ child, onInvest, onClose }) {
                   </div>
                   <div>
                     <p className="text-base font-bold text-slate-900">
-                      {selected ? "Invest Amount" : "Invest for " + child.first_name}
+                      {step === "amount" ? "Invest Amount" : step === "preview" ? "Strategy Preview" : "Invest for " + child.first_name}
                     </p>
                     <p className="text-xs text-slate-400">
                       {selected ? selected.name : "Choose a strategy to invest in"}
@@ -370,12 +797,14 @@ function InvestModal({ child, onInvest, onClose }) {
               </div>
 
               {/* Strategy list */}
-              {!selected && (
+              {step === "browse" && (
                 <>
                   {/* Search */}
                   <div className="relative mb-3">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                     <input
+                      id="child-strategy-search"
+                      name="child-strategy-search"
                       type="text"
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
@@ -409,13 +838,12 @@ function InvestModal({ child, onInvest, onClose }) {
                   ) : (
                     <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-0.5">
                       {filtered.map((s) => {
-                        const ytd = s.r_ytd;
-                        const ytdPct = ytd != null ? ytd * 100 : null;
+                        const ytdPct = getYtdPct(s);
                         const isUp = (ytdPct ?? 0) >= 0;
                         return (
                           <button
                             key={s.id}
-                            onClick={() => setSelected(s)}
+                            onClick={() => { setSelected(s); setStep("preview"); setUnits(1); setError(""); }}
                             className="w-full rounded-2xl border border-slate-100 bg-white shadow-sm p-4 text-left hover:shadow-md hover:border-violet-200 transition active:scale-[0.98]"
                           >
                             {/* Header row */}
@@ -423,7 +851,7 @@ function InvestModal({ child, onInvest, onClose }) {
                               <div className="flex-1 min-w-0 space-y-0.5">
                                 <p className="text-sm font-semibold text-slate-900 truncate">{s.short_name || s.name}</p>
                                 <p className="text-xs text-slate-500 line-clamp-1">
-                                  {s.risk_level || "Balanced"}{s.description ? ` â€¢ ${s.description.substring(0, 60)}${s.description.length > 60 ? "â€¦" : ""}` : ""}
+                                  {s.risk_level || "Balanced"}{s.description ? ` - ${s.description.substring(0, 60)}${s.description.length > 60 ? "..." : ""}` : ""}
                                 </p>
                                 {s.min_investment > 0 && (
                                   <p className="text-[11px] text-slate-400">Min. {fmt(s.min_investment)}</p>
@@ -471,7 +899,7 @@ function InvestModal({ child, onInvest, onClose }) {
                                     {isUp ? "+" : ""}{ytdPct.toFixed(2)}%
                                   </span>
                                 ) : (
-                                  <span className="text-xs text-slate-400">â€”</span>
+                                  <span className="text-xs text-slate-400">-</span>
                                 )}
                                 {s.ytd_as_of_date && (
                                   <span className="text-[10px] text-slate-400">
@@ -512,82 +940,6 @@ function InvestModal({ child, onInvest, onClose }) {
                 </>
               )}
 
-              {/* Amount entry (after selecting strategy) */}
-              {selected && (
-                <div className="mt-2">
-                  <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2 ml-0.5">
-                    Units to invest
-                  </label>
-
-                  {/* Unit stepper */}
-                  <div className="flex items-center justify-center gap-6 py-4 mb-3">
-                    <button
-                      type="button"
-                      onClick={() => setUnits(u => Math.max(1, u - 1))}
-                      disabled={units <= 1}
-                      className="h-12 w-12 rounded-full bg-slate-100 text-slate-700 text-2xl font-bold flex items-center justify-center transition active:scale-90 disabled:opacity-40"
-                    >−</button>
-                    <div className="text-center min-w-[60px]">
-                      <p className="text-4xl font-bold text-slate-900 tabular-nums">{units}</p>
-                      <p className="text-[11px] text-slate-400 mt-0.5">unit{units !== 1 ? "s" : ""}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setUnits(u => u + 1)}
-                      className="h-12 w-12 rounded-full bg-violet-600 text-white text-2xl font-bold flex items-center justify-center transition active:scale-90"
-                    >+</button>
-                  </div>
-
-                  {/* Price breakdown */}
-                  <div className="flex items-center justify-center gap-1.5 text-sm mb-5 text-slate-500">
-                    <span className="font-semibold text-slate-700">{fmt(minInvCents)}</span>
-                    <span>×</span>
-                    <span className="font-semibold text-slate-700">{units}</span>
-                    <span>=</span>
-                    <span className="font-bold text-violet-700 text-base">{fmt(amountCents)}</span>
-                  </div>
-
-                  {/* Strategy info */}
-                  <div className="rounded-xl bg-slate-50 border border-slate-100 p-3.5 mb-4">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Investment Summary</p>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-500">Strategy</span>
-                      <span className="font-semibold text-slate-800">{selected.name}</span>
-                    </div>
-                    <div className="flex justify-between text-sm mt-1">
-                      <span className="text-slate-500">Amount</span>
-                      <span className="font-bold text-slate-900">R{numAmount.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm mt-1">
-                      <span className="text-slate-500">From</span>
-                      <span className="font-semibold text-slate-800">{child.first_name}'s wallet</span>
-                    </div>
-                  </div>
-
-                  {insufficient && (
-                    <div className="flex items-start gap-2 rounded-xl bg-purple-50 px-4 py-3 border border-purple-100 mb-3">
-                      <AlertCircle className="h-3.5 w-3.5 text-purple-500 mt-0.5 flex-shrink-0" />
-                      <p className="text-xs text-purple-600">Insufficient balance. Transfer funds first.</p>
-                    </div>
-                  )}
-
-                  {error && (
-                    <div className="flex items-start gap-2 rounded-xl bg-red-50 px-4 py-3 border border-red-100 mb-3">
-                      <X className="h-3.5 w-3.5 text-red-400 mt-0.5 flex-shrink-0" />
-                      <p className="text-xs text-red-500">{error}</p>
-                    </div>
-                  )}
-
-                  <button
-                    onClick={handleInvest}
-                    disabled={saving || numAmount <= 0 || insufficient}
-                    className="w-full rounded-xl py-3.5 text-sm font-bold text-white transition active:scale-[0.98] disabled:opacity-50"
-                    style={{ background: "linear-gradient(135deg,#1e1b4b,#312e81)" }}
-                  >
-                    {saving ? "Investingâ€¦" : `Invest R${numAmount.toFixed(2)}`}
-                  </button>
-                </div>
-              )}
             </>
           ) : (
             <motion.div
@@ -620,7 +972,7 @@ function InvestModal({ child, onInvest, onClose }) {
 
 
 
-// â”€â”€â”€ TransactionRow â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- TransactionRow ----------------------------------------------------------
 
 function TransactionRow({ tx }) {
   const isCredit = tx.direction === "credit";
@@ -643,7 +995,7 @@ function TransactionRow({ tx }) {
   );
 }
 
-// â”€â”€â”€ CompleteProfileModal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- CompleteProfileModal ----------------------------------------------------
 
 
 function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
@@ -692,7 +1044,7 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
       if (!child.poa_declaration_url) { setStep("poa"); }
       else if (!child.signed_agreement_url) { setStep("agreement"); }
       else {
-        // All steps already done â€” mark address_completed
+        // All steps already done - mark address_completed
         await fetch(`/api/family-members/${child.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -725,11 +1077,11 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
           bin += String.fromCharCode.apply(null, uint8.subarray(i, i + CHUNK));
         }
         const pdfBase64 = btoa(bin);
-        const res = await fetch("/api/onboarding/upload-agreement", {
+        const res = await fetchWithTimeout("/api/onboarding/upload-agreement", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({ pdfBase64, subjectId: child.id }),
-        });
+        }, 45000, "Upload is taking too long. Please check your connection and retry.");
         const j = await res.json();
         if (!res.ok || !j.publicUrl) {
           throw new Error(j?.error || "Failed to upload proof of address.");
@@ -738,22 +1090,25 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
       } else if (fileUpload && supabase) {
         const safeName = fileUpload.name.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9._-]/g, "");
         const path = `poa/${child.id}/${Date.now()}-${safeName}`;
-        const { error: upErr } = await supabase.storage
-          .from("birth-certificates").upload(path, fileUpload, { upsert: true });
+        const { error: upErr } = await withTimeout(
+          supabase.storage.from("birth-certificates").upload(path, fileUpload, { upsert: true }),
+          45000,
+          "Document upload is taking too long. Please check your connection and retry."
+        );
         if (upErr) {
           throw new Error(upErr.message || "Failed to upload proof document.");
         }
         poaUrl = `storage://birth-certificates/${path}`;
       }
       if (poaUrl) {
-        const patchRes = await fetch(`/api/family-members/${child.id}`, {
+        const patchRes = await fetchWithTimeout(`/api/family-members/${child.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             poa_declaration_url: poaUrl,
             address_completed: true,
           }),
-        });
+        }, 30000, "Saving proof of address is taking too long. Please retry.");
         if (!patchRes.ok) {
           const patchJson = await patchRes.json().catch(() => ({}));
           throw new Error(patchJson?.error || "Failed to save proof of address.");
@@ -784,21 +1139,21 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
         bin += String.fromCharCode.apply(null, uint8.subarray(i, i + CHUNK));
       }
       const pdfBase64 = btoa(bin);
-      const uploadRes = await fetch("/api/onboarding/upload-agreement", {
+      const uploadRes = await fetchWithTimeout("/api/onboarding/upload-agreement", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ pdfBase64, subjectId: child.id }),
-      });
+      }, 45000, "Upload is taking too long. Please check your connection and retry.");
       const uploadJson = await uploadRes.json();
       if (!uploadRes.ok || !uploadJson.publicUrl) {
         throw new Error(uploadJson?.error || "Failed to upload signed agreement.");
       }
 
-      const patchRes = await fetch(`/api/family-members/${child.id}`, {
+      const patchRes = await fetchWithTimeout(`/api/family-members/${child.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ signed_agreement_url: uploadJson.publicUrl, signed_at: signedAt, address_completed: true }),
-      });
+      }, 30000, "Saving signed agreement is taking too long. Please retry.");
       if (!patchRes.ok) {
         const patchJson = await patchRes.json().catch(() => ({}));
         throw new Error(patchJson?.error || "Failed to save signed agreement.");
@@ -843,7 +1198,7 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
               <div>
                 <p className="text-base font-bold text-slate-900">Complete Profile</p>
                 <p className="text-xs text-slate-400">
-                  {step === "id" ? "Step 1 â€” ID number" :
+                  {step === "id" ? "Step 1 - ID number" :
                    step === "poa" ? "Proof of address" :
                    "Responsibility agreement"}
                 </p>
@@ -865,6 +1220,8 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
                 Please provide <strong>{childName}'s</strong> SA ID number to complete their profile.
               </p>
               <input
+                id="child-id-number"
+                name="child-id-number"
                 type="text"
                 inputMode="numeric"
                 maxLength={13}
@@ -882,7 +1239,7 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
                 className="w-full rounded-xl py-3.5 text-sm font-bold text-white transition active:scale-[0.98] disabled:opacity-50"
                 style={{ background: "linear-gradient(135deg,#1e1b4b,#312e81)" }}
               >
-                {saving ? "Savingâ€¦" : "Save & Continue"}
+                {saving ? "Saving..." : "Save & Continue"}
               </button>
             </div>
           )}
@@ -917,11 +1274,9 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
   );
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// â”€â”€â”€ Main Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// --- Main Page ---------------------------------------------------------------
 
-export default function ChildDashboardPage({ child: initialChild, onBack }) {
+export default function ChildDashboardPage({ child: initialChild, onBack, onOpenFactsheet }) {
   const { profile } = useProfile();
   const isMounted = useRef(true);
   const [child, setChild] = useState(initialChild);
@@ -935,6 +1290,12 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
   const [openingTransfer, setOpeningTransfer] = useState(false);
   const [showInvest, setShowInvest] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [showGoalsModal, setShowGoalsModal] = useState(false);
+  const [goals, setGoals] = useState([]);
+  const [loadingGoals, setLoadingGoals] = useState(false);
+  const [isCreatingGoal, setIsCreatingGoal] = useState(false);
+  const [editingGoalId, setEditingGoalId] = useState(null);
+  const [newGoal, setNewGoal] = useState({ name: "", target_amount: "", target_date: "" });
 
   const childName = [child?.first_name, child?.last_name].filter(Boolean).join(" ") || "Child";
   const age = getAge(child?.date_of_birth);
@@ -961,6 +1322,12 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
     fetchAll();
     return () => { isMounted.current = false; };
   }, [child?.id]);
+
+  useEffect(() => {
+    if (showGoalsModal && child?.id) {
+      fetchGoals();
+    }
+  }, [showGoalsModal, child?.id]);
 
   async function fetchAll() {
     setLoading(true);
@@ -991,14 +1358,36 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
   async function fetchHoldings() {
     try {
       if (!supabase) return;
-      const { data, error } = await supabase
+      const linkedUserId = child?.linked_user_id || null;
+      const familyHoldingsQuery = supabase
         .from("stock_holdings_c")
-        .select("id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id")
+        .select("id, user_id, family_member_id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id")
         .eq("family_member_id", child.id)
         .eq("Status", "active")
         .order("market_value", { ascending: false });
-      if (error) { console.error("[child-dash] holdings query error", error); return; }
-      const baseRows = data || [];
+      const linkedHoldingsQuery = linkedUserId
+        ? supabase
+            .from("stock_holdings_c")
+            .select("id, user_id, family_member_id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id")
+            .eq("user_id", linkedUserId)
+            .eq("Status", "active")
+            .order("market_value", { ascending: false })
+        : Promise.resolve({ data: [], error: null });
+
+      const [familyHoldingsRes, linkedHoldingsRes] = await Promise.all([
+        familyHoldingsQuery,
+        linkedHoldingsQuery,
+      ]);
+
+      if (familyHoldingsRes.error) { console.error("[child-dash] family holdings query error", familyHoldingsRes.error); return; }
+      if (linkedHoldingsRes.error) { console.error("[child-dash] linked holdings query error", linkedHoldingsRes.error); return; }
+
+      const rowsById = new Map();
+      [...(familyHoldingsRes.data || []), ...(linkedHoldingsRes.data || [])].forEach((row) => {
+        if (row?.id) rowsById.set(row.id, row);
+      });
+      const baseRows = Array.from(rowsById.values())
+        .sort((a, b) => Number(b.market_value || 0) - Number(a.market_value || 0));
 
       // Enrich with security info (symbol/name/logo_url live on securities_c)
       const securityIds = [...new Set(baseRows.map(h => h.security_id).filter(Boolean))];
@@ -1063,14 +1452,34 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
   async function fetchTransactions() {
     try {
       if (!supabase) return;
-      const { data, error } = await supabase
+      const linkedUserId = child?.linked_user_id || null;
+      const familyTxQuery = supabase
         .from("transactions")
-        .select("id, name, direction, amount, description, created_at")
+        .select("id, user_id, family_member_id, name, direction, amount, description, created_at, transaction_date")
         .eq("family_member_id", child.id)
         .order("created_at", { ascending: false })
         .limit(10);
-      if (error) { console.error("[child-dash] txns query error", error); return; }
-      if (isMounted.current) setTransactions(data || []);
+      const linkedTxQuery = linkedUserId
+        ? supabase
+            .from("transactions")
+            .select("id, user_id, family_member_id, name, direction, amount, description, created_at, transaction_date")
+            .eq("user_id", linkedUserId)
+            .order("created_at", { ascending: false })
+            .limit(10)
+        : Promise.resolve({ data: [], error: null });
+
+      const [familyTxRes, linkedTxRes] = await Promise.all([familyTxQuery, linkedTxQuery]);
+      if (familyTxRes.error) { console.error("[child-dash] family txns query error", familyTxRes.error); return; }
+      if (linkedTxRes.error) { console.error("[child-dash] linked txns query error", linkedTxRes.error); return; }
+
+      const txById = new Map();
+      [...(familyTxRes.data || []), ...(linkedTxRes.data || [])].forEach((tx) => {
+        if (tx?.id) txById.set(tx.id, tx);
+      });
+      const mergedTransactions = Array.from(txById.values())
+        .sort((a, b) => new Date(b.created_at || b.transaction_date || 0) - new Date(a.created_at || a.transaction_date || 0))
+        .slice(0, 10);
+      if (isMounted.current) setTransactions(mergedTransactions);
     } catch (e) { console.error("[child-dash] txns", e); }
   }
 
@@ -1091,6 +1500,126 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
     }
     fetchHoldings();
     fetchTransactions();
+  }
+
+  async function fetchGoals() {
+    if (!child?.id) return;
+    setLoadingGoals(true);
+    try {
+      let query = supabase
+        .from("investment_goals")
+        .select("id, name, target_amount, current_amount, is_active, target_date")
+        .eq("family_member_id", child.id)
+        .eq("is_active", true)
+        .order("created_at", { ascending: false });
+
+      if (profile?.id) query = query.eq("user_id", profile.id);
+
+      const { data, error } = await query;
+      if (error) throw error;
+      if (isMounted.current) setGoals(data || []);
+    } catch (error) {
+      console.error("[child-dash] goal fetch error", error);
+      if (isMounted.current) setGoals([]);
+    } finally {
+      if (isMounted.current) setLoadingGoals(false);
+    }
+  }
+
+  function resetGoalForm() {
+    setNewGoal({ name: "", target_amount: "", target_date: "" });
+    setEditingGoalId(null);
+    setIsCreatingGoal(false);
+  }
+
+  function closeGoalsModal() {
+    setShowGoalsModal(false);
+    resetGoalForm();
+  }
+
+  function handleEditClick(goal) {
+    setNewGoal({
+      name: goal.name,
+      target_amount: goal.target_amount,
+      target_date: goal.target_date || "",
+    });
+    setEditingGoalId(goal.id);
+    setIsCreatingGoal(true);
+    setShowGoalsModal(true);
+  }
+
+  async function handleCreateGoal(e) {
+    e.preventDefault();
+    if (!newGoal.name || !newGoal.target_amount || !child?.id || !profile?.id) return;
+
+    setLoadingGoals(true);
+    try {
+      const { error } = await supabase.from("investment_goals").insert({
+        user_id: profile.id,
+        family_member_id: child.id,
+        name: newGoal.name,
+        target_amount: parseFloat(newGoal.target_amount),
+        target_date: newGoal.target_date || null,
+        current_amount: 0,
+        is_active: true,
+      });
+
+      if (error) throw error;
+
+      setNewGoal({ name: "", target_amount: "", target_date: "" });
+      setIsCreatingGoal(false);
+      fetchGoals();
+    } catch (error) {
+      console.error("[child-dash] goal create error", error);
+    } finally {
+      setLoadingGoals(false);
+    }
+  }
+
+  async function handleUpdateGoal(e) {
+    e.preventDefault();
+    if (!editingGoalId) return;
+
+    setLoadingGoals(true);
+    try {
+      const updatePayload = {
+        name: newGoal.name,
+        target_amount: parseFloat(newGoal.target_amount),
+        target_date: newGoal.target_date || null,
+      };
+      const { error } = await supabase
+        .from("investment_goals")
+        .update(updatePayload)
+        .eq("id", editingGoalId)
+        .eq("family_member_id", child.id);
+
+      if (error) throw error;
+      resetGoalForm();
+      fetchGoals();
+    } catch (error) {
+      console.error("[child-dash] goal update error", error);
+    } finally {
+      setLoadingGoals(false);
+    }
+  }
+
+  async function handleDeleteGoal(goalId) {
+    if (!window.confirm("Are you sure you want to delete this goal?")) return;
+    setLoadingGoals(true);
+    try {
+      const { error } = await supabase
+        .from("investment_goals")
+        .delete()
+        .eq("id", goalId)
+        .eq("family_member_id", child.id);
+      if (error) throw error;
+      resetGoalForm();
+      fetchGoals();
+    } catch (error) {
+      console.error("[child-dash] goal delete error", error);
+    } finally {
+      setLoadingGoals(false);
+    }
   }
 
   // market_value and avg_fill are stored in rands; convert to cents for fmt
@@ -1140,7 +1669,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
         backgroundAttachment: "fixed",
       }}
     >
-      {/* â”€â”€ Header â”€â”€ */}
+      {/* -- Header -- */}
       <div className="px-4 pt-12 pb-6">
         <div className="mx-auto w-full max-w-sm md:max-w-md">
           <div className="flex items-center gap-3">
@@ -1168,7 +1697,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
       <div className="mx-auto w-full max-w-sm px-4 pb-12 md:max-w-md">
         <motion.div variants={container} initial="hidden" animate="show" className="space-y-4">
 
-          {/* â”€â”€ Incomplete profile banner â”€â”€ */}
+          {/* -- Incomplete profile banner -- */}
           {isProfileIncomplete && (
             <motion.div variants={item}>
               <button
@@ -1197,7 +1726,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
                 { label: "Learn", icon: BookOpen, onClick: null, comingSoon: true },
                 { label: "Invest", icon: LayoutGrid, onClick: () => setShowInvest(true) },
                 { label: "Deposit", icon: ArrowDownToLine, onClick: openTransferModal, disabled: openingTransfer },
-                { label: "Goals", icon: Target, onClick: null, comingSoon: true },
+                { label: "Goals", icon: Target, onClick: () => setShowGoalsModal(true) },
               ].map((btn, i) => {
                 const Icon = btn.icon;
                 return (
@@ -1220,7 +1749,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
                     <span className={`text-center leading-tight font-medium ${
                       btn.comingSoon ? "text-slate-400" : "text-slate-700"
                     }`}>
-                      {btn.disabled && !btn.comingSoon ? "Loading…" : btn.label}
+                      {btn.disabled && !btn.comingSoon ? "Loading..." : btn.label}
                     </span>
                     {btn.comingSoon && (
                       <span className="absolute bottom-1.5 left-1/2 -translate-x-1/2 inline-flex items-center px-1.5 py-px rounded-full text-[7px] font-bold uppercase tracking-wider text-white" style={{ background: "linear-gradient(90deg,#7c3aed,#a855f7)" }}>Soon</span>
@@ -1231,7 +1760,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
             </div>
           </motion.div>
 
-          {/* â”€â”€ Strategy Holdings â”€â”€ */}
+          {/* -- Strategy Holdings -- */}
           <motion.div variants={item}>
             <div className="flex items-center gap-2 mb-3 px-1">
               <div className="h-2 w-2 rounded-full bg-slate-300" />
@@ -1317,7 +1846,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
             )}
           </motion.div>
 
-          {/* â”€â”€ Best Performing Assets â”€â”€ */}
+          {/* -- Best Performing Assets -- */}
           {bestAssets.length > 0 && (
             <motion.div variants={item}>
               <div className="flex items-center gap-2 mb-3 px-1">
@@ -1355,7 +1884,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
             </motion.div>
           )}
 
-          {/* â”€â”€ Recent Activity â”€â”€ */}
+          {/* -- Recent Activity -- */}
           <motion.div variants={item}>
             <div className="flex items-center gap-2 mb-3 px-1">
               <div className="h-2 w-2 rounded-full bg-slate-300" />
@@ -1377,7 +1906,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
             )}
           </motion.div>
 
-          {/* â”€â”€ Account Info â”€â”€ */}
+          {/* -- Account Info -- */}
           <motion.div variants={item}>
             <div className="flex items-center gap-2 mb-3 px-1">
               <div className="h-2 w-2 rounded-full bg-slate-300" />
@@ -1441,7 +1970,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
         </motion.div>
       </div>
 
-      {/* â”€â”€ Modals â”€â”€ */}
+      {/* -- Modals -- */}
       <AnimatePresence>
         {showTransfer && (
           <TransferModal
@@ -1459,6 +1988,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
             child={child}
             onInvest={handleInvestDone}
             onClose={() => setShowInvest(false)}
+            onOpenFactsheet={onOpenFactsheet}
           />
         )}
       </AnimatePresence>
@@ -1472,6 +2002,168 @@ export default function ChildDashboardPage({ child: initialChild, onBack }) {
           />
         )}
       </AnimatePresence>
+      {showGoalsModal && (
+        <div className="fixed inset-0 z-[950] flex items-end justify-center bg-slate-900/60 px-4 pb-20 sm:items-center sm:pb-0">
+          <button
+            type="button"
+            className="absolute inset-0 h-full w-full cursor-default backdrop-blur-sm"
+            aria-label="Close modal"
+            onClick={closeGoalsModal}
+          />
+          <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-[32px] bg-white shadow-2xl animate-in slide-in-from-bottom duration-300">
+            <div className="flex items-center justify-center pt-3">
+              <div className="h-1.5 w-12 rounded-full bg-slate-200" />
+            </div>
+            <div className="p-6">
+              <header className="mb-6 flex items-center justify-between">
+                <h2 className="text-xl font-bold text-slate-900">
+                  {editingGoalId ? "Edit Goal" : (isCreatingGoal || goals.length === 0) ? "New Goal" : "Your Goals"}
+                </h2>
+                <button
+                  type="button"
+                  onClick={closeGoalsModal}
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-50 text-slate-400"
+                  aria-label="Close"
+                >
+                  <X size={20} />
+                </button>
+              </header>
+
+              <div className="max-h-[60vh] overflow-y-auto pr-1">
+                {loadingGoals ? (
+                  <div className="space-y-4">
+                    {[0, 1].map((i) => (
+                      <div key={i} className="rounded-2xl border border-slate-100 p-4 space-y-3">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-48" />
+                        <Skeleton className="h-2 w-full rounded-full" />
+                      </div>
+                    ))}
+                  </div>
+                ) : isCreatingGoal || editingGoalId || goals.length === 0 ? (
+                  <form onSubmit={editingGoalId ? handleUpdateGoal : handleCreateGoal} className="space-y-4">
+                    <div>
+                      <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">Goal Name</label>
+                      <input
+                        id="child-goal-name"
+                        name="child-goal-name"
+                        type="text"
+                        placeholder="e.g. New Car, Holiday"
+                        value={newGoal.name}
+                        onChange={(e) => setNewGoal(prev => ({ ...prev, name: e.target.value }))}
+                        className="w-full rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">Target Amount (R)</label>
+                      <input
+                        id="child-goal-target"
+                        name="child-goal-target"
+                        type="number"
+                        placeholder="0.00"
+                        value={newGoal.target_amount}
+                        onChange={(e) => setNewGoal(prev => ({ ...prev, target_amount: e.target.value }))}
+                        className="w-full rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">Target Date (Optional)</label>
+                      <input
+                        id="child-goal-date"
+                        name="child-goal-date"
+                        type="date"
+                        value={newGoal.target_date}
+                        onChange={(e) => setNewGoal(prev => ({ ...prev, target_date: e.target.value }))}
+                        className="w-full rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-3 pt-2">
+                      <button
+                        type="submit"
+                        disabled={loadingGoals}
+                        className="w-full rounded-2xl bg-[#31005e] py-4 font-bold uppercase tracking-widest text-white shadow-lg transition-active active:scale-95"
+                      >
+                        {editingGoalId ? "Update Goal" : "Save Goal"}
+                      </button>
+                      {editingGoalId && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteGoal(editingGoalId)}
+                          className="w-full rounded-2xl bg-rose-50 py-4 text-xs font-bold uppercase tracking-widest text-rose-600 transition-active active:scale-95"
+                        >
+                          Delete Goal
+                        </button>
+                      )}
+                      {goals.length > 0 && !editingGoalId && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsCreatingGoal(false);
+                            setNewGoal({ name: "", target_amount: "", target_date: "" });
+                          }}
+                          className="w-full rounded-2xl border border-slate-200 py-3 text-sm font-semibold text-slate-600"
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+                  </form>
+                ) : (
+                  <div className="space-y-4">
+                    {goals.map((goal) => {
+                      const progress = goal.target_amount > 0
+                        ? Math.min(100, ((goal.current_amount || 0) / goal.target_amount) * 100)
+                        : 0;
+                      const left = Math.max(0, (goal.target_amount || 0) - (goal.current_amount || 0));
+                      return (
+                        <div key={goal.id} className="group relative rounded-3xl border border-slate-100 bg-white p-5 shadow-sm transition-all hover:shadow-md">
+                          <div className="mb-3 flex items-start justify-between">
+                            <div>
+                              <h3 className="font-bold text-slate-900">{goal.name}</h3>
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                Target: R{Number(goal.target_amount).toLocaleString()}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleEditClick(goal)}
+                              className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-50 text-slate-400 hover:bg-violet-50 hover:text-violet-600"
+                            >
+                              <FileSignature size={18} />
+                            </button>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
+                              <span className="text-violet-600">{Math.round(progress)}% Complete</span>
+                              <span className="text-slate-300">R{left.toLocaleString()} Left</span>
+                            </div>
+                            <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-gradient-to-r from-violet-600 to-purple-500 rounded-full transition-all duration-1000"
+                                style={{ width: `${progress}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => setIsCreatingGoal(true)}
+                      className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-200 py-4 text-sm font-bold text-slate-400 transition-all hover:border-violet-300 hover:bg-violet-50 active:scale-95"
+                    >
+                      <Plus size={18} />
+                      <span>Add New Goal</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

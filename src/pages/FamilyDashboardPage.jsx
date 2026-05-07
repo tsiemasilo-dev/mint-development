@@ -1109,14 +1109,16 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
   async function fetchPortfolio(membersList = members) {
     if (!userId) return;
     const spouseUserIds = membersList.filter(m => m.relationship === "spouse" && m.linked_user_id).map(m => m.linked_user_id);
+    const childLinkedUserIds = membersList.filter(m => m.relationship === "child" && m.linked_user_id).map(m => m.linked_user_id);
     const childMemberIds = membersList.filter(m => m.relationship === "child").map(m => m.id);
-    const allUserIds = [userId, ...spouseUserIds];
+    const holdingsUserIds = [userId, ...spouseUserIds, ...childLinkedUserIds];
+    const walletUserIds = [userId, ...spouseUserIds];
     
     try {
       const [holdingsRes, childHoldingsRes, walletRes, childWalletRes] = await Promise.all([
-        supabase.from("stock_holdings_c").select("user_id, security_id, quantity, avg_fill").in("user_id", allUserIds).eq("Status", "active"),
+        supabase.from("stock_holdings_c").select("user_id, family_member_id, security_id, quantity, avg_fill").in("user_id", holdingsUserIds).is("family_member_id", null).eq("Status", "active"),
         supabase.from("stock_holdings_c").select("family_member_id, security_id, quantity, avg_fill").in("family_member_id", childMemberIds).eq("Status", "active"),
-        supabase.from("wallets").select("user_id, balance").in("user_id", allUserIds),
+        supabase.from("wallets").select("user_id, balance").in("user_id", walletUserIds),
         childMemberIds.length
           ? supabase.from("family_members").select("id, available_balance").in("id", childMemberIds)
           : Promise.resolve({ data: [] }),
@@ -1189,7 +1191,10 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
           const sWallet = wallets.find(w => w.user_id === m.linked_user_id);
           balances[m.id] = sHoldings.reduce((s, h) => s + marketValueCents(h), 0) + Math.round((sWallet?.balance || 0) * 100);
         } else if (m.relationship === "child") {
-          const cHoldings = childHoldings.filter(h => h.family_member_id === m.id);
+          const cHoldings = [
+            ...childHoldings.filter(h => h.family_member_id === m.id),
+            ...(m.linked_user_id ? holdings.filter(h => h.user_id === m.linked_user_id) : []),
+          ];
           balances[m.id] = cHoldings.reduce((s, h) => s + marketValueCents(h), 0) + (childBalanceCentsMap[m.id] || 0);
         }
       });
