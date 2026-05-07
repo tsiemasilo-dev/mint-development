@@ -1,0 +1,45 @@
+index-CL9PUNOc.js:64 [realtime-prices] Setting up singleton subscription
+index-CL9PUNOc.js:64 Setting up SINGLETON notifications subscription
+index-CL9PUNOc.js:64 Setting up SINGLETON real-time subscription: required-actions-singleton
+index-CL9PUNOc.js:64 KYC status check: stored="verified" current="verified"
+index-CL9PUNOc.js:64 [useOnboardingStatus] Total Onboarding Status: COMPLETE ✅ Object
+index-CL9PUNOc.js:64 [useFinancialData] Updated balance from DB: 112894.15
+index-CL9PUNOc.js:64 [realtime-prices] Subscription status: SUBSCRIBED
+index-CL9PUNOc.js:64 Notifications singleton status: SUBSCRIBED
+index-CL9PUNOc.js:64 Singleton subscription status: SUBSCRIBED
+index-CL9PUNOc.js:64 [realtime-prices] Tearing down subscription
+index-CL9PUNOc.js:64 [realtime-prices] Subscription status: CLOSED
+index-CL9PUNOc.js:105 [SwipeableBalanceCard] Loaded holdings: Object
+/api/banking/initiate:1  Failed to load resource: the server responded with a status of 405 ()
+index-CL9PUNOc.js:110 Error: <!DOCTYPE html><html><head><title>UnsupportedHttpVerb</title></head><body><h1>The resource doesn't support specified Http Verb.</h1><p><ul><li>HttpStatusCode: 405</li><li>ErrorCode: UnsupportedHttpVerb</li><li>RequestId : 3b9f45b6-801e-0050-0386-dc6ac7000000</li><li>TimeStamp : 2026-05-05T11:56:41.1399108Z</li></ul></p></body></html>
+    at p (index-CL9PUNOc.js:110:70674)
+p @ index-CL9PUNOc.js:110
+index-CL9PUNOc.js:110  POST https://mint-development.vercel.app/api/banking/initiate 405 (Method Not Allowed)
+p @ index-CL9PUNOc.js:110
+await in p
+Vn @ index-CL9PUNOc.js:5
+ot @ index-CL9PUNOc.js:5
+Nt @ index-CL9PUNOc.js:5
+If @ index-CL9PUNOc.js:5
+Df @ index-CL9PUNOc.js:5
+(anonymous) @ index-CL9PUNOc.js:5
+Q5 @ index-CL9PUNOc.js:8
+zt @ index-CL9PUNOc.js:5
+Rf @ index-CL9PUNOc.js:5
+nu @ index-CL9PUNOc.js:5
+uh @ index-CL9PUNOc.js:5
+index-CL9PUNOc.js:110 Error: <!DOCTYPE html><html><head><title>UnsupportedHttpVerb</title></head><body><h1>The resource doesn't support specified Http Verb.</h1><p><ul><li>HttpStatusCode: 405</li><li>ErrorCode: UnsupportedHttpVerb</li><li>RequestId : 8fda1e53-701e-006b-4686-dc2f63000000</li><li>TimeStamp : 2026-05-05T11:57:23.3543791Z</li></ul></p></body></html>
+    at p (index-CL9PUNOc.js:110:70674)
+p @ index-CL9PUNOc.js:110
+await in p
+Vn @ index-CL9PUNOc.js:5
+ot @ index-CL9PUNOc.js:5
+Nt @ index-CL9PUNOc.js:5
+If @ index-CL9PUNOc.js:5
+Df @ index-CL9PUNOc.js:5
+(anonymous) @ index-CL9PUNOc.js:5
+Q5 @ index-CL9PUNOc.js:8
+zt @ index-CL9PUNOc.js:5
+Rf @ index-CL9PUNOc.js:5
+nu @ index-CL9PUNOc.js:5
+uh @ index-CL9PUNOc.js:5

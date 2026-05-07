@@ -14,5 +14,10 @@ export const supabase = supabaseUrl && supabaseAnonKey
       realtime: {
         timeout: 40000,
       },
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: false,
+      },
     })
   : null;
