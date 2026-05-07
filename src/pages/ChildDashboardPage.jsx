@@ -1361,14 +1361,14 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
       const linkedUserId = child?.linked_user_id || null;
       const familyHoldingsQuery = supabase
         .from("stock_holdings_c")
-        .select("id, user_id, family_member_id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id, fill_date, settlement_status, Status")
+        .select("id, user_id, family_member_id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id, Fill_date, settlement_status, Status")
         .eq("family_member_id", child.id)
         .eq("Status", "active")
         .order("market_value", { ascending: false });
       const linkedHoldingsQuery = linkedUserId
         ? supabase
             .from("stock_holdings_c")
-            .select("id, user_id, family_member_id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id, fill_date, settlement_status, Status")
+            .select("id, user_id, family_member_id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id, Fill_date, settlement_status, Status")
             .eq("user_id", linkedUserId)
             .eq("Status", "active")
             .order("market_value", { ascending: false })
@@ -1636,7 +1636,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
 
   const strategyCards = Object.entries(strategyGroups).map(([sid, hs]) => {
     const strat = strategyMap[sid] || {};
-    const isFilling = hs.some((h) => !Number(h.avg_fill || 0) || !h.fill_date);
+    const isFilling = hs.some((h) => !Number(h.avg_fill || 0) || !h.Fill_date);
     const totalValueCents = isFilling ? 0 : hs.reduce((s, h) => s + Math.round((h.market_value || 0) * 100), 0);
     const totalCostCents = isFilling ? 0 : hs.reduce((s, h) => s + Math.round(Number(h.avg_fill || 0) * Number(h.quantity || 0) * 100), 0);
     const pnlCents = totalValueCents - totalCostCents;
@@ -1646,7 +1646,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
 
   // Best performing individual assets (top 5 by unrealized_pnl %)
   const bestAssets = [...holdings]
-    .filter(h => h.symbol && h.market_value > 0 && Number(h.avg_fill || 0) > 0 && h.fill_date)
+    .filter(h => h.symbol && h.market_value > 0 && Number(h.avg_fill || 0) > 0 && h.Fill_date)
     .map(h => {
       const costRands = Number(h.avg_fill || 0) * Number(h.quantity || 0);
       const marketRands = h.market_value || 0;
