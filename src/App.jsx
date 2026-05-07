@@ -1535,6 +1535,7 @@ const App = () => {
             console.log("Payment successful:", response);
             const goalId = selectedGoalIdRef.current;
             const goalAmount = goalInvestAmountRef.current;
+            const linkedAssetName = stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock";
             if (goalId && supabase) {
               try {
                 const { data: { session } } = await supabase.auth.getSession();
@@ -1551,7 +1552,10 @@ const App = () => {
                     const progress = goal.target_amount > 0 ? Math.min(100, (newInvested / goal.target_amount) * 100) : 0;
                     const { error: updateErr } = await supabase
                       .from("investment_goals")
-                      .update({ current_amount: newInvested })
+                      .update({
+                        current_amount: newInvested,
+                        linked_asset_name: linkedAssetName,
+                      })
                       .eq("id", goalId);
                     if (updateErr) {
                       console.error("Goal update failed:", updateErr);
@@ -1783,6 +1787,7 @@ const App = () => {
             console.log("Payment successful:", response);
             const goalId = selectedGoalIdRef.current;
             const goalAmount = goalInvestAmountRef.current;
+            const linkedAssetName = selectedStrategy?.name || "Strategy";
             if (goalId && supabase) {
               try {
                 const { data: { session } } = await supabase.auth.getSession();
@@ -1799,7 +1804,10 @@ const App = () => {
                     const progress = goal.target_amount > 0 ? Math.min(100, (newInvested / goal.target_amount) * 100) : 0;
                     const { error: updateErr } = await supabase
                       .from("investment_goals")
-                      .update({ current_amount: newInvested })
+                      .update({
+                        current_amount: newInvested,
+                        linked_asset_name: linkedAssetName,
+                      })
                       .eq("id", goalId);
                     if (updateErr) {
                       console.error("Goal update failed:", updateErr);
