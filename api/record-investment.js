@@ -304,10 +304,8 @@ export default async function handler(req, res) {
       // Do not scale component shares by investment amount.
 
       const now = new Date().toISOString();
-      const today = now.split("T")[0];
       const insertedHoldings = [];
       const skippedSymbols = [];
-      const shouldDeferChildStrategyFill = Boolean(targetFamilyMemberId);
 
       for (const holding of strategyHoldings) {
         const sec = secBySymbol[holding.symbol];
@@ -325,40 +323,10 @@ export default async function handler(req, res) {
 
         const holdingQty = Math.floor(rawHoldingQty);
 
-        const priceCents = Number(sec.last_price || 0);
-        if (priceCents <= 0) {
-          console.warn("[record-investment] No price found for:", holding.symbol);
-          skippedSymbols.push(holding.symbol);
-          continue;
-        }
-
-        if (shouldDeferChildStrategyFill) {
-          const { error: insertErr } = await db.from("stock_holdings_c").insert({
-            user_id: targetUserId,
-            family_member_id: targetFamilyMemberId,
-            security_id: sec.id,
-            strategy_id: strategyId,
-            quantity: holdingQty,
-            avg_fill: null,
-            market_value: 0,
-            unrealized_pnl: 0,
-            as_of_date: null,
-            Status: "active",
-          });
-
-          if (insertErr) {
-            console.error("[record-investment] Failed to insert pending child holding for", holding.symbol, insertErr.message);
-            return res.status(500).json({ success: false, error: `Failed to record pending child holding for ${holding.symbol}` });
-          }
-
-          insertedHoldings.push({ symbol: holding.symbol, quantity: holdingQty, priceCents: null, pendingFill: true });
-          continue;
-        }
-
         const holdingsLookupQuery = withFamilyMemberFilter(
           db
             .from("stock_holdings_c")
-            .select("id, quantity, avg_fill")
+            .select("id, quantity")
             .eq("user_id", targetUserId)
             .eq("security_id", sec.id)
             .eq("strategy_id", strategyId)
@@ -372,17 +340,10 @@ export default async function handler(req, res) {
 
         if (existing) {
           const oldQty = Number(existing.quantity || 0);
-          const oldAvgFill = Number(existing.avg_fill || 0);
           const newQty = Math.floor(oldQty + holdingQty);
-          const newAvgFill = newQty > 0
-            ? ((oldAvgFill * oldQty) + (priceCents * holdingQty)) / newQty
-            : priceCents;
 
           const { error: updateErr } = await db.from("stock_holdings_c").update({
             quantity: newQty,
-            avg_fill: Math.round(newAvgFill),
-            market_value: Math.round(newQty * priceCents),
-            as_of_date: today,
             updated_at: now,
           }).eq("id", existing.id);
 
@@ -397,10 +358,10 @@ export default async function handler(req, res) {
             security_id: sec.id,
             strategy_id: strategyId,
             quantity: holdingQty,
-            avg_fill: priceCents,
-            market_value: Math.round(holdingQty * priceCents),
+            avg_fill: null,
+            market_value: 0,
             unrealized_pnl: 0,
-            as_of_date: today,
+            as_of_date: null,
             Status: "active",
           });
 
@@ -410,7 +371,7 @@ export default async function handler(req, res) {
           }
         }
 
-        insertedHoldings.push({ symbol: holding.symbol, quantity: holdingQty, priceCents });
+        insertedHoldings.push({ symbol: holding.symbol, quantity: holdingQty, priceCents: null, pendingFill: true });
       }
 
       if (skippedSymbols.length > 0) {
