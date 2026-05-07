@@ -38,29 +38,78 @@ const GoalLinkModal = ({
     String(error?.message || "").toLowerCase().includes("family_member_id")
   );
 
+  const sortGoals = (items) => [...items].sort((a, b) => {
+    if (a.scope === "child" && b.scope !== "child") return -1;
+    if (a.scope !== "child" && b.scope === "child") return 1;
+    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+  });
+
   const fetchGoals = async () => {
     setLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return;
 
+      const selectFields = "id, name, target_amount, current_amount, is_active, linked_asset_name, family_member_id, created_at";
+
+      if (childFamilyMemberId) {
+        const [childResult, familyResult] = await Promise.all([
+          supabase
+            .from("investment_goals")
+            .select(selectFields)
+            .eq("user_id", session.user.id)
+            .eq("family_member_id", childFamilyMemberId)
+            .eq("is_active", true)
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("investment_goals")
+            .select(selectFields)
+            .eq("user_id", session.user.id)
+            .is("family_member_id", null)
+            .eq("is_active", true)
+            .order("created_at", { ascending: false }),
+        ]);
+
+        if (isMissingFamilyMemberColumn(childResult.error) || isMissingFamilyMemberColumn(familyResult.error)) {
+          const fallback = await supabase
+            .from("investment_goals")
+            .select("id, name, target_amount, current_amount, is_active, linked_asset_name, created_at")
+            .eq("user_id", session.user.id)
+            .eq("is_active", true)
+            .order("created_at", { ascending: false });
+
+          if (fallback.error) throw fallback.error;
+          setGoals((fallback.data || []).map((goal) => ({ ...goal, scope: "family" })));
+          return;
+        }
+
+        if (childResult.error) throw childResult.error;
+        if (familyResult.error) throw familyResult.error;
+
+        const byId = new Map();
+        (childResult.data || []).forEach((goal) => byId.set(goal.id, { ...goal, scope: "child" }));
+        (familyResult.data || []).forEach((goal) => {
+          if (!byId.has(goal.id)) byId.set(goal.id, { ...goal, scope: "family" });
+        });
+        setGoals(sortGoals(Array.from(byId.values())));
+        return;
+      }
+
       let query = supabase
         .from("investment_goals")
-        .select("id, name, target_amount, current_amount, is_active, linked_asset_name")
+        .select(selectFields)
         .eq("user_id", session.user.id)
         .eq("is_active", true)
         .order("created_at", { ascending: false });
 
-      query = childFamilyMemberId
-        ? query.eq("family_member_id", childFamilyMemberId)
-        : query.is("family_member_id", null);
+      query = query.is("family_member_id", null);
 
       let { data, error } = await query;
 
-      if (error && isMissingFamilyMemberColumn(error) && !childFamilyMemberId) {
+      if (error && isMissingFamilyMemberColumn(error)) {
         const fallback = await supabase
           .from("investment_goals")
-          .select("id, name, target_amount, current_amount, is_active, linked_asset_name")
+          .select("id, name, target_amount, current_amount, is_active, linked_asset_name, created_at")
           .eq("user_id", session.user.id)
           .eq("is_active", true)
           .order("created_at", { ascending: false });
@@ -69,13 +118,8 @@ const GoalLinkModal = ({
       }
 
       if (!error) {
-        setGoals(data || []);
+        setGoals((data || []).map((goal) => ({ ...goal, scope: "family" })));
       } else {
-        if (childFamilyMemberId && isMissingFamilyMemberColumn(error)) {
-          console.warn("Child goals need investment_goals.family_member_id. Run the child goals SQL migration.");
-          setGoals([]);
-          return;
-        }
         console.error("Error fetching goals:", error);
       }
     } catch (e) {
@@ -127,7 +171,7 @@ const GoalLinkModal = ({
 
       if (error) throw error;
 
-      setGoals((prev) => [data, ...prev]);
+      setGoals((prev) => [{ ...data, scope: childFamilyMemberId ? "child" : "family" }, ...prev]);
       setSelectedGoalId(data.id);
       setShowCreateForm(false);
       setNewGoalName("");
@@ -226,7 +270,7 @@ const GoalLinkModal = ({
 
                   {goals.length > 0 && (
                     <div className="mb-3">
-                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Your Goals</p>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Existing Goals</p>
                       <div className="space-y-2">
                         {goals.map((goal) => {
                           const isSelected = selectedGoalId === goal.id;
@@ -246,9 +290,20 @@ const GoalLinkModal = ({
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center justify-between mb-1">
                                   <p className="text-sm font-semibold text-slate-900 truncate">{goal.name}</p>
-                                  <p className="text-xs font-semibold text-slate-600 ml-2 flex-shrink-0">
-                                    {formatCurrency(invested)} / {formatCurrency(goal.target_amount)}
-                                  </p>
+                                  <div className="ml-2 flex flex-shrink-0 items-center gap-1.5">
+                                    {childFamilyMemberId && (
+                                      <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+                                        goal.scope === "child"
+                                          ? "bg-violet-100 text-violet-700"
+                                          : "bg-slate-100 text-slate-500"
+                                      }`}>
+                                        {goal.scope === "child" ? "Child" : "Family"}
+                                      </span>
+                                    )}
+                                    <p className="text-xs font-semibold text-slate-600">
+                                      {formatCurrency(invested)} / {formatCurrency(goal.target_amount)}
+                                    </p>
+                                  </div>
                                 </div>
                                 <div className="h-1.5 w-full rounded-full bg-slate-200 overflow-hidden">
                                   <div
