@@ -300,18 +300,8 @@ export default async function handler(req, res) {
       const secBySymbol = {};
       (securitiesData || []).forEach(s => { secBySymbol[s.symbol] = s; });
 
-      // Compute total basket cost at current prices so we can scale by investAmount
-      let totalBasketCostRands = 0;
-      for (const holding of strategyHoldings) {
-        const sec = secBySymbol[holding.symbol];
-        if (!sec) continue;
-        const qty = Number(holding.quantity || holding.shares || 0);
-        const priceCents = Number(sec.last_price || 0);
-        if (qty > 0 && priceCents > 0) totalBasketCostRands += (qty * priceCents) / 100;
-      }
-      // investAmount is how much the user actually put in (before fees)
-      const scalingRatio = totalBasketCostRands > 0 ? investAmount / totalBasketCostRands : 1;
-      console.log("[record-investment] Basket cost:", totalBasketCostRands.toFixed(2), "investAmount:", investAmount, "scalingRatio:", scalingRatio.toFixed(6));
+      // Strategy component quantities come directly from strategies_c.holdings.
+      // Do not scale component shares by investment amount.
 
       const now = new Date().toISOString();
       const today = now.split("T")[0];
@@ -333,8 +323,7 @@ export default async function handler(req, res) {
           continue;
         }
 
-        // Scale shares proportionally to what the user actually invested (ENFORCE INTEGER)
-        const holdingQty = Math.floor(rawHoldingQty * scalingRatio);
+        const holdingQty = Math.floor(rawHoldingQty);
 
         const priceCents = Number(sec.last_price || 0);
         if (priceCents <= 0) {
