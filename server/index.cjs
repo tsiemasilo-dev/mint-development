@@ -3840,8 +3840,9 @@ app.get("/api/user/holdings", async (req, res) => {
     // Attempt queries with progressively fewer optional columns to handle missing DB columns
     const holdingsFull = await db
       .from("stock_holdings_c")
-      .select("id, user_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status, settlement_status, is_active, exit_price")
-      .eq("user_id", userId);
+      .select("id, user_id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status, settlement_status, is_active, exit_price")
+      .eq("user_id", userId)
+      .is("family_member_id", null);
 
     if (!holdingsFull.error) {
       holdings = holdingsFull.data;
@@ -3850,8 +3851,9 @@ app.get("/api/user/holdings", async (req, res) => {
       // One or more optional columns missing — try without settlement_status
       const noSettlement = await db
         .from("stock_holdings_c")
-        .select("id, user_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status, is_active, exit_price")
-        .eq("user_id", userId);
+        .select("id, user_id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status, is_active, exit_price")
+        .eq("user_id", userId)
+        .is("family_member_id", null);
 
       if (!noSettlement.error) {
         holdings = noSettlement.data;
@@ -3860,8 +3862,9 @@ app.get("/api/user/holdings", async (req, res) => {
         // Try without is_active and exit_price too
         const noExtras = await db
           .from("stock_holdings_c")
-          .select("id, user_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status")
-          .eq("user_id", userId);
+          .select("id, user_id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status")
+          .eq("user_id", userId)
+          .is("family_member_id", null);
         holdings = (noExtras.data || []).map(h => ({ ...h, is_active: true, exit_price: null }));
         holdingsError = noExtras.error;
       } else {
@@ -4022,8 +4025,9 @@ app.get("/api/user/strategies", async (req, res) => {
     // First, get user's strategy investments from transactions
     const { data: transactions, error: txError } = await db
       .from("transactions")
-      .select("id, name, amount, direction, transaction_date")
+      .select("id, name, amount, direction, transaction_date, family_member_id")
       .eq("user_id", userId)
+      .is("family_member_id", null)
       .eq("direction", "debit");
 
     if (txError) {
@@ -4059,8 +4063,9 @@ app.get("/api/user/strategies", async (req, res) => {
     // Also check stock_holdings_c for holdings with strategy_id (fallback when transactions are empty or RLS blocks them)
     const { data: userStratHoldings } = await db
       .from("stock_holdings_c")
-      .select("id, security_id, strategy_id, quantity, avg_fill")
+      .select("id, family_member_id, security_id, strategy_id, quantity, avg_fill")
       .eq("user_id", userId)
+      .is("family_member_id", null)
       .not("strategy_id", "is", null);
 
     const holdingStrategyIds = [...new Set((userStratHoldings || []).map(h => h.strategy_id).filter(Boolean))];

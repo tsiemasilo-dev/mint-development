@@ -29,8 +29,9 @@ export default async function handler(req, res) {
     // Fetch user's active holdings to determine which strategies they own
     const { data: userHoldings, error: holdingsError } = await db
       .from("stock_holdings_c")
-      .select("id, security_id, strategy_id, quantity, avg_fill")
+      .select("id, family_member_id, security_id, strategy_id, quantity, avg_fill")
       .eq("user_id", userId)
+      .is("family_member_id", null)
       .eq("Status", "active")
       .not("strategy_id", "is", null);
 
