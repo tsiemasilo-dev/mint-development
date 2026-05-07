@@ -939,7 +939,7 @@ const AuthForm = ({ initialStep = 'email', onSignupComplete, onLoginComplete, on
                   </div>
                   <div className={`glass glass-input shadow-xl animate-on-load delay-5 ${loginPassword ? 'has-value' : ''}`}>
                     <PasswordInput
-                      id="login-password"
+                      id="login-password-entry"
                       label="Password"
                       required
                       minLength={6}

@@ -353,7 +353,7 @@ async function buildSameAddressPdf({ parentProfile, coGuardianProfiles, childDat
   y += 6;
 
   if (signatureDataUrl) {
-    doc.addImage(signatureDataUrl, "PNG", MARGIN, y, 60, 22, undefined, "FAST");
+    doc.addImage(signatureDataUrl, "JPEG", MARGIN, y, 60, 22, undefined, "FAST");
     y += 26;
   } else {
     y += 30;
@@ -504,7 +504,7 @@ async function buildDifferentAddressPdf({ parentProfile, coGuardianProfiles, chi
   y += 6;
 
   if (signatureDataUrl) {
-    doc.addImage(signatureDataUrl, "PNG", MARGIN, y, 60, 22, undefined, "FAST");
+    doc.addImage(signatureDataUrl, "JPEG", MARGIN, y, 60, 22, undefined, "FAST");
     y += 26;
   } else {
     y += 30;
@@ -639,7 +639,7 @@ export default function MinorProofOfAddressDeclaration({ childData, parentProfil
     }
     setSigning(true); setError("");
     try {
-      const signatureDataUrl = samePadRef.current.toDataURL("image/png");
+      const signatureDataUrl = samePadRef.current.toDataURL("image/jpeg", 0.92);
       const signedAt = new Date().toISOString();
       const pdfBuffer = await buildSameAddressPdf({ parentProfile, coGuardianProfiles, childData, signatureDataUrl, signedAt });
       const safeName = (childData?.first_name || "minor").toLowerCase().replace(/\s+/g, "-");
@@ -664,7 +664,7 @@ export default function MinorProofOfAddressDeclaration({ childData, parentProfil
     }
     setSigning(true); setError("");
     try {
-      const signatureDataUrl = diffPadRef.current.toDataURL("image/png");
+      const signatureDataUrl = diffPadRef.current.toDataURL("image/jpeg", 0.92);
       const signedAt = new Date().toISOString();
       const pdfBuffer = await buildDifferentAddressPdf({ parentProfile, coGuardianProfiles, childData, childAddress, signatureDataUrl, signedAt });
       const safeName = (childData?.first_name || "minor").toLowerCase().replace(/\s+/g, "-");

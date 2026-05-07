@@ -4,6 +4,7 @@ const TextInput = forwardRef(
   (
     {
       id,
+      name,
       placeholder,
       autoComplete,
       required = false,
@@ -25,6 +26,7 @@ const TextInput = forwardRef(
       ref={ref}
       type={type}
       id={id}
+      name={name || id}
       placeholder={placeholder}
       required={required}
       autoComplete={autoComplete}
