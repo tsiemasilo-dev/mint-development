@@ -113,17 +113,19 @@ function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onCl
 
   return (
     <motion.div
-      className="fixed inset-0 z-50 flex items-center justify-center px-4"
+      className="fixed inset-0 z-50 flex items-end justify-center"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
     >
       <motion.div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <motion.div
-        className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden"
-        initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+        className="relative w-full max-w-md bg-white rounded-t-3xl shadow-2xl overflow-hidden pb-[env(safe-area-inset-bottom)]"
+        initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
         transition={{ type: "spring", stiffness: 380, damping: 38 }}
       >
-        <div className="px-6 pt-5 pb-8">
+        <div className="flex justify-center pt-3 pb-1"><div className="h-1 w-10 rounded-full bg-slate-200" /></div>
+
+        <div className="px-6 pt-3 pb-8">
           {!success ? (
             <>
               <div className="flex items-center justify-between mb-6">
@@ -335,21 +337,9 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
     setSaving(true);
     setError("");
     try {
-      let token = authToken;
-      if (!token) {
-        try {
-          const tokenData = JSON.parse(window.localStorage.getItem('sb-mfxnghmuccevsxwcetej-auth-token') || '{}');
-          token = tokenData.access_token;
-        } catch (e) {
-          console.warn('[child-invest] could not get token from localStorage', e);
-        }
-      }
       const res = await fetch("/api/child-invest", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           family_member_id: child.id,
           strategy_id: selected.id,
@@ -1330,38 +1320,6 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   useEffect(() => {
     isMounted.current = true;
     fetchAll();
-
-    // Set up real-time subscriptions for child account
-    if (child?.id && supabase) {
-      const childSubscription = supabase
-        .channel(`child-${child.id}`)
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'stock_holdings_c',
-          filter: `family_member_id=eq.${child.id}`
-        }, () => {
-          fetchHoldings();
-          fetchBestAssets();
-          fetchBestStrategies();
-        })
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'transactions',
-          filter: `family_member_id=eq.${child.id}`
-        }, () => {
-          fetchTransactions();
-          fetchChildBalance();
-        })
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(childSubscription);
-        isMounted.current = false;
-      };
-    }
-
     return () => { isMounted.current = false; };
   }, [child?.id]);
 
@@ -1389,18 +1347,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
 
   async function fetchChildBalance() {
     try {
-      let token = authToken;
-      if (!token) {
-        try {
-          const tokenData = JSON.parse(window.localStorage.getItem('sb-mfxnghmuccevsxwcetej-auth-token') || '{}');
-          token = tokenData.access_token;
-        } catch (e) {
-          console.warn('[child-dash] could not get token from localStorage', e);
-        }
-      }
-      const res = await fetch(`/api/child-wallet?family_member_id=${child.id}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      });
+      const res = await fetch(`/api/child-wallet?family_member_id=${child.id}`);
       const json = await res.json();
       if (json.balance !== undefined && isMounted.current) {
         setChild(prev => ({ ...prev, available_balance: json.balance }));
@@ -1502,60 +1449,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     }
   }
 
-  async function fetchChildStrategies() {
-    try {
-      if (!supabase || !child?.id) return;
-      const { data: stratHoldings } = await supabase
-        .from("stock_holdings_c")
-        .select("strategy_id, market_value, unrealized_pnl, securities(symbol, name, logo_url)")
-        .eq("family_member_id", child.id)
-        .not("strategy_id", "is", null);
-      if (!stratHoldings?.length) { if (isMounted.current) setChildStrategies([]); return; }
-      const stratMap = {};
-      stratHoldings.forEach(h => {
-        if (!h.strategy_id) return;
-        if (!stratMap[h.strategy_id]) stratMap[h.strategy_id] = { holdings: [], totalValue: 0, totalPnl: 0 };
-        stratMap[h.strategy_id].holdings.push(h);
-        stratMap[h.strategy_id].totalValue += (h.market_value || 0);
-        stratMap[h.strategy_id].totalPnl += (h.unrealized_pnl || 0);
-      });
-      const stratIds = Object.keys(stratMap);
-      const { data: strategies } = await supabase.from("strategies_c").select("id, name, risk_level").in("id", stratIds);
-      const formatted = (strategies || []).map(s => {
-        const g = stratMap[s.id];
-        const invested = g.totalValue - g.totalPnl;
-        const pct = invested > 0 ? (g.totalPnl / invested) * 100 : 0;
-        return {
-          ...s, currentValue: g.totalValue, investedAmount: invested, pnlRands: g.totalPnl, pnlPct: pct,
-          holdingLogos: g.holdings.filter(h => h.securities?.logo_url).map(h => ({ symbol: h.securities.symbol, logo_url: h.securities.logo_url, name: h.securities.name })).slice(0, 4),
-        };
-      }).sort((a, b) => (b.pnlPct || 0) - (a.pnlPct || 0));
-      if (isMounted.current) setChildStrategies(formatted);
-    } catch (e) { console.error("[child-dash] strategies", e); }
-  }
-
   async function fetchTransactions() {
-    try {
-      let token = authToken;
-      if (!token) {
-        try {
-          const tokenData = JSON.parse(window.localStorage.getItem('sb-mfxnghmuccevsxwcetej-auth-token') || '{}');
-          token = tokenData.access_token;
-        } catch (e) {
-          console.warn('[child-dash] could not get token from localStorage', e);
-        }
-      }
-      const res = await fetch(`/api/child-transactions?family_member_id=${child.id}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      });
-      if (res.ok) {
-        const json = await res.json();
-        if (isMounted.current) setTransactions(json.transactions || []);
-      }
-    } catch (e) { console.error("[child-dash] txns", e); }
-  }
-
-  async function fetchBestAssets() {
     try {
       if (!supabase) return;
       const linkedUserId = child?.linked_user_id || null;
@@ -1764,19 +1658,6 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
 
 
 
-  const bestChildAssets = React.useMemo(() => {
-    return holdings
-      .filter(h => h.market_value && h.unrealized_pnl != null)
-      .map(h => {
-        const cost = (h.market_value || 0) - (h.unrealized_pnl || 0);
-        const pnl = h.unrealized_pnl || 0;
-        const pct = cost > 0 ? (pnl / cost) * 100 : 0;
-        return { symbol: h.securities?.symbol || 'N/A', name: h.securities?.name || 'Security', logo_url: h.securities?.logo_url, pnlCents: pnl, pnlPct: pct };
-      })
-      .sort((a, b) => b.pnlPct - a.pnlPct)
-      .slice(0, 5);
-  }, [holdings]);
-
   return (
     <div
       className="min-h-screen pb-[env(safe-area-inset-bottom)]"
@@ -1947,12 +1828,19 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                 })}
               </div>
             ) : (
-              <div className="rounded-3xl bg-white p-6 shadow-md text-center">
-                <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-full bg-violet-50 text-violet-600 mb-4"><TrendingUp className="h-8 w-8" /></div>
-                <p className="text-sm font-semibold text-slate-900 mb-1">No investments yet</p>
-                <p className="text-xs text-slate-500 mb-4">Start investing to see {child?.first_name}'s best performers here</p>
-                <button type="button" onClick={() => setShowInvest(true)} className="inline-flex items-center justify-center rounded-full bg-slate-900 px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.15em] text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5">
-                  Make first investment
+              <div className="rounded-2xl border border-slate-200 p-8 text-center shadow-lg bg-white">
+                <div className="h-16 w-16 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: "linear-gradient(135deg,#e9d5ff,#d8b4fe)" }}>
+                  <BarChart3 className="h-7 w-7 text-purple-600" />
+                </div>
+                <p className="text-sm font-bold text-slate-900">No investments yet</p>
+                <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+                  Start investing on {child?.first_name}'s behalf to build their future portfolio.
+                </p>
+                <button
+                  onClick={() => setShowInvest(true)}
+                  className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-purple-600 hover:text-purple-700 transition"
+                >
+                  <BarChart3 className="h-4 w-4" /> Browse Strategies
                 </button>
               </div>
             )}
@@ -2011,153 +1899,76 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                   ))}
                 </div>
               </div>
-            </div>
-            {childStrategies.length > 0 ? (
-              <div className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {childStrategies.map((strategy) => {
-                  const pct = strategy.pnlPct || 0;
-                  return (
-                    <div key={strategy.id} className="flex-shrink-0 w-[280px] snap-start rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)]">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="text-left space-y-1 min-w-0">
-                          <p className="truncate text-sm font-semibold text-slate-900">{strategy.name}</p>
-                          <p className="text-xs text-slate-600 line-clamp-1">{strategy.risk_level || 'Balanced'}</p>
-                        </div>
-                        <div className="text-right flex-shrink-0">
-                          <p className="text-sm font-semibold text-slate-900">{fmt(strategy.currentValue || 0)}</p>
-                          <p className={`text-xs font-semibold ${pct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                            {pct >= 0 ? '+' : ''}R{Math.abs((strategy.pnlRands || 0) / 100).toFixed(2)} ({pct >= 0 ? '+' : ''}{pct.toFixed(2)}%)
-                          </p>
-                        </div>
-                      </div>
-                      <div className="mt-3 flex items-center justify-between">
-                        {strategy.risk_level && (<span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">{strategy.risk_level}</span>)}
-                        {strategy.holdingLogos?.length > 0 && (
-                          <div className="flex items-center gap-2">
-                            <div className="flex -space-x-2">
-                              {strategy.holdingLogos.slice(0, 3).map((h) => (
-                                <div key={h.symbol} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-sm">
-                                  {h.logo_url ? (<img src={h.logo_url} alt={h.name} className="h-full w-full object-cover" />) : (
-                                    <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">{h.symbol?.substring(0, 2)}</div>
-                                  )}
-                                </div>
-                              ))}
-                              {strategy.holdingLogos.length > 3 && (<div className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500">+{strategy.holdingLogos.length - 3}</div>)}
-                            </div>
-                            <span className="text-[11px] text-slate-400">Holdings</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
             ) : (
-              <div className="rounded-3xl bg-white p-6 shadow-md text-center">
-                <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-full bg-slate-50 text-slate-400 mb-4"><LayoutGrid className="h-8 w-8" /></div>
-                <p className="text-sm font-semibold text-slate-900 mb-1">No strategies yet</p>
-                <p className="text-xs text-slate-500 mb-4">Invest in a strategy for {child?.first_name}</p>
-                <button type="button" onClick={() => setShowInvest(true)} className="inline-flex items-center justify-center rounded-full bg-slate-900 px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.15em] text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5">
-                  Browse Strategies
-                </button>
+              <div className="rounded-2xl border border-slate-200 p-6 text-center shadow-lg bg-white">
+                <p className="text-xs text-slate-600">No activity yet. Transfer or invest to get started.</p>
               </div>
             )}
-          </section>
-
-          {/* ── Transaction history (matching HomePage) ── */}
-          <section className="rounded-3xl bg-white shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] overflow-hidden">
-            <div className="flex items-end justify-between px-5 py-4 border-b border-slate-100">
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-slate-900">Transaction history</p>
-              </div>
-            </div>
-            <div className="divide-y divide-slate-100">
-              {transactions.length > 0 ? (
-                transactions.slice(0, 5).map((tx) => {
-                  const isCredit = tx.direction === "credit" || tx.type === "transfer_in";
-                  const date = tx.created_at ? new Date(tx.created_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short" }) : "";
-                  const rawAmt = Math.abs(Number(tx.amount || 0));
-                  const amtDisplay = rawAmt > 10000 ? rawAmt / 100 : rawAmt;
-                  return (
-                    <div key={tx.id} className="flex items-center gap-3.5 px-5 py-4">
-                      <div className="h-10 w-10 rounded-2xl flex items-center justify-center" style={{ background: isCredit ? "rgba(34,197,94,0.10)" : "rgba(124,58,237,0.08)" }}>
-                        {isCredit ? <ArrowDownLeft className="h-4 w-4 text-green-600" /> : <ArrowUpRight className="h-4 w-4 text-purple-600" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-semibold text-slate-900 truncate">{tx.description || tx.type || "Transaction"}</p>
-                        <p className="text-[11px] text-slate-400 mt-0.5">{date}</p>
-                      </div>
-                      <p className="text-[13px] font-bold tabular-nums text-slate-900">R{amtDisplay.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="p-6 text-center">
-                  <p className="text-xs text-slate-400">No activity yet. Transfer or invest to get started.</p>
-                </div>
-              )}
-            </div>
-          </section>
+          </motion.div>
 
           {/* -- Account Info -- */}
           <motion.div variants={item}>
-          <div className="flex items-center gap-2 mb-3 px-1">
-            <div className="h-2 w-2 rounded-full bg-slate-300" />
-            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Account Details</p>
-          </div>
-          <div className="rounded-2xl shadow-lg border border-slate-200 p-5 bg-white">
-            <div className="space-y-4">
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-600">Account Type</span>
-                <span className="font-semibold text-slate-900">Child (Minor)</span>
-              </div>
-              {child?.mint_number && (
+            <div className="flex items-center gap-2 mb-3 px-1">
+              <div className="h-2 w-2 rounded-full bg-slate-300" />
+              <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Account Details</p>
+            </div>
+            <div className="rounded-2xl shadow-lg border border-slate-200 p-5 bg-white">
+              <div className="space-y-4">
                 <div className="flex justify-between text-sm">
-                  <span className="text-slate-600">Mint Number</span>
-                  <span className="font-mono text-xs font-semibold text-slate-900">{child.mint_number}</span>
+                  <span className="text-slate-600">Account Type</span>
+                  <span className="font-semibold text-slate-900">Child (Minor)</span>
                 </div>
-              )}
-              {age !== null && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-600">Age</span>
-                  <span className="font-semibold text-slate-900">{age} year{age !== 1 ? "s" : ""}</span>
+                {child?.mint_number && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-600">Mint Number</span>
+                    <span className="font-mono text-xs font-semibold text-slate-900">{child.mint_number}</span>
+                  </div>
+                )}
+                {age !== null && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-600">Age</span>
+                    <span className="font-semibold text-slate-900">{age} year{age !== 1 ? "s" : ""}</span>
+                  </div>
+                )}
+                {child?.date_of_birth && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-600">Date of Birth</span>
+                    <span className="font-semibold text-slate-900">
+                      {new Date(child.date_of_birth).toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" })}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm border-t border-slate-100 pt-4">
+                  <span className="text-slate-600">Managed By</span>
+                  <span className="font-semibold text-slate-900">{parentName}</span>
                 </div>
-              )}
-              {child?.date_of_birth && (
+                {parentMintNumber && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-600">Parent Mint #</span>
+                    <span className="font-mono text-xs font-semibold text-slate-900">{parentMintNumber}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-sm">
-                  <span className="text-slate-600">Date of Birth</span>
-                  <span className="font-semibold text-slate-900">
-                    {new Date(child.date_of_birth).toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" })}
+                  <span className="text-slate-600">KYC Status</span>
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide border ${
+                      childKycStatus === "completed"
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        : childKycStatus === "rejected"
+                          ? "bg-red-50 text-red-700 border-red-200"
+                          : "bg-amber-50 text-amber-700 border-amber-200"
+                    }`}
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full ${childKycStatus === "pending" ? "animate-pulse" : ""}`} style={{ backgroundColor: "currentColor" }} />
+                    {childKycLabel}
                   </span>
                 </div>
-              )}
-              <div className="flex justify-between text-sm border-t border-slate-100 pt-4">
-                <span className="text-slate-600">Managed By</span>
-                <span className="font-semibold text-slate-900">{parentName}</span>
-              </div>
-              {parentMintNumber && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-600">Parent Mint #</span>
-                  <span className="font-mono text-xs font-semibold text-slate-900">{parentMintNumber}</span>
-                </div>
-              )}
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-600">KYC Status</span>
-                <span
-                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide border ${childKycStatus === "completed"
-                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                    : childKycStatus === "rejected"
-                      ? "bg-red-50 text-red-700 border-red-200"
-                      : "bg-amber-50 text-amber-700 border-amber-200"
-                    }`}
-                >
-                  <span className={`h-1.5 w-1.5 rounded-full ${childKycStatus === "pending" ? "animate-pulse" : ""}`} style={{ backgroundColor: "currentColor" }} />
-                  {childKycLabel}
-                </span>
               </div>
             </div>
-          </div>
+          </motion.div>
+
         </motion.div>
+      </div>
 
       {/* -- Modals -- */}
       <AnimatePresence>
@@ -2168,7 +1979,6 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             balancesLoading={parentBalanceLoading}
             onTransfer={handleTransferDone}
             onClose={() => setShowTransfer(false)}
-            authToken={authToken}
           />
         )}
       </AnimatePresence>
