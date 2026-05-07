@@ -32,7 +32,7 @@ const PaymentMethodModal = ({
   const [walletLabel, setWalletLabel] = useState("Wallet");
   const [walletLoading, setWalletLoading] = useState(true);
   const hasChildBalanceSnapshot = childWalletBalanceCents !== undefined && childWalletBalanceCents !== null;
-  const isChildWallet = !!childFamilyMemberId || !!childFirstName || hasChildBalanceSnapshot;
+  const isChildWallet = !!childFamilyMemberId || hasChildBalanceSnapshot;
 
   useEffect(() => {
     const fetchWallet = async () => {

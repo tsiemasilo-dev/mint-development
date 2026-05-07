@@ -1615,6 +1615,8 @@ const App = () => {
   }
 
   if (currentPage === "investAmount") {
+    const isChildStrategyPurchase = !!selectedStrategy?.is_kid_strategy && !!selectedChildForInvest?.id;
+
     return (
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <InvestAmountPage
@@ -1683,9 +1685,9 @@ const App = () => {
           onClose={() => setShowPaymentMethodModal(false)}
           amount={investmentAmount}
           strategyName={selectedStrategy?.name || "Investment"}
-          childFamilyMemberId={selectedChildForInvest?.id || null}
-          childFirstName={selectedChildForInvest?.first_name || "Child"}
-          childWalletBalanceCents={selectedChildForInvest?.available_balance ?? null}
+          childFamilyMemberId={isChildStrategyPurchase ? selectedChildForInvest?.id : null}
+          childFirstName={isChildStrategyPurchase ? selectedChildForInvest?.first_name : null}
+          childWalletBalanceCents={isChildStrategyPurchase ? (selectedChildForInvest?.available_balance ?? null) : null}
           onSelectPaystack={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("paystack"); navigateTo("payment"); }}
           onSelectWallet={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("wallet"); navigateTo("payment"); }}
           onSelectOzow={async () => {
@@ -1771,6 +1773,8 @@ const App = () => {
   }
 
   if (currentPage === "payment") {
+    const isChildStrategyPurchase = !!selectedStrategy?.is_kid_strategy && !!selectedChildForInvest?.id;
+
     return (
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <PaymentPage
@@ -1780,8 +1784,8 @@ const App = () => {
           baseAmount={baseInvestmentAmount}
           fees={investmentFees || pendingGoalFlow?.fees}
           initialMethod={pendingPaymentMethod}
-          childId={selectedChildForInvest?.linked_user_id || null}
-          childFamilyMemberId={selectedChildForInvest?.id || null}
+          childId={isChildStrategyPurchase ? selectedChildForInvest?.linked_user_id || null : null}
+          childFamilyMemberId={isChildStrategyPurchase ? selectedChildForInvest?.id || null : null}
           onOpenDeposit={() => navigateTo("deposit")}
           onSuccess={async (response) => {
             console.log("Payment successful:", response);
