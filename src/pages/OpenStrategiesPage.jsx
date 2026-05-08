@@ -245,8 +245,14 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
     let isMounted = true;
 
     const calculateAllMinimums = async () => {
-      if (!supabase || strategies.length === 0) return;
+      if (strategies.length === 0) return;
 
+      if (!supabase) {
+        console.error("❌ Supabase is null/undefined in calculateAllMinimums");
+        return;
+      }
+
+      console.log(`🧮 Calculating minimums for ${strategies.length} strategies`);
       const minimums = {};
 
       for (const strategy of strategies) {
@@ -254,12 +260,13 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
           const minValue = await calculateMinInvestment(strategy, holdingsBySymbol, supabase);
           minimums[strategy.id] = minValue;
         } catch (error) {
-          console.warn(`Error calculating minimum for ${strategy.name}:`, error);
+          console.warn(`Error calculating minimum for ${strategy.name}:`, error.message);
           minimums[strategy.id] = null;
         }
       }
 
       if (isMounted) {
+        console.log(`✅ Calculated minimums for ${Object.keys(minimums).length} strategies`);
         setStrategyMinimums(minimums);
       }
     };
@@ -269,7 +276,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
     return () => {
       isMounted = false;
     };
-  }, [strategies, supabase]);
+  }, [strategies, holdingsBySymbol, supabase]);
 
   const series = [
     { label: "Jan", returnPct: 1.2 },
