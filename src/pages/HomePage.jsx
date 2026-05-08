@@ -430,7 +430,6 @@ const HomePage = ({
         }
 
         const formatted = serverStrategies
-          .filter((s) => !s.isKidStrategy && !s.is_kid_strategy)
           .map((s) => {
           const invested = s.investedAmount || 0;
           const currentValue = s.currentMarketValue != null ? Number(s.currentMarketValue.toFixed(2)) : invested;
