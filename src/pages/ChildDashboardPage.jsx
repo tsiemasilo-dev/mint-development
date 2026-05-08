@@ -1344,6 +1344,9 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   const [isCreatingGoal, setIsCreatingGoal] = useState(false);
   const [editingGoalId, setEditingGoalId] = useState(null);
   const [newGoal, setNewGoal] = useState({ name: "", target_amount: "", target_date: "" });
+  const [childFriendlyStrategies, setChildFriendlyStrategies] = useState([]);
+  const [childFriendlyMinimums, setChildFriendlyMinimums] = useState({});
+  const [childFriendlyLoading, setChildFriendlyLoading] = useState(true);
 
   const childName = [child?.first_name, child?.last_name].filter(Boolean).join(" ") || "Child";
   const age = getAge(child?.date_of_birth);
@@ -1376,6 +1379,119 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
       fetchGoals();
     }
   }, [showGoalsModal, child?.id]);
+
+  useEffect(() => {
+    fetchChildFriendlyStrategies();
+  }, []);
+
+  async function fetchChildFriendlyStrategies() {
+    if (!supabase) return;
+    setChildFriendlyLoading(true);
+    try {
+      const { data } = await supabase
+        .from("strategies_c")
+        .select("id, name, short_name, description, risk_level, sector, tags, min_investment, is_featured, holdings, strategy_metrics(*)")
+        .eq("status", "active")
+        .eq("is_kid_strategy", true)
+        .order("is_featured", { ascending: false })
+        .order("name");
+
+      const rows = data || [];
+
+      // Collect all holding symbols to fetch logos
+      const allSymbols = [...new Set(
+        rows.flatMap(s => (Array.isArray(s.holdings) ? s.holdings : []).map(h => h.symbol || h.ticker).filter(Boolean))
+      )];
+      let secMap = {};
+      if (allSymbols.length > 0) {
+        const { data: secs } = await supabase
+          .from("securities_c")
+          .select("symbol, name, logo_url")
+          .in("symbol", allSymbols);
+        (secs || []).forEach(s => { secMap[s.symbol] = s; });
+      }
+
+      const enriched = rows.map(s => {
+        const metrics = Array.isArray(s.strategy_metrics)
+          ? [...s.strategy_metrics].sort((a, b) => (b.as_of_date || "").localeCompare(a.as_of_date || ""))[0]
+          : s.strategy_metrics;
+        const r_ytd = metrics?.r_ytd ?? metrics?.r_ytd_pct ?? metrics?.r_1y ?? null;
+        const ytd_as_of_date = metrics?.as_of_date ?? null;
+        const holdingsList = (Array.isArray(s.holdings) ? s.holdings : [])
+          .sort((a, b) => Number(b.weight || 0) - Number(a.weight || 0))
+          .map(h => {
+            const symbol = h.symbol || h.ticker;
+            const security = secMap[symbol] || {};
+            return {
+              ...h,
+              symbol,
+              name: security.name || h.name || symbol,
+              logo_url: security.logo_url || null,
+            };
+          });
+        return { ...s, r_ytd, ytd_as_of_date, holdingsList };
+      });
+
+      if (isMounted.current) {
+        setChildFriendlyStrategies(enriched);
+      }
+
+      // Calculate minimums for all strategies
+      if (enriched.length > 0) {
+        await calculateAllChildFriendlyMinimums(enriched);
+      }
+    } catch (e) {
+      console.error("[child-dash] fetchChildFriendlyStrategies error", e);
+    } finally {
+      if (isMounted.current) {
+        setChildFriendlyLoading(false);
+      }
+    }
+  }
+
+  async function calculateAllChildFriendlyMinimums(strategies) {
+    if (!supabase) return;
+    try {
+      // Get all securities for building holdingsBySymbol map
+      const allTickers = [...new Set(
+        strategies
+          .flatMap((strategy) => getHoldingsArray(strategy).map((h) => {
+            const rawSymbol = h.ticker || h.symbol || h;
+            const normalizedSymbol = normalizeSymbol(rawSymbol);
+            return normalizedSymbol || rawSymbol;
+          }))
+          .filter(Boolean)
+      )];
+
+      if (allTickers.length === 0) {
+        const minimums = {};
+        strategies.forEach(s => {
+          minimums[s.id] = s.min_investment ? Math.round(s.min_investment / 100) : null;
+        });
+        if (isMounted.current) setChildFriendlyMinimums(minimums);
+        return;
+      }
+
+      const { data: securities } = await supabase
+        .from("securities_c")
+        .select("symbol, id, name, logo_url")
+        .in("symbol", allTickers);
+
+      const holdingsBySymbol = buildHoldingsBySymbol(securities || []);
+
+      const minimums = {};
+      for (const strategy of strategies) {
+        const minValue = await calculateMinInvestment(strategy, holdingsBySymbol);
+        minimums[strategy.id] = minValue;
+      }
+
+      if (isMounted.current) {
+        setChildFriendlyMinimums(minimums);
+      }
+    } catch (error) {
+      console.error("Error calculating child-friendly minimums:", error);
+    }
+  }
 
   async function fetchAll() {
     setLoading(true);
@@ -1841,6 +1957,108 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
               })}
             </div>
           </motion.div>
+
+          {/* -- Child Friendly Strategies -- */}
+          {childFriendlyStrategies.length > 0 && (
+            <motion.div variants={item}>
+              <div className="flex items-center gap-2 mb-3 px-1">
+                <div className="h-2 w-2 rounded-full bg-green-300" />
+                <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Child Friendly Strategies</p>
+              </div>
+
+              {childFriendlyLoading ? (
+                <div className="space-y-3">
+                  {[0, 1].map((i) => (
+                    <div key={i} className="rounded-2xl border border-slate-200 bg-white shadow-md p-4">
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Skeleton className="h-10 w-10 rounded-xl flex-shrink-0" />
+                          <div className="space-y-2 min-w-0">
+                            <Skeleton className="h-4 w-32" />
+                            <div className="flex gap-1.5">
+                              <Skeleton className="h-5 w-14 rounded-full" />
+                              <Skeleton className="h-5 w-16 rounded-full" />
+                            </div>
+                          </div>
+                        </div>
+                        <div className="space-y-2 flex-shrink-0">
+                          <Skeleton className="h-4 w-20" />
+                          <Skeleton className="h-3 w-16" />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
+                        <div className="flex -space-x-2">
+                          {[0, 1, 2].map((idx) => (
+                            <Skeleton key={idx} className="h-7 w-7 rounded-full border-2 border-white" />
+                          ))}
+                        </div>
+                        <Skeleton className="h-3 w-20" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {childFriendlyStrategies.map((strategy) => (
+                    <button
+                      key={strategy.id}
+                      onClick={() => setShowInvest(true)}
+                      className="w-full rounded-2xl border border-slate-200 bg-white shadow-md p-4 text-left transition hover:shadow-lg active:scale-[0.98]"
+                    >
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                            style={{ background: "linear-gradient(135deg,#dcfce7,#bbf7d0)" }}>
+                            <BarChart3 className="h-5 w-5 text-green-600" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-slate-900 truncate">{strategy.short_name || strategy.name}</p>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              {strategy.risk_level && (
+                                <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-violet-50 text-violet-600 border border-violet-100">{strategy.risk_level}</span>
+                              )}
+                              {strategy.is_featured && (
+                                <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-violet-100 text-violet-700">Featured</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-sm font-bold text-slate-900 tabular-nums">
+                            {childFriendlyMinimums[strategy.id] ? `R${childFriendlyMinimums[strategy.id].toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "..."}
+                          </p>
+                          <p className="text-[10px] font-semibold text-slate-500">Min. invest</p>
+                        </div>
+                      </div>
+                      {strategy.holdingsList?.length > 0 && (
+                        <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
+                          <div className="flex -space-x-2">
+                            {strategy.holdingsList.slice(0, 4).map(h => (
+                              <div key={h.symbol} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white shadow-sm">
+                                {h.logo_url ? (
+                                  <img src={h.logo_url} alt={h.symbol} className="h-full w-full object-cover" />
+                                ) : (
+                                  <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">
+                                    {h.symbol?.substring(0, 2)}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                            {strategy.holdingsList.length > 4 && (
+                              <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-slate-100 text-[10px] font-semibold text-slate-500">
+                                +{strategy.holdingsList.length - 4}
+                              </div>
+                            )}
+                          </div>
+                          <span className="text-[11px] text-slate-400">{strategy.holdingsList.length} holding{strategy.holdingsList.length !== 1 ? "s" : ""}</span>
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          )}
 
           {/* -- Strategy Holdings -- */}
           <motion.div variants={item}>
