@@ -54,29 +54,37 @@ const getMinFromPrice = (price) => {
 export const calculateMinInvestment = async (strategy, holdingsBySymbol) => {
   const holdings = getHoldingsArray(strategy);
 
+  console.log(`🔍 [${strategy?.name}] Starting minimum calculation. Holdings:`, holdings);
+
   // If no holdings, use min_investment from database
   if (!holdings.length) {
-    console.log(`[${strategy.name}] No holdings found`);
+    console.log(`⚠️ [${strategy?.name}] No holdings found, returning null or DB value`);
     return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : null;
   }
 
   if (!supabase) {
-    console.log(`[${strategy.name}] Supabase not available`);
+    console.log(`❌ [${strategy?.name}] Supabase not available`);
     return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : null;
   }
 
   try {
     let total = 0;
-    console.log(`[${strategy.name}] Processing ${holdings.length} holdings`);
+    console.log(`📊 [${strategy?.name}] Processing ${holdings.length} holdings`);
 
     // For each holding, get the symbol (already has .JO) and shares
     for (const holding of holdings) {
-      const symbol = holding.symbol || holding.ticker;  // Use symbol as-is (already has .JO)
+      const symbol = holding.symbol || holding.ticker;
       const shares = Number(holding.shares || holding.quantity || 1);
 
-      if (!symbol || shares <= 0) continue;
+      console.log(`  → Holding: symbol=${symbol}, shares=${shares}`);
+
+      if (!symbol || shares <= 0) {
+        console.log(`  ⊘ Skipped: no symbol or invalid shares`);
+        continue;
+      }
 
       // Get latest price for this symbol from stock_intraday_c
+      console.log(`  🔎 Querying stock_intraday_c for ${symbol}...`);
       const { data, error } = await supabase
         .from("stock_intraday_c")
         .select("current_price")
@@ -86,26 +94,26 @@ export const calculateMinInvestment = async (strategy, holdingsBySymbol) => {
         .maybeSingle();
 
       if (error) {
-        console.warn(`[${strategy.name}] Error fetching price for ${symbol}:`, error.message);
+        console.warn(`  ❌ Error fetching price for ${symbol}:`, error.message);
         continue;
       }
 
       if (!data?.current_price) {
-        console.warn(`[${strategy.name}] No price found for ${symbol}, got:`, data);
+        console.warn(`  ❌ No price data found for ${symbol}:`, data);
         continue;
       }
 
       const contribution = shares * data.current_price;
-      console.log(`[${strategy.name}] ${symbol}: ${shares} shares × ${data.current_price} cents = ${contribution}`);
+      console.log(`  ✓ ${symbol}: ${shares} × ${data.current_price} = ${contribution} cents`);
       total += contribution;
     }
 
     // Convert from cents to Rands
     const result = Math.round(total / 100);
-    console.log(`[${strategy.name}] Final minimum: R${result}`);
+    console.log(`✅ [${strategy?.name}] Total: ${total} cents → R${result}`);
     return result;
   } catch (err) {
-    console.error("❌ Error calculating min investment:", err.message);
+    console.error(`❌ [${strategy?.name}] Error calculating min investment:`, err);
     return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : null;
   }
 };
