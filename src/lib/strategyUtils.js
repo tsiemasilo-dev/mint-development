@@ -54,15 +54,18 @@ export const calculateMinInvestment = async (strategy, holdingsBySymbol, supabas
 
   // If no holdings, use min_investment from database
   if (!holdings.length) {
+    console.log(`[${strategy.name}] No holdings found`);
     return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : null;
   }
 
   if (!supabase) {
+    console.log(`[${strategy.name}] Supabase not available`);
     return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : null;
   }
 
   try {
     let total = 0;
+    console.log(`[${strategy.name}] Processing ${holdings.length} holdings`);
 
     // For each holding, get the symbol and shares
     for (const holding of holdings) {
@@ -80,17 +83,25 @@ export const calculateMinInvestment = async (strategy, holdingsBySymbol, supabas
         .limit(1)
         .single();
 
-      if (error || !data?.current_price) {
-        console.warn(`⚠️ No price found for ${symbol}`);
+      if (error) {
+        console.warn(`[${strategy.name}] Error fetching price for ${symbol}:`, error.message);
         continue;
       }
 
-      // current_price is in cents, add to total
-      total += shares * data.current_price;
+      if (!data?.current_price) {
+        console.warn(`[${strategy.name}] No price found for ${symbol}, got:`, data);
+        continue;
+      }
+
+      const contribution = shares * data.current_price;
+      console.log(`[${strategy.name}] ${symbol}: ${shares} shares × ${data.current_price} cents = ${contribution}`);
+      total += contribution;
     }
 
     // Convert from cents to Rands
-    return Math.round(total / 100);
+    const result = Math.round(total / 100);
+    console.log(`[${strategy.name}] Final minimum: R${result}`);
+    return result;
   } catch (err) {
     console.error("❌ Error calculating min investment:", err.message);
     return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : null;
