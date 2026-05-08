@@ -333,10 +333,43 @@ const SwipeableBalanceCard = ({
           enrichedHoldings = [...stockHoldings, ...strategyItems];
         }
 
-        const mValue = enrichedHoldings.reduce(
-          (acc, h) => acc + Number(h.market_value || 0) / 100,
-          0,
-        );
+        // Fetch latest basket_value from client_strategy_returns_c and override
+        // each strategy's market_value so totalMarketValue is always DB-accurate
+        if (strategiesRes && userId) {
+          const strategyIds = (strategiesRes.strategies || []).map(s => s.id).filter(Boolean);
+          const basketMap = {};
+          for (const stratId of strategyIds) {
+            const { data: row } = await supabase
+              .from("client_strategy_returns_c")
+              .select("basket_value")
+              .eq("user_id", userId)
+              .eq("strategy_id", stratId)
+              .order("as_of_date", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (row?.basket_value) {
+              basketMap[stratId] = Number(row.basket_value);
+            }
+          }
+          if (Object.keys(basketMap).length > 0) {
+            enrichedHoldings = enrichedHoldings.map(h => {
+              if (h.isStrategy && h.strategyId && basketMap[h.strategyId] != null) {
+                return { ...h, market_value: basketMap[h.strategyId] };
+              }
+              return h;
+            });
+          }
+        }
+
+        // Live value: use last_price × qty for stocks, market_value for strategies
+        const liveMarketValue = (h) => {
+          if (!h.isStrategy && h.last_price != null && h.quantity != null) {
+            return (Number(h.last_price) * Number(h.quantity));
+          }
+          return Number(h.market_value || 0);
+        };
+
+        const mValue = enrichedHoldings.reduce((acc, h) => acc + liveMarketValue(h) / 100, 0);
         const invested = enrichedHoldings.reduce(
           (acc, h) =>
             acc + (Number(h.avg_fill || 0) * Number(h.quantity || 0)) / 100,
@@ -345,7 +378,6 @@ const SwipeableBalanceCard = ({
         const investedAmount = enrichedHoldings.reduce(
           (acc, h) => {
             if (h.invested_amount !== undefined) return acc + Number(h.invested_amount) / 100;
-            // For stocks, use avg_fill * quantity as the initial invested amount
             return acc + (Number(h.avg_fill || 0) * Number(h.quantity || 0)) / 100;
           },
           0,
@@ -371,28 +403,6 @@ const SwipeableBalanceCard = ({
           totalInvestedAmount: investedAmount,
           holdingsCount: enrichedHoldings.length,
         });
-
-        // Fetch latest basket_value from client_strategy_returns_c for all strategies (parent mode only)
-        if (strategiesRes) {
-          const strategyIds = (strategiesRes.strategies || []).map(s => s.id).filter(Boolean);
-          let totalBasketValue = 0;
-          for (const stratId of strategyIds) {
-            const { data: row } = await supabase
-              .from("client_strategy_returns_c")
-              .select("basket_value")
-              .eq("user_id", userId)
-              .eq("strategy_id", stratId)
-              .order("as_of_date", { ascending: false })
-              .limit(1)
-              .maybeSingle();
-            if (row?.basket_value) {
-              totalBasketValue += Number(row.basket_value) / 100;
-            }
-          }
-          if (totalBasketValue > 0) {
-            setDefaultPortfolioBasketValue(totalBasketValue);
-          }
-        }
       } catch (err) {
         console.error("❌ [SwipeableBalanceCard] Load data error:", err);
       } finally {
