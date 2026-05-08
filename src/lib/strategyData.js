@@ -887,7 +887,66 @@ export const getStockMonthlyReturns = async (securityId, startDate = null, actua
   }
 };
 
-export const getOverallPortfolioMonthlyReturns = async (strategyIds, stockSecurityIds, strategies, rawHoldings) => {
+/**
+ * Fetch monthly returns for a strategy from client_strategy_returns_c.
+ * Groups rows by calendar month, takes the last basket_value per month,
+ * and computes MoM % return from basket_value changes.
+ * Returns {} if no rows found (caller should fall back to price-history path).
+ */
+export const getStrategyMonthlyReturnsFromDB = async (userId, strategyId, startDate = null) => {
+  if (!supabase || !userId || !strategyId) return {};
+
+  try {
+    const { data: rows, error } = await supabase
+      .from("client_strategy_returns_c")
+      .select("as_of_date, basket_value")
+      .eq("user_id", userId)
+      .eq("strategy_id", strategyId)
+      .order("as_of_date", { ascending: true });
+
+    if (error || !rows || rows.length < 2) return {};
+
+    const filterStart = startDate ? startDate.slice(0, 7) : null;
+
+    // Keep last row per calendar month
+    const monthlyLast = {};
+    rows.forEach(row => {
+      const ym = row.as_of_date.slice(0, 7);
+      monthlyLast[ym] = row.basket_value;
+    });
+
+    const sortedMonths = Object.keys(monthlyLast).sort();
+    const result = {};
+
+    for (let i = 1; i < sortedMonths.length; i++) {
+      const currKey = sortedMonths[i];
+      const prevKey = sortedMonths[i - 1];
+      const currBv = monthlyLast[currKey];
+      const prevBv = monthlyLast[prevKey];
+      if (!prevBv || prevBv === 0) continue;
+      const [year, month] = currKey.split("-");
+      if (filterStart && currKey < filterStart) continue;
+      if (!result[year]) result[year] = {};
+      result[year][month] = (currBv - prevBv) / prevBv;
+    }
+
+    // Include the first month itself as a partial return from the very first basket_value
+    // if startDate falls within that first month
+    if (filterStart && sortedMonths.length > 0) {
+      const firstMonth = sortedMonths[0];
+      if (firstMonth >= filterStart) {
+        // We have no prior baseline — skip; MoM for the first available month is unknown
+      }
+    }
+
+    return result;
+  } catch (err) {
+    console.error("[getStrategyMonthlyReturnsFromDB] error:", err);
+    return {};
+  }
+};
+
+export const getOverallPortfolioMonthlyReturns = async (strategyIds, stockSecurityIds, strategies, rawHoldings, userId = null) => {
   // Skip cache when there are stock holdings — live prices must always be fresh
   const hasStockHoldings = stockSecurityIds && stockSecurityIds.length > 0;
   const cacheKey = `monthly_returns_overall_${strategyIds.sort().join("_")}_${stockSecurityIds.sort().join("_")}`;
@@ -905,9 +964,17 @@ export const getOverallPortfolioMonthlyReturns = async (strategyIds, stockSecuri
       const strategy = strategies.find(s => s.strategyId === sid);
       const invested = strategy?.investedAmount || 0;
       const current = strategy?.currentValue || 0;
-      const actualPnlPct = invested > 0 ? (current - invested) / invested : null;
-      const returns = await getMonthlyReturns(sid, strategy?.firstInvestedDate || null, actualPnlPct);
-      const value = invested || current || 0;
+      const value = current || invested || 0;
+
+      let returns = {};
+      if (userId && strategy?.hasReturnsData) {
+        returns = await getStrategyMonthlyReturnsFromDB(userId, sid, strategy?.firstInvestedDate || null);
+      }
+      if (Object.keys(returns).length === 0) {
+        const actualPnlPct = invested > 0 ? (current - invested) / invested : null;
+        returns = await getMonthlyReturns(sid, strategy?.firstInvestedDate || null, actualPnlPct);
+      }
+
       if (Object.keys(returns).length > 0) {
         allMonthlyData.push({ returns, value });
       }

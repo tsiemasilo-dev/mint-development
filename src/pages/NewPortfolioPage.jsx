@@ -6,7 +6,7 @@ import { useInvestments } from "../lib/useFinancialData";
 import { useRealtimePrices } from "../lib/useRealtimePrices";
 import { useProfile } from "../lib/useProfile";
 import { useUserStrategies, useStrategyChartData, useStrategyPeriodReturns } from "../lib/useUserStrategies";
-import { getMonthlyReturns, getStockMonthlyReturns, getOverallPortfolioMonthlyReturns } from "../lib/strategyData";
+import { getMonthlyReturns, getStockMonthlyReturns, getOverallPortfolioMonthlyReturns, getStrategyMonthlyReturnsFromDB } from "../lib/strategyData";
 import { useStockQuotes, useStockChart } from "../lib/useStockData";
 import { clearMarketDataCache } from "../lib/marketData";
 import SwipeBackWrapper from "../components/SwipeBackWrapper.jsx";
@@ -316,15 +316,21 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           strategies.map(s => s.strategyId).filter(Boolean),
           individualHoldingSecurityIds,
           strategies,
-          (rawHoldings || []).filter(h => !h.strategy_id)
+          (rawHoldings || []).filter(h => !h.strategy_id),
+          profile?.id
         );
       } else {
         const matchedStrategy = strategies.find(s => s.strategyId === calendarFilter);
         if (matchedStrategy) {
-          const invested = matchedStrategy.investedAmount || 0;
-          const current = matchedStrategy.currentValue || 0;
-          const actualPnlPct = invested > 0 ? (current - invested) / invested : null;
-          data = await getMonthlyReturns(calendarFilter, matchedStrategy.firstInvestedDate || null, actualPnlPct);
+          if (profile?.id && matchedStrategy.hasReturnsData) {
+            data = await getStrategyMonthlyReturnsFromDB(profile.id, calendarFilter, matchedStrategy.firstInvestedDate || null);
+          }
+          if (!data || Object.keys(data).length === 0) {
+            const invested = matchedStrategy.investedAmount || 0;
+            const current = matchedStrategy.currentValue || 0;
+            const actualPnlPct = invested > 0 ? (current - invested) / invested : null;
+            data = await getMonthlyReturns(calendarFilter, matchedStrategy.firstInvestedDate || null, actualPnlPct);
+          }
         } else {
           const matchedHolding = (rawHoldings || []).find(h => h.security_id === calendarFilter && !h.strategy_id);
           const investedVal = matchedHolding ? (matchedHolding.avg_fill * matchedHolding.quantity) / 100 : 0;
