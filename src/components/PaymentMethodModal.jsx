@@ -526,16 +526,14 @@ const PaymentMethodModal = ({
                     <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                   </svg>
                 </div>
-                <h3 className="text-xl font-bold text-slate-800 mb-1 text-center">Thank You!</h3>
-                <p className="text-sm font-semibold text-emerald-600 text-center">Payment Received</p>
+                <h3 className="text-xl font-bold text-slate-800 mb-1 text-center">Payment Noted</h3>
+                <p className="text-sm font-semibold text-emerald-600 text-center">We'll be in touch</p>
               </div>
 
               {/* Body */}
               <div className="px-6 pt-5 pb-2">
                 <p className="text-sm text-slate-600 text-center leading-relaxed mb-5">
-                  We've noted your EFT payment. Your deposit will reflect within{" "}
-                  <span className="font-semibold text-slate-800">1–3 business days</span>{" "}
-                  once it clears with the bank.
+                  We will contact you as soon as your payment has been received and confirmed.
                 </p>
 
                 {/* Pending badge info */}
@@ -550,10 +548,10 @@ const PaymentMethodModal = ({
                   </div>
                   <div>
                     <p className="text-xs font-bold text-amber-700 uppercase tracking-wide mb-0.5">
-                      Balance Pending
+                      Payment Pending
                     </p>
                     <p className="text-xs text-amber-600 leading-relaxed">
-                      Your balance will show as <span className="font-semibold">Pending</span> until the payment is verified and confirmed by our team.
+                      EFT deposits typically reflect within <span className="font-semibold">1–3 business days</span> once cleared with the bank.
                     </p>
                   </div>
                 </div>
