@@ -493,7 +493,6 @@ const PaymentPage = ({
           childWalletBalanceCents={isChildWalletPurchase ? Math.round(walletBalance * 100) : null}
           onSelectPaystack={() => handleMethodSelection("paystack")}
           onSelectWallet={() => handleMethodSelection("wallet")}
-          onSelectEFT={() => handleMethodSelection("direct_eft")}
           onEFTConfirm={() => handleMethodSelection("direct_eft")}
         />
 
