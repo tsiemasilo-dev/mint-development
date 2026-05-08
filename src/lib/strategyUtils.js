@@ -54,8 +54,7 @@ export const calculateMinInvestment = (strategy, holdingsBySymbol) => {
   if (!holdings.length) {
     const strategyPrice = Number(strategy?.last_close || strategy?.nav || strategy?.min_investment || 0);
     if (!strategyPrice || strategyPrice <= 0 || !isFinite(strategyPrice)) return null;
-    // If it's the DB min_investment, it's likely in cents, so normalize to Rands
-    return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : Math.round(strategyPrice);
+    return strategy?.min_investment ? Math.round(strategy.min_investment) : Math.round(strategyPrice);
   }
   let total = 0;
   let matched = 0;
@@ -75,7 +74,7 @@ export const calculateMinInvestment = (strategy, holdingsBySymbol) => {
   if (matched === 0) {
     const strategyPrice = Number(strategy?.last_close || strategy?.nav || strategy?.min_investment || 0);
     if (!strategyPrice || strategyPrice <= 0 || !isFinite(strategyPrice)) return null;
-    return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : Math.round(strategyPrice);
+    return strategy?.min_investment ? Math.round(strategy.min_investment) : Math.round(strategyPrice);
   }
   return Math.round(total);
 };
