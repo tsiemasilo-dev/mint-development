@@ -78,7 +78,7 @@ export const calculateMinInvestment = async (strategy, holdingsBySymbol, supabas
   try {
     const { data: intradayData, error } = await supabase
       .from("stock_intraday_c")
-      .select("security_id, symbol, close_price, as_of_date")
+      .select("security_id, symbol, current_price, as_of_date")
       .in("symbol", symbols)
       .order("as_of_date", { ascending: false })
       .limit(1, { foreignTable: "stock_intraday_c" });
@@ -92,7 +92,7 @@ export const calculateMinInvestment = async (strategy, holdingsBySymbol, supabas
     const pricesBySymbol = {};
     for (const record of intradayData) {
       if (record.symbol && !pricesBySymbol[record.symbol]) {
-        pricesBySymbol[record.symbol] = record.close_price;
+        pricesBySymbol[record.symbol] = record.current_price;
       }
     }
 
