@@ -69,25 +69,18 @@ export const calculateMinInvestment = async (strategy, holdingsBySymbol) => {
     let total = 0;
     console.log(`[${strategy.name}] Processing ${holdings.length} holdings`);
 
-    // For each holding, get the symbol and shares
+    // For each holding, get the symbol (already has .JO) and shares
     for (const holding of holdings) {
-      const symbol = normalizeSymbol(holding.ticker || holding.symbol || holding);
+      const symbol = holding.symbol || holding.ticker;  // Use symbol as-is (already has .JO)
       const shares = Number(holding.shares || holding.quantity || 1);
 
       if (!symbol || shares <= 0) continue;
 
-      // Get security_id from holdingsBySymbol
-      const security = holdingsBySymbol.get(symbol);
-      if (!security?.id) {
-        console.warn(`[${strategy.name}] No security found for ${symbol}`);
-        continue;
-      }
-
-      // Get latest price for this symbol from stock_intraday_c (symbols have .JO suffix)
+      // Get latest price for this symbol from stock_intraday_c
       const { data, error } = await supabase
         .from("stock_intraday_c")
         .select("current_price")
-        .eq("symbol", `${symbol}.JO`)
+        .eq("symbol", symbol)
         .order("timestamp", { ascending: false })
         .limit(1)
         .maybeSingle();
