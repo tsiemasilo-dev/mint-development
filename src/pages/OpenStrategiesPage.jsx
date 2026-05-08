@@ -182,16 +182,10 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
       if (!supabase || strategies.length === 0) return;
 
       try {
-        // Get all unique tickers from all strategies
+        // Get all unique symbols from all strategies (already include .JO suffix)
         const allTickers = [...new Set(
           strategies
-            .flatMap((strategy) => getHoldingsArray(strategy).flatMap((h) => {
-              const rawSymbol = h.ticker || h.symbol || h;
-              const normalizedSymbol = normalizeSymbol(rawSymbol);
-              return normalizedSymbol && normalizedSymbol !== rawSymbol
-                ? [rawSymbol, normalizedSymbol]
-                : [rawSymbol];
-            }))
+            .flatMap((strategy) => getHoldingsArray(strategy).map((h) => h.ticker || h.symbol || h).filter(Boolean))
         )];
 
         if (allTickers.length === 0) return;

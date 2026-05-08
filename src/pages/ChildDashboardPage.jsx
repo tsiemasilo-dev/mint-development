@@ -375,18 +375,13 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
     let isMounted = true;
     const calculateMin = async () => {
       try {
-        // Get all securities for building holdingsBySymbol map
-        const allTickers = [...new Set(
+        // Get all symbols from holdings (they already include .JO suffix)
+        const allSymbols = [...new Set(
           strategies
-            .flatMap((strategy) => getHoldingsArray(strategy).map((h) => {
-              const rawSymbol = h.ticker || h.symbol || h;
-              const normalizedSymbol = normalizeSymbol(rawSymbol);
-              return normalizedSymbol || rawSymbol;
-            }))
-            .filter(Boolean)
+            .flatMap((strategy) => getHoldingsArray(strategy).map((h) => h.symbol || h.ticker).filter(Boolean))
         )];
 
-        if (allTickers.length === 0) {
+        if (allSymbols.length === 0) {
           setSelectedStrategyMinimum(selected?.min_investment ? Math.round(selected.min_investment / 100) : null);
           return;
         }
@@ -394,7 +389,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
         const { data: securities } = await supabase
           .from("securities_c")
           .select("symbol, id, name, logo_url")
-          .in("symbol", allTickers);
+          .in("symbol", allSymbols);
 
         const holdingsBySymbol = buildHoldingsBySymbol(securities || []);
         const minValue = await calculateMinInvestment(selected, holdingsBySymbol);
@@ -1452,18 +1447,13 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   async function calculateAllChildFriendlyMinimums(strategies) {
     if (!supabase) return;
     try {
-      // Get all securities for building holdingsBySymbol map
-      const allTickers = [...new Set(
+      // Get all symbols from holdings (they already include .JO suffix)
+      const allSymbols = [...new Set(
         strategies
-          .flatMap((strategy) => getHoldingsArray(strategy).map((h) => {
-            const rawSymbol = h.ticker || h.symbol || h;
-            const normalizedSymbol = normalizeSymbol(rawSymbol);
-            return normalizedSymbol || rawSymbol;
-          }))
-          .filter(Boolean)
+          .flatMap((strategy) => getHoldingsArray(strategy).map((h) => h.symbol || h.ticker).filter(Boolean))
       )];
 
-      if (allTickers.length === 0) {
+      if (allSymbols.length === 0) {
         const minimums = {};
         strategies.forEach(s => {
           minimums[s.id] = s.min_investment ? Math.round(s.min_investment / 100) : null;
@@ -1475,7 +1465,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
       const { data: securities } = await supabase
         .from("securities_c")
         .select("symbol, id, name, logo_url")
-        .in("symbol", allTickers);
+        .in("symbol", allSymbols);
 
       const holdingsBySymbol = buildHoldingsBySymbol(securities || []);
 
