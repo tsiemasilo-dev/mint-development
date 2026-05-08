@@ -182,10 +182,16 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
       if (!supabase || strategies.length === 0) return;
 
       try {
-        // Get all unique symbols from all strategies (already include .JO suffix)
+        // Get all unique tickers from all strategies
         const allTickers = [...new Set(
           strategies
-            .flatMap((strategy) => getHoldingsArray(strategy).map((h) => h.ticker || h.symbol || h).filter(Boolean))
+            .flatMap((strategy) => getHoldingsArray(strategy).flatMap((h) => {
+              const rawSymbol = h.ticker || h.symbol || h;
+              const normalizedSymbol = normalizeSymbol(rawSymbol);
+              return normalizedSymbol && normalizedSymbol !== rawSymbol
+                ? [rawSymbol, normalizedSymbol]
+                : [rawSymbol];
+            }))
         )];
 
         if (allTickers.length === 0) return;
@@ -253,7 +259,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
 
       for (const strategy of strategies) {
         try {
-          const minValue = await calculateMinInvestment(strategy, null);
+          const minValue = await calculateMinInvestment(strategy, holdingsBySymbol);
           minimums[strategy.id] = minValue;
         } catch (error) {
           console.warn(`Error calculating minimum for ${strategy.name}:`, error.message);
@@ -274,7 +280,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
     return () => {
       isMounted = false;
     };
-  }, [strategies]);
+  }, [strategies, holdingsBySymbol]);
 
   const series = [
     { label: "Jan", returnPct: 1.2 },
