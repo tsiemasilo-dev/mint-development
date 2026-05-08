@@ -152,8 +152,6 @@ export default async function handler(req, res) {
 
     const matchedStrategies = [];
     for (const strategy of allStrategies) {
-      if (strategy.is_kid_strategy) continue;
-
       const hasHoldingsForStrategy = (holdingsByStrategyId[strategy.id] || []).length > 0;
       const isLinkedFromHoldings = strategyIdsFromHoldings.includes(strategy.id);
 

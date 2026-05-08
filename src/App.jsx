@@ -1651,6 +1651,11 @@ const App = () => {
         <KidStrategyChildPickerModal
           isOpen={showChildPickerModal}
           onClose={() => { setShowChildPickerModal(false); setPendingGoalFlow(null); }}
+          onSelectSelf={() => {
+            setSelectedChildForInvest(null);
+            setShowChildPickerModal(false);
+            setShowGoalModal(true);
+          }}
           onSelectChild={(child) => {
             setSelectedChildForInvest(child);
             setShowChildPickerModal(false);
