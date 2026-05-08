@@ -367,7 +367,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
 
   // Calculate minimum investment for selected strategy
   useEffect(() => {
-    if (!selected || !supabase || strategies.length === 0) {
+    if (!selected || !supabase) {
       setSelectedStrategyMinimum(null);
       return;
     }
@@ -375,24 +375,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
     let isMounted = true;
     const calculateMin = async () => {
       try {
-        // Get all symbols from holdings (they already include .JO suffix)
-        const allSymbols = [...new Set(
-          strategies
-            .flatMap((strategy) => getHoldingsArray(strategy).map((h) => h.symbol || h.ticker).filter(Boolean))
-        )];
-
-        if (allSymbols.length === 0) {
-          setSelectedStrategyMinimum(selected?.min_investment ? Math.round(selected.min_investment / 100) : null);
-          return;
-        }
-
-        const { data: securities } = await supabase
-          .from("securities_c")
-          .select("symbol, id, name, logo_url")
-          .in("symbol", allSymbols);
-
-        const holdingsBySymbol = buildHoldingsBySymbol(securities || []);
-        const minValue = await calculateMinInvestment(selected, holdingsBySymbol);
+        const minValue = await calculateMinInvestment(selected, null);
         if (isMounted) setSelectedStrategyMinimum(minValue);
       } catch (error) {
         console.error("Error calculating min investment:", error);
@@ -402,7 +385,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
 
     calculateMin();
     return () => { isMounted = false; };
-  }, [selected, strategies]);
+  }, [selected]);
 
   useEffect(() => {
     if (!selected || step !== "preview") {
@@ -1447,31 +1430,9 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   async function calculateAllChildFriendlyMinimums(strategies) {
     if (!supabase) return;
     try {
-      // Get all symbols from holdings (they already include .JO suffix)
-      const allSymbols = [...new Set(
-        strategies
-          .flatMap((strategy) => getHoldingsArray(strategy).map((h) => h.symbol || h.ticker).filter(Boolean))
-      )];
-
-      if (allSymbols.length === 0) {
-        const minimums = {};
-        strategies.forEach(s => {
-          minimums[s.id] = s.min_investment ? Math.round(s.min_investment / 100) : null;
-        });
-        if (isMounted.current) setChildFriendlyMinimums(minimums);
-        return;
-      }
-
-      const { data: securities } = await supabase
-        .from("securities_c")
-        .select("symbol, id, name, logo_url")
-        .in("symbol", allSymbols);
-
-      const holdingsBySymbol = buildHoldingsBySymbol(securities || []);
-
       const minimums = {};
       for (const strategy of strategies) {
-        const minValue = await calculateMinInvestment(strategy, holdingsBySymbol);
+        const minValue = await calculateMinInvestment(strategy, null);
         minimums[strategy.id] = minValue;
       }
 

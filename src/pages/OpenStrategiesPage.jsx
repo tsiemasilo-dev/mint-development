@@ -253,7 +253,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
 
       for (const strategy of strategies) {
         try {
-          const minValue = await calculateMinInvestment(strategy, holdingsBySymbol);
+          const minValue = await calculateMinInvestment(strategy, null);
           minimums[strategy.id] = minValue;
         } catch (error) {
           console.warn(`Error calculating minimum for ${strategy.name}:`, error.message);
@@ -274,7 +274,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
     return () => {
       isMounted = false;
     };
-  }, [strategies, holdingsBySymbol]);
+  }, [strategies]);
 
   const series = [
     { label: "Jan", returnPct: 1.2 },
