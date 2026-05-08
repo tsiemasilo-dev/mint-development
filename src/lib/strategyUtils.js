@@ -83,11 +83,11 @@ export const calculateMinInvestment = async (strategy, holdingsBySymbol) => {
         continue;
       }
 
-      // Get latest price for this security_id from stock_intraday_c
+      // Get latest price for this symbol from stock_intraday_c (symbols have .JO suffix)
       const { data, error } = await supabase
         .from("stock_intraday_c")
         .select("current_price")
-        .eq("security_id", security.id)
+        .eq("symbol", `${symbol}.JO`)
         .order("timestamp", { ascending: false })
         .limit(1)
         .maybeSingle();
