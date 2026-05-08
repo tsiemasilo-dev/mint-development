@@ -108,9 +108,10 @@ export const calculateMinInvestment = async (strategy, holdingsBySymbol) => {
       total += contribution;
     }
 
-    // Convert from cents to Rands
-    const result = Math.round(total / 100);
-    console.log(`✅ [${strategy?.name}] Total: ${total} cents → R${result}`);
+    // Convert from cents to Rands and add 8% markup
+    const resultBeforeMarkup = Math.round(total / 100);
+    const result = Math.round(resultBeforeMarkup * 1.08);
+    console.log(`✅ [${strategy?.name}] Total: ${total} cents → R${resultBeforeMarkup} + 8% markup → R${result}`);
     return result;
   } catch (err) {
     console.error(`❌ [${strategy?.name}] Error calculating min investment:`, err);
