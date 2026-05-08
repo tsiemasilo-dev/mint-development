@@ -83,7 +83,7 @@ export const calculateMinInvestment = async (strategy, holdingsBySymbol) => {
         .eq("symbol", symbol)
         .order("timestamp", { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.warn(`[${strategy.name}] Error fetching price for ${symbol}:`, error.message);
