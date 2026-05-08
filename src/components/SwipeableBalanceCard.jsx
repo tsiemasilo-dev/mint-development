@@ -238,7 +238,8 @@ const SwipeableBalanceCard = ({
 
       try {
         let enrichedHoldings = [];
-        let strategiesRes = { strategies: [] }; // Initialize to avoid ReferenceError
+        let strategiesRes = { strategies: [] };
+        let holdingsRes = { holdings: [] };
 
         // Child mode: fetch from stock_holdings_c directly
         if (familyMemberId) {
@@ -287,7 +288,7 @@ const SwipeableBalanceCard = ({
           if (cancelled) return;
           const token = sessionResult?.data?.session?.access_token;
 
-          const [holdingsRes, strategiesRes] = token
+          [holdingsRes, strategiesRes] = token
             ? await Promise.all([
               fetch("/api/user/holdings", {
                 headers: { Authorization: `Bearer ${token}` },
