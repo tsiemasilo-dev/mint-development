@@ -276,7 +276,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
     return () => {
       isMounted = false;
     };
-  }, [strategies, holdingsBySymbol, supabase]);
+  }, [strategies, holdingsBySymbol]);
 
   const series = [
     { label: "Jan", returnPct: 1.2 },

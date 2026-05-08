@@ -62,7 +62,7 @@ export const calculateMinInvestment = async (strategy, holdingsBySymbol, supabas
   let matched = 0;
 
   if (!supabase) {
-    console.warn("⚠️ Supabase not available for calculateMinInvestment, using fallback");
+    console.warn(`⚠️ Supabase not available for calculateMinInvestment (${strategy.name}), using fallback. min_investment=${strategy?.min_investment}`);
     return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : null;
   }
 
