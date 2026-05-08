@@ -15,6 +15,7 @@ const PaymentMethodModal = ({
   onSelectOzow,
   onEFTConfirm,
   onSelectWallet,
+  onSelectEFT,
   childFamilyMemberId,
   childFirstName,
   childWalletBalanceCents,
@@ -179,8 +180,12 @@ const PaymentMethodModal = ({
                       setShowTopUpPrompt(false);
                       onSelectWallet?.();
                     } else {
-                      setShowTopUpPrompt(true);
-                      setEftExpanded(true);
+                      if (onSelectEFT) {
+                        onSelectEFT();
+                      } else {
+                        setShowTopUpPrompt(true);
+                        setEftExpanded(true);
+                      }
                     }
                   }}
                   className={`w-full flex items-center gap-4 rounded-2xl border-2 px-4 py-3.5 text-left transition active:scale-[0.98] ${

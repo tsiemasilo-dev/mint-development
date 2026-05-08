@@ -1433,6 +1433,7 @@ const App = () => {
           strategyName={stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock"}
           onSelectPaystack={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("paystack"); navigateTo("stockPayment"); }}
           onSelectWallet={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("wallet"); navigateTo("stockPayment"); }}
+          onSelectEFT={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("direct_eft"); navigateTo("stockPayment"); }}
           onSelectOzow={async () => {
             try {
               const { data: { user } } = await supabase.auth.getUser();
@@ -1690,6 +1691,7 @@ const App = () => {
           childWalletBalanceCents={isChildStrategyPurchase ? (selectedChildForInvest?.available_balance ?? null) : null}
           onSelectPaystack={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("paystack"); navigateTo("payment"); }}
           onSelectWallet={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("wallet"); navigateTo("payment"); }}
+          onSelectEFT={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("direct_eft"); navigateTo("payment"); }}
           onSelectOzow={async () => {
             try {
               const { data: { user } } = await supabase.auth.getUser();
