@@ -97,11 +97,9 @@ export const useUserStrategies = () => {
             return h;
           });
         } else {
-          invested = strategy.investedAmount || 0;
-          currentVal = strategy.currentMarketValue != null
-            ? Number(strategy.currentMarketValue.toFixed(2))
-            : invested;
-          changePct = invested > 0 ? ((currentVal - invested) / invested) * 100 : 0;
+          invested = 0;
+          currentVal = 0;
+          changePct = 0;
           ytdPctDecimal = null;
           augmentedHoldings = strategy.holdings || [];
         }
@@ -126,6 +124,7 @@ export const useUserStrategies = () => {
           metrics: latestMetric,
           firstInvestedDate: strategy.firstInvestedDate || null,
           ytd_pct: ytdPctDecimal,
+          hasReturnsData: !!returnsRow,
         };
       });
 
