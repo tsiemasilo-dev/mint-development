@@ -263,6 +263,8 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
   const [selectedStrategyAnalyticsLoading, setSelectedStrategyAnalyticsLoading] = useState(false);
   const [selectedStrategyActiveLabel, setSelectedStrategyActiveLabel] = useState(null);
   const [selectedStrategyMinimum, setSelectedStrategyMinimum] = useState(null);
+  const [strategyMinimums, setStrategyMinimums] = useState({}); // Minimums for browse list
+  const [minimumLoading, setMinimumLoading] = useState(true);
   const previewGradientId = useId();
   const [units, setUnits] = useState(1);
   const [saving, setSaving] = useState(false);
@@ -282,11 +284,12 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
 
   async function fetchStrategies() {
     setLoading(true);
+    setMinimumLoading(true);
     try {
       if (!supabase) return;
       const { data } = await supabase
         .from("strategies_c")
-        .select("id, name, short_name, description, risk_level, sector, tags, min_investment, is_featured, holdings, strategy_metrics(*)")
+        .select("id, name, short_name, description, risk_level, sector, tags, min_investment, is_featured, holdings")
         .eq("status", "active")
         .eq("is_kid_strategy", true)
         .order("is_featured", { ascending: false })
@@ -307,12 +310,18 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
         (secs || []).forEach(s => { secMap[s.symbol] = s; });
       }
 
+      // Fetch YTD returns from strategies_returns_c
+      const currentYear = new Date().getFullYear();
+      const yearStart = `${currentYear}-01-01`;
+      const { data: returnsData } = await supabase
+        .from("strategies_returns_c")
+        .select("strategy_id, ytd_return")
+        .gte("as_of_date", yearStart);
+
+      const returnsMap = {};
+      (returnsData || []).forEach(r => { returnsMap[r.strategy_id] = r.ytd_return; });
+
       const enriched = rows.map(s => {
-        const metrics = Array.isArray(s.strategy_metrics)
-          ? [...s.strategy_metrics].sort((a, b) => (b.as_of_date || "").localeCompare(a.as_of_date || ""))[0]
-          : s.strategy_metrics;
-        const r_ytd = metrics?.r_ytd ?? metrics?.r_ytd_pct ?? metrics?.r_1y ?? null;
-        const ytd_as_of_date = metrics?.as_of_date ?? null;
         const holdingsList = (Array.isArray(s.holdings) ? s.holdings : [])
           .sort((a, b) => Number(b.weight || 0) - Number(a.weight || 0))
           .map(h => {
@@ -325,12 +334,34 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
               logo_url: security.logo_url || null,
             };
           });
-        return { ...s, r_ytd, ytd_as_of_date, holdingsList };
+        return { ...s, holdingsList, ytd_return: returnsMap[s.id] };
       });
 
       setStrategies(enriched);
+
+      // Calculate minimums for all strategies
+      await calculateAllStrategiesMinimums(enriched);
     } catch (e) { console.error("[child-invest] strategies", e); }
     finally { setLoading(false); }
+  }
+
+  async function calculateAllStrategiesMinimums(strategies) {
+    if (!supabase) {
+      setMinimumLoading(false);
+      return;
+    }
+    try {
+      const minimums = {};
+      for (const strategy of strategies) {
+        const minValue = await calculateMinInvestment(strategy, null);
+        minimums[strategy.id] = minValue;
+      }
+      setStrategyMinimums(minimums);
+    } catch (error) {
+      console.error("Error calculating strategy minimums:", error);
+    } finally {
+      setMinimumLoading(false);
+    }
   }
 
   async function handleInvest() {
@@ -510,14 +541,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
     };
   }, [selectedStrategyAnalytics]);
 
-  const getYtdPct = (strategy) => {
-    if (strategy?.r_ytd == null) return null;
-    const value = Number(strategy.r_ytd);
-    if (!Number.isFinite(value)) return null;
-    return Math.abs(value) > 1 ? value : value * 100;
-  };
-
-  const selectedYtdPct = getYtdPct(selected);
+  const selectedYtdPct = selected?.ytd_return ?? null;
   const previewChartLineColor = (selectedYtdPct ?? 0) > 0
     ? "#16a34a"
     : (selectedYtdPct ?? 0) < 0
@@ -864,7 +888,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
                   ) : (
                     <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-0.5">
                       {filtered.map((s) => {
-                        const ytdPct = getYtdPct(s);
+                        const ytdPct = s.ytd_return ?? null;
                         const isUp = (ytdPct ?? 0) >= 0;
                         return (
                           <button
@@ -879,9 +903,9 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
                                 <p className="text-xs text-slate-500 line-clamp-1">
                                   {s.risk_level || "Balanced"}{s.description ? ` - ${s.description.substring(0, 60)}${s.description.length > 60 ? "..." : ""}` : ""}
                                 </p>
-                                {s.min_investment > 0 && (
-                                  <p className="text-[11px] text-slate-400">Min. {fmt(s.min_investment)}</p>
-                                )}
+                                <p className="text-[11px] text-slate-400">
+                                  {minimumLoading ? "Calculating..." : (strategyMinimums[s.id] ? `Min. R${strategyMinimums[s.id].toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—")}
+                                </p>
                               </div>
                               {/* Sparkline */}
                               <div className="flex-shrink-0 rounded-xl bg-slate-50 px-2 py-1.5">
