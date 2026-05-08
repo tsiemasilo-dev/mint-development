@@ -266,7 +266,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
       }
 
       if (isMounted) {
-        console.log(`✅ Calculated minimums for ${Object.keys(minimums).length} strategies`);
+        console.log(`✅ Calculated minimums for ${Object.keys(minimums).length} strategies`, minimums);
         setStrategyMinimums(minimums);
       }
     };
