@@ -24,6 +24,8 @@ export const useUserStrategies = () => {
       }
 
       const token = session.access_token;
+      const userId = session.user.id;
+
       const res = await fetch("/api/user/strategies", {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -39,18 +41,70 @@ export const useUserStrategies = () => {
       const serverStrategies = json.strategies || [];
 
       if (serverStrategies.length === 0) {
-        console.log("[useUserStrategies] No strategies found from API");
         setData({ strategies: [], selectedStrategy: null, loading: false, error: null });
         return;
       }
 
+      const strategyIds = serverStrategies.map(s => s.id);
+      const { data: returnsRows, error: returnsError } = await supabase
+        .from("client_strategy_returns_c")
+        .select("*")
+        .eq("user_id", userId)
+        .in("strategy_id", strategyIds)
+        .order("as_of_date", { ascending: false });
+
+      const latestReturnsMap = {};
+      if (!returnsError && returnsRows) {
+        returnsRows.forEach(row => {
+          if (!latestReturnsMap[row.strategy_id]) {
+            latestReturnsMap[row.strategy_id] = row;
+          }
+        });
+      }
+
       const formattedStrategies = serverStrategies.map((strategy) => {
         const latestMetric = strategy.metrics;
-        const invested = strategy.investedAmount || 0;
-        const currentVal = strategy.currentMarketValue != null
-          ? Number(strategy.currentMarketValue.toFixed(2))
-          : invested;
-        const changePct = invested > 0 ? ((currentVal - invested) / invested) * 100 : 0;
+        const returnsRow = latestReturnsMap[strategy.id];
+
+        let invested, currentVal, changePct, augmentedHoldings, ytdPctDecimal;
+
+        if (returnsRow) {
+          const snapshot = (() => {
+            try {
+              return typeof returnsRow.holdings_snapshot === "string"
+                ? JSON.parse(returnsRow.holdings_snapshot)
+                : (returnsRow.holdings_snapshot || []);
+            } catch { return []; }
+          })();
+
+          currentVal = Number((returnsRow.basket_value / 100).toFixed(2));
+          invested = snapshot.reduce((sum, h) => sum + (h.avg_fill || 0) * (h.qty || 0) / 100, 0);
+          changePct = invested > 0 ? ((currentVal - invested) / invested) * 100 : 0;
+          ytdPctDecimal = returnsRow.ytd_pct != null ? returnsRow.ytd_pct / 100 : null;
+
+          const snapshotMap = {};
+          snapshot.forEach(h => { snapshotMap[h.symbol] = h; });
+
+          augmentedHoldings = (strategy.holdings || []).map(h => {
+            const snap = snapshotMap[h.symbol];
+            if (snap) {
+              const stockCurrentVal = (snap.current_price * snap.qty) / 100;
+              const stockCostBasis = (snap.avg_fill * snap.qty) / 100;
+              const pnlRands = stockCurrentVal - stockCostBasis;
+              const pnlPct = stockCostBasis > 0 ? (pnlRands / stockCostBasis) * 100 : 0;
+              return { ...h, pnlRands: Number(pnlRands.toFixed(2)), pnlPct: Number(pnlPct.toFixed(2)) };
+            }
+            return h;
+          });
+        } else {
+          invested = strategy.investedAmount || 0;
+          currentVal = strategy.currentMarketValue != null
+            ? Number(strategy.currentMarketValue.toFixed(2))
+            : invested;
+          changePct = invested > 0 ? ((currentVal - invested) / invested) * 100 : 0;
+          ytdPctDecimal = null;
+          augmentedHoldings = strategy.holdings || [];
+        }
 
         return {
           id: strategy.id,
@@ -62,15 +116,16 @@ export const useUserStrategies = () => {
           sector: strategy.sector || "",
           iconUrl: strategy.iconUrl,
           imageUrl: strategy.imageUrl,
-          holdings: strategy.holdings || [],
-          investedAmount: invested,
+          holdings: augmentedHoldings,
+          investedAmount: Number(invested.toFixed(2)),
           currentValue: currentVal,
           unitsHeld: 0,
           entryDate: null,
-          lastUpdated: latestMetric?.as_of_date,
+          lastUpdated: returnsRow?.as_of_date || latestMetric?.as_of_date,
           previousMonthChange: parseFloat(changePct.toFixed(1)),
           metrics: latestMetric,
           firstInvestedDate: strategy.firstInvestedDate || null,
+          ytd_pct: ytdPctDecimal,
         };
       });
 
@@ -102,7 +157,7 @@ export const useUserStrategies = () => {
   return { ...data, selectStrategy, refetch: fetchUserStrategies };
 };
 
-export const useStrategyChartData = (strategyId, timeFilter = "W", purchaseDate = null) => {
+export const useStrategyChartData = (strategyId, timeFilter = "W", purchaseDate = null, userId = null) => {
   const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -115,6 +170,65 @@ export const useStrategyChartData = (strategyId, timeFilter = "W", purchaseDate 
 
       setLoading(true);
 
+      let resolvedUserId = userId;
+      if (!resolvedUserId && supabase) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          resolvedUserId = session?.user?.id || null;
+        } catch {}
+      }
+
+      if (resolvedUserId && supabase) {
+        try {
+          const now = new Date();
+          let query = supabase
+            .from("client_strategy_returns_c")
+            .select("as_of_date, basket_value")
+            .eq("user_id", resolvedUserId)
+            .eq("strategy_id", strategyId)
+            .order("as_of_date", { ascending: false });
+
+          if (timeFilter === "D") {
+            query = query.limit(2);
+          } else if (timeFilter === "5d") {
+            query = query.limit(5);
+          } else if (timeFilter === "m") {
+            const fromDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+            query = query.gte("as_of_date", fromDate.toISOString().split("T")[0]);
+          } else if (timeFilter === "ytd") {
+            query = query.gte("as_of_date", `${now.getFullYear()}-01-01`);
+          }
+
+          const { data: rows, error } = await query;
+
+          if (!error && rows && rows.length > 0) {
+            const ascending = [...rows].reverse();
+            const firstBasket = ascending[0].basket_value || 0;
+
+            const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+            const DAY_NAMES_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+            const formatted = [{ day: null, value: 0, fullDate: null }];
+            ascending.forEach(row => {
+              const [y, m, d] = row.as_of_date.split("-").map(Number);
+              const dow = new Date(y, m - 1, d).getDay();
+              const pnl = Number(((row.basket_value - firstBasket) / 100).toFixed(2));
+              formatted.push({
+                day: `${d} ${MONTH_NAMES[m - 1]} '${String(y).slice(-2)}`,
+                value: pnl,
+                fullDate: `${DAY_NAMES_SHORT[dow]}, ${d} ${MONTH_NAMES[m - 1]} ${y}`,
+              });
+            });
+
+            setChartData(formatted);
+            setLoading(false);
+            return;
+          }
+        } catch (err) {
+          console.warn("[useStrategyChartData] client_strategy_returns_c error, falling back to price history:", err);
+        }
+      }
+
       const timeframeMap = {
         "D": "1D",
         "W": "1W",
@@ -126,7 +240,7 @@ export const useStrategyChartData = (strategyId, timeFilter = "W", purchaseDate 
         "all": "1Y",
       };
 
-      const timeframe = timeframeMap[timeFilter] || timeframeMap["D"] || "1D";
+      const timeframe = timeframeMap[timeFilter] || "1D";
 
       try {
         const priceHistory = await getStrategyPriceHistory(strategyId, timeframe);
@@ -154,8 +268,7 @@ export const useStrategyChartData = (strategyId, timeFilter = "W", purchaseDate 
           }
         }
 
-        const formattedData = formatChartData(filteredHistory, timeFilter);
-        setChartData(formattedData);
+        setChartData(formatChartData(filteredHistory, timeFilter));
 
       } catch (err) {
         console.error("Error fetching chart data:", err);
@@ -166,12 +279,11 @@ export const useStrategyChartData = (strategyId, timeFilter = "W", purchaseDate 
     };
 
     fetchChartData();
-  }, [strategyId, timeFilter, purchaseDate]);
+  }, [strategyId, timeFilter, purchaseDate, userId]);
 
   return { chartData, loading };
 };
 
-// Fetch period-specific return data from client_strategy_returns_c
 export const useStrategyPeriodReturns = (userId, strategyId, activeTab = "m") => {
   const [returnData, setReturnData] = useState({ pnl: 0, pct: 0, basketValue: 0 });
   const [loading, setLoading] = useState(false);
@@ -274,7 +386,6 @@ function formatChartData(priceHistory, timeFilter) {
         const { year, month } = parseDateParts(p.ts);
         monthKeys.add(`${year}-${month}`);
       });
-      // If less than 3 months of data, show daily points so the chart has a meaningful curve
       if (monthKeys.size < 3) {
         return priceHistory.map((p) => {
           const { year, month, day, dayOfWeek } = parseDateParts(p.ts);
@@ -285,7 +396,6 @@ function formatChartData(priceHistory, timeFilter) {
           };
         });
       }
-      // For longer history, group by month
       const grouped = {};
       priceHistory.forEach((p) => {
         const { year, month } = parseDateParts(p.ts);

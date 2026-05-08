@@ -163,7 +163,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   const stockDropdownRef = useRef(null);
   const { profile } = useProfile();
   const { strategies, selectedStrategy: userSelectedStrategy, loading: strategiesLoading, selectStrategy, refetch: refetchStrategies } = useUserStrategies();
-  const { chartData: realChartData, loading: chartLoading } = useStrategyChartData(userSelectedStrategy?.strategyId, timeFilter, userSelectedStrategy?.firstInvestedDate || null);
+  const { chartData: realChartData, loading: chartLoading } = useStrategyChartData(userSelectedStrategy?.strategyId, timeFilter, userSelectedStrategy?.firstInvestedDate || null, profile?.id);
   const { returnData: periodReturnData, loading: periodReturnLoading } = useStrategyPeriodReturns(profile?.id, userSelectedStrategy?.strategyId, timeFilter);
 
   const fullName = [profile?.firstName || profile?.first_name, profile?.lastName || profile?.last_name]
@@ -427,7 +427,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           currentValue: sCv,
           investedAmount: sIa,
           change: sPnlPct,
-          ytd_return: s.metrics?.r_ytd,
+          ytd_return: s.ytd_pct != null ? s.ytd_pct : s.metrics?.r_ytd,
         });
       }
     });
@@ -442,6 +442,11 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
 
   const getChartData = () => {
     if (realChartData && realChartData.length > 0) {
+      // Pre-computed P&L format from client_strategy_returns_c — first point has day:null, value:0
+      if (realChartData[0]?.day === null && realChartData[0]?.value === 0) {
+        return realChartData;
+      }
+      // Legacy NAV-based format from strategy_price_history — scale to user P&L
       const currentValue = currentStrategy.currentValue || 0;
       const costBasis = currentStrategy.investedAmount || 0;
       if (currentValue > 0 && realChartData.length > 0) {
