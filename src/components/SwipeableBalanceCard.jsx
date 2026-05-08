@@ -244,23 +244,37 @@ const SwipeableBalanceCard = ({
         if (familyMemberId) {
           const { data: childHoldings, error } = await supabase
             .from("stock_holdings_c")
-            .select("id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id, securities(symbol, name, logo_url)")
+            .select("id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id, Fill_date, securities(symbol, name, logo_url, last_price)")
             .eq("family_member_id", familyMemberId);
 
           if (!error && childHoldings) {
-            enrichedHoldings = childHoldings.map((h) => ({
-              id: h.id,
-              symbol: h.securities?.symbol || `SEC-${String(h.security_id || "").slice(0, 6)}`,
-              name: h.securities?.name || "Security",
-              market_value: Math.round((h.market_value || 0) * 100), // Convert to cents
-              invested_amount: Math.round((h.avg_fill * h.quantity) * 100),
-              avg_fill: Math.round(h.avg_fill * 100),
-              quantity: h.quantity,
-              logo_url: h.securities?.logo_url || null,
-              security_id: h.security_id,
-              strategy_id: h.strategy_id,
-              isStrategy: false,
-            }));
+            enrichedHoldings = childHoldings.map((h) => {
+              const quantity = Number(h.quantity || 0);
+              const avgFillCents = Number(h.avg_fill || 0);
+              const isFilled = avgFillCents > 0 && !!h.Fill_date;
+              const livePriceCents = Number(h.securities?.last_price || 0) > 0
+                ? Math.round(Number(h.securities.last_price) * 100)
+                : 0;
+              const marketValueCents = isFilled
+                ? (livePriceCents > 0 && quantity > 0
+                  ? Math.round(livePriceCents * quantity)
+                  : Math.round(Number(h.market_value || 0)))
+                : 0;
+              const investedCents = isFilled ? Math.round(avgFillCents * quantity) : 0;
+              return {
+                id: h.id,
+                symbol: h.securities?.symbol || `SEC-${String(h.security_id || "").slice(0, 6)}`,
+                name: h.securities?.name || "Security",
+                market_value: marketValueCents,
+                invested_amount: investedCents,
+                avg_fill: isFilled ? avgFillCents : 0,
+                quantity,
+                logo_url: h.securities?.logo_url || null,
+                security_id: h.security_id,
+                strategy_id: h.strategy_id,
+                isStrategy: false,
+              };
+            });
           }
         } else {
           // Parent mode: fetch from API endpoints

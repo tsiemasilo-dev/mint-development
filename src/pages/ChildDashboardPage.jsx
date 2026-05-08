@@ -1398,13 +1398,13 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
       if (securityIds.length > 0) {
         const { data: secs } = await supabase
           .from("securities_c")
-          .select("id, symbol, name, logo_url")
+          .select("id, symbol, name, logo_url, last_price")
           .in("id", securityIds);
         (secs || []).forEach(s => { secMap[s.id] = s; });
       }
       const rows = baseRows.map(h => {
         const sec = secMap[h.security_id] || {};
-        return { ...h, symbol: sec.symbol || null, name: sec.name || null, logo_url: sec.logo_url || null };
+        return { ...h, symbol: sec.symbol || null, name: sec.name || null, logo_url: sec.logo_url || null, last_price: sec.last_price ?? null };
       });
       if (isMounted.current) setHoldings(rows);
 
@@ -1625,8 +1625,24 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     }
   }
 
-  // market_value and avg_fill are stored in rands; convert to cents for fmt
-  const totalPortfolioCents = holdings.reduce((s, h) => s + Math.round((h.market_value || 0) * 100), 0);
+  const isHoldingFilled = (holding) => Number(holding.avg_fill || 0) > 0 && !!holding.Fill_date;
+  const getHoldingMarketValueCents = (holding) => {
+    if (!isHoldingFilled(holding)) return 0;
+    const quantity = Number(holding.quantity || 0);
+    const livePriceCents = Number(holding.last_price || 0) > 0
+      ? Math.round(Number(holding.last_price) * 100)
+      : 0;
+    if (livePriceCents > 0 && quantity > 0) {
+      return Math.round(livePriceCents * quantity);
+    }
+    return Math.round(Number(holding.market_value || 0));
+  };
+  const getHoldingCostCents = (holding) => {
+    if (!isHoldingFilled(holding)) return 0;
+    return Math.round(Number(holding.avg_fill || 0) * Number(holding.quantity || 0));
+  };
+
+  const totalPortfolioCents = holdings.reduce((s, h) => s + getHoldingMarketValueCents(h), 0);
 
 
   // Group holdings by strategy
@@ -1639,9 +1655,9 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
 
   const strategyCards = Object.entries(strategyGroups).map(([sid, hs]) => {
     const strat = strategyMap[sid] || {};
-    const isFilling = hs.some((h) => !Number(h.avg_fill || 0) || !h.Fill_date);
-    const totalValueCents = isFilling ? 0 : hs.reduce((s, h) => s + Math.round((h.market_value || 0) * 100), 0);
-    const totalCostCents = isFilling ? 0 : hs.reduce((s, h) => s + Math.round(Number(h.avg_fill || 0) * Number(h.quantity || 0) * 100), 0);
+    const isFilling = hs.some((h) => !isHoldingFilled(h));
+    const totalValueCents = isFilling ? 0 : hs.reduce((s, h) => s + getHoldingMarketValueCents(h), 0);
+    const totalCostCents = isFilling ? 0 : hs.reduce((s, h) => s + getHoldingCostCents(h), 0);
     const pnlCents = totalValueCents - totalCostCents;
     const pnlP = totalCostCents > 0 ? (pnlCents / totalCostCents) * 100 : 0;
     return { id: sid, name: strat.name || "Strategy", short_name: strat.short_name, risk_level: strat.risk_level, is_featured: strat.is_featured, totalValue: totalValueCents, pnl: pnlCents, pnlPct: pnlP, holdings: hs, isFilling };
@@ -1649,12 +1665,13 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
 
   // Best performing individual assets (top 5 by unrealized_pnl %)
   const bestAssets = [...holdings]
-    .filter(h => h.symbol && h.market_value > 0 && Number(h.avg_fill || 0) > 0 && h.Fill_date)
+    .filter(h => h.symbol && isHoldingFilled(h) && getHoldingMarketValueCents(h) > 0)
     .map(h => {
-      const costRands = Number(h.avg_fill || 0) * Number(h.quantity || 0);
-      const marketRands = h.market_value || 0;
-      const pnlR = marketRands - costRands;
-      const pnlP = costRands > 0 ? ((marketRands - costRands) / costRands) * 100 : 0;
+      const costCents = getHoldingCostCents(h);
+      const marketCents = getHoldingMarketValueCents(h);
+      const pnlCents = marketCents - costCents;
+      const pnlR = pnlCents / 100;
+      const pnlP = costCents > 0 ? (pnlCents / costCents) * 100 : 0;
       return { ...h, pnlR, pnlP };
     })
     .sort((a, b) => b.pnlP - a.pnlP)
@@ -1689,6 +1706,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
           <div className="mt-4">
             <SwipeableBalanceCard
               userId={null}
+              familyMemberId={child?.id || null}
               mintNumber={parentMintNumber || null}
               overrideBalance={totalPortfolioCents / 100}
               overrideWalletBalance={childBalance / 100}
