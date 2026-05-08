@@ -144,9 +144,9 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [showProceed, setShowProceed] = useState(false);
   const [agreedAll, setAgreedAll] = useState(false);
-  const [sec1Open, setSec1Open] = useState(true);
-  const [sec2Open, setSec2Open] = useState(true);
-  const [sec3Open, setSec3Open] = useState(true);
+  const [sec1Open, setSec1Open] = useState(false);
+  const [sec2Open, setSec2Open] = useState(false);
+  const [sec3Open, setSec3Open] = useState(false);
   const [signingStarted, setSigningStarted] = useState(false);
   const [existingOnboardingId, setExistingOnboardingId] = useState(null);
 
