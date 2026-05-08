@@ -1,3 +1,5 @@
+import { supabase } from "./supabase.js";
+
 export const normalizeSymbol = (symbol) => {
   if (typeof symbol !== "string") return symbol;
   const trimmed = symbol.trim();
@@ -49,7 +51,7 @@ const getMinFromPrice = (price) => {
 };
 
 
-export const calculateMinInvestment = async (strategy, holdingsBySymbol, supabase) => {
+export const calculateMinInvestment = async (strategy, holdingsBySymbol) => {
   const holdings = getHoldingsArray(strategy);
 
   // If no holdings, use min_investment from database

@@ -257,7 +257,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
 
       for (const strategy of strategies) {
         try {
-          const minValue = await calculateMinInvestment(strategy, holdingsBySymbol, supabase);
+          const minValue = await calculateMinInvestment(strategy, holdingsBySymbol);
           minimums[strategy.id] = minValue;
         } catch (error) {
           console.warn(`Error calculating minimum for ${strategy.name}:`, error.message);
