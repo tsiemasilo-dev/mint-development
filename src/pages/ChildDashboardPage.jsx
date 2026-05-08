@@ -1071,8 +1071,6 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
                     <input
                       type="checkbox"
                       id="terms"
-                      checked={savingDone || false}
-                      onChange={(e) => {}}
                       className="mt-1 h-5 w-5 rounded border-slate-300"
                     />
                     <label htmlFor="terms" className="text-xs text-slate-600">
