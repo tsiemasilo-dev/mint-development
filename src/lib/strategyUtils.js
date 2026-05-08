@@ -49,33 +49,75 @@ const getMinFromPrice = (price) => {
 };
 
 
-export const calculateMinInvestment = (strategy, holdingsBySymbol) => {
+export const calculateMinInvestment = async (strategy, holdingsBySymbol, supabase) => {
   const holdings = getHoldingsArray(strategy);
+
   if (!holdings.length) {
     const strategyPrice = Number(strategy?.last_close || strategy?.nav || strategy?.min_investment || 0);
     if (!strategyPrice || strategyPrice <= 0 || !isFinite(strategyPrice)) return null;
     return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : Math.round(strategyPrice);
   }
+
   let total = 0;
   let matched = 0;
-  for (const holding of holdings) {
-    const rawSymbol = holding.ticker || holding.symbol || holding;
-    const normalizedSym = normalizeSymbol(rawSymbol);
-    const security = holdingsBySymbol.get(rawSymbol) || holdingsBySymbol.get(normalizedSym);
-    if (security?.last_price != null) {
-      const pricePerShare = Number(security.last_price) / 100;
-      if (!pricePerShare || pricePerShare <= 0 || !isFinite(pricePerShare)) continue;
-      const shares = Number(holding.shares || holding.quantity || 1);
-      total += shares * pricePerShare;
-      matched++;
+
+  if (!supabase) {
+    console.warn("⚠️ Supabase not available for calculateMinInvestment, using fallback");
+    return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : null;
+  }
+
+  // Fetch latest stock_intraday_c prices for all securities in holdings
+  const symbols = holdings
+    .map(h => normalizeSymbol(h.ticker || h.symbol || h))
+    .filter(Boolean);
+
+  if (symbols.length === 0) {
+    return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : null;
+  }
+
+  try {
+    const { data: intradayData, error } = await supabase
+      .from("stock_intraday_c")
+      .select("security_id, symbol, close_price, as_of_date")
+      .in("symbol", symbols)
+      .order("as_of_date", { ascending: false })
+      .limit(1, { foreignTable: "stock_intraday_c" });
+
+    if (error || !intradayData) {
+      console.warn("⚠️ Error fetching intraday prices:", error?.message);
+      return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : null;
     }
+
+    // Build map of latest prices by symbol
+    const pricesBySymbol = {};
+    for (const record of intradayData) {
+      if (record.symbol && !pricesBySymbol[record.symbol]) {
+        pricesBySymbol[record.symbol] = record.close_price;
+      }
+    }
+
+    // Calculate minimum as sum of (shares * price in cents) for all holdings
+    for (const holding of holdings) {
+      const rawSymbol = holding.ticker || holding.symbol || holding;
+      const normalizedSym = normalizeSymbol(rawSymbol);
+      const priceCents = pricesBySymbol[normalizedSym];
+
+      if (priceCents != null && priceCents > 0) {
+        const shares = Number(holding.shares || holding.quantity || 1);
+        total += shares * (priceCents / 100); // Convert cents to Rands
+        matched++;
+      }
+    }
+
+    if (matched === 0) {
+      return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : null;
+    }
+
+    return Math.round(total);
+  } catch (err) {
+    console.error("❌ Error in calculateMinInvestment:", err.message);
+    return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : null;
   }
-  if (matched === 0) {
-    const strategyPrice = Number(strategy?.last_close || strategy?.nav || strategy?.min_investment || 0);
-    if (!strategyPrice || strategyPrice <= 0 || !isFinite(strategyPrice)) return null;
-    return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : Math.round(strategyPrice);
-  }
-  return Math.round(total);
 };
 
 export const getAdjustedShares = (holding, holdingsBySymbol) => {
