@@ -1704,13 +1704,27 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
           </div>
 
           <div className="mt-4">
-            <SwipeableBalanceCard
-              userId={null}
-              familyMemberId={child?.id || null}
-              mintNumber={parentMintNumber || null}
-              overrideBalance={totalPortfolioCents / 100}
-              overrideWalletBalance={childBalance / 100}
-            />
+            {loading ? (
+              <div className="rounded-[28px] bg-white/95 p-5 shadow-xl border border-white/70">
+                <div className="flex items-center justify-between mb-8">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-8 w-8 rounded-full" />
+                </div>
+                <Skeleton className="h-10 w-40 mb-8" />
+                <div className="grid grid-cols-2 gap-3">
+                  <Skeleton className="h-12 rounded-2xl" />
+                  <Skeleton className="h-12 rounded-2xl" />
+                </div>
+              </div>
+            ) : (
+              <SwipeableBalanceCard
+                userId={null}
+                familyMemberId={child?.id || null}
+                mintNumber={parentMintNumber || null}
+                overrideBalance={totalPortfolioCents / 100}
+                overrideWalletBalance={childBalance / 100}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -1789,7 +1803,38 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
               <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Strategies</p>
             </div>
 
-            {strategyCards.length > 0 ? (
+            {loading ? (
+              <div className="space-y-3">
+                {[0, 1].map((i) => (
+                  <div key={i} className="rounded-2xl border border-slate-200 bg-white shadow-md p-4">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Skeleton className="h-10 w-10 rounded-xl flex-shrink-0" />
+                        <div className="space-y-2 min-w-0">
+                          <Skeleton className="h-4 w-32" />
+                          <div className="flex gap-1.5">
+                            <Skeleton className="h-5 w-14 rounded-full" />
+                            <Skeleton className="h-5 w-16 rounded-full" />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="space-y-2 flex-shrink-0">
+                        <Skeleton className="h-4 w-20" />
+                        <Skeleton className="h-3 w-16" />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
+                      <div className="flex -space-x-2">
+                        {[0, 1, 2].map((idx) => (
+                          <Skeleton key={idx} className="h-7 w-7 rounded-full border-2 border-white" />
+                        ))}
+                      </div>
+                      <Skeleton className="h-3 w-20" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : strategyCards.length > 0 ? (
               <div className="space-y-3">
                 {strategyCards.map((sc) => {
                   const isUp = sc.pnl >= 0;
@@ -1884,7 +1929,29 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
           </motion.div>
 
           {/* -- Best Performing Assets -- */}
-          {bestAssets.length > 0 && (
+          {loading ? (
+            <motion.div variants={item}>
+              <div className="flex items-center gap-2 mb-3 px-1">
+                <div className="h-2 w-2 rounded-full bg-emerald-200" />
+                <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Best Performing Assets</p>
+              </div>
+              <div className="flex gap-3 overflow-hidden pb-1 -mx-4 px-4">
+                {[0, 1].map((i) => (
+                  <div key={i} className="flex min-w-[220px] flex-shrink-0 items-center gap-3 rounded-2xl bg-white border border-slate-100 shadow-md p-3.5">
+                    <Skeleton className="h-11 w-11 rounded-xl flex-shrink-0" />
+                    <div className="flex-1 min-w-0 space-y-2">
+                      <Skeleton className="h-4 w-16" />
+                      <Skeleton className="h-3 w-24" />
+                    </div>
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-14" />
+                      <Skeleton className="h-3 w-12" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          ) : bestAssets.length > 0 && (
             <motion.div variants={item}>
               <div className="flex items-center gap-2 mb-3 px-1">
                 <div className="h-2 w-2 rounded-full bg-emerald-400" />
@@ -1928,7 +1995,22 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
               <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Recent Activity</p>
             </div>
 
-            {transactions.length > 0 ? (
+            {loading ? (
+              <div className="rounded-2xl overflow-hidden shadow-lg border border-slate-200 bg-white">
+                <div className="divide-y divide-slate-100 px-5">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="flex items-center gap-3 py-4">
+                      <Skeleton className="h-10 w-10 rounded-xl flex-shrink-0" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-24" />
+                      </div>
+                      <Skeleton className="h-4 w-16" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : transactions.length > 0 ? (
               <div className="rounded-2xl overflow-hidden shadow-lg border border-slate-200 bg-white">
                 <div className="divide-y divide-slate-100 px-5">
                   {transactions.map((tx) => (
