@@ -133,6 +133,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
   const [watchlist, setWatchlist] = useState(new Set());
   const [holdingsSecurities, setHoldingsSecurities] = useState([]);
   const [strategyMinimums, setStrategyMinimums] = useState({}); // Map of strategy.id -> minimum value
+  const [minimumLoading, setMinimumLoading] = useState(true); // Loading state for minimums
   const carouselRef = useRef(null);
   const dragStartY = useRef(null);
   const isDragging = useRef(false);
@@ -249,6 +250,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
 
       if (!supabase) {
         console.error("❌ Supabase is null/undefined in calculateAllMinimums");
+        if (isMounted) setMinimumLoading(false);
         return;
       }
 
@@ -268,9 +270,11 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
       if (isMounted) {
         console.log(`✅ Calculated minimums for ${Object.keys(minimums).length} strategies`, minimums);
         setStrategyMinimums(minimums);
+        setMinimumLoading(false);
       }
     };
 
+    setMinimumLoading(true);
     calculateAllMinimums();
 
     return () => {
@@ -694,7 +698,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
                 const holdings = getHoldingsArray(strategy);
 
                 const minInvestmentValue = strategyMinimums[strategy.id] || null;
-                const minInvestmentText = minInvestmentValue ? `Min. ${formatCurrency(minInvestmentValue, "R")}` : null;
+                const minInvestmentText = minimumLoading ? "Loading..." : (minInvestmentValue ? `Min. ${formatCurrency(minInvestmentValue, "R")}` : null);
 
                 const sparkline = strategy.sparkline || [20, 22, 21, 24, 26, 25, 28, 30, 29, 32];
                 
@@ -1016,7 +1020,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold text-slate-900">{selectedStrategy.name}</h3>
                   <p className="text-sm text-slate-500">
-                    {strategyMinimums[selectedStrategy.id] ? `Min. ${formatCurrency(strategyMinimums[selectedStrategy.id], "R")}` : "Calculating..."}
+                    {minimumLoading ? "Loading..." : (strategyMinimums[selectedStrategy.id] ? `Min. ${formatCurrency(strategyMinimums[selectedStrategy.id], "R")}` : "N/A")}
                   </p>
                 </div>
                 <button
