@@ -4229,8 +4229,8 @@ app.get("/api/user/strategies", async (req, res) => {
     console.log("[user/strategies] Transactions found:", (transactions || []).length);
     console.log("[user/strategies] Strategy names from transactions:", strategyNames);
 
-    // Also check stock_holdings_c for holdings with strategy_id (fallback when transactions are empty or RLS blocks them)
-    // Filter to only parent's direct investments (family_member_id IS NULL) to exclude child-only strategies
+    // Also check stock_holdings_c for holdings with strategy_id (fallback when transactions are empty or RLS blocks them).
+    // Parent view only includes direct parent investments; child-linked holdings stay on the child dashboard.
     const { data: userStratHoldings } = await db
       .from("stock_holdings_c")
       .select("id, family_member_id, security_id, strategy_id, quantity, avg_fill")
@@ -4342,25 +4342,13 @@ app.get("/api/user/strategies", async (req, res) => {
     // Match user's strategies (by transaction name OR by holdings strategy_id)
     const matchedStrategies = [];
     for (const strategy of (allStrategies || [])) {
-      if (strategy.is_kid_strategy) continue;
-
       const matchKey = strategyNames.find(sn =>
         sn.toLowerCase() === (strategy.name || "").toLowerCase() ||
         sn.toLowerCase() === (strategy.short_name || "").toLowerCase()
       );
       const matchedByHoldings = holdingStrategyIds.includes(strategy.id);
 
-      // Exclude child-only strategies from parent view
-      const strategyNameLower = (strategy.name || "").toLowerCase().trim();
-      const descriptionLower = (strategy.description || "").toLowerCase();
-      const isChildStrategy = strategyNameLower.includes("child") ||
-                            strategyNameLower.includes("growth") ||
-                            descriptionLower.includes("child") ||
-                            descriptionLower.includes("for a child") ||
-                            strategyNameLower === "mygrowthfund" ||
-                            strategy.id === "eb95d956-cfac-4fd4-b74f-294d4a2ec21d";  // Hardcode MyGrowthFund ID
-
-      if ((matchKey || matchedByHoldings) && !isChildStrategy) {
+      if (matchKey || matchedByHoldings) {
         const metrics = strategy.strategy_metrics;
         const latestMetric = Array.isArray(metrics) ? metrics[0] : metrics;
         const enrichedHoldings = (strategy.holdings || []).map(h => {
