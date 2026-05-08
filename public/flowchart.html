@@ -22,68 +22,58 @@ body { background: #e2e2e2; font-family: 'Helvetica Neue', Helvetica, Arial, san
 .zoom-controls .export { background: #2e7d32; }
 .zoom-controls .export:hover { background: #388e3c; }
 .zoom-label { font-size: 11px; color: #9ca3af; min-width: 42px; text-align: center; }
-
-.canvas-wrap {
-  position: fixed; top: 46px; left: 0; right: 0; bottom: 0;
-  overflow: auto; cursor: grab;
-}
+.canvas-wrap { position: fixed; top: 46px; left: 0; right: 0; bottom: 0; overflow: auto; cursor: grab; }
 .canvas-wrap.grabbing { cursor: grabbing; }
-
 .legend {
-  position: fixed; bottom: 16px; left: 16px; z-index: 100;
+  position: fixed; bottom: 14px; left: 14px; z-index: 100;
   background: white; border: 1px solid #e5e7eb; border-radius: 8px;
-  padding: 10px 14px; font-size: 10.5px; box-shadow: 0 4px 12px rgba(0,0,0,.12);
+  padding: 10px 13px; font-size: 10px; box-shadow: 0 4px 12px rgba(0,0,0,.12);
 }
-.legend h3 { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #666; margin-bottom: 6px; }
-.lr { display: flex; align-items: center; gap: 7px; margin: 3px 0; color: #333; }
-.ld { width: 13px; height: 13px; border-radius: 2px; flex-shrink: 0; }
-.lsep { margin-top: 7px; padding-top: 7px; border-top: 1px solid #e5e7eb; }
-
+.legend h3 { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #666; margin-bottom: 5px; }
+.lr { display: flex; align-items: center; gap: 7px; margin: 2px 0; color: #333; }
+.ld { width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0; }
+.lsep { margin-top: 6px; padding-top: 6px; border-top: 1px solid #e5e7eb; }
 .svg-container { transform-origin: 0 0; }
-
 @media print {
-  .toolbar, .legend { display: none; }
-  body { overflow: visible; height: auto; background: white; }
-  .canvas-wrap { position: static; overflow: visible; }
-  .svg-container { transform: none !important; }
+  .toolbar,.legend { display:none; }
+  body { overflow:visible; height:auto; background:white; }
+  .canvas-wrap { position:static; overflow:visible; }
+  .svg-container { transform:none !important; }
 }
 </style>
 </head>
 <body>
-
 <div class="toolbar">
   <h1>MINT — COMPLETE APP FLOW MAP</h1>
-  <span class="sub">App launch → every screen · CRUD · APIs · math · edge cases</span>
+  <span class="sub">App launch → every screen · CRUD inside nodes · APIs · math · edge cases · cross-tab data links</span>
   <div class="zoom-controls">
-    <button onclick="zoom(-0.15)">−</button>
-    <span class="zoom-label" id="zoom-label">65%</span>
-    <button onclick="zoom(0.15)">+</button>
+    <button onclick="zoom(-0.12)">−</button>
+    <span class="zoom-label" id="zoom-label">60%</span>
+    <button onclick="zoom(0.12)">+</button>
     <button onclick="fitToScreen()">Fit</button>
     <button class="export" onclick="window.print()">Export PDF</button>
   </div>
 </div>
-
 <div class="legend">
   <h3>Legend</h3>
-  <div class="lr"><div class="ld" style="background:#e8f5e9;border:1.5px solid #2e7d32"></div> Start / Success state</div>
+  <div class="lr"><div class="ld" style="background:#e8f5e9;border:1.5px solid #2e7d32"></div> Start / Success</div>
   <div class="lr"><div class="ld" style="background:white;border:1.5px solid #222"></div> Screen / Page</div>
-  <div class="lr"><div class="ld" style="background:#fff8e1;border:1.5px solid #f57f17"></div> Decision (YES/NO branch)</div>
-  <div class="lr"><div class="ld" style="background:#fce4ec;border:1.5px dashed #c62828"></div> Edge case / Error path</div>
-  <div class="lr"><div class="ld" style="background:#e8f4fd;border:1px solid #1565c0"></div> Calculation / Formula</div>
+  <div class="lr"><div class="ld" style="background:#fff8e1;border:1.5px solid #f57f17"></div> Decision</div>
+  <div class="lr"><div class="ld" style="background:#fce4ec;border:1.5px dashed #c62828"></div> Edge / Error</div>
   <div class="lsep">
-    <div class="lr"><div class="ld" style="background:#4caf50"></div> C = CREATE to DB</div>
-    <div class="lr"><div class="ld" style="background:#2196f3"></div> R = READ from DB</div>
-    <div class="lr"><div class="ld" style="background:#ff9800"></div> U = UPDATE in DB</div>
-    <div class="lr"><div class="ld" style="background:#f44336"></div> D = DELETE from DB</div>
-    <div class="lr"><div class="ld" style="background:#7c4dff"></div> ▸ External API call</div>
+    <div class="lr"><div class="ld" style="background:#dbeafe;border:1px solid #1565c0"></div> Math / Formula (in node)</div>
+    <div class="lr"><div class="ld" style="background:#4caf5030;border:1px solid #4caf50"></div> C = CREATE</div>
+    <div class="lr"><div class="ld" style="background:#2196f330;border:1px solid #2196f3"></div> R = READ</div>
+    <div class="lr"><div class="ld" style="background:#ff980030;border:1px solid #ff9800"></div> U = UPDATE</div>
+    <div class="lr"><div class="ld" style="background:#f4433630;border:1px solid #f44336"></div> D = DELETE</div>
+    <div class="lr"><div class="ld" style="background:#7c4dff30;border:1px solid #7c4dff"></div> ▸ External API</div>
   </div>
-  <div class="lsep" style="font-size:9.5px;color:#666;line-height:1.7">
-    ——— solid: happy path<br>
-    <span style="color:#e65100">- - - dashed: edge / error</span><br>
-    <span style="color:#1976d2">··· dotted: cross-tab data link</span>
+  <div class="lsep" style="color:#666;line-height:1.8">
+    ——— happy path<br>
+    <span style="color:#e65100">- - - edge / error</span><br>
+    <span style="color:#1976d2">··· cross-tab data</span>
   </div>
 </div>
-
 <div class="canvas-wrap" id="canvasWrap">
   <div class="svg-container" id="svgContainer">
     <div id="diagram"></div>
@@ -92,359 +82,395 @@ body { background: #e2e2e2; font-family: 'Helvetica Neue', Helvetica, Arial, san
 
 <script>
 // ═══════════════════════════════════════════════════════════════════
-// LAYOUT CONSTANTS
-// Tab col centers: HOME=370, PORTFOLIO=970, MARKETS=1570, CREDIT=2170, MORE=2770
-// Tab col x: 60, 660, 1260, 1860, 2460  width=560
-// Auth flow centered at x=1500 (midpoint of full layout 60–3020)
-// Total SVG: W=3100, H=3100
+// HEIGHT HELPERS  — everything contained inside node rects
 // ═══════════════════════════════════════════════════════════════════
+const CRUD_COLORS = { C:'#4caf50', R:'#2196f3', U:'#ff9800', D:'#f44336' };
 
-const SVG_W = 3100, SVG_H = 3120;
+function mH(n) {
+  // Height of the math section (inside node)
+  return n.math ? n.math.split('\n').length * 13 + 12 : 0;
+}
+function cCount(n) {
+  if (!n.crud) return 0;
+  return Object.values(n.crud).reduce((s,a)=>s+a.length,0);
+}
+function cH(n) {
+  const c = cCount(n);
+  return c > 0 ? c * 20 + 8 : 0;
+}
+function totalH(n) {
+  if (['start','decision','home','tab','edge'].includes(n.type)) return n.h;
+  return n.h + mH(n) + cH(n);
+}
 
-// ─── NODES ──────────────────────────────────────────────────────
-// type: start | screen | decision | edge | math | home | tab | success
-const NODES = [
+// ═══════════════════════════════════════════════════════════════════
+// LAYOUT — auth section centered at x≈1550, tab cols start x=60
+// Tab col x: 60,  700,  1340,  1980,  2620    width=600
+// Auth login branch x=780, signup branch x=2060
+// ═══════════════════════════════════════════════════════════════════
+const SVG_W = 3480, SVG_H = 3300;
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // AUTH SECTION  (top, centered ~x=1500)
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ─── NODE DEFINITIONS ───────────────────────────────────────────
+// n.h = text-content height (title+sub+apis); math+crud are added automatically
+const N = [
 
-  { id:'launch', type:'start', x:1390, y:60, w:220, h:58,
+  // ── AUTH SECTION ──────────────────────────────────────────────
+
+  { id:'launch', type:'start', x:1450, y:60, w:230, h:58,
     title:'APP LAUNCH',
     sub:'React 18 + Vite · Capacitor shell' },
 
-  { id:'session-chk', type:'decision', x:1445, y:172, w:160, h:64,
+  { id:'session-chk', type:'decision', x:1505, y:172, w:160, h:64,
     title:'Session\nactive?' },
 
-  // Session YES → returning user bio/PIN
-  { id:'pin-existing', type:'screen', x:1920, y:152, w:270, h:80,
+  { id:'pin-existing', type:'screen', x:2060, y:150, w:280, h:82,
     title:'BIOMETRIC / PIN CHECK',
-    sub:'Returning user — re-authenticate',
+    sub:'Returning user re-auth',
     crud:{ R:['localStorage (pin_hash)','supabase.auth'] },
-    apis:['capacitor-face-id (native iOS / Android)'] },
-  { id:'pin-existing-fail', type:'edge', x:2250, y:154, w:220, h:76,
+    apis:['capacitor-face-id (native iOS/Android)'] },
+
+  { id:'pin-existing-fail', type:'edge', x:2400, y:150, w:230, h:80,
     title:'Bio / PIN fails',
     sub:'3 attempts max\n→ force full logout\n→ back to Auth Page' },
 
-  // Session NO → Auth Page
-  { id:'auth', type:'screen', x:1390, y:295, w:240, h:76,
+  { id:'auth', type:'screen', x:1450, y:300, w:250, h:78,
     title:'AUTH PAGE',
     sub:'Email + 6-digit OTP\nLogin  or  Signup',
     crud:{ R:['supabase.auth.users'] } },
 
-  { id:'new-user', type:'decision', x:1445, y:430, w:160, h:64,
+  { id:'new-user', type:'decision', x:1505, y:445, w:160, h:64,
     title:'New\nUser?' },
 
-  // ─── LOGIN PATH (LEFT) ────────────────────────────────────────
-  { id:'login-otp', type:'screen', x:760, y:555, w:260, h:80,
-    title:'OTP VERIFY (Login)',
+  // Login path (left)
+  { id:'login-otp', type:'screen', x:770, y:570, w:260, h:82,
+    title:'OTP VERIFY  (Login)',
     sub:'6-digit code · 10-min expiry',
     crud:{ R:['supabase.auth'] } },
-  { id:'login-otp-fail', type:'edge', x:1080, y:545, w:220, h:100,
+  { id:'login-otp-fail', type:'edge', x:1050, y:560, w:230, h:100,
     title:'Wrong OTP',
-    sub:'Max 3 attempts\n30-min cooldown\nOption: resend code' },
-
-  { id:'login-pin', type:'screen', x:760, y:690, w:260, h:80,
+    sub:'Max 3 attempts\n→ 30-min cooldown\nOption: resend code' },
+  { id:'login-pin', type:'screen', x:770, y:730,  w:260, h:82,
     title:'PIN / BIOMETRIC',
     sub:'SHA-256 compare vs localStorage\nor capacitor-face-id',
     crud:{ R:['localStorage (pin_hash)','supabase.auth'] },
     apis:['capacitor-face-id'] },
 
-  // ─── SIGNUP PATH (RIGHT) ──────────────────────────────────────
-  { id:'signup-otp', type:'screen', x:1980, y:555, w:260, h:76,
-    title:'OTP VERIFY (Signup)',
+  // Signup path (right)
+  { id:'signup-otp', type:'screen', x:2060, y:570, w:260, h:78,
+    title:'OTP VERIFY  (Signup)',
     sub:'6-digit code · 10-min expiry',
     crud:{ C:['supabase.auth.users'] } },
-  { id:'signup-otp-fail', type:'edge', x:2300, y:545, w:210, h:88,
+  { id:'signup-otp-fail', type:'edge', x:2380, y:560, w:230, h:88,
     title:'Wrong OTP',
-    sub:'Max 3 attempts\n30-min cooldown\nretry → new code' },
+    sub:'Max 3 attempts\n→ 30-min cooldown\nretry → new code' },
 
-  { id:'onboarding', type:'screen', x:1980, y:695, w:270, h:104,
+  { id:'onboarding', type:'screen', x:2060, y:730, w:280, h:106,
     title:'USER ONBOARDING',
     sub:'6 steps: employment · mandate\nrisk disclosure · source of funds\nbank details · T&C agreement',
     crud:{ C:['user_onboarding_pack_details'], U:['profiles'] },
     apis:['/api/onboarding/status','/api/onboarding/complete','/api/mandate/save'] },
 
-  { id:'sumsub', type:'screen', x:1980, y:862, w:270, h:88,
+  { id:'sumsub', type:'screen', x:2060, y:1020, w:280, h:90,
     title:'IDENTITY CHECK — Sumsub KYC',
     sub:'ID document + selfie verification',
     crud:{ U:['user_onboarding_pack_details'] },
-    apis:['Sumsub API  (SUMSUB_APP_TOKEN + SUMSUB_SECRET_KEY)'] },
-  { id:'sumsub-fail', type:'edge', x:2310, y:860, w:220, h:92,
+    apis:['Sumsub REST API  (SUMSUB_APP_TOKEN + SUMSUB_SECRET_KEY)'] },
+  { id:'sumsub-fail', type:'edge', x:2400, y:1020, w:230, h:96,
     title:'KYC Rejected',
     sub:'Show rejection reason\nRetry submission\nor manual review\n→ support escalation' },
 
-  { id:'banklink', type:'screen', x:1980, y:1014, w:270, h:80,
+  { id:'banklink', type:'screen', x:2060, y:1210, w:280, h:82,
     title:'BANK LINK — TruID Connect',
     sub:'Open-banking account verification',
     crud:{ U:['user_onboarding_pack_details'] },
     apis:['TruID Connect API'] },
-  { id:'banklink-fail', type:'edge', x:2310, y:1014, w:210, h:80,
+  { id:'banklink-fail', type:'edge', x:2400, y:1210, w:220, h:80,
     title:'Bank link fails',
-    sub:'Retry · different bank\nor admin override\nto skip step' },
+    sub:'Retry · different bank\nor admin override to skip' },
 
-  { id:'pin-setup', type:'screen', x:1980, y:1154, w:270, h:80,
+  { id:'pin-setup', type:'screen', x:2060, y:1382, w:280, h:82,
     title:'PIN SETUP + Biometric Register',
     sub:'5-digit PIN · optional Face ID / fingerprint',
     crud:{ C:['localStorage (pin_hash)'] },
-    math:'pin_hash = SHA-256(userPin)\nStored only in localStorage — never sent to server' },
+    math:'pin_hash = SHA-256(userPin)\nNever sent to server — stored in localStorage only' },
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // HOME HUB
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  { id:'home', type:'home', x:50, y:1310, w:3000, h:90,
+  // ── HOME HUB ─────────────────────────────────────────────────
+  { id:'home', type:'home', x:40, y:1620, w:3200, h:92,
     title:'HOME HUB — App Navigation Shell',
     sub:'React navigateTo() · back() · history sync · auth guards · onboarding completion check',
-    crud:{ R:['profiles','wallets','required_actions','notifications (Supabase realtime)'] } },
-
-  { id:'timeout', type:'edge', x:3070, y:1276, w:250, h:88,
+    crud:{ R:['profiles','wallets','required_actions','notifications (Supabase realtime sub)'] } },
+  { id:'timeout', type:'edge', x:3260, y:1588, w:250, h:96,
     title:'Inactivity Timeout',
-    sub:'4-min timer on any screen\n→ PIN Lock Screen overlay\n→ re-auth → back to HOME' },
+    sub:'4-min timer on any screen\n→ PIN Lock Screen overlay\n→ re-auth → HOME' },
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // TAB HEADERS  (5 × 560px, gap 20px, x start 60)
-  // Col centers: 340, 940, 1540, 2140, 2740
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  { id:'t-home', type:'tab', color:'#1b5e20', x:60,   y:1476, w:560, h:44, title:'HOME TAB' },
-  { id:'t-port', type:'tab', color:'#4527a0', x:660,  y:1476, w:560, h:44, title:'PORTFOLIO TAB' },
-  { id:'t-mkt',  type:'tab', color:'#e65100', x:1260, y:1476, w:560, h:44, title:'MARKETS / INVEST TAB' },
-  { id:'t-cr',   type:'tab', color:'#b71c1c', x:1860, y:1476, w:560, h:44, title:'CREDIT TAB' },
-  { id:'t-more', type:'tab', color:'#1a237e', x:2460, y:1476, w:560, h:44, title:'MORE TAB' },
+  // ── TAB HEADERS ──────────────────────────────────────────────
+  { id:'t-home', type:'tab', color:'#1b5e20', x:60,   y:1788, w:600, h:44, title:'HOME TAB' },
+  { id:'t-port', type:'tab', color:'#4527a0', x:700,  y:1788, w:600, h:44, title:'PORTFOLIO TAB' },
+  { id:'t-mkt',  type:'tab', color:'#e65100', x:1340, y:1788, w:600, h:44, title:'MARKETS / INVEST TAB' },
+  { id:'t-cr',   type:'tab', color:'#b71c1c', x:1980, y:1788, w:600, h:44, title:'CREDIT TAB' },
+  { id:'t-more', type:'tab', color:'#1a237e', x:2620, y:1788, w:600, h:44, title:'MORE TAB' },
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // HOME TAB SCREENS (col x=60, center=340)
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  { id:'h-balance', type:'screen', x:60, y:1536, w:560, h:96,
+  // ══════════ HOME TAB (col x=60, w=600) ══════════
+  // totalH of each node computed automatically; y positions are stacked with 10px gap
+
+  { id:'h-balance', type:'screen', x:60, y:1848, w:600, h:96,
     title:'SWIPEABLE BALANCE CARD',
     sub:'Live portfolio value · P&L equity curve\nTimeframes: 1d · 5d · 1m · 6m · YTD · 1y · inception',
     crud:{ R:['client_strategy_returns_c','stock_holdings_c','stock_intraday_c'] },
-    math:'total_value = Σ basket_value (strategies)\n             + Σ qty × (last_price / 100) (stocks)' },
+    math:'total_value = Σ basket_value  (strategies)\n             + Σ qty × (last_price / 100)  (stock positions)' },
 
-  { id:'h-notif', type:'screen', x:60, y:1648, w:560, h:72,
+  // h-balance totalH = 96 + math(2lines→38) + crud(3→68) = 202. ends=2050, next=2060
+  { id:'h-notif', type:'screen', x:60, y:2060, w:600, h:72,
     title:'NOTIFICATIONS',
     sub:'Grouped by date · swipe-to-delete · mark all read',
     crud:{ R:['notifications'], U:['notifications (is_read=true)'], D:['notifications (swiped away)'] } },
 
-  { id:'h-activity', type:'screen', x:60, y:1736, w:560, h:60,
+  // h-notif totalH = 72 + crud(3→68) = 140. ends=2200, next=2210
+  { id:'h-activity', type:'screen', x:60, y:2210, w:600, h:58,
     title:'ACTIVITY PAGE',
     crud:{ R:['transactions'] } },
 
-  { id:'h-actions', type:'screen', x:60, y:1812, w:560, h:60,
-    title:'ACTIONS PAGE  — required to-dos',
+  // h-activity totalH = 58+28 = 86. ends=2296, next=2306
+  { id:'h-actions', type:'screen', x:60, y:2306, w:600, h:58,
+    title:'ACTIONS PAGE — required to-dos',
     crud:{ R:['required_actions'] } },
 
-  { id:'h-deposit', type:'screen', x:60, y:1888, w:560, h:80,
+  // 86. ends=2392, next=2402
+  { id:'h-deposit', type:'screen', x:60, y:2402, w:600, h:80,
     title:'DEPOSIT / TRANSACT',
     sub:'Fund wallet or withdraw',
     crud:{ C:['transactions (type=deposit)'], U:['wallets (balance += amount)'] },
     math:'new_balance = wallets.balance + deposit_amount' },
 
-  { id:'h-family', type:'screen', x:60, y:1984, w:560, h:72,
+  // 80 + math(1→25) + crud(2→48) = 153. ends=2555, next=2565
+  { id:'h-family', type:'screen', x:60, y:2565, w:600, h:72,
     title:'FAMILY / CHILD DASHBOARD',
     sub:'View sub-account positions',
     crud:{ R:['stock_holdings_c (family_member_id filter)','securities_c'] } },
 
-  { id:'h-funeral', type:'screen', x:60, y:2072, w:560, h:64,
+  // 72+48=120. ends=2685, next=2695
+  { id:'h-funeral', type:'screen', x:60, y:2695, w:600, h:64,
     title:'FUNERAL COVER PAGE',
     sub:'External insurance partner',
     crud:{ R:['profiles'] },
     apis:['External insurance partner API'] },
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // PORTFOLIO TAB (col x=660, center=940)
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  { id:'p-overview', type:'screen', x:660, y:1536, w:560, h:104,
+  // ══════════ PORTFOLIO TAB (col x=700, w=600) ══════════
+  { id:'p-overview', type:'screen', x:700, y:1848, w:600, h:104,
     title:'OVERVIEW — P&L EQUITY CURVE CHART',
     sub:'Timeframes: 1d · 5d · 1m · 6m · YTD · 1y · inception',
     crud:{ R:['client_strategy_returns_c'] },
-    math:'P&L = basket_value − cost_basis\nReturns% = (basket_value − cost_basis) / cost_basis × 100\nChart anchored to purchase_date row' },
+    math:'P&L = basket_value − cost_basis\nReturns% = (basket_value − cost_basis) / cost_basis × 100\nChart anchored to purchase_date row in client_strategy_returns_c' },
 
-  { id:'p-holdings', type:'screen', x:660, y:1656, w:560, h:104,
+  // 104+math(3→51)+crud(1→28)=183. ends=2031, next=2041
+  { id:'p-holdings', type:'screen', x:700, y:2041, w:600, h:104,
     title:'HOLDINGS TAB — ASSETS + PIE CHART',
-    sub:'Strategy positions + stock positions',
+    sub:'Strategy positions + individual stock positions',
     crud:{ R:['stock_holdings_c','client_strategy_returns_c','stock_intraday_c'] },
-    math:'stock_value  = qty × (last_price / 100)\nstrategy_value = basket_value  (from client_strategy_returns_c)\ntotal = Σ stock_value + Σ strategy_value' },
+    math:'stock_value  = qty × (last_price / 100)\nstrategy_value = basket_value  (client_strategy_returns_c)\ntotal = Σ stock_value + Σ strategy_value' },
 
-  { id:'p-calendar', type:'screen', x:660, y:1776, w:560, h:84,
+  // 104+math(3→51)+crud(3→68)=223. ends=2264, next=2274
+  { id:'p-calendar', type:'screen', x:700, y:2274, w:600, h:84,
     title:'CALENDAR — MONTHLY RETURNS HEATMAP',
-    crud:{ R:['client_strategy_returns_c (month-end rows grouped by date)'] },
-    math:'MoM% = (basket_value_M − basket_value_(M-1))\n        ÷ basket_value_(M-1) × 100' },
+    crud:{ R:['client_strategy_returns_c (month-end rows, grouped by date)'] },
+    math:'MoM% = (basket_value_month_end − basket_value_prev_month_end)\n        ÷ basket_value_prev_month_end × 100' },
 
-  { id:'p-statements', type:'screen', x:660, y:1876, w:560, h:72,
+  // 84+math(2→38)+crud(1→28)=150. ends=2424, next=2434
+  { id:'p-statements', type:'screen', x:700, y:2434, w:600, h:72,
     title:'STATEMENTS PAGE',
-    sub:'Strategy / Holdings / Financials tabs',
+    sub:'Strategy / Holdings / Financials tabs · PDF download',
     crud:{ R:['transactions','stock_holdings_c','wallets'] } },
 
-  { id:'p-factsheet', type:'screen', x:660, y:1964, w:560, h:72,
+  // 72+crud(3→68)=140. ends=2574, next=2584
+  { id:'p-factsheet', type:'screen', x:700, y:2584, w:600, h:72,
     title:'FACTSHEET → PDF  (client-side jsPDF)',
-    sub:'Personalised strategy document, no upload',
+    sub:'Personalised strategy document, no server upload',
     crud:{ R:['strategies_c','client_strategy_returns_c','profiles'] } },
 
-  { id:'p-stockmodal', type:'screen', x:660, y:2052, w:560, h:72,
-    title:'STOCK DETAIL MODAL (tapped holding)',
+  // 140. ends=2724, next=2734
+  { id:'p-stockmodal', type:'screen', x:700, y:2734, w:600, h:72,
+    title:'STOCK DETAIL MODAL  (tapped holding)',
     crud:{ R:['stock_returns_c (security_id · timeframe)'] },
     math:'chart series: current_price keyed by as_of_date' },
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // MARKETS TAB (col x=1260, center=1540)
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  { id:'m-list', type:'screen', x:1260, y:1536, w:560, h:76,
+  // ══════════ MARKETS TAB (col x=1340, w=600) ══════════
+  { id:'m-list', type:'screen', x:1340, y:1848, w:600, h:76,
     title:'STOCK LIST VIEW',
     crud:{ R:['securities_c','stock_intraday_c'] },
-    apis:['/api/user/holdings  (join: last_price + logo)'] },
+    apis:['/api/user/holdings  (join: last_price + logo_url)'] },
 
-  { id:'m-strategies', type:'screen', x:1260, y:1628, w:560, h:72,
+  // 76+crud(2→48)=124. ends=1972, next=1982
+  { id:'m-strategies', type:'screen', x:1340, y:1982, w:600, h:72,
     title:'OPEN STRATEGIES VIEW',
     crud:{ R:['strategies_c','client_strategy_returns_c (ytd_pct · basket_value)'] } },
 
-  { id:'m-detail', type:'screen', x:1260, y:1716, w:560, h:72,
+  // 72+crud(2→48)=120. ends=2102, next=2112
+  { id:'m-detail', type:'screen', x:1340, y:2112, w:600, h:72,
     title:'STOCK DETAIL PAGE',
     crud:{ R:['stock_returns_c','securities_c'] },
     math:'chart: current_price series by as_of_date' },
 
-  { id:'m-buy', type:'screen', x:1260, y:1804, w:560, h:100,
+  // 72+math(1→25)+crud(2→48)=145. ends=2257, next=2267
+  { id:'m-buy', type:'screen', x:1340, y:2267, w:600, h:100,
     title:'BUY / INVEST AMOUNT PAGE',
-    sub:'Quantity selector · wallet balance check',
+    sub:'Quantity selector · wallet balance check · min investment check',
     crud:{ R:['wallets (balance check)','stock_intraday_c (last_price)'] },
-    math:'order_value = qty × (last_price / 100)\nmin_check: order_value ≥ min_investment\nEdge: order_value > wallets.balance → top-up prompt' },
+    math:'order_value = qty × (last_price / 100)\nmin_check: order_value ≥ min_investment  (from securities_c)\nEdge: order_value > wallets.balance → top-up prompt shown' },
 
-  { id:'m-payment', type:'screen', x:1260, y:1920, w:560, h:80,
+  // 100+math(3→51)+crud(2→48)=199. ends=2466, next=2476
+  { id:'m-payment', type:'screen', x:1340, y:2476, w:600, h:82,
     title:'PAYMENT PAGE',
-    sub:'Paystack (card) or Wallet debit',
+    sub:'Paystack (card/EFT) or direct Wallet debit',
     crud:{ C:['transactions (status=pending)'] },
     apis:['Paystack API  (card/EFT)'] },
-  { id:'m-pay-fail', type:'edge', x:1260, y:2016, w:320, h:80,
-    title:'Payment Fails',
-    sub:'Card declined / timeout / network\nEdge: retry · change method\nor cancel order' },
 
-  { id:'m-success', type:'success', x:1260, y:2112, w:560, h:96,
+  // 82+crud(1→28)=110. ends=2586, next=2596
+  { id:'m-pay-fail', type:'edge', x:1360, y:2596, w:570, h:82,
+    title:'PAYMENT FAILS  (edge case)',
+    sub:'Card declined / timeout / network error / insufficient funds\nEdge: retry payment · switch method (card ↔ wallet)\nOr cancel → transactions (status=cancelled)' },
+
+  // edge h=82. ends=2678, next=2688
+  { id:'m-success', type:'success', x:1340, y:2688, w:600, h:96,
     title:'PAYMENT SUCCESS — ORDER CONFIRMED',
-    sub:'Confirmation screen',
-    crud:{ U:['transactions (status=filled)'], C:['stock_holdings_c','order_emails'] },
-    apis:['Resend → order confirmation email','Resend → order fill notification (when executed)'] },
+    sub:'Confirmation screen shown',
+    crud:{ U:['transactions (status=filled)'], C:['stock_holdings_c (new position created)','order_emails (record)'] },
+    apis:['Resend → order confirmation email (immediate)','Resend → order fill notification (on execution)'] },
 
-  { id:'m-news', type:'screen', x:1260, y:2224, w:560, h:64,
+  // 96+crud(3→68)=164. ends=2852, next=2862
+  { id:'m-news', type:'screen', x:1340, y:2862, w:600, h:64,
     title:'NEWS — Mint Mornings Articles',
     crud:{ R:['articles'] },
-    apis:['Vercel Cron: mintMorningsCron.cjs → Resend daily'] },
+    apis:['Vercel Cron: mintMorningsCron.cjs → Resend daily newsletter'] },
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // CREDIT TAB (col x=1860, center=2140)
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  { id:'c-home', type:'screen', x:1860, y:1536, w:560, h:68,
+  // ══════════ CREDIT TAB (col x=1980, w=600) ══════════
+  { id:'c-home', type:'screen', x:1980, y:1848, w:600, h:68,
     title:'CREDIT HOME',
     crud:{ R:['credit_accounts','wallets'] } },
 
-  { id:'c-score', type:'screen', x:1860, y:1620, w:560, h:72,
+  // 68+crud(2→48)=116. ends=1964, next=1974
+  { id:'c-score', type:'screen', x:1980, y:1974, w:600, h:72,
     title:'CREDIT SCORE PAGE',
     crud:{ R:['credit_score_history','credit_accounts'] },
     math:'chart: score_value by date' },
 
-  { id:'c-apply', type:'screen', x:1860, y:1708, w:560, h:80,
+  // 72+math(1→25)+crud(2→48)=145. ends=2119, next=2129
+  { id:'c-apply', type:'screen', x:1980, y:2129, w:600, h:80,
     title:'APPLY FOR CREDIT  (Unsecured)',
-    crud:{ C:['credit_accounts (status=pending)'], R:['profiles (affordability check)','wallets'] } },
-  { id:'c-apply-rej', type:'edge', x:1860, y:1804, w:310, h:72,
-    title:'Application Rejected',
-    sub:'Show rejection reason · criteria not met\n→ re-apply after 90 days' },
+    crud:{ C:['credit_accounts (status=pending)'], R:['profiles (affordability check)','wallets (balance)'] } },
 
-  { id:'c-liquidity', type:'screen', x:1860, y:1892, w:560, h:116,
+  // 80+crud(3→68)=148. ends=2277, next=2287
+  { id:'c-apply-rej', type:'edge', x:2000, y:2287, w:570, h:76,
+    title:'APPLICATION REJECTED  (edge case)',
+    sub:'Show rejection reason and criteria not met\n→ re-apply after 90 days\n→ credit_accounts (status=rejected)' },
+
+  // edge h=76. ends=2363, next=2373
+  { id:'c-liquidity', type:'screen', x:1980, y:2373, w:600, h:116,
     title:'INSTANT LIQUIDITY — Pledge Holdings',
     sub:'Pledge eligible stock positions for immediate cash',
-    crud:{ R:['stock_holdings_c (pledgeable filter)'],
-           U:['stock_holdings_c (pledged=true)','wallets (balance += loan_amount)'],
-           C:['credit_accounts (liquidity record)'] },
-    math:'eligible_val = Σ qty×(last_price/100) for pledgeable holdings\nloan_amount ≤ eligible_val × LTV_ratio  (e.g. 70%)\noutstanding = principal + accrued_interest' },
+    crud:{ R:['stock_holdings_c (pledgeable=true filter)'],
+           U:['stock_holdings_c (pledged=true, locks position)','wallets (balance += loan_amount)'],
+           C:['credit_accounts (liquidity record, status=active)'] },
+    math:'eligible_val = Σ qty × (last_price/100) for pledgeable holdings\nloan_amount ≤ eligible_val × LTV_ratio  (e.g. 70%)\noutstanding = principal + accrued_interest' },
 
-  { id:'c-active', type:'screen', x:1860, y:2024, w:560, h:68,
+  // 116+math(3→51)+crud(4→88)=255. ends=2628, next=2638
+  { id:'c-active', type:'screen', x:1980, y:2638, w:600, h:68,
     title:'ACTIVE LIQUIDITY / HISTORY',
     crud:{ R:['credit_accounts','transactions'] } },
 
-  { id:'c-repay', type:'screen', x:1860, y:2108, w:560, h:100,
+  // 68+crud(2→48)=116. ends=2754, next=2764
+  { id:'c-repay', type:'screen', x:1980, y:2764, w:600, h:100,
     title:'REPAY CREDIT / LIQUIDITY',
     crud:{ U:['credit_accounts (balance −= repayment)','wallets (balance −= repayment)'],
-           C:['transactions (repayment record)'],
-           D:['credit_accounts (close on full repay)'] },
-    math:'repayment = min(outstanding_balance, input_amount)\nAfter full repay → stock_holdings_c: pledged = false' },
+           C:['transactions (repayment type)'],
+           D:['credit_accounts (close record on full repayment)'] },
+    math:'repayment = min(outstanding_balance, input_amount)\nAfter full repay: stock_holdings_c pledged = false (unlocked)' },
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // MORE TAB (col x=2460, center=2740)
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  { id:'mo-settings', type:'screen', x:2460, y:1536, w:560, h:84,
+  // ══════════ MORE TAB (col x=2620, w=600) ══════════
+  { id:'mo-settings', type:'screen', x:2620, y:1848, w:600, h:84,
     title:'SETTINGS PAGE',
-    sub:'Biometrics toggle · session timeout · notifications',
-    crud:{ R:['profiles'], U:['profiles (prefs)'] },
+    sub:'Biometrics toggle · session timeout · PIN change',
+    crud:{ R:['profiles'], U:['profiles (notification_prefs · biometric_enabled)'] },
     math:'PIN change: new_hash = SHA-256(new_pin) → localStorage' },
 
-  { id:'mo-profile', type:'screen', x:2460, y:1636, w:560, h:68,
+  // 84+math(1→25)+crud(2→48)=157. ends=2005, next=2015
+  { id:'mo-profile', type:'screen', x:2620, y:2015, w:600, h:68,
     title:'EDIT PROFILE / PROFILE DETAILS',
     crud:{ R:['profiles'], U:['profiles'] } },
 
-  { id:'mo-password', type:'screen', x:2460, y:1720, w:560, h:68,
+  // 68+crud(2→48)=116. ends=2131, next=2141
+  { id:'mo-password', type:'screen', x:2620, y:2141, w:600, h:68,
     title:'CHANGE PASSWORD',
     crud:{ U:['supabase.auth (updateUser)'] },
     apis:['supabase.auth.updateUser({ password: newPassword })'] },
 
-  { id:'mo-sessions', type:'screen', x:2460, y:1804, w:560, h:68,
+  // 68+crud(1→28)=96. ends=2237, next=2247
+  { id:'mo-sessions', type:'screen', x:2620, y:2247, w:600, h:68,
     title:'ACTIVE SESSIONS MANAGER',
     apis:['supabase.auth.getSession()','supabase.auth.signOut({ scope: "others" })'] },
 
-  { id:'mo-notif', type:'screen', x:2460, y:1888, w:560, h:60,
+  // 68 (no crud). ends=2315, next=2325
+  { id:'mo-notif', type:'screen', x:2620, y:2325, w:600, h:60,
     title:'NOTIFICATION SETTINGS',
     crud:{ U:['profiles (notification_prefs)'] } },
 
-  { id:'mo-legal', type:'screen', x:2460, y:1964, w:560, h:60,
+  // 60+crud(1→28)=88. ends=2413, next=2423
+  { id:'mo-legal', type:'screen', x:2620, y:2423, w:600, h:60,
     title:'LEGAL DOCS / SUBSCRIPTIONS',
     sub:'Static content — no DB access required' },
 
-  { id:'mo-transact', type:'screen', x:2460, y:2040, w:560, h:72,
+  // 60. ends=2483, next=2493
+  { id:'mo-transact', type:'screen', x:2620, y:2493, w:600, h:72,
     title:'TRANSACT PAGE',
     sub:'Deposit / withdraw / bank re-link',
     crud:{ C:['transactions'], U:['wallets'] } },
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // DATA LAYER (bottom)
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  { id:'dbl-head1', type:'tab', color:'#004d40', x:50, y:2380, w:1490, h:40, title:'SUPABASE — MARKET DATA TABLES  (source of truth for all calculations)' },
-  { id:'dbl-mkt', type:'screen', x:50, y:2428, w:1490, h:108,
+  // ══════════ DATA LAYER ══════════
+  { id:'dbl-h1', type:'tab', color:'#004d40', x:40, y:3070, w:1660, h:42, title:'SUPABASE — MARKET DATA TABLES  (source of truth)' },
+  { id:'dbl-mkt', type:'screen', x:40, y:3120, w:1660, h:114,
     title:'',
-    sub:'client_strategy_returns_c   basket_value · 1d/5d/1m/6m/ytd/1y/inception P&L and % · purchase_date — sole source for strategy value\nstock_holdings_c   user_id · security_id · qty · avg_fill · strategy_id · fill_date · pledged (bool) — user positions\nstock_returns_c   security_id · as_of_date · current_price · 1d/1w/1m/ytd % — historical price chart data\nstock_intraday_c   security_id · last_price · changePercent — live intraday price (refreshed continuously)\nsecurities_c   security_id · name · symbol · logo_url · min_investment · pledgeable (bool) — security master' },
+    sub:'client_strategy_returns_c   basket_value · 1d/5d/1m/6m/ytd/1y/inception P&L and % · purchase_date  — SOLE source for strategy value\nstock_holdings_c   user_id · security_id · qty · avg_fill · strategy_id · fill_date · pledged (bool)  — user positions\nstock_returns_c   security_id · as_of_date · current_price · 1d/1w/1m/ytd %  — historical price chart\nstock_intraday_c   security_id · last_price · changePercent  — live intraday price (refreshed continuously)\nsecurities_c   security_id · name · symbol · logo_url · min_investment · pledgeable (bool)  — security master data' },
 
-  { id:'dbl-head2', type:'tab', color:'#1b5e20', x:50, y:2544, w:1490, h:40, title:'SUPABASE — SUPPORTING TABLES' },
-  { id:'dbl-sup', type:'screen', x:50, y:2592, w:1490, h:80,
+  { id:'dbl-h2', type:'tab', color:'#1b5e20', x:40, y:3242, w:1660, h:42, title:'SUPABASE — SUPPORTING TABLES' },
+  { id:'dbl-sup', type:'screen', x:40, y:3292, w:1660, h:84,
     title:'',
-    sub:'profiles · wallets · transactions · notifications · required_actions · investment_goals\ncredit_accounts · credit_score_history · user_onboarding_pack_details\nstrategies_c · order_emails · articles' },
+    sub:'profiles · wallets · transactions · notifications · required_actions · investment_goals\ncredit_accounts · credit_score_history · user_onboarding_pack_details · order_emails\nstrategies_c · articles' },
 
-  { id:'api-head', type:'tab', color:'#6a1b9a', x:1580, y:2380, w:1470, h:40, title:'EXPRESS API ROUTES + EXTERNAL SERVICES' },
-  { id:'api-routes', type:'screen', x:1580, y:2428, w:1470, h:108,
+  { id:'api-h', type:'tab', color:'#6a1b9a', x:1740, y:3070, w:1700, h:42, title:'EXPRESS API ROUTES + EXTERNAL SERVICES' },
+  { id:'api-routes', type:'screen', x:1740, y:3120, w:1700, h:114,
     title:'',
-    sub:'/api/user/strategies   computes market_value from live prices · returns investedAmount, currentMarketValue, YTD\n/api/user/holdings   stock_holdings_c joined with securities_c + stock_intraday_c (logo · symbol · last_price)\n/api/onboarding/*   status · complete · id-number validation · /api/mandate/save · /api/settlement/config\nmintMorningsCron.cjs   Vercel Cron job — daily newsletter to subscribers via Resend API' },
-  { id:'api-ext', type:'screen', x:1580, y:2544, w:1470, h:80,
+    sub:'/api/user/strategies   computes market_value from live prices · returns investedAmount, currentMarketValue, YTD\n/api/user/holdings   stock_holdings_c joined with securities_c + stock_intraday_c (logo · symbol · last_price)\n/api/onboarding/*   status · complete · id-number validation · /api/mandate/save\n/api/settlement/config   returns { fullyIntegrated: true }\nmintMorningsCron.cjs   Vercel Cron job — daily newsletter to subscribers via Resend API' },
+  { id:'api-ext', type:'screen', x:1740, y:3242, w:1700, h:84,
     title:'',
-    sub:'Sumsub KYC API  (SUMSUB_APP_TOKEN · SUMSUB_SECRET_KEY)  →  identity verification + document checks\nTruID Connect  →  open-banking account verification / linking · bank statement access\nResend API  →  order confirmation + fill emails · Mint Mornings newsletter · OTP recovery\nPaystack  →  card / EFT payment gateway for deposits and investments\ncapacitor-face-id  →  native iOS/Android Face ID + fingerprint biometrics' },
+    sub:'Sumsub KYC API  (SUMSUB_APP_TOKEN · SUMSUB_SECRET_KEY)  →  identity verification + document checks\nTruID Connect  →  open-banking account verification / linking\nResend API  →  order confirmation + fill emails · Mint Mornings newsletter\nPaystack  →  card / EFT payment gateway · capacitor-face-id  →  native iOS/Android biometrics' },
 ];
 
+// Build lookup
+const byId = {};
+N.forEach(n => byId[n.id] = n);
+
 // ─── EDGES ──────────────────────────────────────────────────────
-const EDGES = [
-  { f:'launch',       t:'session-chk',   type:'s' },
-  { f:'session-chk',  t:'pin-existing',  type:'s',  fs:'right', ts:'left',  label:'YES →\nactive session' },
-  { f:'session-chk',  t:'auth',          type:'s',  fs:'bottom',ts:'top',   label:'NO' },
-  { f:'pin-existing', t:'pin-existing-fail', type:'d', fs:'right', ts:'left', label:'fails' },
-  { f:'pin-existing', t:'home',          type:'s',  fs:'bottom',ts:'top',   label:'verified' },
-  { f:'auth',         t:'new-user',      type:'s' },
-  { f:'new-user',     t:'login-otp',     type:'s',  fs:'left',  ts:'right', label:'← NO\nexisting user' },
-  { f:'new-user',     t:'signup-otp',    type:'s',  fs:'right', ts:'left',  label:'YES →\nnew account' },
-  { f:'login-otp',    t:'login-otp-fail',type:'d',  fs:'right', ts:'left',  label:'wrong code' },
-  { f:'login-otp',    t:'login-pin',     type:'s',                          label:'code ok' },
-  { f:'login-pin',    t:'home',          type:'s',  fs:'bottom',ts:'top',   label:'authenticated' },
-  { f:'signup-otp',   t:'signup-otp-fail',type:'d', fs:'right', ts:'left',  label:'wrong code' },
-  { f:'signup-otp',   t:'onboarding',    type:'s',                          label:'code ok' },
-  { f:'onboarding',   t:'sumsub',        type:'s' },
-  { f:'sumsub',       t:'sumsub-fail',   type:'d',  fs:'right', ts:'left',  label:'rejected' },
-  { f:'sumsub',       t:'banklink',      type:'s',                          label:'approved' },
-  { f:'banklink',     t:'banklink-fail', type:'d',  fs:'right', ts:'left',  label:'fails' },
-  { f:'banklink',     t:'pin-setup',     type:'s',                          label:'linked' },
-  { f:'pin-setup',    t:'home',          type:'s',  fs:'bottom',ts:'top',   label:'setup complete' },
-  { f:'home',         t:'timeout',       type:'d',  fs:'right', ts:'left',  label:'4-min\ninactivity' },
+// type: 's'=solid, 'd'=dashed(edge case), 'dt'=dotted(cross-tab)
+const E = [
+  { f:'launch',        t:'session-chk', type:'s' },
+  { f:'session-chk',   t:'pin-existing', type:'s', fs:'right', ts:'left', label:'YES →\nactive session' },
+  { f:'session-chk',   t:'auth',         type:'s', fs:'bottom',ts:'top',  label:'NO' },
+  { f:'pin-existing',  t:'pin-existing-fail', type:'d', fs:'right', ts:'left', label:'fails' },
+  { f:'pin-existing',  t:'home',         type:'s', fs:'bottom',ts:'top',  label:'verified' },
+  { f:'auth',          t:'new-user',     type:'s' },
+  { f:'new-user',      t:'login-otp',    type:'s', fs:'left',  ts:'right', label:'← NO\nexisting user' },
+  { f:'new-user',      t:'signup-otp',   type:'s', fs:'right', ts:'left',  label:'YES →\nnew account' },
+  { f:'login-otp',     t:'login-otp-fail', type:'d', fs:'right',ts:'left', label:'wrong code' },
+  { f:'login-otp',     t:'login-pin',    type:'s',              label:'code ok' },
+  { f:'login-pin',     t:'home',         type:'s', fs:'bottom',ts:'top',  label:'authenticated' },
+  { f:'signup-otp',    t:'signup-otp-fail', type:'d', fs:'right',ts:'left', label:'wrong code' },
+  { f:'signup-otp',    t:'onboarding',   type:'s',              label:'code ok' },
+  { f:'onboarding',    t:'sumsub',       type:'s' },
+  { f:'sumsub',        t:'sumsub-fail',  type:'d', fs:'right',ts:'left',  label:'rejected' },
+  { f:'sumsub',        t:'banklink',     type:'s',              label:'approved' },
+  { f:'banklink',      t:'banklink-fail',type:'d', fs:'right',ts:'left',  label:'fails' },
+  { f:'banklink',      t:'pin-setup',    type:'s',              label:'linked' },
+  { f:'pin-setup',     t:'home',         type:'s', fs:'bottom',ts:'top',  label:'setup complete' },
+  { f:'home',          t:'timeout',      type:'d', fs:'right',ts:'left',  label:'4-min\ninactivity' },
 
   // HOME → tab headers
   { f:'home', t:'t-home', type:'s', fs:'bottom', ts:'top' },
@@ -462,34 +488,34 @@ const EDGES = [
   { f:'h-deposit', t:'h-family',   type:'s' },
   { f:'h-family',  t:'h-funeral',  type:'s' },
 
-  // PORTFOLIO TAB
-  { f:'t-port',     t:'p-overview', type:'s' },
-  { f:'p-overview', t:'p-holdings', type:'s' },
-  { f:'p-holdings', t:'p-calendar', type:'s' },
-  { f:'p-calendar', t:'p-statements',type:'s' },
-  { f:'p-statements',t:'p-factsheet',type:'s' },
+  // PORTFOLIO
+  { f:'t-port',      t:'p-overview',  type:'s' },
+  { f:'p-overview',  t:'p-holdings',  type:'s' },
+  { f:'p-holdings',  t:'p-calendar',  type:'s' },
+  { f:'p-calendar',  t:'p-statements',type:'s' },
+  { f:'p-statements',t:'p-factsheet', type:'s' },
   { f:'p-factsheet', t:'p-stockmodal',type:'s' },
 
-  // MARKETS TAB
+  // MARKETS
   { f:'t-mkt',     t:'m-list',      type:'s' },
   { f:'m-list',    t:'m-strategies',type:'s' },
   { f:'m-strategies',t:'m-detail',  type:'s' },
   { f:'m-detail',  t:'m-buy',       type:'s', label:'tap Buy' },
   { f:'m-buy',     t:'m-payment',   type:'s', label:'confirm order' },
   { f:'m-payment', t:'m-pay-fail',  type:'d', label:'fails' },
-  { f:'m-payment', t:'m-success',   type:'s', label:'payment ok ✓' },
+  { f:'m-pay-fail',t:'m-success',   type:'s', label:'retry ok ✓' },
   { f:'m-success', t:'m-news',      type:'s' },
 
-  // CREDIT TAB
-  { f:'t-cr',    t:'c-home',      type:'s' },
-  { f:'c-home',  t:'c-score',     type:'s' },
-  { f:'c-score', t:'c-apply',     type:'s' },
-  { f:'c-apply', t:'c-apply-rej', type:'d', label:'rejected' },
-  { f:'c-apply', t:'c-liquidity', type:'s', label:'approved' },
-  { f:'c-liquidity',t:'c-active', type:'s', label:'pledged' },
-  { f:'c-active',t:'c-repay',     type:'s' },
+  // CREDIT
+  { f:'t-cr',      t:'c-home',      type:'s' },
+  { f:'c-home',    t:'c-score',     type:'s' },
+  { f:'c-score',   t:'c-apply',     type:'s' },
+  { f:'c-apply',   t:'c-apply-rej', type:'d', label:'rejected' },
+  { f:'c-apply-rej',t:'c-liquidity',type:'s', label:'approved\n(after re-apply)' },
+  { f:'c-liquidity',t:'c-active',   type:'s', label:'pledged' },
+  { f:'c-active',  t:'c-repay',     type:'s' },
 
-  // MORE TAB
+  // MORE
   { f:'t-more',      t:'mo-settings', type:'s' },
   { f:'mo-settings', t:'mo-profile',  type:'s' },
   { f:'mo-profile',  t:'mo-password', type:'s' },
@@ -498,292 +524,260 @@ const EDGES = [
   { f:'mo-notif',    t:'mo-legal',    type:'s' },
   { f:'mo-legal',    t:'mo-transact', type:'s' },
 
-  // Cross-tab data connections (dotted)
-  { f:'m-success',  fs:'left',   t:'h-balance', ts:'right', type:'dt',
+  // Cross-tab dotted
+  { f:'m-success', fs:'left',  t:'h-balance', ts:'right', type:'dt',
     label:'stock_holdings_c written\n→ balance card refreshes' },
-  { f:'h-deposit',  fs:'right',  t:'m-payment', ts:'left',  type:'dt',
+  { f:'h-deposit', fs:'right', t:'m-payment', ts:'left',  type:'dt',
     label:'wallets.balance\nfunds payment flow' },
-  { f:'c-repay',    fs:'left',   t:'p-holdings',ts:'right', type:'dt',
-    label:'pledged=false after\nfull repayment\n→ position unlocked' },
+  { f:'c-repay',   fs:'left',  t:'p-holdings',ts:'right', type:'dt',
+    label:'pledged=false after full repay\n→ position unlocked in Holdings' },
 ];
 
 // ═══════════════════════════════════════════════════════════════════
 // RENDER ENGINE
 // ═══════════════════════════════════════════════════════════════════
 
-const CRUD_COLORS = { C:'#4caf50', R:'#2196f3', U:'#ff9800', D:'#f44336' };
-
-function nodeById(id) { return NODES.find(n => n.id === id); }
-
 function sidePoint(n, side) {
-  const cx = n.x + n.w/2, cy = n.y + n.h/2;
+  const th = totalH(n);
+  const cx = n.x + n.w/2;
   if (side === 'top')    return [cx, n.y];
-  if (side === 'bottom') return [cx, n.y + n.h];
-  if (side === 'left')   return [n.x, cy];
-  if (side === 'right')  return [n.x + n.w, cy];
-  return [cx, cy];
+  if (side === 'bottom') return [cx, n.y + th];
+  // left/right: use box midpoint (not total height midpoint)
+  if (side === 'left')   return [n.x, n.y + n.h/2];
+  if (side === 'right')  return [n.x + n.w, n.y + n.h/2];
+  return [cx, n.y + n.h/2];
 }
 
 function autoSides(fn, tn) {
   const fc = [fn.x+fn.w/2, fn.y+fn.h/2];
   const tc = [tn.x+tn.w/2, tn.y+tn.h/2];
   const dx = tc[0]-fc[0], dy = tc[1]-fc[1];
-  const fromS = Math.abs(dy)>Math.abs(dx) ? (dy>0?'bottom':'top') : (dx>0?'right':'left');
-  const toS   = Math.abs(dy)>Math.abs(dx) ? (dy>0?'top':'bottom') : (dx>0?'left':'right');
-  return [fromS, toS];
+  const fs = Math.abs(dy)>Math.abs(dx)?(dy>0?'bottom':'top'):(dx>0?'right':'left');
+  const ts = Math.abs(dy)>Math.abs(dx)?(dy>0?'top':'bottom'):(dx>0?'left':'right');
+  return [fs,ts];
 }
 
 function renderEdge(e) {
-  const fn = nodeById(e.f), tn = nodeById(e.t);
+  const fn = byId[e.f], tn = byId[e.t];
   if (!fn||!tn) return '';
-  const [afs, ats] = autoSides(fn, tn);
-  const fs = e.fs || afs, ts = e.ts || ats;
-  const [x1,y1] = sidePoint(fn, fs);
-  const [x2,y2] = sidePoint(tn, ts);
+  const [afs,ats] = autoSides(fn,tn);
+  const fs = e.fs||afs, ts = e.ts||ats;
+  const [x1,y1] = sidePoint(fn,fs);
+  const [x2,y2] = sidePoint(tn,ts);
 
-  let stroke, dash, arrowId, labelColor;
-  if (e.type==='d')  { stroke='#e65100'; dash='stroke-dasharray="6,3"'; arrowId='arrO'; labelColor='#e65100'; }
-  else if (e.type==='dt') { stroke='#1976d2'; dash='stroke-dasharray="2,5"'; arrowId='arrB'; labelColor='#1976d2'; }
-  else                { stroke='#333';    dash=''; arrowId='arrK'; labelColor='#555'; }
+  let stroke, dash, arrow, lc;
+  if (e.type==='d') { stroke='#e65100'; dash='stroke-dasharray="7,3"'; arrow='arrO'; lc='#e65100'; }
+  else if (e.type==='dt') { stroke='#1976d2'; dash='stroke-dasharray="2,5"'; arrow='arrB'; lc='#1976d2'; }
+  else { stroke='#333'; dash=''; arrow='arrK'; lc='#555'; }
 
-  // Bezier control points
-  let cx1=x1, cy1=y1, cx2=x2, cy2=y2;
-  if (fs==='bottom'&&ts==='top')    { cy1=y1+(y2-y1)*0.5; cy2=y2-(y2-y1)*0.5; cx1=x1; cx2=x2; }
-  else if (fs==='top'&&ts==='bottom'){ cy1=y1-(y1-y2)*0.5; cy2=y2+(y1-y2)*0.5; cx1=x1; cx2=x2; }
-  else if (fs==='right'&&ts==='left'){ cx1=x1+(x2-x1)*0.5; cx2=x2-(x2-x1)*0.5; }
-  else if (fs==='left'&&ts==='right'){ cx1=x1-(x1-x2)*0.5; cx2=x2+(x1-x2)*0.5; }
-  else if (fs==='bottom'&&ts==='left') { cx1=x1; cy1=y2; cx2=x1; cy2=y2; }
-  else if (fs==='bottom'&&ts==='right'){ cx1=x1; cy1=y2; cx2=x1; cy2=y2; }
+  let cx1=x1,cy1=y1,cx2=x2,cy2=y2;
+  if      (fs==='bottom'&&ts==='top')    { cy1=y1+(y2-y1)*0.5; cy2=y2-(y2-y1)*0.5; cx1=x1; cx2=x2; }
+  else if (fs==='top'&&ts==='bottom')    { cy1=y1-(y1-y2)*0.5; cy2=y2+(y1-y2)*0.5; cx1=x1; cx2=x2; }
+  else if (fs==='right'&&ts==='left')    { cx1=x1+(x2-x1)*0.55; cx2=x2-(x2-x1)*0.55; }
+  else if (fs==='left'&&ts==='right')    { cx1=x1-(x1-x2)*0.55; cx2=x2+(x1-x2)*0.55; }
+  else if (fs==='bottom'&&ts==='left')   { cx1=x1; cy1=y2; cx2=x2-20; cy2=y2; }
+  else if (fs==='bottom'&&ts==='right')  { cx1=x1; cy1=y2; cx2=x2+20; cy2=y2; }
   else { cx1=x1; cy1=(y1+y2)/2; cx2=x2; cy2=(y1+y2)/2; }
 
-  const path = `<path d="M ${x1},${y1} C ${cx1},${cy1} ${cx2},${cy2} ${x2},${y2}"
-    fill="none" stroke="${stroke}" stroke-width="1.6" ${dash} marker-end="url(#${arrowId})"/>`;
+  let out = `<path d="M ${x1},${y1} C ${cx1},${cy1} ${cx2},${cy2} ${x2},${y2}"
+    fill="none" stroke="${stroke}" stroke-width="1.6" ${dash} marker-end="url(#${arrow})"/>`;
 
-  let labelSVG = '';
   if (e.label) {
-    const lx = (x1+x2)/2, ly = (y1+y2)/2;
-    const lines = e.label.split('\n');
-    const linesHTML = lines.map((ln,i) =>
-      `<text x="${lx}" y="${ly - (lines.length-1)*7 + i*14}" text-anchor="middle"
-        font-size="9.5" fill="${labelColor}" font-style="italic"
-        style="paint-order:stroke;stroke:white;stroke-width:4;stroke-linejoin:round">${ln}</text>`
-    ).join('');
-    labelSVG = linesHTML;
+    const lx=(x1+x2)/2, ly=(y1+y2)/2;
+    const lines=e.label.split('\n');
+    lines.forEach((ln,i)=>{
+      out += `<text x="${lx}" y="${ly-(lines.length-1)*7+i*14}" text-anchor="middle"
+        font-size="9.5" fill="${lc}" font-style="italic"
+        style="paint-order:stroke;stroke:white;stroke-width:4;stroke-linejoin:round">${ln}</text>`;
+    });
   }
-  return path + labelSVG;
-}
-
-function crudBlockY(n) {
-  // Returns y below math (if any) for CRUD badges
-  let y = n.y + n.h + 4;
-  if (n.math) y += n.math.split('\n').length * 13 + 14;
-  return y;
+  return out;
 }
 
 function renderNode(n) {
-  const parts = [];
+  const p = [];
+  const th = totalH(n);
 
-  if (n.type === 'start') {
-    parts.push(`<rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="30" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>`);
-    const cy = n.y + n.h/2;
-    parts.push(`<text x="${n.x+n.w/2}" y="${cy-4}" text-anchor="middle" font-size="13" font-weight="700" fill="#1b5e20">${n.title}</text>`);
-    if (n.sub) parts.push(`<text x="${n.x+n.w/2}" y="${cy+12}" text-anchor="middle" font-size="9.5" fill="#388e3c">${n.sub}</text>`);
-    return parts.join('');
+  // ── START ──────────────────────────
+  if (n.type==='start') {
+    p.push(`<rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="30" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>`);
+    p.push(`<text x="${n.x+n.w/2}" y="${n.y+n.h/2-4}" text-anchor="middle" font-size="13" font-weight="700" fill="#1b5e20">${n.title}</text>`);
+    if(n.sub) p.push(`<text x="${n.x+n.w/2}" y="${n.y+n.h/2+12}" text-anchor="middle" font-size="9.5" fill="#388e3c">${n.sub}</text>`);
+    return p.join('');
   }
-
-  if (n.type === 'decision') {
+  // ── DECISION ───────────────────────
+  if (n.type==='decision') {
     const cx=n.x+n.w/2, cy=n.y+n.h/2, hw=n.w/2, hh=n.h/2;
-    parts.push(`<polygon points="${cx},${cy-hh} ${cx+hw},${cy} ${cx},${cy+hh} ${cx-hw},${cy}" fill="#fff8e1" stroke="#f57f17" stroke-width="1.5"/>`);
-    const lines = n.title.split('\n');
-    lines.forEach((l,i) => {
-      const oy = (i-(lines.length-1)/2)*15;
-      parts.push(`<text x="${cx}" y="${cy+oy+5}" text-anchor="middle" font-size="11" font-weight="700" fill="#4a2600">${l}</text>`);
+    p.push(`<polygon points="${cx},${cy-hh} ${cx+hw},${cy} ${cx},${cy+hh} ${cx-hw},${cy}" fill="#fff8e1" stroke="#f57f17" stroke-width="1.5"/>`);
+    const lines=n.title.split('\n');
+    lines.forEach((l,i)=>{
+      const oy=(i-(lines.length-1)/2)*15;
+      p.push(`<text x="${cx}" y="${cy+oy+5}" text-anchor="middle" font-size="11" font-weight="700" fill="#4a2600">${l}</text>`);
     });
-    return parts.join('');
+    return p.join('');
   }
-
-  if (n.type === 'home') {
-    parts.push(`<rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="6" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2.5"/>`);
-    parts.push(`<text x="${n.x+n.w/2}" y="${n.y+22}" text-anchor="middle" font-size="14" font-weight="700" fill="#1b5e20">${n.title}</text>`);
-    if (n.sub) parts.push(`<text x="${n.x+n.w/2}" y="${n.y+38}" text-anchor="middle" font-size="9.5" fill="#388e3c">${n.sub}</text>`);
-    // CRUD inline
-    if (n.crud) {
-      let bx = n.x + 16;
-      for (const [op, tables] of Object.entries(n.crud)) {
-        tables.forEach(t => {
-          const label = `${op}: ${t}`;
-          const bw = label.length * 6 + 12;
-          parts.push(`<rect x="${bx}" y="${n.y+54}" width="${bw}" height="16" rx="2" fill="${CRUD_COLORS[op]}22" stroke="${CRUD_COLORS[op]}" stroke-width="0.6"/>`);
-          parts.push(`<text x="${bx+6}" y="${n.y+65}" font-size="8.5" fill="${CRUD_COLORS[op]}" font-weight="700">${label}</text>`);
-          bx += bw + 6;
-        });
-      }
-    }
-    return parts.join('');
-  }
-
-  if (n.type === 'tab') {
-    parts.push(`<rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="3" fill="${n.color}"/>`);
-    parts.push(`<text x="${n.x+n.w/2}" y="${n.y+n.h/2+5}" text-anchor="middle" font-size="12" font-weight="700" fill="white" letter-spacing="0.5">${n.title}</text>`);
-    return parts.join('');
-  }
-
-  if (n.type === 'edge') {
-    parts.push(`<rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="3" fill="#fce4ec" stroke="#c62828" stroke-width="1" stroke-dasharray="5,3"/>`);
-    parts.push(`<text x="${n.x+9}" y="${n.y+17}" font-size="10.5" font-weight="700" fill="#b71c1c">${n.title}</text>`);
-    if (n.sub) n.sub.split('\n').forEach((l,i) => {
-      parts.push(`<text x="${n.x+9}" y="${n.y+32+i*13}" font-size="9" fill="#c62828">${l}</text>`);
-    });
-    return parts.join('');
-  }
-
-  // SCREEN or SUCCESS
-  const isSuc = n.type === 'success';
-  const bg     = isSuc ? '#e8f5e9' : 'white';
-  const stk    = isSuc ? '#2e7d32' : '#222';
-  const sw     = isSuc ? 2 : 1.5;
-  const tcolor = isSuc ? '#1b5e20' : '#111';
-
-  parts.push(`<rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="4" fill="${bg}" stroke="${stk}" stroke-width="${sw}"/>`);
-
-  let ty = n.y + 18;
-  if (n.title) {
-    parts.push(`<text x="${n.x+n.w/2}" y="${ty}" text-anchor="middle" font-size="11" font-weight="700" fill="${tcolor}">${n.title}</text>`);
-    ty += 14;
-  }
-  if (n.sub) n.sub.split('\n').forEach(l => {
-    parts.push(`<text x="${n.x+n.w/2}" y="${ty}" text-anchor="middle" font-size="9.5" fill="#555">${l}</text>`);
-    ty += 13;
-  });
-  if (n.apis) n.apis.forEach(a => {
-    parts.push(`<text x="${n.x+n.w/2}" y="${ty}" text-anchor="middle" font-size="9" fill="#7c4dff" font-style="italic">▸ ${a}</text>`);
-    ty += 12;
-  });
-
-  // Math box
-  if (n.math) {
-    const mlines = n.math.split('\n');
-    const mh = mlines.length * 13 + 8;
-    const my = n.y + n.h + 4;
-    parts.push(`<rect x="${n.x}" y="${my}" width="${n.w}" height="${mh}" rx="3" fill="#e8f4fd" stroke="#1565c0" stroke-width="0.8"/>`);
-    mlines.forEach((l,i) => {
-      parts.push(`<text x="${n.x+8}" y="${my+12+i*13}" font-size="8.8" fill="#0d47a1" font-family="'Courier New',Courier,monospace">${l}</text>`);
-    });
-  }
-
-  // CRUD badges
-  if (n.crud) {
-    const mathH = n.math ? (n.math.split('\n').length * 13 + 8 + 6) : 0;
-    let by = n.y + n.h + 4 + mathH;
-    for (const [op, tables] of Object.entries(n.crud)) {
-      tables.forEach(t => {
-        const label = `${op}: ${t}`;
-        parts.push(`<rect x="${n.x}" y="${by}" width="${n.w}" height="17" rx="2" fill="${CRUD_COLORS[op]}18" stroke="${CRUD_COLORS[op]}" stroke-width="0.6"/>`);
-        parts.push(`<text x="${n.x+7}" y="${by+12}" font-size="9" fill="${CRUD_COLORS[op]}" font-weight="700">${label}</text>`);
-        by += 19;
+  // ── HOME ───────────────────────────
+  if (n.type==='home') {
+    p.push(`<rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="6" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2.5"/>`);
+    p.push(`<text x="${n.x+n.w/2}" y="${n.y+22}" text-anchor="middle" font-size="14" font-weight="700" fill="#1b5e20">${n.title}</text>`);
+    if(n.sub) p.push(`<text x="${n.x+n.w/2}" y="${n.y+38}" text-anchor="middle" font-size="9.5" fill="#388e3c">${n.sub}</text>`);
+    if(n.crud) {
+      let bx=n.x+14;
+      for(const [op,tables] of Object.entries(n.crud)) tables.forEach(t=>{
+        const lbl=`${op}: ${t}`, bw=lbl.length*6.2+12;
+        p.push(`<rect x="${bx}" y="${n.y+55}" width="${bw}" height="15" rx="2" fill="${CRUD_COLORS[op]}22" stroke="${CRUD_COLORS[op]}" stroke-width="0.6"/>`);
+        p.push(`<text x="${bx+5}" y="${n.y+65}" font-size="8" fill="${CRUD_COLORS[op]}" font-weight="700">${lbl}</text>`);
+        bx+=bw+6;
       });
     }
+    return p.join('');
+  }
+  // ── TAB HEADER ─────────────────────
+  if (n.type==='tab') {
+    p.push(`<rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="3" fill="${n.color}"/>`);
+    p.push(`<text x="${n.x+n.w/2}" y="${n.y+n.h/2+5}" text-anchor="middle" font-size="12" font-weight="700" fill="white" letter-spacing="0.5">${n.title}</text>`);
+    return p.join('');
+  }
+  // ── EDGE CASE ──────────────────────
+  if (n.type==='edge') {
+    p.push(`<rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="4" fill="#fce4ec" stroke="#c62828" stroke-width="1.2" stroke-dasharray="5,3"/>`);
+    p.push(`<text x="${n.x+10}" y="${n.y+18}" font-size="10.5" font-weight="700" fill="#b71c1c">${n.title}</text>`);
+    if(n.sub) n.sub.split('\n').forEach((l,i)=>{
+      p.push(`<text x="${n.x+10}" y="${n.y+34+i*13}" font-size="9.5" fill="#c62828">${l}</text>`);
+    });
+    return p.join('');
   }
 
-  return parts.join('');
+  // ── SCREEN / SUCCESS ───────────────
+  const isSuc = n.type==='success';
+  const bg  = isSuc ? '#e8f5e9' : 'white';
+  const stk = isSuc ? '#2e7d32' : '#222';
+  const sw  = isSuc ? 2 : 1.5;
+  const tc  = isSuc ? '#1b5e20' : '#111';
+
+  // Outer rect — full computed height
+  p.push(`<rect x="${n.x}" y="${n.y}" width="${n.w}" height="${th}" rx="4" fill="${bg}" stroke="${stk}" stroke-width="${sw}"/>`);
+
+  // Content area (title + sub + apis within n.h)
+  let ty = n.y+18;
+  if(n.title) {
+    p.push(`<text x="${n.x+n.w/2}" y="${ty}" text-anchor="middle" font-size="11" font-weight="700" fill="${tc}">${n.title}</text>`);
+    ty+=15;
+  }
+  if(n.sub) n.sub.split('\n').forEach(l=>{
+    p.push(`<text x="${n.x+n.w/2}" y="${ty}" text-anchor="middle" font-size="9.5" fill="#555">${l}</text>`);
+    ty+=13;
+  });
+  if(n.apis) n.apis.forEach(a=>{
+    p.push(`<text x="${n.x+n.w/2}" y="${ty}" text-anchor="middle" font-size="9" fill="#7c4dff" font-style="italic">▸ ${a}</text>`);
+    ty+=12;
+  });
+
+  // Math section — light blue band inside the rect
+  if(n.math) {
+    const mathLines = n.math.split('\n');
+    const mStartY   = n.y + n.h;
+    const mHeight   = mathLines.length * 13 + 12;
+    p.push(`<rect x="${n.x+1}" y="${mStartY}" width="${n.w-2}" height="${mHeight}" fill="#dbeafe" stroke="none"/>`);
+    p.push(`<line x1="${n.x}" y1="${mStartY}" x2="${n.x+n.w}" y2="${mStartY}" stroke="${stk}" stroke-width="0.5" stroke-dasharray="3,2"/>`);
+    mathLines.forEach((l,i)=>{
+      p.push(`<text x="${n.x+8}" y="${mStartY+12+i*13}" font-size="8.5" fill="#1e3a8a" font-family="'Courier New',Courier,monospace">${l}</text>`);
+    });
+  }
+
+  // CRUD badges — inside the rect, at the bottom
+  if(n.crud) {
+    const cStartY = n.y + n.h + mH(n);
+    p.push(`<line x1="${n.x}" y1="${cStartY}" x2="${n.x+n.w}" y2="${cStartY}" stroke="${stk}" stroke-width="0.5" stroke-dasharray="3,2"/>`);
+    let by = cStartY + 5;
+    for(const [op,tables] of Object.entries(n.crud)) tables.forEach(t=>{
+      const lbl=`${op}: ${t}`;
+      p.push(`<rect x="${n.x+4}" y="${by}" width="${n.w-8}" height="17" rx="2" fill="${CRUD_COLORS[op]}22" stroke="${CRUD_COLORS[op]}" stroke-width="0.6"/>`);
+      p.push(`<text x="${n.x+10}" y="${by+12}" font-size="9" fill="${CRUD_COLORS[op]}" font-weight="700">${lbl}</text>`);
+      by+=20;
+    });
+  }
+
+  return p.join('');
 }
 
+// ─── BUILD SVG ──────────────────────────────────────────────────
 function buildSVG() {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${SVG_W}" height="${SVG_H}" viewBox="0 0 ${SVG_W} ${SVG_H}"
     font-family="'Helvetica Neue',Helvetica,Arial,sans-serif">
-    <defs>
-      <pattern id="grid" x="0" y="0" width="28" height="28" patternUnits="userSpaceOnUse">
-        <circle cx="14" cy="14" r="1.2" fill="#bbb" opacity="0.4"/>
-      </pattern>
-      <marker id="arrK" markerWidth="9" markerHeight="7" refX="8.5" refY="3.5" orient="auto"><polygon points="0 0,9 3.5,0 7" fill="#333"/></marker>
-      <marker id="arrO" markerWidth="9" markerHeight="7" refX="8.5" refY="3.5" orient="auto"><polygon points="0 0,9 3.5,0 7" fill="#e65100"/></marker>
-      <marker id="arrB" markerWidth="9" markerHeight="7" refX="8.5" refY="3.5" orient="auto"><polygon points="0 0,9 3.5,0 7" fill="#1976d2"/></marker>
-    </defs>
-    <rect width="${SVG_W}" height="${SVG_H}" fill="#f6f6f6"/>
-    <rect width="${SVG_W}" height="${SVG_H}" fill="url(#grid)"/>
+  <defs>
+    <pattern id="grid" x="0" y="0" width="28" height="28" patternUnits="userSpaceOnUse">
+      <circle cx="14" cy="14" r="1.2" fill="#bbb" opacity="0.4"/>
+    </pattern>
+    <marker id="arrK" markerWidth="9" markerHeight="7" refX="8.5" refY="3.5" orient="auto"><polygon points="0 0,9 3.5,0 7" fill="#333"/></marker>
+    <marker id="arrO" markerWidth="9" markerHeight="7" refX="8.5" refY="3.5" orient="auto"><polygon points="0 0,9 3.5,0 7" fill="#e65100"/></marker>
+    <marker id="arrB" markerWidth="9" markerHeight="7" refX="8.5" refY="3.5" orient="auto"><polygon points="0 0,9 3.5,0 7" fill="#1976d2"/></marker>
+  </defs>
+  <rect width="${SVG_W}" height="${SVG_H}" fill="#f6f6f6"/>
+  <rect width="${SVG_W}" height="${SVG_H}" fill="url(#grid)"/>
 
-    <!-- Section dividers -->
-    <line x1="50" y1="1286" x2="${SVG_W-50}" y2="1286" stroke="#d1d5db" stroke-width="1.5" stroke-dasharray="6,4"/>
-    <text x="${SVG_W/2}" y="1302" text-anchor="middle" font-size="10" fill="#9ca3af" letter-spacing="2" font-weight="600">APP SHELL — HOME HUB + 5-TAB NAVIGATION</text>
-    <line x1="50" y1="2350" x2="${SVG_W-50}" y2="2350" stroke="#d1d5db" stroke-width="1.5" stroke-dasharray="6,4"/>
-    <text x="${SVG_W/2}" y="2366" text-anchor="middle" font-size="10" fill="#9ca3af" letter-spacing="2" font-weight="600">DATA LAYER — DATABASE TABLES + API ROUTES</text>
+  <!-- Section labels -->
+  <text x="${SVG_W/2}" y="52" text-anchor="middle" font-size="10" fill="#9ca3af" letter-spacing="2.5" font-weight="600">AUTHENTICATION + ONBOARDING</text>
+  <line x1="40" y1="1600" x2="${SVG_W-40}" y2="1600" stroke="#d1d5db" stroke-width="1.5" stroke-dasharray="8,5"/>
+  <text x="${SVG_W/2}" y="1616" text-anchor="middle" font-size="10" fill="#9ca3af" letter-spacing="2.5" font-weight="600">HOME HUB + 5-TAB NAVIGATION</text>
+  <line x1="40" y1="3042" x2="${SVG_W-40}" y2="3042" stroke="#d1d5db" stroke-width="1.5" stroke-dasharray="8,5"/>
+  <text x="${SVG_W/2}" y="3058" text-anchor="middle" font-size="10" fill="#9ca3af" letter-spacing="2.5" font-weight="600">DATA LAYER — DB TABLES + API ROUTES</text>
 
-    <!-- Auth section label -->
-    <text x="${SVG_W/2}" y="50" text-anchor="middle" font-size="10" fill="#9ca3af" letter-spacing="2" font-weight="600">AUTHENTICATION + ONBOARDING FLOW</text>
-
-    ${EDGES.map(renderEdge).join('\n')}
-    ${NODES.map(renderNode).join('\n')}
+  ${E.map(renderEdge).join('\n')}
+  ${N.map(renderNode).join('\n')}
   </svg>`;
 }
 
 document.getElementById('diagram').innerHTML = buildSVG();
 
-// ═══════════════════════════════════════════════════════════════════
-// PAN + ZOOM
-// ═══════════════════════════════════════════════════════════════════
-let scale = 0.65;
+// ─── PAN + ZOOM ─────────────────────────────────────────────────
+let scale = 0.60;
 const container = document.getElementById('svgContainer');
-const wrap = document.getElementById('canvasWrap');
+const wrap      = document.getElementById('canvasWrap');
 const zoomLabel = document.getElementById('zoom-label');
 
 function applyScale() {
   container.style.transform = `scale(${scale})`;
-  container.style.width = (SVG_W * scale) + 'px';
+  container.style.width  = (SVG_W * scale) + 'px';
   container.style.height = (SVG_H * scale) + 'px';
-  zoomLabel.textContent = Math.round(scale * 100) + '%';
+  zoomLabel.textContent  = Math.round(scale*100) + '%';
 }
-
 function zoom(delta) {
-  const newScale = Math.max(0.2, Math.min(2, scale + delta));
+  const ns = Math.max(0.18, Math.min(2, scale+delta));
   const cx = wrap.scrollLeft + wrap.clientWidth/2;
-  const cy = wrap.scrollTop + wrap.clientHeight/2;
-  const rx = cx / (SVG_W * scale);
-  const ry = cy / (SVG_H * scale);
-  scale = newScale;
-  applyScale();
-  wrap.scrollLeft = rx * SVG_W * scale - wrap.clientWidth/2;
-  wrap.scrollTop  = ry * SVG_H * scale - wrap.clientHeight/2;
+  const cy = wrap.scrollTop  + wrap.clientHeight/2;
+  const rx = cx/(SVG_W*scale), ry = cy/(SVG_H*scale);
+  scale = ns; applyScale();
+  wrap.scrollLeft = rx*SVG_W*scale - wrap.clientWidth/2;
+  wrap.scrollTop  = ry*SVG_H*scale - wrap.clientHeight/2;
 }
-
 function fitToScreen() {
-  const sw = wrap.clientWidth / SVG_W;
-  const sh = (wrap.clientHeight) / SVG_H;
-  scale = Math.min(sw, sh) * 0.96;
+  scale = Math.min(wrap.clientWidth/SVG_W, wrap.clientHeight/SVG_H) * 0.96;
   applyScale();
-  wrap.scrollLeft = 0;
-  wrap.scrollTop = 0;
+  wrap.scrollLeft = wrap.scrollTop = 0;
 }
 
-// Mouse-wheel zoom
 wrap.addEventListener('wheel', e => {
-  if (e.ctrlKey || e.metaKey) {
-    e.preventDefault();
-    zoom(e.deltaY < 0 ? 0.08 : -0.08);
-  }
-}, { passive: false });
+  if (e.ctrlKey||e.metaKey) { e.preventDefault(); zoom(e.deltaY<0?0.08:-0.08); }
+}, { passive:false });
 
-// Pan by drag
-let dragging = false, dragStartX, dragStartY, scrollStartX, scrollStartY;
+let drag=false, dsx,dsy,ssx,ssy;
 wrap.addEventListener('mousedown', e => {
-  if (e.target.closest('button')) return;
-  dragging = true;
-  wrap.classList.add('grabbing');
-  dragStartX = e.clientX; dragStartY = e.clientY;
-  scrollStartX = wrap.scrollLeft; scrollStartY = wrap.scrollTop;
+  if(e.target.closest('button')) return;
+  drag=true; wrap.classList.add('grabbing');
+  dsx=e.clientX; dsy=e.clientY; ssx=wrap.scrollLeft; ssy=wrap.scrollTop;
 });
 document.addEventListener('mousemove', e => {
-  if (!dragging) return;
-  wrap.scrollLeft = scrollStartX - (e.clientX - dragStartX);
-  wrap.scrollTop  = scrollStartY - (e.clientY - dragStartY);
+  if(!drag) return;
+  wrap.scrollLeft = ssx-(e.clientX-dsx);
+  wrap.scrollTop  = ssy-(e.clientY-dsy);
 });
-document.addEventListener('mouseup', () => { dragging = false; wrap.classList.remove('grabbing'); });
+document.addEventListener('mouseup', ()=>{ drag=false; wrap.classList.remove('grabbing'); });
 
-// Init
 applyScale();
-// Scroll to center on the auth flow (top center of diagram)
-setTimeout(() => {
-  wrap.scrollLeft = (SVG_W * scale - wrap.clientWidth) / 2;
-  wrap.scrollTop = 0;
+setTimeout(()=>{
+  wrap.scrollLeft = (SVG_W*scale - wrap.clientWidth)/2;
+  wrap.scrollTop  = 0;
 }, 50);
 </script>
 </body>
