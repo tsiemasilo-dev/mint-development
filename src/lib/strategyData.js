@@ -906,9 +906,11 @@ export const getStrategyMonthlyReturnsFromDB = async (userId, strategyId, startD
 
     if (error || !rows || rows.length < 2) return {};
 
-    const filterStart = startDate ? startDate.slice(0, 7) : null;
+    // The very first row is the entry-day baseline
+    const entryBv = rows[0].basket_value;
+    const entryYm = rows[0].as_of_date.slice(0, 7);
 
-    // Keep last row per calendar month
+    // Keep last row per calendar month (month-end value)
     const monthlyLast = {};
     rows.forEach(row => {
       const ym = row.as_of_date.slice(0, 7);
@@ -918,26 +920,26 @@ export const getStrategyMonthlyReturnsFromDB = async (userId, strategyId, startD
     const sortedMonths = Object.keys(monthlyLast).sort();
     const result = {};
 
-    for (let i = 1; i < sortedMonths.length; i++) {
-      const currKey = sortedMonths[i];
-      const prevKey = sortedMonths[i - 1];
+    sortedMonths.forEach((currKey, i) => {
       const currBv = monthlyLast[currKey];
-      const prevBv = monthlyLast[prevKey];
-      if (!prevBv || prevBv === 0) continue;
-      const [year, month] = currKey.split("-");
-      if (filterStart && currKey < filterStart) continue;
-      if (!result[year]) result[year] = {};
-      result[year][month] = (currBv - prevBv) / prevBv;
-    }
+      let baseBv;
 
-    // Include the first month itself as a partial return from the very first basket_value
-    // if startDate falls within that first month
-    if (filterStart && sortedMonths.length > 0) {
-      const firstMonth = sortedMonths[0];
-      if (firstMonth >= filterStart) {
-        // We have no prior baseline — skip; MoM for the first available month is unknown
+      if (i === 0) {
+        // First month: return from entry day to month-end
+        baseBv = entryBv;
+      } else {
+        // All subsequent months: MoM from previous month-end
+        baseBv = monthlyLast[sortedMonths[i - 1]];
       }
-    }
+
+      if (!baseBv || baseBv === 0) return;
+      // Skip the entry month if month-end equals entry day (single row — no intra-month move to show)
+      if (i === 0 && currBv === entryBv) return;
+
+      const [year, month] = currKey.split("-");
+      if (!result[year]) result[year] = {};
+      result[year][month] = (currBv - baseBv) / baseBv;
+    });
 
     return result;
   } catch (err) {
