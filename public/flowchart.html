@@ -2,459 +2,789 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Mint — Navigation Flow Diagram</title>
+<title>Mint — Complete App Flow Map</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: #e8e8e8; display: flex; justify-content: center; padding: 40px 20px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
-  .wrap { background: white; box-shadow: 0 4px 32px rgba(0,0,0,0.12); }
-  svg { display: block; }
-  @media print {
-    body { background: white; padding: 0; }
-    .wrap { box-shadow: none; }
-    svg { width: 100%; height: auto; page-break-inside: avoid; }
-  }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #e2e2e2; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; overflow: hidden; height: 100vh; }
+.toolbar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  background: #111827; color: white; display: flex; align-items: center;
+  gap: 14px; padding: 8px 18px; height: 46px;
+}
+.toolbar h1 { font-size: 14px; font-weight: 700; letter-spacing: 0.3px; }
+.toolbar .sub { color: #6b7280; font-size: 10.5px; }
+.zoom-controls { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+.zoom-controls button {
+  padding: 5px 12px; background: #374151; color: white; border: none;
+  border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600;
+}
+.zoom-controls button:hover { background: #4b5563; }
+.zoom-controls .export { background: #2e7d32; }
+.zoom-controls .export:hover { background: #388e3c; }
+.zoom-label { font-size: 11px; color: #9ca3af; min-width: 42px; text-align: center; }
+
+.canvas-wrap {
+  position: fixed; top: 46px; left: 0; right: 0; bottom: 0;
+  overflow: auto; cursor: grab;
+}
+.canvas-wrap.grabbing { cursor: grabbing; }
+
+.legend {
+  position: fixed; bottom: 16px; left: 16px; z-index: 100;
+  background: white; border: 1px solid #e5e7eb; border-radius: 8px;
+  padding: 10px 14px; font-size: 10.5px; box-shadow: 0 4px 12px rgba(0,0,0,.12);
+}
+.legend h3 { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #666; margin-bottom: 6px; }
+.lr { display: flex; align-items: center; gap: 7px; margin: 3px 0; color: #333; }
+.ld { width: 13px; height: 13px; border-radius: 2px; flex-shrink: 0; }
+.lsep { margin-top: 7px; padding-top: 7px; border-top: 1px solid #e5e7eb; }
+
+.svg-container { transform-origin: 0 0; }
+
+@media print {
+  .toolbar, .legend { display: none; }
+  body { overflow: visible; height: auto; background: white; }
+  .canvas-wrap { position: static; overflow: visible; }
+  .svg-container { transform: none !important; }
+}
 </style>
 </head>
 <body>
-<div class="wrap">
-<svg xmlns="http://www.w3.org/2000/svg"
-     width="2600" height="1560"
-     viewBox="0 0 2600 1560"
-     font-family="'Helvetica Neue', Helvetica, Arial, sans-serif">
 
-<defs>
-  <pattern id="dots" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
-    <circle cx="12" cy="12" r="1.2" fill="#bbb" opacity="0.5"/>
-  </pattern>
-  <marker id="arr" markerWidth="9" markerHeight="7" refX="9" refY="3.5" orient="auto">
-    <polygon points="0 0, 9 3.5, 0 7" fill="#333"/>
-  </marker>
-  <marker id="arr-sm" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
-    <polygon points="0 0, 7 2.5, 0 5" fill="#999"/>
-  </marker>
-  <marker id="arr-grn" markerWidth="9" markerHeight="7" refX="9" refY="3.5" orient="auto">
-    <polygon points="0 0, 9 3.5, 0 7" fill="#2e7d32"/>
-  </marker>
-</defs>
-
-<!-- Background -->
-<rect width="2600" height="1560" fill="#f7f7f7"/>
-<rect width="2600" height="1560" fill="url(#dots)"/>
-
-<!-- ══════════════════════════════════════════════
-     TITLE
-══════════════════════════════════════════════ -->
-<text x="64" y="54" font-size="30" font-weight="700" fill="#111" letter-spacing="-0.5">NAVIGATION FLOW</text>
-<text x="64" y="76" font-size="11.5" fill="#888" letter-spacing="2.5">MINT APP — SCREEN MAP &amp; DATABASE TABLES PER SCREEN</text>
-
-<!-- divider -->
-<line x1="64" y1="90" x2="2536" y2="90" stroke="#ddd" stroke-width="1"/>
-
-<!-- ══════════════════════════════════════════════
-     SECTION 1 — AUTHENTICATION FLOW
-══════════════════════════════════════════════ -->
-<text x="64" y="118" font-size="10" font-weight="600" fill="#999" letter-spacing="2.2">① AUTHENTICATION &amp; ONBOARDING</text>
-
-<!-- Box helper: each box y=132, h=72 — auth center y=168 -->
-
-<!-- WELCOME -->
-<rect x="64" y="130" width="185" height="72" rx="3" fill="white" stroke="#333" stroke-width="1.5"/>
-<text x="156" y="154" font-size="11" font-weight="700" fill="#111" text-anchor="middle">WELCOME</text>
-<text x="156" y="170" font-size="10" fill="#666" text-anchor="middle">(Landing Page)</text>
-
-<!-- arrow -->
-<line x1="249" y1="166" x2="282" y2="166" stroke="#333" stroke-width="1.5" marker-end="url(#arr)"/>
-
-<!-- AUTH PAGE -->
-<rect x="285" y="130" width="210" height="72" rx="3" fill="white" stroke="#333" stroke-width="1.5"/>
-<text x="390" y="154" font-size="11" font-weight="700" fill="#111" text-anchor="middle">AUTH PAGE</text>
-<text x="390" y="170" font-size="10" fill="#666" text-anchor="middle">Email + OTP Login / Signup</text>
-<text x="390" y="183" font-size="9.5" fill="#999" text-anchor="middle">DB: supabase.auth.users</text>
-
-<!-- arrow + label -->
-<line x1="495" y1="166" x2="528" y2="166" stroke="#333" stroke-width="1.5" marker-end="url(#arr)"/>
-<text x="512" y="148" font-size="9" fill="#999" text-anchor="middle">first login</text>
-
-<!-- USER ONBOARDING -->
-<rect x="531" y="130" width="225" height="72" rx="3" fill="white" stroke="#333" stroke-width="1.5"/>
-<text x="643" y="154" font-size="11" font-weight="700" fill="#111" text-anchor="middle">USER ONBOARDING</text>
-<text x="643" y="170" font-size="10" fill="#666" text-anchor="middle">6-Step Identity Form</text>
-<text x="643" y="183" font-size="9.5" fill="#999" text-anchor="middle">DB: user_onboarding_pack_details · profiles</text>
-
-<!-- arrow -->
-<line x1="756" y1="166" x2="789" y2="166" stroke="#333" stroke-width="1.5" marker-end="url(#arr)"/>
-
-<!-- IDENTITY CHECK -->
-<rect x="792" y="130" width="215" height="72" rx="3" fill="white" stroke="#333" stroke-width="1.5"/>
-<text x="899" y="154" font-size="11" font-weight="700" fill="#111" text-anchor="middle">IDENTITY CHECK</text>
-<text x="899" y="170" font-size="10" fill="#666" text-anchor="middle">Sumsub KYC Widget</text>
-<text x="899" y="183" font-size="9.5" fill="#999" text-anchor="middle">DB: user_onboarding_pack_details</text>
-
-<!-- arrow -->
-<line x1="1007" y1="166" x2="1040" y2="166" stroke="#333" stroke-width="1.5" marker-end="url(#arr)"/>
-
-<!-- BANK LINK -->
-<rect x="1043" y="130" width="205" height="72" rx="3" fill="white" stroke="#333" stroke-width="1.5"/>
-<text x="1145" y="154" font-size="11" font-weight="700" fill="#111" text-anchor="middle">BANK LINK</text>
-<text x="1145" y="170" font-size="10" fill="#666" text-anchor="middle">TruID Connect</text>
-<text x="1145" y="183" font-size="9.5" fill="#999" text-anchor="middle">DB: user_onboarding_pack_details</text>
-
-<!-- arrow -->
-<line x1="1248" y1="166" x2="1281" y2="166" stroke="#333" stroke-width="1.5" marker-end="url(#arr)"/>
-
-<!-- PIN SETUP -->
-<rect x="1284" y="130" width="205" height="72" rx="3" fill="white" stroke="#333" stroke-width="1.5"/>
-<text x="1386" y="154" font-size="11" font-weight="700" fill="#111" text-anchor="middle">PIN SETUP</text>
-<text x="1386" y="170" font-size="10" fill="#666" text-anchor="middle">+ Biometric Prompt</text>
-<text x="1386" y="183" font-size="9.5" fill="#999" text-anchor="middle">DB: localStorage (no server)</text>
-
-<!-- arrow -->
-<line x1="1489" y1="166" x2="1522" y2="166" stroke="#333" stroke-width="1.5" marker-end="url(#arr)"/>
-
-<!-- HOME (green) -->
-<rect x="1525" y="120" width="240" height="92" rx="3" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
-<text x="1645" y="147" font-size="12" font-weight="700" fill="#1b5e20" text-anchor="middle">HOME</text>
-<text x="1645" y="163" font-size="10" fill="#2e7d32" text-anchor="middle">App Shell &amp; Navigation Hub</text>
-<text x="1645" y="177" font-size="9.5" fill="#388e3c" text-anchor="middle">DB: profiles · wallets</text>
-<text x="1645" y="189" font-size="9.5" fill="#388e3c" text-anchor="middle">required_actions · notifications</text>
-
-<!-- returning user note -->
-<text x="64" y="222" font-size="10" fill="#aaa" font-style="italic">RETURNING USER  →  Auth Page → PIN / Biometric Check → Home  (skips onboarding steps)</text>
-
-<!-- divider -->
-<line x1="64" y1="236" x2="2536" y2="236" stroke="#ddd" stroke-width="1"/>
-
-<!-- ══════════════════════════════════════════════
-     SECTION 2 — MAIN NAVIGATION (5 columns)
-     Column width: 488px, gap: 12px, start x=64
-     Col x: 64, 564, 1064, 1564, 2064
-══════════════════════════════════════════════ -->
-<text x="64" y="258" font-size="10" font-weight="600" fill="#999" letter-spacing="2.2">② MAIN APPLICATION  —  5 TAB NAVIGATION FROM HOME</text>
-
-<!-- ── COL 1: HOME TAB (x=64) ── -->
-<rect x="64" y="268" width="488" height="46" rx="3" fill="#2e7d32" stroke="none"/>
-<text x="308" y="297" font-size="12" font-weight="700" fill="white" text-anchor="middle" letter-spacing="0.5">HOME TAB</text>
-
-<rect x="64" y="322" width="488" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="308" y="341" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">SWIPEABLE BALANCE CARD</text>
-<text x="308" y="356" font-size="9.5" fill="#888" text-anchor="middle">client_strategy_returns_c · stock_intraday_c</text>
-<text x="308" y="368" font-size="9" fill="#aaa" text-anchor="middle">basket_value · live last_price × qty</text>
-
-<rect x="64" y="382" width="488" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="308" y="401" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">NOTIFICATIONS PAGE</text>
-<text x="308" y="416" font-size="9.5" fill="#888" text-anchor="middle">notifications (Supabase realtime subscription)</text>
-<text x="308" y="428" font-size="9" fill="#aaa" text-anchor="middle">grouped by date · swipe-to-delete</text>
-
-<rect x="64" y="442" width="488" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="308" y="461" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">ACTIVITY PAGE</text>
-<text x="308" y="476" font-size="9.5" fill="#888" text-anchor="middle">transactions</text>
-
-<rect x="64" y="502" width="488" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="308" y="521" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">ACTIONS PAGE</text>
-<text x="308" y="536" font-size="9.5" fill="#888" text-anchor="middle">required_actions</text>
-
-<rect x="64" y="562" width="488" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="308" y="581" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">MINT BALANCE / DEPOSIT</text>
-<text x="308" y="596" font-size="9.5" fill="#888" text-anchor="middle">wallets · transactions</text>
-
-<rect x="64" y="622" width="488" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="308" y="641" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">FAMILY / CHILD DASHBOARD</text>
-<text x="308" y="656" font-size="9.5" fill="#888" text-anchor="middle">stock_holdings_c (family_member_id) · securities_c</text>
-
-<rect x="64" y="682" width="488" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="308" y="701" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">FUNERAL COVER PAGE</text>
-<text x="308" y="716" font-size="9.5" fill="#888" text-anchor="middle">Insurance product  (external partner API)</text>
-
-<!-- ── COL 2: PORTFOLIO TAB (x=564) ── -->
-<rect x="564" y="268" width="488" height="46" rx="3" fill="#5c35a0" stroke="none"/>
-<text x="808" y="297" font-size="12" font-weight="700" fill="white" text-anchor="middle" letter-spacing="0.5">PORTFOLIO TAB</text>
-
-<rect x="564" y="322" width="488" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="808" y="341" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">OVERVIEW — P&amp;L EQUITY CURVE CHART</text>
-<text x="808" y="356" font-size="9.5" fill="#888" text-anchor="middle">client_strategy_returns_c → basket_value time series</text>
-<text x="808" y="368" font-size="9" fill="#aaa" text-anchor="middle">timeframes: 1d · 5d · 1m · 6m · YTD · 1y · inception</text>
-
-<rect x="564" y="382" width="488" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="808" y="401" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">HOLDINGS TAB — YOUR ASSETS + PIE</text>
-<text x="808" y="416" font-size="9.5" fill="#888" text-anchor="middle">stock_holdings_c · client_strategy_returns_c · stock_intraday_c</text>
-<text x="808" y="428" font-size="9" fill="#aaa" text-anchor="middle">strategies: basket_value · stocks: live last_price × qty</text>
-
-<rect x="564" y="442" width="488" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="808" y="461" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">CALENDAR TAB — MONTHLY RETURNS HEATMAP</text>
-<text x="808" y="476" font-size="9.5" fill="#888" text-anchor="middle">client_strategy_returns_c → month-end basket_value</text>
-
-<rect x="564" y="502" width="488" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="808" y="521" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">STATEMENTS PAGE</text>
-<text x="808" y="536" font-size="9.5" fill="#888" text-anchor="middle">transactions · stock_holdings_c · wallets</text>
-
-<rect x="564" y="562" width="488" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="808" y="581" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">FACTSHEET PAGE → PDF (jsPDF)</text>
-<text x="808" y="596" font-size="9.5" fill="#888" text-anchor="middle">strategies_c · client_strategy_returns_c · profiles</text>
-
-<rect x="564" y="622" width="488" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="808" y="641" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">STOCK DETAIL MODAL (tapped holding)</text>
-<text x="808" y="656" font-size="9.5" fill="#888" text-anchor="middle">stock_returns_c → as_of_date · current_price by security_id</text>
-
-<rect x="564" y="682" width="488" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="808" y="701" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">OPEN STRATEGIES VIEW</text>
-<text x="808" y="716" font-size="9.5" fill="#888" text-anchor="middle">strategies_c · client_strategy_returns_c (ytd_pct)</text>
-
-<!-- ── COL 3: MARKETS TAB (x=1064) ── -->
-<rect x="1064" y="268" width="488" height="46" rx="3" fill="#d97706" stroke="none"/>
-<text x="1308" y="297" font-size="12" font-weight="700" fill="white" text-anchor="middle" letter-spacing="0.5">MARKETS / INVEST TAB</text>
-
-<rect x="1064" y="322" width="488" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="1308" y="341" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">STOCK LIST VIEW</text>
-<text x="1308" y="356" font-size="9.5" fill="#888" text-anchor="middle">securities_c · stock_intraday_c (live price + changePercent)</text>
-
-<rect x="1064" y="382" width="488" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="1308" y="401" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">STOCK DETAIL PAGE</text>
-<text x="1308" y="416" font-size="9.5" fill="#888" text-anchor="middle">stock_returns_c (price history chart) · securities_c</text>
-
-<rect x="1064" y="442" width="488" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="1308" y="461" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">BUY / INVEST AMOUNT PAGE</text>
-<text x="1308" y="476" font-size="9.5" fill="#888" text-anchor="middle">stock_holdings_c · wallets (balance check) · strategies_c</text>
-<text x="1308" y="488" font-size="9" fill="#aaa" text-anchor="middle">min investment: shares × (last_price ÷ 100)</text>
-
-<rect x="1064" y="502" width="488" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="1308" y="521" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">PAYMENT PAGE</text>
-<text x="1308" y="536" font-size="9.5" fill="#888" text-anchor="middle">Paystack gateway or Wallet debit</text>
-<text x="1308" y="548" font-size="9" fill="#aaa" text-anchor="middle">transactions · wallets · order_emails (Resend)</text>
-
-<rect x="1064" y="562" width="488" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="1308" y="581" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">PAYMENT SUCCESS / PENDING</text>
-<text x="1308" y="596" font-size="9.5" fill="#888" text-anchor="middle">transactions · stock_holdings_c · order_emails</text>
-
-<rect x="1064" y="622" width="488" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="1308" y="641" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">NEWS VIEW — NewsArticlePage</text>
-<text x="1308" y="656" font-size="9.5" fill="#888" text-anchor="middle">articles  (Mint Mornings newsletter content)</text>
-
-<rect x="1064" y="682" width="488" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="1308" y="701" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">INVITE PAGE / GOALS MODAL</text>
-<text x="1308" y="716" font-size="9.5" fill="#888" text-anchor="middle">investment_goals · profiles</text>
-
-<!-- ── COL 4: CREDIT TAB (x=1564) ── -->
-<rect x="1564" y="268" width="488" height="46" rx="3" fill="#c0392b" stroke="none"/>
-<text x="1808" y="297" font-size="12" font-weight="700" fill="white" text-anchor="middle" letter-spacing="0.5">CREDIT TAB</text>
-
-<rect x="1564" y="322" width="488" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="1808" y="341" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">CREDIT HOME</text>
-<text x="1808" y="356" font-size="9.5" fill="#888" text-anchor="middle">credit_accounts · wallets</text>
-
-<rect x="1564" y="382" width="488" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="1808" y="401" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">CREDIT SCORE PAGE</text>
-<text x="1808" y="416" font-size="9.5" fill="#888" text-anchor="middle">credit_score_history · credit_accounts</text>
-
-<rect x="1564" y="442" width="488" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="1808" y="461" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">APPLY FOR CREDIT (Unsecured)</text>
-<text x="1808" y="476" font-size="9.5" fill="#888" text-anchor="middle">credit_accounts · profiles · wallets</text>
-
-<rect x="1564" y="502" width="488" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="1808" y="521" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">INSTANT LIQUIDITY  —  Pledge Holdings</text>
-<text x="1808" y="536" font-size="9.5" fill="#888" text-anchor="middle">stock_holdings_c (qualifying positions) · credit_accounts</text>
-
-<rect x="1564" y="562" width="488" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="1808" y="581" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">ACTIVE LIQUIDITY / HISTORY</text>
-<text x="1808" y="596" font-size="9.5" fill="#888" text-anchor="middle">credit_accounts · transactions</text>
-
-<rect x="1564" y="622" width="488" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="1808" y="641" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">REPAY CREDIT / LIQUIDITY</text>
-<text x="1808" y="656" font-size="9.5" fill="#888" text-anchor="middle">credit_accounts · wallets · transactions</text>
-
-<rect x="1564" y="682" width="488" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="1808" y="701" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">LIQUIDITY FLOW (Sign &amp; Pledge)</text>
-<text x="1808" y="716" font-size="9.5" fill="#888" text-anchor="middle">credit_accounts · stock_holdings_c (pledged flag)</text>
-
-<!-- ── COL 5: MORE TAB (x=2064) ── -->
-<rect x="2064" y="268" width="472" height="46" rx="3" fill="#2c3e50" stroke="none"/>
-<text x="2300" y="297" font-size="12" font-weight="700" fill="white" text-anchor="middle" letter-spacing="0.5">MORE TAB</text>
-
-<rect x="2064" y="322" width="472" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="2300" y="341" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">SETTINGS PAGE</text>
-<text x="2300" y="356" font-size="9.5" fill="#888" text-anchor="middle">profiles · localStorage (PIN hash · biometric flag)</text>
-
-<rect x="2064" y="382" width="472" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="2300" y="401" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">EDIT PROFILE / PROFILE DETAILS</text>
-<text x="2300" y="416" font-size="9.5" fill="#888" text-anchor="middle">profiles</text>
-
-<rect x="2064" y="442" width="472" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="2300" y="461" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">CHANGE PASSWORD</text>
-<text x="2300" y="476" font-size="9.5" fill="#888" text-anchor="middle">supabase.auth  (updateUser)</text>
-
-<rect x="2064" y="502" width="472" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="2300" y="521" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">ACTIVE SESSIONS PAGE</text>
-<text x="2300" y="536" font-size="9.5" fill="#888" text-anchor="middle">supabase.auth.sessions</text>
-
-<rect x="2064" y="562" width="472" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="2300" y="581" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">NOTIFICATION SETTINGS</text>
-<text x="2300" y="596" font-size="9.5" fill="#888" text-anchor="middle">profiles  (notification preferences)</text>
-
-<rect x="2064" y="622" width="472" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="2300" y="641" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">LEGAL DOCS / SUBSCRIPTIONS</text>
-<text x="2300" y="656" font-size="9.5" fill="#888" text-anchor="middle">Static content — no DB read required</text>
-
-<rect x="2064" y="682" width="472" height="54" rx="2" fill="white" stroke="#ccc" stroke-width="1"/>
-<text x="2300" y="701" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">TRANSACT PAGE</text>
-<text x="2300" y="716" font-size="9.5" fill="#888" text-anchor="middle">wallets · transactions  (deposit / withdraw)</text>
-
-<!-- divider -->
-<line x1="64" y1="752" x2="2536" y2="752" stroke="#ddd" stroke-width="1"/>
-
-<!-- ══════════════════════════════════════════════
-     SECTION 3 — KEY USER JOURNEYS
-══════════════════════════════════════════════ -->
-<text x="64" y="774" font-size="10" font-weight="600" fill="#999" letter-spacing="2.2">③ KEY USER JOURNEYS  —  END-TO-END FLOWS</text>
-
-<!-- ── JOURNEY 1: Buy a Stock (y=790) ── -->
-<text x="64" y="794" font-size="10" fill="#d97706" font-weight="600">BUY A STOCK</text>
-
-<rect x="64"   y="802" width="215" height="68" rx="3" fill="white" stroke="#333" stroke-width="1.5"/>
-<text x="171"  y="824" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">MARKETS</text>
-<text x="171"  y="840" font-size="9.5"  fill="#666" text-anchor="middle">Stock List View</text>
-<text x="171"  y="853" font-size="9"    fill="#aaa" text-anchor="middle">securities_c · stock_intraday_c</text>
-<line x1="279" y1="836" x2="312" y2="836" stroke="#333" stroke-width="1.5" marker-end="url(#arr)"/>
-
-<rect x="315"  y="802" width="215" height="68" rx="3" fill="white" stroke="#333" stroke-width="1.5"/>
-<text x="422"  y="824" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">STOCK DETAIL PAGE</text>
-<text x="422"  y="840" font-size="9.5"  fill="#666" text-anchor="middle">stock_returns_c (price history)</text>
-<line x1="530" y1="836" x2="563" y2="836" stroke="#333" stroke-width="1.5" marker-end="url(#arr)"/>
-<text x="547"  y="826" font-size="8.5"  fill="#999" text-anchor="middle">tap Buy</text>
-
-<rect x="566"  y="802" width="215" height="68" rx="3" fill="white" stroke="#333" stroke-width="1.5"/>
-<text x="673"  y="824" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">BUY AMOUNT PAGE</text>
-<text x="673"  y="840" font-size="9.5"  fill="#666" text-anchor="middle">wallets · stock_holdings_c</text>
-<line x1="781" y1="836" x2="814" y2="836" stroke="#333" stroke-width="1.5" marker-end="url(#arr)"/>
-
-<rect x="817"  y="802" width="215" height="68" rx="3" fill="white" stroke="#333" stroke-width="1.5"/>
-<text x="924"  y="824" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">PAYMENT PAGE</text>
-<text x="924"  y="840" font-size="9.5"  fill="#666" text-anchor="middle">Paystack or Wallet debit</text>
-<line x1="1032" y1="836" x2="1065" y2="836" stroke="#333" stroke-width="1.5" marker-end="url(#arr)"/>
-<text x="1049" y="826" font-size="8.5"  fill="#999" text-anchor="middle">confirmed</text>
-
-<rect x="1068" y="802" width="240" height="68" rx="3" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
-<text x="1188" y="824" font-size="10.5" font-weight="700" fill="#1b5e20" text-anchor="middle">PAYMENT SUCCESS</text>
-<text x="1188" y="840" font-size="9.5"  fill="#388e3c" text-anchor="middle">transactions · stock_holdings_c</text>
-<text x="1188" y="853" font-size="9"    fill="#4caf50" text-anchor="middle">order_emails sent via Resend</text>
-
-<!-- ── JOURNEY 2: Invest in Strategy (y=892) ── -->
-<text x="64" y="894" font-size="10" fill="#5c35a0" font-weight="600">INVEST IN A STRATEGY</text>
-
-<rect x="64"   y="902" width="240" height="68" rx="3" fill="white" stroke="#333" stroke-width="1.5"/>
-<text x="184"  y="924" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">OPEN STRATEGIES</text>
-<text x="184"  y="940" font-size="9.5"  fill="#666" text-anchor="middle">strategies_c</text>
-<text x="184"  y="953" font-size="9"    fill="#aaa" text-anchor="middle">client_strategy_returns_c (ytd_pct)</text>
-<line x1="304" y1="936" x2="337" y2="936" stroke="#333" stroke-width="1.5" marker-end="url(#arr)"/>
-
-<rect x="340"  y="902" width="265" height="68" rx="3" fill="white" stroke="#333" stroke-width="1.5"/>
-<text x="472"  y="924" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">INVEST AMOUNT PAGE</text>
-<text x="472"  y="940" font-size="9.5"  fill="#666" text-anchor="middle">Min enforced: shares × (last_price ÷ 100)</text>
-<text x="472"  y="953" font-size="9"    fill="#aaa" text-anchor="middle">wallets (balance check)</text>
-<line x1="605" y1="936" x2="638" y2="936" stroke="#333" stroke-width="1.5" marker-end="url(#arr)"/>
-
-<rect x="641"  y="902" width="215" height="68" rx="3" fill="white" stroke="#333" stroke-width="1.5"/>
-<text x="748"  y="924" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">PAYMENT PAGE</text>
-<text x="748"  y="940" font-size="9.5"  fill="#666" text-anchor="middle">Paystack or Wallet debit</text>
-<line x1="856" y1="936" x2="889" y2="936" stroke="#333" stroke-width="1.5" marker-end="url(#arr)"/>
-<text x="873"  y="926" font-size="8.5"  fill="#999" text-anchor="middle">confirmed</text>
-
-<rect x="892"  y="902" width="280" height="68" rx="3" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
-<text x="1032" y="924" font-size="10.5" font-weight="700" fill="#1b5e20" text-anchor="middle">INVESTMENT CONFIRMED</text>
-<text x="1032" y="940" font-size="9.5"  fill="#388e3c" text-anchor="middle">transactions · stock_holdings_c</text>
-<text x="1032" y="953" font-size="9"    fill="#4caf50" text-anchor="middle">client_strategy_returns_c (updated next run)</text>
-
-<!-- ── JOURNEY 3: KYC Onboarding (y=992) ── -->
-<text x="64" y="994" font-size="10" fill="#5c35a0" font-weight="600">NEW USER — KYC ONBOARDING</text>
-
-<rect x="64"   y="1002" width="200" height="68" rx="3" fill="white" stroke="#333" stroke-width="1.5"/>
-<text x="164"  y="1024" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">SIGN UP</text>
-<text x="164"  y="1040" font-size="9.5"  fill="#666" text-anchor="middle">supabase.auth</text>
-<line x1="264" y1="1036" x2="297" y2="1036" stroke="#333" stroke-width="1.5" marker-end="url(#arr)"/>
-
-<rect x="300"  y="1002" width="240" height="68" rx="3" fill="white" stroke="#333" stroke-width="1.5"/>
-<text x="420"  y="1024" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">USER ONBOARDING</text>
-<text x="420"  y="1040" font-size="9.5"  fill="#666" text-anchor="middle">6-step form</text>
-<text x="420"  y="1053" font-size="9"    fill="#aaa" text-anchor="middle">user_onboarding_pack_details</text>
-<line x1="540" y1="1036" x2="573" y2="1036" stroke="#333" stroke-width="1.5" marker-end="url(#arr)"/>
-
-<rect x="576"  y="1002" width="225" height="68" rx="3" fill="white" stroke="#333" stroke-width="1.5"/>
-<text x="688"  y="1024" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">SUMSUB KYC</text>
-<text x="688"  y="1040" font-size="9.5"  fill="#666" text-anchor="middle">ID document + selfie check</text>
-<text x="688"  y="1053" font-size="9"    fill="#aaa" text-anchor="middle">user_onboarding_pack_details</text>
-<line x1="801" y1="1036" x2="834" y2="1036" stroke="#333" stroke-width="1.5" marker-end="url(#arr)"/>
-
-<rect x="837"  y="1002" width="215" height="68" rx="3" fill="white" stroke="#333" stroke-width="1.5"/>
-<text x="944"  y="1024" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">BANK LINK</text>
-<text x="944"  y="1040" font-size="9.5"  fill="#666" text-anchor="middle">TruID Connect</text>
-<text x="944"  y="1053" font-size="9"    fill="#aaa" text-anchor="middle">user_onboarding_pack_details</text>
-<line x1="1052" y1="1036" x2="1085" y2="1036" stroke="#333" stroke-width="1.5" marker-end="url(#arr)"/>
-<text x="1069" y="1026" font-size="8.5"  fill="#999" text-anchor="middle">verified</text>
-
-<rect x="1088" y="1002" width="265" height="68" rx="3" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
-<text x="1220" y="1024" font-size="10.5" font-weight="700" fill="#1b5e20" text-anchor="middle">VERIFIED &amp; ONBOARDED</text>
-<text x="1220" y="1040" font-size="9.5"  fill="#388e3c" text-anchor="middle">profiles · user_onboarding_pack_details</text>
-<text x="1220" y="1053" font-size="9"    fill="#4caf50" text-anchor="middle">→ full app access unlocked</text>
-
-<!-- ── JOURNEY 4: Instant Liquidity (y=1092) ── -->
-<text x="64" y="1094" font-size="10" fill="#c0392b" font-weight="600">INSTANT LIQUIDITY  —  PLEDGE HOLDINGS FOR CASH</text>
-
-<rect x="64"   y="1102" width="225" height="68" rx="3" fill="white" stroke="#333" stroke-width="1.5"/>
-<text x="176"  y="1124" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">CREDIT TAB</text>
-<text x="176"  y="1140" font-size="9.5"  fill="#666" text-anchor="middle">credit_accounts · wallets</text>
-<line x1="289" y1="1136" x2="322" y2="1136" stroke="#333" stroke-width="1.5" marker-end="url(#arr)"/>
-
-<rect x="325"  y="1102" width="265" height="68" rx="3" fill="white" stroke="#333" stroke-width="1.5"/>
-<text x="457"  y="1124" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">INSTANT LIQUIDITY</text>
-<text x="457"  y="1140" font-size="9.5"  fill="#666" text-anchor="middle">Select qualifying holdings</text>
-<text x="457"  y="1153" font-size="9"    fill="#aaa" text-anchor="middle">stock_holdings_c (qualifying positions)</text>
-<line x1="590" y1="1136" x2="623" y2="1136" stroke="#333" stroke-width="1.5" marker-end="url(#arr)"/>
-
-<rect x="626"  y="1102" width="225" height="68" rx="3" fill="white" stroke="#333" stroke-width="1.5"/>
-<text x="738"  y="1124" font-size="10.5" font-weight="700" fill="#111" text-anchor="middle">PLEDGE &amp; SIGN</text>
-<text x="738"  y="1140" font-size="9.5"  fill="#666" text-anchor="middle">LiquidityFlow agreement</text>
-<text x="738"  y="1153" font-size="9"    fill="#aaa" text-anchor="middle">credit_accounts (pledge_flag)</text>
-<line x1="851" y1="1136" x2="884" y2="1136" stroke="#333" stroke-width="1.5" marker-end="url(#arr)"/>
-<text x="868"  y="1126" font-size="8.5"  fill="#999" text-anchor="middle">approved</text>
-
-<rect x="887"  y="1102" width="250" height="68" rx="3" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
-<text x="1012" y="1124" font-size="10.5" font-weight="700" fill="#1b5e20" text-anchor="middle">CASH DISBURSED</text>
-<text x="1012" y="1140" font-size="9.5"  fill="#388e3c" text-anchor="middle">wallets · transactions</text>
-<text x="1012" y="1153" font-size="9"    fill="#4caf50" text-anchor="middle">credit_accounts (balance updated)</text>
-
-<!-- divider -->
-<line x1="64" y1="1190" x2="2536" y2="1190" stroke="#ddd" stroke-width="1"/>
-
-<!-- ══════════════════════════════════════════════
-     SECTION 4 — DATA LAYER LEGEND
-══════════════════════════════════════════════ -->
-<text x="64" y="1212" font-size="10" font-weight="600" fill="#999" letter-spacing="2.2">④ DATA LAYER SUMMARY</text>
-
-<!-- Supabase Tables -->
-<rect x="64" y="1224" width="820" height="28" rx="2" fill="#e8f5e9" stroke="#2e7d32" stroke-width="1"/>
-<text x="74" y="1242" font-size="10" font-weight="700" fill="#2e7d32">SUPABASE TABLES (sole source of truth):</text>
-<text x="330" y="1242" font-size="9.5" fill="#333">client_strategy_returns_c  ·  stock_holdings_c  ·  stock_returns_c  ·  stock_intraday_c  ·  securities_c  ·  strategies_c</text>
-
-<rect x="64" y="1258" width="820" height="24" rx="2" fill="#f0f4ff" stroke="#5c35a0" stroke-width="1"/>
-<text x="74" y="1275" font-size="9.5" fill="#333">profiles  ·  wallets  ·  transactions  ·  notifications  ·  required_actions  ·  credit_accounts  ·  credit_score_history  ·  user_onboarding_pack_details  ·  investment_goals  ·  order_emails</text>
-
-<!-- Express API -->
-<rect x="900" y="1224" width="520" height="28" rx="2" fill="#e3f2fd" stroke="#1565c0" stroke-width="1"/>
-<text x="910" y="1242" font-size="10" font-weight="700" fill="#1565c0">EXPRESS API ROUTES:</text>
-<text x="1080" y="1242" font-size="9.5" fill="#333">/api/user/strategies  ·  /api/user/holdings  ·  /api/onboarding/*  ·  /api/settlement/config</text>
-
-<!-- External APIs -->
-<rect x="1436" y="1224" width="440" height="28" rx="2" fill="#fff3e0" stroke="#e65100" stroke-width="1"/>
-<text x="1446" y="1242" font-size="10" font-weight="700" fill="#e65100">EXTERNAL APIS:</text>
-<text x="1576" y="1242" font-size="9.5" fill="#333">Sumsub (KYC)  ·  TruID (bank link)  ·  Resend (email)  ·  Paystack  ·  Yahoo Finance</text>
-
-<!-- ══════════════════════════════════════════════
-     FOOTER
-══════════════════════════════════════════════ -->
-<line x1="64" y1="1302" x2="2536" y2="1302" stroke="#e0e0e0" stroke-width="1"/>
-<text x="64"   y="1322" font-size="9.5" fill="#aaa">Stack: React 18 + Vite  |  Tailwind CSS + Framer Motion  |  Supabase (Auth + DB + Realtime)  |  Express.js API  |  Vercel Serverless + Cron  |  Capacitor (native iOS/Android)</text>
-<text x="64"   y="1338" font-size="9.5" fill="#aaa">Navigation: custom navigateTo() stack in App.jsx  —  back() history  ·  auth guards  ·  onboarding checks  ·  4-min inactivity timeout → PinLockScreen or logout</text>
-<text x="2536" y="1338" font-size="9" fill="#ccc" text-anchor="end">Mint App — Architecture Diagram</text>
-
-</svg>
+<div class="toolbar">
+  <h1>MINT — COMPLETE APP FLOW MAP</h1>
+  <span class="sub">App launch → every screen · CRUD · APIs · math · edge cases</span>
+  <div class="zoom-controls">
+    <button onclick="zoom(-0.15)">−</button>
+    <span class="zoom-label" id="zoom-label">65%</span>
+    <button onclick="zoom(0.15)">+</button>
+    <button onclick="fitToScreen()">Fit</button>
+    <button class="export" onclick="window.print()">Export PDF</button>
+  </div>
 </div>
+
+<div class="legend">
+  <h3>Legend</h3>
+  <div class="lr"><div class="ld" style="background:#e8f5e9;border:1.5px solid #2e7d32"></div> Start / Success state</div>
+  <div class="lr"><div class="ld" style="background:white;border:1.5px solid #222"></div> Screen / Page</div>
+  <div class="lr"><div class="ld" style="background:#fff8e1;border:1.5px solid #f57f17"></div> Decision (YES/NO branch)</div>
+  <div class="lr"><div class="ld" style="background:#fce4ec;border:1.5px dashed #c62828"></div> Edge case / Error path</div>
+  <div class="lr"><div class="ld" style="background:#e8f4fd;border:1px solid #1565c0"></div> Calculation / Formula</div>
+  <div class="lsep">
+    <div class="lr"><div class="ld" style="background:#4caf50"></div> C = CREATE to DB</div>
+    <div class="lr"><div class="ld" style="background:#2196f3"></div> R = READ from DB</div>
+    <div class="lr"><div class="ld" style="background:#ff9800"></div> U = UPDATE in DB</div>
+    <div class="lr"><div class="ld" style="background:#f44336"></div> D = DELETE from DB</div>
+    <div class="lr"><div class="ld" style="background:#7c4dff"></div> ▸ External API call</div>
+  </div>
+  <div class="lsep" style="font-size:9.5px;color:#666;line-height:1.7">
+    ——— solid: happy path<br>
+    <span style="color:#e65100">- - - dashed: edge / error</span><br>
+    <span style="color:#1976d2">··· dotted: cross-tab data link</span>
+  </div>
+</div>
+
+<div class="canvas-wrap" id="canvasWrap">
+  <div class="svg-container" id="svgContainer">
+    <div id="diagram"></div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// LAYOUT CONSTANTS
+// Tab col centers: HOME=370, PORTFOLIO=970, MARKETS=1570, CREDIT=2170, MORE=2770
+// Tab col x: 60, 660, 1260, 1860, 2460  width=560
+// Auth flow centered at x=1500 (midpoint of full layout 60–3020)
+// Total SVG: W=3100, H=3100
+// ═══════════════════════════════════════════════════════════════════
+
+const SVG_W = 3100, SVG_H = 3120;
+
+// ─── NODES ──────────────────────────────────────────────────────
+// type: start | screen | decision | edge | math | home | tab | success
+const NODES = [
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // AUTH SECTION  (top, centered ~x=1500)
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  { id:'launch', type:'start', x:1390, y:60, w:220, h:58,
+    title:'APP LAUNCH',
+    sub:'React 18 + Vite · Capacitor shell' },
+
+  { id:'session-chk', type:'decision', x:1445, y:172, w:160, h:64,
+    title:'Session\nactive?' },
+
+  // Session YES → returning user bio/PIN
+  { id:'pin-existing', type:'screen', x:1920, y:152, w:270, h:80,
+    title:'BIOMETRIC / PIN CHECK',
+    sub:'Returning user — re-authenticate',
+    crud:{ R:['localStorage (pin_hash)','supabase.auth'] },
+    apis:['capacitor-face-id (native iOS / Android)'] },
+  { id:'pin-existing-fail', type:'edge', x:2250, y:154, w:220, h:76,
+    title:'Bio / PIN fails',
+    sub:'3 attempts max\n→ force full logout\n→ back to Auth Page' },
+
+  // Session NO → Auth Page
+  { id:'auth', type:'screen', x:1390, y:295, w:240, h:76,
+    title:'AUTH PAGE',
+    sub:'Email + 6-digit OTP\nLogin  or  Signup',
+    crud:{ R:['supabase.auth.users'] } },
+
+  { id:'new-user', type:'decision', x:1445, y:430, w:160, h:64,
+    title:'New\nUser?' },
+
+  // ─── LOGIN PATH (LEFT) ────────────────────────────────────────
+  { id:'login-otp', type:'screen', x:760, y:555, w:260, h:80,
+    title:'OTP VERIFY (Login)',
+    sub:'6-digit code · 10-min expiry',
+    crud:{ R:['supabase.auth'] } },
+  { id:'login-otp-fail', type:'edge', x:1080, y:545, w:220, h:100,
+    title:'Wrong OTP',
+    sub:'Max 3 attempts\n30-min cooldown\nOption: resend code' },
+
+  { id:'login-pin', type:'screen', x:760, y:690, w:260, h:80,
+    title:'PIN / BIOMETRIC',
+    sub:'SHA-256 compare vs localStorage\nor capacitor-face-id',
+    crud:{ R:['localStorage (pin_hash)','supabase.auth'] },
+    apis:['capacitor-face-id'] },
+
+  // ─── SIGNUP PATH (RIGHT) ──────────────────────────────────────
+  { id:'signup-otp', type:'screen', x:1980, y:555, w:260, h:76,
+    title:'OTP VERIFY (Signup)',
+    sub:'6-digit code · 10-min expiry',
+    crud:{ C:['supabase.auth.users'] } },
+  { id:'signup-otp-fail', type:'edge', x:2300, y:545, w:210, h:88,
+    title:'Wrong OTP',
+    sub:'Max 3 attempts\n30-min cooldown\nretry → new code' },
+
+  { id:'onboarding', type:'screen', x:1980, y:695, w:270, h:104,
+    title:'USER ONBOARDING',
+    sub:'6 steps: employment · mandate\nrisk disclosure · source of funds\nbank details · T&C agreement',
+    crud:{ C:['user_onboarding_pack_details'], U:['profiles'] },
+    apis:['/api/onboarding/status','/api/onboarding/complete','/api/mandate/save'] },
+
+  { id:'sumsub', type:'screen', x:1980, y:862, w:270, h:88,
+    title:'IDENTITY CHECK — Sumsub KYC',
+    sub:'ID document + selfie verification',
+    crud:{ U:['user_onboarding_pack_details'] },
+    apis:['Sumsub API  (SUMSUB_APP_TOKEN + SUMSUB_SECRET_KEY)'] },
+  { id:'sumsub-fail', type:'edge', x:2310, y:860, w:220, h:92,
+    title:'KYC Rejected',
+    sub:'Show rejection reason\nRetry submission\nor manual review\n→ support escalation' },
+
+  { id:'banklink', type:'screen', x:1980, y:1014, w:270, h:80,
+    title:'BANK LINK — TruID Connect',
+    sub:'Open-banking account verification',
+    crud:{ U:['user_onboarding_pack_details'] },
+    apis:['TruID Connect API'] },
+  { id:'banklink-fail', type:'edge', x:2310, y:1014, w:210, h:80,
+    title:'Bank link fails',
+    sub:'Retry · different bank\nor admin override\nto skip step' },
+
+  { id:'pin-setup', type:'screen', x:1980, y:1154, w:270, h:80,
+    title:'PIN SETUP + Biometric Register',
+    sub:'5-digit PIN · optional Face ID / fingerprint',
+    crud:{ C:['localStorage (pin_hash)'] },
+    math:'pin_hash = SHA-256(userPin)\nStored only in localStorage — never sent to server' },
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // HOME HUB
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  { id:'home', type:'home', x:50, y:1310, w:3000, h:90,
+    title:'HOME HUB — App Navigation Shell',
+    sub:'React navigateTo() · back() · history sync · auth guards · onboarding completion check',
+    crud:{ R:['profiles','wallets','required_actions','notifications (Supabase realtime)'] } },
+
+  { id:'timeout', type:'edge', x:3070, y:1276, w:250, h:88,
+    title:'Inactivity Timeout',
+    sub:'4-min timer on any screen\n→ PIN Lock Screen overlay\n→ re-auth → back to HOME' },
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // TAB HEADERS  (5 × 560px, gap 20px, x start 60)
+  // Col centers: 340, 940, 1540, 2140, 2740
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  { id:'t-home', type:'tab', color:'#1b5e20', x:60,   y:1476, w:560, h:44, title:'HOME TAB' },
+  { id:'t-port', type:'tab', color:'#4527a0', x:660,  y:1476, w:560, h:44, title:'PORTFOLIO TAB' },
+  { id:'t-mkt',  type:'tab', color:'#e65100', x:1260, y:1476, w:560, h:44, title:'MARKETS / INVEST TAB' },
+  { id:'t-cr',   type:'tab', color:'#b71c1c', x:1860, y:1476, w:560, h:44, title:'CREDIT TAB' },
+  { id:'t-more', type:'tab', color:'#1a237e', x:2460, y:1476, w:560, h:44, title:'MORE TAB' },
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // HOME TAB SCREENS (col x=60, center=340)
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  { id:'h-balance', type:'screen', x:60, y:1536, w:560, h:96,
+    title:'SWIPEABLE BALANCE CARD',
+    sub:'Live portfolio value · P&L equity curve\nTimeframes: 1d · 5d · 1m · 6m · YTD · 1y · inception',
+    crud:{ R:['client_strategy_returns_c','stock_holdings_c','stock_intraday_c'] },
+    math:'total_value = Σ basket_value (strategies)\n             + Σ qty × (last_price / 100) (stocks)' },
+
+  { id:'h-notif', type:'screen', x:60, y:1648, w:560, h:72,
+    title:'NOTIFICATIONS',
+    sub:'Grouped by date · swipe-to-delete · mark all read',
+    crud:{ R:['notifications'], U:['notifications (is_read=true)'], D:['notifications (swiped away)'] } },
+
+  { id:'h-activity', type:'screen', x:60, y:1736, w:560, h:60,
+    title:'ACTIVITY PAGE',
+    crud:{ R:['transactions'] } },
+
+  { id:'h-actions', type:'screen', x:60, y:1812, w:560, h:60,
+    title:'ACTIONS PAGE  — required to-dos',
+    crud:{ R:['required_actions'] } },
+
+  { id:'h-deposit', type:'screen', x:60, y:1888, w:560, h:80,
+    title:'DEPOSIT / TRANSACT',
+    sub:'Fund wallet or withdraw',
+    crud:{ C:['transactions (type=deposit)'], U:['wallets (balance += amount)'] },
+    math:'new_balance = wallets.balance + deposit_amount' },
+
+  { id:'h-family', type:'screen', x:60, y:1984, w:560, h:72,
+    title:'FAMILY / CHILD DASHBOARD',
+    sub:'View sub-account positions',
+    crud:{ R:['stock_holdings_c (family_member_id filter)','securities_c'] } },
+
+  { id:'h-funeral', type:'screen', x:60, y:2072, w:560, h:64,
+    title:'FUNERAL COVER PAGE',
+    sub:'External insurance partner',
+    crud:{ R:['profiles'] },
+    apis:['External insurance partner API'] },
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // PORTFOLIO TAB (col x=660, center=940)
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  { id:'p-overview', type:'screen', x:660, y:1536, w:560, h:104,
+    title:'OVERVIEW — P&L EQUITY CURVE CHART',
+    sub:'Timeframes: 1d · 5d · 1m · 6m · YTD · 1y · inception',
+    crud:{ R:['client_strategy_returns_c'] },
+    math:'P&L = basket_value − cost_basis\nReturns% = (basket_value − cost_basis) / cost_basis × 100\nChart anchored to purchase_date row' },
+
+  { id:'p-holdings', type:'screen', x:660, y:1656, w:560, h:104,
+    title:'HOLDINGS TAB — ASSETS + PIE CHART',
+    sub:'Strategy positions + stock positions',
+    crud:{ R:['stock_holdings_c','client_strategy_returns_c','stock_intraday_c'] },
+    math:'stock_value  = qty × (last_price / 100)\nstrategy_value = basket_value  (from client_strategy_returns_c)\ntotal = Σ stock_value + Σ strategy_value' },
+
+  { id:'p-calendar', type:'screen', x:660, y:1776, w:560, h:84,
+    title:'CALENDAR — MONTHLY RETURNS HEATMAP',
+    crud:{ R:['client_strategy_returns_c (month-end rows grouped by date)'] },
+    math:'MoM% = (basket_value_M − basket_value_(M-1))\n        ÷ basket_value_(M-1) × 100' },
+
+  { id:'p-statements', type:'screen', x:660, y:1876, w:560, h:72,
+    title:'STATEMENTS PAGE',
+    sub:'Strategy / Holdings / Financials tabs',
+    crud:{ R:['transactions','stock_holdings_c','wallets'] } },
+
+  { id:'p-factsheet', type:'screen', x:660, y:1964, w:560, h:72,
+    title:'FACTSHEET → PDF  (client-side jsPDF)',
+    sub:'Personalised strategy document, no upload',
+    crud:{ R:['strategies_c','client_strategy_returns_c','profiles'] } },
+
+  { id:'p-stockmodal', type:'screen', x:660, y:2052, w:560, h:72,
+    title:'STOCK DETAIL MODAL (tapped holding)',
+    crud:{ R:['stock_returns_c (security_id · timeframe)'] },
+    math:'chart series: current_price keyed by as_of_date' },
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // MARKETS TAB (col x=1260, center=1540)
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  { id:'m-list', type:'screen', x:1260, y:1536, w:560, h:76,
+    title:'STOCK LIST VIEW',
+    crud:{ R:['securities_c','stock_intraday_c'] },
+    apis:['/api/user/holdings  (join: last_price + logo)'] },
+
+  { id:'m-strategies', type:'screen', x:1260, y:1628, w:560, h:72,
+    title:'OPEN STRATEGIES VIEW',
+    crud:{ R:['strategies_c','client_strategy_returns_c (ytd_pct · basket_value)'] } },
+
+  { id:'m-detail', type:'screen', x:1260, y:1716, w:560, h:72,
+    title:'STOCK DETAIL PAGE',
+    crud:{ R:['stock_returns_c','securities_c'] },
+    math:'chart: current_price series by as_of_date' },
+
+  { id:'m-buy', type:'screen', x:1260, y:1804, w:560, h:100,
+    title:'BUY / INVEST AMOUNT PAGE',
+    sub:'Quantity selector · wallet balance check',
+    crud:{ R:['wallets (balance check)','stock_intraday_c (last_price)'] },
+    math:'order_value = qty × (last_price / 100)\nmin_check: order_value ≥ min_investment\nEdge: order_value > wallets.balance → top-up prompt' },
+
+  { id:'m-payment', type:'screen', x:1260, y:1920, w:560, h:80,
+    title:'PAYMENT PAGE',
+    sub:'Paystack (card) or Wallet debit',
+    crud:{ C:['transactions (status=pending)'] },
+    apis:['Paystack API  (card/EFT)'] },
+  { id:'m-pay-fail', type:'edge', x:1260, y:2016, w:320, h:80,
+    title:'Payment Fails',
+    sub:'Card declined / timeout / network\nEdge: retry · change method\nor cancel order' },
+
+  { id:'m-success', type:'success', x:1260, y:2112, w:560, h:96,
+    title:'PAYMENT SUCCESS — ORDER CONFIRMED',
+    sub:'Confirmation screen',
+    crud:{ U:['transactions (status=filled)'], C:['stock_holdings_c','order_emails'] },
+    apis:['Resend → order confirmation email','Resend → order fill notification (when executed)'] },
+
+  { id:'m-news', type:'screen', x:1260, y:2224, w:560, h:64,
+    title:'NEWS — Mint Mornings Articles',
+    crud:{ R:['articles'] },
+    apis:['Vercel Cron: mintMorningsCron.cjs → Resend daily'] },
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // CREDIT TAB (col x=1860, center=2140)
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  { id:'c-home', type:'screen', x:1860, y:1536, w:560, h:68,
+    title:'CREDIT HOME',
+    crud:{ R:['credit_accounts','wallets'] } },
+
+  { id:'c-score', type:'screen', x:1860, y:1620, w:560, h:72,
+    title:'CREDIT SCORE PAGE',
+    crud:{ R:['credit_score_history','credit_accounts'] },
+    math:'chart: score_value by date' },
+
+  { id:'c-apply', type:'screen', x:1860, y:1708, w:560, h:80,
+    title:'APPLY FOR CREDIT  (Unsecured)',
+    crud:{ C:['credit_accounts (status=pending)'], R:['profiles (affordability check)','wallets'] } },
+  { id:'c-apply-rej', type:'edge', x:1860, y:1804, w:310, h:72,
+    title:'Application Rejected',
+    sub:'Show rejection reason · criteria not met\n→ re-apply after 90 days' },
+
+  { id:'c-liquidity', type:'screen', x:1860, y:1892, w:560, h:116,
+    title:'INSTANT LIQUIDITY — Pledge Holdings',
+    sub:'Pledge eligible stock positions for immediate cash',
+    crud:{ R:['stock_holdings_c (pledgeable filter)'],
+           U:['stock_holdings_c (pledged=true)','wallets (balance += loan_amount)'],
+           C:['credit_accounts (liquidity record)'] },
+    math:'eligible_val = Σ qty×(last_price/100) for pledgeable holdings\nloan_amount ≤ eligible_val × LTV_ratio  (e.g. 70%)\noutstanding = principal + accrued_interest' },
+
+  { id:'c-active', type:'screen', x:1860, y:2024, w:560, h:68,
+    title:'ACTIVE LIQUIDITY / HISTORY',
+    crud:{ R:['credit_accounts','transactions'] } },
+
+  { id:'c-repay', type:'screen', x:1860, y:2108, w:560, h:100,
+    title:'REPAY CREDIT / LIQUIDITY',
+    crud:{ U:['credit_accounts (balance −= repayment)','wallets (balance −= repayment)'],
+           C:['transactions (repayment record)'],
+           D:['credit_accounts (close on full repay)'] },
+    math:'repayment = min(outstanding_balance, input_amount)\nAfter full repay → stock_holdings_c: pledged = false' },
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // MORE TAB (col x=2460, center=2740)
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  { id:'mo-settings', type:'screen', x:2460, y:1536, w:560, h:84,
+    title:'SETTINGS PAGE',
+    sub:'Biometrics toggle · session timeout · notifications',
+    crud:{ R:['profiles'], U:['profiles (prefs)'] },
+    math:'PIN change: new_hash = SHA-256(new_pin) → localStorage' },
+
+  { id:'mo-profile', type:'screen', x:2460, y:1636, w:560, h:68,
+    title:'EDIT PROFILE / PROFILE DETAILS',
+    crud:{ R:['profiles'], U:['profiles'] } },
+
+  { id:'mo-password', type:'screen', x:2460, y:1720, w:560, h:68,
+    title:'CHANGE PASSWORD',
+    crud:{ U:['supabase.auth (updateUser)'] },
+    apis:['supabase.auth.updateUser({ password: newPassword })'] },
+
+  { id:'mo-sessions', type:'screen', x:2460, y:1804, w:560, h:68,
+    title:'ACTIVE SESSIONS MANAGER',
+    apis:['supabase.auth.getSession()','supabase.auth.signOut({ scope: "others" })'] },
+
+  { id:'mo-notif', type:'screen', x:2460, y:1888, w:560, h:60,
+    title:'NOTIFICATION SETTINGS',
+    crud:{ U:['profiles (notification_prefs)'] } },
+
+  { id:'mo-legal', type:'screen', x:2460, y:1964, w:560, h:60,
+    title:'LEGAL DOCS / SUBSCRIPTIONS',
+    sub:'Static content — no DB access required' },
+
+  { id:'mo-transact', type:'screen', x:2460, y:2040, w:560, h:72,
+    title:'TRANSACT PAGE',
+    sub:'Deposit / withdraw / bank re-link',
+    crud:{ C:['transactions'], U:['wallets'] } },
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // DATA LAYER (bottom)
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  { id:'dbl-head1', type:'tab', color:'#004d40', x:50, y:2380, w:1490, h:40, title:'SUPABASE — MARKET DATA TABLES  (source of truth for all calculations)' },
+  { id:'dbl-mkt', type:'screen', x:50, y:2428, w:1490, h:108,
+    title:'',
+    sub:'client_strategy_returns_c   basket_value · 1d/5d/1m/6m/ytd/1y/inception P&L and % · purchase_date — sole source for strategy value\nstock_holdings_c   user_id · security_id · qty · avg_fill · strategy_id · fill_date · pledged (bool) — user positions\nstock_returns_c   security_id · as_of_date · current_price · 1d/1w/1m/ytd % — historical price chart data\nstock_intraday_c   security_id · last_price · changePercent — live intraday price (refreshed continuously)\nsecurities_c   security_id · name · symbol · logo_url · min_investment · pledgeable (bool) — security master' },
+
+  { id:'dbl-head2', type:'tab', color:'#1b5e20', x:50, y:2544, w:1490, h:40, title:'SUPABASE — SUPPORTING TABLES' },
+  { id:'dbl-sup', type:'screen', x:50, y:2592, w:1490, h:80,
+    title:'',
+    sub:'profiles · wallets · transactions · notifications · required_actions · investment_goals\ncredit_accounts · credit_score_history · user_onboarding_pack_details\nstrategies_c · order_emails · articles' },
+
+  { id:'api-head', type:'tab', color:'#6a1b9a', x:1580, y:2380, w:1470, h:40, title:'EXPRESS API ROUTES + EXTERNAL SERVICES' },
+  { id:'api-routes', type:'screen', x:1580, y:2428, w:1470, h:108,
+    title:'',
+    sub:'/api/user/strategies   computes market_value from live prices · returns investedAmount, currentMarketValue, YTD\n/api/user/holdings   stock_holdings_c joined with securities_c + stock_intraday_c (logo · symbol · last_price)\n/api/onboarding/*   status · complete · id-number validation · /api/mandate/save · /api/settlement/config\nmintMorningsCron.cjs   Vercel Cron job — daily newsletter to subscribers via Resend API' },
+  { id:'api-ext', type:'screen', x:1580, y:2544, w:1470, h:80,
+    title:'',
+    sub:'Sumsub KYC API  (SUMSUB_APP_TOKEN · SUMSUB_SECRET_KEY)  →  identity verification + document checks\nTruID Connect  →  open-banking account verification / linking · bank statement access\nResend API  →  order confirmation + fill emails · Mint Mornings newsletter · OTP recovery\nPaystack  →  card / EFT payment gateway for deposits and investments\ncapacitor-face-id  →  native iOS/Android Face ID + fingerprint biometrics' },
+];
+
+// ─── EDGES ──────────────────────────────────────────────────────
+const EDGES = [
+  { f:'launch',       t:'session-chk',   type:'s' },
+  { f:'session-chk',  t:'pin-existing',  type:'s',  fs:'right', ts:'left',  label:'YES →\nactive session' },
+  { f:'session-chk',  t:'auth',          type:'s',  fs:'bottom',ts:'top',   label:'NO' },
+  { f:'pin-existing', t:'pin-existing-fail', type:'d', fs:'right', ts:'left', label:'fails' },
+  { f:'pin-existing', t:'home',          type:'s',  fs:'bottom',ts:'top',   label:'verified' },
+  { f:'auth',         t:'new-user',      type:'s' },
+  { f:'new-user',     t:'login-otp',     type:'s',  fs:'left',  ts:'right', label:'← NO\nexisting user' },
+  { f:'new-user',     t:'signup-otp',    type:'s',  fs:'right', ts:'left',  label:'YES →\nnew account' },
+  { f:'login-otp',    t:'login-otp-fail',type:'d',  fs:'right', ts:'left',  label:'wrong code' },
+  { f:'login-otp',    t:'login-pin',     type:'s',                          label:'code ok' },
+  { f:'login-pin',    t:'home',          type:'s',  fs:'bottom',ts:'top',   label:'authenticated' },
+  { f:'signup-otp',   t:'signup-otp-fail',type:'d', fs:'right', ts:'left',  label:'wrong code' },
+  { f:'signup-otp',   t:'onboarding',    type:'s',                          label:'code ok' },
+  { f:'onboarding',   t:'sumsub',        type:'s' },
+  { f:'sumsub',       t:'sumsub-fail',   type:'d',  fs:'right', ts:'left',  label:'rejected' },
+  { f:'sumsub',       t:'banklink',      type:'s',                          label:'approved' },
+  { f:'banklink',     t:'banklink-fail', type:'d',  fs:'right', ts:'left',  label:'fails' },
+  { f:'banklink',     t:'pin-setup',     type:'s',                          label:'linked' },
+  { f:'pin-setup',    t:'home',          type:'s',  fs:'bottom',ts:'top',   label:'setup complete' },
+  { f:'home',         t:'timeout',       type:'d',  fs:'right', ts:'left',  label:'4-min\ninactivity' },
+
+  // HOME → tab headers
+  { f:'home', t:'t-home', type:'s', fs:'bottom', ts:'top' },
+  { f:'home', t:'t-port', type:'s', fs:'bottom', ts:'top' },
+  { f:'home', t:'t-mkt',  type:'s', fs:'bottom', ts:'top' },
+  { f:'home', t:'t-cr',   type:'s', fs:'bottom', ts:'top' },
+  { f:'home', t:'t-more', type:'s', fs:'bottom', ts:'top' },
+
+  // HOME TAB
+  { f:'t-home',    t:'h-balance',  type:'s' },
+  { f:'h-balance', t:'h-notif',    type:'s' },
+  { f:'h-notif',   t:'h-activity', type:'s' },
+  { f:'h-activity',t:'h-actions',  type:'s' },
+  { f:'h-actions', t:'h-deposit',  type:'s' },
+  { f:'h-deposit', t:'h-family',   type:'s' },
+  { f:'h-family',  t:'h-funeral',  type:'s' },
+
+  // PORTFOLIO TAB
+  { f:'t-port',     t:'p-overview', type:'s' },
+  { f:'p-overview', t:'p-holdings', type:'s' },
+  { f:'p-holdings', t:'p-calendar', type:'s' },
+  { f:'p-calendar', t:'p-statements',type:'s' },
+  { f:'p-statements',t:'p-factsheet',type:'s' },
+  { f:'p-factsheet', t:'p-stockmodal',type:'s' },
+
+  // MARKETS TAB
+  { f:'t-mkt',     t:'m-list',      type:'s' },
+  { f:'m-list',    t:'m-strategies',type:'s' },
+  { f:'m-strategies',t:'m-detail',  type:'s' },
+  { f:'m-detail',  t:'m-buy',       type:'s', label:'tap Buy' },
+  { f:'m-buy',     t:'m-payment',   type:'s', label:'confirm order' },
+  { f:'m-payment', t:'m-pay-fail',  type:'d', label:'fails' },
+  { f:'m-payment', t:'m-success',   type:'s', label:'payment ok ✓' },
+  { f:'m-success', t:'m-news',      type:'s' },
+
+  // CREDIT TAB
+  { f:'t-cr',    t:'c-home',      type:'s' },
+  { f:'c-home',  t:'c-score',     type:'s' },
+  { f:'c-score', t:'c-apply',     type:'s' },
+  { f:'c-apply', t:'c-apply-rej', type:'d', label:'rejected' },
+  { f:'c-apply', t:'c-liquidity', type:'s', label:'approved' },
+  { f:'c-liquidity',t:'c-active', type:'s', label:'pledged' },
+  { f:'c-active',t:'c-repay',     type:'s' },
+
+  // MORE TAB
+  { f:'t-more',      t:'mo-settings', type:'s' },
+  { f:'mo-settings', t:'mo-profile',  type:'s' },
+  { f:'mo-profile',  t:'mo-password', type:'s' },
+  { f:'mo-password', t:'mo-sessions', type:'s' },
+  { f:'mo-sessions', t:'mo-notif',    type:'s' },
+  { f:'mo-notif',    t:'mo-legal',    type:'s' },
+  { f:'mo-legal',    t:'mo-transact', type:'s' },
+
+  // Cross-tab data connections (dotted)
+  { f:'m-success',  fs:'left',   t:'h-balance', ts:'right', type:'dt',
+    label:'stock_holdings_c written\n→ balance card refreshes' },
+  { f:'h-deposit',  fs:'right',  t:'m-payment', ts:'left',  type:'dt',
+    label:'wallets.balance\nfunds payment flow' },
+  { f:'c-repay',    fs:'left',   t:'p-holdings',ts:'right', type:'dt',
+    label:'pledged=false after\nfull repayment\n→ position unlocked' },
+];
+
+// ═══════════════════════════════════════════════════════════════════
+// RENDER ENGINE
+// ═══════════════════════════════════════════════════════════════════
+
+const CRUD_COLORS = { C:'#4caf50', R:'#2196f3', U:'#ff9800', D:'#f44336' };
+
+function nodeById(id) { return NODES.find(n => n.id === id); }
+
+function sidePoint(n, side) {
+  const cx = n.x + n.w/2, cy = n.y + n.h/2;
+  if (side === 'top')    return [cx, n.y];
+  if (side === 'bottom') return [cx, n.y + n.h];
+  if (side === 'left')   return [n.x, cy];
+  if (side === 'right')  return [n.x + n.w, cy];
+  return [cx, cy];
+}
+
+function autoSides(fn, tn) {
+  const fc = [fn.x+fn.w/2, fn.y+fn.h/2];
+  const tc = [tn.x+tn.w/2, tn.y+tn.h/2];
+  const dx = tc[0]-fc[0], dy = tc[1]-fc[1];
+  const fromS = Math.abs(dy)>Math.abs(dx) ? (dy>0?'bottom':'top') : (dx>0?'right':'left');
+  const toS   = Math.abs(dy)>Math.abs(dx) ? (dy>0?'top':'bottom') : (dx>0?'left':'right');
+  return [fromS, toS];
+}
+
+function renderEdge(e) {
+  const fn = nodeById(e.f), tn = nodeById(e.t);
+  if (!fn||!tn) return '';
+  const [afs, ats] = autoSides(fn, tn);
+  const fs = e.fs || afs, ts = e.ts || ats;
+  const [x1,y1] = sidePoint(fn, fs);
+  const [x2,y2] = sidePoint(tn, ts);
+
+  let stroke, dash, arrowId, labelColor;
+  if (e.type==='d')  { stroke='#e65100'; dash='stroke-dasharray="6,3"'; arrowId='arrO'; labelColor='#e65100'; }
+  else if (e.type==='dt') { stroke='#1976d2'; dash='stroke-dasharray="2,5"'; arrowId='arrB'; labelColor='#1976d2'; }
+  else                { stroke='#333';    dash=''; arrowId='arrK'; labelColor='#555'; }
+
+  // Bezier control points
+  let cx1=x1, cy1=y1, cx2=x2, cy2=y2;
+  if (fs==='bottom'&&ts==='top')    { cy1=y1+(y2-y1)*0.5; cy2=y2-(y2-y1)*0.5; cx1=x1; cx2=x2; }
+  else if (fs==='top'&&ts==='bottom'){ cy1=y1-(y1-y2)*0.5; cy2=y2+(y1-y2)*0.5; cx1=x1; cx2=x2; }
+  else if (fs==='right'&&ts==='left'){ cx1=x1+(x2-x1)*0.5; cx2=x2-(x2-x1)*0.5; }
+  else if (fs==='left'&&ts==='right'){ cx1=x1-(x1-x2)*0.5; cx2=x2+(x1-x2)*0.5; }
+  else if (fs==='bottom'&&ts==='left') { cx1=x1; cy1=y2; cx2=x1; cy2=y2; }
+  else if (fs==='bottom'&&ts==='right'){ cx1=x1; cy1=y2; cx2=x1; cy2=y2; }
+  else { cx1=x1; cy1=(y1+y2)/2; cx2=x2; cy2=(y1+y2)/2; }
+
+  const path = `<path d="M ${x1},${y1} C ${cx1},${cy1} ${cx2},${cy2} ${x2},${y2}"
+    fill="none" stroke="${stroke}" stroke-width="1.6" ${dash} marker-end="url(#${arrowId})"/>`;
+
+  let labelSVG = '';
+  if (e.label) {
+    const lx = (x1+x2)/2, ly = (y1+y2)/2;
+    const lines = e.label.split('\n');
+    const linesHTML = lines.map((ln,i) =>
+      `<text x="${lx}" y="${ly - (lines.length-1)*7 + i*14}" text-anchor="middle"
+        font-size="9.5" fill="${labelColor}" font-style="italic"
+        style="paint-order:stroke;stroke:white;stroke-width:4;stroke-linejoin:round">${ln}</text>`
+    ).join('');
+    labelSVG = linesHTML;
+  }
+  return path + labelSVG;
+}
+
+function crudBlockY(n) {
+  // Returns y below math (if any) for CRUD badges
+  let y = n.y + n.h + 4;
+  if (n.math) y += n.math.split('\n').length * 13 + 14;
+  return y;
+}
+
+function renderNode(n) {
+  const parts = [];
+
+  if (n.type === 'start') {
+    parts.push(`<rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="30" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>`);
+    const cy = n.y + n.h/2;
+    parts.push(`<text x="${n.x+n.w/2}" y="${cy-4}" text-anchor="middle" font-size="13" font-weight="700" fill="#1b5e20">${n.title}</text>`);
+    if (n.sub) parts.push(`<text x="${n.x+n.w/2}" y="${cy+12}" text-anchor="middle" font-size="9.5" fill="#388e3c">${n.sub}</text>`);
+    return parts.join('');
+  }
+
+  if (n.type === 'decision') {
+    const cx=n.x+n.w/2, cy=n.y+n.h/2, hw=n.w/2, hh=n.h/2;
+    parts.push(`<polygon points="${cx},${cy-hh} ${cx+hw},${cy} ${cx},${cy+hh} ${cx-hw},${cy}" fill="#fff8e1" stroke="#f57f17" stroke-width="1.5"/>`);
+    const lines = n.title.split('\n');
+    lines.forEach((l,i) => {
+      const oy = (i-(lines.length-1)/2)*15;
+      parts.push(`<text x="${cx}" y="${cy+oy+5}" text-anchor="middle" font-size="11" font-weight="700" fill="#4a2600">${l}</text>`);
+    });
+    return parts.join('');
+  }
+
+  if (n.type === 'home') {
+    parts.push(`<rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="6" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2.5"/>`);
+    parts.push(`<text x="${n.x+n.w/2}" y="${n.y+22}" text-anchor="middle" font-size="14" font-weight="700" fill="#1b5e20">${n.title}</text>`);
+    if (n.sub) parts.push(`<text x="${n.x+n.w/2}" y="${n.y+38}" text-anchor="middle" font-size="9.5" fill="#388e3c">${n.sub}</text>`);
+    // CRUD inline
+    if (n.crud) {
+      let bx = n.x + 16;
+      for (const [op, tables] of Object.entries(n.crud)) {
+        tables.forEach(t => {
+          const label = `${op}: ${t}`;
+          const bw = label.length * 6 + 12;
+          parts.push(`<rect x="${bx}" y="${n.y+54}" width="${bw}" height="16" rx="2" fill="${CRUD_COLORS[op]}22" stroke="${CRUD_COLORS[op]}" stroke-width="0.6"/>`);
+          parts.push(`<text x="${bx+6}" y="${n.y+65}" font-size="8.5" fill="${CRUD_COLORS[op]}" font-weight="700">${label}</text>`);
+          bx += bw + 6;
+        });
+      }
+    }
+    return parts.join('');
+  }
+
+  if (n.type === 'tab') {
+    parts.push(`<rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="3" fill="${n.color}"/>`);
+    parts.push(`<text x="${n.x+n.w/2}" y="${n.y+n.h/2+5}" text-anchor="middle" font-size="12" font-weight="700" fill="white" letter-spacing="0.5">${n.title}</text>`);
+    return parts.join('');
+  }
+
+  if (n.type === 'edge') {
+    parts.push(`<rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="3" fill="#fce4ec" stroke="#c62828" stroke-width="1" stroke-dasharray="5,3"/>`);
+    parts.push(`<text x="${n.x+9}" y="${n.y+17}" font-size="10.5" font-weight="700" fill="#b71c1c">${n.title}</text>`);
+    if (n.sub) n.sub.split('\n').forEach((l,i) => {
+      parts.push(`<text x="${n.x+9}" y="${n.y+32+i*13}" font-size="9" fill="#c62828">${l}</text>`);
+    });
+    return parts.join('');
+  }
+
+  // SCREEN or SUCCESS
+  const isSuc = n.type === 'success';
+  const bg     = isSuc ? '#e8f5e9' : 'white';
+  const stk    = isSuc ? '#2e7d32' : '#222';
+  const sw     = isSuc ? 2 : 1.5;
+  const tcolor = isSuc ? '#1b5e20' : '#111';
+
+  parts.push(`<rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="4" fill="${bg}" stroke="${stk}" stroke-width="${sw}"/>`);
+
+  let ty = n.y + 18;
+  if (n.title) {
+    parts.push(`<text x="${n.x+n.w/2}" y="${ty}" text-anchor="middle" font-size="11" font-weight="700" fill="${tcolor}">${n.title}</text>`);
+    ty += 14;
+  }
+  if (n.sub) n.sub.split('\n').forEach(l => {
+    parts.push(`<text x="${n.x+n.w/2}" y="${ty}" text-anchor="middle" font-size="9.5" fill="#555">${l}</text>`);
+    ty += 13;
+  });
+  if (n.apis) n.apis.forEach(a => {
+    parts.push(`<text x="${n.x+n.w/2}" y="${ty}" text-anchor="middle" font-size="9" fill="#7c4dff" font-style="italic">▸ ${a}</text>`);
+    ty += 12;
+  });
+
+  // Math box
+  if (n.math) {
+    const mlines = n.math.split('\n');
+    const mh = mlines.length * 13 + 8;
+    const my = n.y + n.h + 4;
+    parts.push(`<rect x="${n.x}" y="${my}" width="${n.w}" height="${mh}" rx="3" fill="#e8f4fd" stroke="#1565c0" stroke-width="0.8"/>`);
+    mlines.forEach((l,i) => {
+      parts.push(`<text x="${n.x+8}" y="${my+12+i*13}" font-size="8.8" fill="#0d47a1" font-family="'Courier New',Courier,monospace">${l}</text>`);
+    });
+  }
+
+  // CRUD badges
+  if (n.crud) {
+    const mathH = n.math ? (n.math.split('\n').length * 13 + 8 + 6) : 0;
+    let by = n.y + n.h + 4 + mathH;
+    for (const [op, tables] of Object.entries(n.crud)) {
+      tables.forEach(t => {
+        const label = `${op}: ${t}`;
+        parts.push(`<rect x="${n.x}" y="${by}" width="${n.w}" height="17" rx="2" fill="${CRUD_COLORS[op]}18" stroke="${CRUD_COLORS[op]}" stroke-width="0.6"/>`);
+        parts.push(`<text x="${n.x+7}" y="${by+12}" font-size="9" fill="${CRUD_COLORS[op]}" font-weight="700">${label}</text>`);
+        by += 19;
+      });
+    }
+  }
+
+  return parts.join('');
+}
+
+function buildSVG() {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${SVG_W}" height="${SVG_H}" viewBox="0 0 ${SVG_W} ${SVG_H}"
+    font-family="'Helvetica Neue',Helvetica,Arial,sans-serif">
+    <defs>
+      <pattern id="grid" x="0" y="0" width="28" height="28" patternUnits="userSpaceOnUse">
+        <circle cx="14" cy="14" r="1.2" fill="#bbb" opacity="0.4"/>
+      </pattern>
+      <marker id="arrK" markerWidth="9" markerHeight="7" refX="8.5" refY="3.5" orient="auto"><polygon points="0 0,9 3.5,0 7" fill="#333"/></marker>
+      <marker id="arrO" markerWidth="9" markerHeight="7" refX="8.5" refY="3.5" orient="auto"><polygon points="0 0,9 3.5,0 7" fill="#e65100"/></marker>
+      <marker id="arrB" markerWidth="9" markerHeight="7" refX="8.5" refY="3.5" orient="auto"><polygon points="0 0,9 3.5,0 7" fill="#1976d2"/></marker>
+    </defs>
+    <rect width="${SVG_W}" height="${SVG_H}" fill="#f6f6f6"/>
+    <rect width="${SVG_W}" height="${SVG_H}" fill="url(#grid)"/>
+
+    <!-- Section dividers -->
+    <line x1="50" y1="1286" x2="${SVG_W-50}" y2="1286" stroke="#d1d5db" stroke-width="1.5" stroke-dasharray="6,4"/>
+    <text x="${SVG_W/2}" y="1302" text-anchor="middle" font-size="10" fill="#9ca3af" letter-spacing="2" font-weight="600">APP SHELL — HOME HUB + 5-TAB NAVIGATION</text>
+    <line x1="50" y1="2350" x2="${SVG_W-50}" y2="2350" stroke="#d1d5db" stroke-width="1.5" stroke-dasharray="6,4"/>
+    <text x="${SVG_W/2}" y="2366" text-anchor="middle" font-size="10" fill="#9ca3af" letter-spacing="2" font-weight="600">DATA LAYER — DATABASE TABLES + API ROUTES</text>
+
+    <!-- Auth section label -->
+    <text x="${SVG_W/2}" y="50" text-anchor="middle" font-size="10" fill="#9ca3af" letter-spacing="2" font-weight="600">AUTHENTICATION + ONBOARDING FLOW</text>
+
+    ${EDGES.map(renderEdge).join('\n')}
+    ${NODES.map(renderNode).join('\n')}
+  </svg>`;
+}
+
+document.getElementById('diagram').innerHTML = buildSVG();
+
+// ═══════════════════════════════════════════════════════════════════
+// PAN + ZOOM
+// ═══════════════════════════════════════════════════════════════════
+let scale = 0.65;
+const container = document.getElementById('svgContainer');
+const wrap = document.getElementById('canvasWrap');
+const zoomLabel = document.getElementById('zoom-label');
+
+function applyScale() {
+  container.style.transform = `scale(${scale})`;
+  container.style.width = (SVG_W * scale) + 'px';
+  container.style.height = (SVG_H * scale) + 'px';
+  zoomLabel.textContent = Math.round(scale * 100) + '%';
+}
+
+function zoom(delta) {
+  const newScale = Math.max(0.2, Math.min(2, scale + delta));
+  const cx = wrap.scrollLeft + wrap.clientWidth/2;
+  const cy = wrap.scrollTop + wrap.clientHeight/2;
+  const rx = cx / (SVG_W * scale);
+  const ry = cy / (SVG_H * scale);
+  scale = newScale;
+  applyScale();
+  wrap.scrollLeft = rx * SVG_W * scale - wrap.clientWidth/2;
+  wrap.scrollTop  = ry * SVG_H * scale - wrap.clientHeight/2;
+}
+
+function fitToScreen() {
+  const sw = wrap.clientWidth / SVG_W;
+  const sh = (wrap.clientHeight) / SVG_H;
+  scale = Math.min(sw, sh) * 0.96;
+  applyScale();
+  wrap.scrollLeft = 0;
+  wrap.scrollTop = 0;
+}
+
+// Mouse-wheel zoom
+wrap.addEventListener('wheel', e => {
+  if (e.ctrlKey || e.metaKey) {
+    e.preventDefault();
+    zoom(e.deltaY < 0 ? 0.08 : -0.08);
+  }
+}, { passive: false });
+
+// Pan by drag
+let dragging = false, dragStartX, dragStartY, scrollStartX, scrollStartY;
+wrap.addEventListener('mousedown', e => {
+  if (e.target.closest('button')) return;
+  dragging = true;
+  wrap.classList.add('grabbing');
+  dragStartX = e.clientX; dragStartY = e.clientY;
+  scrollStartX = wrap.scrollLeft; scrollStartY = wrap.scrollTop;
+});
+document.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  wrap.scrollLeft = scrollStartX - (e.clientX - dragStartX);
+  wrap.scrollTop  = scrollStartY - (e.clientY - dragStartY);
+});
+document.addEventListener('mouseup', () => { dragging = false; wrap.classList.remove('grabbing'); });
+
+// Init
+applyScale();
+// Scroll to center on the auth flow (top center of diagram)
+setTimeout(() => {
+  wrap.scrollLeft = (SVG_W * scale - wrap.clientWidth) / 2;
+  wrap.scrollTop = 0;
+}, 50);
+</script>
 </body>
 </html>
