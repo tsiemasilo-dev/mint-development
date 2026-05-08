@@ -54,7 +54,7 @@ export const calculateMinInvestment = (strategy, holdingsBySymbol) => {
   if (!holdings.length) {
     const strategyPrice = Number(strategy?.last_close || strategy?.nav || strategy?.min_investment || 0);
     if (!strategyPrice || strategyPrice <= 0 || !isFinite(strategyPrice)) return null;
-    return strategy?.min_investment ? Math.round(strategy.min_investment) : Math.round(strategyPrice);
+    return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : Math.round(strategyPrice);
   }
   let total = 0;
   let matched = 0;
@@ -63,8 +63,7 @@ export const calculateMinInvestment = (strategy, holdingsBySymbol) => {
     const normalizedSym = normalizeSymbol(rawSymbol);
     const security = holdingsBySymbol.get(rawSymbol) || holdingsBySymbol.get(normalizedSym);
     if (security?.last_price != null) {
-      // Prices are in Rands (from marketData.js)
-      const pricePerShare = Number(security.last_price);
+      const pricePerShare = Number(security.last_price) / 100;
       if (!pricePerShare || pricePerShare <= 0 || !isFinite(pricePerShare)) continue;
       const shares = Number(holding.shares || holding.quantity || 1);
       total += shares * pricePerShare;
@@ -74,7 +73,7 @@ export const calculateMinInvestment = (strategy, holdingsBySymbol) => {
   if (matched === 0) {
     const strategyPrice = Number(strategy?.last_close || strategy?.nav || strategy?.min_investment || 0);
     if (!strategyPrice || strategyPrice <= 0 || !isFinite(strategyPrice)) return null;
-    return strategy?.min_investment ? Math.round(strategy.min_investment) : Math.round(strategyPrice);
+    return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : Math.round(strategyPrice);
   }
   return Math.round(total);
 };

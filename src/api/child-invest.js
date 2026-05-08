@@ -79,7 +79,7 @@ export default async function handler(req, res) {
     if (!strategy) return res.status(404).json({ error: "Strategy not found." });
     if (!strategy.is_active) return res.status(400).json({ error: "This strategy is no longer active." });
     if (strategy.min_investment && amount < strategy.min_investment) {
-      return res.status(400).json({ error: `Minimum investment is R${(strategy.min_investment).toFixed(2)}.` });
+      return res.status(400).json({ error: `Minimum investment is R${(strategy.min_investment / 100).toFixed(2)}.` });
     }
 
     // 4. Deduct from child balance

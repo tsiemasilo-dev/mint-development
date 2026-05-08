@@ -534,7 +534,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
     onClose();
     onOpenFactsheet({
       ...selected,
-      calculatedMinInvestment: selected.min_investment ? Math.round(selected.min_investment) : null,
+      calculatedMinInvestment: selected.min_investment ? Math.round(selected.min_investment / 100) : null,
       holdingsWithLogos: (selected.holdingsList || []).map((h) => ({
         ...h,
         ticker: h.ticker || h.symbol,
