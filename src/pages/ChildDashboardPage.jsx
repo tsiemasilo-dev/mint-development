@@ -273,7 +273,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
 
   const childFirstName = child?.first_name || "Child";
   const childBalance = child.available_balance || 0;
-  const minInvCents = selected?.min_investment || 0;
+  const minInvCents = selectedStrategyMinimum ? selectedStrategyMinimum * 100 : 0;
   const amountCents = units * minInvCents;
   const numAmount = amountCents / 100;
   const insufficient = amountCents > childBalance;
@@ -781,12 +781,21 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
               </div>
             )}
 
-            <button
-              onClick={openFactsheet}
-              className="mt-6 w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-4 font-semibold text-white shadow-lg transition-all active:scale-95"
-            >
-              View Factsheet
-            </button>
+            <div className="mt-6 space-y-3">
+              <button
+                onClick={() => setStep("amount")}
+                disabled={!selectedStrategyMinimum}
+                className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-4 font-semibold text-white shadow-lg transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Invest Now
+              </button>
+              <button
+                onClick={openFactsheet}
+                className="w-full rounded-2xl border border-slate-300 bg-white py-3 font-semibold text-slate-700 shadow-sm transition-all active:scale-95"
+              >
+                View Factsheet
+              </button>
+            </div>
           </div>
         </motion.div>
       </motion.div>
@@ -987,6 +996,105 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
                       })}
                     </div>
                   )}
+                </>
+              )}
+
+              {/* Amount selection step */}
+              {step === "amount" && selected && (
+                <>
+                  {/* Strategy info card */}
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4 mb-4">
+                    <div className="flex items-start gap-3 mb-3">
+                      <div className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg,#ede9fe,#ddd6fe)" }}>
+                        <BarChart3 className="h-5 w-5 text-purple-600" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-slate-900">{selected.short_name || selected.name}</p>
+                        <p className="text-xs text-slate-500 mt-1">{selected.description?.substring(0, 60)}</p>
+                      </div>
+                    </div>
+                    <div className="pt-3 border-t border-slate-100">
+                      <p className="text-xs text-slate-500 mb-1">Minimum investment</p>
+                      <p className="text-sm font-semibold text-slate-900">
+                        {selectedStrategyMinimum ? `R${selectedStrategyMinimum.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "Calculating..."}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Amount selector */}
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4 mb-4">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Investment Amount</p>
+                    <div className="flex items-center justify-center gap-4">
+                      <button
+                        onClick={() => setUnits(Math.max(1, units - 1))}
+                        disabled={units <= 1 || !selectedStrategyMinimum}
+                        className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                      >
+                        −
+                      </button>
+                      <div className="flex-1 text-center">
+                        <p className="text-3xl font-bold text-slate-900 tabular-nums">
+                          R{selectedStrategyMinimum && numAmount > 0 ? numAmount.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}
+                        </p>
+                        <p className="text-xs text-slate-500 mt-1">{units} unit{units !== 1 ? "s" : ""}</p>
+                      </div>
+                      <button
+                        onClick={() => setUnits(units + 1)}
+                        disabled={!selectedStrategyMinimum || insufficient}
+                        className="flex h-10 w-10 items-center justify-center rounded-full bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Fee and total */}
+                  <div className="space-y-2 mb-4">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-600">Subtotal</span>
+                      <span className="font-semibold text-slate-900">R{selectedStrategyMinimum && numAmount > 0 ? numAmount.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-600">Total Due Today</span>
+                      <span className="text-lg font-bold text-slate-900">R{selectedStrategyMinimum && numAmount > 0 ? numAmount.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}</span>
+                    </div>
+                  </div>
+
+                  {insufficient && (
+                    <div className="rounded-lg bg-red-50 border border-red-200 p-3 mb-4">
+                      <p className="text-xs font-semibold text-red-700">Insufficient funds. {childFirstName} needs R{(numAmount - childBalance / 100).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} more.</p>
+                    </div>
+                  )}
+
+                  {/* Terms checkbox */}
+                  <div className="flex items-start gap-3 mb-4">
+                    <input
+                      type="checkbox"
+                      id="terms"
+                      checked={savingDone || false}
+                      onChange={(e) => {}}
+                      className="mt-1 h-5 w-5 rounded border-slate-300"
+                    />
+                    <label htmlFor="terms" className="text-xs text-slate-600">
+                      <span className="font-semibold">I agree to Risk Disclosure, Fee Schedule & Strategy Mandate</span>
+                      <p className="mt-1">By continuing, you confirm you have reviewed and agree to all terms and conditions</p>
+                    </label>
+                  </div>
+
+                  {error && (
+                    <div className="rounded-lg bg-red-50 border border-red-200 p-3 mb-4">
+                      <p className="text-xs font-semibold text-red-700">{error}</p>
+                    </div>
+                  )}
+
+                  {/* Continue button */}
+                  <button
+                    onClick={handleInvest}
+                    disabled={insufficient || amountCents <= 0 || saving || !selectedStrategyMinimum}
+                    className="w-full rounded-2xl bg-purple-600 py-3.5 font-semibold text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                  >
+                    {saving ? "Processing..." : "Continue"}
+                  </button>
                 </>
               )}
 
