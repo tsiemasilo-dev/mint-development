@@ -697,8 +697,8 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
                 });
                 const holdings = getHoldingsArray(strategy);
 
-                const minInvestmentValue = strategyMinimums[strategy.id] || null;
-                const minInvestmentText = minimumLoading ? "Loading..." : (minInvestmentValue ? `Min. ${formatCurrency(minInvestmentValue, "R")}` : null);
+                const minInvestmentValue = strategyMinimums[strategy.id];
+                const minInvestmentText = minInvestmentValue ? `Min. ${formatCurrency(minInvestmentValue, "R")}` : (minimumLoading ? "Loading..." : null);
 
                 const sparkline = strategy.sparkline || [20, 22, 21, 24, 26, 25, 28, 30, 29, 32];
                 
@@ -1020,7 +1020,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold text-slate-900">{selectedStrategy.name}</h3>
                   <p className="text-sm text-slate-500">
-                    {minimumLoading ? "Loading..." : (strategyMinimums[selectedStrategy.id] ? `Min. ${formatCurrency(strategyMinimums[selectedStrategy.id], "R")}` : "N/A")}
+                    {strategyMinimums[selectedStrategy.id] ? `Min. ${formatCurrency(strategyMinimums[selectedStrategy.id], "R")}` : (minimumLoading ? "Loading..." : "N/A")}
                   </p>
                 </div>
                 <button
