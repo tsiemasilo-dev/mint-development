@@ -22,6 +22,7 @@ const PaymentMethodModal = ({
   const [eftExpanded, setEftExpanded] = useState(false);
   const [copied, setCopied] = useState(null);
   const [showThankYou, setShowThankYou] = useState(false);
+  const [showTopUpPrompt, setShowTopUpPrompt] = useState(false);
   const { profile, loading: profileLoading } = useProfile();
 
   // ── FIX 1: Mint number pulled directly from profile ──────────────────────
@@ -172,87 +173,71 @@ const PaymentMethodModal = ({
                 {/* ── Pay with Wallet ── */}
                 <button
                   type="button"
-                  disabled={!isWalletReady || !hasEnoughFunds}
+                  disabled={!isWalletReady}
                   onClick={() => {
-                    if (hasEnoughFunds) onSelectWallet?.();
+                    if (hasEnoughFunds) {
+                      setShowTopUpPrompt(false);
+                      onSelectWallet?.();
+                    } else {
+                      setShowTopUpPrompt(true);
+                      setEftExpanded(true);
+                    }
                   }}
-                  className={`w-full flex items-center gap-4 rounded-2xl border-2 px-4 py-3.5 text-left transition active:scale-[0.98] ${!hasEnoughFunds
-                      ? "border-slate-100 bg-slate-50 opacity-60 cursor-not-allowed"
+                  className={`w-full flex items-center gap-4 rounded-2xl border-2 px-4 py-3.5 text-left transition active:scale-[0.98] ${
+                    showTopUpPrompt
+                      ? "border-amber-300 bg-amber-50/60"
                       : "border-slate-200 bg-white hover:border-violet-300 hover:bg-violet-50/40"
-                    }`}
+                  }`}
                 >
-                  <div
-                    className={`flex h-10 w-10 items-center justify-center rounded-xl flex-shrink-0 ${!hasEnoughFunds ? "bg-slate-200" : "bg-violet-100"
-                      }`}
-                  >
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-xl flex-shrink-0 ${showTopUpPrompt ? "bg-amber-100" : "bg-violet-100"}`}>
                     {!isWalletReady ? (
                       <Loader2 className="h-5 w-5 text-slate-400 animate-spin" />
                     ) : (
-                      <Wallet
-                        className={`h-5 w-5 ${!hasEnoughFunds ? "text-slate-400" : "text-violet-600"
-                          }`}
-                      />
+                      <Wallet className={`h-5 w-5 ${showTopUpPrompt ? "text-amber-500" : "text-violet-600"}`} />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p
-                      className={`text-sm font-semibold ${!hasEnoughFunds ? "text-slate-500" : "text-slate-900"
-                        }`}
-                    >
-                      Pay with Wallet
-                    </p>
-                    <p className="text-xs text-slate-500 mt-0.5">
+                    <p className="text-sm font-semibold text-slate-900">Pay with Wallet</p>
+                    <p className={`text-xs mt-0.5 ${showTopUpPrompt ? "text-amber-600 font-medium" : "text-slate-500"}`}>
                       {!isWalletReady
                         ? "Checking balance..."
-                        : !hasAnyFunds
-                          ? `No balance in ${walletLabel.toLowerCase()} — please top up`
-                          : !hasEnoughFunds
-                            ? `Insufficient funds in ${walletLabel.toLowerCase()} — top up to continue`
+                        : showTopUpPrompt
+                          ? "Top up your wallet to continue — use Direct EFT below"
+                          : hasEnoughFunds
+                            ? `Available in ${walletLabel}: ${formatAmount(walletBalance)}`
                             : `Available in ${walletLabel}: ${formatAmount(walletBalance)}`}
                     </p>
                   </div>
-                  <span
-                    className={`text-[11px] font-semibold rounded-full px-2 py-0.5 flex-shrink-0 ${!hasEnoughFunds
-                        ? "text-slate-400 bg-slate-200"
-                        : "text-violet-600 bg-violet-100"
-                      }`}
-                  >
-                    {!hasEnoughFunds ? (hasAnyFunds ? "Top Up Required" : "Top Up") : "Wallet"}
+                  <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 flex-shrink-0 ${showTopUpPrompt ? "text-amber-600 bg-amber-100" : hasEnoughFunds ? "text-violet-600 bg-violet-100" : "text-slate-500 bg-slate-100"}`}>
+                    {showTopUpPrompt ? "Top Up" : hasEnoughFunds ? "Wallet" : "Top Up"}
                   </span>
                 </button>
 
-                {/* ── Paystack (Coming Soon) ── */}
-                <div className="relative w-full">
-                  <div className="w-full flex items-center gap-4 rounded-2xl border-2 border-slate-100 bg-slate-50/60 px-4 py-3.5 opacity-60 select-none cursor-not-allowed">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white border border-slate-100 shadow-sm flex-shrink-0 p-1.5">
-                      <img
-                        src="/paystack-logo.svg"
-                        alt="Paystack"
-                        className="w-full h-full object-contain"
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-slate-500">Paystack</p>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        Card, instant EFT, bank transfer & more
-                      </p>
-                    </div>
-                  </div>
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                    <span
-                      className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-widest text-white shadow-md"
-                      style={{
-                        background:
-                          "linear-gradient(135deg, #1e293b 0%, #334155 50%, #1e293b 100%)",
-                        boxShadow:
-                          "0 1px 8px 0 rgba(15,23,42,0.18), inset 0 1px 0 rgba(255,255,255,0.08)",
-                        letterSpacing: "0.12em",
-                      }}
+                {/* ── Top-up prompt banner ── */}
+                <AnimatePresence>
+                  {showTopUpPrompt && (
+                    <motion.div
+                      key="topup-prompt"
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      transition={{ duration: 0.18 }}
+                      className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3"
                     >
-                      Coming Soon
-                    </span>
-                  </div>
-                </div>
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-100 mt-0.5">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" width={14} height={14}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2m6-2a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-amber-800">Wallet top-up needed</p>
+                        <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
+                          Your wallet {walletBalance > 0 ? `only has ${formatAmount(walletBalance)}` : "has no balance"}. Use Direct EFT below to top up, then come back to pay with your wallet.
+                        </p>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
                 {/* ── Ozow (Coming Soon) ── */}
                 <div className="relative w-full">
