@@ -76,11 +76,18 @@ export const calculateMinInvestment = async (strategy, holdingsBySymbol) => {
 
       if (!symbol || shares <= 0) continue;
 
-      // Get latest price for this symbol from stock_intraday_c
+      // Get security_id from holdingsBySymbol
+      const security = holdingsBySymbol.get(symbol);
+      if (!security?.id) {
+        console.warn(`[${strategy.name}] No security found for ${symbol}`);
+        continue;
+      }
+
+      // Get latest price for this security_id from stock_intraday_c
       const { data, error } = await supabase
         .from("stock_intraday_c")
         .select("current_price")
-        .eq("symbol", symbol)
+        .eq("security_id", security.id)
         .order("timestamp", { ascending: false })
         .limit(1)
         .maybeSingle();
