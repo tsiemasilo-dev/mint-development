@@ -699,6 +699,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
 
                 const minInvestmentValue = strategyMinimums[strategy.id];
                 const minInvestmentText = minInvestmentValue ? `Min. ${formatCurrency(minInvestmentValue, "R")}` : (minimumLoading ? "Loading..." : null);
+                console.log(`[${strategy.name}] minInvestmentValue=${minInvestmentValue}, minimumLoading=${minimumLoading}, minInvestmentText=${minInvestmentText}`);
 
                 const sparkline = strategy.sparkline || [20, 22, 21, 24, 26, 25, 28, 30, 29, 32];
                 
