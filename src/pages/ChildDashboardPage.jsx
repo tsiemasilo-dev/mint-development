@@ -22,6 +22,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { calculateMinInvestment, buildHoldingsBySymbol, getHoldingsArray, normalizeSymbol } from "../lib/strategyUtils.js";
 
 // --- helpers ----------------------------------------------------------------
 
@@ -261,6 +262,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
   const [selectedStrategyAnalytics, setSelectedStrategyAnalytics] = useState(null);
   const [selectedStrategyAnalyticsLoading, setSelectedStrategyAnalyticsLoading] = useState(false);
   const [selectedStrategyActiveLabel, setSelectedStrategyActiveLabel] = useState(null);
+  const [selectedStrategyMinimum, setSelectedStrategyMinimum] = useState(null);
   const previewGradientId = useId();
   const [units, setUnits] = useState(1);
   const [saving, setSaving] = useState(false);
@@ -362,6 +364,50 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
   const filtered = strategies.filter(s =>
     s.name?.toLowerCase().includes(search.toLowerCase())
   );
+
+  // Calculate minimum investment for selected strategy
+  useEffect(() => {
+    if (!selected || !supabase || strategies.length === 0) {
+      setSelectedStrategyMinimum(null);
+      return;
+    }
+
+    let isMounted = true;
+    const calculateMin = async () => {
+      try {
+        // Get all securities for building holdingsBySymbol map
+        const allTickers = [...new Set(
+          strategies
+            .flatMap((strategy) => getHoldingsArray(strategy).map((h) => {
+              const rawSymbol = h.ticker || h.symbol || h;
+              const normalizedSymbol = normalizeSymbol(rawSymbol);
+              return normalizedSymbol || rawSymbol;
+            }))
+            .filter(Boolean)
+        )];
+
+        if (allTickers.length === 0) {
+          setSelectedStrategyMinimum(selected?.min_investment ? Math.round(selected.min_investment / 100) : null);
+          return;
+        }
+
+        const { data: securities } = await supabase
+          .from("securities_c")
+          .select("symbol, id, name, logo_url")
+          .in("symbol", allTickers);
+
+        const holdingsBySymbol = buildHoldingsBySymbol(securities || []);
+        const minValue = await calculateMinInvestment(selected, holdingsBySymbol);
+        if (isMounted) setSelectedStrategyMinimum(minValue);
+      } catch (error) {
+        console.error("Error calculating min investment:", error);
+        if (isMounted) setSelectedStrategyMinimum(selected?.min_investment ? Math.round(selected.min_investment / 100) : null);
+      }
+    };
+
+    calculateMin();
+    return () => { isMounted = false; };
+  }, [selected, strategies]);
 
   useEffect(() => {
     if (!selected || step !== "preview") {
@@ -587,15 +633,15 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
               <div className="flex-1">
                 <h2 className="text-lg font-semibold text-slate-900">{selected.name}</h2>
                 <p className="text-sm text-slate-500">
-                  {selected.min_investment > 0 ? `Min. ${fmt(selected.min_investment)}` : "Calculating..."}
+                  {selectedStrategyMinimum ? `Min. R${selectedStrategyMinimum.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "Calculating..."}
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-3 mb-6">
-              {selected.min_investment > 0 ? (
+              {selectedStrategyMinimum ? (
                 <>
-                  <p className="text-2xl font-semibold text-slate-900">{fmt(selected.min_investment)}</p>
+                  <p className="text-2xl font-semibold text-slate-900">R{selectedStrategyMinimum.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   <span className="rounded-full px-2.5 py-1 text-xs font-semibold bg-slate-100 text-slate-500">
                     Min. investment
                   </span>
