@@ -417,13 +417,8 @@ const PaymentPage = ({
   }, [profile, launchPaystack, selectedMethod]);
 
   if (paymentStatus === "eft-pending") {
-    return (
-      <PaymentPendingPage
-        strategy={strategy?.name}
-        amount={amount}
-        onDone={() => onCancel?.()}
-      />
-    );
+    onCancel?.();
+    return null;
   }
 
   return (
@@ -493,7 +488,7 @@ const PaymentPage = ({
           childWalletBalanceCents={isChildWalletPurchase ? Math.round(walletBalance * 100) : null}
           onSelectPaystack={() => handleMethodSelection("paystack")}
           onSelectWallet={() => handleMethodSelection("wallet")}
-          onEFTConfirm={() => handleMethodSelection("direct_eft")}
+          onEFTConfirm={() => { setIsMethodModalOpen(false); onCancel?.(); }}
         />
 
         <section className="mt-20 rounded-3xl border border-slate-100 bg-white p-8 shadow-sm text-center">

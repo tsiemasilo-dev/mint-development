@@ -1504,10 +1504,9 @@ const App = () => {
             } catch (e) {
               console.error("EFT record error:", e);
             }
-            setPendingPaymentInfo({ strategy: stockCheckout.security?.name || stockCheckout.security?.symbol, amount: stockCheckout.amount });
             navigationHistory.current = [];
             setPreviousPageName(null);
-            setCurrentPage("paymentPending");
+            setCurrentPage("home");
           }}
         />
       </SwipeBackWrapper>
@@ -1762,10 +1761,9 @@ const App = () => {
             } catch (e) {
               console.error("EFT record error:", e);
             }
-            setPendingPaymentInfo({ strategy: selectedStrategy?.name, amount: investmentAmount });
             navigationHistory.current = [];
             setPreviousPageName(null);
-            setCurrentPage("paymentPending");
+            setCurrentPage("home");
           }}
         />
       </SwipeBackWrapper>
