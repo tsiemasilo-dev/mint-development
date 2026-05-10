@@ -62,6 +62,39 @@ function fetchWithTimeout(url, options, ms, message) {
     .finally(() => window.clearTimeout(timeoutId));
 }
 
+function normalizeReturnDecimal(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return null;
+  return Math.abs(number) > 1 ? number / 100 : number;
+}
+
+function formatReturnPercent(value) {
+  const normalized = normalizeReturnDecimal(value);
+  if (normalized === null) return "-";
+  const pct = normalized * 100;
+  return `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`;
+}
+
+function getLatestStrategyMetric(strategy) {
+  const metrics = strategy?.strategy_metrics || strategy?.metrics || [];
+  if (Array.isArray(metrics)) {
+    return [...metrics].sort((a, b) => (b.as_of_date || "").localeCompare(a.as_of_date || ""))[0] || null;
+  }
+  return metrics || null;
+}
+
+function getStrategyYtdReturn(strategy) {
+  return normalizeReturnDecimal(
+    strategy?.ytd_return
+      ?? strategy?.r_ytd
+      ?? strategy?.r_ytd_pct
+      ?? strategy?.ytd_pct
+      ?? getLatestStrategyMetric(strategy)?.r_ytd_pct
+      ?? getLatestStrategyMetric(strategy)?.r_ytd
+      ?? getLatestStrategyMetric(strategy)?.ytd_pct
+  );
+}
+
 const CHILD_KYC_PENDING_MESSAGE = "Please wait until this child's KYC is verified before browsing strategies.";
 
 function getChildKycState(child) {
@@ -326,7 +359,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
       if (!supabase) return;
       const { data } = await supabase
         .from("strategies_c")
-        .select("id, name, short_name, description, risk_level, sector, tags, min_investment, is_featured, holdings")
+        .select("id, name, short_name, description, risk_level, sector, tags, min_investment, is_featured, holdings, strategy_metrics(*)")
         .eq("status", "active")
         .eq("is_kid_strategy", true)
         .order("is_featured", { ascending: false })
@@ -352,13 +385,22 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
       const yearStart = `${currentYear}-01-01`;
       const { data: returnsData } = await supabase
         .from("strategies_returns_c")
-        .select("strategy_id, ytd_return")
-        .gte("as_of_date", yearStart);
+        .select("strategy_id, as_of_date, ytd_pct")
+        .gte("as_of_date", yearStart)
+        .order("as_of_date", { ascending: true });
 
       const returnsMap = {};
-      (returnsData || []).forEach(r => { returnsMap[r.strategy_id] = r.ytd_return; });
+      (returnsData || []).forEach(r => {
+        returnsMap[r.strategy_id] = {
+          ytd_return: normalizeReturnDecimal(r.ytd_pct),
+          ytd_as_of_date: r.as_of_date,
+        };
+      });
 
       const enriched = rows.map(s => {
+        const metric = getLatestStrategyMetric(s);
+        const ytdReturn = returnsMap[s.id]?.ytd_return ?? normalizeReturnDecimal(metric?.r_ytd_pct ?? metric?.r_ytd ?? metric?.ytd_pct);
+        const ytdAsOfDate = returnsMap[s.id]?.ytd_as_of_date ?? metric?.as_of_date ?? null;
         const holdingsList = (Array.isArray(s.holdings) ? s.holdings : [])
           .sort((a, b) => Number(b.weight || 0) - Number(a.weight || 0))
           .map(h => {
@@ -371,7 +413,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
               logo_url: security.logo_url || null,
             };
           });
-        return { ...s, holdingsList, ytd_return: returnsMap[s.id] };
+        return { ...s, holdingsList, ytd_return: ytdReturn, r_ytd: ytdReturn, ytd_as_of_date: ytdAsOfDate };
       });
 
       setStrategies(enriched);
@@ -483,7 +525,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
         const yearStart = `${currentYear}-01-01`;
         const { data: dailyReturns, error } = await supabase
           .from("strategies_returns_c")
-          .select("strategy_id, as_of_date, \"1d_pct\"")
+          .select("strategy_id, as_of_date, \"1d_pct\", ytd_pct")
           .eq("strategy_id", strategyId)
           .gte("as_of_date", yearStart)
           .order("as_of_date", { ascending: true });
@@ -496,21 +538,23 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
         }
 
         const cumulativeData = [];
-        let cumulative = 0;
+        let indexValue = 100;
         dailyReturns.forEach((day) => {
-          const dailyReturn = day["1d_pct"] ? day["1d_pct"] / 100 : 0;
-          cumulative += dailyReturn;
+          const dailyReturn = normalizeReturnDecimal(day["1d_pct"]) ?? 0;
+          indexValue *= (1 + dailyReturn);
           cumulativeData.push({
             d: day.as_of_date,
-            v: Number((cumulative * 100).toFixed(2)),
+            v: Number(indexValue.toFixed(2)),
           });
         });
 
         if (isMounted) {
+          const latestReturn = normalizeReturnDecimal(dailyReturns[dailyReturns.length - 1]?.ytd_pct);
           setSelectedStrategyAnalytics({
             strategy_id: strategyId,
             as_of_date: dailyReturns[dailyReturns.length - 1].as_of_date,
             curves: { YTD: cumulativeData },
+            ytd_return: latestReturn,
           });
         }
       } catch (e) {
@@ -527,16 +571,19 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
     };
   }, [selected, step]);
 
+  const selectedYtdPct = selectedStrategyAnalytics?.ytd_return ?? getStrategyYtdReturn(selected);
+
   const { previewChartData, previewChartDomain, previewBaseIndexValue } = useMemo(() => {
     const previewFallbackLength = 140;
     const curves = selectedStrategyAnalytics?.curves || {};
+    const fallbackEndValue = selectedYtdPct !== null ? 100 * (1 + selectedYtdPct) : 101.6;
     const fallbackSeries = Array.from({ length: previewFallbackLength }, (_, index) => {
       const wave = Math.sin(index / 18) * 1.1 + Math.cos(index / 9) * 0.4;
-      const drift = (index / previewFallbackLength) * 1.6;
+      const drift = ((fallbackEndValue - 100) * index) / Math.max(1, previewFallbackLength - 1);
       const noise = ((index % 7) - 3) * 0.03;
       return {
         d: new Date(Date.now() - (previewFallbackLength - index) * 86400000).toISOString(),
-        v: Number((100 + wave + drift + noise).toFixed(2)),
+        v: Number((100 + drift + wave + noise).toFixed(2)),
       };
     });
 
@@ -576,9 +623,8 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
       previewChartDomain: domain,
       previewBaseIndexValue: values.length ? values[0] : null,
     };
-  }, [selectedStrategyAnalytics]);
+  }, [selectedStrategyAnalytics, selectedYtdPct]);
 
-  const selectedYtdPct = selected?.ytd_return ?? null;
   const previewChartLineColor = (selectedYtdPct ?? 0) > 0
     ? "#16a34a"
     : (selectedYtdPct ?? 0) < 0
@@ -693,7 +739,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
                 <span>YTD return</span>
                 <div className="flex flex-col items-end gap-1">
                   <span className={selectedYtdPct > 0 ? "text-emerald-600" : selectedYtdPct < 0 ? "text-rose-600" : "text-slate-500"}>
-                    {selectedYtdPct != null ? `${selectedYtdPct >= 0 ? "+" : ""}${selectedYtdPct.toFixed(2)}%` : "-"}
+                    {formatReturnPercent(selectedYtdPct)}
                   </span>
                   {selected.ytd_as_of_date && (
                     <span className="text-[10px] text-slate-400">
@@ -934,7 +980,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
                   ) : (
                     <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-0.5">
                       {filtered.map((s) => {
-                        const ytdPct = s.ytd_return ?? null;
+                        const ytdPct = getStrategyYtdReturn(s);
                         const isUp = (ytdPct ?? 0) >= 0;
                         return (
                           <button
@@ -958,19 +1004,19 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
                                 <svg width="64" height="32" viewBox="0 0 64 32">
                                   <defs>
                                     <linearGradient id={`sg-${s.id}`} x1="0" y1="0" x2="0" y2="1">
-                                      <stop offset="0%" stopColor={isUp ? "#7c3aed" : "#e11d48"} stopOpacity="0.15" />
-                                      <stop offset="100%" stopColor={isUp ? "#7c3aed" : "#e11d48"} stopOpacity="0" />
+                                      <stop offset="0%" stopColor={isUp ? "#16a34a" : "#e11d48"} stopOpacity="0.15" />
+                                      <stop offset="100%" stopColor={isUp ? "#16a34a" : "#e11d48"} stopOpacity="0" />
                                     </linearGradient>
                                   </defs>
                                   <polyline
                                     points="0,28 10,22 20,24 30,14 40,10 50,16 64,6"
                                     fill="none"
-                                    stroke={isUp ? "#7c3aed" : "#e11d48"}
+                                    stroke={isUp ? "#16a34a" : "#e11d48"}
                                     strokeWidth="1.8"
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
                                   />
-                                  <circle cx="64" cy="6" r="2.5" fill={isUp ? "#7c3aed" : "#e11d48"} />
+                                  <circle cx="64" cy="6" r="2.5" fill={isUp ? "#16a34a" : "#e11d48"} />
                                 </svg>
                               </div>
                             </div>
@@ -992,7 +1038,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
                               <div className="flex items-center gap-2">
                                 {ytdPct != null ? (
                                   <span className={`text-xs font-semibold ${isUp ? "text-emerald-600" : "text-red-500"}`}>
-                                    {isUp ? "+" : ""}{ytdPct.toFixed(2)}%
+                                    {formatReturnPercent(ytdPct)}
                                   </span>
                                 ) : (
                                   <span className="text-xs text-slate-400">-</span>
@@ -1750,8 +1796,26 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   }
 
   async function openInvestModal() {
-    const latestChild = await fetchChildProfile();
-    const latestKyc = getChildKycState(latestChild);
+    const currentKyc = getChildKycState(child);
+    if (currentKyc.verified) {
+      setKycNotice("");
+      setShowInvest(true);
+      fetchChildProfile();
+      return;
+    }
+
+    let latestKyc = currentKyc;
+    try {
+      const latestChild = await withTimeout(
+        fetchChildProfile(),
+        4000,
+        "Unable to refresh child KYC right now."
+      );
+      latestKyc = getChildKycState(latestChild);
+    } catch (e) {
+      console.error("[child-dash] kyc refresh before invest", e);
+    }
+
     if (!latestKyc.verified) {
       setKycNotice(CHILD_KYC_PENDING_MESSAGE);
       window.setTimeout(() => {
