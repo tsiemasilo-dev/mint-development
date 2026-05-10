@@ -59,6 +59,38 @@ const formatPrecise = (value) => {
 
 const TIMEFRAME_DAYS = { d: 7, "5d": 5, m: 30, ytd: 365, all: 1825 };
 
+async function getSessionWithRetry() {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) return session;
+    if (attempt === 0) {
+      const { data } = await supabase.auth.refreshSession();
+      if (data?.session?.access_token) return data.session;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
+  }
+  return null;
+}
+
+async function fetchJsonWithAuth(url, token) {
+  let activeToken = token;
+  let res = await fetch(url, {
+    headers: { Authorization: `Bearer ${activeToken}` },
+  });
+
+  if (res.status === 401) {
+    const session = await getSessionWithRetry();
+    activeToken = session?.access_token;
+    if (activeToken) {
+      res = await fetch(url, {
+        headers: { Authorization: `Bearer ${activeToken}` },
+      });
+    }
+  }
+
+  return res.ok ? res.json() : null;
+}
+
 const SwipeableBalanceCard = ({
   userId,
   familyMemberId,        // For child dashboard — fetch child-specific holdings instead of parent
@@ -279,23 +311,14 @@ const SwipeableBalanceCard = ({
           }
         } else {
           // Parent mode: fetch from API endpoints
-          const sessionResult = await Promise.race([
-            supabase.auth.getSession(),
-            new Promise(resolve =>
-              setTimeout(() => resolve({ data: { session: null } }), 5000)
-            ),
-          ]);
+          const session = await getSessionWithRetry();
           if (cancelled) return;
-          const token = sessionResult?.data?.session?.access_token;
+          const token = session?.access_token;
 
           [holdingsRes, strategiesRes] = token
             ? await Promise.all([
-              fetch("/api/user/holdings", {
-                headers: { Authorization: `Bearer ${token}` },
-              }).then((r) => (r.ok ? r.json() : { holdings: [] })),
-              fetch("/api/user/strategies", {
-                headers: { Authorization: `Bearer ${token}` },
-              }).then((r) => (r.ok ? r.json() : { strategies: [] })),
+              fetchJsonWithAuth("/api/user/holdings", token).then((json) => json || { holdings: [] }),
+              fetchJsonWithAuth("/api/user/strategies", token).then((json) => json || { strategies: [] }),
             ])
             : [{ holdings: [] }, { strategies: [] }];
 

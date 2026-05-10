@@ -1579,7 +1579,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
 
       // Calculate minimums for all strategies
       if (enriched.length > 0) {
-        await calculateAllChildFriendlyMinimums(enriched);
+        calculateAllChildFriendlyMinimums(enriched);
       }
     } catch (e) {
       console.error("[child-dash] fetchChildFriendlyStrategies error", e);
@@ -1594,10 +1594,15 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     if (!supabase) return;
     try {
       const minimums = {};
-      for (const strategy of strategies) {
-        const minValue = await calculateMinInvestment(strategy, null);
+      await Promise.allSettled(strategies.map(async (strategy) => {
+        const fallback = strategy?.min_investment ? Math.round(strategy.min_investment / 100) : null;
+        const minValue = await withTimeout(
+          calculateMinInvestment(strategy, null),
+          5000,
+          "Strategy minimum calculation timed out"
+        ).catch(() => fallback);
         minimums[strategy.id] = minValue;
-      }
+      }));
 
       if (isMounted.current) {
         setChildFriendlyMinimums(minimums);
@@ -1610,13 +1615,17 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   async function fetchAll() {
     setLoading(true);
     try {
-      await Promise.all([
-        fetchHoldings(),
-        fetchParentWallet(),
-        fetchTransactions(),
-        fetchChildBalance(),
-        fetchChildProfile(),
-      ]);
+      await withTimeout(
+        Promise.allSettled([
+          fetchHoldings(),
+          fetchParentWallet(),
+          fetchTransactions(),
+          fetchChildBalance(),
+          fetchChildProfile(),
+        ]),
+        12000,
+        "Child dashboard load timed out"
+      );
     } catch (e) {
       console.error("[child-dash] fetchAll error", e);
     } finally {
@@ -1626,7 +1635,12 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
 
   async function fetchChildBalance() {
     try {
-      const res = await fetch(`/api/child-wallet?family_member_id=${child.id}`);
+      const res = await fetchWithTimeout(
+        `/api/child-wallet?family_member_id=${child.id}`,
+        {},
+        8000,
+        "Child wallet balance timed out"
+      );
       const json = await res.json();
       if (json.balance !== undefined && isMounted.current) {
         setChild(prev => ({ ...prev, available_balance: json.balance }));
