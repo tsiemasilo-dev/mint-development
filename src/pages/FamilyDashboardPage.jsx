@@ -30,6 +30,23 @@ function fmt(cents) {
 
 // ─── animation variants ──────────────────────────────────────────────────────
 
+function getChildKycState(child) {
+  const kycStatus = String(child?.kyc_status || "pending").toLowerCase();
+  const certificateStatus = String(child?.certificate_verification_status || "pending_review").toLowerCase();
+  const verified = certificateStatus === "verified" || kycStatus === "completed";
+  const rejected = kycStatus === "rejected" || certificateStatus === "rejected";
+
+  if (verified) {
+    return { label: "Verified", className: "bg-emerald-50 text-emerald-700 border-emerald-200", pulse: false };
+  }
+
+  if (rejected) {
+    return { label: "KYC Rejected", className: "bg-red-50 text-red-700 border-red-200", pulse: false };
+  }
+
+  return { label: "KYC Pending", className: "bg-amber-50 text-amber-700 border-amber-200", pulse: true };
+}
+
 const container = {
   hidden: {},
   show: { transition: { staggerChildren: 0.08, delayChildren: 0.05 } },
@@ -1442,12 +1459,7 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
                   const certVerified = certStatus === "verified";
                   const certIdMatched = certStatus === "id_matched_pending_review";
                   const certPending = !certVerified && !!child.certificate_url;
-                  const childKycStatus = String(child?.kyc_status || "pending").toLowerCase();
-                  const childKycLabel = childKycStatus === "completed"
-                    ? "KYC Completed"
-                    : childKycStatus === "rejected"
-                      ? "KYC Rejected"
-                      : "KYC Pending";
+                  const childKyc = getChildKycState(child);
                   return (
                     <motion.div key={child.id} variants={item} className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 8px rgba(91,33,182,0.07)" }}>
                       <div className="flex items-center gap-4 px-5 py-4">
@@ -1461,22 +1473,11 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
                               </span>
                               {age !== null && <span className="text-[11px] text-slate-400">{age} yr{age !== 1 ? "s" : ""}</span>}
                               <span
-                                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold tracking-wide border ${
-                                  childKycStatus === "completed"
-                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                    : childKycStatus === "rejected"
-                                      ? "bg-red-50 text-red-700 border-red-200"
-                                      : "bg-amber-50 text-amber-700 border-amber-200"
-                                }`}
+                                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold tracking-wide border ${childKyc.className}`}
                               >
-                                <span className={`h-1.5 w-1.5 rounded-full ${childKycStatus === "pending" ? "animate-pulse" : ""}`} style={{ backgroundColor: "currentColor" }} />
-                                {childKycLabel}
+                                <span className={`h-1.5 w-1.5 rounded-full ${childKyc.pulse ? "animate-pulse" : ""}`} style={{ backgroundColor: "currentColor" }} />
+                                {childKyc.label}
                               </span>
-                              {certVerified && (
-                                <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold bg-emerald-50 text-emerald-600">
-                                  <ShieldCheck className="h-2.5 w-2.5" />Verified
-                                </span>
-                              )}
                               {certIdMatched && !certVerified && (
                                 <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold bg-blue-50 text-blue-600">
                                   <Clock className="h-2.5 w-2.5" />ID Matched
