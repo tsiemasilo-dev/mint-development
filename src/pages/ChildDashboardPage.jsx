@@ -326,7 +326,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
       if (!supabase) return;
       const { data } = await supabase
         .from("strategies_c")
-        .select("id, name, short_name, description, risk_level, sector, tags, min_investment, is_featured, holdings")
+        .select("id, name, short_name, description, risk_level, sector, tags, min_investment, is_featured, holdings, strategy_metrics(*)")
         .eq("status", "active")
         .eq("is_kid_strategy", true)
         .order("is_featured", { ascending: false })
@@ -347,18 +347,32 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
         (secs || []).forEach(s => { secMap[s.symbol] = s; });
       }
 
-      // Fetch YTD returns from strategies_returns_c
-      const currentYear = new Date().getFullYear();
-      const yearStart = `${currentYear}-01-01`;
-      const { data: returnsData } = await supabase
-        .from("strategies_returns_c")
-        .select("strategy_id, ytd_return")
-        .gte("as_of_date", yearStart);
-
-      const returnsMap = {};
-      (returnsData || []).forEach(r => { returnsMap[r.strategy_id] = r.ytd_return; });
+      // Fetch latest YTD returns from strategies_returns_c, newest row per strategy.
+      const strategyIds = rows.map(s => s.id).filter(Boolean);
+      const ytdById = {};
+      if (strategyIds.length > 0) {
+        const { data: returns } = await supabase
+          .from("strategies_returns_c")
+          .select("strategy_id, ytd_pct, as_of_date")
+          .in("strategy_id", strategyIds)
+          .order("as_of_date", { ascending: false });
+        (returns || []).forEach((ret) => {
+          if (!ytdById[ret.strategy_id]) {
+            ytdById[ret.strategy_id] = {
+              ytd: ret.ytd_pct != null ? Number(ret.ytd_pct) / 100 : null,
+              as_of_date: ret.as_of_date,
+            };
+          }
+        });
+      }
 
       const enriched = rows.map(s => {
+        const metrics = Array.isArray(s.strategy_metrics)
+          ? [...s.strategy_metrics].sort((a, b) => (b.as_of_date || "").localeCompare(a.as_of_date || ""))[0]
+          : s.strategy_metrics;
+        const ytdData = ytdById[s.id];
+        const r_ytd = ytdData?.ytd ?? metrics?.r_ytd ?? metrics?.r_ytd_pct ?? metrics?.r_1y ?? null;
+        const ytd_as_of_date = ytdData?.as_of_date ?? metrics?.as_of_date ?? null;
         const holdingsList = (Array.isArray(s.holdings) ? s.holdings : [])
           .sort((a, b) => Number(b.weight || 0) - Number(a.weight || 0))
           .map(h => {
@@ -371,13 +385,13 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
               logo_url: security.logo_url || null,
             };
           });
-        return { ...s, holdingsList, ytd_return: returnsMap[s.id] };
+        return { ...s, r_ytd, ytd_return: r_ytd, ytd_as_of_date, holdingsList };
       });
 
       setStrategies(enriched);
 
       // Calculate minimums for all strategies
-      await calculateAllStrategiesMinimums(enriched);
+      calculateAllStrategiesMinimums(enriched);
     } catch (e) { console.error("[child-invest] strategies", e); }
     finally { setLoading(false); }
   }
@@ -389,10 +403,15 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
     }
     try {
       const minimums = {};
-      for (const strategy of strategies) {
-        const minValue = await calculateMinInvestment(strategy, null);
+      await Promise.allSettled(strategies.map(async (strategy) => {
+        const fallback = strategy?.min_investment ? Math.round(strategy.min_investment / 100) : null;
+        const minValue = await withTimeout(
+          calculateMinInvestment(strategy, null),
+          5000,
+          "Strategy minimum calculation timed out"
+        ).catch(() => fallback);
         minimums[strategy.id] = minValue;
-      }
+      }));
       setStrategyMinimums(minimums);
     } catch (error) {
       console.error("Error calculating strategy minimums:", error);
@@ -443,7 +462,11 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
     let isMounted = true;
     const calculateMin = async () => {
       try {
-        const minValue = await calculateMinInvestment(selected, null);
+        const minValue = await withTimeout(
+          calculateMinInvestment(selected, null),
+          5000,
+          "Strategy minimum calculation timed out"
+        );
         if (isMounted) setSelectedStrategyMinimum(minValue);
       } catch (error) {
         console.error("Error calculating min investment:", error);
@@ -578,7 +601,14 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
     };
   }, [selectedStrategyAnalytics]);
 
-  const selectedYtdPct = selected?.ytd_return ?? null;
+  const getYtdPct = (strategy) => {
+    if (strategy?.r_ytd == null) return null;
+    const value = Number(strategy.r_ytd);
+    if (!Number.isFinite(value)) return null;
+    return Math.abs(value) > 1 ? value : value * 100;
+  };
+
+  const selectedYtdPct = getYtdPct(selected);
   const previewChartLineColor = (selectedYtdPct ?? 0) > 0
     ? "#16a34a"
     : (selectedYtdPct ?? 0) < 0
@@ -934,7 +964,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
                   ) : (
                     <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-0.5">
                       {filtered.map((s) => {
-                        const ytdPct = s.ytd_return ?? null;
+                        const ytdPct = getYtdPct(s);
                         const isUp = (ytdPct ?? 0) >= 0;
                         return (
                           <button
