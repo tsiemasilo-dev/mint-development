@@ -62,6 +62,43 @@ function fetchWithTimeout(url, options, ms, message) {
     .finally(() => window.clearTimeout(timeoutId));
 }
 
+const CHILD_KYC_PENDING_MESSAGE = "Please wait until this child's KYC is verified before browsing strategies.";
+
+function getChildKycState(child) {
+  const kycStatus = String(child?.kyc_status || "pending").toLowerCase();
+  const certificateStatus = String(child?.certificate_verification_status || "pending_review").toLowerCase();
+  const verified = certificateStatus === "verified" || kycStatus === "completed";
+  const rejected = kycStatus === "rejected" || certificateStatus === "rejected";
+
+  if (verified) {
+    return {
+      status: "verified",
+      label: "Verified",
+      className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+      pulse: false,
+      verified: true,
+    };
+  }
+
+  if (rejected) {
+    return {
+      status: "rejected",
+      label: "KYC Rejected",
+      className: "bg-red-50 text-red-700 border-red-200",
+      pulse: false,
+      verified: false,
+    };
+  }
+
+  return {
+    status: "pending",
+    label: "KYC Pending",
+    className: "bg-amber-50 text-amber-700 border-amber-200",
+    pulse: true,
+    verified: false,
+  };
+}
+
 // --- Animation variants -----------------------------------------------------
 
 const container = {
@@ -1455,18 +1492,14 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   const [childFriendlyStrategies, setChildFriendlyStrategies] = useState([]);
   const [childFriendlyMinimums, setChildFriendlyMinimums] = useState({});
   const [childFriendlyLoading, setChildFriendlyLoading] = useState(true);
+  const [kycNotice, setKycNotice] = useState("");
 
   const childName = [child?.first_name, child?.last_name].filter(Boolean).join(" ") || "Child";
   const age = getAge(child?.date_of_birth);
   const parentName = [profile?.firstName, profile?.lastName].filter(Boolean).join(" ") || "Parent";
   const parentMintNumber = profile?.mintNumber || "";
   const childBalance = child?.available_balance || 0;
-  const childKycStatus = String(child?.kyc_status || "pending").toLowerCase();
-  const childKycLabel = childKycStatus === "completed"
-    ? "KYC Completed"
-    : childKycStatus === "rejected"
-      ? "KYC Rejected"
-      : "KYC Pending";
+  const childKyc = getChildKycState(child);
 
   const poaDone = !!child?.poa_declaration_url;
   const missingItems = [
@@ -1582,6 +1615,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
         fetchParentWallet(),
         fetchTransactions(),
         fetchChildBalance(),
+        fetchChildProfile(),
       ]);
     } catch (e) {
       console.error("[child-dash] fetchAll error", e);
@@ -1598,6 +1632,26 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
         setChild(prev => ({ ...prev, available_balance: json.balance }));
       }
     } catch (e) { console.error("[child-dash] balance", e); }
+  }
+
+  async function fetchChildProfile() {
+    try {
+      if (!supabase || !child?.id) return;
+      const { data, error } = await supabase
+        .from("family_members")
+        .select("id, available_balance, certificate_verification_status, kyc_status, kyc_pending, certificate_url, updated_at")
+        .eq("id", child.id)
+        .maybeSingle();
+      if (error) throw error;
+      if (data && isMounted.current) {
+        const nextChild = { ...child, ...data };
+        setChild(prev => ({ ...prev, ...data }));
+        return nextChild;
+      }
+    } catch (e) {
+      console.error("[child-dash] child profile", e);
+    }
+    return child;
   }
 
   async function fetchHoldings() {
@@ -1688,11 +1742,25 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
 
   async function openTransferModal() {
     setOpeningTransfer(true);
-    await Promise.all([fetchParentWallet(), fetchChildBalance()]);
+    await Promise.all([fetchParentWallet(), fetchChildBalance(), fetchChildProfile()]);
     if (isMounted.current) {
       setShowTransfer(true);
       setOpeningTransfer(false);
     }
+  }
+
+  async function openInvestModal() {
+    const latestChild = await fetchChildProfile();
+    const latestKyc = getChildKycState(latestChild);
+    if (!latestKyc.verified) {
+      setKycNotice(CHILD_KYC_PENDING_MESSAGE);
+      window.setTimeout(() => {
+        if (isMounted.current) setKycNotice("");
+      }, 5000);
+      return;
+    }
+    setKycNotice("");
+    setShowInvest(true);
   }
 
   async function fetchTransactions() {
@@ -1998,12 +2066,21 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             </motion.div>
           )}
 
+          {kycNotice && (
+            <motion.div variants={item}>
+              <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3.5 text-amber-800 shadow-sm">
+                <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                <p className="text-xs font-semibold leading-relaxed">{kycNotice}</p>
+              </div>
+            </motion.div>
+          )}
+
           {/* Quick Actions */}
           <motion.div variants={item}>
             <div className="grid grid-cols-4 gap-2 text-[11px] font-medium">
               {[
                 { label: "Learn", icon: BookOpen, onClick: null, comingSoon: true },
-                { label: "Invest", icon: LayoutGrid, onClick: () => setShowInvest(true) },
+                { label: "Invest", icon: LayoutGrid, onClick: openInvestModal },
                 { label: "Deposit", icon: ArrowDownToLine, onClick: openTransferModal, disabled: openingTransfer },
                 { label: "Goals", icon: Target, onClick: () => setShowGoalsModal(true) },
               ].map((btn, i) => {
@@ -2083,7 +2160,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                   {childFriendlyStrategies.map((strategy) => (
                     <button
                       key={strategy.id}
-                      onClick={() => setShowInvest(true)}
+                      onClick={openInvestModal}
                       className="w-full rounded-2xl border border-slate-200 bg-white shadow-md p-4 text-left transition hover:shadow-lg active:scale-[0.98]"
                     >
                       <div className="flex items-start justify-between gap-3 mb-3">
@@ -2264,7 +2341,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                   {`Start investing on ${childName}'s behalf to build their future portfolio.`}
                 </p>
                 <button
-                  onClick={() => setShowInvest(true)}
+                  onClick={openInvestModal}
                   className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-purple-600 hover:text-purple-700 transition"
                 >
                   <BarChart3 className="h-4 w-4" /> Browse Strategies
@@ -2415,16 +2492,10 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600">KYC Status</span>
                   <span
-                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide border ${
-                      childKycStatus === "completed"
-                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                        : childKycStatus === "rejected"
-                          ? "bg-red-50 text-red-700 border-red-200"
-                          : "bg-amber-50 text-amber-700 border-amber-200"
-                    }`}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide border ${childKyc.className}`}
                   >
-                    <span className={`h-1.5 w-1.5 rounded-full ${childKycStatus === "pending" ? "animate-pulse" : ""}`} style={{ backgroundColor: "currentColor" }} />
-                    {childKycLabel}
+                    <span className={`h-1.5 w-1.5 rounded-full ${childKyc.pulse ? "animate-pulse" : ""}`} style={{ backgroundColor: "currentColor" }} />
+                    {childKyc.label}
                   </span>
                 </div>
               </div>
