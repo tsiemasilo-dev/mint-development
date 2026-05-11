@@ -1,0 +1,48 @@
+20:49:31.336 Running build in Washington, D.C., USA (East) – iad1
+20:49:31.337 Build machine configuration: 4 cores, 8 GB
+20:49:31.465 Cloning github.com/mihle-matimba/mint-development (Branch: Mpumi's-Branch, Commit: 170f4e1)
+20:49:38.164 Warning: Failed to fetch one or more git submodules
+20:49:38.165 Cloning completed: 6.700s
+20:49:38.385 Restored build cache from previous deployment (GUvAWcVDViWATMN9nfq6RB56w14P)
+20:49:38.613 Running "vercel build"
+20:49:39.339 Vercel CLI 53.3.2
+20:49:40.147 Installing dependencies...
+20:49:41.368 
+20:49:41.369 up to date in 980ms
+20:49:41.369 
+20:49:41.369 76 packages are looking for funding
+20:49:41.369   run `npm fund` for details
+20:49:41.488 
+20:49:41.489 > mint@1.0.0 build
+20:49:41.489 > vite build
+20:49:41.489 
+20:49:41.727 vite v7.3.2 building client environment for production...
+20:49:42.084 transforming...
+20:49:42.347 
+20:49:42.347 ../assets/fonts/future-earth.ttf referenced in ../assets/fonts/future-earth.ttf didn't resolve at build time, it will remain unchanged to be resolved at runtime
+20:49:45.551 ✓ 2120 modules transformed.
+20:49:45.552 ✗ Build failed in 3.79s
+20:49:45.552 error during build:
+20:49:45.552 [vite:esbuild] Transform failed with 1 error:
+20:49:45.552 /vercel/path0/src/pages/ChildDashboardPage.jsx:1583:41: ERROR: Expected ";" but found "n"
+20:49:45.553 file: /vercel/path0/src/pages/ChildDashboardPage.jsx:1583:41
+20:49:45.553 
+20:49:45.553 Expected ";" but found "n"
+20:49:45.553 1581 |  
+20:49:45.553 1582 |        const enriched = rows.map(s => {
+20:49:45.553 1583 |          const ytdData = ytdById[s.id];`r`n        const r_ytd = ytdData?.ytd ?? null;
+20:49:45.553      |                                           ^
+20:49:45.553 1584 |          const ytd_as_of_date = ytdData?.as_of_date ?? null;
+20:49:45.553 1585 |          const holdingsList = (Array.isArray(s.holdings) ? s.holdings : [])
+20:49:45.553 
+20:49:45.553     at failureErrorWithLog (/vercel/path0/node_modules/esbuild/lib/main.js:1467:15)
+20:49:45.553     at /vercel/path0/node_modules/esbuild/lib/main.js:736:50
+20:49:45.553     at responseCallbacks.<computed> (/vercel/path0/node_modules/esbuild/lib/main.js:603:9)
+20:49:45.553     at handleIncomingPacket (/vercel/path0/node_modules/esbuild/lib/main.js:658:12)
+20:49:45.554     at Socket.readFromStdout (/vercel/path0/node_modules/esbuild/lib/main.js:581:7)
+20:49:45.554     at Socket.emit (node:events:508:28)
+20:49:45.554     at addChunk (node:internal/streams/readable:563:12)
+20:49:45.554     at readableAddChunkPushByteMode (node:internal/streams/readable:514:3)
+20:49:45.554     at Readable.push (node:internal/streams/readable:394:5)
+20:49:45.554     at Pipe.onStreamRead (node:internal/stream_base_commons:189:23)
+20:49:45.610 Error: Command "npm run build" exited with 1
