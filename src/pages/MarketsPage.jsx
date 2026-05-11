@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useMemo, useId } from "react";
 import { createPortal } from "react-dom";
 import MaintenanceModal from "../components/MaintenanceModal.jsx";
+import { registerCacheResetCallback } from "../lib/userCacheReset.js";
 import { supabase } from "../lib/supabase.js";
 import { getMarketsSecuritiesWithMetrics } from "../lib/marketData.js";
 import { getStrategiesWithMetrics, getPublicStrategies, formatChangePct, formatChangeAbs, getChangeColor } from "../lib/strategyData.js";
@@ -127,6 +128,11 @@ const StrategyMiniChart = ({ values }) => {
 let _mkSecurities = null;
 let _mkStrategies = null;
 let _mkPublicStrategies = null;
+
+registerCacheResetCallback(() => {
+  // Only clear user-specific strategies; securities/public strategies are the same for all users
+  _mkStrategies = null;
+});
 
 const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNewsArticle, onOpenFactsheet, initialViewMode, onViewModeChange }) => {
   const { profile, loading: profileLoading } = useProfile();

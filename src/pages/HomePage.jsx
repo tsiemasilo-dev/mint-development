@@ -33,6 +33,7 @@ import { useFinancialData, useInvestments } from "../lib/useFinancialData";
 import { useRealtimePrices } from "../lib/useRealtimePrices";
 import { getHoldingsArray, normalizeSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot } from "../lib/strategyUtils";
 import HomeSkeleton from "../components/HomeSkeleton";
+import { registerCacheResetCallback } from "../lib/userCacheReset.js";
 import Skeleton from "../components/Skeleton";
 import SwipeableBalanceCard from "../components/SwipeableBalanceCard";
 import OutstandingActionsSection from "../components/OutstandingActionsSection";
@@ -51,6 +52,12 @@ const CARD_VISIBILITY_KEY = "mintBalanceVisible";
 let _cachedBestAssets = [];
 let _cachedBestStrategies = [];
 let _cachedHasAnyHoldings = false;
+
+registerCacheResetCallback(() => {
+  _cachedBestAssets = [];
+  _cachedBestStrategies = [];
+  _cachedHasAnyHoldings = false;
+});
 
 const HomePage = ({
   onOpenNotifications,

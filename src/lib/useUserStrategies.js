@@ -1,10 +1,17 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "./supabase";
 import { getStrategyPriceHistory } from "./strategyData";
+import { registerCacheResetCallback } from "./userCacheReset.js";
 
 // Module-level cache — survives unmount/remount when navigating between tabs,
 // so the Portfolio page shows last known strategies instead of an empty skeleton.
 let _cachedStrategiesData = null;
+
+export function clearUserStrategiesCache() {
+  _cachedStrategiesData = null;
+}
+
+registerCacheResetCallback(clearUserStrategiesCache);
 
 export const useUserStrategies = () => {
   const [data, setData] = useState(_cachedStrategiesData || {
