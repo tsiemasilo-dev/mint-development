@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo, lazy, Suspense } from "react";
 import { supabase } from "./lib/supabase.js";
 import { setCachedSession, clearSessionCache } from "./lib/sessionCache.js";
+import { clearAllUserCaches } from "./lib/userCacheReset.js";
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import SwipeBackWrapper from "./components/SwipeBackWrapper.jsx";
@@ -173,6 +174,7 @@ const App = () => {
 
   const justLoggedInRef = useRef(false);
   const intentionalLogoutRef = useRef(false);
+  const lastAuthUserIdRef = useRef(null);
 
   const handleBeforeLogout = () => {
     intentionalLogoutRef.current = true;
@@ -524,6 +526,7 @@ const App = () => {
         handleRecoveryFlow();
       }
       if (event === 'SIGNED_OUT') {
+        clearAllUserCaches();
         clearUserStorage();
         if (resetNotifications) resetNotifications();
 
@@ -554,9 +557,17 @@ const App = () => {
       }
       if (event === 'SIGNED_IN' && session) {
         setCachedSession(session);
+        // If a different user just logged in, nuke all stale caches immediately
+        // so they never see the previous user's data
+        const incomingId = session.user?.id;
+        if (incomingId && incomingId !== lastAuthUserIdRef.current) {
+          clearAllUserCaches();
+        }
+        lastAuthUserIdRef.current = incomingId || null;
       }
       if (event === 'SIGNED_OUT') {
         clearSessionCache();
+        lastAuthUserIdRef.current = null;
       }
     });
 

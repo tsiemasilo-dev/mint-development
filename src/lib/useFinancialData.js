@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "./supabase";
 import { logDebug, CAT } from "./debugLog.js";
 import { getCachedSession, setCachedSession } from "./sessionCache.js";
+import { registerCacheResetCallback } from "./userCacheReset.js";
 
 async function getAuthToken() {
   if (!supabase) return null;
@@ -277,6 +278,14 @@ export const useFinancialData = () => {
 };
 
 let _mintBalanceCache = null;
+
+export function clearUserFinancialCache() {
+  _mintBalanceCache = null;
+  _txCache = null;
+  _txCacheLimit = null;
+}
+
+registerCacheResetCallback(clearUserFinancialCache);
 
 export const useMintBalance = () => {
   const [data, setData] = useState(() => _mintBalanceCache || {
