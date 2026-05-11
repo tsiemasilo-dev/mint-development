@@ -13,7 +13,7 @@ import Skeleton from "../components/Skeleton";
 import { ChartContainer } from "../components/ui/line-charts-2";
 import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatCurrency } from "../lib/formatCurrency";
-import { normalizeSymbol, getHoldingsArray, getHoldingSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot, calculateMinInvestment, getAdjustedShares } from "../lib/strategyUtils";
+import { normalizeSymbol, getHoldingsArray, getHoldingSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot, calculateMinInvestment, calculateMinInvestmentSync, getAdjustedShares } from "../lib/strategyUtils";
 
 const sortOptions = ["Market Cap", "Dividend Yield", "P/E Ratio", "1M Performance", "YTD Performance"];
 
@@ -124,17 +124,21 @@ const StrategyMiniChart = ({ values }) => {
   );
 };
 
+let _mkSecurities = null;
+let _mkStrategies = null;
+let _mkPublicStrategies = null;
+
 const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNewsArticle, onOpenFactsheet, initialViewMode, onViewModeChange }) => {
   const { profile, loading: profileLoading } = useProfile();
   const [portalTarget, setPortalTarget] = useState(null);
-  const [securities, setSecurities] = useState([]);
-  const [strategies, setStrategies] = useState([]);
-  const [publicStrategies, setPublicStrategies] = useState([]);
+  const [securities, setSecurities] = useState(() => _mkSecurities || []);
+  const [strategies, setStrategies] = useState(() => _mkStrategies || []);
+  const [publicStrategies, setPublicStrategies] = useState(() => _mkPublicStrategies || []);
   const [holdingsSecurities, setHoldingsSecurities] = useState([]);
   const [newsArticles, setNewsArticles] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [strategiesLoading, setStrategiesLoading] = useState(true);
-  const [publicStrategiesLoading, setPublicStrategiesLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !_mkSecurities);
+  const [strategiesLoading, setStrategiesLoading] = useState(() => !_mkStrategies);
+  const [publicStrategiesLoading, setPublicStrategiesLoading] = useState(() => !_mkPublicStrategies);
   const [searchQuery, setSearchQuery] = useState("");
   const [strategiesSearchQuery, setStrategiesSearchQuery] = useState("");
   const [newsSearchQuery, setNewsSearchQuery] = useState("");
@@ -244,13 +248,11 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
 
   useEffect(() => {
     const fetchSecurities = async () => {
+      if (_mkSecurities) { setLoading(false); return; }
       setLoading(true);
-      
       try {
         const data = await getMarketsSecuritiesWithMetrics();
-        console.log("📊 Fetched securities:", data);
-        console.log("📊 Securities with prices:", data.filter(s => s.currentPrice != null).length);
-        console.log("📊 Securities without prices:", data.filter(s => s.currentPrice == null).length);
+        _mkSecurities = data;
         setSecurities(data);
       } catch (error) {
         console.error("Error fetching securities:", error);
@@ -265,11 +267,11 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   // Fetch strategies with metrics
   useEffect(() => {
     const fetchStrategies = async () => {
+      if (_mkStrategies) { setStrategiesLoading(false); return; }
       setStrategiesLoading(true);
-      
       try {
         const data = await getStrategiesWithMetrics();
-        console.log("✅ Fetched strategies:", data);
+        _mkStrategies = data;
         setStrategies(data);
       } catch (error) {
         console.error("Error fetching strategies:", error);
@@ -285,11 +287,11 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   // Fetch public strategies for OpenStrategies view
   useEffect(() => {
     const fetchPublicStrategies = async () => {
+      if (_mkPublicStrategies) { setPublicStrategiesLoading(false); return; }
       setPublicStrategiesLoading(true);
-      
       try {
         const data = await getPublicStrategies();
-        console.log("✅ Fetched public strategies:", data);
+        _mkPublicStrategies = data;
         setPublicStrategies(data);
       } catch (error) {
         console.error("Error fetching public strategies:", error);
@@ -533,7 +535,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
         ? selectedRisks.has(strategy.risk_level)
         : true;
       
-      const minInvest = calculateMinInvestment(strategy, holdingsBySymbol);
+      const minInvest = calculateMinInvestmentSync(strategy, holdingsBySymbol);
       let investmentCategory = null;
       if (minInvest != null) {
         if (minInvest >= 10000) investmentCategory = "R10,000+";
@@ -575,7 +577,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       sorted.sort((a, b) => (b.performance_score || 0) - (a.performance_score || 0));
     }
     if (strategySort === "Lowest minimum") {
-      sorted.sort((a, b) => (calculateMinInvestment(a, holdingsBySymbol) || 0) - (calculateMinInvestment(b, holdingsBySymbol) || 0));
+      sorted.sort((a, b) => (calculateMinInvestmentSync(a, holdingsBySymbol) || 0) - (calculateMinInvestmentSync(b, holdingsBySymbol) || 0));
     }
 
     return sorted;
@@ -1698,7 +1700,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                           : strategy.description
                         : '';
                       
-                      const calcMin = calculateMinInvestment(strategy, holdingsBySymbol);
+                      const calcMin = calculateMinInvestmentSync(strategy, holdingsBySymbol);
                       const formattedMinInvestment = calcMin ? `Min. ${formatCurrency(calcMin, "R")}` : null;
                       
                       const sparkline = [20, 22, 21, 24, 26, 25, 28, 30, 29, 32];
@@ -1919,14 +1921,14 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 <div className="flex-1">
                   <h2 className="text-lg font-semibold text-slate-900">{selectedStrategy.name}</h2>
                   <p className="text-sm text-slate-500">
-                    {calculateMinInvestment(selectedStrategy, holdingsBySymbol) ? `Min. ${formatCurrency(calculateMinInvestment(selectedStrategy, holdingsBySymbol), "R")}` : "Calculating..."}
+                    {calculateMinInvestmentSync(selectedStrategy, holdingsBySymbol) ? `Min. ${formatCurrency(calculateMinInvestmentSync(selectedStrategy, holdingsBySymbol), "R")}` : "Calculating..."}
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-3 mb-6">
                 {(() => {
-                  const minInvest = calculateMinInvestment(selectedStrategy, holdingsBySymbol);
+                  const minInvest = calculateMinInvestmentSync(selectedStrategy, holdingsBySymbol);
                   return minInvest ? (
                     <>
                       <p className="text-2xl font-semibold text-slate-900">
@@ -2096,7 +2098,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                     const sec = holdingsBySymbol.get(sym) || holdingsBySymbol.get(normalizeSymbol(sym));
                     return { ...h, logo_url: sec?.logo_url || null, shares: getAdjustedShares(h, holdingsBySymbol) };
                   });
-                  onOpenFactsheet({ ...selectedStrategy, calculatedMinInvestment: calculateMinInvestment(selectedStrategy, holdingsBySymbol), holdingsWithLogos: enrichedHoldings });
+                  onOpenFactsheet({ ...selectedStrategy, calculatedMinInvestment: calculateMinInvestmentSync(selectedStrategy, holdingsBySymbol), holdingsWithLogos: enrichedHoldings });
                 }}
                 className="mt-6 w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-4 font-semibold text-white shadow-lg transition-all active:scale-95"
               >

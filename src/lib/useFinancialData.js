@@ -276,8 +276,10 @@ export const useFinancialData = () => {
   return { ...data, refetch: fetchData };
 };
 
+let _mintBalanceCache = null;
+
 export const useMintBalance = () => {
-  const [data, setData] = useState({
+  const [data, setData] = useState(() => _mintBalanceCache || {
     totalBalance: 0,
     investments: 0,
     availableCredit: 0,
@@ -336,7 +338,7 @@ export const useMintBalance = () => {
           amount: formatTransactionAmount((t.amount || 0) / 100, t.direction),
         }));
 
-        setData({
+        const nextData = {
           totalBalance,
           investments: totalInvestments,
           availableCredit,
@@ -344,7 +346,9 @@ export const useMintBalance = () => {
           recentChanges,
           loading: false,
           error: null,
-        });
+        };
+        _mintBalanceCache = nextData;
+        setData(nextData);
       } catch (err) {
         console.error("Error fetching mint balance:", err);
         setData((prev) => ({ ...prev, loading: false, error: err.message }));
@@ -363,9 +367,16 @@ export const useMintBalance = () => {
   return data;
 };
 
+let _txCache = null;
+let _txCacheLimit = null;
+
 export const useTransactions = (limit = 20) => {
-  const [transactions, setTransactions] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [transactions, setTransactions] = useState(() =>
+    _txCache && _txCacheLimit === limit ? _txCache : []
+  );
+  const [loading, setLoading] = useState(() =>
+    !(_txCache && _txCacheLimit === limit)
+  );
 
   useEffect(() => {
     const fetchTransactions = async () => {
@@ -382,6 +393,8 @@ export const useTransactions = (limit = 20) => {
         }
 
         const data = await fetchServerTransactions(token, limit);
+        _txCache = data;
+        _txCacheLimit = limit;
         setTransactions(data);
       } catch (err) {
         console.error("Error fetching transactions:", err);

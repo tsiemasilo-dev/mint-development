@@ -22,7 +22,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { calculateMinInvestment, buildHoldingsBySymbol, getHoldingsArray, normalizeSymbol } from "../lib/strategyUtils.js";
+import { calculateMinInvestmentSync, buildHoldingsBySymbol, getHoldingsArray, normalizeSymbol } from "../lib/strategyUtils.js";
 
 // --- helpers ----------------------------------------------------------------
 
@@ -396,22 +396,12 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
     finally { setLoading(false); }
   }
 
-  async function calculateAllStrategiesMinimums(strategies) {
-    if (!supabase) {
-      setMinimumLoading(false);
-      return;
-    }
+  function calculateAllStrategiesMinimums(strategies) {
     try {
       const minimums = {};
-      await Promise.allSettled(strategies.map(async (strategy) => {
-        const fallback = strategy?.min_investment ? Math.round(strategy.min_investment / 100) : null;
-        const minValue = await withTimeout(
-          calculateMinInvestment(strategy, null),
-          5000,
-          "Strategy minimum calculation timed out"
-        ).catch(() => fallback);
-        minimums[strategy.id] = minValue;
-      }));
+      for (const strategy of strategies) {
+        minimums[strategy.id] = calculateMinInvestmentSync(strategy, new Map());
+      }
       setStrategyMinimums(minimums);
     } catch (error) {
       console.error("Error calculating strategy minimums:", error);
@@ -459,23 +449,8 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
       return;
     }
 
-    let isMounted = true;
-    const calculateMin = async () => {
-      try {
-        const minValue = await withTimeout(
-          calculateMinInvestment(selected, null),
-          5000,
-          "Strategy minimum calculation timed out"
-        );
-        if (isMounted) setSelectedStrategyMinimum(minValue);
-      } catch (error) {
-        console.error("Error calculating min investment:", error);
-        if (isMounted) setSelectedStrategyMinimum(selected?.min_investment ? Math.round(selected.min_investment / 100) : null);
-      }
-    };
-
-    calculateMin();
-    return () => { isMounted = false; };
+    const minValue = calculateMinInvestmentSync(selected, new Map());
+    setSelectedStrategyMinimum(minValue);
   }, [selected]);
 
   useEffect(() => {
@@ -1624,15 +1599,9 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     if (!supabase) return;
     try {
       const minimums = {};
-      await Promise.allSettled(strategies.map(async (strategy) => {
-        const fallback = strategy?.min_investment ? Math.round(strategy.min_investment / 100) : null;
-        const minValue = await withTimeout(
-          calculateMinInvestment(strategy, null),
-          5000,
-          "Strategy minimum calculation timed out"
-        ).catch(() => fallback);
-        minimums[strategy.id] = minValue;
-      }));
+      for (const strategy of strategies) {
+        minimums[strategy.id] = calculateMinInvestmentSync(strategy, new Map());
+      }
 
       if (isMounted.current) {
         setChildFriendlyMinimums(minimums);

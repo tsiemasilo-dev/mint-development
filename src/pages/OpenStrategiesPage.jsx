@@ -8,7 +8,7 @@ import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer } from "r
 import { supabase } from "../lib/supabase";
 import { getStrategiesWithMetrics, formatChangePct, formatChangeAbs, getChangeColor } from "../lib/strategyData.js";
 import { formatCurrency } from "../lib/formatCurrency";
-import { normalizeSymbol, getHoldingsArray, getHoldingSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot, calculateMinInvestment, getAdjustedShares } from "../lib/strategyUtils";
+import { normalizeSymbol, getHoldingsArray, getHoldingSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot, calculateMinInvestmentSync, getAdjustedShares } from "../lib/strategyUtils";
 
 const sortOptions = [
   "Recommended",
@@ -241,45 +241,15 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
     };
   }, [strategies]);
 
-  // Calculate minimums for all strategies using latest stock_intraday_c prices
+  // Calculate minimums synchronously from already-loaded holdingsBySymbol prices
   useEffect(() => {
-    let isMounted = true;
-
-    const calculateAllMinimums = async () => {
-      if (strategies.length === 0) return;
-
-      if (!supabase) {
-        console.error("❌ Supabase is null/undefined in calculateAllMinimums");
-        if (isMounted) setMinimumLoading(false);
-        return;
-      }
-
-      console.log(`🧮 Calculating minimums for ${strategies.length} strategies`);
-      const minimums = {};
-
-      for (const strategy of strategies) {
-        try {
-          const minValue = await calculateMinInvestment(strategy, holdingsBySymbol);
-          minimums[strategy.id] = minValue;
-        } catch (error) {
-          console.warn(`Error calculating minimum for ${strategy.name}:`, error.message);
-          minimums[strategy.id] = null;
-        }
-      }
-
-      if (isMounted) {
-        console.log(`✅ Calculated minimums for ${Object.keys(minimums).length} strategies`, minimums);
-        setStrategyMinimums(minimums);
-        setMinimumLoading(false);
-      }
-    };
-
-    setMinimumLoading(true);
-    calculateAllMinimums();
-
-    return () => {
-      isMounted = false;
-    };
+    if (strategies.length === 0) return;
+    const minimums = {};
+    for (const strategy of strategies) {
+      minimums[strategy.id] = calculateMinInvestmentSync(strategy, holdingsBySymbol);
+    }
+    setStrategyMinimums(minimums);
+    setMinimumLoading(false);
   }, [strategies, holdingsBySymbol]);
 
   const series = [
