@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "./supabase";
+import { logDebug, CAT } from "./debugLog.js";
 
 async function getAuthToken() {
   if (!supabase) return null;
@@ -126,7 +127,8 @@ export const useFinancialData = () => {
       : { ...emptyFinancialData, loading: true }
   );
 
-  const fetchData = useCallback(async ({ silent = false } = {}) => {
+  const fetchData = useCallback(async ({ silent = false, _trigger = "unknown" } = {}) => {
+    logDebug(CAT.FETCH, `📥 useFinancialData fetch start — trigger: ${_trigger}, silent: ${silent}`);
     if (!supabase) {
       setData((prev) => ({ ...prev, loading: false, error: "Database not connected" }));
       return;
@@ -216,6 +218,7 @@ export const useFinancialData = () => {
       financialDataLastFetch = Date.now();
       setData(newData);
 
+      logDebug(CAT.FETCH, `✅ useFinancialData done — balance: R${walletBalance}`, { walletBalance, totalInvestments });
       console.log("[useFinancialData] Updated balance from DB:", walletBalance);
     } catch (err) {
       console.error("Error fetching financial data:", err);
@@ -229,17 +232,18 @@ export const useFinancialData = () => {
 
   useEffect(() => {
     if (financialDataCache) {
-      fetchData({ silent: true });
+      fetchData({ silent: true, _trigger: "mount-with-cache" });
       return;
     }
     const safetyTimer = setTimeout(() => {
       setData((prev) => {
         if (!prev.loading) return prev;
         console.warn("[useFinancialData] Safety timeout reached, unblocking UI");
+        logDebug(CAT.LOADING, "⏱ Safety timer fired — useFinancialData loading forced off after 15 s");
         return { ...prev, loading: false };
       });
     }, 15000);
-    fetchData().finally(() => clearTimeout(safetyTimer));
+    fetchData({ _trigger: "mount-no-cache" }).finally(() => clearTimeout(safetyTimer));
     return () => clearTimeout(safetyTimer);
   }, [fetchData]);
 
@@ -247,11 +251,17 @@ export const useFinancialData = () => {
     const handleVisibility = () => {
       if (document.visibilityState !== "visible") return;
       const now = Date.now();
-      if (now - financialDataLastFetch < VISIBILITY_REFETCH_COOLDOWN_MS) return;
-      fetchData({ silent: true });
+      const timeSinceLast = now - financialDataLastFetch;
+      if (timeSinceLast < VISIBILITY_REFETCH_COOLDOWN_MS) {
+        logDebug(CAT.VISIBILITY, `👁  useFinancialData skip refetch — cooldown (${Math.round(timeSinceLast / 1000)}s < 45s)`);
+        return;
+      }
+      logDebug(CAT.VISIBILITY, "👁  useFinancialData refetch triggered by tab focus");
+      fetchData({ silent: true, _trigger: "visibility" });
     };
     const handleUpdate = () => {
-      fetchData();
+      logDebug(CAT.FETCH, "📡 useFinancialData refetch via financial-data-updated event");
+      fetchData({ _trigger: "event" });
     };
     document.addEventListener("visibilitychange", handleVisibility);
     window.addEventListener("financial-data-updated", handleUpdate);

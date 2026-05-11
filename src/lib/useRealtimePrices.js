@@ -1,5 +1,6 @@
 import { useSyncExternalStore, useCallback } from "react";
 import { supabase } from "./supabase";
+import { logDebug, CAT } from "./debugLog.js";
 
 const globalState = {
   lastUpdated: null,
@@ -40,6 +41,7 @@ export function setupRealtimePrices() {
   if (!supabase || globalState.channel || globalState.isSettingUp) return;
 
   globalState.isSettingUp = true;
+  logDebug(CAT.REALTIME, "🔌 Realtime prices subscription — SETTING UP");
   console.log("[realtime-prices] Setting up singleton subscription");
 
   globalState.channel = supabase
@@ -112,6 +114,7 @@ export function setupRealtimePrices() {
 
 export function teardownRealtimePrices() {
   if (globalState.channel) {
+    logDebug(CAT.REALTIME, "🔌 Realtime prices subscription — TEARING DOWN (triggers chart re-fetch via lastUpdated)");
     console.log("[realtime-prices] Tearing down subscription");
     supabase.removeChannel(globalState.channel);
     globalState.channel = null;
