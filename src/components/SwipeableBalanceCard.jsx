@@ -30,6 +30,12 @@ import {
 
 const VISIBILITY_STORAGE_KEY = "mintBalanceVisible";
 
+// Module-level data cache — survives unmount/remount when the user switches
+// homeTab values (balance ↔ invest ↔ wallet), preventing the R0 flash that
+// occurs because each new instance starts with totalMarketValue: 0.
+// Keyed by `userId:familyMemberId` so child-mode data stays separate.
+const _cardDataCache = {};
+
 // Wraps a Supabase query promise with a timeout so hung queries fail fast
 function withTimeout(promise, ms = 4000) {
   return Promise.race([
@@ -112,6 +118,7 @@ const SwipeableBalanceCard = ({
   managedByLabel,        // For child cards: "Managed by parent · Age X · Independent at Y"
 }) => {
   const childMode = !!familyMemberId;
+  const _cacheKey = `${userId || ''}:${familyMemberId || ''}`;
   const [activeTab, setActiveTab] = useState("m");
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -221,7 +228,9 @@ const SwipeableBalanceCard = ({
   }, [isOpen]);
 
   const [selectedAsset, setSelectedAsset] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // Pre-populate from module-level cache so re-mounts (e.g. homeTab switch)
+  // show the last known data immediately instead of flashing R0 + skeleton.
+  const [loading, setLoading] = useState(() => !_cardDataCache[_cacheKey]);
   const [chartData, setChartData] = useState([]);
   const [chartLoading, setChartLoading] = useState(false);
   const [returnData5d, setReturnData5d] = useState({ pnl: 0, pct: 0 });
@@ -245,7 +254,7 @@ const SwipeableBalanceCard = ({
     }
   };
 
-  const [dbData, setDbData] = useState({
+  const [dbData, setDbData] = useState(() => _cardDataCache[_cacheKey] || {
     holdings: [],
     totalMarketValue: 0,
     totalInvested: 0,
@@ -444,13 +453,18 @@ const SwipeableBalanceCard = ({
           }))
         });
 
-        setDbData({
+        const nextDbData = {
           holdings: enrichedHoldings,
           totalMarketValue: mValue,
           totalInvested: invested,
           totalInvestedAmount: investedAmount,
           holdingsCount: enrichedHoldings.length,
-        });
+        };
+        // Persist in module-level cache so subsequent re-mounts skip skeleton
+        if (mValue > 0 || enrichedHoldings.length > 0) {
+          _cardDataCache[_cacheKey] = nextDbData;
+        }
+        setDbData(nextDbData);
       } catch (err) {
         console.error("❌ [SwipeableBalanceCard] Load data error:", err);
       } finally {
