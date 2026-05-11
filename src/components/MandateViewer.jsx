@@ -64,12 +64,19 @@ const CHECKBOX_GROUPS = {
   lim_risk: ["lim-rp-0", "lim-rp-1", "lim-rp-2", "lim-rp-3", "lim-rp-4"],
 };
 
-const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData }) => {
+const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, requestTab }) => {
   const [activeTab, setActiveTab] = useState(0);
   const [initials, setInitials] = useState(savedData?.initials || "");
   const scrollRef = useRef(null);
   const fullRef = useRef(null);
   const limitedRef = useRef(null);
+
+  useEffect(() => {
+    if (requestTab !== undefined && requestTab !== null) {
+      setActiveTab(requestTab);
+      if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    }
+  }, [requestTab]);
   const [checkedBoxes, setCheckedBoxes] = useState(savedData?.checkedBoxes || {});
   const [showErrors, setShowErrors] = useState(false);
   const [discretionType, setDiscretionType] = useState(savedData?.discretionType || null);
