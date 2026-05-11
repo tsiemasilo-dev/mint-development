@@ -3,16 +3,49 @@ import { supabase } from "./supabase";
 
 async function getAuthToken() {
   if (!supabase) return null;
-  const { data: { session } } = await supabase.auth.getSession();
-  return session?.access_token || null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) return session.access_token;
+    if (attempt === 0) {
+      const { data: refreshData } = await supabase.auth.refreshSession();
+      if (refreshData?.session?.access_token) return refreshData.session.access_token;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
+  }
+  return null;
+}
+
+function getHoldingsList(result) {
+  if (Array.isArray(result)) return result;
+  if (Array.isArray(result?.holdings)) return result.holdings;
+  return [];
+}
+
+function getClosedHoldingsList(result) {
+  if (Array.isArray(result?.closedHoldings)) return result.closedHoldings;
+  return [];
 }
 
 async function fetchServerHoldings(token) {
   try {
-    const res = await fetch("/api/user/holdings", {
-      headers: { Authorization: `Bearer ${token}` },
+    let activeToken = token || await getAuthToken();
+    if (!activeToken) return { holdings: [], closedHoldings: [] };
+
+    let res = await fetch("/api/user/holdings", {
+      headers: { Authorization: `Bearer ${activeToken}` },
       signal: AbortSignal.timeout(12000),
     });
+
+    if (res.status === 401) {
+      activeToken = await getAuthToken();
+      if (activeToken) {
+        res = await fetch("/api/user/holdings", {
+          headers: { Authorization: `Bearer ${activeToken}` },
+          signal: AbortSignal.timeout(12000),
+        });
+      }
+    }
+
     if (!res.ok) {
       console.error("Failed to fetch holdings from server:", res.status);
       return { holdings: [], closedHoldings: [] };
@@ -31,10 +64,24 @@ async function fetchServerHoldings(token) {
 
 async function fetchServerTransactions(token, limit = 50) {
   try {
-    const res = await fetch(`/api/user/transactions?limit=${limit}`, {
-      headers: { Authorization: `Bearer ${token}` },
+    let activeToken = token || await getAuthToken();
+    if (!activeToken) return [];
+
+    let res = await fetch(`/api/user/transactions?limit=${limit}`, {
+      headers: { Authorization: `Bearer ${activeToken}` },
       signal: AbortSignal.timeout(12000),
     });
+
+    if (res.status === 401) {
+      activeToken = await getAuthToken();
+      if (activeToken) {
+        res = await fetch(`/api/user/transactions?limit=${limit}`, {
+          headers: { Authorization: `Bearer ${activeToken}` },
+          signal: AbortSignal.timeout(12000),
+        });
+      }
+    }
+
     if (!res.ok) {
       console.error("Failed to fetch transactions from server:", res.status);
       return [];
@@ -98,7 +145,7 @@ export const useFinancialData = () => {
         supabase.from("wallets").select("balance").eq("user_id", userId).maybeSingle(),
       ]);
 
-      const safeHoldings = Array.isArray(holdings) ? holdings : [];
+      const safeHoldings = getHoldingsList(holdings);
       const safeTxns = Array.isArray(allServerTransactions) ? allServerTransactions : [];
       const transactions = safeTxns.slice(0, 20);
       const allTransactions = safeTxns;
@@ -142,7 +189,7 @@ export const useFinancialData = () => {
         investments: totalInvestments,
         availableCredit,
         transactions,
-        holdings,
+        holdings: safeHoldings,
         creditInfo,
         bestAssets,
         loading: false,
@@ -226,7 +273,7 @@ export const useMintBalance = () => {
           fetchServerTransactions(token, 100),
         ]);
 
-        const holdings = Array.isArray(holdingsRaw) ? holdingsRaw : [];
+        const holdings = getHoldingsList(holdingsRaw);
         const allServerTransactions = Array.isArray(allServerTransactionsRaw) ? allServerTransactionsRaw : [];
         const recentTransactions = allServerTransactions.slice(0, 10);
         const allTransactions = allServerTransactions;
@@ -423,8 +470,8 @@ export const useInvestments = () => {
         supabase.from("investment_goals").select("*").eq("user_id", userId),
       ]);
 
-      const holdings = holdingsResult.holdings;
-      const closedHoldings = holdingsResult.closedHoldings;
+      const holdings = getHoldingsList(holdingsResult);
+      const closedHoldings = getClosedHoldingsList(holdingsResult);
       const goals = goalsResult.data || [];
 
       const liveHV = (h) => h.last_price != null && h.quantity != null ? (h.last_price * h.quantity) / 100 : (h.market_value || 0) / 100;
