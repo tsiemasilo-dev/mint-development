@@ -508,15 +508,19 @@ function AddMemberModal({ type, userId, profile, coGuardians = [], onSave, onClo
       }
 
       // 2. Patch family member record
+      // address_completed:true marks onboarding as finished — ChildDashboardPage
+      // reads this (along with the individual fields) to hide the "Complete
+      // profile" banner. Without it, every revisit re-prompts to sign.
       const updateRes = await fetch(`/api/family-members/${newChildMember.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           signed_agreement_url: uploadJson.publicUrl,
           signed_at: signedAt,
+          address_completed: true,
         }),
       });
-      
+
       if (!updateRes.ok) {
         // Fallback for older API versions or missing endpoint
         console.warn("[family] PATCH failed, trying metadata update via Supabase directly");
@@ -525,14 +529,16 @@ function AddMemberModal({ type, userId, profile, coGuardians = [], onSave, onClo
           .update({
             signed_agreement_url: uploadJson.publicUrl,
             signed_at: signedAt,
+            address_completed: true,
           })
           .eq("id", newChildMember.id);
       }
 
-      const finalMember = { 
-        ...newChildMember, 
-        signed_agreement_url: uploadJson.publicUrl, 
-        signed_at: signedAt 
+      const finalMember = {
+        ...newChildMember,
+        signed_agreement_url: uploadJson.publicUrl,
+        signed_at: signedAt,
+        address_completed: true,
       };
       setChildComplete({ member: finalMember });
       return true;
