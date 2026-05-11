@@ -40,6 +40,7 @@ import TransactionHistorySection from "../components/TransactionHistorySection";
 import SettlementBadge from "../components/PendingBadge";
 import NotificationBell from "../components/NotificationBell";
 import FamilyDropdown from "../components/FamilyDropdown";
+import HomeSkeleton from "../components/HomeSkeleton";
 
 // Feature flags — set VITE_ENABLE_INSURE=true in Replit Secrets to preview.
 // Leave unset in Vercel production to keep the feature hidden from live users.
@@ -645,7 +646,7 @@ const HomePage = ({
 
 
   if (loading) {
-    return null;
+    return <HomeSkeleton />;
   }
 
   const handleMintBalancePress = () => {
