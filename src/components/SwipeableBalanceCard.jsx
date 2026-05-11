@@ -231,6 +231,7 @@ const SwipeableBalanceCard = ({
   // Pre-populate from module-level cache so re-mounts (e.g. homeTab switch)
   // show the last known data immediately instead of flashing R0 + skeleton.
   const [loading, setLoading] = useState(() => !_cardDataCache[_cacheKey]);
+  const [dataSettled, setDataSettled] = useState(() => !!_cardDataCache[_cacheKey]?.totalMarketValue);
   const [chartData, setChartData] = useState([]);
   const [chartLoading, setChartLoading] = useState(false);
   const [returnData5d, setReturnData5d] = useState({ pnl: 0, pct: 0 });
@@ -284,6 +285,7 @@ const SwipeableBalanceCard = ({
     const safetyTimer = setTimeout(() => {
       if (!cancelled) {
         logDebug(CAT.LOADING, "⏱ Safety timer fired — SwipeableBalanceCard card loading forced off after 5 s");
+        setDataSettled(true);
         setLoading(false);
       }
     }, 5000);
@@ -465,8 +467,10 @@ const SwipeableBalanceCard = ({
           _cardDataCache[_cacheKey] = nextDbData;
         }
         setDbData(nextDbData);
+        setDataSettled(true);
       } catch (err) {
         console.error("❌ [SwipeableBalanceCard] Load data error:", err);
+        setDataSettled(true);
       } finally {
         if (!cancelled) {
           lastCardLoadRef.current = Date.now();
@@ -948,7 +952,7 @@ const SwipeableBalanceCard = ({
       {/* Value + inline sparkline */}
       <div className="flex items-end justify-between mt-2 relative">
         <div className="flex-1 min-w-0 pr-3">
-          {loading ? (
+          {!dataSettled ? (
             <Skeleton className="h-8 w-36 bg-white/15 rounded mb-2 animate-pulse" />
           ) : (
             <h2 className="text-3xl font-bold tracking-tight text-white leading-none">
@@ -956,7 +960,7 @@ const SwipeableBalanceCard = ({
             </h2>
           )}
           <div className="flex items-center gap-2 mt-2">
-            {loading ? (
+            {!dataSettled ? (
               <Skeleton className="h-5 w-24 bg-white/15 rounded-full animate-pulse" />
             ) : (
               <>
@@ -1006,7 +1010,7 @@ const SwipeableBalanceCard = ({
                 <Line type="monotone" dataKey="v" stroke={chartColor} strokeWidth={2} dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
-          ) : (loading || chartLoading) ? (
+          ) : (!dataSettled || chartLoading) ? (
             <div className="flex items-end gap-0.5 w-[185px] h-[85px]">
               {[40, 55, 35, 65, 50, 70, 45, 60].map((h, i) => (
                 <Skeleton key={i} className="flex-1 rounded-sm bg-white/10 animate-pulse" style={{ height: `${h}%` }} />
@@ -1018,7 +1022,7 @@ const SwipeableBalanceCard = ({
 
       {/* Asset selector — hidden in child mode */}
       <div ref={dropdownRef} className={`relative mt-3${childMode ? " hidden" : ""}`}>
-        {loading ? (
+        {!dataSettled ? (
           <Skeleton className="h-7 w-28 bg-white/10 rounded-full animate-pulse" />
         ) : (
         <button
