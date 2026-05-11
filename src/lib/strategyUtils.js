@@ -72,7 +72,7 @@ export const calculateMinInvestmentSync = (strategy, holdingsBySymbol) => {
   if (!foundAny) {
     return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : null;
   }
-  const resultBeforeMarkup = Math.round(total / 100);
+  const resultBeforeMarkup = Math.round(total);
   return Math.round(resultBeforeMarkup * 1.08);
 };
 
