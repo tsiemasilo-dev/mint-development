@@ -632,6 +632,24 @@ const App = () => {
     };
   }, [isAuthenticated]);
 
+  // Prefetch lazily-loaded chunks that users commonly navigate to, so the first
+  // tap feels instant rather than waiting for the JS chunk to download.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const prefetch = () => {
+      import("./pages/FactsheetPage.jsx");
+      import("./pages/InvestAmountPage.jsx");
+      import("./pages/InvestPage.jsx");
+      import("./pages/PaymentPage.jsx");
+      import("./pages/PaymentSuccessPage.jsx");
+    };
+    const schedule = window.requestIdleCallback
+      ? () => window.requestIdleCallback(prefetch, { timeout: 3000 })
+      : () => setTimeout(prefetch, 1500);
+    const t = setTimeout(schedule, 500);
+    return () => clearTimeout(t);
+  }, [isAuthenticated]);
+
   const openAuthFlow = (step) => {
     setAuthStep(step);
     setCurrentPage("auth");
