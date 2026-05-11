@@ -645,6 +645,10 @@ const HomePage = ({
   };
 
 
+  if (loading) {
+    return <HomeSkeleton />;
+  }
+
   const handleMintBalancePress = () => {
     if (onOpenMintBalance) {
       onOpenMintBalance();
