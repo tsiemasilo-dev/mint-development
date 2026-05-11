@@ -2153,7 +2153,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
               <SwipeableBalanceCard
                 userId={null}
                 familyMemberId={child?.id || null}
-                mintNumber={parentMintNumber || null}
+                mintNumber={child?.mint_number || null}
                 overrideBalance={totalPortfolioCents / 100}
                 overrideWalletBalance={childBalance / 100}
               />
