@@ -326,7 +326,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
       if (!supabase) return;
       const { data } = await supabase
         .from("strategies_c")
-        .select("id, name, short_name, description, risk_level, sector, tags, min_investment, is_featured, holdings, strategy_metrics(*)")
+        .select("id, name, short_name, description, risk_level, sector, tags, min_investment, is_featured, holdings")
         .eq("status", "active")
         .eq("is_kid_strategy", true)
         .order("is_featured", { ascending: false })
@@ -367,12 +367,9 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
       }
 
       const enriched = rows.map(s => {
-        const metrics = Array.isArray(s.strategy_metrics)
-          ? [...s.strategy_metrics].sort((a, b) => (b.as_of_date || "").localeCompare(a.as_of_date || ""))[0]
-          : s.strategy_metrics;
         const ytdData = ytdById[s.id];
-        const r_ytd = ytdData?.ytd ?? metrics?.r_ytd ?? metrics?.r_ytd_pct ?? metrics?.r_1y ?? null;
-        const ytd_as_of_date = ytdData?.as_of_date ?? metrics?.as_of_date ?? null;
+        const r_ytd = ytdData?.ytd ?? null;
+        const ytd_as_of_date = ytdData?.as_of_date ?? null;
         const holdingsList = (Array.isArray(s.holdings) ? s.holdings : [])
           .sort((a, b) => Number(b.weight || 0) - Number(a.weight || 0))
           .map(h => {
@@ -955,7 +952,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
                                   {s.risk_level || "Balanced"}{s.description ? ` - ${s.description.substring(0, 60)}${s.description.length > 60 ? "..." : ""}` : ""}
                                 </p>
                                 <p className="text-[11px] text-slate-400">
-                                  {minimumLoading ? "Calculating..." : (strategyMinimums[s.id] ? `Min. R${strategyMinimums[s.id].toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—")}
+                                  {minimumLoading ? "Calculating..." : (strategyMinimums[s.id] ? `Min. R${strategyMinimums[s.id].toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "â€”")}
                                 </p>
                               </div>
                               {/* Sparkline */}
@@ -1072,7 +1069,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
                         disabled={units <= 1 || !selectedStrategyMinimum}
                         className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition"
                       >
-                        −
+                        âˆ’
                       </button>
                       <div className="flex-1 text-center">
                         <p className="text-3xl font-bold text-slate-900 tabular-nums">
@@ -1203,7 +1200,7 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
     if (!child.id_number) return "id";
     if (!poaComplete) return "poa";
     if (!agreementComplete) return "agreement";
-    // Nothing actually missing — fall back to agreement but caller should
+    // Nothing actually missing â€” fall back to agreement but caller should
     // never open the modal in this state (banner is gated on missingItems).
     return "agreement";
   });
@@ -1516,7 +1513,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     !poaDone && "proof of address",
     !child?.signed_agreement_url && "responsibility agreement",
   ].filter(Boolean);
-  // Derive from the actual fields rather than the address_completed flag —
+  // Derive from the actual fields rather than the address_completed flag â€”
   // onboarding flows don't always set that flag, so we'd otherwise show the
   // "Complete profile" prompt even when every doc is signed.
   const isProfileIncomplete = missingItems.length > 0;
@@ -1543,13 +1540,31 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     try {
       const { data } = await supabase
         .from("strategies_c")
-        .select("id, name, short_name, description, risk_level, sector, tags, min_investment, is_featured, holdings, strategy_metrics(*)")
+        .select("id, name, short_name, description, risk_level, sector, tags, min_investment, is_featured, holdings")
         .eq("status", "active")
         .eq("is_kid_strategy", true)
         .order("is_featured", { ascending: false })
         .order("name");
 
       const rows = data || [];
+      // Fetch latest YTD returns from strategies_returns_c, newest row per strategy.
+      const strategyIds = rows.map(s => s.id).filter(Boolean);
+      const ytdById = {};
+      if (strategyIds.length > 0) {
+        const { data: returns } = await supabase
+          .from("strategies_returns_c")
+          .select("strategy_id, ytd_pct, as_of_date")
+          .in("strategy_id", strategyIds)
+          .order("as_of_date", { ascending: false });
+        (returns || []).forEach((ret) => {
+          if (!ytdById[ret.strategy_id]) {
+            ytdById[ret.strategy_id] = {
+              ytd: ret.ytd_pct != null ? Number(ret.ytd_pct) / 100 : null,
+              as_of_date: ret.as_of_date,
+            };
+          }
+        });
+      }
 
       // Collect all holding symbols to fetch logos
       const allSymbols = [...new Set(
@@ -1565,11 +1580,8 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
       }
 
       const enriched = rows.map(s => {
-        const metrics = Array.isArray(s.strategy_metrics)
-          ? [...s.strategy_metrics].sort((a, b) => (b.as_of_date || "").localeCompare(a.as_of_date || ""))[0]
-          : s.strategy_metrics;
-        const r_ytd = metrics?.r_ytd ?? metrics?.r_ytd_pct ?? metrics?.r_1y ?? null;
-        const ytd_as_of_date = metrics?.as_of_date ?? null;
+        const ytdData = ytdById[s.id];`r`n        const r_ytd = ytdData?.ytd ?? null;
+        const ytd_as_of_date = ytdData?.as_of_date ?? null;
         const holdingsList = (Array.isArray(s.holdings) ? s.holdings : [])
           .sort((a, b) => Number(b.weight || 0) - Number(a.weight || 0))
           .map(h => {
