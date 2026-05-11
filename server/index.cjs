@@ -4283,12 +4283,7 @@ app.get("/api/user/strategies", async (req, res) => {
     // Get all active strategies
     const { data: allStrategies, error: stratErr } = await db
       .from("strategies_c")
-      .select(`
-        id, name, short_name, description, risk_level, sector, icon_url, image_url, holdings, status, is_kid_strategy,
-        strategy_metrics (
-          *
-        )
-      `)
+      .select(`id, name, short_name, description, risk_level, sector, icon_url, image_url, holdings, status, is_kid_strategy`)
       .eq("status", "active");
 
     if (stratErr) {
@@ -4296,14 +4291,32 @@ app.get("/api/user/strategies", async (req, res) => {
       return res.status(500).json({ success: false, error: stratErr.message });
     }
 
-    // Sort each strategy's metrics by date descending and keep only the latest row
-    for (const strategy of (allStrategies || [])) {
-      if (Array.isArray(strategy.strategy_metrics) && strategy.strategy_metrics.length > 1) {
-        strategy.strategy_metrics.sort((a, b) =>
-          (b.as_of_date || "").localeCompare(a.as_of_date || "")
-        );
-        strategy.strategy_metrics = [strategy.strategy_metrics[0]];
+    // Fetch latest returns from strategies_returns_c for all strategies
+    const strategyIds = (allStrategies || []).map(s => s.id);
+    let returnsMap = {};
+    if (strategyIds.length > 0) {
+      const { data: returnsRows } = await db
+        .from("strategies_returns_c")
+        .select("strategy_id, as_of_date, ytd_pct, 5d_pct, 1m_pct, 6m_pct")
+        .in("strategy_id", strategyIds)
+        .order("as_of_date", { ascending: false });
+      for (const row of (returnsRows || [])) {
+        if (!returnsMap[row.strategy_id]) {
+          returnsMap[row.strategy_id] = {
+            r_ytd: row.ytd_pct ?? null,
+            r_ytd_pct: row.ytd_pct ?? null,
+            r_5d: row["5d_pct"] ?? null,
+            r_1m: row["1m_pct"] ?? null,
+            r_6m: row["6m_pct"] ?? null,
+            as_of_date: row.as_of_date ?? null,
+          };
+        }
       }
+    }
+
+    // Attach returns to each strategy as strategy_metrics shape
+    for (const strategy of (allStrategies || [])) {
+      strategy.strategy_metrics = returnsMap[strategy.id] ? [returnsMap[strategy.id]] : [];
     }
 
     // Get securities for logos
