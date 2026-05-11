@@ -856,8 +856,8 @@ const LoanCalculatorStep = ({ onSignedContinue }) => {
    const MIN_LOAN_AMOUNT = 1000;
    const MAX_LOAN_AMOUNT = 9000;
    const AMOUNT_STEP = 100;
-   const MIN_LOAN_PERIOD = 3;
-   const MAX_LOAN_PERIOD = 6;
+   const MIN_LOAN_PERIOD = 1;
+   const MAX_LOAN_PERIOD = 3;
    const [loanAmount, setLoanAmount] = useState(3000);
    const [loanPeriod, setLoanPeriod] = useState(3);
    const amountTrackRef = useRef(null);
@@ -870,23 +870,28 @@ const LoanCalculatorStep = ({ onSignedContinue }) => {
       return Math.round((limited - min) / step) * step + min;
    };
 
-   // ── NCA short-term credit fee engine ──
-   // Interest base rate: 4.5% per month (capped at 27% effective)
-   // Admin/service fee: R69 per month (fixed)
-   // No initiation fee, no credit life insurance
-   const MONTHLY_RATE = 0.045; // 4.5% per month
-   const MAX_EFFECTIVE_RATE_PCT = 27;
+   // ── Pricing engine ──
+   // Interest: 5% per month, first month pro-rated by days remaining in the
+   //           origination month. Example: R5000 borrowed on day 15 →
+   //           (5000 × 0.05 / 30) × 15 = R125 for the first month.
+   //           Each subsequent month is a full 5% charge.
+   // Initiation fee (one-off, charged into the first installment):
+   //           min(1000, 165 + 10% × (capital − 1000))
+   // Service fee: R69 per month (admin).
+   const MONTHLY_RATE = 0.05; // 5% per month
+   const monthlyServiceFee = 69;
 
-   const monthlyServiceFee = 69; // Admin fee fixed at R69 per month
+   // Pro-ration is based on the day-of-month of origination. Using 30-day
+   // accounting matches the example the engine was speced against.
+   const originationDayOfMonth = new Date().getDate();
+   const firstMonthInterestDays = Math.max(0, 30 - originationDayOfMonth);
+   const firstMonthInterest = (loanAmount * MONTHLY_RATE / 30) * firstMonthInterestDays;
+   const subsequentMonthsInterest = Math.max(0, loanPeriod - 1) * (loanAmount * MONTHLY_RATE);
+   const totalInterest = firstMonthInterest + subsequentMonthsInterest;
 
-   const effectiveInterestRatePct = Math.min(
-      MAX_EFFECTIVE_RATE_PCT,
-      MONTHLY_RATE * loanPeriod * 100
-   );
-
-   const totalInterest = Math.max(0, loanAmount * (effectiveInterestRatePct / 100));
+   const initiationFee = Math.min(1000, 165 + 0.10 * Math.max(0, loanAmount - 1000));
    const totalServiceFees = monthlyServiceFee * loanPeriod;
-   const totalCostOfCredit = totalInterest + totalServiceFees;
+   const totalCostOfCredit = totalInterest + totalServiceFees + initiationFee;
    const totalRepayable = loanAmount + totalCostOfCredit;
    const monthlyPayment = loanPeriod > 0 ? (totalRepayable / loanPeriod) : 0;
 
@@ -1114,6 +1119,7 @@ const LoanCalculatorStep = ({ onSignedContinue }) => {
                totalCostOfCredit,
                totalInterest,
                totalServiceFees,
+               initiationFee,
                signatureDataUrl,
             });
          }
@@ -1257,13 +1263,13 @@ const LoanCalculatorStep = ({ onSignedContinue }) => {
                   </div>
                </div>
                <div className="flex justify-between px-0.5">
+                  <span className="text-[10px] text-slate-400 font-medium">1 month</span>
                   <span className="text-[10px] text-slate-400 font-medium">3 months</span>
-                  <span className="text-[10px] text-slate-400 font-medium">6 months</span>
                </div>
             </div>
 
             <p className="mt-4 text-[10px] text-slate-400 font-medium text-center">
-               Min R1,000 · Max R9,000 · Term 3–6 months
+               Min R1,000 · Max R9,000 · Term 1–3 months
             </p>
          </div>
 
@@ -1327,8 +1333,9 @@ const LoanCalculatorStep = ({ onSignedContinue }) => {
             {showFees && (
                <div className="mt-3 space-y-0 animate-in fade-in slide-in-from-top-2 duration-300">
                   {[
-                     { label: "Interest (4.5% p.m.)",       value: `R ${formatMoney(totalInterest)}` },
-                     { label: "Admin fees (R69 × " + loanPeriod + ")", value: `R ${formatMoney(totalServiceFees)}` },
+                     { label: "Interest (5% p.m., pro-rated)", value: `R ${formatMoney(totalInterest)}` },
+                     { label: "Initiation fee",                 value: `R ${formatMoney(initiationFee)}` },
+                     { label: "Service fee (R69 × " + loanPeriod + ")", value: `R ${formatMoney(totalServiceFees)}` },
                   ].map((row, i, arr) => (
                      <div key={row.label} className={`flex items-center justify-between py-2 ${i < arr.length - 1 ? "border-b border-dashed border-slate-100" : ""}`}>
                         <span className="text-[11px] text-slate-400">{row.label}</span>
@@ -1341,12 +1348,6 @@ const LoanCalculatorStep = ({ onSignedContinue }) => {
                   </div>
                </div>
             )}
-
-            {/* NCA compliance inline */}
-            <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2">
-               <ShieldCheck className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-               <span className="text-[11px] font-medium text-slate-500">NCA-compliant · Interest: <strong className="text-slate-700">4.5% p.m.</strong> ({effectiveInterestRatePct.toFixed(0)}% over {loanPeriod} months, max 27%)</span>
-            </div>
          </div>
 
          {/* ── CTA ── */}
@@ -1389,8 +1390,8 @@ const LoanCalculatorStep = ({ onSignedContinue }) => {
 
                      <div className="space-y-3 text-[12px] text-slate-600 leading-relaxed">
                         <p><strong className="text-slate-800">1. Facility:</strong> This unsecured credit facility is granted subject to affordability, identity verification, and final approval checks.</p>
-                        <p><strong className="text-slate-800">2. Pricing:</strong> Interest is charged at 4.5% per month (effective {effectiveInterestRatePct.toFixed(0)}% for this {loanPeriod}-month term, capped at 27%), plus a fixed R69 monthly admin fee.</p>
-                        <p><strong className="text-slate-800">3. Fees Breakdown:</strong> Admin fees R {formatMoney(totalServiceFees)}, total interest R {formatMoney(totalInterest)}.</p>
+                        <p><strong className="text-slate-800">2. Pricing:</strong> Interest is charged at 5% per month, pro-rated daily for the origination month. A one-off initiation fee and a R69 monthly service fee apply.</p>
+                        <p><strong className="text-slate-800">3. Fees Breakdown:</strong> Interest R {formatMoney(totalInterest)}, initiation fee R {formatMoney(initiationFee)}, service fees R {formatMoney(totalServiceFees)}.</p>
                         <p><strong className="text-slate-800">4. Payment Obligation:</strong> You agree to pay the installment on scheduled due dates. Missed payments may incur default collection processes as permitted by law.</p>
                         <p><strong className="text-slate-800">5. Early Settlement:</strong> You may settle early in accordance with the National Credit Act and receive an adjusted settlement quote where applicable.</p>
                         <p><strong className="text-slate-800">6. Consent:</strong> By signing below, you confirm you understood the repayment schedule, costs, and legal obligations of this loan agreement.</p>
@@ -1854,17 +1855,19 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
                total_repayable: Math.round((quote?.totalRepayable ?? 0) * 100) / 100,
                total_interest: Math.round((quote?.totalInterest ?? 0) * 100) / 100,
                total_service_fees: Math.round((quote?.totalServiceFees ?? 0) * 100) / 100,
+               total_initiation_fee: Math.round((quote?.initiationFee ?? 0) * 100) / 100,
                total_cost_of_credit: Math.round((quote?.totalCostOfCredit ?? 0) * 100) / 100,
                schedule: scheduleEntries,
             };
 
             // ── Full payload matching loan_application schema ─────────────────
-            // interest_rate stored as monthly % (4.50 = 4.5% p.m., max 27% effective)
+            // interest_rate stored as monthly % (5.00 = 5% p.m., first month
+            // pro-rated by day of origination).
             // step_number max allowed by CHECK constraint is 4
             const payload = {
                principal_amount: Math.round((quote?.loanAmount ?? 0) * 100) / 100,
                amount_repayable: Math.round((quote?.totalRepayable ?? 0) * 100) / 100,
-               interest_rate: 4.50,           // 4.5% per month (max 27% effective)
+               interest_rate: 5.00,           // 5% per month, first month pro-rated
                number_of_months: months,
                first_repayment_date: firstRepaymentDateStr,
                salary_date: salaryDayOfMonth, // day-of-month (1–31)

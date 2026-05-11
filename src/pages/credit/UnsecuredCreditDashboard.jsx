@@ -348,10 +348,11 @@ const UnsecuredCreditDashboard = ({ profile, onTabChange, onOpenNotifications })
       : (loan?.status ? String(loan.status).replace(/_/g, " ") : "Unknown");
 
   // ─── Display rate strings ────────────────────────────────────────────────
-  const monthlyRatePct = 4.5;
-  const maxEffectiveRatePct = 27;
-  const effectiveRatePct = Math.min(maxEffectiveRatePct, Math.max(0, months * monthlyRatePct));
-  const annualRate = `${Number.isInteger(effectiveRatePct) ? effectiveRatePct.toFixed(0) : effectiveRatePct.toFixed(1)}%`;
+  const monthlyRatePct = 5;
+  // First month of interest is pro-rated by day-of-month at origination, so
+  // the "effective rate over the term" is not a clean monthly × term value.
+  // We keep the simple monthly figure and drop the legacy NCA effective rate
+  // disclosure from the UI.
   const monthlyRate = `${monthlyRatePct}%`;
   const canStartNewLoan = !loan || loanBalance <= 0;
 
@@ -436,9 +437,12 @@ const UnsecuredCreditDashboard = ({ profile, onTabChange, onOpenNotifications })
       const generated = new Intl.DateTimeFormat("en-ZA", { day: "numeric", month: "long", year: "numeric" }).format(new Date());
       const borrowerName = displayName || "Borrower";
 
-      // ── Fee calculations (only interest + admin fee) ─────────────────────
+      // ── Fee calculations ─────────────────────────────────────────────────
+      // initiation fee is stored alongside the repayment schedule when the
+      // application is created; older records may not have it.
+      const initiationFee = Number(loan?.repayment_schedule?.total_initiation_fee ?? 0);
       const totalAdminFees = 69 * months;
-      const totalInterest = Math.max(0, totalRepay - principal - totalAdminFees);
+      const totalInterest = Math.max(0, totalRepay - principal - totalAdminFees - initiationFee);
 
       // ══════════════════════════════════════════════════
       // PAGE 1 — HEADER + COMPLIANCE
@@ -489,8 +493,8 @@ const UnsecuredCreditDashboard = ({ profile, onTabChange, onOpenNotifications })
         "the right to dispute incorrect information with any credit bureau. You may settle this agreement early",
         "at any time (NCA s125). In the event of debt review, contact an NCR-registered debt counsellor.",
         "",
-        `INTEREST RATE DISCLOSURE: The interest rate applied is ${monthlyRate} per month with an effective rate of ${annualRate}`,
-        `for this ${months || 0}-month unsecured short-term credit agreement.`,
+        `INTEREST RATE DISCLOSURE: The interest rate applied is ${monthlyRate} per month, with the first month`,
+        `pro-rated by day of origination for this ${months || 0}-month unsecured short-term credit agreement.`,
       ];
       complianceLines.forEach((line) => {
         doc.text(line, 15, y);
@@ -543,10 +547,11 @@ const UnsecuredCreditDashboard = ({ profile, onTabChange, onOpenNotifications })
         head: [["Item", "Rate / Detail", "Amount (ZAR)"]],
         body: [
           ["Principal amount disbursed", "—", formatZar(principal)],
-          ["Interest (4.5% p.m. on reducing balance)", `${annualRate} over ${months || 0} months (max 27%)`, formatZar(totalInterest)],
-          ["Monthly admin fee × " + months, "R69.00 per month (fixed)", formatZar(totalAdminFees)],
+          ["Interest (5% p.m., first month pro-rated)", `${months || 0} month${months === 1 ? "" : "s"}`, formatZar(totalInterest)],
+          ["Initiation fee (one-off)", "min(R1,000, R165 + 10% × (loan − R1,000))", formatZar(initiationFee)],
+          ["Monthly service fee × " + months, "R69.00 per month (fixed)", formatZar(totalAdminFees)],
           ["", "", ""],
-          [{ content: "TOTAL COST OF CREDIT (TCC)", styles: { fontStyle: "bold" } }, { content: "Interest + admin fees", styles: {} }, { content: formatZar(totalRepay - principal), styles: { fontStyle: "bold" } }],
+          [{ content: "TOTAL COST OF CREDIT (TCC)", styles: { fontStyle: "bold" } }, { content: "Interest + initiation + service fees", styles: {} }, { content: formatZar(totalRepay - principal), styles: { fontStyle: "bold" } }],
           [{ content: "TOTAL AMOUNT REPAYABLE", styles: { fontStyle: "bold", fillColor: darkPurple, textColor: 255 } }, { content: "", styles: { fillColor: darkPurple } }, { content: formatZar(totalRepay), styles: { fontStyle: "bold", fillColor: darkPurple, textColor: 255 } }],
         ],
       });
@@ -565,7 +570,7 @@ const UnsecuredCreditDashboard = ({ profile, onTabChange, onOpenNotifications })
           ["Monthly instalment (principal + interest)", formatZar(monthlyPay)],
           ["Loan term", months > 0 ? `${months} month${months > 1 ? "s" : ""}` : "—"],
           ["First repayment date", loan.first_repayment_date ? fmtDate(new Date(loan.first_repayment_date)) : "—"],
-          ["Interest rate", `${monthlyRate} per month (${annualRate} over ${months || 0} months, max 27%)`],
+          ["Interest rate", `${monthlyRate} per month (first month pro-rated by origination day)`],
           ["Amount already repaid", formatZar(totalPaid)],
           ["Outstanding balance", formatZar(loanBalance)],
         ],
@@ -952,7 +957,7 @@ const UnsecuredCreditDashboard = ({ profile, onTabChange, onOpenNotifications })
           <div className="bg-white border border-slate-100 rounded-[20px] p-4 shadow-sm">
             <p className="text-[10px] text-slate-400 mb-1">Interest rate</p>
             <p className="text-[18px] font-medium text-slate-900">{monthlyRate} p.m.</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">{annualRate} over {months > 0 ? `${months} months` : "term"}</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">First month pro-rated</p>
             <span className="inline-block text-[10px] font-medium px-2 py-0.5 rounded-full mt-1.5 bg-emerald-50 text-emerald-700">
               Unsecured
             </span>
