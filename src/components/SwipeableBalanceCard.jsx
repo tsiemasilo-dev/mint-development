@@ -339,85 +339,91 @@ const SwipeableBalanceCard = ({
             });
           }
         } else {
-          // Parent mode: fetch from API endpoints
+          // Parent mode: pull strategy values directly from client_strategy_returns_c
+          // (avoids dependency on /api/user/strategies which joins the deleted strategy_metrics table)
           const session = await getSessionWithRetry();
           if (cancelled) return;
           const token = session?.access_token;
 
-          [holdingsRes, strategiesRes] = token
-            ? await Promise.all([
-              fetchJsonWithAuth("/api/user/holdings", token).then((json) => json || { holdings: [] }),
-              fetchJsonWithAuth("/api/user/strategies", token).then((json) => json || { strategies: [] }),
-            ])
-            : [{ holdings: [] }, { strategies: [] }];
+          // Individual stock holdings (unaffected by the strategy_metrics issue)
+          holdingsRes = token
+            ? await fetchJsonWithAuth("/api/user/holdings", token).then((json) => json || { holdings: [] })
+            : { holdings: [] };
 
           const stockHoldings = (holdingsRes.holdings || []).filter(h => !h.strategy_id);
-          const strategyItems = await Promise.all((strategiesRes.strategies || []).map(async (s) => {
-            const holdingsArr = s.holdings || [];
-            const topLogos = holdingsArr
+
+          // Latest basket_value per strategy from client_strategy_returns_c
+          const [returnsResult, strategiesResult] = await Promise.all([
+            supabase
+              .from("client_strategy_returns_c")
+              .select("strategy_id, basket_value, holdings_snapshot, as_of_date")
+              .eq("user_id", userId)
+              .order("as_of_date", { ascending: false }),
+            supabase
+              .from("strategies_c")
+              .select("id, name, short_name, holdings, status")
+              .eq("status", "active"),
+          ]);
+
+          // Take the most-recent row per strategy_id
+          const latestByStrategy = {};
+          for (const row of (returnsResult.data || [])) {
+            if (!latestByStrategy[row.strategy_id]) {
+              latestByStrategy[row.strategy_id] = row;
+            }
+          }
+
+          const strategiesMap = {};
+          for (const s of (strategiesResult.data || [])) {
+            strategiesMap[s.id] = s;
+          }
+
+          const strategyItems = Object.entries(latestByStrategy).map(([stratId, row]) => {
+            const strat = strategiesMap[stratId] || {};
+            const basketCents = Number(row.basket_value || 0);
+
+            const snapshot = (() => {
+              try {
+                return typeof row.holdings_snapshot === "string"
+                  ? JSON.parse(row.holdings_snapshot)
+                  : (row.holdings_snapshot || []);
+              } catch { return []; }
+            })();
+
+            const investedCents = snapshot.reduce(
+              (sum, h) => sum + Math.round((h.avg_fill || 0) * (h.qty || 0)),
+              0
+            );
+            const changePct = investedCents > 0
+              ? ((basketCents - investedCents) / investedCents) * 100
+              : 0;
+
+            const holdingsArr = strat.holdings || [];
+            const topLogos = [...holdingsArr]
               .sort((a, b) => (b.weight || 0) - (a.weight || 0))
               .slice(0, 3)
-              .map((h) => h.logo_url || null)
+              .map(h => h.logo_url || null)
               .filter(Boolean);
-            const investedRands = s.investedAmount || 0;
-            const liveRands = s.currentMarketValue != null ? s.currentMarketValue : investedRands;
-            const purchaseDate = s.firstInvestedDate;
-            let changePct = investedRands > 0 ? ((liveRands - investedRands) / investedRands) * 100 : 0;
 
-            const investedCents = Math.round(investedRands * 100);
-            const currentCents = Math.round(liveRands * 100);
             return {
-              symbol: s.shortName || s.name || "Strategy",
-              name: s.name || "Strategy",
-              market_value: currentCents,
+              symbol: strat.short_name || strat.name || "Strategy",
+              name: strat.name || "Strategy",
+              market_value: basketCents,
               invested_amount: investedCents,
               avg_fill: investedCents,
               quantity: 1,
               logo_url: null,
               security_id: null,
               isStrategy: true,
-              strategyId: s.id,
-              topLogos: topLogos,
-              changePct: changePct,
+              strategyId: stratId,
+              topLogos,
+              changePct,
               holdings: holdingsArr,
-              firstInvestedDate: purchaseDate,
+              firstInvestedDate: null,
             };
-          }));
-          enrichedHoldings = [...stockHoldings, ...strategyItems];
-        }
+          });
 
-        // Fetch latest basket_value from client_strategy_returns_c and override
-        // each strategy's market_value so totalMarketValue is always DB-accurate
-        if (strategiesRes && userId) {
-          const strategyIds = (strategiesRes.strategies || []).map(s => s.id).filter(Boolean);
-          const basketMap = {};
-          await Promise.all(strategyIds.map(async (stratId) => {
-            try {
-              const { data: row } = await withTimeout(
-                supabase
-                  .from("client_strategy_returns_c")
-                  .select("basket_value")
-                  .eq("user_id", userId)
-                  .eq("strategy_id", stratId)
-                  .order("as_of_date", { ascending: false })
-                  .limit(1)
-                  .maybeSingle()
-              );
-              if (row?.basket_value) {
-                basketMap[stratId] = Number(row.basket_value);
-              }
-            } catch (e) {
-              console.warn(`[SwipeableBalanceCard] basket_value query timed out for ${stratId}`);
-            }
-          }));
-          if (Object.keys(basketMap).length > 0) {
-            enrichedHoldings = enrichedHoldings.map(h => {
-              if (h.isStrategy && h.strategyId && basketMap[h.strategyId] != null) {
-                return { ...h, market_value: basketMap[h.strategyId] };
-              }
-              return h;
-            });
-          }
+          enrichedHoldings = [...stockHoldings, ...strategyItems];
         }
 
         // Live value: use last_price × qty for stocks, market_value for strategies
