@@ -471,11 +471,11 @@ const App = () => {
     };
 
     const checkExistingSession = async () => {
-      // Safety timeout: never block on the black screen for more than 1s.
+      // Safety timeout: never block on the skeleton for more than 300ms.
       // Supabase auth lock can deadlock for 5s+ in React StrictMode causing
       // the spinner to hang indefinitely. The timeout ensures the UI always
       // unblocks; the session check still completes in the background.
-      const safetyTimer = setTimeout(() => setIsCheckingAuth(false), 1000);
+      const safetyTimer = setTimeout(() => setIsCheckingAuth(false), 300);
 
       if (supabase && !isRecoveryMode && !hasError) {
         try {
