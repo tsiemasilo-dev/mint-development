@@ -5,7 +5,6 @@ import { clearAllUserCaches } from "./lib/userCacheReset.js";
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import SwipeBackWrapper from "./components/SwipeBackWrapper.jsx";
-import HomeSkeleton from "./components/HomeSkeleton.jsx";
 
 const AuthPage = lazy(() => import("./pages/AuthPage.jsx"));
 const HomePage = lazy(() => import("./pages/HomePage.jsx"));
@@ -102,6 +101,25 @@ const hashParams = getHashParams(initialHash);
 const hasError = hashParams.error === 'access_denied';
 const errorCode = hashParams.error_code;
 
+// Synchronous localStorage session check — runs at module load, before any render.
+// If a valid non-expired Supabase token is cached, we skip isCheckingAuth entirely
+// and jump straight to 'home', giving an instant startup with no loading screen.
+const getStoredSession = () => {
+  if (hasError || isRecoveryMode) return null;
+  try {
+    const key = Object.keys(localStorage).find(
+      k => k.startsWith('sb-') && k.endsWith('-auth-token')
+    );
+    if (!key) return null;
+    const stored = JSON.parse(localStorage.getItem(key));
+    if (stored?.access_token && stored?.expires_at && Date.now() / 1000 < stored.expires_at) {
+      return stored;
+    }
+  } catch {}
+  return null;
+};
+const storedSession = getStoredSession();
+
 const getTokensFromHash = (hash) => {
   if (!hash) return null;
   const params = new URLSearchParams(hash.substring(1));
@@ -118,10 +136,12 @@ const recoveryTokens = isRecoveryMode ? getTokensFromHash(initialHash) : null;
 const mainTabs = ['home', 'credit', 'transact', 'investments', 'markets', 'deposit', 'more', 'welcome', 'auth'];
 
 const App = () => {
-  const [currentPage, setCurrentPage] = useState(hasError ? "linkExpired" : (isRecoveryMode ? "auth" : "welcome"));
+  const [currentPage, setCurrentPage] = useState(
+    hasError ? "linkExpired" : (isRecoveryMode ? "auth" : (storedSession ? "home" : "welcome"))
+  );
   const [previousPageName, setPreviousPageName] = useState(null);
   const [authStep, setAuthStep] = useState(isRecoveryMode ? "newPassword" : "email");
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(!storedSession && !hasError);
   const [sessionReady, setSessionReady] = useState(false);
   const [notificationReturnPage, setNotificationReturnPage] = useState("home");
   const [modal, setModal] = useState(null);
@@ -1100,10 +1120,6 @@ const App = () => {
 
 
 
-  if (isCheckingAuth) {
-    return <HomeSkeleton />;
-  }
-
   if (currentPage === "linkExpired") {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center px-6">
@@ -1172,7 +1188,7 @@ const App = () => {
 
   if (['home', 'credit', 'investments', 'markets', 'more'].includes(currentPage)) {
     return (
-      <Suspense fallback={<HomeSkeleton />}>
+      <Suspense fallback={<div className="min-h-screen bg-[#f8fafc]" />}>
         <>
           {showOpenStrategiesMaintenance && <MaintenanceModal onClose={() => setShowOpenStrategiesMaintenance(false)} />}
           {/* Home tab – always mounted */}

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-    <meta name="theme-color" content="#111111" />
+    <meta name="theme-color" content="#ffffff" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Mint" />
@@ -15,53 +15,12 @@
     <script src="https://js.paystack.co/v2/inline.js"></script>
     <title>Mint</title>
     <style>
-      *{box-sizing:border-box}
-      body{margin:0;background:#f8fafc}
-      @keyframes sk-pulse{0%,100%{opacity:1}50%{opacity:.5}}
-      #sk{min-height:100vh;background:#f8fafc;padding-bottom:env(safe-area-inset-bottom)}
-      #sk .sk-hd{border-bottom-left-radius:36px;border-bottom-right-radius:36px;background:linear-gradient(to bottom,#111111 0%,#3b1b7a 50%,#5b21b6 100%);padding:48px 16px}
-      #sk .sk-in{max-width:384px;margin:0 auto;display:flex;flex-direction:column;gap:24px}
-      #sk .sk-row{display:flex;justify-content:space-between;align-items:center}
-      #sk .sk-ci{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.4);animation:sk-pulse 2s ease-in-out infinite}
-      #sk .sk-card{background:rgba(255,255,255,.1);border-radius:24px;padding:20px}
-      #sk .sk-ln{border-radius:6px;animation:sk-pulse 2s ease-in-out infinite}
-      #sk .sk-bd{max-width:384px;margin:-40px auto 0;padding:0 16px 40px;display:flex;flex-direction:column;gap:24px}
-      #sk .sk-gr{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-      #sk .sk-ti{height:64px;border-radius:16px;background:#e2e8f0;animation:sk-pulse 2s ease-in-out infinite}
-      #sk .sk-b1{height:144px;border-radius:24px;background:#e2e8f0;animation:sk-pulse 2s ease-in-out infinite}
-      #sk .sk-b2{height:160px;border-radius:24px;background:#e2e8f0;animation:sk-pulse 2s ease-in-out infinite}
-      #sk .sk-dt{display:flex;justify-content:center;align-items:center;gap:8px}
-      #sk .sk-ds{width:6px;height:6px;border-radius:50%;background:#e2e8f0;animation:sk-pulse 2s ease-in-out infinite}
-      #sk .sk-dl{width:16px;height:6px;border-radius:3px;background:#e2e8f0;animation:sk-pulse 2s ease-in-out infinite}
+      * { box-sizing: border-box; }
+      body { margin: 0; background: #f8fafc; }
     </style>
   </head>
   <body>
-    <div id="root"><div id="sk">
-  <div class="sk-hd">
-    <div class="sk-in">
-      <div class="sk-row">
-        <div class="sk-ci"></div>
-        <div class="sk-ci"></div>
-      </div>
-      <div class="sk-card">
-        <div class="sk-ln" style="height:12px;width:96px;background:rgba(255,255,255,.4)"></div>
-        <div class="sk-ln" style="height:32px;width:128px;background:rgba(255,255,255,.4);margin-top:12px"></div>
-        <div class="sk-ln" style="height:24px;width:80px;background:rgba(255,255,255,.3);margin-top:16px"></div>
-        <div class="sk-ln" style="height:12px;width:192px;background:rgba(255,255,255,.3);margin-top:12px"></div>
-      </div>
-    </div>
-  </div>
-  <div class="sk-bd">
-    <div class="sk-gr">
-      <div class="sk-ti"></div><div class="sk-ti"></div><div class="sk-ti"></div><div class="sk-ti"></div>
-    </div>
-    <div class="sk-b1"></div>
-    <div class="sk-b2"></div>
-    <div class="sk-dt">
-      <div class="sk-ds"></div><div class="sk-dl"></div><div class="sk-ds"></div>
-    </div>
-  </div>
-</div></div>
+    <div id="root"></div>
     <!-- Auto-refresh on deployment updates (Disabled for now) -->
     <!-- <script src="/auto-refresh.js"></script> -->
     <script type="module" src="/src/main.jsx"></script>

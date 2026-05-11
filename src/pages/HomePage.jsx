@@ -32,7 +32,6 @@ import { useOnboardingStatus } from "../lib/useOnboardingStatus";
 import { useFinancialData, useInvestments } from "../lib/useFinancialData";
 import { useRealtimePrices } from "../lib/useRealtimePrices";
 import { getHoldingsArray, normalizeSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot } from "../lib/strategyUtils";
-import HomeSkeleton from "../components/HomeSkeleton";
 import { registerCacheResetCallback } from "../lib/userCacheReset.js";
 import Skeleton from "../components/Skeleton";
 import SwipeableBalanceCard from "../components/SwipeableBalanceCard";
@@ -646,7 +645,7 @@ const HomePage = ({
 
 
   if (loading) {
-    return <HomeSkeleton />;
+    return null;
   }
 
   const handleMintBalancePress = () => {
