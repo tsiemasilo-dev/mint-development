@@ -78,8 +78,11 @@ export default async function handler(req, res) {
     if (stratErr) throw stratErr;
     if (!strategy) return res.status(404).json({ error: "Strategy not found." });
     if (strategy.status !== "active") return res.status(400).json({ error: "This strategy is no longer active." });
-    if (strategy.min_investment && amount < strategy.min_investment) {
-      return res.status(400).json({ error: `Minimum investment is R${(strategy.min_investment / 100).toFixed(2)}.` });
+    // min_investment column is stored in rands; amount arrives in cents.
+    const minInvestmentRands = Number(strategy.min_investment || 0);
+    const minInvestmentCents = Math.round(minInvestmentRands * 100);
+    if (minInvestmentCents > 0 && amount < minInvestmentCents) {
+      return res.status(400).json({ error: `Minimum investment is R${minInvestmentRands.toFixed(2)}.` });
     }
 
     // 4. Deduct from child balance

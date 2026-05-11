@@ -397,7 +397,8 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
     try {
       const minimums = {};
       for (const strategy of strategies) {
-        minimums[strategy.id] = calculateMinInvestmentSync(strategy, new Map());
+        // Use min_investment column directly (rands). No division, no markup.
+        minimums[strategy.id] = strategy?.min_investment ?? null;
       }
       setStrategyMinimums(minimums);
     } catch (error) {
@@ -446,8 +447,8 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
       return;
     }
 
-    const minValue = calculateMinInvestmentSync(selected, new Map());
-    setSelectedStrategyMinimum(minValue);
+    // Use min_investment column directly (rands). No division, no markup.
+    setSelectedStrategyMinimum(selected?.min_investment ?? null);
   }, [selected]);
 
   useEffect(() => {
@@ -621,7 +622,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
     onClose();
     onOpenFactsheet({
       ...selected,
-      calculatedMinInvestment: selected.min_investment ? Math.round(selected.min_investment / 100) : null,
+      calculatedMinInvestment: selected.min_investment ?? null,
       holdingsWithLogos: (selected.holdingsList || []).map((h) => ({
         ...h,
         ticker: h.ticker || h.symbol,
@@ -1067,9 +1068,10 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
                       <button
                         onClick={() => setUnits(Math.max(1, units - 1))}
                         disabled={units <= 1 || !selectedStrategyMinimum}
-                        className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                        className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition text-xl font-semibold leading-none"
+                        aria-label="Decrease units"
                       >
-                        ÃƒÂ¢Ã‹â€ Ã¢â‚¬â„¢
+                        −
                       </button>
                       <div className="flex-1 text-center">
                         <p className="text-3xl font-bold text-slate-900 tabular-nums">
@@ -1620,7 +1622,8 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     try {
       const minimums = {};
       for (const strategy of strategies) {
-        minimums[strategy.id] = calculateMinInvestmentSync(strategy, new Map());
+        // Use min_investment column directly (rands). No division, no markup.
+        minimums[strategy.id] = strategy?.min_investment ?? null;
       }
 
       if (isMounted.current) {
