@@ -59,12 +59,16 @@ const CreditHome = ({ profile, onOpenNotifications, onTabChange }) => {
         })
         .eq('id', profile.id);
 
-      if (!error) {
+      if (error) {
+        console.error("Consent Error:", error);
+      } else {
+        if (profile) {
+          if (!profile.declarations) profile.declarations = {};
+          profile.declarations.debicheck_consent = { agreed: true };
+        }
         setShowConsentModal(false);
         if (pendingAction === "portfolio") onTabChange("instantLiquidity");
         if (pendingAction === "unsecured") handleUnsecuredClick();
-      } else {
-        console.error("Consent Error:", error);
       }
     } catch (err) {
       console.error(err);
@@ -217,9 +221,9 @@ const CreditHome = ({ profile, onOpenNotifications, onTabChange }) => {
           </h1>
           <button
             onClick={() => onTabChange("creditHowItWorks")}
-            className="flex items-center justify-between w-full opacity-60 hover:opacity-80 active:opacity-100 transition-opacity text-white"
+            className="flex items-center justify-between opacity-60 text-white hover:opacity-100 transition-opacity active:scale-95"
           >
-            <span className="text-xs font-medium tracking-wide">How it works</span>
+            <span className="text-xs font-medium tracking-wide mr-2">How it works</span>
             <HelpCircle className="h-6 w-6" />
           </button>
         </div>
@@ -266,7 +270,7 @@ const CreditHome = ({ profile, onOpenNotifications, onTabChange }) => {
               <p>By proceeding, you agree to the following:</p>
               <ul className="list-disc pl-5 space-y-2">
                 <li>I consent to a credit bureau check with Experian.</li>
-                <li>I consent to link my bank account to verify income &amp; expenses.</li>
+                <li>I consent to link my bank account to verify income & expenses.</li>
                 <li>I confirm the salary and employer details I provide are true.</li>
                 <li>I consent to an authenticated DebiCheck mandate if approved.</li>
               </ul>
