@@ -99,23 +99,30 @@ async function fetchServerTransactions(token, limit = 50) {
 }
 
 let financialDataCache = null;
+let financialDataLastFetch = 0;
+const STALE_MS = 5 * 60 * 1000; // 5 minutes
 
 export const clearFinancialDataCache = () => {
   financialDataCache = null;
+  financialDataLastFetch = 0;
 };
 
 export const useFinancialData = () => {
-  const [data, setData] = useState({
-    balance: 0,
-    investments: 0,
-    availableCredit: 0,
-    transactions: [],
-    holdings: [],
-    creditInfo: null,
-    bestAssets: [],
-    loading: true,
-    error: null,
-  });
+  const [data, setData] = useState(() =>
+    financialDataCache
+      ? { ...financialDataCache, loading: false }
+      : {
+          balance: 0,
+          investments: 0,
+          availableCredit: 0,
+          transactions: [],
+          holdings: [],
+          creditInfo: null,
+          bestAssets: [],
+          loading: true,
+          error: null,
+        }
+  );
 
   const fetchData = useCallback(async () => {
     if (!supabase) {
@@ -197,6 +204,7 @@ export const useFinancialData = () => {
       };
 
       financialDataCache = newData;
+      financialDataLastFetch = Date.now();
       setData(newData);
 
       console.log("[useFinancialData] Updated balance from DB:", walletBalance);
@@ -224,7 +232,9 @@ export const useFinancialData = () => {
 
   useEffect(() => {
     const handleVisibility = () => {
-      if (document.visibilityState === "visible") fetchData();
+      if (document.visibilityState === "visible" && Date.now() - financialDataLastFetch > STALE_MS) {
+        fetchData();
+      }
     };
     const handleUpdate = () => {
       fetchData();
@@ -240,16 +250,23 @@ export const useFinancialData = () => {
   return { ...data, refetch: fetchData };
 };
 
+let mintBalanceCache = null;
+let mintBalanceLastFetch = 0;
+
 export const useMintBalance = () => {
-  const [data, setData] = useState({
-    totalBalance: 0,
-    investments: 0,
-    availableCredit: 0,
-    dailyChange: 0,
-    recentChanges: [],
-    loading: true,
-    error: null,
-  });
+  const [data, setData] = useState(() =>
+    mintBalanceCache
+      ? { ...mintBalanceCache, loading: false }
+      : {
+          totalBalance: 0,
+          investments: 0,
+          availableCredit: 0,
+          dailyChange: 0,
+          recentChanges: [],
+          loading: true,
+          error: null,
+        }
+  );
 
   useEffect(() => {
     const fetchBalance = async () => {
@@ -300,7 +317,7 @@ export const useMintBalance = () => {
           amount: formatTransactionAmount((t.amount || 0) / 100, t.direction),
         }));
 
-        setData({
+        const newMintData = {
           totalBalance,
           investments: totalInvestments,
           availableCredit,
@@ -308,7 +325,10 @@ export const useMintBalance = () => {
           recentChanges,
           loading: false,
           error: null,
-        });
+        };
+        mintBalanceCache = newMintData;
+        mintBalanceLastFetch = Date.now();
+        setData(newMintData);
       } catch (err) {
         console.error("Error fetching mint balance:", err);
         setData((prev) => ({ ...prev, loading: false, error: err.message }));
@@ -318,7 +338,9 @@ export const useMintBalance = () => {
     fetchBalance();
 
     const handleVisibility = () => {
-      if (document.visibilityState === "visible") fetchBalance();
+      if (document.visibilityState === "visible" && Date.now() - mintBalanceLastFetch > STALE_MS) {
+        fetchBalance();
+      }
     };
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
@@ -436,18 +458,25 @@ export const useCreditInfo = () => {
   return data;
 };
 
+let investmentsCache = null;
+let investmentsLastFetch = 0;
+
 export const useInvestments = () => {
-  const [data, setData] = useState({
-    totalInvestments: 0,
-    monthlyChange: 0,
-    monthlyChangePercent: 0,
-    portfolioMix: [],
-    goals: [],
-    holdings: [],
-    closedHoldings: [],
-    loading: true,
-    hasInvestments: false,
-  });
+  const [data, setData] = useState(() =>
+    investmentsCache
+      ? { ...investmentsCache, loading: false }
+      : {
+          totalInvestments: 0,
+          monthlyChange: 0,
+          monthlyChangePercent: 0,
+          portfolioMix: [],
+          goals: [],
+          holdings: [],
+          closedHoldings: [],
+          loading: true,
+          hasInvestments: false,
+        }
+  );
 
   const fetchInvestments = useCallback(async () => {
     if (!supabase) {
@@ -526,7 +555,7 @@ export const useInvestments = () => {
         };
       });
 
-      setData({
+      const newInvData = {
         totalInvestments,
         monthlyChange,
         monthlyChangePercent,
@@ -536,7 +565,10 @@ export const useInvestments = () => {
         closedHoldings,
         loading: false,
         hasInvestments: holdings.length > 0,
-      });
+      };
+      investmentsCache = newInvData;
+      investmentsLastFetch = Date.now();
+      setData(newInvData);
     } catch (err) {
       console.error("Error fetching investments:", err);
       setData((prev) => ({ ...prev, loading: false }));
@@ -549,7 +581,9 @@ export const useInvestments = () => {
 
   useEffect(() => {
     const handleVisibility = () => {
-      if (document.visibilityState === "visible") fetchInvestments();
+      if (document.visibilityState === "visible" && Date.now() - investmentsLastFetch > STALE_MS) {
+        fetchInvestments();
+      }
     };
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
