@@ -50,7 +50,7 @@ const GoalLinkModal = ({
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return;
 
-      const selectFields = "id, name, target_amount, current_amount, is_active, linked_asset_name, family_member_id, created_at";
+      const selectFields = "id, name, target_amount, current_amount, is_active, family_member_id, created_at";
 
       if (childFamilyMemberId) {
         const [childResult, familyResult] = await Promise.all([
@@ -73,7 +73,7 @@ const GoalLinkModal = ({
         if (isMissingFamilyMemberColumn(childResult.error) || isMissingFamilyMemberColumn(familyResult.error)) {
           const fallback = await supabase
             .from("investment_goals")
-            .select("id, name, target_amount, current_amount, is_active, linked_asset_name, created_at")
+            .select("id, name, target_amount, current_amount, is_active, created_at")
             .eq("user_id", session.user.id)
             .eq("is_active", true)
             .order("created_at", { ascending: false });
@@ -109,7 +109,7 @@ const GoalLinkModal = ({
       if (error && isMissingFamilyMemberColumn(error)) {
         const fallback = await supabase
           .from("investment_goals")
-          .select("id, name, target_amount, current_amount, is_active, linked_asset_name, created_at")
+          .select("id, name, target_amount, current_amount, is_active, created_at")
           .eq("user_id", session.user.id)
           .eq("is_active", true)
           .order("created_at", { ascending: false });
@@ -311,9 +311,6 @@ const GoalLinkModal = ({
                                     style={{ width: `${progress}%` }}
                                   />
                                 </div>
-                                {goal.linked_asset_name && (
-                                  <p className="text-[10px] text-slate-400 mt-1">Linked to {goal.linked_asset_name}</p>
-                                )}
                               </div>
                               {isSelected && (
                                 <div className="ml-3 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-violet-600">
