@@ -32,7 +32,6 @@ import { useOnboardingStatus } from "../lib/useOnboardingStatus";
 import { useFinancialData, useInvestments } from "../lib/useFinancialData";
 import { useRealtimePrices } from "../lib/useRealtimePrices";
 import { getHoldingsArray, normalizeSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot } from "../lib/strategyUtils";
-import HomeSkeleton from "../components/HomeSkeleton";
 import { registerCacheResetCallback } from "../lib/userCacheReset.js";
 import Skeleton from "../components/Skeleton";
 import SwipeableBalanceCard from "../components/SwipeableBalanceCard";
@@ -41,6 +40,7 @@ import TransactionHistorySection from "../components/TransactionHistorySection";
 import SettlementBadge from "../components/PendingBadge";
 import NotificationBell from "../components/NotificationBell";
 import FamilyDropdown from "../components/FamilyDropdown";
+import HomeSkeleton from "../components/HomeSkeleton";
 
 // Feature flags — set VITE_ENABLE_INSURE=true in Replit Secrets to preview.
 // Leave unset in Vercel production to keep the feature hidden from live users.
@@ -120,7 +120,7 @@ const HomePage = ({
   const [editingGoalId, setEditingGoalId] = useState(null);
 
   const assetsToDisplay = localBestAssets.length > 0 ? localBestAssets : (bestAssets || []);
-  const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(" ");
+  const displayName = [profile?.firstName, profile?.lastName].filter(Boolean).join(" ");
   const initials = displayName
     .split(" ")
     .filter(Boolean)
@@ -644,7 +644,8 @@ const HomePage = ({
     finally { setLoadingGoals(false); }
   };
 
-  if (loading || financialLoading) {
+
+  if (loading) {
     return <HomeSkeleton />;
   }
 
@@ -738,7 +739,7 @@ const HomePage = ({
               profile={profile}
               userId={userId}
               initials={initials}
-              avatarUrl={profile.avatarUrl}
+              avatarUrl={profile?.avatarUrl}
               onOpenFamily={onOpenFamily}
               onSelectMember={onSelectMember}
             />
@@ -766,13 +767,13 @@ const HomePage = ({
                     userId={userId}
                     isBackFacing
                     forceVisible={isCardVisible}
-                    mintNumber={profile.mintNumber}
+                    mintNumber={profile?.mintNumber}
                   />
                 </div>
               </div>
             </div>
           ) : (
-            <SwipeableBalanceCard userId={userId} mintNumber={profile.mintNumber} />
+            <SwipeableBalanceCard userId={userId} mintNumber={profile?.mintNumber} />
           )}
         </div>
       </div>

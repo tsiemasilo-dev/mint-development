@@ -36,6 +36,26 @@ const VISIBILITY_STORAGE_KEY = "mintBalanceVisible";
 // Keyed by `userId:familyMemberId` so child-mode data stays separate.
 const _cardDataCache = {};
 
+// ── localStorage persistence helpers ──────────────────────────────────────────
+// Persisting the last-known card data across page refreshes lets returning users
+// see their correct balance instantly (no skeleton) while fresh data loads silently.
+const LS_PREFIX = "mintcard:";
+const LS_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+function _lsLoad(cacheKey) {
+  try {
+    const raw = localStorage.getItem(LS_PREFIX + cacheKey);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw);
+    if (Date.now() - ts > LS_TTL_MS) { localStorage.removeItem(LS_PREFIX + cacheKey); return null; }
+    return data?.totalMarketValue != null ? data : null;
+  } catch { return null; }
+}
+
+function _lsSave(cacheKey, data) {
+  try { localStorage.setItem(LS_PREFIX + cacheKey, JSON.stringify({ data, ts: Date.now() })); } catch {}
+}
+
 // Wraps a Supabase query promise with a timeout so hung queries fail fast
 function withTimeout(promise, ms = 4000) {
   return Promise.race([
@@ -228,9 +248,19 @@ const SwipeableBalanceCard = ({
   }, [isOpen]);
 
   const [selectedAsset, setSelectedAsset] = useState(null);
-  // Pre-populate from module-level cache so re-mounts (e.g. homeTab switch)
-  // show the last known data immediately instead of flashing R0 + skeleton.
-  const [loading, setLoading] = useState(() => !_cardDataCache[_cacheKey]);
+
+  // ── Warm cache from localStorage on first mount ──────────────────────────
+  // This runs synchronously inside useState initialisers so the very first
+  // render already has the last-known data — no skeleton for returning users.
+  const _warmCache = (() => {
+    if (_cardDataCache[_cacheKey]) return _cardDataCache[_cacheKey];
+    const stored = _lsLoad(_cacheKey);
+    if (stored) { _cardDataCache[_cacheKey] = stored; return stored; }
+    return null;
+  })();
+
+  const [loading, setLoading] = useState(() => !_warmCache);
+  const [dataSettled, setDataSettled] = useState(() => !!_warmCache?.totalMarketValue);
   const [chartData, setChartData] = useState([]);
   const [chartLoading, setChartLoading] = useState(false);
   const [returnData5d, setReturnData5d] = useState({ pnl: 0, pct: 0 });
@@ -254,7 +284,7 @@ const SwipeableBalanceCard = ({
     }
   };
 
-  const [dbData, setDbData] = useState(() => _cardDataCache[_cacheKey] || {
+  const [dbData, setDbData] = useState(() => _warmCache || {
     holdings: [],
     totalMarketValue: 0,
     totalInvested: 0,
@@ -280,13 +310,26 @@ const SwipeableBalanceCard = ({
   useEffect(() => {
     let cancelled = false;
 
-    // Safety timeout — always exit skeleton after 5s even if fetch stalls
+    // Phase-1 safety (5 s): release the `loading` flag so any loading spinners
+    // stop — but do NOT touch `dataSettled` here.  Skeleton must stay until
+    // real data actually arrives to prevent the R0 flash.
     const safetyTimer = setTimeout(() => {
       if (!cancelled) {
-        logDebug(CAT.LOADING, "⏱ Safety timer fired — SwipeableBalanceCard card loading forced off after 5 s");
+        logDebug(CAT.LOADING, "⏱ Safety timer fired — SwipeableBalanceCard loading flag cleared after 5 s");
         setLoading(false);
       }
     }, 5000);
+
+    // Phase-2 absolute abort (15 s): if the network truly stalled and no data
+    // arrived at all, exit the skeleton with whatever we have (R0 / empty).
+    // This prevents an infinite skeleton on complete network failure.
+    const abortTimer = setTimeout(() => {
+      if (!cancelled) {
+        logDebug(CAT.LOADING, "⏱ Abort timer fired — forcing skeleton exit after 15 s");
+        setDataSettled(true);
+        setLoading(false);
+      }
+    }, 15000);
 
     const loadData = async ({ silent = false } = {}) => {
       if (!userId && !familyMemberId) return;
@@ -337,85 +380,104 @@ const SwipeableBalanceCard = ({
             });
           }
         } else {
-          // Parent mode: fetch from API endpoints
+          // Parent mode: pull strategy values directly from client_strategy_returns_c
+          // (avoids dependency on /api/user/strategies which joins the deleted strategy_metrics table)
+          //
+          // ── PARALLELISE everything ───────────────────────────────────────────
+          // The Supabase JS client manages its own auth — it does NOT need us to
+          // resolve the session before firing queries.  Start all three fetches
+          // simultaneously:
+          //   • getSessionWithRetry()          – needed only for the Express API
+          //   • client_strategy_returns_c      – Supabase direct (no token needed)
+          //   • strategies_c                   – Supabase direct (no token needed)
+          // Then, the moment the session resolves, fire /api/user/holdings in
+          // parallel with the still-in-flight Supabase queries.
+          const returnsPromise = supabase
+            .from("client_strategy_returns_c")
+            .select("strategy_id, basket_value, holdings_snapshot, as_of_date")
+            .eq("user_id", userId)
+            .order("as_of_date", { ascending: false });
+
+          const strategiesPromise = supabase
+            .from("strategies_c")
+            .select("id, name, short_name, holdings, status")
+            .eq("status", "active");
+
+          // Session resolves in parallel with the Supabase queries above
           const session = await getSessionWithRetry();
           if (cancelled) return;
           const token = session?.access_token;
 
-          [holdingsRes, strategiesRes] = token
-            ? await Promise.all([
-              fetchJsonWithAuth("/api/user/holdings", token).then((json) => json || { holdings: [] }),
-              fetchJsonWithAuth("/api/user/strategies", token).then((json) => json || { strategies: [] }),
-            ])
-            : [{ holdings: [] }, { strategies: [] }];
-
+          // Holdings API (needs token) + Supabase queries all land in parallel
+          const [holdingsJson, returnsResult, strategiesResult] = await Promise.all([
+            token
+              ? fetchJsonWithAuth("/api/user/holdings", token).then((json) => json || { holdings: [] })
+              : Promise.resolve({ holdings: [] }),
+            returnsPromise,
+            strategiesPromise,
+          ]);
+          holdingsRes = holdingsJson;
           const stockHoldings = (holdingsRes.holdings || []).filter(h => !h.strategy_id);
-          const strategyItems = await Promise.all((strategiesRes.strategies || []).map(async (s) => {
-            const holdingsArr = s.holdings || [];
-            const topLogos = holdingsArr
+
+          // Take the most-recent row per strategy_id
+          const latestByStrategy = {};
+          for (const row of (returnsResult.data || [])) {
+            if (!latestByStrategy[row.strategy_id]) {
+              latestByStrategy[row.strategy_id] = row;
+            }
+          }
+
+          const strategiesMap = {};
+          for (const s of (strategiesResult.data || [])) {
+            strategiesMap[s.id] = s;
+          }
+
+          const strategyItems = Object.entries(latestByStrategy).map(([stratId, row]) => {
+            const strat = strategiesMap[stratId] || {};
+            const basketCents = Number(row.basket_value || 0);
+
+            const snapshot = (() => {
+              try {
+                return typeof row.holdings_snapshot === "string"
+                  ? JSON.parse(row.holdings_snapshot)
+                  : (row.holdings_snapshot || []);
+              } catch { return []; }
+            })();
+
+            const investedCents = snapshot.reduce(
+              (sum, h) => sum + Math.round((h.avg_fill || 0) * (h.qty || 0)),
+              0
+            );
+            const changePct = investedCents > 0
+              ? ((basketCents - investedCents) / investedCents) * 100
+              : 0;
+
+            const holdingsArr = strat.holdings || [];
+            const topLogos = [...holdingsArr]
               .sort((a, b) => (b.weight || 0) - (a.weight || 0))
               .slice(0, 3)
-              .map((h) => h.logo_url || null)
+              .map(h => h.logo_url || null)
               .filter(Boolean);
-            const investedRands = s.investedAmount || 0;
-            const liveRands = s.currentMarketValue != null ? s.currentMarketValue : investedRands;
-            const purchaseDate = s.firstInvestedDate;
-            let changePct = investedRands > 0 ? ((liveRands - investedRands) / investedRands) * 100 : 0;
 
-            const investedCents = Math.round(investedRands * 100);
-            const currentCents = Math.round(liveRands * 100);
             return {
-              symbol: s.shortName || s.name || "Strategy",
-              name: s.name || "Strategy",
-              market_value: currentCents,
+              symbol: strat.short_name || strat.name || "Strategy",
+              name: strat.name || "Strategy",
+              market_value: basketCents,
               invested_amount: investedCents,
               avg_fill: investedCents,
               quantity: 1,
               logo_url: null,
               security_id: null,
               isStrategy: true,
-              strategyId: s.id,
-              topLogos: topLogos,
-              changePct: changePct,
+              strategyId: stratId,
+              topLogos,
+              changePct,
               holdings: holdingsArr,
-              firstInvestedDate: purchaseDate,
+              firstInvestedDate: null,
             };
-          }));
-          enrichedHoldings = [...stockHoldings, ...strategyItems];
-        }
+          });
 
-        // Fetch latest basket_value from client_strategy_returns_c and override
-        // each strategy's market_value so totalMarketValue is always DB-accurate
-        if (strategiesRes && userId) {
-          const strategyIds = (strategiesRes.strategies || []).map(s => s.id).filter(Boolean);
-          const basketMap = {};
-          await Promise.all(strategyIds.map(async (stratId) => {
-            try {
-              const { data: row } = await withTimeout(
-                supabase
-                  .from("client_strategy_returns_c")
-                  .select("basket_value")
-                  .eq("user_id", userId)
-                  .eq("strategy_id", stratId)
-                  .order("as_of_date", { ascending: false })
-                  .limit(1)
-                  .maybeSingle()
-              );
-              if (row?.basket_value) {
-                basketMap[stratId] = Number(row.basket_value);
-              }
-            } catch (e) {
-              console.warn(`[SwipeableBalanceCard] basket_value query timed out for ${stratId}`);
-            }
-          }));
-          if (Object.keys(basketMap).length > 0) {
-            enrichedHoldings = enrichedHoldings.map(h => {
-              if (h.isStrategy && h.strategyId && basketMap[h.strategyId] != null) {
-                return { ...h, market_value: basketMap[h.strategyId] };
-              }
-              return h;
-            });
-          }
+          enrichedHoldings = [...stockHoldings, ...strategyItems];
         }
 
         // Live value: use last_price × qty for stocks, market_value for strategies
@@ -460,13 +522,16 @@ const SwipeableBalanceCard = ({
           totalInvestedAmount: investedAmount,
           holdingsCount: enrichedHoldings.length,
         };
-        // Persist in module-level cache so subsequent re-mounts skip skeleton
+        // Persist in module-level cache (tab switches) + localStorage (page refreshes)
         if (mValue > 0 || enrichedHoldings.length > 0) {
           _cardDataCache[_cacheKey] = nextDbData;
+          _lsSave(_cacheKey, nextDbData);
         }
         setDbData(nextDbData);
+        setDataSettled(true);
       } catch (err) {
         console.error("❌ [SwipeableBalanceCard] Load data error:", err);
+        setDataSettled(true);
       } finally {
         if (!cancelled) {
           lastCardLoadRef.current = Date.now();
@@ -476,8 +541,11 @@ const SwipeableBalanceCard = ({
       }
     };
 
-    loadDataRef.current = () => loadData({ silent: false });
-    loadData({ silent: false });
+    // If we already have cached data (module cache or localStorage), refresh
+    // silently in the background — no skeleton shown, value updates in-place.
+    const hasCached = !!(_warmCache?.totalMarketValue > 0);
+    loadDataRef.current = () => loadData({ silent: hasCached });
+    loadData({ silent: hasCached });
 
     // Debounce visibility handler — silent background refresh with 30 s cooldown
     // so tab switches never reset the skeleton when data is already loaded
@@ -500,6 +568,7 @@ const SwipeableBalanceCard = ({
     return () => {
       cancelled = true;
       clearTimeout(safetyTimer);
+      clearTimeout(abortTimer);
       clearTimeout(visibilityDebounce);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
@@ -915,28 +984,6 @@ const SwipeableBalanceCard = ({
 
   const TrendIcon = isLoss ? TrendingDown : TrendingUp;
 
-  if (loading && userId)
-    return (
-      <div className="rounded-3xl gradient-hero-card shadow-hero p-5 relative overflow-hidden border border-white/5 animate-pulse">
-        <div className="flex items-center justify-between mb-3">
-          <Skeleton className="h-2.5 w-28 bg-white/10 rounded" />
-          <Skeleton className="h-3 w-10 bg-white/10 rounded" />
-        </div>
-        <div className="flex items-end justify-between mb-4">
-          <div>
-            <Skeleton className="h-8 w-36 bg-white/10 rounded mb-2" />
-            <Skeleton className="h-5 w-24 bg-white/10 rounded" />
-          </div>
-          <Skeleton className="h-12 w-28 bg-white/10 rounded" />
-        </div>
-        <Skeleton className="h-9 w-full bg-white/10 rounded-full mb-4" />
-        <div className="flex gap-4 pt-4 border-t border-white/10">
-          <Skeleton className="h-8 w-24 bg-white/10 rounded" />
-          <Skeleton className="h-8 w-24 bg-white/10 rounded" />
-        </div>
-      </div>
-    );
-
   return (
     <div className="rounded-3xl gradient-hero-card shadow-hero p-5 relative overflow-hidden border border-white/5">
       {/* Ambient glows */}
@@ -970,30 +1017,40 @@ const SwipeableBalanceCard = ({
       {/* Value + inline sparkline */}
       <div className="flex items-end justify-between mt-2 relative">
         <div className="flex-1 min-w-0 pr-3">
-          <h2 className="text-3xl font-bold tracking-tight text-white leading-none">
-            {isVisible ? formatFull(displayBalance) : masked}
-          </h2>
+          {!dataSettled ? (
+            <Skeleton className="h-8 w-36 bg-white/15 rounded mb-2 animate-pulse" />
+          ) : (
+            <h2 className="text-3xl font-bold tracking-tight text-white leading-none">
+              {isVisible ? formatFull(displayBalance) : masked}
+            </h2>
+          )}
           <div className="flex items-center gap-2 mt-2">
-            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${isLoss ? "bg-destructive/20 text-destructive" : "bg-success/20 text-success"}`}>
-              <TrendIcon size={11} strokeWidth={2.5} />
-              {isVisible ? (
-                <>
-                  {isPeriodTab && (
-                    <span className="text-[10px] opacity-75">
-                      {activeTab === "5d" && "5D:"}{activeTab === "m" && "1M:"}{activeTab === "ytd" && "YTD:"}{activeTab === "all" && "Inc:"}
-                    </span>
+            {!dataSettled ? (
+              <Skeleton className="h-5 w-24 bg-white/15 rounded-full animate-pulse" />
+            ) : (
+              <>
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${isLoss ? "bg-destructive/20 text-destructive" : "bg-success/20 text-success"}`}>
+                  <TrendIcon size={11} strokeWidth={2.5} />
+                  {isVisible ? (
+                    <>
+                      {isPeriodTab && (
+                        <span className="text-[10px] opacity-75">
+                          {activeTab === "5d" && "5D:"}{activeTab === "m" && "1M:"}{activeTab === "ytd" && "YTD:"}{activeTab === "all" && "Inc:"}
+                        </span>
+                      )}
+                      {displayReturn == null ? "N/A" : formatKMB(Math.abs(displayReturn))}
+                    </>
+                  ) : (
+                    masked
                   )}
-                  {displayReturn == null ? "N/A" : formatKMB(Math.abs(displayReturn))}
-                </>
-              ) : (
-                masked
-              )}
-            </span>
-            <span className={`text-[11px] font-medium ${isLoss ? "text-destructive" : "text-success"}`}>
-              {isVisible
-                ? (returnPct == null ? "N/A" : `${isLoss ? "-" : "+"}${returnPct}%`)
-                : masked}
-            </span>
+                </span>
+                <span className={`text-[11px] font-medium ${isLoss ? "text-destructive" : "text-success"}`}>
+                  {isVisible
+                    ? (returnPct == null ? "N/A" : `${isLoss ? "-" : "+"}${returnPct}%`)
+                    : masked}
+                </span>
+              </>
+            )}
           </div>
         </div>
 
@@ -1018,10 +1075,10 @@ const SwipeableBalanceCard = ({
                 <Line type="monotone" dataKey="v" stroke={chartColor} strokeWidth={2} dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
-          ) : chartLoading ? (
+          ) : (!dataSettled || chartLoading) ? (
             <div className="flex items-end gap-0.5 w-[185px] h-[85px]">
               {[40, 55, 35, 65, 50, 70, 45, 60].map((h, i) => (
-                <Skeleton key={i} className="flex-1 rounded-sm bg-white/10" style={{ height: `${h}%` }} />
+                <Skeleton key={i} className="flex-1 rounded-sm bg-white/10 animate-pulse" style={{ height: `${h}%` }} />
               ))}
             </div>
           ) : null}
@@ -1030,6 +1087,9 @@ const SwipeableBalanceCard = ({
 
       {/* Asset selector — hidden in child mode */}
       <div ref={dropdownRef} className={`relative mt-3${childMode ? " hidden" : ""}`}>
+        {!dataSettled ? (
+          <Skeleton className="h-7 w-28 bg-white/10 rounded-full animate-pulse" />
+        ) : (
         <button
           onClick={() => setIsOpen(!isOpen)}
           className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/15"
@@ -1040,6 +1100,7 @@ const SwipeableBalanceCard = ({
           </span>
           {isOpen ? <ChevronUp size={12} className="text-slate-300" /> : <ChevronDown size={12} className="text-slate-300" />}
         </button>
+        )}
         {isOpen && (
           <div className="absolute top-full mt-1 left-0 w-48 bg-white rounded-xl z-[120] overflow-hidden border border-slate-200 shadow-lg">
             <div className="py-1 overflow-y-auto max-h-[140px]">
