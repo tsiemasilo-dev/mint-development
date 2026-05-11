@@ -36,6 +36,26 @@ const VISIBILITY_STORAGE_KEY = "mintBalanceVisible";
 // Keyed by `userId:familyMemberId` so child-mode data stays separate.
 const _cardDataCache = {};
 
+// ── localStorage persistence helpers ──────────────────────────────────────────
+// Persisting the last-known card data across page refreshes lets returning users
+// see their correct balance instantly (no skeleton) while fresh data loads silently.
+const LS_PREFIX = "mintcard:";
+const LS_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+function _lsLoad(cacheKey) {
+  try {
+    const raw = localStorage.getItem(LS_PREFIX + cacheKey);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw);
+    if (Date.now() - ts > LS_TTL_MS) { localStorage.removeItem(LS_PREFIX + cacheKey); return null; }
+    return data?.totalMarketValue != null ? data : null;
+  } catch { return null; }
+}
+
+function _lsSave(cacheKey, data) {
+  try { localStorage.setItem(LS_PREFIX + cacheKey, JSON.stringify({ data, ts: Date.now() })); } catch {}
+}
+
 // Wraps a Supabase query promise with a timeout so hung queries fail fast
 function withTimeout(promise, ms = 4000) {
   return Promise.race([
@@ -228,10 +248,19 @@ const SwipeableBalanceCard = ({
   }, [isOpen]);
 
   const [selectedAsset, setSelectedAsset] = useState(null);
-  // Pre-populate from module-level cache so re-mounts (e.g. homeTab switch)
-  // show the last known data immediately instead of flashing R0 + skeleton.
-  const [loading, setLoading] = useState(() => !_cardDataCache[_cacheKey]);
-  const [dataSettled, setDataSettled] = useState(() => !!_cardDataCache[_cacheKey]?.totalMarketValue);
+
+  // ── Warm cache from localStorage on first mount ──────────────────────────
+  // This runs synchronously inside useState initialisers so the very first
+  // render already has the last-known data — no skeleton for returning users.
+  const _warmCache = (() => {
+    if (_cardDataCache[_cacheKey]) return _cardDataCache[_cacheKey];
+    const stored = _lsLoad(_cacheKey);
+    if (stored) { _cardDataCache[_cacheKey] = stored; return stored; }
+    return null;
+  })();
+
+  const [loading, setLoading] = useState(() => !_warmCache);
+  const [dataSettled, setDataSettled] = useState(() => !!_warmCache?.totalMarketValue);
   const [chartData, setChartData] = useState([]);
   const [chartLoading, setChartLoading] = useState(false);
   const [returnData5d, setReturnData5d] = useState({ pnl: 0, pct: 0 });
@@ -255,7 +284,7 @@ const SwipeableBalanceCard = ({
     }
   };
 
-  const [dbData, setDbData] = useState(() => _cardDataCache[_cacheKey] || {
+  const [dbData, setDbData] = useState(() => _warmCache || {
     holdings: [],
     totalMarketValue: 0,
     totalInvested: 0,
@@ -353,29 +382,42 @@ const SwipeableBalanceCard = ({
         } else {
           // Parent mode: pull strategy values directly from client_strategy_returns_c
           // (avoids dependency on /api/user/strategies which joins the deleted strategy_metrics table)
+          //
+          // ── PARALLELISE everything ───────────────────────────────────────────
+          // The Supabase JS client manages its own auth — it does NOT need us to
+          // resolve the session before firing queries.  Start all three fetches
+          // simultaneously:
+          //   • getSessionWithRetry()          – needed only for the Express API
+          //   • client_strategy_returns_c      – Supabase direct (no token needed)
+          //   • strategies_c                   – Supabase direct (no token needed)
+          // Then, the moment the session resolves, fire /api/user/holdings in
+          // parallel with the still-in-flight Supabase queries.
+          const returnsPromise = supabase
+            .from("client_strategy_returns_c")
+            .select("strategy_id, basket_value, holdings_snapshot, as_of_date")
+            .eq("user_id", userId)
+            .order("as_of_date", { ascending: false });
+
+          const strategiesPromise = supabase
+            .from("strategies_c")
+            .select("id, name, short_name, holdings, status")
+            .eq("status", "active");
+
+          // Session resolves in parallel with the Supabase queries above
           const session = await getSessionWithRetry();
           if (cancelled) return;
           const token = session?.access_token;
 
-          // Individual stock holdings (unaffected by the strategy_metrics issue)
-          holdingsRes = token
-            ? await fetchJsonWithAuth("/api/user/holdings", token).then((json) => json || { holdings: [] })
-            : { holdings: [] };
-
-          const stockHoldings = (holdingsRes.holdings || []).filter(h => !h.strategy_id);
-
-          // Latest basket_value per strategy from client_strategy_returns_c
-          const [returnsResult, strategiesResult] = await Promise.all([
-            supabase
-              .from("client_strategy_returns_c")
-              .select("strategy_id, basket_value, holdings_snapshot, as_of_date")
-              .eq("user_id", userId)
-              .order("as_of_date", { ascending: false }),
-            supabase
-              .from("strategies_c")
-              .select("id, name, short_name, holdings, status")
-              .eq("status", "active"),
+          // Holdings API (needs token) + Supabase queries all land in parallel
+          const [holdingsJson, returnsResult, strategiesResult] = await Promise.all([
+            token
+              ? fetchJsonWithAuth("/api/user/holdings", token).then((json) => json || { holdings: [] })
+              : Promise.resolve({ holdings: [] }),
+            returnsPromise,
+            strategiesPromise,
           ]);
+          holdingsRes = holdingsJson;
+          const stockHoldings = (holdingsRes.holdings || []).filter(h => !h.strategy_id);
 
           // Take the most-recent row per strategy_id
           const latestByStrategy = {};
@@ -480,9 +522,10 @@ const SwipeableBalanceCard = ({
           totalInvestedAmount: investedAmount,
           holdingsCount: enrichedHoldings.length,
         };
-        // Persist in module-level cache so subsequent re-mounts skip skeleton
+        // Persist in module-level cache (tab switches) + localStorage (page refreshes)
         if (mValue > 0 || enrichedHoldings.length > 0) {
           _cardDataCache[_cacheKey] = nextDbData;
+          _lsSave(_cacheKey, nextDbData);
         }
         setDbData(nextDbData);
         setDataSettled(true);
@@ -498,8 +541,11 @@ const SwipeableBalanceCard = ({
       }
     };
 
-    loadDataRef.current = () => loadData({ silent: false });
-    loadData({ silent: false });
+    // If we already have cached data (module cache or localStorage), refresh
+    // silently in the background — no skeleton shown, value updates in-place.
+    const hasCached = !!(_warmCache?.totalMarketValue > 0);
+    loadDataRef.current = () => loadData({ silent: hasCached });
+    loadData({ silent: hasCached });
 
     // Debounce visibility handler — silent background refresh with 30 s cooldown
     // so tab switches never reset the skeleton when data is already loaded
