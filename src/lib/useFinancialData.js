@@ -99,25 +99,34 @@ async function fetchServerTransactions(token, limit = 50) {
 }
 
 let financialDataCache = null;
+let financialDataLastFetch = 0;
+const VISIBILITY_REFETCH_COOLDOWN_MS = 45000;
 
 export const clearFinancialDataCache = () => {
   financialDataCache = null;
+  financialDataLastFetch = 0;
+};
+
+const emptyFinancialData = {
+  balance: 0,
+  investments: 0,
+  availableCredit: 0,
+  transactions: [],
+  holdings: [],
+  creditInfo: null,
+  bestAssets: [],
+  loading: false,
+  error: null,
 };
 
 export const useFinancialData = () => {
-  const [data, setData] = useState({
-    balance: 0,
-    investments: 0,
-    availableCredit: 0,
-    transactions: [],
-    holdings: [],
-    creditInfo: null,
-    bestAssets: [],
-    loading: true,
-    error: null,
-  });
+  const [data, setData] = useState(() =>
+    financialDataCache
+      ? { ...financialDataCache, loading: false, error: null }
+      : { ...emptyFinancialData, loading: true }
+  );
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async ({ silent = false } = {}) => {
     if (!supabase) {
       setData((prev) => ({ ...prev, loading: false, error: "Database not connected" }));
       return;
@@ -147,6 +156,13 @@ export const useFinancialData = () => {
 
       const safeHoldings = getHoldingsList(holdings);
       const safeTxns = Array.isArray(allServerTransactions) ? allServerTransactions : [];
+
+      if (silent && safeHoldings.length === 0 && financialDataCache?.holdings?.length > 0) {
+        console.warn("[useFinancialData] Background refresh returned empty holdings — keeping cached data");
+        setData((prev) => ({ ...prev, loading: false }));
+        return;
+      }
+
       const transactions = safeTxns.slice(0, 20);
       const allTransactions = safeTxns;
       const creditInfo = creditResult.data;
@@ -197,6 +213,7 @@ export const useFinancialData = () => {
       };
 
       financialDataCache = newData;
+      financialDataLastFetch = Date.now();
       setData(newData);
 
       console.log("[useFinancialData] Updated balance from DB:", walletBalance);
@@ -211,6 +228,10 @@ export const useFinancialData = () => {
   }, []);
 
   useEffect(() => {
+    if (financialDataCache) {
+      fetchData({ silent: true });
+      return;
+    }
     const safetyTimer = setTimeout(() => {
       setData((prev) => {
         if (!prev.loading) return prev;
@@ -224,7 +245,10 @@ export const useFinancialData = () => {
 
   useEffect(() => {
     const handleVisibility = () => {
-      if (document.visibilityState === "visible") fetchData();
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - financialDataLastFetch < VISIBILITY_REFETCH_COOLDOWN_MS) return;
+      fetchData({ silent: true });
     };
     const handleUpdate = () => {
       fetchData();
@@ -436,20 +460,27 @@ export const useCreditInfo = () => {
   return data;
 };
 
-export const useInvestments = () => {
-  const [data, setData] = useState({
-    totalInvestments: 0,
-    monthlyChange: 0,
-    monthlyChangePercent: 0,
-    portfolioMix: [],
-    goals: [],
-    holdings: [],
-    closedHoldings: [],
-    loading: true,
-    hasInvestments: false,
-  });
+let investmentsDataCache = null;
+let investmentsDataLastFetch = 0;
 
-  const fetchInvestments = useCallback(async () => {
+export const useInvestments = () => {
+  const [data, setData] = useState(() =>
+    investmentsDataCache
+      ? { ...investmentsDataCache, loading: false }
+      : {
+          totalInvestments: 0,
+          monthlyChange: 0,
+          monthlyChangePercent: 0,
+          portfolioMix: [],
+          goals: [],
+          holdings: [],
+          closedHoldings: [],
+          loading: true,
+          hasInvestments: false,
+        }
+  );
+
+  const fetchInvestments = useCallback(async ({ silent = false } = {}) => {
     if (!supabase) {
       setData((prev) => ({ ...prev, loading: false }));
       return;
@@ -473,6 +504,12 @@ export const useInvestments = () => {
       const holdings = getHoldingsList(holdingsResult);
       const closedHoldings = getClosedHoldingsList(holdingsResult);
       const goals = goalsResult.data || [];
+
+      if (silent && holdings.length === 0 && investmentsDataCache?.holdings?.length > 0) {
+        console.warn("[useInvestments] Background refresh returned empty holdings — keeping cached data");
+        setData((prev) => ({ ...prev, loading: false }));
+        return;
+      }
 
       const liveHV = (h) => h.last_price != null && h.quantity != null ? (h.last_price * h.quantity) / 100 : (h.market_value || 0) / 100;
       const totalInvestments = holdings.reduce((sum, h) => sum + liveHV(h), 0);
@@ -526,7 +563,7 @@ export const useInvestments = () => {
         };
       });
 
-      setData({
+      const newInvestmentsData = {
         totalInvestments,
         monthlyChange,
         monthlyChangePercent,
@@ -536,7 +573,10 @@ export const useInvestments = () => {
         closedHoldings,
         loading: false,
         hasInvestments: holdings.length > 0,
-      });
+      };
+      investmentsDataCache = newInvestmentsData;
+      investmentsDataLastFetch = Date.now();
+      setData(newInvestmentsData);
     } catch (err) {
       console.error("Error fetching investments:", err);
       setData((prev) => ({ ...prev, loading: false }));
@@ -544,12 +584,19 @@ export const useInvestments = () => {
   }, []);
 
   useEffect(() => {
+    if (investmentsDataCache) {
+      fetchInvestments({ silent: true });
+      return;
+    }
     fetchInvestments();
   }, [fetchInvestments]);
 
   useEffect(() => {
     const handleVisibility = () => {
-      if (document.visibilityState === "visible") fetchInvestments();
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - investmentsDataLastFetch < VISIBILITY_REFETCH_COOLDOWN_MS) return;
+      fetchInvestments({ silent: true });
     };
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);

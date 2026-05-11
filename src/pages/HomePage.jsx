@@ -47,6 +47,11 @@ const INSURE_ENABLED = import.meta.env.VITE_ENABLE_INSURE === "true";
 
 const CARD_VISIBILITY_KEY = "mintBalanceVisible";
 
+// Module-level caches to prevent section skeletons on remount
+let _cachedBestAssets = [];
+let _cachedBestStrategies = [];
+let _cachedHasAnyHoldings = false;
+
 const HomePage = ({
   onOpenNotifications,
   onOpenMintBalance,
@@ -76,7 +81,7 @@ const HomePage = ({
   const { balance, investments, transactions, bestAssets, loading: financialLoading, refetch: fetchFinancialData } = useFinancialData();
   const { monthlyChangePercent } = useInvestments();
   const { lastUpdated: pricesLastUpdated } = useRealtimePrices();
-  const [bestStrategies, setBestStrategies] = useState([]);
+  const [bestStrategies, setBestStrategies] = useState(() => _cachedBestStrategies);
   const [holdingsSecurities, setHoldingsSecurities] = useState([]);
   const [failedLogos, setFailedLogos] = useState({});
   const [showPayModal, setShowPayModal] = useState(false);
@@ -86,10 +91,10 @@ const HomePage = ({
   const [loadingNews, setLoadingNews] = useState(false);
   const [homeTab, setHomeTab] = useState("balance");
   const [userId, setUserId] = useState(null);
-  const [localBestAssets, setLocalBestAssets] = useState([]);
-  const [hasAnyHoldings, setHasAnyHoldings] = useState(false);
-  const [loadingBestAssets, setLoadingBestAssets] = useState(true);
-  const [loadingBestStrategies, setLoadingBestStrategies] = useState(true);
+  const [localBestAssets, setLocalBestAssets] = useState(() => _cachedBestAssets);
+  const [hasAnyHoldings, setHasAnyHoldings] = useState(() => _cachedHasAnyHoldings);
+  const [loadingBestAssets, setLoadingBestAssets] = useState(() => _cachedBestAssets.length === 0);
+  const [loadingBestStrategies, setLoadingBestStrategies] = useState(() => _cachedBestStrategies.length === 0);
   const { onboardingComplete, loading: onboardingLoading, refetch: fetchOnboardingStatus } = useOnboardingStatus();
   const onboardingChecked = !onboardingLoading;
 
@@ -133,7 +138,7 @@ const HomePage = ({
       const directHoldings = (holdings || []).filter(h => !h.strategy_id && h.security_id);
       const strategyHoldings = (holdings || []).filter(h => h.strategy_id);
 
-      if (holdings && holdings.length > 0) setHasAnyHoldings(true);
+      if (holdings && holdings.length > 0) { _cachedHasAnyHoldings = true; setHasAnyHoldings(true); }
 
       if (directHoldings.length > 0) {
         const holdings = directHoldings;
@@ -188,6 +193,7 @@ const HomePage = ({
         const profitable = formatted.filter(a => !a.isPending && a.pnlPct > 0).sort((a, b) => b.pnlPct - a.pnlPct);
         const pending = formatted.filter(a => a.isPending);
         const sorted = [...profitable, ...pending].slice(0, 5);
+        _cachedBestAssets = sorted;
         setLocalBestAssets(sorted);
         return;
       }
@@ -230,6 +236,7 @@ const HomePage = ({
           const profitable = formatted.filter(a => !a.isPending && a.pnlPct > 0).sort((a, b) => b.pnlPct - a.pnlPct);
           const ranked = profitable.slice(0, 5);
           if (ranked.length > 0) {
+            _cachedBestAssets = ranked;
             setLocalBestAssets(ranked);
             return;
           }
@@ -269,6 +276,7 @@ const HomePage = ({
             };
           });
 
+        _cachedBestAssets = formatted;
         setLocalBestAssets(formatted);
       }
     } catch (e) {
@@ -460,10 +468,11 @@ const HomePage = ({
         const sorted = formatted
           .sort((a, b) => (b.change_pct || 0) - (a.change_pct || 0))
           .slice(0, 5);
+        _cachedBestStrategies = sorted;
         setBestStrategies(sorted);
       } catch (error) {
         console.error("Failed to load strategies", error);
-        setBestStrategies([]);
+        setBestStrategies((prev) => prev.length > 0 ? prev : []);
       } finally {
         setLoadingBestStrategies(false);
       }
