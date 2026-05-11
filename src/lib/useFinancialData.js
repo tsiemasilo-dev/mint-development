@@ -1,18 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "./supabase";
 import { logDebug, CAT } from "./debugLog.js";
+import { getCachedSession, setCachedSession } from "./sessionCache.js";
 
 async function getAuthToken() {
   if (!supabase) return null;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) return session.access_token;
-    if (attempt === 0) {
-      const { data: refreshData } = await supabase.auth.refreshSession();
-      if (refreshData?.session?.access_token) return refreshData.session.access_token;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
-  }
+  const session = await getCachedSession();
+  if (session?.access_token) return session.access_token;
+  try {
+    const { data: refreshData } = await supabase.auth.refreshSession();
+    if (refreshData?.session?.access_token) return refreshData.session.access_token;
+  } catch {}
   return null;
 }
 
@@ -135,11 +133,12 @@ export const useFinancialData = () => {
     }
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const session = await getCachedSession();
       if (!session?.user) {
         setData((prev) => ({ ...prev, loading: false }));
         return;
       }
+      setCachedSession(session);
 
       const userId = session.user.id;
       const token = session.access_token;
@@ -200,7 +199,10 @@ export const useFinancialData = () => {
         .filter((t) => expenseTypes.includes(t.direction))
         .reduce((sum, t) => sum + Math.abs((t.amount || 0) / 100), 0);
       const availableCredit = Math.max(0, (totalIncome - totalExpenses) * 0.2);
-      const walletBalance = walletResult.data?.balance ?? 0;
+      // Guard: if wallet query failed, preserve cached balance to avoid showing R0
+      const walletBalance = walletResult.error
+        ? (financialDataCache?.balance ?? 0)
+        : (walletResult.data?.balance ?? 0);
 
       const newData = {
         balance: walletBalance,
@@ -293,7 +295,7 @@ export const useMintBalance = () => {
       }
 
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const session = await getCachedSession();
         if (!session?.user) {
           setData((prev) => ({ ...prev, loading: false }));
           return;
@@ -416,7 +418,7 @@ export const useCreditInfo = () => {
       }
 
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const session = await getCachedSession();
         if (!session?.user) {
           setData((prev) => ({ ...prev, loading: false }));
           return;
@@ -497,7 +499,7 @@ export const useInvestments = () => {
     }
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const session = await getCachedSession();
       if (!session?.user) {
         setData((prev) => ({ ...prev, loading: false }));
         return;

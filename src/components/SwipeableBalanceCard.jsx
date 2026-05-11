@@ -19,6 +19,7 @@ import {
 import { supabase } from "../lib/supabase";
 import { getStrategyPriceHistory, getClientStrategyReturns } from "../lib/strategyData";
 import { logDebug, CAT } from "../lib/debugLog.js";
+import { getCachedSession } from "../lib/sessionCache.js";
 import { useRealtimePrices } from "../lib/useRealtimePrices";
 import Skeleton from "./Skeleton";
 import SettlementBadge from "./PendingBadge";
@@ -71,15 +72,13 @@ const formatPrecise = (value) => {
 const TIMEFRAME_DAYS = { d: 7, "5d": 5, m: 30, ytd: 365, all: 1825 };
 
 async function getSessionWithRetry() {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) return session;
-    if (attempt === 0) {
-      const { data } = await supabase.auth.refreshSession();
-      if (data?.session?.access_token) return data.session;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
-  }
+  const session = await getCachedSession();
+  if (session?.access_token) return session;
+  // Fallback: attempt a direct refresh (only if cache returned null)
+  try {
+    const { data } = await supabase.auth.refreshSession();
+    if (data?.session?.access_token) return data.session;
+  } catch {}
   return null;
 }
 
@@ -266,6 +265,8 @@ const SwipeableBalanceCard = ({
   };
 
   const loadDataRef = React.useRef(null);
+  const lastCardLoadRef = React.useRef(0);
+  const CARD_REFRESH_COOLDOWN = 30000;
 
   useEffect(() => {
     let cancelled = false;
@@ -278,10 +279,12 @@ const SwipeableBalanceCard = ({
       }
     }, 5000);
 
-    const loadData = async () => {
+    const loadData = async ({ silent = false } = {}) => {
       if (!userId && !familyMemberId) return;
-      logDebug(CAT.LOADING, "🃏 SwipeableBalanceCard loadData — loading → TRUE");
-      setLoading(true);
+      if (!silent) {
+        logDebug(CAT.LOADING, "🃏 SwipeableBalanceCard loadData — loading → TRUE");
+        setLoading(true);
+      }
 
       try {
         let enrichedHoldings = [];
@@ -451,23 +454,31 @@ const SwipeableBalanceCard = ({
       } catch (err) {
         console.error("❌ [SwipeableBalanceCard] Load data error:", err);
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          lastCardLoadRef.current = Date.now();
+          if (!silent) setLoading(false);
+          else setLoading(false);
+        }
       }
     };
 
-    loadDataRef.current = loadData;
-    loadData();
+    loadDataRef.current = () => loadData({ silent: false });
+    loadData({ silent: false });
 
-    // Debounce visibility handler — prevents multiple concurrent loadData calls
-    // when the OS rapidly fires visibilitychange events on app resume
+    // Debounce visibility handler — silent background refresh with 30 s cooldown
+    // so tab switches never reset the skeleton when data is already loaded
     let visibilityDebounce = null;
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
         clearTimeout(visibilityDebounce);
-        logDebug(CAT.VISIBILITY, "👁  SwipeableBalanceCard visibility → will call loadData in 300 ms");
         visibilityDebounce = setTimeout(() => {
-          logDebug(CAT.LOADING, "👁  SwipeableBalanceCard loadData triggered by tab focus (visibilitychange)");
-          loadDataRef.current?.();
+          const elapsed = Date.now() - lastCardLoadRef.current;
+          if (elapsed < CARD_REFRESH_COOLDOWN) {
+            logDebug(CAT.VISIBILITY, `👁  SwipeableBalanceCard skip tab-focus refresh — cooldown (${Math.round(elapsed / 1000)}s < 30s)`);
+            return;
+          }
+          logDebug(CAT.LOADING, "👁  SwipeableBalanceCard silent refresh on tab focus (no skeleton)");
+          loadData({ silent: true });
         }, 300);
       }
     };
@@ -487,10 +498,8 @@ const SwipeableBalanceCard = ({
 
       // Ensure we don't leave chart stuck in loading if no holdings
       if (dbData.holdings.length === 0) {
-        if (!loading) {
-           setChartData([]);
-           setChartLoading(false);
-        }
+        setChartData([]);
+        setChartLoading(false);
         return;
       }
 
@@ -711,7 +720,7 @@ const SwipeableBalanceCard = ({
     return () => {
       chartCancelled = true;
     };
-  }, [userId, familyMemberId, dbData.holdings, activeTab, selectedAsset, lastUpdated, loading]);
+  }, [userId, familyMemberId, dbData.holdings, activeTab, selectedAsset, lastUpdated]);
 
   useEffect(() => {
     const fetchPeriodReturnData = async () => {

@@ -1,4 +1,18 @@
 (function initAutoRefresh() {
+  // Disable auto-refresh in development environments to prevent spurious reloads
+  // caused by hot-module replacement changing bundle hashes
+  const host = window.location.hostname;
+  const isDev = host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host.endsWith('.replit.dev') ||
+    host.endsWith('.repl.co') ||
+    window.location.port !== '';
+
+  if (isDev) {
+    console.log('[auto-refresh] Development environment detected — auto-refresh disabled');
+    return;
+  }
+
   const POLL_INTERVAL = 30000;
   const VERSION_ENDPOINT = '/api/version';
 
