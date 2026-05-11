@@ -1054,8 +1054,38 @@ const SwipeableBalanceCard = ({
           </div>
         </div>
 
-        {/* Inline sparkline — absolute so it doesn't expand card height */}
-        <div className="opacity-90 absolute right-4 -bottom-10">
+        {/* Mobile sparkline — flex item so it doesn't overflow into dropdown */}
+        <div className="sm:hidden opacity-90 self-end shrink-0 overflow-hidden" style={{ width: 150, height: 72 }}>
+          {chartData.length > 1 ? (
+            <ResponsiveContainer width={150} height={72}>
+              <ComposedChart data={chartData} margin={{ top: 2, right: 0, left: 0, bottom: 2 }}>
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null;
+                    return (
+                      <div className="bg-white/95 backdrop-blur-sm border border-slate-200 rounded-lg px-2 py-1 shadow-md">
+                        <p className="text-[9px] text-slate-500">{payload[0]?.payload?.d}</p>
+                        <p className="text-[10px] font-semibold text-slate-800">{formatPrecise(payload[0]?.value)}</p>
+                      </div>
+                    );
+                  }}
+                />
+                <ReferenceLine y={0} stroke="rgba(148,163,184,0.3)" strokeDasharray="3 3" strokeWidth={1} />
+                <Area type="monotone" dataKey="v" stroke="none" fill={chartColor} fillOpacity={0.15} />
+                <Line type="monotone" dataKey="v" stroke={chartColor} strokeWidth={2} dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          ) : (!dataSettled || chartLoading) ? (
+            <div className="flex items-end gap-0.5 w-full h-full">
+              {[40, 55, 35, 65, 50, 70, 45, 60].map((h, i) => (
+                <Skeleton key={i} className="flex-1 rounded-sm bg-white/10 animate-pulse" style={{ height: `${h}%` }} />
+              ))}
+            </div>
+          ) : null}
+        </div>
+
+        {/* Desktop sparkline — original absolute positioning, unchanged */}
+        <div className="hidden sm:block opacity-90 absolute right-4 -bottom-10">
           {chartData.length > 1 ? (
             <ResponsiveContainer width={185} height={85}>
               <ComposedChart data={chartData} margin={{ top: 2, right: 0, left: 0, bottom: 2 }}>
