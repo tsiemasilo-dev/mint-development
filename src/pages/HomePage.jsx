@@ -250,42 +250,7 @@ const HomePage = ({
         }
       }
 
-      const { data: allocData, error: allocError } = await supabase
-        .from('allocations')
-        .select('value, security_id')
-        .eq('user_id', profile.id)
-        .order('value', { ascending: false })
-        .limit(5);
-
-      if (allocError) throw allocError;
-
-      if (allocData && allocData.length > 0) {
-        const securityIds = allocData.map(item => item.security_id).filter(Boolean);
-        let securitiesMap = {};
-        if (securityIds.length > 0) {
-          const { data: secData } = await supabase
-            .from('securities_c')
-            .select('id, symbol, name, logo_url, change_percent')
-            .in('id', securityIds);
-          (secData || []).forEach(s => { securitiesMap[s.id] = s; });
-        }
-
-        const formatted = allocData
-          .filter(item => securitiesMap[item.security_id])
-          .map(item => {
-            const sec = securitiesMap[item.security_id];
-            return {
-              symbol: sec.symbol,
-              name: sec.name,
-              logo: sec.logo_url,
-              value: item.value,
-              change: Number(sec.change_percent) || 0,
-            };
-          });
-
-        _cachedBestAssets = formatted;
-        setLocalBestAssets(formatted);
-      }
+      // allocations table removed — skip this fallback gracefully
     } catch (e) {
       console.error("Asset fetch error:", e.message);
     } finally {

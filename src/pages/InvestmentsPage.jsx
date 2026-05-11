@@ -49,14 +49,9 @@ const InvestmentsPage = ({ onOpenNotifications, onOpenInvest }) => {
           return;
         }
 
-        const { data, error: allocationsError } = await supabase
-          .from("allocations")
-          .select("id, asset_class, weight, value, as_of_date")
-          .eq("user_id", userData.user.id)
-          .order("as_of_date", { ascending: false });
-
-        if (isMounted && !allocationsError) {
-          setAllocations(data || []);
+        // allocations table removed — set empty gracefully
+        if (isMounted) {
+          setAllocations([]);
         }
       } catch (error) {
         console.error("Failed to load allocations", error);

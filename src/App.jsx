@@ -699,9 +699,10 @@ const App = () => {
       }
 
       const { count, error } = await supabase
-        .from("allocations")
+        .from("stock_holdings")
         .select("id", { count: "exact", head: true })
-        .eq("user_id", userData.user.id);
+        .eq("user_id", userData.user.id)
+        .eq("is_active", true);
 
       if (error || !count) {
         openModal("Withdraw", "You don't have any allocations to withdraw from.");
