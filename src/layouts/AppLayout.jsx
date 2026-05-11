@@ -1,4 +1,4 @@
-import React, { Suspense } from "react";
+import React from "react";
 import { X } from "lucide-react";
 import Navbar from "../components/Navbar.jsx";
 import CreditNavbar from "../components/CreditNavbar.jsx";
@@ -46,9 +46,7 @@ const AppLayout = ({ activeTab, onTabChange, onWithdraw, onShowComingSoon, modal
       <main
         className="app-content flex-1 overflow-y-auto pb-[calc(7rem+env(safe-area-inset-bottom))]"
       >
-        <Suspense fallback={<div className="min-h-screen bg-[#f8f9fc]" />}>
-          {children}
-        </Suspense>
+        {children}
       </main>
       {modal ? (
         <div className="fixed inset-0 z-[12000] flex items-center justify-center bg-slate-900/60 px-4">

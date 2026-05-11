@@ -1172,7 +1172,7 @@ const App = () => {
 
   if (['home', 'credit', 'investments', 'markets', 'more'].includes(currentPage)) {
     return (
-      <Suspense fallback={<div className="min-h-screen bg-[#f8f9fc]" />}>
+      <Suspense fallback={<HomeSkeleton />}>
         <>
           {showOpenStrategiesMaintenance && <MaintenanceModal onClose={() => setShowOpenStrategiesMaintenance(false)} />}
           {/* Home tab – always mounted */}
