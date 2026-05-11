@@ -5,15 +5,20 @@ import { clearAllUserCaches } from "./lib/userCacheReset.js";
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import SwipeBackWrapper from "./components/SwipeBackWrapper.jsx";
+import AppLayout from "./layouts/AppLayout.jsx";
+import { useProfile } from "./lib/useProfile";
+import { NotificationsProvider, createWelcomeNotification, useNotificationsContext } from "./lib/NotificationsContext.jsx";
+import HomePage from "./pages/HomePage.jsx";
+import CreditHome from "./pages/credit/CreditHome";
+import NewPortfolioPage from "./pages/NewPortfolioPage.jsx";
+import MarketsPage from "./pages/MarketsPage.jsx";
+import MorePage from "./pages/MorePage.jsx";
 
 const AuthPage = lazy(() => import("./pages/AuthPage.jsx"));
-const HomePage = lazy(() => import("./pages/HomePage.jsx"));
-const CreditHome = lazy(() => import("./pages/credit/CreditHome"));
 const CreditApplyPage = lazy(() => import("./pages/CreditApplyPage.jsx"));
 const UnsecuredCreditDashboard = lazy(() => import("./pages/credit/UnsecuredCreditDashboard.jsx"));
 const CreditRepayPage = lazy(() => import("./pages/CreditRepayPage.jsx"));
 const InvestmentsPage = lazy(() => import("./pages/InvestmentsPage.jsx"));
-const NewPortfolioPage = lazy(() => import("./pages/NewPortfolioPage.jsx"));
 const InvestPage = lazy(() => import("./pages/InvestPage.jsx"));
 const InvestAmountPage = lazy(() => import("./pages/InvestAmountPage.jsx"));
 const PaymentPage = lazy(() => import("./pages/PaymentPage.jsx"));
@@ -22,25 +27,20 @@ const PaymentPendingPage = lazy(() => import("./pages/PaymentPendingPage.jsx"));
 const PaymentMethodModal = lazy(() => import("./components/PaymentMethodModal.jsx"));
 const FactsheetPage = lazy(() => import("./pages/FactsheetPage.jsx"));
 const OpenStrategiesPage = lazy(() => import("./pages/OpenStrategiesPage.jsx"));
-const MorePage = lazy(() => import("./pages/MorePage.jsx"));
 const ManageSubscriptionsPage = lazy(() => import("./pages/ManageSubscriptionsPage.jsx"));
 const OnboardingPage = lazy(() => import("./pages/OnboardingPage.jsx"));
 const InstantLiquidityPage = lazy(() => import("./pages/credit/InstantLiquidity.jsx"));
-import { useProfile } from "./lib/useProfile";
 const SettingsPage = lazy(() => import("./pages/SettingsPage.jsx"));
 const TransactPage = lazy(() => import("./pages/TransactPage.jsx"));
 const UserOnboardingPage = lazy(() => import("./pages/UserOnboardingPage.jsx"));
-import AppLayout from "./layouts/AppLayout.jsx";
 const BiometricsDebugPage = lazy(() => import("./pages/BiometricsDebugPage.jsx"));
 const EditProfilePage = lazy(() => import("./pages/EditProfilePage.jsx"));
 const NotificationsPage = lazy(() => import("./pages/NotificationsPage.jsx"));
 const NotificationSettingsPage = lazy(() => import("./pages/NotificationSettingsPage.jsx"));
 const MintBalancePage = lazy(() => import("./pages/MintBalancePage.jsx"));
-const MarketsPage = lazy(() => import("./pages/MarketsPage.jsx"));
 const StockDetailPage = lazy(() => import("./pages/StockDetailPage.jsx"));
 const StockBuyPage = lazy(() => import("./pages/StockBuyPage.jsx"));
 const NewsArticlePage = lazy(() => import("./pages/NewsArticlePage.jsx"));
-import { NotificationsProvider, createWelcomeNotification, useNotificationsContext } from "./lib/NotificationsContext.jsx";
 const ActivityPage = lazy(() => import("./pages/ActivityPage.jsx"));
 const ActionsPage = lazy(() => import("./pages/ActionsPage.jsx"));
 const ProfileDetailsPage = lazy(() => import("./pages/ProfileDetailsPage.jsx"));
@@ -338,7 +338,7 @@ const App = () => {
         ? navigationHistory.current[navigationHistory.current.length - 1]
         : null;
       setPreviousPageName(newPreviousPage);
-      setCurrentPage(prevPage);
+      startTransition(() => setCurrentPage(prevPage));
 
       if (!Capacitor.isNativePlatform()) {
         pendingProgrammaticBacks.current++;
@@ -349,7 +349,7 @@ const App = () => {
 
     if (!mainTabs.includes(currentPage)) {
       setPreviousPageName(null);
-      setCurrentPage('home');
+      startTransition(() => setCurrentPage('home'));
 
       if (!Capacitor.isNativePlatform()) {
         pendingProgrammaticBacks.current++;
@@ -954,7 +954,7 @@ const App = () => {
       case 'profileDetails':
         return <ProfileDetailsPage onNavigate={noOp} onBack={noOp} />;
       case 'creditApply':
-        return <CreditApplyPage onBack={noOp} onTabChange={setCurrentPage} />;
+        return <CreditApplyPage onBack={noOp} onTabChange={handleTabChange} />;
       case 'creditRepay':
         return <CreditRepayPage onBack={noOp} />;
       case 'identityCheck':
@@ -1207,8 +1207,8 @@ const App = () => {
                 onOpenMintBalance={() => navigateTo("mintBalance")}
                 onOpenActivity={() => navigateTo("activity")}
                 onOpenActions={() => navigateTo("actions")}
-                onOpenInvestments={() => setCurrentPage("investments")}
-                onOpenCredit={() => setCurrentPage("credit")}
+                onOpenInvestments={() => handleTabChange("investments")}
+                onOpenCredit={() => handleTabChange("credit")}
                 onOpenCreditApply={() => navigateTo("creditApply")}
                 onOpenCreditRepay={() => navigateTo("creditRepay")}
                 onOpenInvest={() => { setMarketsInitialView(null); navigateTo("markets"); }}
@@ -1282,7 +1282,7 @@ const App = () => {
                   setNotificationReturnPage("credit");
                   navigateTo("notifications");
                 }}
-                onTabChange={setCurrentPage}
+                onTabChange={handleTabChange}
               />
             </AppLayout>
           </div>
