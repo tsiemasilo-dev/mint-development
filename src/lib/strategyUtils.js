@@ -80,6 +80,8 @@ export const calculateMinInvestment = async (strategy, holdingsBySymbol) => {
 
   console.log(`🔍 [${strategy?.name}] Starting minimum calculation. Holdings:`, holdings);
 
+  console.log(`🔍 [${strategy?.name}] Starting minimum calculation. Holdings:`, holdings);
+
   // If no holdings, use min_investment from database
   if (!holdings.length) {
     console.log(`⚠️ [${strategy?.name}] No holdings found, returning null or DB value`);
@@ -95,7 +97,6 @@ export const calculateMinInvestment = async (strategy, holdingsBySymbol) => {
     let total = 0;
     console.log(`📊 [${strategy?.name}] Processing ${holdings.length} holdings`);
 
-    // For each holding, get the symbol (already has .JO) and shares
     for (const holding of holdings) {
       const symbol = holding.symbol || holding.ticker;
       const shares = Number(holding.shares || holding.quantity || 1);
@@ -107,7 +108,6 @@ export const calculateMinInvestment = async (strategy, holdingsBySymbol) => {
         continue;
       }
 
-      // Get latest price for this symbol from stock_intraday_c
       console.log(`  🔎 Querying stock_intraday_c for ${symbol}...`);
       const { data, error } = await supabase
         .from("stock_intraday_c")

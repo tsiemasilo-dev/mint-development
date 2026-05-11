@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useId } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, ArrowUpRight, ArrowDownLeft, X,
-  Wallet, BarChart3, ChevronRight,
+  Wallet, BarChart3, ChevronRight, ChevronDown, ChevronUp,
   RefreshCw, Search, Star, AlertCircle, Check, ClipboardList,
   BookOpen, LayoutGrid, ArrowDownToLine, Target, FileSignature, Plus,
 } from "lucide-react";
@@ -290,6 +290,13 @@ function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onCl
 
 // --- Invest Modal (bottom-sheet) - browse strategies & invest ----------------
 
+// Fee rates — must match InvestAmountPage.jsx so child & parent flows quote
+// identical totals for a given base investment + holdings count.
+const BROKER_FEE_RATE = 0.0025;
+const ISIN_FEE_PER_ASSET = 69;
+const TRANSACTION_FEE_RATE = 0.038;
+const CASH_BUFFER_RATE = 0.08;
+
 function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
   const [strategies, setStrategies] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -311,9 +318,29 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
   const childFirstName = child?.first_name || "Child";
   const childBalance = child.available_balance || 0;
   const minInvCents = selectedStrategyMinimum ? selectedStrategyMinimum * 100 : 0;
-  const amountCents = units * minInvCents;
-  const numAmount = amountCents / 100;
-  const insufficient = amountCents > childBalance;
+  const baseAmountCents = units * minInvCents;        // user-selected base (units × min)
+  const baseAmount = baseAmountCents / 100;            // rands
+
+  // Mirror the parent flow's fee model so child quotes are identical for a
+  // given base + holdings count. Fees stack onto the buffered base (base × 1.08).
+  const numAssets = useMemo(() => {
+    const list = selected?.holdingsList || selected?.holdings || [];
+    return Array.isArray(list) ? list.length : 0;
+  }, [selected]);
+
+  const fees = useMemo(() => {
+    const bufferedBase = baseAmount * (1 + CASH_BUFFER_RATE);
+    const brokerAmount = bufferedBase * BROKER_FEE_RATE;
+    const isinTotal = ISIN_FEE_PER_ASSET * numAssets;
+    const transactionAmount = bufferedBase * TRANSACTION_FEE_RATE;
+    const totalCost = bufferedBase + brokerAmount + isinTotal + transactionAmount;
+    return { bufferedBase, brokerAmount, isinTotal, transactionAmount, totalCost };
+  }, [baseAmount, numAssets]);
+
+  const totalCostCents = Math.round(fees.totalCost * 100);
+  const numAmount = baseAmount; // kept for compatibility with downstream usage
+  const insufficient = totalCostCents > childBalance;
+  const [feeExpanded, setFeeExpanded] = useState(false);
 
   useEffect(() => {
     fetchStrategies();
@@ -334,7 +361,9 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
 
       const rows = data || [];
 
-      // Collect all holding symbols to fetch logos
+      // Collect all holding symbols — we need logo_url AND last_price so that
+      // calculateMinInvestmentSync can compute the minimum from live prices,
+      // matching the factsheet's behaviour exactly.
       const allSymbols = [...new Set(
         rows.flatMap(s => (Array.isArray(s.holdings) ? s.holdings : []).map(h => h.symbol || h.ticker).filter(Boolean))
       )];
@@ -342,7 +371,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
       if (allSymbols.length > 0) {
         const { data: secs } = await supabase
           .from("securities_c")
-          .select("symbol, name, logo_url")
+          .select("symbol, name, logo_url, last_price")
           .in("symbol", allSymbols);
         (secs || []).forEach(s => { secMap[s.symbol] = s; });
       }
@@ -380,25 +409,30 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
               symbol,
               name: security.name || h.name || symbol,
               logo_url: security.logo_url || null,
+              last_price: security.last_price ?? null,
             };
           });
-        return { ...s, r_ytd, ytd_return: r_ytd, ytd_as_of_date, holdingsList };
+        return { ...s, r_ytd, ytd_return: r_ytd, ytd_as_of_date, holdingsList, _secMap: secMap };
       });
 
       setStrategies(enriched);
 
-      // Calculate minimums for all strategies
-      calculateAllStrategiesMinimums(enriched);
+      // Calculate minimums using live prices — same as factsheet
+      calculateAllStrategiesMinimums(enriched, secMap);
     } catch (e) { console.error("[child-invest] strategies", e); }
     finally { setLoading(false); }
   }
 
-  function calculateAllStrategiesMinimums(strategies) {
+  function calculateAllStrategiesMinimums(strategies, secMap = {}) {
     try {
       const minimums = {};
+      // Build a holdingsBySymbol map with last_price so calculateMinInvestmentSync
+      // can compute from live prices — matching the factsheet exactly.
+      const holdingsMap = buildHoldingsBySymbol(
+        Object.values(secMap).filter(s => s.last_price != null)
+      );
       for (const strategy of strategies) {
-        // Use min_investment column directly (rands). No division, no markup.
-        minimums[strategy.id] = strategy?.min_investment ?? null;
+        minimums[strategy.id] = calculateMinInvestmentSync(strategy, holdingsMap);
       }
       setStrategyMinimums(minimums);
     } catch (error) {
@@ -410,7 +444,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
 
   async function handleInvest() {
     if (!selected) return;
-    if (amountCents <= 0) { setError("Select a valid investment amount."); return; }
+    if (baseAmountCents <= 0) { setError("Select a valid investment amount."); return; }
     if (insufficient) { setError("Insufficient funds in child's wallet."); return; }
 
     setSaving(true);
@@ -422,7 +456,8 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
         body: JSON.stringify({
           family_member_id: child.id,
           strategy_id: selected.id,
-          amount: amountCents,
+          amount: totalCostCents,         // includes 8% buffer + broker + custody + transaction fees
+          base_amount: baseAmountCents,   // user-selected base for record keeping
         }),
       });
       const json = await res.json();
@@ -447,8 +482,13 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
       return;
     }
 
-    // Use min_investment column directly (rands). No division, no markup.
-    setSelectedStrategyMinimum(selected?.min_investment ?? null);
+    // Build a live-price map from the holdings already enriched in fetchStrategies
+    // and compute via calculateMinInvestmentSync — same path as the factsheet.
+    const secMap = selected?._secMap || {};
+    const holdingsMap = buildHoldingsBySymbol(
+      Object.values(secMap).filter(s => s.last_price != null)
+    );
+    setSelectedStrategyMinimum(calculateMinInvestmentSync(selected, holdingsMap));
   }, [selected]);
 
   useEffect(() => {
@@ -622,7 +662,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
     onClose();
     onOpenFactsheet({
       ...selected,
-      calculatedMinInvestment: selected.min_investment ?? null,
+      calculatedMinInvestment: selectedStrategyMinimum,
       holdingsWithLogos: (selected.holdingsList || []).map((h) => ({
         ...h,
         ticker: h.ticker || h.symbol,
@@ -1089,21 +1129,64 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
                     </div>
                   </div>
 
-                  {/* Fee and total */}
-                  <div className="space-y-2 mb-4">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-slate-600">Subtotal</span>
-                      <span className="font-semibold text-slate-900">R{selectedStrategyMinimum && numAmount > 0 ? numAmount.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-slate-600">Total Due Today</span>
-                      <span className="text-lg font-bold text-slate-900">R{selectedStrategyMinimum && numAmount > 0 ? numAmount.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}</span>
+                  {/* Fee breakdown — mirrors InvestAmountPage layout */}
+                  <div className="mb-4 rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setFeeExpanded(!feeExpanded)}
+                      className="w-full flex items-center justify-between p-4"
+                    >
+                      <h3 className="text-xs font-semibold text-slate-600">Fee Breakdown</h3>
+                      {feeExpanded ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+                    </button>
+
+                    {feeExpanded && (
+                      <div className="px-4 pb-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1">
+                            <p className="text-xs text-slate-600">Investment Amount</p>
+                            <span className="text-xs text-slate-400" title="Includes 8% cash reserve">*</span>
+                          </div>
+                          <p className="text-xs font-semibold text-slate-900">
+                            R{fees.bufferedBase.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-slate-600">Broker Fee (0.25%)</p>
+                          <p className="text-xs font-semibold text-slate-900">
+                            R{fees.brokerAmount.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-slate-600">
+                            Custody Fee (R{ISIN_FEE_PER_ASSET.toFixed(2)} × {numAssets} asset{numAssets !== 1 ? "s" : ""})
+                          </p>
+                          <p className="text-xs font-semibold text-slate-900">
+                            R{fees.isinTotal.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-slate-600">Transaction Fee (3.8%)</p>
+                          <p className="text-xs font-semibold text-slate-900">
+                            R{fees.transactionAmount.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-t border-slate-100">
+                      <p className="text-xs font-semibold text-slate-700">Total Due Today</p>
+                      <p className="text-sm font-bold text-slate-900">
+                        R{fees.totalCost.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
                     </div>
                   </div>
 
                   {insufficient && (
                     <div className="rounded-lg bg-red-50 border border-red-200 p-3 mb-4">
-                      <p className="text-xs font-semibold text-red-700">Insufficient funds. {childFirstName} needs R{(numAmount - childBalance / 100).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} more.</p>
+                      <p className="text-xs font-semibold text-red-700">
+                        Insufficient funds. {childFirstName} needs R{(fees.totalCost - childBalance / 100).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} more.
+                      </p>
                     </div>
                   )}
 
@@ -1129,7 +1212,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
                   {/* Continue button */}
                   <button
                     onClick={handleInvest}
-                    disabled={insufficient || amountCents <= 0 || saving || !selectedStrategyMinimum}
+                    disabled={insufficient || baseAmountCents <= 0 || saving || !selectedStrategyMinimum}
                     className="w-full rounded-2xl bg-purple-600 py-3.5 font-semibold text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
                   >
                     {saving ? "Processing..." : "Continue"}
@@ -1568,7 +1651,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
         });
       }
 
-      // Collect all holding symbols to fetch logos
+      // Fetch logos AND last_price so calculateMinInvestmentSync uses live prices
       const allSymbols = [...new Set(
         rows.flatMap(s => (Array.isArray(s.holdings) ? s.holdings : []).map(h => h.symbol || h.ticker).filter(Boolean))
       )];
@@ -1576,7 +1659,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
       if (allSymbols.length > 0) {
         const { data: secs } = await supabase
           .from("securities_c")
-          .select("symbol, name, logo_url")
+          .select("symbol, name, logo_url, last_price")
           .in("symbol", allSymbols);
         (secs || []).forEach(s => { secMap[s.symbol] = s; });
       }
@@ -1595,6 +1678,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
               symbol,
               name: security.name || h.name || symbol,
               logo_url: security.logo_url || null,
+              last_price: security.last_price ?? null,
             };
           });
         return { ...s, r_ytd, ytd_as_of_date, holdingsList };
@@ -1604,9 +1688,9 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
         setChildFriendlyStrategies(enriched);
       }
 
-      // Calculate minimums for all strategies
+      // Calculate minimums using live prices — matches factsheet behaviour
       if (enriched.length > 0) {
-        calculateAllChildFriendlyMinimums(enriched);
+        calculateAllChildFriendlyMinimums(enriched, secMap);
       }
     } catch (e) {
       console.error("[child-dash] fetchChildFriendlyStrategies error", e);
@@ -1617,13 +1701,15 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     }
   }
 
-  async function calculateAllChildFriendlyMinimums(strategies) {
+  async function calculateAllChildFriendlyMinimums(strategies, secMap = {}) {
     if (!supabase) return;
     try {
       const minimums = {};
+      const holdingsMap = buildHoldingsBySymbol(
+        Object.values(secMap).filter(s => s.last_price != null)
+      );
       for (const strategy of strategies) {
-        // Use min_investment column directly (rands). No division, no markup.
-        minimums[strategy.id] = strategy?.min_investment ?? null;
+        minimums[strategy.id] = calculateMinInvestmentSync(strategy, holdingsMap);
       }
 
       if (isMounted.current) {
