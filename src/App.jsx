@@ -1173,7 +1173,7 @@ const App = () => {
   }
 
 
-  if (['home', 'investments', 'markets', 'more'].includes(currentPage)) {
+  if (['home', 'credit', 'investments', 'markets', 'more'].includes(currentPage)) {
     return (
       <Suspense fallback={<div className="min-h-screen bg-[#f8f9fc]" />}>
         <>
@@ -1252,6 +1252,26 @@ const App = () => {
               />
             </AppLayout>
           </div>
+          {/* Credit tab – always mounted */}
+          <div style={{ display: currentPage === 'credit' ? 'block' : 'none' }}>
+            <AppLayout
+              activeTab={currentPage}
+              onTabChange={handleTabChange}
+              onWithdraw={handleWithdrawRequest}
+              onShowComingSoon={handleShowComingSoon}
+              modal={modal}
+              onCloseModal={closeModal}
+            >
+              <CreditHome
+                profile={profile}
+                onOpenNotifications={() => {
+                  setNotificationReturnPage("credit");
+                  navigateTo("notifications");
+                }}
+                onTabChange={setCurrentPage}
+              />
+            </AppLayout>
+          </div>
           {/* More tab – always mounted */}
           <div style={{ display: currentPage === 'more' ? 'block' : 'none' }}>
             <AppLayout
@@ -1267,27 +1287,6 @@ const App = () => {
           </div>
         </>
       </Suspense>
-    );
-  }
-  if (currentPage === "credit") {
-    return (
-      <AppLayout
-        activeTab="credit"
-        onTabChange={handleTabChange}
-        onWithdraw={handleWithdrawRequest}
-        onShowComingSoon={handleShowComingSoon}
-        modal={modal}
-        onCloseModal={closeModal}
-      >
-        <CreditHome
-          profile={profile}
-          onOpenNotifications={() => {
-            setNotificationReturnPage("credit");
-            navigateTo("notifications");
-          }}
-          onTabChange={setCurrentPage}
-        />
-      </AppLayout>
     );
   }
 
