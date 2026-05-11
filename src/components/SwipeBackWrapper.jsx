@@ -194,7 +194,7 @@ const SwipeBackWrapper = ({
   return (
     <div 
       ref={containerRef}
-      className="swipe-back-container relative w-full h-full overflow-hidden"
+      className="swipe-back-container relative w-full h-full min-h-screen overflow-hidden"
       style={{ position: 'relative' }}
     >
       {showPreviousPage && (

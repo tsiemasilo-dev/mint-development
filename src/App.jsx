@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo, lazy, Suspense } from "react";
 import { supabase } from "./lib/supabase.js";
 import { setCachedSession, clearSessionCache } from "./lib/sessionCache.js";
+import { clearAllUserCaches } from "./lib/userCacheReset.js";
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import SwipeBackWrapper from "./components/SwipeBackWrapper.jsx";
@@ -173,6 +174,7 @@ const App = () => {
 
   const justLoggedInRef = useRef(false);
   const intentionalLogoutRef = useRef(false);
+  const lastAuthUserIdRef = useRef(null);
 
   const handleBeforeLogout = () => {
     intentionalLogoutRef.current = true;
@@ -524,6 +526,7 @@ const App = () => {
         handleRecoveryFlow();
       }
       if (event === 'SIGNED_OUT') {
+        clearAllUserCaches();
         clearUserStorage();
         if (resetNotifications) resetNotifications();
 
@@ -554,9 +557,17 @@ const App = () => {
       }
       if (event === 'SIGNED_IN' && session) {
         setCachedSession(session);
+        // If a different user just logged in, nuke all stale caches immediately
+        // so they never see the previous user's data
+        const incomingId = session.user?.id;
+        if (incomingId && incomingId !== lastAuthUserIdRef.current) {
+          clearAllUserCaches();
+        }
+        lastAuthUserIdRef.current = incomingId || null;
       }
       if (event === 'SIGNED_OUT') {
         clearSessionCache();
+        lastAuthUserIdRef.current = null;
       }
     });
 
@@ -619,6 +630,24 @@ const App = () => {
       clearTimeout(initialDelay);
       clearInterval(interval);
     };
+  }, [isAuthenticated]);
+
+  // Prefetch lazily-loaded chunks that users commonly navigate to, so the first
+  // tap feels instant rather than waiting for the JS chunk to download.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const prefetch = () => {
+      import("./pages/FactsheetPage.jsx");
+      import("./pages/InvestAmountPage.jsx");
+      import("./pages/InvestPage.jsx");
+      import("./pages/PaymentPage.jsx");
+      import("./pages/PaymentSuccessPage.jsx");
+    };
+    const schedule = window.requestIdleCallback
+      ? () => window.requestIdleCallback(prefetch, { timeout: 3000 })
+      : () => setTimeout(prefetch, 1500);
+    const t = setTimeout(schedule, 500);
+    return () => clearTimeout(t);
   }, [isAuthenticated]);
 
   const openAuthFlow = (step) => {
