@@ -374,12 +374,13 @@ const App = () => {
 
   useEffect(() => {
     const handleNavigationEvent = (e) => {
-      const { page, member } = e.detail || {};
-      if (member) setSelectedMember(member);
+      const { page, member, child } = e.detail || {};
       if (page) {
-        const normalizedPage = page === 'family' ? 'familyDashboard' : page;
-        if (page === 'childDashboard' && e.detail?.child) {
-          setSelectedFamilyChild(e.detail.child);
+        let normalizedPage = page === 'family' ? 'familyDashboard' : page;
+        const selectedChild = child || member || null;
+        if (selectedChild && (page === 'childDashboard' || page === 'memberPortfolio')) {
+          setSelectedFamilyChild(selectedChild);
+          normalizedPage = 'childDashboard';
         }
         if (page === 'userOnboarding') {
           setNotificationReturnPage(currentPage);
