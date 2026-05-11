@@ -281,14 +281,26 @@ const SwipeableBalanceCard = ({
   useEffect(() => {
     let cancelled = false;
 
-    // Safety timeout — always exit skeleton after 5s even if fetch stalls
+    // Phase-1 safety (5 s): release the `loading` flag so any loading spinners
+    // stop — but do NOT touch `dataSettled` here.  Skeleton must stay until
+    // real data actually arrives to prevent the R0 flash.
     const safetyTimer = setTimeout(() => {
       if (!cancelled) {
-        logDebug(CAT.LOADING, "⏱ Safety timer fired — SwipeableBalanceCard card loading forced off after 5 s");
-        setDataSettled(true);
+        logDebug(CAT.LOADING, "⏱ Safety timer fired — SwipeableBalanceCard loading flag cleared after 5 s");
         setLoading(false);
       }
     }, 5000);
+
+    // Phase-2 absolute abort (15 s): if the network truly stalled and no data
+    // arrived at all, exit the skeleton with whatever we have (R0 / empty).
+    // This prevents an infinite skeleton on complete network failure.
+    const abortTimer = setTimeout(() => {
+      if (!cancelled) {
+        logDebug(CAT.LOADING, "⏱ Abort timer fired — forcing skeleton exit after 15 s");
+        setDataSettled(true);
+        setLoading(false);
+      }
+    }, 15000);
 
     const loadData = async ({ silent = false } = {}) => {
       if (!userId && !familyMemberId) return;
@@ -510,6 +522,7 @@ const SwipeableBalanceCard = ({
     return () => {
       cancelled = true;
       clearTimeout(safetyTimer);
+      clearTimeout(abortTimer);
       clearTimeout(visibilityDebounce);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
