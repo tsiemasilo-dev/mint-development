@@ -915,28 +915,6 @@ const SwipeableBalanceCard = ({
 
   const TrendIcon = isLoss ? TrendingDown : TrendingUp;
 
-  if (loading && userId)
-    return (
-      <div className="rounded-3xl gradient-hero-card shadow-hero p-5 relative overflow-hidden border border-white/5 animate-pulse">
-        <div className="flex items-center justify-between mb-3">
-          <Skeleton className="h-2.5 w-28 bg-white/10 rounded" />
-          <Skeleton className="h-3 w-10 bg-white/10 rounded" />
-        </div>
-        <div className="flex items-end justify-between mb-4">
-          <div>
-            <Skeleton className="h-8 w-36 bg-white/10 rounded mb-2" />
-            <Skeleton className="h-5 w-24 bg-white/10 rounded" />
-          </div>
-          <Skeleton className="h-12 w-28 bg-white/10 rounded" />
-        </div>
-        <Skeleton className="h-9 w-full bg-white/10 rounded-full mb-4" />
-        <div className="flex gap-4 pt-4 border-t border-white/10">
-          <Skeleton className="h-8 w-24 bg-white/10 rounded" />
-          <Skeleton className="h-8 w-24 bg-white/10 rounded" />
-        </div>
-      </div>
-    );
-
   return (
     <div className="rounded-3xl gradient-hero-card shadow-hero p-5 relative overflow-hidden border border-white/5">
       {/* Ambient glows */}
@@ -970,30 +948,40 @@ const SwipeableBalanceCard = ({
       {/* Value + inline sparkline */}
       <div className="flex items-end justify-between mt-2 relative">
         <div className="flex-1 min-w-0 pr-3">
-          <h2 className="text-3xl font-bold tracking-tight text-white leading-none">
-            {isVisible ? formatFull(displayBalance) : masked}
-          </h2>
+          {loading ? (
+            <Skeleton className="h-8 w-36 bg-white/15 rounded mb-2 animate-pulse" />
+          ) : (
+            <h2 className="text-3xl font-bold tracking-tight text-white leading-none">
+              {isVisible ? formatFull(displayBalance) : masked}
+            </h2>
+          )}
           <div className="flex items-center gap-2 mt-2">
-            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${isLoss ? "bg-destructive/20 text-destructive" : "bg-success/20 text-success"}`}>
-              <TrendIcon size={11} strokeWidth={2.5} />
-              {isVisible ? (
-                <>
-                  {isPeriodTab && (
-                    <span className="text-[10px] opacity-75">
-                      {activeTab === "5d" && "5D:"}{activeTab === "m" && "1M:"}{activeTab === "ytd" && "YTD:"}{activeTab === "all" && "Inc:"}
-                    </span>
+            {loading ? (
+              <Skeleton className="h-5 w-24 bg-white/15 rounded-full animate-pulse" />
+            ) : (
+              <>
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${isLoss ? "bg-destructive/20 text-destructive" : "bg-success/20 text-success"}`}>
+                  <TrendIcon size={11} strokeWidth={2.5} />
+                  {isVisible ? (
+                    <>
+                      {isPeriodTab && (
+                        <span className="text-[10px] opacity-75">
+                          {activeTab === "5d" && "5D:"}{activeTab === "m" && "1M:"}{activeTab === "ytd" && "YTD:"}{activeTab === "all" && "Inc:"}
+                        </span>
+                      )}
+                      {displayReturn == null ? "N/A" : formatKMB(Math.abs(displayReturn))}
+                    </>
+                  ) : (
+                    masked
                   )}
-                  {displayReturn == null ? "N/A" : formatKMB(Math.abs(displayReturn))}
-                </>
-              ) : (
-                masked
-              )}
-            </span>
-            <span className={`text-[11px] font-medium ${isLoss ? "text-destructive" : "text-success"}`}>
-              {isVisible
-                ? (returnPct == null ? "N/A" : `${isLoss ? "-" : "+"}${returnPct}%`)
-                : masked}
-            </span>
+                </span>
+                <span className={`text-[11px] font-medium ${isLoss ? "text-destructive" : "text-success"}`}>
+                  {isVisible
+                    ? (returnPct == null ? "N/A" : `${isLoss ? "-" : "+"}${returnPct}%`)
+                    : masked}
+                </span>
+              </>
+            )}
           </div>
         </div>
 
@@ -1018,10 +1006,10 @@ const SwipeableBalanceCard = ({
                 <Line type="monotone" dataKey="v" stroke={chartColor} strokeWidth={2} dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
-          ) : chartLoading ? (
+          ) : (loading || chartLoading) ? (
             <div className="flex items-end gap-0.5 w-[185px] h-[85px]">
               {[40, 55, 35, 65, 50, 70, 45, 60].map((h, i) => (
-                <Skeleton key={i} className="flex-1 rounded-sm bg-white/10" style={{ height: `${h}%` }} />
+                <Skeleton key={i} className="flex-1 rounded-sm bg-white/10 animate-pulse" style={{ height: `${h}%` }} />
               ))}
             </div>
           ) : null}
@@ -1030,6 +1018,9 @@ const SwipeableBalanceCard = ({
 
       {/* Asset selector — hidden in child mode */}
       <div ref={dropdownRef} className={`relative mt-3${childMode ? " hidden" : ""}`}>
+        {loading ? (
+          <Skeleton className="h-7 w-28 bg-white/10 rounded-full animate-pulse" />
+        ) : (
         <button
           onClick={() => setIsOpen(!isOpen)}
           className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/15"
@@ -1040,6 +1031,7 @@ const SwipeableBalanceCard = ({
           </span>
           {isOpen ? <ChevronUp size={12} className="text-slate-300" /> : <ChevronDown size={12} className="text-slate-300" />}
         </button>
+        )}
         {isOpen && (
           <div className="absolute top-full mt-1 left-0 w-48 bg-white rounded-xl z-[120] overflow-hidden border border-slate-200 shadow-lg">
             <div className="py-1 overflow-y-auto max-h-[140px]">
