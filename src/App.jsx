@@ -65,6 +65,7 @@ import KidStrategyChildPickerModal from "./components/KidStrategyChildPickerModa
 import { useOnboardingStatus } from "./lib/useOnboardingStatus.js";
 import { checkOnboardingComplete } from "./lib/checkOnboardingComplete.js";
 import MaintenanceModal from "./components/MaintenanceModal.jsx";
+import HomeSkeleton from "./components/HomeSkeleton.jsx";
 
 const PERSISTENT_KEYS = [
   'mint_device_id',
@@ -1188,7 +1189,7 @@ const App = () => {
 
   if (['home', 'credit', 'investments', 'markets', 'more'].includes(currentPage)) {
     return (
-      <Suspense fallback={null}>
+      <Suspense fallback={<HomeSkeleton />}>
         <>
           {showOpenStrategiesMaintenance && <MaintenanceModal onClose={() => setShowOpenStrategiesMaintenance(false)} />}
           {/* Home tab – always mounted */}
