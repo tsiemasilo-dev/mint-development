@@ -1152,7 +1152,7 @@ const App = () => {
           {/* Home tab – always mounted */}
           <div style={{ display: currentPage === 'home' ? 'block' : 'none' }}>
             <AppLayout
-              activeTab="home"
+              activeTab={currentPage}
               onTabChange={handleTabChange}
               onWithdraw={handleWithdrawRequest}
               onShowComingSoon={handleShowComingSoon}
@@ -1185,7 +1185,7 @@ const App = () => {
           {/* Investments tab – always mounted */}
           <div style={{ display: currentPage === 'investments' ? 'block' : 'none' }}>
             <AppLayout
-              activeTab="investments"
+              activeTab={currentPage}
               onTabChange={handleTabChange}
               onWithdraw={handleWithdrawRequest}
               onShowComingSoon={handleShowComingSoon}
@@ -1205,7 +1205,7 @@ const App = () => {
           {/* Markets tab – always mounted */}
           <div style={{ display: currentPage === 'markets' ? 'block' : 'none' }}>
             <AppLayout
-              activeTab="markets"
+              activeTab={currentPage}
               onTabChange={handleTabChange}
               onWithdraw={() => {}}
               onShowComingSoon={() => {}}
@@ -1226,7 +1226,7 @@ const App = () => {
           {/* More tab – always mounted */}
           <div style={{ display: currentPage === 'more' ? 'block' : 'none' }}>
             <AppLayout
-              activeTab="more"
+              activeTab={currentPage}
               onTabChange={handleTabChange}
               onWithdraw={handleWithdrawRequest}
               onShowComingSoon={handleShowComingSoon}
