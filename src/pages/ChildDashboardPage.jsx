@@ -361,7 +361,9 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
 
       const rows = data || [];
 
-      // Collect all holding symbols to fetch logos
+      // Collect all holding symbols — we need logo_url AND last_price so that
+      // calculateMinInvestmentSync can compute the minimum from live prices,
+      // matching the factsheet's behaviour exactly.
       const allSymbols = [...new Set(
         rows.flatMap(s => (Array.isArray(s.holdings) ? s.holdings : []).map(h => h.symbol || h.ticker).filter(Boolean))
       )];
@@ -369,7 +371,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
       if (allSymbols.length > 0) {
         const { data: secs } = await supabase
           .from("securities_c")
-          .select("symbol, name, logo_url")
+          .select("symbol, name, logo_url, last_price")
           .in("symbol", allSymbols);
         (secs || []).forEach(s => { secMap[s.symbol] = s; });
       }
@@ -407,25 +409,30 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
               symbol,
               name: security.name || h.name || symbol,
               logo_url: security.logo_url || null,
+              last_price: security.last_price ?? null,
             };
           });
-        return { ...s, r_ytd, ytd_return: r_ytd, ytd_as_of_date, holdingsList };
+        return { ...s, r_ytd, ytd_return: r_ytd, ytd_as_of_date, holdingsList, _secMap: secMap };
       });
 
       setStrategies(enriched);
 
-      // Calculate minimums for all strategies
-      calculateAllStrategiesMinimums(enriched);
+      // Calculate minimums using live prices — same as factsheet
+      calculateAllStrategiesMinimums(enriched, secMap);
     } catch (e) { console.error("[child-invest] strategies", e); }
     finally { setLoading(false); }
   }
 
-  function calculateAllStrategiesMinimums(strategies) {
+  function calculateAllStrategiesMinimums(strategies, secMap = {}) {
     try {
       const minimums = {};
+      // Build a holdingsBySymbol map with last_price so calculateMinInvestmentSync
+      // can compute from live prices — matching the factsheet exactly.
+      const holdingsMap = buildHoldingsBySymbol(
+        Object.values(secMap).filter(s => s.last_price != null)
+      );
       for (const strategy of strategies) {
-        // Use min_investment column directly (rands). No division, no markup.
-        minimums[strategy.id] = strategy?.min_investment ?? null;
+        minimums[strategy.id] = calculateMinInvestmentSync(strategy, holdingsMap);
       }
       setStrategyMinimums(minimums);
     } catch (error) {
@@ -475,8 +482,13 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
       return;
     }
 
-    // Use min_investment column directly (rands). No division, no markup.
-    setSelectedStrategyMinimum(selected?.min_investment ?? null);
+    // Build a live-price map from the holdings already enriched in fetchStrategies
+    // and compute via calculateMinInvestmentSync — same path as the factsheet.
+    const secMap = selected?._secMap || {};
+    const holdingsMap = buildHoldingsBySymbol(
+      Object.values(secMap).filter(s => s.last_price != null)
+    );
+    setSelectedStrategyMinimum(calculateMinInvestmentSync(selected, holdingsMap));
   }, [selected]);
 
   useEffect(() => {
@@ -650,7 +662,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
     onClose();
     onOpenFactsheet({
       ...selected,
-      calculatedMinInvestment: selected.min_investment ?? null,
+      calculatedMinInvestment: selectedStrategyMinimum,
       holdingsWithLogos: (selected.holdingsList || []).map((h) => ({
         ...h,
         ticker: h.ticker || h.symbol,
@@ -1639,7 +1651,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
         });
       }
 
-      // Collect all holding symbols to fetch logos
+      // Fetch logos AND last_price so calculateMinInvestmentSync uses live prices
       const allSymbols = [...new Set(
         rows.flatMap(s => (Array.isArray(s.holdings) ? s.holdings : []).map(h => h.symbol || h.ticker).filter(Boolean))
       )];
@@ -1647,7 +1659,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
       if (allSymbols.length > 0) {
         const { data: secs } = await supabase
           .from("securities_c")
-          .select("symbol, name, logo_url")
+          .select("symbol, name, logo_url, last_price")
           .in("symbol", allSymbols);
         (secs || []).forEach(s => { secMap[s.symbol] = s; });
       }
@@ -1666,6 +1678,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
               symbol,
               name: security.name || h.name || symbol,
               logo_url: security.logo_url || null,
+              last_price: security.last_price ?? null,
             };
           });
         return { ...s, r_ytd, ytd_as_of_date, holdingsList };
@@ -1675,9 +1688,9 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
         setChildFriendlyStrategies(enriched);
       }
 
-      // Calculate minimums for all strategies
+      // Calculate minimums using live prices — matches factsheet behaviour
       if (enriched.length > 0) {
-        calculateAllChildFriendlyMinimums(enriched);
+        calculateAllChildFriendlyMinimums(enriched, secMap);
       }
     } catch (e) {
       console.error("[child-dash] fetchChildFriendlyStrategies error", e);
@@ -1688,13 +1701,15 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     }
   }
 
-  async function calculateAllChildFriendlyMinimums(strategies) {
+  async function calculateAllChildFriendlyMinimums(strategies, secMap = {}) {
     if (!supabase) return;
     try {
       const minimums = {};
+      const holdingsMap = buildHoldingsBySymbol(
+        Object.values(secMap).filter(s => s.last_price != null)
+      );
       for (const strategy of strategies) {
-        // Use min_investment column directly (rands). No division, no markup.
-        minimums[strategy.id] = strategy?.min_investment ?? null;
+        minimums[strategy.id] = calculateMinInvestmentSync(strategy, holdingsMap);
       }
 
       if (isMounted.current) {
