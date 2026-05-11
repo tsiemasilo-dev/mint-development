@@ -1198,9 +1198,13 @@ function TransactionRow({ tx }) {
 
 function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
   const poaComplete = !!child.poa_declaration_url;
+  const agreementComplete = !!child.signed_agreement_url;
   const [step, setStep] = useState(() => {
     if (!child.id_number) return "id";
     if (!poaComplete) return "poa";
+    if (!agreementComplete) return "agreement";
+    // Nothing actually missing — fall back to agreement but caller should
+    // never open the modal in this state (banner is gated on missingItems).
     return "agreement";
   });
   const [idInput, setIdInput] = useState("");
@@ -1512,7 +1516,10 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     !poaDone && "proof of address",
     !child?.signed_agreement_url && "responsibility agreement",
   ].filter(Boolean);
-  const isProfileIncomplete = !child?.address_completed;
+  // Derive from the actual fields rather than the address_completed flag —
+  // onboarding flows don't always set that flag, so we'd otherwise show the
+  // "Complete profile" prompt even when every doc is signed.
+  const isProfileIncomplete = missingItems.length > 0;
 
   useEffect(() => {
     isMounted.current = true;
@@ -1652,7 +1659,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
       if (!supabase || !child?.id) return;
       const { data, error } = await supabase
         .from("family_members")
-        .select("id, available_balance, certificate_verification_status, kyc_status, kyc_pending, certificate_url, updated_at")
+        .select("id, available_balance, certificate_verification_status, kyc_status, kyc_pending, certificate_url, updated_at, id_number, poa_declaration_url, signed_agreement_url, signed_at, address_completed")
         .eq("id", child.id)
         .maybeSingle();
       if (error) throw error;
