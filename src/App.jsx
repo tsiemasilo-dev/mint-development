@@ -5,6 +5,7 @@ import { clearAllUserCaches } from "./lib/userCacheReset.js";
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import SwipeBackWrapper from "./components/SwipeBackWrapper.jsx";
+import HomeSkeleton from "./components/HomeSkeleton.jsx";
 
 const AuthPage = lazy(() => import("./pages/AuthPage.jsx"));
 const HomePage = lazy(() => import("./pages/HomePage.jsx"));
@@ -1100,11 +1101,7 @@ const App = () => {
 
 
   if (isCheckingAuth) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0d0d12]">
-        <div className="w-8 h-8 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <HomeSkeleton />;
   }
 
   if (currentPage === "linkExpired") {
