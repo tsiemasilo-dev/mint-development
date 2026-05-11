@@ -172,6 +172,11 @@ const App = () => {
   });
 
   const justLoggedInRef = useRef(false);
+  const intentionalLogoutRef = useRef(false);
+
+  const handleBeforeLogout = () => {
+    intentionalLogoutRef.current = true;
+  };
   // Read ozow param synchronously at init — before any effect can clear the URL
   const ozowReturnParam = useRef(new URLSearchParams(window.location.search).get("ozow"));
   const ozowRecordedRef = useRef(false);
@@ -521,6 +526,14 @@ const App = () => {
       if (event === 'SIGNED_OUT') {
         clearUserStorage();
         if (resetNotifications) resetNotifications();
+
+        // Intentional logout (user clicked "Log out") — skip session-expired overlay
+        if (intentionalLogoutRef.current) {
+          intentionalLogoutRef.current = false;
+          sessionExpiredPageRef.current = null;
+          setShowPinLock(false);
+          return;
+        }
 
         // Don't force navigate - let SessionExpired overlay handle UX gracefully
         // This prevents jarring redirects and shows users why they were logged out
@@ -1220,7 +1233,7 @@ const App = () => {
               modal={modal}
               onCloseModal={closeModal}
             >
-              <MorePage onNavigate={navigateTo} />
+              <MorePage onNavigate={navigateTo} onBeforeLogout={handleBeforeLogout} />
             </AppLayout>
           </div>
         </>
