@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback, useMemo, lazy, Suspense } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo, lazy, Suspense, startTransition } from "react";
 import { supabase } from "./lib/supabase.js";
 import { setCachedSession, clearSessionCache } from "./lib/sessionCache.js";
 import { clearAllUserCaches } from "./lib/userCacheReset.js";
@@ -322,13 +322,13 @@ const App = () => {
       setPreviousPageName(null);
     }
 
-    setCurrentPage(page);
+    startTransition(() => setCurrentPage(page));
   }, [currentPage, cacheCurrentPageState, onboardingComplete]);
 
   const handleTabChange = useCallback((tab) => {
     navigationHistory.current = [];
     setPreviousPageName(null);
-    setCurrentPage(tab);
+    startTransition(() => setCurrentPage(tab));
   }, []);
 
   const goBack = useCallback(() => {
