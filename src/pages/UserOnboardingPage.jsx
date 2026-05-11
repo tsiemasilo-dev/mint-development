@@ -153,6 +153,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const [agreedMandate, setAgreedMandate] = useState(false);
   const [mandateValid, setMandateValid] = useState(false);
   const mandateDataRef = useRef(null);
+  const [mandateRequestTab, setMandateRequestTab] = useState(null);
   const [sourceOfFunds, setSourceOfFunds] = useState("");
   const [sourceOfFundsOther, setSourceOfFundsOther] = useState("");
   const [expectedMonthlyInvestment, setExpectedMonthlyInvestment] = useState("");
@@ -1345,7 +1346,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 );
               })()}
               <div className="animate-fade-in delay-2" style={{ borderRadius: '16px', overflow: 'hidden', border: '1px solid hsl(270 20% 90%)', boxShadow: '0 4px 20px rgba(100, 60, 140, 0.08)', background: 'white' }}>
-                <MandateViewer profile={profile} onValidChange={setMandateValid} onDataChange={(data) => { mandateDataRef.current = data; }} />
+                <MandateViewer profile={profile} onValidChange={setMandateValid} onDataChange={(data) => { mandateDataRef.current = data; }} requestTab={mandateRequestTab} />
               </div>
               <div className="checkbox-container animate-fade-in delay-3" style={{ display: 'block' }}>
                 <label className="checkbox-item">
@@ -1365,7 +1366,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                       !profile?.email?.trim() && "Email Address",
                     ].filter(Boolean);
                     if (missing.length > 0) {
-                      return <p style={{ color: "#ef4444", fontSize: "12px", textAlign: "center" }}>Cannot continue — the following required fields are still empty in the mandate: <strong>{missing.join(", ")}</strong>. Please fill them in on Tab 1 of the mandate document above.</p>;
+                      return <p style={{ color: "#ef4444", fontSize: "12px", textAlign: "center" }}>Cannot continue — the following required fields are still empty in the mandate: <strong>{missing.join(", ")}</strong>. <button type="button" onClick={() => { setMandateRequestTab(null); setTimeout(() => setMandateRequestTab(0), 0); }} style={{ color: "#ef4444", textDecoration: "underline", background: "none", border: "none", cursor: "pointer", fontSize: "12px", fontWeight: "600", padding: 0 }}>Go to Tab 1 to fill them in.</button></p>;
                     }
                     return <p style={{ color: "#ef4444", fontSize: "12px", textAlign: "center" }}>Please enter your initials and complete all checkbox selections on the Schedules tab before continuing.</p>;
                   })()}
