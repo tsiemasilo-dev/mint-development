@@ -30,6 +30,7 @@ const OpenStrategiesPage = lazy(() => import("./pages/OpenStrategiesPage.jsx"));
 const ManageSubscriptionsPage = lazy(() => import("./pages/ManageSubscriptionsPage.jsx"));
 const OnboardingPage = lazy(() => import("./pages/OnboardingPage.jsx"));
 const InstantLiquidityPage = lazy(() => import("./pages/credit/InstantLiquidity.jsx"));
+const CreditHowItWorksPage = lazy(() => import("./pages/credit/CreditHowItWorks.jsx"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage.jsx"));
 const TransactPage = lazy(() => import("./pages/TransactPage.jsx"));
 const UserOnboardingPage = lazy(() => import("./pages/UserOnboardingPage.jsx"));
@@ -1346,6 +1347,25 @@ const App = () => {
             setNotificationReturnPage("instantLiquidity");
             navigateTo("notifications");
           }}
+        />
+      </AppLayout>
+    );
+  }
+
+  if (currentPage === "creditHowItWorks") {
+    return (
+      <AppLayout
+        activeTab="credit"
+        onTabChange={handleTabChange}
+        onWithdraw={handleWithdrawRequest}
+        onShowComingSoon={handleShowComingSoon}
+        modal={modal}
+        onCloseModal={closeModal}
+      >
+        <CreditHowItWorksPage
+          profile={profile}
+          onBack={goBack}
+          onTabChange={handleTabChange}
         />
       </AppLayout>
     );
