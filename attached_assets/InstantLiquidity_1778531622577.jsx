@@ -33,8 +33,8 @@ const normalizeLoanType = (value, fallback = "secured") => {
 
 // --- MINI CHART COMPONENT ---
 const AssetMiniChart = ({ data, color = "#7c3aed" }) => (
-  <div className="h-8 w-16">
-    <ResponsiveContainer width="100%" height="100%" minHeight={32}>
+  <div className="h-8 w-16" style={{ minWidth: 64, minHeight: 32 }}>
+    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={32}>
       <LineChart data={data.map((v, i) => ({ v, i }))}>
         <YAxis hide domain={['dataMin', 'dataMax']} />
         <Line type="monotone" dataKey="v" stroke={color} strokeWidth={2} dot={false} />
@@ -109,30 +109,21 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange, onLinkBan
 
         if (error) throw error;
 
-        if (data && data.length > 0) {
-          const securityIds = data.map(item => item.securities_c.id);
-
-          const { data: allPrices } = await supabase
-            .from('security_prices_c')
-            .select('security_id, close_price, ts')
-            .in('security_id', securityIds)
-            .order('ts', { ascending: false });
-
-          const pricesBySecId = {};
-          if (allPrices) {
-            for (const row of allPrices) {
-              if (!pricesBySecId[row.security_id]) pricesBySecId[row.security_id] = [];
-              if (pricesBySecId[row.security_id].length < 7) {
-                pricesBySecId[row.security_id].push(parseFloat(row.close_price));
-              }
-            }
-          }
-
-          const formatted = data.map(item => {
+        if (data) {
+          const formatted = await Promise.all(data.map(async item => {
             const sec = item.securities_c;
-            const rawPrices = pricesBySecId[sec.id] || [];
-            const spark = rawPrices.length > 0 ? [...rawPrices].reverse() : [0, 0, 0, 0, 0, 0, 0];
-            const balance = item.quantity * (sec.last_price || 0);
+            const { data: prices } = await supabase
+              .from('security_prices_c')
+              .select('close_price')
+              .eq('security_id', sec.id)
+              .order('ts', { ascending: false })
+              .limit(7);
+
+            const spark = (prices?.length > 0)
+              ? prices.map(p => parseFloat(p.close_price)).reverse()
+              : [0, 0, 0, 0, 0, 0, 0];
+
+            const balance = (item.quantity * (sec.last_price || 0));
 
             return {
               id: sec.id,
@@ -142,7 +133,7 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange, onLinkBan
               sector: sec.sector,
               marketCap: sec.market_cap,
               quantity: item.quantity,
-              balance,
+              balance: balance,
               isEligible: !sec.disqualified,
               score: sec.collateral_score || 0,
               ltv: sec.ltv_pct || 0,
@@ -151,7 +142,7 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange, onLinkBan
               marginCall: sec.margin_call_pct || 0.65,
               autoLiq: sec.auto_liq_pct || 0.70
             };
-          });
+          }));
           setPortfolioItems(formatted);
         }
 
@@ -263,14 +254,19 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange, onLinkBan
   };
 
   const handleConfirmPledge = async () => {
+    if (isProcessing) return;
+    const principal = parseFloat(pledgeAmount);
+    if (!principal || isNaN(principal) || principal <= 0) {
+      alert("Please enter a valid pledge amount greater than R0.");
+      return;
+    }
     setIsProcessing(true);
     try {
-      const principal = parseFloat(pledgeAmount);
       const calculation = calculateSecuredLoan({
         principal,
         originationDate: new Date(),
-        nextSalaryDate: new Date(nextSalaryDate),
-        termMonths
+        nextSalaryDate,
+        termMonths,
       });
 
       const { data: loan, error: loanErr } = await supabase.from('loan_application').insert({
@@ -288,20 +284,24 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange, onLinkBan
       if (loanErr) throw loanErr;
 
       if (selectedAssets?.length > 0) {
-        const totalBal = selectedAssets.reduce((sum, item) => sum + item.balance, 0);
-        const pledgesToInsert = selectedAssets.map(asset => ({
-          user_id: profile.id,
-          loan_application_id: loan.id,
-          security_id: asset.id,
-          symbol: asset.code,
-          pledged_quantity: asset.quantity,
-          pledged_value: asset.balance,
-          loan_value: principal * (asset.balance / (totalBal || 1)),
-          recognised_value: asset.available,
-          ltv_applied: asset.ltv
-        }));
+        const totalSelectedBalance = selectedAssets.reduce((sum, item) => sum + item.balance, 0);
+        const pledgesToInsert = selectedAssets.map(asset => {
+          const weight = asset.balance / (totalSelectedBalance || 1);
+          return {
+            user_id: profile.id,
+            loan_application_id: loan.id,
+            security_id: asset.id,
+            symbol: asset.code,
+            pledged_quantity: asset.quantity,
+            pledged_value: asset.balance,
+            loan_value: principal * weight,
+            recognised_value: asset.available,
+            ltv_applied: asset.ltv
+          };
+        });
 
         const { error: pledgeErr } = await supabase.from('pbc_collateral_pledges').insert(pledgesToInsert);
+
         if (pledgeErr) {
           console.error("Failed to insert pledges", pledgeErr);
           throw pledgeErr;
@@ -309,7 +309,6 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange, onLinkBan
       }
 
       setActiveLoanId(loan.id);
-
       const { error: historyErr } = await supabase
         .from('credit_transactions_history')
         .insert({
@@ -330,6 +329,40 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange, onLinkBan
       if (historyErr && historyErr.code !== '23505') {
         console.warn('Failed to create secured credit history row:', historyErr.message || historyErr);
       }
+
+      const pledges = selectedAssets.map(item => ({
+        user_id: profile.id,
+        loan_application_id: loan.id,
+        security_id: item.id,
+        symbol: item.code,
+        pledged_quantity: item.quantity,
+        pledged_value: item.balance,
+        recognised_value: item.available,
+        ltv_applied: item.ltv,
+        loan_value: principal * (item.balance / totalSelectedBalance)
+      }));
+
+      // The following tables are protected by RLS and cannot be written to directly from the client.
+      // In a production environment, these should be handled via a server-side API or RPC function.
+      /*
+      await supabase.from('pbc_collateral_pledges').insert(pledges);
+
+      // Upsert credit account info
+      const { data: account } = await supabase.from('credit_accounts')
+        .select('loan_balance, available_credit')
+        .eq('user_id', profile.id)
+        .maybeSingle();
+
+      const newLoanBalance = (account?.loan_balance || 0) + principal;
+      const newAvailableCredit = (account?.available_credit || 0) + principal;
+
+      await supabase.from('credit_accounts').upsert({
+        user_id: profile.id,
+        loan_balance: newLoanBalance,
+        available_credit: newAvailableCredit,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+      */
 
       setWorkflowStep("liquidity_flow");
       setRefreshKey(k => k + 1);
@@ -396,9 +429,9 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange, onLinkBan
                   <p className="text-[9px] font-black uppercase tracking-[0.2em] text-white/60">Borrowing Power</p>
                   <button onClick={() => setInfoModal('collateral')}><Info size={12} className="text-white/40" /></button>
                 </div>
-                <p className="text-4xl font-light tracking-tight drop-shadow-md" style={{ fontFamily: fonts.display }}>
-                  {loading ? "..." : formatZar(totalAvailable)}
-                </p>
+                <div className="min-h-[40px] flex items-center">
+                  {loading ? <div className="h-9 w-40 bg-white/20 animate-pulse rounded-xl" /> : <p className="text-4xl font-light tracking-tight drop-shadow-md" style={{ fontFamily: fonts.display }}>{formatZar(totalAvailable)}</p>}
+                </div>
               </div>
               <div className="h-12 w-12 rounded-[18px] bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-lg">
                 <Zap size={20} className="text-violet-300" />
@@ -408,11 +441,11 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange, onLinkBan
             <div className="relative z-10 grid grid-cols-2 gap-4 border-t border-white/10 pt-5">
               <div>
                 <p className="text-[8px] font-black uppercase tracking-[0.15em] text-white/50 mb-1">Total Portfolio</p>
-                <p className="text-sm font-bold text-white">{formatZar(totalPortfolioValue)}</p>
+                {loading ? <div className="h-5 w-24 bg-white/20 animate-pulse rounded mt-1" /> : <p className="text-sm font-bold text-white">{formatZar(totalPortfolioValue)}</p>}
               </div>
               <div>
                 <p className="text-[8px] font-black uppercase tracking-[0.15em] text-white/50 mb-1">Eligible Assets</p>
-                <p className="text-sm font-bold text-white">{qualifyingCount} <span className="text-white/40 font-normal">/ {portfolioItems.length}</span></p>
+                {loading ? <div className="h-5 w-16 bg-white/20 animate-pulse rounded mt-1" /> : <p className="text-sm font-bold text-white">{qualifyingCount} <span className="text-white/40 font-normal">/ {portfolioItems.length}</span></p>}
               </div>
             </div>
           </div>
@@ -548,7 +581,30 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange, onLinkBan
           {/* List of Collateral Cards */}
           <div className="space-y-3">
             {loading ? (
-              <div className="text-center py-10 opacity-40 text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Analyzing...</div>
+              <>
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="w-full bg-white rounded-[28px] p-5 shadow-sm border border-slate-100 flex flex-col gap-4 animate-pulse">
+                    <div className="flex justify-between items-start">
+                      <div className="flex items-center gap-3">
+                        <div className="h-11 w-11 rounded-2xl bg-slate-100"></div>
+                        <div>
+                          <div className="h-3 w-16 bg-slate-100 rounded mb-2"></div>
+                          <div className="h-6 w-24 bg-slate-100 rounded"></div>
+                        </div>
+                      </div>
+                      <div className="h-5 w-16 bg-slate-100 rounded-full"></div>
+                    </div>
+                    <div className="border-t border-slate-50 pt-4 flex justify-between items-center">
+                      <div>
+                        <div className="h-3 w-20 bg-slate-100 rounded mb-2"></div>
+                        <div className="h-4 w-16 bg-slate-100 rounded"></div>
+                      </div>
+                      <div className="h-8 w-16 bg-slate-100 rounded"></div>
+                      <div className="h-5 w-16 bg-slate-100 rounded-full"></div>
+                    </div>
+                  </div>
+                ))}
+              </>
             ) : filteredItems.length === 0 ? (
               <div className="text-center py-10 text-slate-400 text-xs italic">No matching assets found</div>
             ) : filteredItems.map((item) => {
@@ -791,8 +847,7 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange, onLinkBan
 
               {/* Quote Logic Summary */}
               {(() => {
-                const engine = new LendingEngine({ loanType: 'securitised', principal: pledgeAmount || 0, originationDate: new Date(), nextSalaryDate: nextSalaryDate, termMonths: termMonths });
-                const calc = engine.calculateLoan();
+                const calc = calculateSecuredLoan({ principal: pledgeAmount || 0, originationDate: new Date(), nextSalaryDate, termMonths });
                 return (
                   <div className="bg-slate-900 rounded-2xl p-5 text-white">
                     <div className="flex justify-between items-center mb-4 pb-4 border-b border-white/10">
