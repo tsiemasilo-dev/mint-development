@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { supabase } from "./lib/supabase.js";
+import { setCachedSession, clearSessionCache } from "./lib/sessionCache.js";
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import SwipeBackWrapper from "./components/SwipeBackWrapper.jsx";
@@ -535,7 +536,14 @@ const App = () => {
         setShowPinLock(false);
       }
       if (event === 'TOKEN_REFRESHED' && session) {
+        setCachedSession(session);
         setSessionReady(true);
+      }
+      if (event === 'SIGNED_IN' && session) {
+        setCachedSession(session);
+      }
+      if (event === 'SIGNED_OUT') {
+        clearSessionCache();
       }
     });
 

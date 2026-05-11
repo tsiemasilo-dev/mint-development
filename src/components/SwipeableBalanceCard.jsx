@@ -18,6 +18,8 @@ import {
 } from "recharts";
 import { supabase } from "../lib/supabase";
 import { getStrategyPriceHistory, getClientStrategyReturns } from "../lib/strategyData";
+import { logDebug, CAT } from "../lib/debugLog.js";
+import { getCachedSession } from "../lib/sessionCache.js";
 import { useRealtimePrices } from "../lib/useRealtimePrices";
 import Skeleton from "./Skeleton";
 import SettlementBadge from "./PendingBadge";
@@ -27,6 +29,22 @@ import {
 } from "../lib/useSettlementStatus";
 
 const VISIBILITY_STORAGE_KEY = "mintBalanceVisible";
+
+// Module-level data cache — survives unmount/remount when the user switches
+// homeTab values (balance ↔ invest ↔ wallet), preventing the R0 flash that
+// occurs because each new instance starts with totalMarketValue: 0.
+// Keyed by `userId:familyMemberId` so child-mode data stays separate.
+const _cardDataCache = {};
+
+// Wraps a Supabase query promise with a timeout so hung queries fail fast
+function withTimeout(promise, ms = 4000) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`Query timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+}
 
 const truncateDecimal = (num, decimals) => {
   const factor = Math.pow(10, decimals);
@@ -60,15 +78,13 @@ const formatPrecise = (value) => {
 const TIMEFRAME_DAYS = { d: 7, "5d": 5, m: 30, ytd: 365, all: 1825 };
 
 async function getSessionWithRetry() {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) return session;
-    if (attempt === 0) {
-      const { data } = await supabase.auth.refreshSession();
-      if (data?.session?.access_token) return data.session;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
-  }
+  const session = await getCachedSession();
+  if (session?.access_token) return session;
+  // Fallback: attempt a direct refresh (only if cache returned null)
+  try {
+    const { data } = await supabase.auth.refreshSession();
+    if (data?.session?.access_token) return data.session;
+  } catch {}
   return null;
 }
 
@@ -102,6 +118,7 @@ const SwipeableBalanceCard = ({
   managedByLabel,        // For child cards: "Managed by parent · Age X · Independent at Y"
 }) => {
   const childMode = !!familyMemberId;
+  const _cacheKey = `${userId || ''}:${familyMemberId || ''}`;
   const [activeTab, setActiveTab] = useState("m");
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -211,7 +228,9 @@ const SwipeableBalanceCard = ({
   }, [isOpen]);
 
   const [selectedAsset, setSelectedAsset] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // Pre-populate from module-level cache so re-mounts (e.g. homeTab switch)
+  // show the last known data immediately instead of flashing R0 + skeleton.
+  const [loading, setLoading] = useState(() => !_cardDataCache[_cacheKey]);
   const [chartData, setChartData] = useState([]);
   const [chartLoading, setChartLoading] = useState(false);
   const [returnData5d, setReturnData5d] = useState({ pnl: 0, pct: 0 });
@@ -235,7 +254,7 @@ const SwipeableBalanceCard = ({
     }
   };
 
-  const [dbData, setDbData] = useState({
+  const [dbData, setDbData] = useState(() => _cardDataCache[_cacheKey] || {
     holdings: [],
     totalMarketValue: 0,
     totalInvested: 0,
@@ -255,18 +274,26 @@ const SwipeableBalanceCard = ({
   };
 
   const loadDataRef = React.useRef(null);
+  const lastCardLoadRef = React.useRef(0);
+  const CARD_REFRESH_COOLDOWN = 30000;
 
   useEffect(() => {
     let cancelled = false;
 
-    // Safety timeout — always exit skeleton after 10s even if fetch stalls
+    // Safety timeout — always exit skeleton after 5s even if fetch stalls
     const safetyTimer = setTimeout(() => {
-      if (!cancelled) setLoading(false);
-    }, 10000);
+      if (!cancelled) {
+        logDebug(CAT.LOADING, "⏱ Safety timer fired — SwipeableBalanceCard card loading forced off after 5 s");
+        setLoading(false);
+      }
+    }, 5000);
 
-    const loadData = async () => {
+    const loadData = async ({ silent = false } = {}) => {
       if (!userId && !familyMemberId) return;
-      setLoading(true);
+      if (!silent) {
+        logDebug(CAT.LOADING, "🃏 SwipeableBalanceCard loadData — loading → TRUE");
+        setLoading(true);
+      }
 
       try {
         let enrichedHoldings = [];
@@ -362,19 +389,25 @@ const SwipeableBalanceCard = ({
         if (strategiesRes && userId) {
           const strategyIds = (strategiesRes.strategies || []).map(s => s.id).filter(Boolean);
           const basketMap = {};
-          for (const stratId of strategyIds) {
-            const { data: row } = await supabase
-              .from("client_strategy_returns_c")
-              .select("basket_value")
-              .eq("user_id", userId)
-              .eq("strategy_id", stratId)
-              .order("as_of_date", { ascending: false })
-              .limit(1)
-              .maybeSingle();
-            if (row?.basket_value) {
-              basketMap[stratId] = Number(row.basket_value);
+          await Promise.all(strategyIds.map(async (stratId) => {
+            try {
+              const { data: row } = await withTimeout(
+                supabase
+                  .from("client_strategy_returns_c")
+                  .select("basket_value")
+                  .eq("user_id", userId)
+                  .eq("strategy_id", stratId)
+                  .order("as_of_date", { ascending: false })
+                  .limit(1)
+                  .maybeSingle()
+              );
+              if (row?.basket_value) {
+                basketMap[stratId] = Number(row.basket_value);
+              }
+            } catch (e) {
+              console.warn(`[SwipeableBalanceCard] basket_value query timed out for ${stratId}`);
             }
-          }
+          }));
           if (Object.keys(basketMap).length > 0) {
             enrichedHoldings = enrichedHoldings.map(h => {
               if (h.isStrategy && h.strategyId && basketMap[h.strategyId] != null) {
@@ -420,30 +453,47 @@ const SwipeableBalanceCard = ({
           }))
         });
 
-        setDbData({
+        const nextDbData = {
           holdings: enrichedHoldings,
           totalMarketValue: mValue,
           totalInvested: invested,
           totalInvestedAmount: investedAmount,
           holdingsCount: enrichedHoldings.length,
-        });
+        };
+        // Persist in module-level cache so subsequent re-mounts skip skeleton
+        if (mValue > 0 || enrichedHoldings.length > 0) {
+          _cardDataCache[_cacheKey] = nextDbData;
+        }
+        setDbData(nextDbData);
       } catch (err) {
         console.error("❌ [SwipeableBalanceCard] Load data error:", err);
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          lastCardLoadRef.current = Date.now();
+          if (!silent) setLoading(false);
+          else setLoading(false);
+        }
       }
     };
 
-    loadDataRef.current = loadData;
-    loadData();
+    loadDataRef.current = () => loadData({ silent: false });
+    loadData({ silent: false });
 
-    // Debounce visibility handler — prevents multiple concurrent loadData calls
-    // when the OS rapidly fires visibilitychange events on app resume
+    // Debounce visibility handler — silent background refresh with 30 s cooldown
+    // so tab switches never reset the skeleton when data is already loaded
     let visibilityDebounce = null;
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
         clearTimeout(visibilityDebounce);
-        visibilityDebounce = setTimeout(() => loadDataRef.current?.(), 300);
+        visibilityDebounce = setTimeout(() => {
+          const elapsed = Date.now() - lastCardLoadRef.current;
+          if (elapsed < CARD_REFRESH_COOLDOWN) {
+            logDebug(CAT.VISIBILITY, `👁  SwipeableBalanceCard skip tab-focus refresh — cooldown (${Math.round(elapsed / 1000)}s < 30s)`);
+            return;
+          }
+          logDebug(CAT.LOADING, "👁  SwipeableBalanceCard silent refresh on tab focus (no skeleton)");
+          loadData({ silent: true });
+        }, 300);
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
@@ -456,19 +506,29 @@ const SwipeableBalanceCard = ({
   }, [userId, familyMemberId, lastUpdated]);
 
   useEffect(() => {
+    let chartCancelled = false;
     const fetchChartPrices = async () => {
       if (!userId && !familyMemberId) return;
 
       // Ensure we don't leave chart stuck in loading if no holdings
       if (dbData.holdings.length === 0) {
-        if (!loading) {
-           setChartData([]);
-           setChartLoading(false);
-        }
+        setChartData([]);
+        setChartLoading(false);
         return;
       }
 
+      logDebug(CAT.CHART, `📈 Chart fetch START — tab: ${activeTab}`);
       setChartLoading(true);
+
+      // Safety timeout — always exit chart skeleton after 5s even if Supabase query stalls
+      const chartSafetyTimer = setTimeout(() => {
+        if (!chartCancelled) {
+          logDebug(CAT.CHART, "⏱ Safety timer fired — chart loading forced off after 5 s");
+          console.warn("[SwipeableBalanceCard] Chart fetch safety timeout reached, clearing loader");
+          setChartLoading(false);
+        }
+      }, 5000);
+
       try {
         const holdingsToChart = selectedAsset ? [selectedAsset] : dbData.holdings;
         const days = TIMEFRAME_DAYS[activeTab] || 30;
@@ -487,16 +547,15 @@ const SwipeableBalanceCard = ({
           const strategyHoldings = holdingsToChart.filter(h => h.isStrategy && h.strategyId);
           // Collect daily 1d_pnl per date (summed across all strategies)
           const strategyDailyPnl = {};
-          for (const sh of strategyHoldings) {
+          await Promise.all(strategyHoldings.map(async (sh) => {
             try {
               let query = supabase
                 .from("client_strategy_returns_c")
-                .select("as_of_date, 1d_pnl")
+                .select("*")
                 .eq("user_id", userId)
                 .eq("strategy_id", sh.strategyId)
                 .order("as_of_date", { ascending: true });
 
-              // For all tabs except "all", filter by the start date
               if (activeTab !== "all") {
                 query = query.gte("as_of_date", startDateStr);
               }
@@ -505,7 +564,7 @@ const SwipeableBalanceCard = ({
                 query = query.limit(limitValue);
               }
 
-              const { data, error } = await query;
+              const { data, error } = await withTimeout(query, 4000);
 
               if (!error && data && data.length > 0) {
                 data.forEach((row) => {
@@ -517,7 +576,7 @@ const SwipeableBalanceCard = ({
             } catch (e) {
               console.warn(`[Chart] Failed to fetch strategy 1d_pnl for ${sh.strategyId}:`, e);
             }
-          }
+          }));
 
           // Build cumulative sum of 1d_pnl across all dates
           const sortedStrategyDates = Object.keys(strategyDailyPnl).sort();
@@ -666,12 +725,16 @@ const SwipeableBalanceCard = ({
       } catch (err) {
         console.error("❌ [SwipeableBalanceCard] Chart fetch error:", err);
       } finally {
+        clearTimeout(chartSafetyTimer);
         setChartLoading(false);
       }
     };
 
     fetchChartPrices();
-  }, [userId, familyMemberId, dbData.holdings, activeTab, selectedAsset, lastUpdated, loading]);
+    return () => {
+      chartCancelled = true;
+    };
+  }, [userId, familyMemberId, dbData.holdings, activeTab, selectedAsset, lastUpdated]);
 
   useEffect(() => {
     const fetchPeriodReturnData = async () => {

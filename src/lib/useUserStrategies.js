@@ -2,8 +2,12 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "./supabase";
 import { getStrategyPriceHistory } from "./strategyData";
 
+// Module-level cache — survives unmount/remount when navigating between tabs,
+// so the Portfolio page shows last known strategies instead of an empty skeleton.
+let _cachedStrategiesData = null;
+
 export const useUserStrategies = () => {
-  const [data, setData] = useState({
+  const [data, setData] = useState(_cachedStrategiesData || {
     strategies: [],
     selectedStrategy: null,
     loading: true,
@@ -128,12 +132,15 @@ export const useUserStrategies = () => {
         };
       });
 
-      setData({
+      const nextData = {
         strategies: formattedStrategies,
         selectedStrategy: formattedStrategies[0] || null,
         loading: false,
         error: null,
-      });
+      };
+      // Persist so re-mounts (e.g. navigating back) skip the skeleton
+      _cachedStrategiesData = nextData;
+      setData(nextData);
 
     } catch (err) {
       console.error("Error fetching strategies:", err);
@@ -151,6 +158,13 @@ export const useUserStrategies = () => {
 
   useEffect(() => {
     fetchUserStrategies();
+
+    // Safety timer — release the skeleton after 6 s even if the API is slow/hanging
+    const safetyTimer = setTimeout(() => {
+      setData((prev) => prev.loading ? { ...prev, loading: false } : prev);
+    }, 6000);
+
+    return () => clearTimeout(safetyTimer);
   }, [fetchUserStrategies]);
 
   return { ...data, selectStrategy, refetch: fetchUserStrategies };
