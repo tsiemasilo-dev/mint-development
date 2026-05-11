@@ -1,61 +1,61 @@
-import { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo, lazy, Suspense } from "react";
 import { supabase } from "./lib/supabase.js";
 import { setCachedSession, clearSessionCache } from "./lib/sessionCache.js";
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import SwipeBackWrapper from "./components/SwipeBackWrapper.jsx";
 
-import AuthPage from "./pages/AuthPage.jsx";
-import HomePage from "./pages/HomePage.jsx";
-import CreditHome from "./pages/credit/CreditHome";
-import CreditApplyPage from "./pages/CreditApplyPage.jsx";
-import UnsecuredCreditDashboard from "./pages/credit/UnsecuredCreditDashboard.jsx";
-import CreditRepayPage from "./pages/CreditRepayPage.jsx";
-import InvestmentsPage from "./pages/InvestmentsPage.jsx";
-import NewPortfolioPage from "./pages/NewPortfolioPage.jsx";
-import InvestPage from "./pages/InvestPage.jsx";
-import InvestAmountPage from "./pages/InvestAmountPage.jsx";
-import PaymentPage from "./pages/PaymentPage.jsx";
-import PaymentSuccessPage from "./pages/PaymentSuccessPage.jsx";
-import PaymentPendingPage from "./pages/PaymentPendingPage.jsx";
-import PaymentMethodModal from "./components/PaymentMethodModal.jsx";
-import FactsheetPage from "./pages/FactsheetPage.jsx";
-import OpenStrategiesPage from "./pages/OpenStrategiesPage.jsx";
-import MorePage from "./pages/MorePage.jsx";
-import ManageSubscriptionsPage from "./pages/ManageSubscriptionsPage.jsx";
-import OnboardingPage from "./pages/OnboardingPage.jsx";
-import InstantLiquidityPage from "./pages/credit/InstantLiquidity.jsx";
+const AuthPage = lazy(() => import("./pages/AuthPage.jsx"));
+const HomePage = lazy(() => import("./pages/HomePage.jsx"));
+const CreditHome = lazy(() => import("./pages/credit/CreditHome"));
+const CreditApplyPage = lazy(() => import("./pages/CreditApplyPage.jsx"));
+const UnsecuredCreditDashboard = lazy(() => import("./pages/credit/UnsecuredCreditDashboard.jsx"));
+const CreditRepayPage = lazy(() => import("./pages/CreditRepayPage.jsx"));
+const InvestmentsPage = lazy(() => import("./pages/InvestmentsPage.jsx"));
+const NewPortfolioPage = lazy(() => import("./pages/NewPortfolioPage.jsx"));
+const InvestPage = lazy(() => import("./pages/InvestPage.jsx"));
+const InvestAmountPage = lazy(() => import("./pages/InvestAmountPage.jsx"));
+const PaymentPage = lazy(() => import("./pages/PaymentPage.jsx"));
+const PaymentSuccessPage = lazy(() => import("./pages/PaymentSuccessPage.jsx"));
+const PaymentPendingPage = lazy(() => import("./pages/PaymentPendingPage.jsx"));
+const PaymentMethodModal = lazy(() => import("./components/PaymentMethodModal.jsx"));
+const FactsheetPage = lazy(() => import("./pages/FactsheetPage.jsx"));
+const OpenStrategiesPage = lazy(() => import("./pages/OpenStrategiesPage.jsx"));
+const MorePage = lazy(() => import("./pages/MorePage.jsx"));
+const ManageSubscriptionsPage = lazy(() => import("./pages/ManageSubscriptionsPage.jsx"));
+const OnboardingPage = lazy(() => import("./pages/OnboardingPage.jsx"));
+const InstantLiquidityPage = lazy(() => import("./pages/credit/InstantLiquidity.jsx"));
 import { useProfile } from "./lib/useProfile";
-import SettingsPage from "./pages/SettingsPage.jsx";
-import TransactPage from "./pages/TransactPage.jsx";
-import UserOnboardingPage from "./pages/UserOnboardingPage.jsx";
+const SettingsPage = lazy(() => import("./pages/SettingsPage.jsx"));
+const TransactPage = lazy(() => import("./pages/TransactPage.jsx"));
+const UserOnboardingPage = lazy(() => import("./pages/UserOnboardingPage.jsx"));
 import AppLayout from "./layouts/AppLayout.jsx";
-import BiometricsDebugPage from "./pages/BiometricsDebugPage.jsx";
-import EditProfilePage from "./pages/EditProfilePage.jsx";
-import NotificationsPage from "./pages/NotificationsPage.jsx";
-import NotificationSettingsPage from "./pages/NotificationSettingsPage.jsx";
-import MintBalancePage from "./pages/MintBalancePage.jsx";
-import MarketsPage from "./pages/MarketsPage.jsx";
-import StockDetailPage from "./pages/StockDetailPage.jsx";
-import StockBuyPage from "./pages/StockBuyPage.jsx";
-import NewsArticlePage from "./pages/NewsArticlePage.jsx";
+const BiometricsDebugPage = lazy(() => import("./pages/BiometricsDebugPage.jsx"));
+const EditProfilePage = lazy(() => import("./pages/EditProfilePage.jsx"));
+const NotificationsPage = lazy(() => import("./pages/NotificationsPage.jsx"));
+const NotificationSettingsPage = lazy(() => import("./pages/NotificationSettingsPage.jsx"));
+const MintBalancePage = lazy(() => import("./pages/MintBalancePage.jsx"));
+const MarketsPage = lazy(() => import("./pages/MarketsPage.jsx"));
+const StockDetailPage = lazy(() => import("./pages/StockDetailPage.jsx"));
+const StockBuyPage = lazy(() => import("./pages/StockBuyPage.jsx"));
+const NewsArticlePage = lazy(() => import("./pages/NewsArticlePage.jsx"));
 import { NotificationsProvider, createWelcomeNotification, useNotificationsContext } from "./lib/NotificationsContext.jsx";
-import ActivityPage from "./pages/ActivityPage.jsx";
-import ActionsPage from "./pages/ActionsPage.jsx";
-import ProfileDetailsPage from "./pages/ProfileDetailsPage.jsx";
-import ChangePasswordPage from "./pages/ChangePasswordPage.jsx";
-import LegalDocumentationPage from "./pages/LegalDocumentationPage.jsx";
-import StatementsPage from "./pages/StatementsPage.jsx";
-import DepositPage from "./pages/DepositPage.jsx";
-import IdentityCheckPage from "./pages/IdentityCheckPage.jsx";
-import BankLinkPage from "./pages/BankLinkPage.jsx";
-import MintBankPage from "./pages/MintBankPage.jsx";
-import InvitePage from "./pages/InvitePage.jsx";
-import ActiveSessionsPage from "./pages/ActiveSessionsPage.jsx";
-import PinSetupPage from "./pages/PinSetupPage.jsx";
-import FamilyDashboardPage from "./pages/FamilyDashboardPage.jsx";
-import ChildDashboardPage from "./pages/ChildDashboardPage.jsx";
-import FuneralCoverPage from "./pages/FuneralCoverPage.jsx";
+const ActivityPage = lazy(() => import("./pages/ActivityPage.jsx"));
+const ActionsPage = lazy(() => import("./pages/ActionsPage.jsx"));
+const ProfileDetailsPage = lazy(() => import("./pages/ProfileDetailsPage.jsx"));
+const ChangePasswordPage = lazy(() => import("./pages/ChangePasswordPage.jsx"));
+const LegalDocumentationPage = lazy(() => import("./pages/LegalDocumentationPage.jsx"));
+const StatementsPage = lazy(() => import("./pages/StatementsPage.jsx"));
+const DepositPage = lazy(() => import("./pages/DepositPage.jsx"));
+const IdentityCheckPage = lazy(() => import("./pages/IdentityCheckPage.jsx"));
+const BankLinkPage = lazy(() => import("./pages/BankLinkPage.jsx"));
+const MintBankPage = lazy(() => import("./pages/MintBankPage.jsx"));
+const InvitePage = lazy(() => import("./pages/InvitePage.jsx"));
+const ActiveSessionsPage = lazy(() => import("./pages/ActiveSessionsPage.jsx"));
+const PinSetupPage = lazy(() => import("./pages/PinSetupPage.jsx"));
+const FamilyDashboardPage = lazy(() => import("./pages/FamilyDashboardPage.jsx"));
+const ChildDashboardPage = lazy(() => import("./pages/ChildDashboardPage.jsx"));
+const FuneralCoverPage = lazy(() => import("./pages/FuneralCoverPage.jsx"));
 import { useInactivityTimeout } from "./lib/useInactivityTimeout.jsx";
 import PinLockScreen from "./components/PinLockScreen.jsx";
 import { isPinEnabled } from "./lib/usePin.js";
@@ -172,6 +172,11 @@ const App = () => {
   });
 
   const justLoggedInRef = useRef(false);
+  const intentionalLogoutRef = useRef(false);
+
+  const handleBeforeLogout = () => {
+    intentionalLogoutRef.current = true;
+  };
   // Read ozow param synchronously at init — before any effect can clear the URL
   const ozowReturnParam = useRef(new URLSearchParams(window.location.search).get("ozow"));
   const ozowRecordedRef = useRef(false);
@@ -521,6 +526,14 @@ const App = () => {
       if (event === 'SIGNED_OUT') {
         clearUserStorage();
         if (resetNotifications) resetNotifications();
+
+        // Intentional logout (user clicked "Log out") — skip session-expired overlay
+        if (intentionalLogoutRef.current) {
+          intentionalLogoutRef.current = false;
+          sessionExpiredPageRef.current = null;
+          setShowPinLock(false);
+          return;
+        }
 
         // Don't force navigate - let SessionExpired overlay handle UX gracefully
         // This prevents jarring redirects and shows users why they were logged out
@@ -1131,44 +1144,100 @@ const App = () => {
   }
 
 
-  if (currentPage === "home") {
+  if (['home', 'investments', 'markets', 'more'].includes(currentPage)) {
     return (
-      <>
-      {showOpenStrategiesMaintenance && <MaintenanceModal onClose={() => setShowOpenStrategiesMaintenance(false)} />}
-      <AppLayout
-        activeTab="home"
-        onTabChange={handleTabChange}
-        onWithdraw={handleWithdrawRequest}
-        onShowComingSoon={handleShowComingSoon}
-        modal={modal}
-        onCloseModal={closeModal}
-      >
-        <HomePage
-          onOpenNotifications={() => {
-            setNotificationReturnPage("home");
-            navigateTo("notifications");
-          }}
-          onOpenMintBalance={() => navigateTo("mintBalance")}
-          onOpenActivity={() => navigateTo("activity")}
-          onOpenActions={() => navigateTo("actions")}
-          onOpenInvestments={() => setCurrentPage("investments")}
-          onOpenCredit={() => setCurrentPage("credit")}
-          onOpenCreditApply={() => navigateTo("creditApply")}
-          onOpenCreditRepay={() => navigateTo("creditRepay")}
-          onOpenInvest={() => { setMarketsInitialView(null); navigateTo("markets"); }}
-          onOpenWithdraw={handleWithdrawRequest}
-          onOpenSettings={() => navigateTo("settings")}
-          onOpenStrategies={() => { setMarketsInitialView("openstrategies"); navigateTo("markets"); }}
-          onOpenMarkets={() => { setMarketsInitialView("invest"); navigateTo("markets"); }}
-          onOpenDeposit={() => handleTabChange("deposit")}
-          onOpenNews={() => { setMarketsInitialView("news"); navigateTo("markets"); }}
-          onOpenNewsArticle={(articleId) => { setSelectedArticleId(articleId); navigateTo("newsArticle"); }}
-          onOpenInstantLiquidity={() => navigateTo("instantLiquidity")}
-          onOpenFamily={() => navigateTo("familyDashboard")}
-          onOpenInsure={() => navigateTo("funeralCover")}
-        />
-      </AppLayout>
-      </>
+      <Suspense fallback={<div className="min-h-screen bg-[#f8f9fc]" />}>
+        <>
+          {showOpenStrategiesMaintenance && <MaintenanceModal onClose={() => setShowOpenStrategiesMaintenance(false)} />}
+          {/* Home tab – always mounted */}
+          <div style={{ display: currentPage === 'home' ? 'block' : 'none' }}>
+            <AppLayout
+              activeTab={currentPage}
+              onTabChange={handleTabChange}
+              onWithdraw={handleWithdrawRequest}
+              onShowComingSoon={handleShowComingSoon}
+              modal={modal}
+              onCloseModal={closeModal}
+            >
+              <HomePage
+                onOpenNotifications={() => { setNotificationReturnPage("home"); navigateTo("notifications"); }}
+                onOpenMintBalance={() => navigateTo("mintBalance")}
+                onOpenActivity={() => navigateTo("activity")}
+                onOpenActions={() => navigateTo("actions")}
+                onOpenInvestments={() => setCurrentPage("investments")}
+                onOpenCredit={() => setCurrentPage("credit")}
+                onOpenCreditApply={() => navigateTo("creditApply")}
+                onOpenCreditRepay={() => navigateTo("creditRepay")}
+                onOpenInvest={() => { setMarketsInitialView(null); navigateTo("markets"); }}
+                onOpenWithdraw={handleWithdrawRequest}
+                onOpenSettings={() => navigateTo("settings")}
+                onOpenStrategies={() => { setMarketsInitialView("openstrategies"); navigateTo("markets"); }}
+                onOpenMarkets={() => { setMarketsInitialView("invest"); navigateTo("markets"); }}
+                onOpenDeposit={() => handleTabChange("deposit")}
+                onOpenNews={() => { setMarketsInitialView("news"); navigateTo("markets"); }}
+                onOpenNewsArticle={(articleId) => { setSelectedArticleId(articleId); navigateTo("newsArticle"); }}
+                onOpenInstantLiquidity={() => navigateTo("instantLiquidity")}
+                onOpenFamily={() => navigateTo("familyDashboard")}
+                onOpenInsure={() => navigateTo("funeralCover")}
+              />
+            </AppLayout>
+          </div>
+          {/* Investments tab – always mounted */}
+          <div style={{ display: currentPage === 'investments' ? 'block' : 'none' }}>
+            <AppLayout
+              activeTab={currentPage}
+              onTabChange={handleTabChange}
+              onWithdraw={handleWithdrawRequest}
+              onShowComingSoon={handleShowComingSoon}
+              modal={modal}
+              onCloseModal={closeModal}
+            >
+              <NewPortfolioPage
+                onBack={goBack}
+                onOpenNotifications={() => { setNotificationReturnPage("investments"); navigateTo("notifications"); }}
+                onOpenInvest={() => navigateTo("markets")}
+                onOpenStrategies={() => { setMarketsInitialView("openstrategies"); navigateTo("markets"); }}
+                deepLink={portfolioDeepLink}
+                onDeepLinkConsumed={() => setPortfolioDeepLink(null)}
+              />
+            </AppLayout>
+          </div>
+          {/* Markets tab – always mounted */}
+          <div style={{ display: currentPage === 'markets' ? 'block' : 'none' }}>
+            <AppLayout
+              activeTab={currentPage}
+              onTabChange={handleTabChange}
+              onWithdraw={() => {}}
+              onShowComingSoon={() => {}}
+              modal={null}
+              onCloseModal={() => {}}
+            >
+              <MarketsPage
+                onBack={undefined}
+                initialViewMode={marketsInitialView}
+                onViewModeChange={(mode) => setMarketsInitialView(mode)}
+                onOpenNotifications={() => { setNotificationReturnPage("markets"); navigateTo("notifications"); }}
+                onOpenStockDetail={(security) => { setSelectedChildForInvest(null); setSelectedSecurity(security); navigateTo("stockDetail"); }}
+                onOpenNewsArticle={(articleId) => { setSelectedArticleId(articleId); navigateTo("newsArticle"); }}
+                onOpenFactsheet={(strategy) => { setSelectedChildForInvest(null); setSelectedStrategy(strategy); navigateTo("factsheet"); }}
+              />
+            </AppLayout>
+          </div>
+          {/* More tab – always mounted */}
+          <div style={{ display: currentPage === 'more' ? 'block' : 'none' }}>
+            <AppLayout
+              activeTab={currentPage}
+              onTabChange={handleTabChange}
+              onWithdraw={handleWithdrawRequest}
+              onShowComingSoon={handleShowComingSoon}
+              modal={modal}
+              onCloseModal={closeModal}
+            >
+              <MorePage onNavigate={navigateTo} onBeforeLogout={handleBeforeLogout} />
+            </AppLayout>
+          </div>
+        </>
+      </Suspense>
     );
   }
   if (currentPage === "credit") {
@@ -1276,34 +1345,6 @@ const App = () => {
     );
   }
 
-  if (currentPage === "investments") {
-    return (
-      <>
-      {showOpenStrategiesMaintenance && <MaintenanceModal onClose={() => setShowOpenStrategiesMaintenance(false)} />}
-      <AppLayout
-        activeTab="investments"
-        onTabChange={handleTabChange}
-        onWithdraw={handleWithdrawRequest}
-        onShowComingSoon={handleShowComingSoon}
-        modal={modal}
-        onCloseModal={closeModal}
-      >
-        <NewPortfolioPage
-          onBack={goBack}
-          onOpenNotifications={() => {
-            setNotificationReturnPage("investments");
-            navigateTo("notifications");
-          }}
-          onOpenInvest={() => navigateTo("markets")}
-          onOpenStrategies={() => { setMarketsInitialView("openstrategies"); navigateTo("markets"); }}
-          deepLink={portfolioDeepLink}
-          onDeepLinkConsumed={() => setPortfolioDeepLink(null)}
-        />
-      </AppLayout>
-      </>
-    );
-  }
-
   if (currentPage === "invest") {
     return (
       <>
@@ -1325,45 +1366,6 @@ const App = () => {
         </AppLayout>
       </SwipeBackWrapper>
       </>
-    );
-  }
-
-  if (currentPage === "markets") {
-    return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
-        <AppLayout
-          activeTab="markets"
-          onTabChange={handleTabChange}
-          onWithdraw={() => { }}
-          onShowComingSoon={() => { }}
-          modal={null}
-          onCloseModal={() => { }}
-        >
-          <MarketsPage
-            onBack={canSwipeBack ? goBack : undefined}
-            initialViewMode={marketsInitialView}
-            onViewModeChange={(mode) => setMarketsInitialView(mode)}
-            onOpenNotifications={() => {
-              setNotificationReturnPage("markets");
-              navigateTo("notifications");
-            }}
-            onOpenStockDetail={(security) => {
-              setSelectedChildForInvest(null);
-              setSelectedSecurity(security);
-              navigateTo("stockDetail");
-            }}
-            onOpenNewsArticle={(articleId) => {
-              setSelectedArticleId(articleId);
-              navigateTo("newsArticle");
-            }}
-            onOpenFactsheet={(strategy) => {
-              setSelectedChildForInvest(null);
-              setSelectedStrategy(strategy);
-              navigateTo("factsheet");
-            }}
-          />
-        </AppLayout>
-      </SwipeBackWrapper>
     );
   }
 
@@ -1864,21 +1866,6 @@ const App = () => {
     );
   }
 
-  if (currentPage === "more") {
-    return (
-      <AppLayout
-        activeTab="more"
-        onTabChange={handleTabChange}
-        onWithdraw={handleWithdrawRequest}
-        onShowComingSoon={handleShowComingSoon}
-        modal={modal}
-        onCloseModal={closeModal}
-      >
-        <MorePage onNavigate={navigateTo} />
-      </AppLayout>
-    );
-  }
-
   if (currentPage === "manageSubscriptions") {
     return (
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
@@ -2269,12 +2256,14 @@ const App = () => {
   };
 
   return (
-    <AuthPage
-      initialStep={authStep}
-      onSignupComplete={handleSignupComplete}
-      onLoginComplete={handleLoginComplete}
-      onPreLogin={handlePreLogin}
-    />
+    <Suspense fallback={<div className="min-h-screen bg-[#f8f9fc]" />}>
+      <AuthPage
+        initialStep={authStep}
+        onSignupComplete={handleSignupComplete}
+        onLoginComplete={handleLoginComplete}
+        onPreLogin={handlePreLogin}
+      />
+    </Suspense>
   );
 };
 

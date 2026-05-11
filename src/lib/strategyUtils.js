@@ -51,6 +51,30 @@ const getMinFromPrice = (price) => {
 };
 
 
+export const calculateMinInvestmentSync = (strategy, holdingsBySymbol) => {
+  const holdings = getHoldingsArray(strategy);
+  if (!holdings.length) {
+    return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : null;
+  }
+  let total = 0;
+  let foundAny = false;
+  for (const holding of holdings) {
+    const rawSymbol = holding.symbol || holding.ticker;
+    if (!rawSymbol) continue;
+    const shares = Number(holding.shares || holding.quantity || 1);
+    if (shares <= 0) continue;
+    const normalizedSym = normalizeSymbol(rawSymbol);
+    const security = holdingsBySymbol.get(rawSymbol) || holdingsBySymbol.get(normalizedSym);
+    if (!security?.last_price) continue;
+    foundAny = true;
+    total += shares * Number(security.last_price);
+  }
+  if (!foundAny) {
+    return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : null;
+  }
+  return Math.round(total);
+};
+
 export const calculateMinInvestment = async (strategy, holdingsBySymbol) => {
   const holdings = getHoldingsArray(strategy);
 
