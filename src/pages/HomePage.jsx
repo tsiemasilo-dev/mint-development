@@ -393,11 +393,16 @@ const HomePage = ({
     };
   }, [profile?.id, fetchBestAssets, fetchGoals, fetchFinancialData, fetchRequiredActions, fetchOnboardingStatus]);
 
+  const priceDebounceRef = useRef(null);
   useEffect(() => {
     if (pricesLastUpdated && profile?.id) {
-      fetchBestAssets();
-      if (typeof fetchFinancialData === 'function') fetchFinancialData();
+      clearTimeout(priceDebounceRef.current);
+      priceDebounceRef.current = setTimeout(() => {
+        fetchBestAssets();
+        if (typeof fetchFinancialData === 'function') fetchFinancialData();
+      }, 800);
     }
+    return () => clearTimeout(priceDebounceRef.current);
   }, [pricesLastUpdated]);
 
   useEffect(() => {

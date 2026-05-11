@@ -21,11 +21,13 @@ import { useRequiredActions } from "../lib/useRequiredActions";
 import { useSumsubStatus } from "../lib/useSumsubStatus";
 import OriginButton from "../components/OriginButton";
 
+let _moreProfileCache = null;
+
 const MorePage = ({ onNavigate }) => {
-  const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(!_moreProfileCache);
+  const [profile, setProfile] = useState(_moreProfileCache?.profile || null);
   const [error, setError] = useState("");
-  const [subscriptionPlan, setSubscriptionPlan] = useState(null);
+  const [subscriptionPlan, setSubscriptionPlan] = useState(_moreProfileCache?.plan || null);
   const { bankLinked } = useRequiredActions();
   const { kycVerified, kycPending, kycNeedsResubmission } = useSumsubStatus();
 
@@ -43,6 +45,7 @@ const MorePage = ({ onNavigate }) => {
     .toUpperCase();
 
   useEffect(() => {
+    if (_moreProfileCache) return;
     let alive = true;
 
     const loadProfile = async () => {
@@ -83,12 +86,14 @@ const MorePage = ({ onNavigate }) => {
 
         if (alive) {
           const metadata = userData.user.user_metadata || {};
-          setProfile(profileData || {
+          const resolvedProfile = profileData || {
             first_name: metadata.first_name || "",
             last_name: metadata.last_name || "",
             email: userData.user.email || "",
             avatar_url: metadata.avatar_url || "",
-          });
+          };
+          _moreProfileCache = { profile: resolvedProfile, plan: plan || "free" };
+          setProfile(resolvedProfile);
           setSubscriptionPlan(plan || "free");
           setLoading(false);
         }

@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase";
 import { checkOnboardingComplete } from "../lib/checkOnboardingComplete";
 import { useOnboardingStatus } from "../lib/useOnboardingStatus";
 import { formatChangePct, getChangeColor } from "../lib/strategyData.js";
-import { buildHoldingsBySymbol, calculateMinInvestment, getAdjustedShares, computeExtendedSummary } from "../lib/strategyUtils";
+import { buildHoldingsBySymbol, calculateMinInvestmentSync, getAdjustedShares, computeExtendedSummary } from "../lib/strategyUtils";
 import {
   Area,
   Line,
@@ -485,7 +485,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
 
   const minimumInvestmentAmount = useMemo(() => {
     const holdingsMap = buildHoldingsBySymbol(holdingsSecurities);
-    const calculated = Number(calculateMinInvestment(currentStrategy, holdingsMap));
+    const calculated = Number(calculateMinInvestmentSync(currentStrategy, holdingsMap));
     if (Number.isFinite(calculated) && calculated > 0) {
       return calculated;
     }
@@ -1163,7 +1163,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
               onClick={() => {
                 setShowUpgradeModal(false);
                 const hMap = buildHoldingsBySymbol(holdingsSecurities);
-                const calcMin = calculateMinInvestment(currentStrategy, hMap);
+                const calcMin = calculateMinInvestmentSync(currentStrategy, hMap);
                 const holdingsWithLogos = (currentStrategy.holdings || []).map(h => {
                   const sym = h.ticker || h.symbol || h;
                   const sec = holdingsSecurities.find(s => s.symbol === sym);
@@ -1225,7 +1225,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
               }
 
               const hMap = buildHoldingsBySymbol(holdingsSecurities);
-              const calcMin = calculateMinInvestment(currentStrategy, hMap);
+              const calcMin = calculateMinInvestmentSync(currentStrategy, hMap);
               const holdingsWithLogos = (currentStrategy.holdings || []).map(h => {
                 const sym = h.ticker || h.symbol || h;
                 const sec = holdingsSecurities.find(s => s.symbol === sym);
