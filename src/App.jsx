@@ -1,19 +1,24 @@
-import { useEffect, useState, useRef, useCallback, useMemo, lazy, Suspense } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo, lazy, Suspense, startTransition } from "react";
 import { supabase } from "./lib/supabase.js";
 import { setCachedSession, clearSessionCache } from "./lib/sessionCache.js";
 import { clearAllUserCaches } from "./lib/userCacheReset.js";
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import SwipeBackWrapper from "./components/SwipeBackWrapper.jsx";
+import AppLayout from "./layouts/AppLayout.jsx";
+import { useProfile } from "./lib/useProfile";
+import { NotificationsProvider, createWelcomeNotification, useNotificationsContext } from "./lib/NotificationsContext.jsx";
+import HomePage from "./pages/HomePage.jsx";
+import CreditHome from "./pages/credit/CreditHome";
+import NewPortfolioPage from "./pages/NewPortfolioPage.jsx";
+import MarketsPage from "./pages/MarketsPage.jsx";
+import MorePage from "./pages/MorePage.jsx";
 
 const AuthPage = lazy(() => import("./pages/AuthPage.jsx"));
-const HomePage = lazy(() => import("./pages/HomePage.jsx"));
-const CreditHome = lazy(() => import("./pages/credit/CreditHome"));
 const CreditApplyPage = lazy(() => import("./pages/CreditApplyPage.jsx"));
 const UnsecuredCreditDashboard = lazy(() => import("./pages/credit/UnsecuredCreditDashboard.jsx"));
 const CreditRepayPage = lazy(() => import("./pages/CreditRepayPage.jsx"));
 const InvestmentsPage = lazy(() => import("./pages/InvestmentsPage.jsx"));
-const NewPortfolioPage = lazy(() => import("./pages/NewPortfolioPage.jsx"));
 const InvestPage = lazy(() => import("./pages/InvestPage.jsx"));
 const InvestAmountPage = lazy(() => import("./pages/InvestAmountPage.jsx"));
 const PaymentPage = lazy(() => import("./pages/PaymentPage.jsx"));
@@ -22,25 +27,20 @@ const PaymentPendingPage = lazy(() => import("./pages/PaymentPendingPage.jsx"));
 const PaymentMethodModal = lazy(() => import("./components/PaymentMethodModal.jsx"));
 const FactsheetPage = lazy(() => import("./pages/FactsheetPage.jsx"));
 const OpenStrategiesPage = lazy(() => import("./pages/OpenStrategiesPage.jsx"));
-const MorePage = lazy(() => import("./pages/MorePage.jsx"));
 const ManageSubscriptionsPage = lazy(() => import("./pages/ManageSubscriptionsPage.jsx"));
 const OnboardingPage = lazy(() => import("./pages/OnboardingPage.jsx"));
 const InstantLiquidityPage = lazy(() => import("./pages/credit/InstantLiquidity.jsx"));
-import { useProfile } from "./lib/useProfile";
 const SettingsPage = lazy(() => import("./pages/SettingsPage.jsx"));
 const TransactPage = lazy(() => import("./pages/TransactPage.jsx"));
 const UserOnboardingPage = lazy(() => import("./pages/UserOnboardingPage.jsx"));
-import AppLayout from "./layouts/AppLayout.jsx";
 const BiometricsDebugPage = lazy(() => import("./pages/BiometricsDebugPage.jsx"));
 const EditProfilePage = lazy(() => import("./pages/EditProfilePage.jsx"));
 const NotificationsPage = lazy(() => import("./pages/NotificationsPage.jsx"));
 const NotificationSettingsPage = lazy(() => import("./pages/NotificationSettingsPage.jsx"));
 const MintBalancePage = lazy(() => import("./pages/MintBalancePage.jsx"));
-const MarketsPage = lazy(() => import("./pages/MarketsPage.jsx"));
 const StockDetailPage = lazy(() => import("./pages/StockDetailPage.jsx"));
 const StockBuyPage = lazy(() => import("./pages/StockBuyPage.jsx"));
 const NewsArticlePage = lazy(() => import("./pages/NewsArticlePage.jsx"));
-import { NotificationsProvider, createWelcomeNotification, useNotificationsContext } from "./lib/NotificationsContext.jsx";
 const ActivityPage = lazy(() => import("./pages/ActivityPage.jsx"));
 const ActionsPage = lazy(() => import("./pages/ActionsPage.jsx"));
 const ProfileDetailsPage = lazy(() => import("./pages/ProfileDetailsPage.jsx"));
@@ -65,6 +65,7 @@ import KidStrategyChildPickerModal from "./components/KidStrategyChildPickerModa
 import { useOnboardingStatus } from "./lib/useOnboardingStatus.js";
 import { checkOnboardingComplete } from "./lib/checkOnboardingComplete.js";
 import MaintenanceModal from "./components/MaintenanceModal.jsx";
+import HomeSkeleton from "./components/HomeSkeleton.jsx";
 
 const PERSISTENT_KEYS = [
   'mint_device_id',
@@ -101,6 +102,25 @@ const hashParams = getHashParams(initialHash);
 const hasError = hashParams.error === 'access_denied';
 const errorCode = hashParams.error_code;
 
+// Synchronous localStorage session check — runs at module load, before any render.
+// If a valid non-expired Supabase token is cached, we skip isCheckingAuth entirely
+// and jump straight to 'home', giving an instant startup with no loading screen.
+const getStoredSession = () => {
+  if (hasError || isRecoveryMode) return null;
+  try {
+    const key = Object.keys(localStorage).find(
+      k => k.startsWith('sb-') && k.endsWith('-auth-token')
+    );
+    if (!key) return null;
+    const stored = JSON.parse(localStorage.getItem(key));
+    if (stored?.access_token && stored?.expires_at && Date.now() / 1000 < stored.expires_at) {
+      return stored;
+    }
+  } catch {}
+  return null;
+};
+const storedSession = getStoredSession();
+
 const getTokensFromHash = (hash) => {
   if (!hash) return null;
   const params = new URLSearchParams(hash.substring(1));
@@ -117,10 +137,12 @@ const recoveryTokens = isRecoveryMode ? getTokensFromHash(initialHash) : null;
 const mainTabs = ['home', 'credit', 'transact', 'investments', 'markets', 'deposit', 'more', 'welcome', 'auth'];
 
 const App = () => {
-  const [currentPage, setCurrentPage] = useState(hasError ? "linkExpired" : (isRecoveryMode ? "auth" : "welcome"));
+  const [currentPage, setCurrentPage] = useState(
+    hasError ? "linkExpired" : (isRecoveryMode ? "auth" : (storedSession ? "home" : "welcome"))
+  );
   const [previousPageName, setPreviousPageName] = useState(null);
   const [authStep, setAuthStep] = useState(isRecoveryMode ? "newPassword" : "email");
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(!storedSession && !hasError);
   const [sessionReady, setSessionReady] = useState(false);
   const [notificationReturnPage, setNotificationReturnPage] = useState("home");
   const [modal, setModal] = useState(null);
@@ -300,13 +322,13 @@ const App = () => {
       setPreviousPageName(null);
     }
 
-    setCurrentPage(page);
+    startTransition(() => setCurrentPage(page));
   }, [currentPage, cacheCurrentPageState, onboardingComplete]);
 
   const handleTabChange = useCallback((tab) => {
     navigationHistory.current = [];
     setPreviousPageName(null);
-    setCurrentPage(tab);
+    startTransition(() => setCurrentPage(tab));
   }, []);
 
   const goBack = useCallback(() => {
@@ -316,7 +338,7 @@ const App = () => {
         ? navigationHistory.current[navigationHistory.current.length - 1]
         : null;
       setPreviousPageName(newPreviousPage);
-      setCurrentPage(prevPage);
+      startTransition(() => setCurrentPage(prevPage));
 
       if (!Capacitor.isNativePlatform()) {
         pendingProgrammaticBacks.current++;
@@ -327,7 +349,7 @@ const App = () => {
 
     if (!mainTabs.includes(currentPage)) {
       setPreviousPageName(null);
-      setCurrentPage('home');
+      startTransition(() => setCurrentPage('home'));
 
       if (!Capacitor.isNativePlatform()) {
         pendingProgrammaticBacks.current++;
@@ -470,11 +492,11 @@ const App = () => {
     };
 
     const checkExistingSession = async () => {
-      // Safety timeout: never block on the black screen for more than 1s.
+      // Safety timeout: never block on the skeleton for more than 300ms.
       // Supabase auth lock can deadlock for 5s+ in React StrictMode causing
       // the spinner to hang indefinitely. The timeout ensures the UI always
       // unblocks; the session check still completes in the background.
-      const safetyTimer = setTimeout(() => setIsCheckingAuth(false), 1000);
+      const safetyTimer = setTimeout(() => setIsCheckingAuth(false), 300);
 
       if (supabase && !isRecoveryMode && !hasError) {
         try {
@@ -932,7 +954,7 @@ const App = () => {
       case 'profileDetails':
         return <ProfileDetailsPage onNavigate={noOp} onBack={noOp} />;
       case 'creditApply':
-        return <CreditApplyPage onBack={noOp} onTabChange={setCurrentPage} />;
+        return <CreditApplyPage onBack={noOp} onTabChange={handleTabChange} />;
       case 'creditRepay':
         return <CreditRepayPage onBack={noOp} />;
       case 'identityCheck':
@@ -1099,14 +1121,6 @@ const App = () => {
 
 
 
-  if (isCheckingAuth) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0d0d12]">
-        <div className="w-8 h-8 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
   if (currentPage === "linkExpired") {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center px-6">
@@ -1175,7 +1189,7 @@ const App = () => {
 
   if (['home', 'credit', 'investments', 'markets', 'more'].includes(currentPage)) {
     return (
-      <Suspense fallback={<div className="min-h-screen bg-[#f8f9fc]" />}>
+      <Suspense fallback={<HomeSkeleton />}>
         <>
           {showOpenStrategiesMaintenance && <MaintenanceModal onClose={() => setShowOpenStrategiesMaintenance(false)} />}
           {/* Home tab – always mounted */}
@@ -1193,8 +1207,8 @@ const App = () => {
                 onOpenMintBalance={() => navigateTo("mintBalance")}
                 onOpenActivity={() => navigateTo("activity")}
                 onOpenActions={() => navigateTo("actions")}
-                onOpenInvestments={() => setCurrentPage("investments")}
-                onOpenCredit={() => setCurrentPage("credit")}
+                onOpenInvestments={() => handleTabChange("investments")}
+                onOpenCredit={() => handleTabChange("credit")}
                 onOpenCreditApply={() => navigateTo("creditApply")}
                 onOpenCreditRepay={() => navigateTo("creditRepay")}
                 onOpenInvest={() => { setMarketsInitialView(null); navigateTo("markets"); }}
@@ -1268,7 +1282,7 @@ const App = () => {
                   setNotificationReturnPage("credit");
                   navigateTo("notifications");
                 }}
-                onTabChange={setCurrentPage}
+                onTabChange={handleTabChange}
               />
             </AppLayout>
           </div>

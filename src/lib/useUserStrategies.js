@@ -34,108 +34,108 @@ export const useUserStrategies = () => {
         return;
       }
 
-      const token = session.access_token;
       const userId = session.user.id;
 
-      const res = await fetch("/api/user/strategies", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      // Query client_strategy_returns_c and strategies_c directly —
+      // avoids /api/user/strategies which joins the deleted strategy_metrics table.
+      const [allReturnsResult, strategiesResult] = await Promise.all([
+        supabase
+          .from("client_strategy_returns_c")
+          .select("strategy_id, basket_value, holdings_snapshot, as_of_date, ytd_pct")
+          .eq("user_id", userId)
+          .order("as_of_date", { ascending: false }),
+        supabase
+          .from("strategies_c")
+          .select("id, name, short_name, description, risk_level, sector, icon_url, image_url, holdings")
+          .eq("status", "active"),
+      ]);
 
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        console.error("[useUserStrategies] API error:", res.status, errJson);
-        setData((prev) => ({ ...prev, loading: false, error: errJson.error || "Failed to fetch strategies" }));
+      if (allReturnsResult.error) {
+        console.error("[useUserStrategies] Error fetching returns:", allReturnsResult.error);
+        setData((prev) => ({ ...prev, loading: false, error: allReturnsResult.error.message }));
         return;
       }
 
-      const json = await res.json();
-      const serverStrategies = json.strategies || [];
+      const allReturns = allReturnsResult.data || [];
 
-      if (serverStrategies.length === 0) {
+      if (allReturns.length === 0) {
         setData({ strategies: [], selectedStrategy: null, loading: false, error: null });
         return;
       }
 
-      const strategyIds = serverStrategies.map(s => s.id);
-      const { data: returnsRows, error: returnsError } = await supabase
-        .from("client_strategy_returns_c")
-        .select("*")
-        .eq("user_id", userId)
-        .in("strategy_id", strategyIds)
-        .order("as_of_date", { ascending: false });
-
-      const latestReturnsMap = {};
-      if (!returnsError && returnsRows) {
-        returnsRows.forEach(row => {
-          if (!latestReturnsMap[row.strategy_id]) {
-            latestReturnsMap[row.strategy_id] = row;
-          }
-        });
+      // Build latest-row and oldest-row per strategy (allReturns is desc order)
+      const latestByStrategy = {};
+      const oldestByStrategy = {};
+      for (const row of allReturns) {
+        if (!latestByStrategy[row.strategy_id]) {
+          latestByStrategy[row.strategy_id] = row;
+        }
+        oldestByStrategy[row.strategy_id] = row; // last one written wins = oldest
       }
 
-      const formattedStrategies = serverStrategies.map((strategy) => {
-        const latestMetric = strategy.metrics;
-        const returnsRow = latestReturnsMap[strategy.id];
+      // Map strategies_c by id for O(1) lookup
+      const strategiesMap = {};
+      for (const s of (strategiesResult.data || [])) {
+        strategiesMap[s.id] = s;
+      }
 
-        let invested, currentVal, changePct, augmentedHoldings, ytdPctDecimal;
+      const formattedStrategies = Object.entries(latestByStrategy).map(([strategyId, returnsRow]) => {
+        const stratMeta = strategiesMap[strategyId] || {};
+        const oldestRow = oldestByStrategy[strategyId];
 
-        if (returnsRow) {
-          const snapshot = (() => {
-            try {
-              return typeof returnsRow.holdings_snapshot === "string"
-                ? JSON.parse(returnsRow.holdings_snapshot)
-                : (returnsRow.holdings_snapshot || []);
-            } catch { return []; }
-          })();
+        const snapshot = (() => {
+          try {
+            return typeof returnsRow.holdings_snapshot === "string"
+              ? JSON.parse(returnsRow.holdings_snapshot)
+              : (returnsRow.holdings_snapshot || []);
+          } catch { return []; }
+        })();
 
-          currentVal = Number((returnsRow.basket_value / 100).toFixed(2));
-          invested = snapshot.reduce((sum, h) => sum + (h.avg_fill || 0) * (h.qty || 0) / 100, 0);
-          changePct = invested > 0 ? ((currentVal - invested) / invested) * 100 : 0;
-          ytdPctDecimal = returnsRow.ytd_pct != null ? returnsRow.ytd_pct / 100 : null;
+        const currentVal = Number((returnsRow.basket_value / 100).toFixed(2));
+        const invested = snapshot.reduce((sum, h) => sum + (h.avg_fill || 0) * (h.qty || h.quantity || 0) / 100, 0);
+        const changePct = invested > 0 ? ((currentVal - invested) / invested) * 100 : 0;
+        const ytdPctDecimal = returnsRow.ytd_pct != null ? returnsRow.ytd_pct / 100 : null;
 
-          const snapshotMap = {};
-          snapshot.forEach(h => { snapshotMap[h.symbol] = h; });
+        // Build snapshot lookup by symbol for augmenting base holdings
+        const snapshotMap = {};
+        snapshot.forEach(h => { snapshotMap[h.symbol] = h; });
 
-          augmentedHoldings = (strategy.holdings || []).map(h => {
-            const snap = snapshotMap[h.symbol];
-            if (snap) {
-              const stockCurrentVal = (snap.current_price * snap.qty) / 100;
-              const stockCostBasis = (snap.avg_fill * snap.qty) / 100;
-              const pnlRands = stockCurrentVal - stockCostBasis;
-              const pnlPct = stockCostBasis > 0 ? (pnlRands / stockCostBasis) * 100 : 0;
-              return { ...h, pnlRands: Number(pnlRands.toFixed(2)), pnlPct: Number(pnlPct.toFixed(2)) };
-            }
-            return h;
-          });
-        } else {
-          invested = 0;
-          currentVal = 0;
-          changePct = 0;
-          ytdPctDecimal = null;
-          augmentedHoldings = strategy.holdings || [];
-        }
+        // Use strategies_c.holdings as base (has weight/logo_url); augment with P&L from snapshot
+        const baseHoldings = stratMeta.holdings || snapshot.map(h => ({ symbol: h.symbol, name: h.symbol, weight: 0, logo_url: null }));
+        const augmentedHoldings = baseHoldings.map(h => {
+          const snap = snapshotMap[h.symbol] || snapshotMap[h.ticker];
+          if (snap) {
+            const qty = snap.qty || snap.quantity || 0;
+            const stockCurrentVal = (snap.current_price * qty) / 100;
+            const stockCostBasis = (snap.avg_fill * qty) / 100;
+            const pnlRands = stockCurrentVal - stockCostBasis;
+            const pnlPct = stockCostBasis > 0 ? (pnlRands / stockCostBasis) * 100 : 0;
+            return { ...h, pnlRands: Number(pnlRands.toFixed(2)), pnlPct: Number(pnlPct.toFixed(2)) };
+          }
+          return h;
+        });
 
         return {
-          id: strategy.id,
-          strategyId: strategy.id,
-          name: strategy.name || "Unknown Strategy",
-          shortName: strategy.shortName || strategy.name || "Strategy",
-          description: strategy.description || "",
-          riskLevel: strategy.riskLevel || "Moderate",
-          sector: strategy.sector || "",
-          iconUrl: strategy.iconUrl,
-          imageUrl: strategy.imageUrl,
+          id: strategyId,
+          strategyId,
+          name: stratMeta.name || "Unknown Strategy",
+          shortName: stratMeta.short_name || stratMeta.name || "Strategy",
+          description: stratMeta.description || "",
+          riskLevel: stratMeta.risk_level || "Moderate",
+          sector: stratMeta.sector || "",
+          iconUrl: stratMeta.icon_url || null,
+          imageUrl: stratMeta.image_url || null,
           holdings: augmentedHoldings,
           investedAmount: Number(invested.toFixed(2)),
           currentValue: currentVal,
           unitsHeld: 0,
           entryDate: null,
-          lastUpdated: returnsRow?.as_of_date || latestMetric?.as_of_date,
+          lastUpdated: returnsRow.as_of_date,
           previousMonthChange: parseFloat(changePct.toFixed(1)),
-          metrics: latestMetric,
-          firstInvestedDate: strategy.firstInvestedDate || null,
+          metrics: null,
+          firstInvestedDate: oldestRow?.as_of_date || null,
           ytd_pct: ytdPctDecimal,
-          hasReturnsData: !!returnsRow,
+          hasReturnsData: true,
         };
       });
 
