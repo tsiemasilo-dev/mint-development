@@ -32,9 +32,11 @@ const NavigationPill = ({ activeTab = "credit", onTabChange, className = "", the
             >
               {isActive && (
                 <motion.div
-                  layoutId="activeTabBackground"
+                  key={tab.id}
+                  initial={{ opacity: 0, scale: 0.88 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.18, ease: "easeOut" }}
                   className={`absolute inset-0 rounded-full shadow-sm z-0 ${isLight ? "bg-slate-900" : "bg-white"}`}
-                  transition={{ type: "spring", duration: 0.5, bounce: 0.2 }}
                 />
               )}
 
