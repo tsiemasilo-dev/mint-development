@@ -18,6 +18,7 @@ import {
 } from "recharts";
 import { supabase } from "../lib/supabase";
 import { getStrategyPriceHistory, getClientStrategyReturns } from "../lib/strategyData";
+import { logDebug, CAT } from "../lib/debugLog.js";
 import { useRealtimePrices } from "../lib/useRealtimePrices";
 import Skeleton from "./Skeleton";
 import SettlementBadge from "./PendingBadge";
@@ -271,11 +272,15 @@ const SwipeableBalanceCard = ({
 
     // Safety timeout — always exit skeleton after 5s even if fetch stalls
     const safetyTimer = setTimeout(() => {
-      if (!cancelled) setLoading(false);
+      if (!cancelled) {
+        logDebug(CAT.LOADING, "⏱ Safety timer fired — SwipeableBalanceCard card loading forced off after 5 s");
+        setLoading(false);
+      }
     }, 5000);
 
     const loadData = async () => {
       if (!userId && !familyMemberId) return;
+      logDebug(CAT.LOADING, "🃏 SwipeableBalanceCard loadData — loading → TRUE");
       setLoading(true);
 
       try {
@@ -459,7 +464,11 @@ const SwipeableBalanceCard = ({
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
         clearTimeout(visibilityDebounce);
-        visibilityDebounce = setTimeout(() => loadDataRef.current?.(), 300);
+        logDebug(CAT.VISIBILITY, "👁  SwipeableBalanceCard visibility → will call loadData in 300 ms");
+        visibilityDebounce = setTimeout(() => {
+          logDebug(CAT.LOADING, "👁  SwipeableBalanceCard loadData triggered by tab focus (visibilitychange)");
+          loadDataRef.current?.();
+        }, 300);
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
@@ -485,11 +494,13 @@ const SwipeableBalanceCard = ({
         return;
       }
 
+      logDebug(CAT.CHART, `📈 Chart fetch START — tab: ${activeTab}`);
       setChartLoading(true);
 
       // Safety timeout — always exit chart skeleton after 5s even if Supabase query stalls
       const chartSafetyTimer = setTimeout(() => {
         if (!chartCancelled) {
+          logDebug(CAT.CHART, "⏱ Safety timer fired — chart loading forced off after 5 s");
           console.warn("[SwipeableBalanceCard] Chart fetch safety timeout reached, clearing loader");
           setChartLoading(false);
         }

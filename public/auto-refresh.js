@@ -11,7 +11,6 @@
         cache: 'no-store',
       });
 
-      // Silently ignore 404s or other non-OK responses to avoid console clutter in dev
       if (!response.ok) {
         return null;
       }
@@ -19,7 +18,6 @@
       const data = await response.json();
       return data.version || null;
     } catch {
-      // Network errors are also ignored silently
       return null;
     }
   }
@@ -33,10 +31,20 @@
 
     if (currentVersion === null) {
       currentVersion = version;
+      window.dispatchEvent(new CustomEvent('mint-auto-refresh-check', {
+        detail: { current: version, latest: version }
+      }));
       return;
     }
 
+    window.dispatchEvent(new CustomEvent('mint-auto-refresh-check', {
+      detail: { current: currentVersion, latest: version }
+    }));
+
     if (version !== currentVersion) {
+      window.dispatchEvent(new CustomEvent('mint-auto-refresh-reload', {
+        detail: { from: currentVersion, to: version }
+      }));
       window.location.reload();
     }
   }
