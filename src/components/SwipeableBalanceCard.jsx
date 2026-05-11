@@ -28,6 +28,16 @@ import {
 
 const VISIBILITY_STORAGE_KEY = "mintBalanceVisible";
 
+// Wraps a Supabase query promise with a timeout so hung queries fail fast
+function withTimeout(promise, ms = 4000) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`Query timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+}
+
 const truncateDecimal = (num, decimals) => {
   const factor = Math.pow(10, decimals);
   return Math.floor(num * factor) / factor;
@@ -259,10 +269,10 @@ const SwipeableBalanceCard = ({
   useEffect(() => {
     let cancelled = false;
 
-    // Safety timeout — always exit skeleton after 10s even if fetch stalls
+    // Safety timeout — always exit skeleton after 5s even if fetch stalls
     const safetyTimer = setTimeout(() => {
       if (!cancelled) setLoading(false);
-    }, 10000);
+    }, 5000);
 
     const loadData = async () => {
       if (!userId && !familyMemberId) return;
@@ -362,19 +372,25 @@ const SwipeableBalanceCard = ({
         if (strategiesRes && userId) {
           const strategyIds = (strategiesRes.strategies || []).map(s => s.id).filter(Boolean);
           const basketMap = {};
-          for (const stratId of strategyIds) {
-            const { data: row } = await supabase
-              .from("client_strategy_returns_c")
-              .select("basket_value")
-              .eq("user_id", userId)
-              .eq("strategy_id", stratId)
-              .order("as_of_date", { ascending: false })
-              .limit(1)
-              .maybeSingle();
-            if (row?.basket_value) {
-              basketMap[stratId] = Number(row.basket_value);
+          await Promise.all(strategyIds.map(async (stratId) => {
+            try {
+              const { data: row } = await withTimeout(
+                supabase
+                  .from("client_strategy_returns_c")
+                  .select("basket_value")
+                  .eq("user_id", userId)
+                  .eq("strategy_id", stratId)
+                  .order("as_of_date", { ascending: false })
+                  .limit(1)
+                  .maybeSingle()
+              );
+              if (row?.basket_value) {
+                basketMap[stratId] = Number(row.basket_value);
+              }
+            } catch (e) {
+              console.warn(`[SwipeableBalanceCard] basket_value query timed out for ${stratId}`);
             }
-          }
+          }));
           if (Object.keys(basketMap).length > 0) {
             enrichedHoldings = enrichedHoldings.map(h => {
               if (h.isStrategy && h.strategyId && basketMap[h.strategyId] != null) {
@@ -456,6 +472,7 @@ const SwipeableBalanceCard = ({
   }, [userId, familyMemberId, lastUpdated]);
 
   useEffect(() => {
+    let chartCancelled = false;
     const fetchChartPrices = async () => {
       if (!userId && !familyMemberId) return;
 
@@ -469,6 +486,15 @@ const SwipeableBalanceCard = ({
       }
 
       setChartLoading(true);
+
+      // Safety timeout — always exit chart skeleton after 5s even if Supabase query stalls
+      const chartSafetyTimer = setTimeout(() => {
+        if (!chartCancelled) {
+          console.warn("[SwipeableBalanceCard] Chart fetch safety timeout reached, clearing loader");
+          setChartLoading(false);
+        }
+      }, 5000);
+
       try {
         const holdingsToChart = selectedAsset ? [selectedAsset] : dbData.holdings;
         const days = TIMEFRAME_DAYS[activeTab] || 30;
@@ -487,16 +513,15 @@ const SwipeableBalanceCard = ({
           const strategyHoldings = holdingsToChart.filter(h => h.isStrategy && h.strategyId);
           // Collect daily 1d_pnl per date (summed across all strategies)
           const strategyDailyPnl = {};
-          for (const sh of strategyHoldings) {
+          await Promise.all(strategyHoldings.map(async (sh) => {
             try {
               let query = supabase
                 .from("client_strategy_returns_c")
-                .select("as_of_date, 1d_pnl")
+                .select("*")
                 .eq("user_id", userId)
                 .eq("strategy_id", sh.strategyId)
                 .order("as_of_date", { ascending: true });
 
-              // For all tabs except "all", filter by the start date
               if (activeTab !== "all") {
                 query = query.gte("as_of_date", startDateStr);
               }
@@ -505,7 +530,7 @@ const SwipeableBalanceCard = ({
                 query = query.limit(limitValue);
               }
 
-              const { data, error } = await query;
+              const { data, error } = await withTimeout(query, 4000);
 
               if (!error && data && data.length > 0) {
                 data.forEach((row) => {
@@ -517,7 +542,7 @@ const SwipeableBalanceCard = ({
             } catch (e) {
               console.warn(`[Chart] Failed to fetch strategy 1d_pnl for ${sh.strategyId}:`, e);
             }
-          }
+          }));
 
           // Build cumulative sum of 1d_pnl across all dates
           const sortedStrategyDates = Object.keys(strategyDailyPnl).sort();
@@ -666,11 +691,15 @@ const SwipeableBalanceCard = ({
       } catch (err) {
         console.error("❌ [SwipeableBalanceCard] Chart fetch error:", err);
       } finally {
+        clearTimeout(chartSafetyTimer);
         setChartLoading(false);
       }
     };
 
     fetchChartPrices();
+    return () => {
+      chartCancelled = true;
+    };
   }, [userId, familyMemberId, dbData.holdings, activeTab, selectedAsset, lastUpdated, loading]);
 
   useEffect(() => {
