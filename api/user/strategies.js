@@ -209,7 +209,8 @@ export default async function handler(req, res) {
             investedAmount += Number(tx.amount || 0) / 100;
           }
         }
-        currentMarketValue = investedAmount;
+        // Pending strategies must not contribute to portfolio value until fills arrive.
+        currentMarketValue = allPending ? 0 : investedAmount;
       } else {
         for (const h of stratHoldings) {
           const qty = Number(h.quantity || 0);
@@ -235,6 +236,7 @@ export default async function handler(req, res) {
         investedAmount,
         currentMarketValue,
         currentValue: currentMarketValue,
+        isPending: stratHoldings.length > 0 && allPending,
         metrics: latestMetric,
         firstInvestedDate: matchedByTxName ? (strategyFirstDate[matchedByTxName] || null) : null,
       });

@@ -483,6 +483,10 @@ export default async function handler(req, res) {
           .select();
         holdingResult = { data, error };
       } else {
+        // New position: insert as a pending order. avg_fill / market_value stay
+        // empty until the broker fill comes back, so the position does not show
+        // up in the portfolio total. Quantity is the parent's estimated size
+        // (based on amount / current price) which we record for display only.
         const { data, error } = await db
           .from("stock_holdings_c")
           .insert({
@@ -490,10 +494,10 @@ export default async function handler(req, res) {
             family_member_id: targetFamilyMemberId,
             security_id: securityId,
             quantity: quantity,
-            avg_fill: avgFillCents,
-            market_value: marketValueCents,
+            avg_fill: null,
+            market_value: 0,
             unrealized_pnl: 0,
-            as_of_date: new Date().toISOString().split("T")[0],
+            as_of_date: null,
             Status: "active",
             strategy_id: strategyId || null,
           })

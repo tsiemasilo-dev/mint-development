@@ -22,6 +22,7 @@ import {
   Plus,
   Calendar,
   ChevronRight,
+  Clock3,
 } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
 import NavigationPill from "../components/NavigationPill";
@@ -199,6 +200,9 @@ const HomePage = ({
 
         const profitable = formatted.filter(a => !a.isPending && a.pnlPct > 0).sort((a, b) => b.pnlPct - a.pnlPct);
         const pending = formatted.filter(a => a.isPending);
+        // Keep pending entries available (the "Pending orders" section reads them
+        // off assetsToDisplay) but rank profitable ones first so they dominate
+        // the "best performing assets" carousel.
         const sorted = [...profitable, ...pending].slice(0, 5);
         _cachedBestAssets = sorted;
         setLocalBestAssets(sorted);
@@ -416,9 +420,12 @@ const HomePage = ({
 
         const formatted = serverStrategies
           .map((s) => {
-          const invested = s.investedAmount || 0;
-          const currentValue = s.currentMarketValue != null ? Number(s.currentMarketValue.toFixed(2)) : invested;
-          const isPending = invested === 0 && currentValue === 0;
+          const invested = Number(s.investedAmount) || 0;
+          const rawCurrent = s.currentMarketValue;
+          const currentValue = rawCurrent != null && Number.isFinite(Number(rawCurrent))
+            ? Number(Number(rawCurrent).toFixed(2))
+            : invested;
+          const isPending = s.isPending === true || (invested === 0 && currentValue === 0);
           const stratPnlRands = currentValue - invested;
           const changePctVal = invested > 0 ? (stratPnlRands / invested) * 100 : 0;
           const stratPnlPct = changePctVal;
@@ -953,6 +960,101 @@ const HomePage = ({
           </div>
         </section>
 
+        {/* Pending Orders */}
+        {(() => {
+          const safeAssets = Array.isArray(assetsToDisplay) ? assetsToDisplay : [];
+          const safeStrategies = Array.isArray(bestStrategies) ? bestStrategies : [];
+          const pendingAssets = safeAssets.filter(a => a && a.isPending);
+          const pendingStrategies = safeStrategies.filter(s => s && s.isPending);
+          const items = [
+            ...pendingStrategies.map(s => ({
+              kind: "strategy",
+              key: `pending-strat-${s.id || s.name || Math.random()}`,
+              title: s.name || "Strategy",
+              subtitle: `Strategy • ${s.risk_level || "Balanced"}`,
+              image: s.image_url || s.icon_url || null,
+              amountLabel: Number(s.investedAmount) > 0
+                ? `R${Number(s.investedAmount).toFixed(2)} placed`
+                : "Awaiting fill",
+              symbolFallback: null,
+            })),
+            ...pendingAssets.map(a => ({
+              kind: "asset",
+              key: `pending-asset-${a.symbol || a.name || Math.random()}`,
+              title: a.symbol || a.name || "Asset",
+              subtitle: a.name || "Awaiting fill",
+              image: a.logo || null,
+              amountLabel: "Awaiting fill",
+              symbolFallback: a.symbol || "•",
+            })),
+          ];
+          if (items.length === 0) return null;
+          return (
+            <section>
+              <div className="flex items-end justify-between px-5 mb-3">
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-slate-900">
+                    Pending orders
+                  </p>
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full border border-violet-200 bg-violet-50 text-violet-600">
+                      <Clock3 className="h-3 w-3" />
+                    </span>
+                    <span>Filling — will reflect in portfolio once settled</span>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                className="mx-4 rounded-3xl p-1 shadow-[0_10px_32px_-10px_rgba(76,29,149,0.45)] relative overflow-hidden"
+                style={{ background: "linear-gradient(135deg,#5b21b6 0%,#7c3aed 55%,#a855f7 100%)" }}
+              >
+                <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+                <div className="relative rounded-[22px] bg-white/5 backdrop-blur-sm divide-y divide-white/15">
+                  {items.map((item) => {
+                    const failed = item.kind === "asset" && failedLogos[item.title];
+                    return (
+                      <div key={item.key} className="flex items-center gap-3 px-4 py-3.5">
+                        <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-white/15 ring-1 ring-white/25 flex-shrink-0">
+                          {item.image && !failed ? (
+                            <img
+                              src={item.image}
+                              alt={item.title}
+                              className="h-full w-full object-cover"
+                              referrerPolicy="no-referrer"
+                              crossOrigin="anonymous"
+                              onError={() => {
+                                if (item.kind === "asset") {
+                                  setFailedLogos((prev) => ({ ...prev, [item.title]: true }));
+                                }
+                              }}
+                            />
+                          ) : item.symbolFallback ? (
+                            <span className="text-[11px] font-bold text-white">{item.symbolFallback}</span>
+                          ) : (
+                            <LayoutGrid className="h-5 w-5 text-white" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="truncate text-sm font-bold text-white">{item.title}</p>
+                          <p className="text-[11px] font-medium text-white/70 line-clamp-1">{item.subtitle}</p>
+                        </div>
+                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white ring-1 ring-white/25">
+                            <Clock3 className="h-2.5 w-2.5" />
+                            Pending
+                          </span>
+                          <p className="text-[11px] font-semibold text-white/80 whitespace-nowrap">{item.amountLabel}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </section>
+          );
+        })()}
+
         {/* Best Performing Assets */}
         <section>
           <div className="flex items-end justify-between px-5 mb-3">
@@ -995,7 +1097,7 @@ const HomePage = ({
             </div>
           ) : hasAssets ? (
             <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {assetsToDisplay.slice(0, 5).map((asset) => (
+              {assetsToDisplay.filter(a => !a.isPending).slice(0, 5).map((asset) => (
                 <div
                   key={asset.symbol}
                   className="flex min-w-[260px] flex-1 snap-start items-center gap-4 rounded-3xl bg-white p-4 shadow-md"
@@ -1120,7 +1222,7 @@ const HomePage = ({
             </div>
           ) : hasStrategies ? (
             <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {bestStrategies.slice(0, 5).map((strategy) => {
+              {bestStrategies.filter(s => !s.isPending).slice(0, 5).map((strategy) => {
                 const holdingsSnapshot = getStrategyHoldingsSnapshot(strategy, holdingsBySymbol);
                 const pct = strategy.change_pct || 0;
                 return (
