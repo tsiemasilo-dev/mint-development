@@ -152,33 +152,7 @@ const CompactSecurityRow = ({ security, onClick }) => {
   );
 };
 
-const CollapsibleSection = ({ title, securities, onOpenStockDetail, onToggleWatchlist, watchlist, sparklineData, startExpanded = false, scrollEl }) => {
-  const [expanded, setExpanded] = React.useState(startExpanded);
-  const hasExpandedRef = React.useRef(startExpanded);
-  const sectionRef = React.useRef(null);
-
-  React.useEffect(() => {
-    if (hasExpandedRef.current || !scrollEl) return;
-
-    const check = () => {
-      if (hasExpandedRef.current || !sectionRef.current) return;
-      const rootRect = scrollEl.getBoundingClientRect();
-      const secRect = sectionRef.current.getBoundingClientRect();
-      // Expand when section top scrolls into the lower 85% of the scroll container
-      if (secRect.top < rootRect.bottom - rootRect.height * 0.1) {
-        hasExpandedRef.current = true;
-        setExpanded(true);
-        scrollEl.removeEventListener("scroll", check);
-      }
-    };
-
-    // Check immediately — catches sections already in view on mount
-    check();
-    scrollEl.addEventListener("scroll", check, { passive: true });
-
-    return () => scrollEl.removeEventListener("scroll", check);
-  }, [scrollEl]);
-
+const CollapsibleSection = ({ title, securities, onOpenStockDetail, onToggleWatchlist, watchlist, sparklineData, isExpanded, sectionRef }) => {
   return (
     <section ref={sectionRef}>
       <div className="mb-3 flex items-center justify-between">
@@ -186,7 +160,7 @@ const CollapsibleSection = ({ title, securities, onOpenStockDetail, onToggleWatc
         <ChevronRight className="h-5 w-5 text-slate-400" />
       </div>
       <AnimatePresence mode="wait" initial={false}>
-        {expanded ? (
+        {isExpanded ? (
           <motion.div
             key="expanded"
             initial={{ opacity: 0, y: 8 }}
@@ -441,12 +415,70 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
     return securities.filter((s) => watchlist.includes(s.symbol));
   }, [securities, watchlist]);
 
-  // Scroll container for CollapsibleSection detection
-  const [scrollEl, setScrollEl] = useState(null);
+  // Section refs for scroll-based expand detection
+  const secRefWatchlist = useRef(null);
+  const secRefLargest   = useRef(null);
+  const secRefDividend  = useRef(null);
+  const secRefGainers   = useRef(null);
+
+  // Always start with "largest" expanded. When watchlist loads, mark that expanded too.
+  // Mirror state in a ref so the rAF poll avoids stale-closure bugs.
+  const [expandedSections, setExpandedSections] = useState(() => new Set(["largest"]));
+  const expandedRef = useRef(new Set(["largest"]));
+
   useEffect(() => {
-    const el = document.querySelector(".app-content");
-    if (el) setScrollEl(el);
-  }, []);
+    if (watchedSecurities.length > 0 && !expandedRef.current.has("watchlist")) {
+      expandedRef.current = new Set([...expandedRef.current, "watchlist"]);
+      setExpandedSections(new Set(expandedRef.current));
+    }
+  }, [watchedSecurities.length]);
+
+  useEffect(() => {
+    if (!securities.length) return;
+    const scrollEl = document.querySelector(".app-content");
+    if (!scrollEl) return;
+
+    const initialScrollTop = scrollEl.scrollTop;
+    const sectionMap = {
+      watchlist: secRefWatchlist,
+      largest:   secRefLargest,
+      dividend:  secRefDividend,
+      gainers:   secRefGainers,
+    };
+    let rafId;
+
+    const poll = () => {
+      // Wait until user has scrolled at least 20px
+      if (scrollEl.scrollTop <= initialScrollTop + 20) {
+        rafId = requestAnimationFrame(poll);
+        return;
+      }
+
+      const rootRect = scrollEl.getBoundingClientRect();
+      const threshold = rootRect.top + rootRect.height * 0.75;
+      let changed = false;
+
+      for (const [key, ref] of Object.entries(sectionMap)) {
+        if (!expandedRef.current.has(key) && ref.current) {
+          const rect = ref.current.getBoundingClientRect();
+          if (rect.top < threshold) {
+            expandedRef.current = new Set([...expandedRef.current, key]);
+            changed = true;
+          }
+        }
+      }
+
+      if (changed) setExpandedSections(new Set(expandedRef.current));
+
+      // Stop when all 4 sections are expanded
+      if (expandedRef.current.size < 4) {
+        rafId = requestAnimationFrame(poll);
+      }
+    };
+
+    rafId = requestAnimationFrame(poll);
+    return () => cancelAnimationFrame(rafId);
+  }, [securities.length]);
 
   // Real price history for sparkline cards — keyed by security id
   const [sparklineData, setSparklineData] = useState({});
@@ -1517,8 +1549,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                     onToggleWatchlist={toggleWatchlist}
                     watchlist={watchlist}
                     sparklineData={sparklineData}
-                    startExpanded={true}
-                    scrollEl={scrollEl}
+                    isExpanded={expandedSections.has("watchlist")}
+                    sectionRef={secRefWatchlist}
                   />
                 )}
 
@@ -1529,8 +1561,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                   onToggleWatchlist={toggleWatchlist}
                   watchlist={watchlist}
                   sparklineData={sparklineData}
-                  startExpanded={watchedSecurities.length === 0}
-                  scrollEl={scrollEl}
+                  isExpanded={expandedSections.has("largest")}
+                  sectionRef={secRefLargest}
                 />
 
                 <CollapsibleSection
@@ -1540,7 +1572,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                   onToggleWatchlist={toggleWatchlist}
                   watchlist={watchlist}
                   sparklineData={sparklineData}
-                  scrollEl={scrollEl}
+                  isExpanded={expandedSections.has("dividend")}
+                  sectionRef={secRefDividend}
                 />
 
                 <CollapsibleSection
@@ -1550,7 +1583,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                   onToggleWatchlist={toggleWatchlist}
                   watchlist={watchlist}
                   sparklineData={sparklineData}
-                  scrollEl={scrollEl}
+                  isExpanded={expandedSections.has("gainers")}
+                  sectionRef={secRefGainers}
                 />
 
             {/* All Section */}
