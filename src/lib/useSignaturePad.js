@@ -1,47 +1,3 @@
-import { useEffect, useRef, useCallback } from 'react';
-import SignaturePad from 'signature_pad';
-
-export default function useSignaturePad(canvasRef, options = {}) {
-  const padRef = useRef(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    padRef.current = new SignaturePad(canvas, options);
-
-    function resizeCanvas() {
-      const ratio = Math.max(window.devicePixelRatio || 1, 1);
-      const data = padRef.current.toData();
-      canvas.width = canvas.offsetWidth * ratio;
-      canvas.height = canvas.offsetHeight * ratio;
-      canvas.getContext('2d').scale(ratio, ratio);
-      padRef.current.fromData(data);
-    }
-
-    resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
-
-    return () => {
-      window.removeEventListener('resize', resizeCanvas);
-      padRef.current?.off();
-    };
-  }, [canvasRef]);
-
-  const isEmpty = useCallback(() => {
-    return padRef.current ? padRef.current.isEmpty() : true;
-  }, []);
-
-  const clear = useCallback(() => {
-    padRef.current?.clear();
-  }, []);
-
-  const toDataURL = useCallback((type, encoderOptions) => {
-    return padRef.current ? padRef.current.toDataURL(type, encoderOptions) : '';
-  }, []);
-
-  return { isEmpty, clear, toDataURL };
-}
 /**
  * useSignaturePad — shared signature-pad lifecycle hook.
  *
@@ -78,7 +34,6 @@ export function useSignaturePad(canvasRef, options = {}) {
   const padRef = useRef(null);
   const [isReady, setIsReady] = useState(false);
 
-  // force re-render hook consumers when emptiness changes
   const [, forceTick] = useState(0);
   const notify = useCallback(() => forceTick((t) => t + 1), []);
 
@@ -87,22 +42,18 @@ export function useSignaturePad(canvasRef, options = {}) {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    // Defensive: ensure scrolling is disabled during sign strokes.
     try { canvas.style.touchAction = "none"; } catch {}
 
     const scaleCanvas = () => {
       const rect = canvas.getBoundingClientRect();
-      // Skip when not laid out yet (modal still opening, display:none, etc).
       if (rect.width === 0 || rect.height === 0) return false;
 
       const ratio = Math.max(window.devicePixelRatio || 1, 1);
       const desiredW = Math.round(rect.width * ratio);
       const desiredH = Math.round(rect.height * ratio);
 
-      // Only rebuild if size actually changed.
       if (canvas.width === desiredW && canvas.height === desiredH) return true;
 
-      // Preserve existing drawing (signature_pad stores strokes as JSON).
       const preserved = padRef.current && !padRef.current.isEmpty()
         ? padRef.current.toData()
         : null;
@@ -121,7 +72,6 @@ export function useSignaturePad(canvasRef, options = {}) {
       return true;
     };
 
-    // Create pad first so scaleCanvas can use it for preservation.
     padRef.current = new SignaturePad(canvas, { ...DEFAULT_OPTIONS, ...padOptions });
     padRef.current.addEventListener("endStroke", () => {
       notify();
@@ -133,7 +83,6 @@ export function useSignaturePad(canvasRef, options = {}) {
     const ok = scaleCanvas();
     if (ok) setIsReady(true);
 
-    // Watch the canvas box — handles late layout (modal open, flex reflow).
     let ro = null;
     if (typeof ResizeObserver !== "undefined") {
       ro = new ResizeObserver(() => {
