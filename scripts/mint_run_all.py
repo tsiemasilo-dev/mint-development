@@ -7,13 +7,21 @@ Runs all four stages in dependency order:
   4. Intraday prices          → stock_intraday_c
 
 Usage:
-  # Against local Neon server (default — run from Replit):
+  # Direct Neon connection (default — works from any machine):
   python3 scripts/mint_run_all.py
 
-  # Against production Supabase:
-  SUPABASE_URL=https://xxx.supabase.co SUPABASE_KEY=<key> python3 scripts/mint_run_all.py
+  # Requires:  pip install psycopg2-binary python-dateutil
 
-  # Re-compute and overwrite all existing strategy/client rows (use after fixing a bug):
+  # Override the Neon URL at runtime:
+  NEON_DATABASE_URL=postgresql://... python3 scripts/mint_run_all.py
+
+  # Against the local Replit REST server instead of direct Neon:
+  USE_REST=1 python3 scripts/mint_run_all.py
+
+  # Against production Supabase:
+  USE_REST=1 SUPABASE_URL=https://xxx.supabase.co SUPABASE_KEY=<key> python3 scripts/mint_run_all.py
+
+  # Re-compute and overwrite ALL existing strategy/client rows:
   FORCE_RECOMPUTE=1 python3 scripts/mint_run_all.py
 """
 
@@ -21,23 +29,257 @@ import os
 import urllib.request
 import urllib.parse
 import json
+from decimal import Decimal
 from datetime import datetime, timezone, date, timedelta
 from dateutil.relativedelta import relativedelta
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-# Defaults to the local Neon API server running on Replit.
-# Override with environment variables when running against production Supabase.
+
+# Direct PostgreSQL connection string for Neon.
+# Used by default — works from any machine without needing the local REST server.
+NEON_DATABASE_URL = os.environ.get(
+    "NEON_DATABASE_URL",
+    "postgresql://neondb_owner:npg_letB70dsgDSf@ep-soft-thunder-ap1jl6w6-pooler.c-7.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+)
+
+# Fallback REST API settings (used when USE_REST=1 or psycopg2 is not installed).
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "http://localhost:3002")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "neon-test-anon-key")
 
 # Set FORCE_RECOMPUTE=1 to overwrite ALL existing strategy/client rows.
-# Useful after fixing a bug in the calculation logic.
 FORCE_RECOMPUTE = os.environ.get("FORCE_RECOMPUTE", "0") == "1"
 
-# ── Shared Supabase REST helper ────────────────────────────────────────────────
+# ── psycopg2 direct-connect setup ─────────────────────────────────────────────
+_USE_REST = os.environ.get("USE_REST", "0") == "1"
+_pg_conn  = None
+
+try:
+    import psycopg2
+    import psycopg2.extras
+    USE_DIRECT = not _USE_REST
+except ImportError:
+    USE_DIRECT = False
+    print("[warn] psycopg2 not found — using REST API (http://localhost:3002)")
+    print("[warn] Install with: pip install psycopg2-binary")
+
+# Conflict keys for upsert per table
+_UPSERT_KEYS = {
+    "stock_returns_c"           : ["symbol", "as_of_date"],
+    "strategies_returns_c"      : ["strategy_id", "as_of_date"],
+    "client_strategy_returns_c" : ["user_id", "strategy_id", "as_of_date"],
+    "stock_intraday_c"          : ["symbol", "timestamp"],
+}
+
+# FK column on the parent table that references the embedded table's id
+_FK_COL = {
+    "securities_c": "security_id",
+}
+
+
+def _get_conn():
+    global _pg_conn
+    if _pg_conn is None or _pg_conn.closed:
+        _pg_conn = psycopg2.connect(NEON_DATABASE_URL)
+        _pg_conn.autocommit = True
+    return _pg_conn
+
+
+def _q(name):
+    return f'"{name}"'
+
+
+def _serialize(v):
+    """Convert psycopg2 native types to JSON-compatible Python types."""
+    if isinstance(v, datetime):
+        return v.isoformat()
+    if isinstance(v, date):
+        return v.isoformat()
+    if isinstance(v, Decimal):
+        return float(v)
+    return v
+
+
+def _parse_endpoint(endpoint):
+    """Split 'table?key=val&...' into (table_name, params_dict)."""
+    table_part, _, qs = endpoint.partition("?")
+    params = {}
+    for part in qs.split("&"):
+        if "=" not in part:
+            continue
+        k, _, v = part.partition("=")
+        k = urllib.parse.unquote(k)
+        v = urllib.parse.unquote_plus(v)
+        if k in params:
+            existing = params[k]
+            params[k] = existing if isinstance(existing, list) else [existing]
+            params[k].append(v)
+        else:
+            params[k] = v
+    return table_part.strip("/"), params
+
+
+def _direct_select(endpoint):
+    """Execute a REST-style GET as a direct SQL SELECT via psycopg2."""
+    table, params = _parse_endpoint(endpoint)
+
+    # -- Parse select columns (handle embedded resources like securities_c(symbol))
+    select_raw  = params.pop("select", "*")
+    simple_cols = []
+    embedded    = []  # list of (rel_table, [col, ...])
+
+    for part in select_raw.split(","):
+        part = part.strip()
+        if "(" in part:
+            rel_table, rest = part.split("(", 1)
+            rel_cols = [c.strip() for c in rest.rstrip(")").split(",")]
+            embedded.append((rel_table.strip(), rel_cols))
+        elif part:
+            simple_cols.append(part)
+
+    # -- SELECT clause
+    sel = ["t.*"] if (not simple_cols or simple_cols == ["*"]) else [f"t.{_q(c)}" for c in simple_cols]
+    join_sql = []
+    for rel_table, rel_cols in embedded:
+        for col in rel_cols:
+            alias = f"__emb_{rel_table}__{col}"
+            sel.append(f'j_{rel_table}.{_q(col)} AS {_q(alias)}')
+        fk_col = _FK_COL.get(rel_table, "id")
+        join_sql.append(
+            f'LEFT JOIN {_q(rel_table)} j_{rel_table} ON t.{_q(fk_col)} = j_{rel_table}.{_q("id")}'
+        )
+
+    # -- WHERE clause
+    op_map      = {"eq": "=", "gte": ">=", "gt": ">", "lte": "<=", "lt": "<", "neq": "!="}
+    reserved    = {"order", "limit", "offset"}
+    where_parts = []
+    args        = []
+
+    order_raw  = params.pop("order",  None)
+    limit_raw  = int(params.pop("limit",  1000))
+    offset_raw = int(params.pop("offset", 0))
+
+    for col, val_raw in params.items():
+        for v in (val_raw if isinstance(val_raw, list) else [val_raw]):
+            dot = v.find(".")
+            if dot == -1:
+                continue
+            op_str, val_str = v[:dot], v[dot + 1:]
+            sql_op = op_map.get(op_str)
+            if sql_op:
+                where_parts.append(f't.{_q(col)} {sql_op} %s')
+                args.append(val_str)
+
+    # -- ORDER BY
+    order_parts = []
+    if order_raw:
+        for item in (order_raw if isinstance(order_raw, list) else [order_raw]):
+            for o in item.split(","):
+                o = o.strip()
+                if "." in o:
+                    col_o, dir_o = o.rsplit(".", 1)
+                    order_parts.append(f't.{_q(col_o)} {"DESC" if dir_o.lower() == "desc" else "ASC"}')
+                else:
+                    order_parts.append(f't.{_q(o)}')
+
+    sql = f'SELECT {", ".join(sel)} FROM {_q(table)} t'
+    if join_sql:
+        sql += " " + " ".join(join_sql)
+    if where_parts:
+        sql += " WHERE " + " AND ".join(where_parts)
+    if order_parts:
+        sql += " ORDER BY " + ", ".join(order_parts)
+    sql += f" LIMIT {limit_raw} OFFSET {offset_raw}"
+
+    conn   = _get_conn()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        cursor.execute(sql, args or None)
+        raw_rows = cursor.fetchall()
+    except Exception as e:
+        print(f"  [direct error] {e}")
+        print(f"  [direct sql]   {sql}")
+        cursor.close()
+        return None
+    finally:
+        cursor.close()
+
+    # -- Re-assemble embedded resources and serialize types
+    result = []
+    for row in raw_rows:
+        record   = {}
+        emb_data = {rt: {} for rt, _ in embedded}
+        for key, val in row.items():
+            val = _serialize(val)
+            matched = False
+            for rel_table, rel_cols in embedded:
+                prefix = f"__emb_{rel_table}__"
+                if key.startswith(prefix):
+                    emb_data[rel_table][key[len(prefix):]] = val
+                    matched = True
+                    break
+            if not matched:
+                record[key] = val
+        for rel_table, rel_dict in emb_data.items():
+            record[rel_table] = rel_dict
+        result.append(record)
+
+    return result
+
+
+def _direct_upsert(table, rows, upsert):
+    """Execute a REST-style POST as a direct SQL INSERT via psycopg2."""
+    if not rows:
+        return []
+
+    cols          = list(rows[0].keys())
+    conflict_cols = _UPSERT_KEYS.get(table, [])
+    col_list      = ", ".join(_q(c) for c in cols)
+    val_tmpl      = ", ".join(["%s"] * len(cols))
+
+    if upsert and conflict_cols:
+        conflict_str = ", ".join(_q(c) for c in conflict_cols)
+        update_cols  = [c for c in cols if c not in conflict_cols]
+        if update_cols:
+            update_str  = ", ".join(f'{_q(c)} = EXCLUDED.{_q(c)}' for c in update_cols)
+            on_conflict = f"ON CONFLICT ({conflict_str}) DO UPDATE SET {update_str}"
+        else:
+            on_conflict = f"ON CONFLICT ({conflict_str}) DO NOTHING"
+    else:
+        on_conflict = ""
+
+    sql    = f'INSERT INTO {_q(table)} ({col_list}) VALUES ({val_tmpl}) {on_conflict}'
+    values = [[r.get(c) for c in cols] for r in rows]
+
+    conn   = _get_conn()
+    cursor = conn.cursor()
+    try:
+        psycopg2.extras.execute_batch(cursor, sql, values, page_size=500)
+    except Exception as e:
+        print(f"  [direct error] {e}")
+        print(f"  [direct sql]   {sql[:300]}")
+        cursor.close()
+        return None
+    finally:
+        cursor.close()
+
+    return []
+
+
+# ── Shared request dispatcher ─────────────────────────────────────────────────
 def supabase_request(method, endpoint, body=None, upsert=False, extra_headers=None):
-    url     = f"{SUPABASE_URL}/rest/v1/{endpoint}"
-    prefer  = "resolution=merge-duplicates,return=minimal" if upsert else "return=minimal"
+    if USE_DIRECT:
+        if method == "GET":
+            return _direct_select(endpoint)
+        if method in ("POST", "PATCH", "PUT"):
+            table    = endpoint.split("?")[0]
+            rows     = body if isinstance(body, list) else ([body] if body else [])
+            is_upsert = upsert or "merge-duplicates" in (extra_headers or {}).get("Prefer", "")
+            return _direct_upsert(table, rows, is_upsert)
+        return []
+
+    # ── REST API fallback ──────────────────────────────────────────────────────
+    url    = f"{SUPABASE_URL}/rest/v1/{endpoint}"
+    prefer = "resolution=merge-duplicates,return=minimal" if upsert else "return=minimal"
     headers = {
         "apikey"       : SUPABASE_KEY,
         "Authorization": f"Bearer {SUPABASE_KEY}",
