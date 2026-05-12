@@ -854,7 +854,7 @@ const ResultStage = ({ score, isCalculating, engineFailed, breakdown, engineResu
 const LoanCalculatorStep = ({ onSignedContinue }) => {
    const LIGHT_THRESHOLD = 0.36;
    const MIN_LOAN_AMOUNT = 1000;
-   const MAX_LOAN_AMOUNT = 9000;
+   const MAX_LOAN_AMOUNT = 10000;
    const AMOUNT_STEP = 100;
    const MIN_LOAN_PERIOD = 3;
    const MAX_LOAN_PERIOD = 6;
@@ -1190,14 +1190,17 @@ const LoanCalculatorStep = ({ onSignedContinue }) => {
                      step={AMOUNT_STEP}
                      value={loanAmount}
                      onChange={(e) => {
-                        const raw = Number(e.target.value);
-                        if (!isNaN(raw)) setLoanAmount(clamp(raw, MIN_LOAN_AMOUNT, MAX_LOAN_AMOUNT));
+                        const raw = e.target.value;
+                        if (raw === "") { setLoanAmount(""); return; }
+                        const n = Number(raw);
+                        if (!isNaN(n)) setLoanAmount(n);
                      }}
                      onBlur={(e) => {
                         const raw = Number(e.target.value);
-                        const snapped = snap(isNaN(raw) ? MIN_LOAN_AMOUNT : raw, MIN_LOAN_AMOUNT, MAX_LOAN_AMOUNT, AMOUNT_STEP);
+                        const snapped = snap(isNaN(raw) || raw === 0 ? MIN_LOAN_AMOUNT : raw, MIN_LOAN_AMOUNT, MAX_LOAN_AMOUNT, AMOUNT_STEP);
                         setLoanAmount(snapped);
                      }}
+                     onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
                      className="w-full h-[54px] rounded-2xl bg-slate-100 pl-9 pr-4 text-[22px] font-bold tracking-[-0.02em] text-slate-900 outline-none focus:ring-2 focus:ring-[#2a1a46]/30 appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                   />
                </div>
@@ -1263,7 +1266,7 @@ const LoanCalculatorStep = ({ onSignedContinue }) => {
             </div>
 
             <p className="mt-4 text-[10px] text-slate-400 font-medium text-center">
-               Min R1,000 · Max R9,000 · Term 3–6 months
+               Min R1,000 · Max R10,000 · Term 3–6 months
             </p>
          </div>
 
