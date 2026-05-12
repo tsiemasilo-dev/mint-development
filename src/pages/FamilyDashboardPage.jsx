@@ -1106,6 +1106,7 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
   const [removingId, setRemovingId] = useState(null);
   const [removePassword, setRemovePassword] = useState("");
   const [removeError, setRemoveError] = useState("");
+  const [strategyBlock, setStrategyBlock] = useState(null);
 
   const displayName = [profile?.firstName, profile?.lastName].filter(Boolean).join(" ") || "My Account";
   const familyLastName = profile?.lastName || "";
@@ -1269,6 +1270,13 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
       });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
+        if (json.code === "child_holds_strategy") {
+          setStrategyBlock({ name: member.first_name || "This child", message: json.error });
+          setConfirmRemove(null);
+          setRemovePassword("");
+          setRemoveError("");
+          return;
+        }
         throw new Error(json.error || "Failed to remove member");
       }
       const remaining = members.filter(m => m.id !== member.id);
@@ -1612,6 +1620,45 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
             onSave={handleMemberSaved}
             onClose={() => setAddingType(null)}
           />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {strategyBlock && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center px-6"
+          >
+            <motion.div
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setStrategyBlock(null)}
+            />
+            <motion.div
+              initial={{ scale: 0.92, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.92, opacity: 0, y: 10 }}
+              transition={{ type: "spring", stiffness: 320, damping: 26 }}
+              className="relative z-10 w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl"
+            >
+              <div className="flex flex-col items-center text-center">
+                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-50">
+                  <AlertCircle className="h-7 w-7 text-amber-500" />
+                </div>
+                <h3 className="text-[16px] font-bold text-slate-900">Child holds a strategy</h3>
+                <p className="mt-2 text-[13px] leading-relaxed text-slate-600">
+                  {strategyBlock.message || `${strategyBlock.name} still holds an active strategy. Please sell their investments before removing the account.`}
+                </p>
+                <button
+                  onClick={() => setStrategyBlock(null)}
+                  className="mt-5 w-full rounded-2xl bg-slate-900 px-4 py-3 text-[13px] font-bold text-white transition active:scale-[0.98]"
+                >
+                  Got it
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

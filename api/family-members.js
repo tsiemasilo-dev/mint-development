@@ -477,8 +477,23 @@ export default async function handler(req, res) {
 
       let refundedCents = 0;
 
-      // For children, refund the cash balance to the parent's wallet before deletion
+      // For children, block deletion if active investments exist, then refund cash
       if (member.relationship === "child") {
+        // Block removal if the child still holds active investments
+        const { data: activeHoldings, error: holdErr } = await db
+          .from("stock_holdings_c")
+          .select("id")
+          .eq("family_member_id", member_id)
+          .eq("Status", "active")
+          .limit(1);
+        if (holdErr) throw holdErr;
+        if (activeHoldings && activeHoldings.length > 0) {
+          return res.status(409).json({
+            error: `${member.first_name || "This child"} still holds an active strategy. Please sell their investments before removing the account.`,
+            code: "child_holds_strategy",
+          });
+        }
+
         const childBalanceCents = Number(member.available_balance || 0);
 
         if (childBalanceCents > 0) {
@@ -534,16 +549,6 @@ export default async function handler(req, res) {
           }
 
           refundedCents = childBalanceCents;
-        }
-
-        // Clean up any child investment rows so the delete doesn't hit FK constraints
-        try {
-          await db
-            .from("stock_holdings_c")
-            .delete()
-            .eq("family_member_id", member_id);
-        } catch (holdErr) {
-          console.warn("[family] stock_holdings_c cleanup warning:", holdErr.message);
         }
       }
 
