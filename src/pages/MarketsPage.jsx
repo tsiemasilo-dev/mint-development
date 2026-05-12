@@ -444,27 +444,29 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
     };
 
     const check = () => {
-      // Sections expand when their header enters the top 75% of the viewport.
-      // window.innerHeight is used because the window (not .app-content) scrolls.
+      // Expand when a section's heading enters the top 75% of the viewport;
+      // collapse again when it scrolls back below that line.
       const threshold = window.innerHeight * 0.75;
       let changed = false;
 
       for (const [key, ref] of Object.entries(sectionMap)) {
-        if (!expandedRef.current.has(key) && ref.current) {
-          const { top } = ref.current.getBoundingClientRect();
-          if (top < threshold) {
-            expandedRef.current = new Set([...expandedRef.current, key]);
-            changed = true;
-          }
+        if (!ref.current) continue;
+        const { top } = ref.current.getBoundingClientRect();
+        const shouldBeExpanded = top < threshold;
+        const isExpanded = expandedRef.current.has(key);
+
+        if (shouldBeExpanded && !isExpanded) {
+          expandedRef.current = new Set([...expandedRef.current, key]);
+          changed = true;
+        } else if (!shouldBeExpanded && isExpanded) {
+          const next = new Set(expandedRef.current);
+          next.delete(key);
+          expandedRef.current = next;
+          changed = true;
         }
       }
 
       if (changed) setExpandedSections(new Set(expandedRef.current));
-
-      // Stop listening once every section is expanded
-      if (expandedRef.current.size >= Object.keys(sectionMap).length) {
-        window.removeEventListener("scroll", check);
-      }
     };
 
     window.addEventListener("scroll", check, { passive: true });
