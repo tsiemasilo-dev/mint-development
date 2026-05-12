@@ -183,10 +183,17 @@ const SecuritySparklineCard = ({ security, onClick, onToggleWatchlist, isWatched
         </p>
 
         {/* Price */}
-        <p className="mt-0.5 text-sm text-slate-500">
-          {security.currentPrice != null
-            ? `R ${Number(security.currentPrice).toFixed(2)}`
-            : "—"}
+        <p className="mt-1 leading-none">
+          {security.currentPrice != null ? (
+            <>
+              <span className="text-[10px] font-semibold text-slate-400 tracking-widest align-middle">R</span>
+              <span className="ml-0.5 text-base font-bold text-slate-700 tracking-tight tabular-nums">
+                {Number(security.currentPrice).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </>
+          ) : (
+            <span className="text-sm text-slate-400">—</span>
+          )}
         </p>
       </div>
 
