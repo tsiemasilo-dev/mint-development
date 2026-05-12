@@ -70,11 +70,14 @@ export const calculateMinInvestmentSync = (strategy, holdingsBySymbol) => {
     const shares = (rawShares > 0 && pricePerShare > 0 && rawShares * pricePerShare < MIN_ASSET_VALUE)
       ? Math.ceil(MIN_ASSET_VALUE / pricePerShare)
       : rawShares;
+    console.log(`[minInvest] ${strategy?.name} | ${rawSymbol} | last_price=${security.last_price} priceR=${pricePerShare} rawShares=${rawShares} adjShares=${shares} contrib=R${(shares * pricePerShare).toFixed(2)}`);
     total += shares * pricePerShare;
   }
   if (!foundAny) {
+    console.log(`[minInvest] ${strategy?.name} | no matching securities found, fallback min_investment=${strategy?.min_investment}`);
     return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : null;
   }
+  console.log(`[minInvest] ${strategy?.name} | TOTAL = R${Math.round(total)}`);
   return Math.round(total);
 };
 
