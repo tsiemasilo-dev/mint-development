@@ -833,7 +833,7 @@ const ResultStage = ({ score, isCalculating, engineFailed, breakdown, engineResu
 const LoanCalculatorStep = ({ onSignedContinue }) => {
    const LIGHT_THRESHOLD = 0.36;
    const MIN_LOAN_AMOUNT = 1000;
-   const MAX_LOAN_AMOUNT = 9000;
+   const MAX_LOAN_AMOUNT = 10000;
    const AMOUNT_STEP = 100;
    const MIN_LOAN_PERIOD = 3;
    const MAX_LOAN_PERIOD = 6;
@@ -1245,7 +1245,7 @@ const LoanCalculatorStep = ({ onSignedContinue }) => {
             </div>
 
             <p className="mt-4 text-[10px] text-slate-400 font-medium text-center">
-               Min R1,000 · Max R9,000 · Term 3–6 months
+               Min R1,000 · Max R10,000 · Term 3–6 months
             </p>
          </div>
 
