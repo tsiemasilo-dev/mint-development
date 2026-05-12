@@ -125,6 +125,97 @@ const StrategyMiniChart = ({ values }) => {
   );
 };
 
+// Deterministic sparkline from symbol string so each asset gets a unique curve
+function generateSparkline(security) {
+  const sym = security.symbol || "XX";
+  const seed = sym.split("").reduce((acc, c, i) => acc + c.charCodeAt(0) * (i + 1), 0);
+  const changePct = security.changePct || 0;
+  const points = [];
+  let val = 50;
+  for (let i = 0; i < 14; i++) {
+    const pseudo = ((seed * (i + 7) * 2654435761) >>> 0) % 1000;
+    const noise = (pseudo / 1000 - 0.5) * 6;
+    const trend = changePct * 0.12;
+    val = Math.max(5, Math.min(95, val + noise + trend));
+    points.push(val);
+  }
+  return points.map((p, i) => ({ i, v: p }));
+}
+
+const SecuritySparklineCard = ({ security, onClick, onToggleWatchlist, isWatched }) => {
+  const sparkData = React.useMemo(() => generateSparkline(security), [security.symbol, security.changePct]);
+  const isPositive = (security.changePct ?? 0) >= 0;
+  const gradientId = `sg-${security.id || security.symbol}`;
+
+  return (
+    <button
+      onClick={onClick}
+      className="relative flex-shrink-0 w-44 snap-center rounded-2xl bg-white text-left shadow-[0_2px_12px_-2px_rgba(0,0,0,0.10)] border border-slate-100 transition-all active:scale-[0.96] overflow-hidden"
+    >
+      {/* Header */}
+      <div className="px-3.5 pt-3.5 pb-2">
+        <div className="flex items-center gap-2 mb-2.5">
+          {security.logo_url ? (
+            <img
+              src={security.logo_url}
+              alt={security.symbol}
+              className="h-8 w-8 rounded-full border border-slate-100 object-cover flex-shrink-0"
+            />
+          ) : (
+            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-purple-600 text-[10px] font-bold text-white">
+              {security.symbol?.substring(0, 2) || "—"}
+            </div>
+          )}
+          <span className="flex-1 truncate text-sm font-bold text-slate-900">{security.symbol}</span>
+          <div
+            onClick={(e) => { e.stopPropagation(); onToggleWatchlist(e, security.symbol); }}
+            className="flex-shrink-0 p-0.5"
+          >
+            <Star className={`h-4 w-4 ${isWatched ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
+          </div>
+          <ChevronRight className="h-4 w-4 text-slate-400 flex-shrink-0" />
+        </div>
+
+        {/* Change % */}
+        <p className={`text-lg font-bold leading-tight ${isPositive ? "text-emerald-500" : "text-red-500"}`}>
+          {isPositive ? "+" : ""}{security.changePct != null ? security.changePct.toFixed(2) : "—"}%
+        </p>
+
+        {/* Price */}
+        <p className="mt-0.5 text-sm text-slate-500">
+          {security.currentPrice != null
+            ? `R ${Number(security.currentPrice).toFixed(2)}`
+            : "—"}
+        </p>
+      </div>
+
+      {/* Sparkline chart */}
+      <div className="w-full" style={{ height: 80, background: "#f0f3fc" }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={sparkData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#2563eb" stopOpacity={0.25} />
+                <stop offset="100%" stopColor="#2563eb" stopOpacity={0.03} />
+              </linearGradient>
+            </defs>
+            <Area
+              type="monotone"
+              dataKey="v"
+              stroke="#2563eb"
+              strokeWidth={2}
+              fill={`url(#${gradientId})`}
+              dot={false}
+              activeDot={false}
+              isAnimationActive={false}
+            />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+    </button>
+  );
+};
+
 let _mkSecurities = null;
 let _mkStrategies = null;
 let _mkPublicStrategies = null;
@@ -1250,53 +1341,13 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                     </div>
                     <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-4 scrollbar-hide">
                       {watchedSecurities.map((security) => (
-                        <button
+                        <SecuritySparklineCard
                           key={security.id}
+                          security={security}
                           onClick={() => onOpenStockDetail(security)}
-                          className="relative flex-shrink-0 w-64 snap-center rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-5 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
-                        >
-                          <div onClick={(e) => toggleWatchlist(e, security.symbol)} className="absolute top-3 right-3 z-10">
-                            <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
-                          </div>
-                          <div className="flex items-start gap-3">
-                            {security.logo_url ? (
-                              <img
-                                src={security.logo_url}
-                                alt={security.symbol}
-                                className="h-12 w-12 rounded-full border border-slate-100 object-cover flex-shrink-0"
-                              />
-                            ) : (
-                              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-purple-600 text-sm font-bold text-white">
-                                {security.symbol?.substring(0, 2) || "—"}
-                              </div>
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <p className="truncate text-sm font-bold text-slate-900">
-                                {security.short_name || security.name}
-                              </p>
-                              <p className="mt-0.5 text-xs text-slate-500">{security.symbol}</p>
-                              <div className="mt-2">
-                                {security.currentPrice != null ? (
-                                  <>
-                                    <p className="text-lg font-bold text-slate-900">
-                                      <span className="text-xs text-slate-400 font-normal">{getDisplayCurrency(security)}</span>{' '}
-                                      {formatPrice(security)}
-                                    </p>
-                                    {security.changePct != null && (
-                                      <p className={`mt-1 text-xs font-semibold ${
-                                        security.changePct >= 0 ? 'text-emerald-600' : 'text-red-600'
-                                      }`}>
-                                        {security.changePct >= 0 ? '+' : ''}{security.changePct.toFixed(2)}%
-                                      </p>
-                                    )}
-                                  </>
-                                ) : (
-                                  <p className="text-xs text-slate-500">No pricing data</p>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </button>
+                          onToggleWatchlist={toggleWatchlist}
+                          isWatched={true}
+                        />
                       ))}
                     </div>
                   </section>
@@ -1310,53 +1361,13 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
               </div>
               <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-4 scrollbar-hide">
                 {largestCompanies.map((security) => (
-                  <button
+                  <SecuritySparklineCard
                     key={security.id}
+                    security={security}
                     onClick={() => onOpenStockDetail(security)}
-                    className="relative flex-shrink-0 w-64 snap-center rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-5 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
-                  >
-                    <div onClick={(e) => toggleWatchlist(e, security.symbol)} className="absolute top-3 right-3 z-10">
-                      <Star className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
-                    </div>
-                    <div className="flex items-start gap-3">
-                      {security.logo_url ? (
-                        <img
-                          src={security.logo_url}
-                          alt={security.symbol}
-                          className="h-12 w-12 rounded-full border border-slate-100 object-cover flex-shrink-0"
-                        />
-                      ) : (
-                        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-purple-600 text-sm font-bold text-white">
-                          {security.symbol?.substring(0, 2) || "—"}
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="truncate text-sm font-bold text-slate-900">
-                          {security.short_name || security.name}
-                        </p>
-                        <p className="mt-0.5 text-xs text-slate-500">{security.symbol}</p>
-                        <div className="mt-2">
-                          {security.currentPrice != null ? (
-                            <>
-                              <p className="text-lg font-bold text-slate-900">
-                                <span className="text-xs text-slate-400 font-normal">{getDisplayCurrency(security)}</span>{' '}
-                                {formatPrice(security)}
-                              </p>
-                              {security.changePct != null && (
-                                <p className={`mt-1 text-xs font-semibold ${
-                                  security.changePct >= 0 ? 'text-emerald-600' : 'text-red-600'
-                                }`}>
-                                  {security.changePct >= 0 ? '+' : ''}{security.changePct.toFixed(2)}%
-                                </p>
-                              )}
-                            </>
-                          ) : (
-                            <p className="text-xs text-slate-500">No pricing data</p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </button>
+                    onToggleWatchlist={toggleWatchlist}
+                    isWatched={watchlist.includes(security.symbol)}
+                  />
                 ))}
               </div>
             </section>
@@ -1369,58 +1380,13 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
               </div>
               <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-4 scrollbar-hide">
                 {highestDividendYield.map((security) => (
-                  <button
+                  <SecuritySparklineCard
                     key={security.id}
+                    security={security}
                     onClick={() => onOpenStockDetail(security)}
-                    className="relative flex-shrink-0 w-64 snap-center rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-5 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
-                  >
-                    <div onClick={(e) => toggleWatchlist(e, security.symbol)} className="absolute top-3 right-3 z-10">
-                      <Star className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
-                    </div>
-                    <div className="flex items-start gap-3">
-                      {security.logo_url ? (
-                        <img
-                          src={security.logo_url}
-                          alt={security.symbol}
-                          className="h-12 w-12 rounded-full border border-slate-100 object-cover flex-shrink-0"
-                        />
-                      ) : (
-                        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 text-sm font-bold text-white">
-                          {security.symbol?.substring(0, 2) || "—"}
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="truncate text-sm font-bold text-slate-900">
-                          {security.short_name || security.name}
-                        </p>
-                        <p className="mt-0.5 text-xs text-slate-500">{security.symbol}</p>
-                        <div className="mt-2">
-                          {security.currentPrice != null ? (
-                            <div className="flex items-baseline gap-2">
-                              <p className="text-lg font-bold text-slate-900">
-                                <span className="text-xs text-slate-400 font-normal">{getDisplayCurrency(security)}</span>{' '}
-                                {formatPrice(security)}
-                              </p>
-                              {security.changePct != null && (
-                                <span className={`text-xs font-semibold ${
-                                  security.changePct >= 0 ? 'text-emerald-600' : 'text-red-600'
-                                }`}>
-                                  {security.changePct >= 0 ? '+' : ''}{security.changePct.toFixed(2)}%
-                                </span>
-                              )}
-                            </div>
-                          ) : (
-                            <p className="text-sm text-slate-400">—</p>
-                          )}
-                        </div>
-                        <div className="mt-2 flex items-center gap-2">
-                          <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-700">
-                            {Number(security.dividend_yield).toFixed(2)}% yield
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </button>
+                    onToggleWatchlist={toggleWatchlist}
+                    isWatched={watchlist.includes(security.symbol)}
+                  />
                 ))}
               </div>
             </section>
@@ -1433,47 +1399,13 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
               </div>
               <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-4 scrollbar-hide">
                 {gainers.map((security) => (
-                  <button
+                  <SecuritySparklineCard
                     key={security.id}
+                    security={security}
                     onClick={() => onOpenStockDetail(security)}
-                    className="relative flex-shrink-0 w-64 snap-center rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-5 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
-                  >
-                    <div onClick={(e) => toggleWatchlist(e, security.symbol)} className="absolute top-3 right-3 z-10">
-                      <Star className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
-                    </div>
-                    <div className="flex items-start gap-3">
-                      {security.logo_url ? (
-                        <img
-                          src={security.logo_url}
-                          alt={security.symbol}
-                          className="h-12 w-12 rounded-full border border-slate-100 object-cover flex-shrink-0"
-                        />
-                      ) : (
-                        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-blue-600 text-sm font-bold text-white">
-                          {security.symbol?.substring(0, 2) || "—"}
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="truncate text-sm font-bold text-slate-900">
-                          {security.short_name || security.name}
-                        </p>
-                        <p className="mt-0.5 text-xs text-slate-500">{security.symbol}</p>
-                        <div className="mt-2">
-                          {security.currentPrice != null ? (
-                            <p className="text-lg font-bold text-slate-900">
-                              <span className="text-xs text-slate-400 font-normal">{getDisplayCurrency(security)}</span>{' '}
-                              {formatPrice(security)}
-                            </p>
-                          ) : (
-                            <p className="text-xs text-slate-500">No pricing data</p>
-                          )}
-                        </div>
-                        <p className={`mt-1 text-xs font-semibold ${security.changePct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                          {security.changePct >= 0 ? '+' : ''}{security.changePct?.toFixed(2)}%
-                        </p>
-                      </div>
-                    </div>
-                  </button>
+                    onToggleWatchlist={toggleWatchlist}
+                    isWatched={watchlist.includes(security.symbol)}
+                  />
                 ))}
               </div>
             </section>
