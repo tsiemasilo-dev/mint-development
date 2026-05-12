@@ -1,0 +1,69 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "npm: dev",
+			"type": "shell",
+			"command": "npm run dev",
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "npm: install",
+			"type": "shell",
+			"command": "npm install",
+			"problemMatcher": []
+		},
+		{
+			"label": "npm: start-api",
+			"type": "shell",
+			"command": "npm run start:api",
+			"problemMatcher": []
+		},
+		{
+			"label": "git: status",
+			"type": "shell",
+			"command": "git status --porcelain",
+			"problemMatcher": []
+		},
+		{
+			"label": "git: add",
+			"type": "shell",
+			"command": "git add -A",
+			"problemMatcher": []
+		},
+		{
+			"label": "git: push",
+			"type": "shell",
+			"command": "git push origin main",
+			"problemMatcher": []
+		},
+		{
+			"label": "git: commit-and-push",
+			"type": "shell",
+			"command": "git add -A && git commit -m \"Add debug profile endpoint and server routing\" || echo 'no changes to commit' && git push origin main",
+			"problemMatcher": []
+		},
+		{
+			"label": "git: commit-access-token-push",
+			"type": "shell",
+			"command": "git add -A && git commit -m \"access token fetch\" || echo 'no changes to commit' && git push origin main",
+			"problemMatcher": []
+		},
+		{
+			"label": "git: commit-and-push-ps",
+			"type": "shell",
+			"command": "git add -A; if ((git status --porcelain) -ne '') { git commit -m \"Add logging for create profile errors\" } else { echo \"no changes to commit\" }; git push origin main",
+			"problemMatcher": []
+		},
+		{
+			"label": "git: push now",
+			"type": "shell",
+			"command": "git push origin main",
+			"problemMatcher": []
+		}
+	]
+}
