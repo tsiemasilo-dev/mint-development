@@ -3,8 +3,8 @@ import json
 from datetime import datetime, timezone, date
 from dateutil.relativedelta import relativedelta
 
-SUPABASE_URL = "https://mfxnghmuccevsxwcetej.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1meG5naG11Y2NldnN4d2NldGVqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2ODg1MjU4MCwiZXhwIjoyMDg0NDI4NTgwfQ.0gsEFLa3PtZ82Oams9qbbdx6MFHCMCSlL-aa_ZcHHsY"
+SUPABASE_URL = ""  # Set via SUPABASE_URL environment variable
+SUPABASE_KEY = ""  # Set via SUPABASE_SERVICE_ROLE_KEY environment variable
 
 PERIODS = ["1d", "5d", "1m", "6m", "ytd", "1y", "5y", "all"]
 
