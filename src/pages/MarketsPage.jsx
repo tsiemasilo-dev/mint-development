@@ -128,10 +128,11 @@ const StrategyMiniChart = ({ values }) => {
 let _mkSecurities = null;
 let _mkStrategies = null;
 let _mkPublicStrategies = null;
+let _mkHoldingsSecurities = null;
 
 registerCacheResetCallback(() => {
-  // Only clear user-specific strategies; securities/public strategies are the same for all users
   _mkStrategies = null;
+  _mkHoldingsSecurities = null;
 });
 
 const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNewsArticle, onOpenFactsheet, initialViewMode, onViewModeChange }) => {

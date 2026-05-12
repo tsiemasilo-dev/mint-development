@@ -65,28 +65,19 @@ export const calculateMinInvestmentSync = (strategy, holdingsBySymbol) => {
     const security = holdingsBySymbol.get(rawSymbol) || holdingsBySymbol.get(normalizedSym);
     if (!security?.last_price) continue;
     foundAny = true;
-    const pricePerShare = Number(security.last_price) / 100;
-    const rawShares = Number(holding.shares || holding.quantity || 1);
-    const shares = (rawShares > 0 && pricePerShare > 0 && rawShares * pricePerShare < MIN_ASSET_VALUE)
-      ? Math.ceil(MIN_ASSET_VALUE / pricePerShare)
-      : rawShares;
-    console.log(`[minInvest] ${strategy?.name} | ${rawSymbol} | last_price=${security.last_price} priceR=${pricePerShare} rawShares=${rawShares} adjShares=${shares} contrib=R${(shares * pricePerShare).toFixed(2)}`);
+    const pricePerShare = Number(security.last_price);
+    const shares = Number(holding.shares || holding.quantity || 1);
+    if (shares <= 0) continue;
     total += shares * pricePerShare;
   }
   if (!foundAny) {
-    console.log(`[minInvest] ${strategy?.name} | no matching securities found, fallback min_investment=${strategy?.min_investment}`);
     return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : null;
   }
-  console.log(`[minInvest] ${strategy?.name} | TOTAL = R${Math.round(total)}`);
   return Math.round(total);
 };
 
 export const calculateMinInvestment = async (strategy, holdingsBySymbol) => {
   const holdings = getHoldingsArray(strategy);
-
-  console.log(`🔍 [${strategy?.name}] Starting minimum calculation. Holdings:`, holdings);
-
-  console.log(`🔍 [${strategy?.name}] Starting minimum calculation. Holdings:`, holdings);
 
   // If no holdings, use min_investment from database
   if (!holdings.length) {
