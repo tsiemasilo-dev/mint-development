@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { ArrowLeft, TrendingUp, TrendingDown, Star, Check } from "lucide-react";
 import { getSecurityBySymbol, getSecurityPrices, normalizePriceSeries } from "../lib/marketData.js";
 import { supabase } from "../lib/supabase.js";
@@ -17,6 +17,7 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
   const [loading, setLoading] = useState(true);
   const [watchlist, setWatchlist] = useState([]);
   const [watchlistAnimating, setWatchlistAnimating] = useState(false);
+  const [buttonsVisible, setButtonsVisible] = useState(false);
   const periods = ["1W", "1M", "3M", "6M", "YTD", "1Y"];
 
   useEffect(() => {
@@ -24,6 +25,14 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
       setWatchlist(profile.watchlist);
     }
   }, [profile]);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setButtonsVisible(window.scrollY > 80);
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   const isWatched = useMemo(() => {
     return watchlist.includes(initialSecurity?.symbol);
@@ -501,30 +510,40 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
       </div>
 
       {/* Sticky Action Bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 flex gap-3 border-t border-slate-100 bg-white/90 px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur-md">
+      <div
+        className="fixed bottom-0 left-0 right-0 z-50 flex gap-3 px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-2 transition-all duration-300 ease-out"
+        style={{
+          transform: buttonsVisible ? "translateY(0)" : "translateY(calc(100% + 2rem))",
+          opacity: buttonsVisible ? 1 : 0,
+          pointerEvents: buttonsVisible ? "auto" : "none",
+        }}
+      >
+        {/* Watchlist pill */}
         <button
           onClick={toggleWatchlist}
-          className={`relative flex flex-1 items-center justify-center gap-2 overflow-hidden rounded-2xl border-2 py-4 text-sm font-semibold transition-all duration-300 active:scale-95 ${
+          className={`relative flex flex-1 items-center justify-center gap-2 rounded-full py-4 text-[13px] font-semibold tracking-wide shadow-[0_8px_30px_rgba(0,0,0,0.12)] ring-1 transition-all duration-300 active:scale-95 ${
             isWatched
-              ? "border-yellow-400 bg-yellow-50 text-yellow-700"
-              : "border-slate-200 bg-slate-50 text-slate-700"
+              ? "bg-yellow-400/95 text-yellow-900 ring-yellow-300/60 shadow-yellow-200/60"
+              : "bg-white/95 text-slate-800 ring-slate-200/80"
           } ${watchlistAnimating ? "scale-95" : ""}`}
+          style={{ backdropFilter: "blur(12px)" }}
         >
-          <span className={`flex items-center gap-2 transition-all duration-300 ${watchlistAnimating ? "scale-110" : "scale-100"}`}>
+          <span className={`flex items-center gap-2 transition-transform duration-300 ${watchlistAnimating ? "scale-110" : "scale-100"}`}>
             {isWatched ? (
               <>
-                <Star className={`h-4 w-4 fill-yellow-400 text-yellow-400 ${watchlistAnimating ? "animate-[spin_0.4s_ease-out]" : ""}`} />
+                <Star className={`h-4 w-4 fill-yellow-700 text-yellow-700 ${watchlistAnimating ? "animate-[spin_0.4s_ease-out]" : ""}`} />
                 Watchlisted
               </>
             ) : (
               <>
-                <Star className="h-4 w-4" />
+                <Star className="h-4 w-4 text-slate-500" />
                 Watchlist
               </>
             )}
           </span>
         </button>
 
+        {/* Buy pill */}
         <button
           type="button"
           disabled={buyChecking}
@@ -541,7 +560,7 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
               setBuyChecking(false);
             }
           }}
-          className="flex flex-[1.4] items-center justify-center rounded-2xl bg-gradient-to-r from-black to-purple-600 py-4 text-sm font-semibold text-white shadow-lg transition-all active:scale-95 disabled:opacity-60"
+          className="flex flex-[1.4] items-center justify-center rounded-full bg-gradient-to-r from-[#0f0f0f] via-[#2d0f6b] to-[#6d28d9] py-4 text-[13px] font-semibold tracking-wide text-white shadow-[0_8px_30px_rgba(109,40,217,0.45)] transition-all active:scale-95 disabled:opacity-60"
         >
           {buyChecking ? "Checking…" : "Buy Now"}
         </button>
