@@ -95,6 +95,8 @@ const ChangePasswordPage = ({ onNavigate, onBack }) => {
           <label className="text-xs uppercase tracking-wide text-slate-400">New Password</label>
           <div className="relative mt-1 flex items-center">
             <input
+              id="change-password-new"
+              name="change-password-new"
               type={showNewPassword ? "text" : "password"}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
@@ -115,6 +117,8 @@ const ChangePasswordPage = ({ onNavigate, onBack }) => {
           <label className="text-xs uppercase tracking-wide text-slate-400">Confirm New Password</label>
           <div className="relative mt-1 flex items-center">
             <input
+              id="change-password-confirm"
+              name="change-password-confirm"
               type={showConfirmPassword ? "text" : "password"}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}

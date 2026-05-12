@@ -226,8 +226,8 @@ async function sendOrderConfirmationEmail(db, { userId, userEmail, assetName, as
   }
 }
 
-const pgPool = process.env.DATABASE_URL ? new Pool({
-  connectionString: process.env.DATABASE_URL,
+const pgPool = (process.env.SUPABASE_DB_URL || process.env.DATABASE_URL) ? new Pool({
+  connectionString: process.env.SUPABASE_DB_URL || process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
   max: 5,
 }) : null;
@@ -397,7 +397,11 @@ async function getSumsubRequiredDocsStatus(applicantId) {
 
 const SUPABASE_URL = readEnv('SUPABASE_URL') || readEnv('VITE_SUPABASE_URL');
 const SUPABASE_ANON_KEY = readEnv('SUPABASE_ANON_KEY') || readEnv('VITE_SUPABASE_ANON_KEY');
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_SERVICE_ROLE_KEY = readEnv('SUPABASE_SERVICE_ROLE_KEY');
+
+console.log('[startup] Supabase URL set:', !!SUPABASE_URL);
+console.log('[startup] Supabase anon key set:', !!SUPABASE_ANON_KEY);
+console.log('[startup] Supabase service role key set:', !!SUPABASE_SERVICE_ROLE_KEY);
 
 let supabase = null;
 let supabaseAdmin = null;
@@ -628,7 +632,7 @@ async function ensureUserSessionsTable() {
 }
 ensureUserSessionsTable();
 runFuneralCoverMigration(pgPool);
-runStrategySubscriptionMigration(pgPool);
+runStrategySubscriptionMigration(pgPool, supabaseAdmin, supabase);
 
 // ── Monthly strategy subscription billing cron ─────────────────────────────
 // Runs daily at 22:00 UTC (midnight SAST). Charges R29 for each due subscription.
@@ -640,10 +644,10 @@ cron.schedule("0 22 * * *", async () => {
   const today = new Date().toISOString().split("T")[0];
 
   const { data: dueSubs, error: fetchErr } = await db
-    .from("strategy_subscriptions")
-    .select("id, user_id, strategy_id, strategy_name, amount_cents, next_billing_date")
+    .from("subscriptions")
+    .select("id, user_id, plan, amount, current_period_end")
     .eq("status", "active")
-    .lte("next_billing_date", today);
+    .lte("current_period_end", today);
 
   if (fetchErr) { console.error("[strategy-sub-cron] Fetch error:", fetchErr.message); return; }
   if (!dueSubs || dueSubs.length === 0) { console.log("[strategy-sub-cron] No subscriptions due today."); return; }
@@ -652,7 +656,7 @@ cron.schedule("0 22 * * *", async () => {
 
   for (const sub of dueSubs) {
     try {
-      const amountRands = sub.amount_cents / 100;
+      const amountRands = Number(sub.amount || 29);
 
       // Deduct from wallet (allow negative balance)
       const { data: wallet } = await db.from("wallets").select("balance").eq("user_id", sub.user_id).maybeSingle();
@@ -665,9 +669,9 @@ cron.schedule("0 22 * * *", async () => {
       await db.from("transactions").insert({
         user_id: sub.user_id,
         direction: "debit",
-        name: `Strategy Subscription Fee: ${sub.strategy_name || "Strategy"}`,
-        description: `Monthly R29 subscription fee for ${sub.strategy_name || "strategy"}`,
-        amount: sub.amount_cents,
+        name: `Strategy Subscription Fee: ${sub.plan || "Strategy"}`,
+        description: `Monthly R${amountRands} subscription fee for ${sub.plan || "strategy"}`,
+        amount: Math.round(amountRands * 100),
         store_reference: `sub-${sub.id}-${today}`,
         currency: "ZAR",
         status: "posted",
@@ -675,16 +679,16 @@ cron.schedule("0 22 * * *", async () => {
         created_at: now,
       });
 
-      // Advance next_billing_date by one month
-      const billing = new Date(sub.next_billing_date);
+      // Advance current_period_end by one month
+      const billing = new Date(sub.current_period_end);
       const day = billing.getDate();
       billing.setMonth(billing.getMonth() + 1);
       if (billing.getDate() < day) billing.setDate(0);
       const nextDate = billing.toISOString().split("T")[0];
 
-      await db.from("strategy_subscriptions").update({ next_billing_date: nextDate, updated_at: now }).eq("id", sub.id);
+      await db.from("subscriptions").update({ current_period_end: nextDate, updated_at: now }).eq("id", sub.id);
 
-      console.log(`[strategy-sub-cron] Billed R${amountRands} for user ${sub.user_id} (${sub.strategy_name}). New balance: R${newBalance}. Next billing: ${nextDate}`);
+      console.log(`[strategy-sub-cron] Billed R${amountRands} for user ${sub.user_id} (${sub.plan}). New balance: R${newBalance}. Next billing: ${nextDate}`);
     } catch (err) {
       console.error(`[strategy-sub-cron] Error processing sub ${sub.id}:`, err.message);
     }
@@ -1872,6 +1876,26 @@ app.post("/api/banking/initiate", async (req, res) => {
 
     if (!idNumber) {
       try {
+        idNumber = await getIdNumberWithFallback(db, user.id, null) || "";
+        if (idNumber) {
+          if (profile) {
+            await db.from("profiles").update({ id_number: idNumber }).eq("id", user.id);
+          } else {
+            await db.from("profiles").insert({
+              id: user.id,
+              first_name: firstName,
+              last_name: lastName,
+              id_number: idNumber
+            });
+          }
+        }
+      } catch (fallbackErr) {
+        console.warn("[initiate] Could not resolve ID from fallback:", fallbackErr.message);
+      }
+    }
+
+    if (!idNumber) {
+      try {
         const applicant = await getSumsubApplicantByExternalId(user.id);
         if (applicant?.info?.idDocs?.length) {
           const idDoc = applicant.info.idDocs.find(d => d.number) || {};
@@ -1882,11 +1906,9 @@ app.post("/api/banking/initiate", async (req, res) => {
           idNumber = idDoc.number || null;
         }
         if (idNumber) {
-          // Sync profile if it exists, otherwise create it
           if (profile) {
             await db.from("profiles").update({ id_number: idNumber }).eq("id", user.id);
           } else {
-            // If no profile exists, create one with what we have
             await db.from("profiles").insert({
               id: user.id,
               first_name: firstName,
@@ -2565,17 +2587,17 @@ app.get("/api/stocks/chart", async (req, res) => {
 async function authenticateUser(req) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return { user: null, error: "Missing or invalid Authorization header" };
+    return { user: null, token: null, error: "Missing or invalid Authorization header" };
   }
   const token = authHeader.replace("Bearer ", "");
   if (!supabase) {
-    return { user: null, error: "Database client not initialized" };
+    return { user: null, token: null, error: "Database client not initialized" };
   }
   const { data, error } = await supabase.auth.getUser(token);
   if (error || !data?.user) {
-    return { user: null, error: error?.message || "Invalid token" };
+    return { user: null, token: null, error: error?.message || "Invalid token" };
   }
-  return { user: data.user, error: null };
+  return { user: data.user, token, error: null };
 }
 
 async function verifyPaystackPayment(reference) {
@@ -2606,7 +2628,7 @@ app.post("/api/reconcile-payments", async (req, res) => {
       return res.status(500).json({ success: false, error: "Database not connected" });
     }
 
-    const { user, error: authError } = await authenticateUser(req);
+    const { user, token, error: authError } = await authenticateUser(req);
     if (authError || !user) {
       return res.status(401).json({ success: false, error: authError || "Unauthorized" });
     }
@@ -2674,7 +2696,7 @@ app.post("/api/reconcile-payments", async (req, res) => {
 
     const recovered = [];
     const skipped = [];
-    const db = supabaseAdmin || supabase;
+    const db = getAuthenticatedDb(token);
 
     for (const candidate of candidates) {
       const ref = candidate.reference;
@@ -2800,22 +2822,23 @@ app.post("/api/reconcile-payments", async (req, res) => {
 // ── GET user's strategy subscriptions ─────────────────────────────────────
 app.get("/api/user/strategy-subscriptions", async (req, res) => {
   try {
-    const { user, error: authError } = await authenticateUser(req);
+    const { user, token, error: authError } = await authenticateUser(req);
     if (authError || !user) return res.status(401).json({ success: false, error: "Unauthorized" });
 
-    const client = await pgPool.connect();
-    try {
-      const result = await client.query(
-        `SELECT id, strategy_id, strategy_name, next_billing_date, amount_cents, status, created_at
-         FROM strategy_subscriptions
-         WHERE user_id = $1
-         ORDER BY created_at DESC`,
-        [user.id]
-      );
-      return res.json({ success: true, subscriptions: result.rows });
-    } finally {
-      client.release();
+    const db = getAuthenticatedDb(token);
+
+    const { data: subs, error: subsErr } = await db
+      .from("subscriptions")
+      .select("id, user_id, plan, amount, currency, current_period_end, status, created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+
+    if (subsErr) {
+      console.error("[strategy-subscriptions] GET error:", subsErr.message);
+      return res.status(500).json({ success: false, error: subsErr.message });
     }
+
+    return res.json({ success: true, subscriptions: subs || [] });
   } catch (err) {
     console.error("[strategy-subscriptions] GET error:", err.message);
     return res.status(500).json({ success: false, error: err.message });
@@ -2825,7 +2848,7 @@ app.get("/api/user/strategy-subscriptions", async (req, res) => {
 // ── PATCH update strategy subscription status ──────────────────────────────
 app.patch("/api/user/strategy-subscriptions/:id", async (req, res) => {
   try {
-    const { user, error: authError } = await authenticateUser(req);
+    const { user, token, error: authError } = await authenticateUser(req);
     if (authError || !user) return res.status(401).json({ success: false, error: "Unauthorized" });
 
     const { id } = req.params;
@@ -2834,23 +2857,26 @@ app.patch("/api/user/strategy-subscriptions/:id", async (req, res) => {
       return res.status(400).json({ success: false, error: "status must be 'active' or 'cancelled'" });
     }
 
-    const client = await pgPool.connect();
-    try {
-      const result = await client.query(
-        `UPDATE strategy_subscriptions
-         SET status = $1, updated_at = NOW()
-         WHERE id = $2 AND user_id = $3
-         RETURNING id, status`,
-        [status, id, user.id]
-      );
-      if (result.rowCount === 0) {
-        return res.status(404).json({ success: false, error: "Subscription not found" });
-      }
-      console.log(`[strategy-subscriptions] User ${user.id} set subscription ${id} to ${status}`);
-      return res.json({ success: true, subscription: result.rows[0] });
-    } finally {
-      client.release();
+    const db = getAuthenticatedDb(token);
+
+    const { data, error: updateErr } = await db
+      .from("subscriptions")
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .select("id, status")
+      .maybeSingle();
+
+    if (updateErr) {
+      console.error("[strategy-subscriptions] PATCH error:", updateErr.message);
+      return res.status(500).json({ success: false, error: updateErr.message });
     }
+    if (!data) {
+      return res.status(404).json({ success: false, error: "Subscription not found" });
+    }
+
+    console.log(`[strategy-subscriptions] User ${user.id} set subscription ${id} to ${status}`);
+    return res.json({ success: true, subscription: data });
   } catch (err) {
     console.error("[strategy-subscriptions] PATCH error:", err.message);
     return res.status(500).json({ success: false, error: err.message });
@@ -2858,6 +2884,12 @@ app.patch("/api/user/strategy-subscriptions/:id", async (req, res) => {
 });
 
 app.post("/api/record-investment", async (req, res) => {
+  let rollbackUserId = null;
+  let rollbackPaymentMethod = null;
+  let rollbackDeductionSuccessful = false;
+  let rollbackOriginalWalletBalance = null;
+  let rollbackChildFamilyMemberId = null;
+  let rollbackOriginalChildBalanceCents = null;
   try {
     console.log("[record-investment] === ENDPOINT CALLED ===");
     console.log("[record-investment] Request body:", JSON.stringify(req.body, null, 2));
@@ -2867,20 +2899,42 @@ app.post("/api/record-investment", async (req, res) => {
       return res.status(500).json({ success: false, error: "Database not connected" });
     }
 
-    const { user, error: authError } = await authenticateUser(req);
+    const { user, token, error: authError } = await authenticateUser(req);
     if (authError || !user) {
       console.log("[record-investment] AUTH FAILED:", authError || "No user");
       return res.status(401).json({ success: false, error: authError || "Unauthorized" });
     }
     const userId = user.id;
+    rollbackUserId = userId;
     console.log("[record-investment] Authenticated user:", userId);
-    const db = supabaseAdmin || supabase;
+    const db = getAuthenticatedDb(token);
     console.log("[record-investment] Using DB client:", supabaseAdmin ? "admin (service role)" : "anon");
 
-    const { securityId, symbol, name, amount, baseAmount, strategyId, paymentReference, shareCount, paymentMethod, feesBreakdown } = req.body;
+    const { securityId, symbol, name, amount, baseAmount, strategyId, paymentReference, shareCount, paymentMethod, feesBreakdown, childUserId, childFamilyMemberId } = req.body;
+    rollbackPaymentMethod = paymentMethod;
     // baseAmount = investment amount excluding fees; amount = total charged including fees
     const investAmount = (baseAmount && baseAmount > 0) ? baseAmount : amount;
-    console.log("[record-investment] Parsed fields - securityId:", securityId, "symbol:", symbol, "name:", name, "amount:", amount, "baseAmount:", baseAmount, "strategyId:", strategyId, "paymentReference:", paymentReference, "shareCount:", shareCount, "paymentMethod:", paymentMethod);
+    const targetUserId = childUserId || userId;
+    let targetFamilyMemberId = childFamilyMemberId || null;
+
+    if (!targetFamilyMemberId && childUserId) {
+      const { data: linkedChild } = await db
+        .from("family_members")
+        .select("id")
+        .eq("primary_user_id", userId)
+        .eq("linked_user_id", childUserId)
+        .eq("relationship", "child")
+        .maybeSingle();
+      targetFamilyMemberId = linkedChild?.id || null;
+    }
+
+    const withFamilyMemberFilter = (query) => (
+      targetFamilyMemberId
+        ? query.eq("family_member_id", targetFamilyMemberId)
+        : query.is("family_member_id", null)
+    );
+
+    console.log("[record-investment] Parsed fields - securityId:", securityId, "symbol:", symbol, "name:", name, "amount:", amount, "baseAmount:", baseAmount, "strategyId:", strategyId, "paymentReference:", paymentReference, "shareCount:", shareCount, "paymentMethod:", paymentMethod, "targetUserId:", targetUserId, "targetFamilyMemberId:", targetFamilyMemberId);
     console.log("[record-investment] Fees breakdown:", feesBreakdown);
 
     if ((!securityId && !strategyId) || !amount || Number(amount) <= 0 || !paymentReference) {
@@ -2910,37 +2964,81 @@ app.post("/api/record-investment", async (req, res) => {
     let deductionSuccessful = false;
 
     if (paymentMethod === "wallet") {
-      const { data: wallet, error: walletQueryError } = await db
-        .from("wallets")
-        .select("balance")
-        .eq("user_id", userId)
-        .maybeSingle();
+      if (targetFamilyMemberId) {
+        const { data: childWallet, error: childWalletErr } = await db
+          .from("family_members")
+          .select("id, primary_user_id, relationship, available_balance")
+          .eq("id", targetFamilyMemberId)
+          .maybeSingle();
 
-      if (walletQueryError || !wallet) {
-        console.log("[record-investment] WALLET NOT FOUND for user:", userId);
-        return res.status(400).json({ success: false, error: "Wallet not found" });
+        if (childWalletErr || !childWallet) {
+          return res.status(400).json({ success: false, error: "Child wallet not found" });
+        }
+        if (childWallet.primary_user_id !== userId || childWallet.relationship !== "child") {
+          return res.status(403).json({ success: false, error: "Unauthorized child wallet access" });
+        }
+
+        const chargeCents = Math.round(Number(amount) * 100);
+        const childBalanceCents = Number(childWallet.available_balance || 0);
+        if (childBalanceCents < chargeCents) {
+          return res.status(400).json({ success: false, error: "Insufficient child wallet funds" });
+        }
+
+        const newChildBalanceCents = childBalanceCents - chargeCents;
+        const { error: childDeductErr } = await db
+          .from("family_members")
+          .update({ available_balance: newChildBalanceCents })
+          .eq("id", targetFamilyMemberId)
+          .eq("available_balance", childBalanceCents);
+
+        if (childDeductErr) {
+          console.error("[record-investment] CHILD WALLET DEDUCTION ERROR:", childDeductErr.message);
+          return res.status(409).json({ success: false, error: "Failed to deduct child wallet balance" });
+        }
+
+        deductionSuccessful = true;
+        rollbackDeductionSuccessful = true;
+        rollbackChildFamilyMemberId = targetFamilyMemberId;
+        rollbackOriginalChildBalanceCents = childBalanceCents;
+        newWalletBalance = newChildBalanceCents / 100;
+        const feeDeducted = amount - (baseAmount || amount);
+        console.log(`[Wallet] Deducted R${amount} from child wallet ${targetFamilyMemberId}. Base: R${baseAmount || amount}, Fee: R${feeDeducted.toFixed(2)}, Final balance: R${newWalletBalance}`);
+      } else {
+        const { data: wallet, error: walletQueryError } = await db
+          .from("wallets")
+          .select("balance")
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (walletQueryError || !wallet) {
+          console.log("[record-investment] WALLET NOT FOUND for user:", userId);
+          return res.status(400).json({ success: false, error: "Wallet not found" });
+        }
+
+        originalWalletBalance = Number(wallet.balance);
+        if (originalWalletBalance < amount) {
+          console.log("[record-investment] INSUFFICIENT FUNDS. Balance:", originalWalletBalance, "Required:", amount);
+          return res.status(400).json({ success: false, error: "Insufficient funds" });
+        }
+
+        newWalletBalance = originalWalletBalance - amount;
+        const { error: deductError } = await db
+          .from("wallets")
+          .update({ balance: newWalletBalance })
+          .eq("user_id", userId)
+          .eq("balance", originalWalletBalance);
+
+        if (deductError) {
+          console.error("[record-investment] WALLET DEDUCTION ERROR:", deductError.message);
+          return res.status(500).json({ success: false, error: "Failed to deduct wallet balance" });
+        }
+
+        deductionSuccessful = true;
+        rollbackDeductionSuccessful = true;
+        rollbackOriginalWalletBalance = originalWalletBalance;
+        const feeDeducted = amount - (baseAmount || amount);
+        console.log(`[Wallet] Deducted R${amount} from user ${userId}. Base: R${baseAmount || amount}, Fee: R${feeDeducted.toFixed(2)}, Final balance: R${newWalletBalance}`);
       }
-
-      originalWalletBalance = Number(wallet.balance);
-      if (originalWalletBalance < amount) {
-        console.log("[record-investment] INSUFFICIENT FUNDS. Balance:", originalWalletBalance, "Required:", amount);
-        return res.status(400).json({ success: false, error: "Insufficient funds" });
-      }
-
-      newWalletBalance = originalWalletBalance - amount;
-      const { error: deductError } = await db
-        .from("wallets")
-        .update({ balance: newWalletBalance })
-        .eq("user_id", userId);
-
-      if (deductError) {
-        console.error("[record-investment] WALLET DEDUCTION ERROR:", deductError.message);
-        return res.status(500).json({ success: false, error: "Failed to deduct wallet balance" });
-      }
-
-      deductionSuccessful = true;
-      const feeDeducted = amount - (baseAmount || amount);
-      console.log(`[Wallet] Deducted R${amount} from user ${userId}. Base: R${baseAmount || amount}, Fee: R${feeDeducted.toFixed(2)}, Final balance: R${newWalletBalance}`);
     }
 
     const { data: existingTx } = await db
@@ -3007,6 +3105,7 @@ app.post("/api/record-investment", async (req, res) => {
       const today = now.split("T")[0];
       const insertedHoldings = [];
       const skippedSymbols = [];
+      const shouldDeferChildStrategyFill = Boolean(targetFamilyMemberId);
 
       for (const holding of strategyHoldings) {
         const sec = secBySymbol[holding.symbol];
@@ -3032,13 +3131,38 @@ app.post("/api/record-investment", async (req, res) => {
           continue;
         }
 
-        const { data: existing, error: lookupErr } = await db
-          .from("stock_holdings_c")
-          .select("id, quantity, avg_fill")
-          .eq("user_id", userId)
-          .eq("security_id", sec.id)
-          .eq("strategy_id", strategyId)
-          .maybeSingle();
+        if (shouldDeferChildStrategyFill) {
+          const { error: insertErr } = await db.from("stock_holdings_c").insert({
+            user_id: targetUserId,
+            family_member_id: targetFamilyMemberId,
+            security_id: sec.id,
+            strategy_id: strategyId,
+            quantity: holdingQty,
+            avg_fill: null,
+            market_value: 0,
+            unrealized_pnl: 0,
+            as_of_date: null,
+            Status: "active",
+          });
+
+          if (insertErr) {
+            console.error("[record-investment] Failed to insert pending child holding for", holding.symbol, insertErr.message);
+            return res.status(500).json({ success: false, error: `Failed to record pending child holding for ${holding.symbol}` });
+          }
+          console.log("[record-investment] Inserted pending child holding:", holding.symbol, "qty:", holdingQty);
+          insertedHoldings.push({ symbol: holding.symbol, quantity: holdingQty, priceCents: null, pendingFill: true });
+          continue;
+        }
+
+        const holdingsLookupQuery = withFamilyMemberFilter(
+          db
+            .from("stock_holdings_c")
+            .select("id, quantity, avg_fill")
+            .eq("user_id", targetUserId)
+            .eq("security_id", sec.id)
+            .eq("strategy_id", strategyId)
+        );
+        const { data: existing, error: lookupErr } = await holdingsLookupQuery.maybeSingle();
 
         if (lookupErr) {
           console.error("[record-investment] Error looking up holding for", holding.symbol, lookupErr.message);
@@ -3068,7 +3192,8 @@ app.post("/api/record-investment", async (req, res) => {
           console.log("[record-investment] Updated holding:", holding.symbol, "qty:", newQty, "avg_fill:", newAvgFill);
         } else {
           const { error: insertErr } = await db.from("stock_holdings_c").insert({
-            user_id: userId,
+            user_id: targetUserId,
+            family_member_id: targetFamilyMemberId,
             security_id: sec.id,
             strategy_id: strategyId,
             quantity: holdingQty,
@@ -3142,12 +3267,14 @@ app.post("/api/record-investment", async (req, res) => {
       calcQuantity = quantity;
       console.log("[record-investment] Calculated - currentPriceRands:", currentPriceRands, "rawQuantity:", rawQuantity, "quantity:", quantity);
 
-      const { data: existing, error: fetchError } = await db
-        .from("stock_holdings_c")
-        .select("id, quantity, avg_fill, market_value")
-        .eq("user_id", userId)
-        .eq("security_id", securityId)
-        .maybeSingle();
+      const securityLookupQuery = withFamilyMemberFilter(
+        db
+          .from("stock_holdings_c")
+          .select("id, quantity, avg_fill, market_value")
+          .eq("user_id", targetUserId)
+          .eq("security_id", securityId)
+      );
+      const { data: existing, error: fetchError } = await securityLookupQuery.maybeSingle();
 
       if (fetchError) {
         console.error("[record-investment] Error checking existing holding:", JSON.stringify(fetchError));
@@ -3173,7 +3300,8 @@ app.post("/api/record-investment", async (req, res) => {
       } else {
         console.log("[record-investment] No existing holding, inserting new");
         const holdingData = {
-          user_id: userId,
+          user_id: targetUserId,
+          family_member_id: targetFamilyMemberId,
           security_id: securityId,
           quantity: quantity,
           as_of_date: new Date().toISOString().split("T")[0],
@@ -3222,7 +3350,8 @@ app.post("/api/record-investment", async (req, res) => {
 
     // 1. Create investment transaction
     const investmentTxPayload = {
-      user_id: userId,
+      user_id: targetUserId,
+      family_member_id: targetFamilyMemberId,
       direction: "debit",
       name: isStrategyInvestment ? `Strategy Investment: ${name || symbol || "Strategy"}` : `Purchased ${name || symbol || "Stock"}`,
       description: descriptionText,
@@ -3236,7 +3365,8 @@ app.post("/api/record-investment", async (req, res) => {
 
     // 2. Create fees transaction
     const feesTxPayload = {
-      user_id: userId,
+      user_id: targetUserId,
+      family_member_id: targetFamilyMemberId,
       direction: "debit",
       name: isStrategyInvestment ? `Fees: Strategy Investment` : `Fees: Stock Purchase`,
       description: `Fees and charges for ${isStrategyInvestment ? 'strategy investment' : 'stock purchase'}`,
@@ -3291,7 +3421,7 @@ app.post("/api/record-investment", async (req, res) => {
         const { data: existingUS } = await db
           .from("user_strategies")
           .select("id, invested_amount")
-          .eq("user_id", userId)
+          .eq("user_id", targetUserId)
           .eq("strategy_id", strategyId)
           .maybeSingle();
 
@@ -3308,7 +3438,7 @@ app.post("/api/record-investment", async (req, res) => {
           }
         } else {
           const usPayload = {
-            user_id: userId,
+            user_id: targetUserId,
             strategy_id: strategyId,
             invested_amount: Math.round(investmentAmount * 100),
             status: "active",
@@ -3326,6 +3456,48 @@ app.post("/api/record-investment", async (req, res) => {
         }
       } catch (usErr) {
         console.error("[record-investment] user_strategies upsert failed:", usErr.message);
+      }
+
+      // Also upsert into Supabase subscriptions table so the Manage Subscriptions page shows it.
+      // Child-owned strategy purchases are not parent subscriptions.
+      if (!targetFamilyMemberId) try {
+        const strategyName = name || symbol || "Strategy Subscription";
+        const nextMonth = new Date();
+        nextMonth.setMonth(nextMonth.getMonth() + 1);
+        const nextBilling = nextMonth.toISOString().split("T")[0];
+
+        // Use user-authenticated client so RLS allows the insert (auth.uid() = user_id)
+        const userToken = req.headers.authorization?.replace("Bearer ", "");
+        const subDb = userToken && SUPABASE_URL && SUPABASE_ANON_KEY
+          ? (() => { const { createClient: cc } = require('@supabase/supabase-js'); return cc(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { headers: { Authorization: `Bearer ${userToken}` } } }); })()
+          : db;
+
+        const { data: existingSub } = await subDb
+          .from("subscriptions")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("plan", strategyName)
+          .maybeSingle();
+
+        if (!existingSub) {
+          const { error: subInsertErr } = await subDb.from("subscriptions").insert({
+            user_id: userId,
+            plan: strategyName,
+            amount: 29,
+            currency: "ZAR",
+            current_period_end: nextBilling,
+            status: "active",
+          });
+          if (subInsertErr) {
+            console.warn("[record-investment] subscriptions insert error:", subInsertErr.message);
+          } else {
+            console.log("[record-investment] subscriptions record created for strategy:", strategyName);
+          }
+        } else {
+          console.log("[record-investment] subscriptions record already exists for strategy:", strategyName);
+        }
+      } catch (subErr) {
+        console.warn("[record-investment] Could not write subscriptions:", subErr.message);
       }
     }
 
@@ -3355,9 +3527,23 @@ app.post("/api/record-investment", async (req, res) => {
     console.error("[record-investment] === UNCAUGHT ERROR ===", error);
 
     // Rollback wallet deduction if anything failed after deduction was successful
-    if (typeof paymentMethod !== 'undefined' && paymentMethod === "wallet" && typeof deductionSuccessful !== 'undefined' && deductionSuccessful && typeof originalWalletBalance !== 'undefined' && originalWalletBalance !== null) {
+    if (rollbackPaymentMethod === "wallet" && rollbackDeductionSuccessful) {
       try {
         const db = supabaseAdmin || supabase;
+        if (rollbackChildFamilyMemberId && rollbackOriginalChildBalanceCents !== null) {
+          console.log(`[Wallet] Rollback - restoring child wallet ${rollbackChildFamilyMemberId} balance to ${rollbackOriginalChildBalanceCents} cents`);
+          await db.from("family_members").update({ available_balance: rollbackOriginalChildBalanceCents }).eq("id", rollbackChildFamilyMemberId);
+        } else if (rollbackOriginalWalletBalance !== null && rollbackUserId) {
+          console.log(`[Wallet] Rollback - attempting to restore user wallet balance to ${rollbackOriginalWalletBalance}`);
+          await db.from("wallets").update({ balance: rollbackOriginalWalletBalance }).eq("user_id", rollbackUserId);
+        }
+      } catch (rollbackErr) {
+        console.error("[Wallet] Rollback CRITICAL FAILURE:", rollbackErr.message);
+      }
+    }
+    if (typeof paymentMethod !== 'undefined' && paymentMethod === "wallet" && typeof deductionSuccessful !== 'undefined' && deductionSuccessful && typeof originalWalletBalance !== 'undefined' && originalWalletBalance !== null) {
+      try {
+        const db = getAuthenticatedDb(token);
         console.log(`[Wallet] Rollback — Attempting to restore user wallet balance to ${originalWalletBalance}`);
         await db.from("wallets").update({ balance: originalWalletBalance }).eq("user_id", userId);
       } catch (rollbackErr) {
@@ -3373,10 +3559,10 @@ app.post("/api/eft-deposit", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   try {
     if (!supabase) return res.status(500).json({ success: false, error: "Database not connected" });
-    const { user, error: authError } = await authenticateUser(req);
+    const { user, token, error: authError } = await authenticateUser(req);
     if (authError || !user) return res.status(401).json({ success: false, error: "Unauthorized" });
 
-    const db = supabaseAdmin || supabase;
+    const db = getAuthenticatedDb(token);
     const userId = user.id;
     const { amount, reference, securityId, symbol, name, strategyId, baseAmount, shareCount } = req.body;
 
@@ -3710,7 +3896,7 @@ app.post("/api/user/ensure-mint-number", async (req, res) => {
     if (!mintColumnAvailable) {
       return res.json({ success: true, mint_number: null });
     }
-    const { user, error: authError } = await authenticateUser(req);
+    const { user, token, error: authError } = await authenticateUser(req);
     if (authError || !user) {
       return res.status(401).json({ success: false, error: authError || "Unauthorized" });
     }
@@ -3780,21 +3966,37 @@ app.get("/api/user/holdings", async (req, res) => {
       return res.status(500).json({ success: false, error: "Database not connected" });
     }
 
-    const { user, error: authError } = await authenticateUser(req);
+    const { user, token, error: authError } = await authenticateUser(req);
     if (authError || !user) {
       return res.status(401).json({ success: false, error: authError || "Unauthorized" });
     }
 
-    const db = supabaseAdmin || supabase;
+    const db = getAuthenticatedDb(token);
     const userId = user.id;
+    const familyMemberId = req.query.family_member_id;
+
+    // If family_member_id is provided, verify it belongs to this user
+    if (familyMemberId) {
+      const { data: familyMember, error: fmErr } = await db
+        .from("family_members")
+        .select("id, primary_user_id")
+        .eq("id", familyMemberId)
+        .maybeSingle();
+      if (fmErr || !familyMember || familyMember.primary_user_id !== userId) {
+        return res.status(403).json({ success: false, error: "Child account not found or access denied" });
+      }
+    }
 
     let holdings, holdingsError;
+    const filterColumn = familyMemberId ? "family_member_id" : "user_id";
+    const filterValue = familyMemberId || userId;
 
     // Attempt queries with progressively fewer optional columns to handle missing DB columns
     const holdingsFull = await db
       .from("stock_holdings_c")
-      .select("id, user_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status, settlement_status, is_active, exit_price")
-      .eq("user_id", userId);
+      .select("id, user_id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status, settlement_status, is_active, exit_price")
+      .eq("user_id", userId)
+      .is("family_member_id", null);
 
     if (!holdingsFull.error) {
       holdings = holdingsFull.data;
@@ -3803,8 +4005,9 @@ app.get("/api/user/holdings", async (req, res) => {
       // One or more optional columns missing — try without settlement_status
       const noSettlement = await db
         .from("stock_holdings_c")
-        .select("id, user_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status, is_active, exit_price")
-        .eq("user_id", userId);
+        .select("id, user_id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status, is_active, exit_price")
+        .eq("user_id", userId)
+        .is("family_member_id", null);
 
       if (!noSettlement.error) {
         holdings = noSettlement.data;
@@ -3813,8 +4016,9 @@ app.get("/api/user/holdings", async (req, res) => {
         // Try without is_active and exit_price too
         const noExtras = await db
           .from("stock_holdings_c")
-          .select("id, user_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status")
-          .eq("user_id", userId);
+          .select("id, user_id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status")
+          .eq("user_id", userId)
+          .is("family_member_id", null);
         holdings = (noExtras.data || []).map(h => ({ ...h, is_active: true, exit_price: null }));
         holdingsError = noExtras.error;
       } else {
@@ -3833,8 +4037,21 @@ app.get("/api/user/holdings", async (req, res) => {
 
     const rawHoldings = holdings || [];
     const securityIds = rawHoldings.map(h => h.security_id).filter(Boolean);
+    const strategyIds = rawHoldings.map(h => h.strategy_id).filter(Boolean);
     let securitiesMap = {};
     let latestPricesMap = {};
+    let strategiesMap = {};
+
+    // Fetch strategies if any holdings have strategy_id
+    if (strategyIds.length > 0) {
+      const stratResult = await db
+        .from("strategies_c")
+        .select("id, name")
+        .in("id", strategyIds);
+      if (stratResult.data) {
+        stratResult.data.forEach(s => { strategiesMap[s.id] = s; });
+      }
+    }
 
     if (securityIds.length > 0) {
       const [secResult, pricesResult] = await Promise.all([
@@ -3903,6 +4120,7 @@ app.get("/api/user/holdings", async (req, res) => {
             change_price: 0,
             change_percent: 0,
             exchange: sec?.exchange || null,
+            strategy_name: h.strategy_id ? strategiesMap[h.strategy_id]?.name : null,
           };
         }
         const costBasis = avgFill * quantity;
@@ -3923,6 +4141,7 @@ app.get("/api/user/holdings", async (req, res) => {
           change_price: dailyChange,
           change_percent: Number(dailyChangePct.toFixed(2)),
           exchange: sec?.exchange || null,
+          strategy_name: h.strategy_id ? strategiesMap[h.strategy_id]?.name : null,
         };
       });
 
@@ -3961,7 +4180,7 @@ app.get("/api/user/strategies", async (req, res) => {
       return res.status(503).json({ success: false, error: "Database not available. Please check server configuration." });
     }
 
-    const { user, error: authError } = await authenticateUser(req);
+    const { user, token, error: authError } = await authenticateUser(req);
     if (authError || !user) {
       console.log("[user/strategies] Auth error:", authError);
       return res.status(401).json({ success: false, error: authError || "Unauthorized" });
@@ -3969,14 +4188,15 @@ app.get("/api/user/strategies", async (req, res) => {
 
     console.log("[user/strategies] User authenticated:", user.id);
 
-    const db = supabaseAdmin || supabase;
+    const db = getAuthenticatedDb(token);
     const userId = user.id;
 
     // First, get user's strategy investments from transactions
     const { data: transactions, error: txError } = await db
       .from("transactions")
-      .select("id, name, amount, direction, transaction_date")
+      .select("id, name, amount, direction, transaction_date, family_member_id")
       .eq("user_id", userId)
+      .is("family_member_id", null)
       .eq("direction", "debit");
 
     if (txError) {
@@ -4009,11 +4229,13 @@ app.get("/api/user/strategies", async (req, res) => {
     console.log("[user/strategies] Transactions found:", (transactions || []).length);
     console.log("[user/strategies] Strategy names from transactions:", strategyNames);
 
-    // Also check stock_holdings_c for holdings with strategy_id (fallback when transactions are empty or RLS blocks them)
+    // Also check stock_holdings_c for holdings with strategy_id (fallback when transactions are empty or RLS blocks them).
+    // Parent view only includes direct parent investments; child-linked holdings stay on the child dashboard.
     const { data: userStratHoldings } = await db
       .from("stock_holdings_c")
-      .select("id, security_id, strategy_id, quantity, avg_fill")
+      .select("id, family_member_id, security_id, strategy_id, quantity, avg_fill")
       .eq("user_id", userId)
+      .is("family_member_id", null)
       .not("strategy_id", "is", null);
 
     const holdingStrategyIds = [...new Set((userStratHoldings || []).map(h => h.strategy_id).filter(Boolean))];
@@ -4061,12 +4283,7 @@ app.get("/api/user/strategies", async (req, res) => {
     // Get all active strategies
     const { data: allStrategies, error: stratErr } = await db
       .from("strategies_c")
-      .select(`
-        id, name, short_name, description, risk_level, sector, icon_url, image_url, holdings, status,
-        strategy_metrics (
-          *
-        )
-      `)
+      .select(`id, name, short_name, description, risk_level, sector, icon_url, image_url, holdings, status, is_kid_strategy`)
       .eq("status", "active");
 
     if (stratErr) {
@@ -4074,14 +4291,32 @@ app.get("/api/user/strategies", async (req, res) => {
       return res.status(500).json({ success: false, error: stratErr.message });
     }
 
-    // Sort each strategy's metrics by date descending and keep only the latest row
-    for (const strategy of (allStrategies || [])) {
-      if (Array.isArray(strategy.strategy_metrics) && strategy.strategy_metrics.length > 1) {
-        strategy.strategy_metrics.sort((a, b) =>
-          (b.as_of_date || "").localeCompare(a.as_of_date || "")
-        );
-        strategy.strategy_metrics = [strategy.strategy_metrics[0]];
+    // Fetch latest returns from strategies_returns_c for all strategies
+    const strategyIds = (allStrategies || []).map(s => s.id);
+    let returnsMap = {};
+    if (strategyIds.length > 0) {
+      const { data: returnsRows } = await db
+        .from("strategies_returns_c")
+        .select("strategy_id, as_of_date, ytd_pct, 5d_pct, 1m_pct, 6m_pct")
+        .in("strategy_id", strategyIds)
+        .order("as_of_date", { ascending: false });
+      for (const row of (returnsRows || [])) {
+        if (!returnsMap[row.strategy_id]) {
+          returnsMap[row.strategy_id] = {
+            r_ytd: row.ytd_pct ?? null,
+            r_ytd_pct: row.ytd_pct ?? null,
+            r_5d: row["5d_pct"] ?? null,
+            r_1m: row["1m_pct"] ?? null,
+            r_6m: row["6m_pct"] ?? null,
+            as_of_date: row.as_of_date ?? null,
+          };
+        }
       }
+    }
+
+    // Attach returns to each strategy as strategy_metrics shape
+    for (const strategy of (allStrategies || [])) {
+      strategy.strategy_metrics = returnsMap[strategy.id] ? [returnsMap[strategy.id]] : [];
     }
 
     // Get securities for logos
@@ -4125,6 +4360,7 @@ app.get("/api/user/strategies", async (req, res) => {
         sn.toLowerCase() === (strategy.short_name || "").toLowerCase()
       );
       const matchedByHoldings = holdingStrategyIds.includes(strategy.id);
+
       if (matchKey || matchedByHoldings) {
         const metrics = strategy.strategy_metrics;
         const latestMetric = Array.isArray(metrics) ? metrics[0] : metrics;
@@ -4191,6 +4427,7 @@ app.get("/api/user/strategies", async (req, res) => {
           sector: strategy.sector || "",
           iconUrl: strategy.icon_url,
           imageUrl: strategy.image_url,
+          isKidStrategy: !!strategy.is_kid_strategy,
           holdings: enrichedHoldings,
           investedAmount: investedAmount, // Return as Rands
           currentMarketValue: currentMarketValue, // Return as Rands
@@ -4216,12 +4453,12 @@ app.get("/api/user/transactions", async (req, res) => {
       return res.status(500).json({ success: false, error: "Database not connected" });
     }
 
-    const { user, error: authError } = await authenticateUser(req);
+    const { user, token, error: authError } = await authenticateUser(req);
     if (authError || !user) {
       return res.status(401).json({ success: false, error: authError || "Unauthorized" });
     }
 
-    const db = supabaseAdmin || supabase;
+    const db = getAuthenticatedDb(token);
     const userId = user.id;
     const limit = parseInt(req.query.limit) || 50;
 
@@ -4354,12 +4591,12 @@ app.get("/api/debug/user-investments", async (req, res) => {
       return res.status(500).json({ success: false, error: "Database not connected" });
     }
 
-    const { user, error: authError } = await authenticateUser(req);
+    const { user, token, error: authError } = await authenticateUser(req);
     if (authError || !user) {
       return res.status(401).json({ success: false, error: authError || "Unauthorized" });
     }
 
-    const db = supabaseAdmin || supabase;
+    const db = getAuthenticatedDb(token);
     const userId = user.id;
 
     const [holdingsResult, transactionsResult] = await Promise.all([
@@ -5344,6 +5581,8 @@ app.post("/api/onboarding/check-id-number", async (req, res) => {
         if (exists) {
           matchedUserId = result.rows[0].user_id || null;
         }
+      } catch (pgErr) {
+        console.warn("[Onboarding] pgPool ID precheck failed, falling back to Supabase client:", pgErr.message);
       } finally {
         client.release();
       }
@@ -5636,6 +5875,70 @@ app.post("/api/onboarding/upload-agreement", async (req, res) => {
   } catch (error) {
     console.error("[Onboarding] Agreement upload error:", error);
     res.json({ success: true, publicUrl: "" });
+  }
+});
+
+app.post("/api/onboarding/upload-bank-letter", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (!token) return res.status(401).json({ success: false, error: "Missing token" });
+
+    const authClient = supabaseAdmin || supabase;
+    if (!authClient) return res.status(500).json({ success: false, error: "Database not connected" });
+
+    const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
+    if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
+
+    const { fileBase64, fileType } = req.body || {};
+    if (!fileBase64 || typeof fileBase64 !== "string") {
+      return res.status(400).json({ success: false, error: "Missing fileBase64 in request body" });
+    }
+
+    const normalizedBase64 = fileBase64.includes(",") ? fileBase64.split(",").pop() : fileBase64;
+    const fileBuffer = Buffer.from(normalizedBase64, "base64");
+    if (fileBuffer.length === 0) return res.status(400).json({ success: false, error: "File buffer is empty" });
+
+    const db = supabaseAdmin || supabase;
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const extension = fileType === "application/pdf" ? "pdf" : "png";
+    const filePath = `${user.id}/bank-confirmation-${timestamp}.${extension}`;
+
+    const { error: uploadError } = await db.storage
+      .from("signed-agreements")
+      .upload(filePath, fileBuffer, { contentType: fileType || "application/octet-stream", upsert: true });
+
+    if (uploadError) {
+      console.error("[upload-bank-letter] Storage upload error:", uploadError.message);
+      return res.status(500).json({ success: false, error: `Storage upload failed: ${uploadError.message}` });
+    }
+
+    const { data: urlData } = db.storage.from("signed-agreements").getPublicUrl(filePath);
+    const publicUrl = urlData?.publicUrl || "";
+
+    // Update onboarding record
+    const { data: onboardingRecord } = await db
+      .from("user_onboarding")
+      .select("id, sumsub_raw")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (onboardingRecord) {
+      let raw = {};
+      try { raw = typeof onboardingRecord.sumsub_raw === "string" ? JSON.parse(onboardingRecord.sumsub_raw) : (onboardingRecord.sumsub_raw || {}); } catch {}
+      raw.bank_letter_uploaded = true;
+      raw.bank_letter_url = publicUrl;
+      raw.bank_letter_uploaded_at = new Date().toISOString();
+      await db.from("user_onboarding").update({ sumsub_raw: JSON.stringify(raw) }).eq("id", onboardingRecord.id);
+    }
+
+    console.log(`[upload-bank-letter] Uploaded for user ${user.id}: ${publicUrl}`);
+    return res.json({ success: true, publicUrl });
+  } catch (error) {
+    console.error("[upload-bank-letter] Unexpected error:", error);
+    return res.status(500).json({ success: false, error: error.message || "Unexpected server error" });
   }
 });
 
@@ -6306,7 +6609,7 @@ app.post("/api/ozow/initiate", async (req, res) => {
 // Called from the success page to record the investment when the notify webhook hasn't fired yet
 app.post("/api/ozow/record-success", async (req, res) => {
   try {
-    const { user, error: authError } = await authenticateUser(req);
+    const { user, token, error: authError } = await authenticateUser(req);
     if (authError || !user) {
       return res.status(401).json({ success: false, error: "Unauthorized" });
     }
@@ -6323,7 +6626,7 @@ app.post("/api/ozow/record-success", async (req, res) => {
       return res.status(400).json({ success: false, error: "Invalid transaction reference" });
     }
 
-    const db = supabaseAdmin || supabase;
+    const db = getAuthenticatedDb(token);
     if (!db) return res.status(500).json({ success: false, error: "DB unavailable" });
 
     // Deduplication
@@ -7502,6 +7805,309 @@ app.post('/api/admin/set-ytd-prices', async (req, res) => {
   } catch (err) {
     console.error('[admin] set-ytd-prices error:', err.message);
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Child: wallet & investment endpoints ──
+app.get('/api/child-wallet', async (req, res) => {
+  const { family_member_id } = req.query;
+  if (!family_member_id) {
+    return res.status(400).json({ error: 'family_member_id is required' });
+  }
+  try {
+    const db = supabaseAdmin || supabase;
+    if (!db) return res.status(500).json({ error: 'Database not available' });
+    const { data, error } = await db
+      .from('family_members')
+      .select('available_balance')
+      .eq('id', family_member_id)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: 'Child not found' });
+    return res.json({ balance: data.available_balance || 0 });
+  } catch (e) {
+    console.error('[child-wallet] error:', e.message);
+    return res.status(500).json({ error: 'Failed to fetch child wallet' });
+  }
+});
+
+app.post('/api/child-wallet', async (req, res) => {
+  const { action, family_member_id, amount } = req.body || {};
+  if (!family_member_id) {
+    return res.status(400).json({ error: 'family_member_id is required' });
+  }
+  if (action === 'transfer') {
+    if (!amount || typeof amount !== 'number' || amount <= 0) {
+      return res.status(400).json({ error: 'Amount must be a positive number (in cents)' });
+    }
+    try {
+      const { user, error: authError } = await authenticateUser(req);
+      if (authError || !user) {
+        return res.status(401).json({ error: authError || 'Not authenticated' });
+      }
+      const parentUserId = user.id;
+
+      const db = supabaseAdmin || supabase;
+      if (!db) return res.status(500).json({ error: 'Database not available' });
+
+      const { data: child, error: childErr } = await db
+        .from('family_members')
+        .select('id, available_balance, primary_user_id')
+        .eq('id', family_member_id)
+        .maybeSingle();
+      if (childErr || !child) return res.status(404).json({ error: 'Child not found' });
+      if (child.primary_user_id !== parentUserId) {
+        return res.status(403).json({ error: 'You can only transfer to your own children' });
+      }
+
+      const { data: parent } = await db
+        .from('wallets')
+        .select('balance')
+        .eq('user_id', parentUserId)
+        .maybeSingle();
+      const parentBalance = Math.round((parent?.balance || 0) * 100);
+      if (parentBalance < amount) {
+        return res.status(400).json({ error: 'Insufficient balance' });
+      }
+
+      const parentNewBalance = parentBalance - amount;
+      const childNewBalance = (child.available_balance || 0) + amount;
+
+      await db.from('wallets').update({ balance: parentNewBalance / 100 }).eq('user_id', parentUserId);
+      await db.from('family_members').update({ available_balance: childNewBalance }).eq('id', family_member_id);
+
+      const now = new Date().toISOString();
+      const ref = `TXN-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      await db.from('transactions').insert({
+        user_id: parentUserId,
+        family_member_id: family_member_id,
+        name: 'Transfer to child',
+        direction: 'credit',
+        amount: amount,
+        description: 'Transfer to child wallet',
+        store_reference: ref,
+        currency: 'ZAR',
+        status: 'completed',
+        transaction_date: now,
+        created_at: now,
+      });
+
+      return res.json({ success: true, parent_balance: parentNewBalance, child_balance: childNewBalance });
+    } catch (e) {
+      console.error('[child-wallet] transfer error:', e.message);
+      return res.status(500).json({ error: 'Transfer failed' });
+    }
+  }
+  return res.status(400).json({ error: 'Invalid action' });
+});
+
+app.get('/api/child-transactions', async (req, res) => {
+  try {
+    const { family_member_id } = req.query;
+    if (!family_member_id) {
+      return res.status(400).json({ error: 'family_member_id is required' });
+    }
+
+    const { user, error: authError } = await authenticateUser(req);
+    if (authError || !user) {
+      return res.status(401).json({ error: authError || 'Not authenticated' });
+    }
+
+    const db = supabaseAdmin || supabase;
+    if (!db) return res.status(500).json({ error: 'Database not available' });
+
+    // Verify family_member_id belongs to this user
+    const { data: familyMember, error: fmErr } = await db
+      .from('family_members')
+      .select('id, primary_user_id')
+      .eq('id', family_member_id)
+      .maybeSingle();
+
+    if (fmErr || !familyMember || familyMember.primary_user_id !== user.id) {
+      return res.status(403).json({ error: 'Child account not found or access denied' });
+    }
+
+    // Fetch transactions for the child
+    const { data: transactions, error: txErr } = await db
+      .from('transactions')
+      .select('id, direction, amount, description, transaction_date, created_at')
+      .eq('family_member_id', family_member_id)
+      .order('transaction_date', { ascending: false })
+      .limit(50);
+
+    if (txErr) {
+      console.error('[child-transactions] error:', txErr);
+      return res.status(500).json({ error: 'Failed to fetch transactions' });
+    }
+
+    return res.json({ transactions: transactions || [] });
+  } catch (e) {
+    console.error('[child-transactions]', e.message);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/child-invest', async (req, res) => {
+  const db = supabaseAdmin || supabase;
+  if (!db) return res.status(500).json({ error: 'Database not available.' });
+
+  const { family_member_id, strategy_id, amount } = req.body || {};
+
+  if (!family_member_id) return res.status(400).json({ error: 'family_member_id is required.' });
+  if (!strategy_id) return res.status(400).json({ error: 'strategy_id is required.' });
+  if (!amount || typeof amount !== 'number' || amount <= 0) {
+    return res.status(400).json({ error: 'Amount must be a positive number (in cents).' });
+  }
+
+  let parentUserId;
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    parentUserId = session?.user?.id;
+  } catch {}
+  if (!parentUserId) {
+    try {
+      const { data: fm } = await db
+        .from('family_members')
+        .select('primary_user_id')
+        .eq('id', family_member_id)
+        .maybeSingle();
+      parentUserId = fm?.primary_user_id;
+    } catch {}
+  }
+  if (!parentUserId) return res.status(401).json({ error: 'Could not identify parent.' });
+
+  let originalChildBalance = null;
+
+  try {
+    const { data: child, error: childErr } = await db
+      .from('family_members')
+      .select('id, primary_user_id, available_balance, first_name, relationship')
+      .eq('id', family_member_id)
+      .maybeSingle();
+
+    if (childErr) throw childErr;
+    if (!child) return res.status(404).json({ error: 'Child account not found.' });
+    if (child.relationship !== 'child') return res.status(400).json({ error: 'Investments only supported for child accounts.' });
+    if (child.primary_user_id !== parentUserId) {
+      return res.status(403).json({ error: 'You can only invest for your own children.' });
+    }
+
+    originalChildBalance = child.available_balance || 0;
+    if (originalChildBalance < amount) {
+      return res.status(400).json({ error: 'Insufficient funds in child\'s wallet. Transfer funds first.' });
+    }
+
+    const { data: strategy, error: stratErr } = await db
+      .from('strategies_c')
+      .select('id, name, holdings, min_investment, status')
+      .eq('id', strategy_id)
+      .maybeSingle();
+
+    if (stratErr) throw stratErr;
+    if (!strategy) return res.status(404).json({ error: 'Strategy not found.' });
+    if (strategy.status !== 'active') return res.status(400).json({ error: 'This strategy is no longer active.' });
+    if (strategy.min_investment && amount < strategy.min_investment) {
+      return res.status(400).json({ error: `Minimum investment is R${(strategy.min_investment / 100).toFixed(2)}.` });
+    }
+
+    const newChildBalance = originalChildBalance - amount;
+    const { error: deductErr } = await db
+      .from('family_members')
+      .update({ available_balance: newChildBalance })
+      .eq('id', family_member_id);
+    if (deductErr) throw deductErr;
+
+    const investAmountRands = amount / 100;
+    const holdings = strategy.holdings || [];
+    let holdingsCreated = 0;
+
+    if (holdings.length > 0) {
+      const symbols = holdings.map(h => h.symbol).filter(Boolean);
+      const { data: securities } = await db
+        .from('securities_c')
+        .select('id, symbol, name, last_price')
+        .in('symbol', symbols);
+
+      const secMap = {};
+      (securities || []).forEach(s => { secMap[s.symbol] = s; });
+
+      let totalBasketCostRands = 0;
+      for (const h of holdings) {
+        const sec = secMap[h.symbol];
+        if (sec?.last_price) {
+          totalBasketCostRands += sec.last_price * (h.weight || 1);
+        }
+      }
+
+      if (totalBasketCostRands > 0) {
+        const scale = investAmountRands / totalBasketCostRands;
+
+        for (const h of holdings) {
+          const sec = secMap[h.symbol];
+          if (!sec?.last_price) continue;
+
+          const qty = Math.floor((h.weight || 1) * scale);
+          if (qty <= 0) continue;
+
+          try {
+            await db
+              .from('stock_holdings_c')
+              .insert({
+                user_id: parentUserId,
+                family_member_id: family_member_id,
+                security_id: sec.id,
+                quantity: qty,
+                avg_fill: null,
+                market_value: 0,
+                unrealized_pnl: 0,
+                as_of_date: null,
+                strategy_id: strategy_id,
+                Status: 'active',
+              });
+            holdingsCreated++;
+          } catch (e) {
+            console.warn(`[child-invest] pending holding insert for ${h.symbol}:`, e.message);
+          }
+        }
+      }
+    }
+
+    const ref = `CHILD-INV-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const now = new Date().toISOString();
+    try {
+      await db.from('transactions').insert({
+        user_id: parentUserId,
+        family_member_id: family_member_id,
+        name: `${strategy.name} investment`,
+        direction: 'debit',
+        amount: amount,
+        description: `${strategy.name} investment for ${child.first_name}`,
+        store_reference: ref,
+        currency: 'ZAR',
+        status: 'completed',
+        transaction_date: now,
+        created_at: now,
+      });
+    } catch (e) { console.warn('[child-invest] tx insert:', e.message); }
+
+    return res.json({
+      success: true,
+      child_balance: newChildBalance,
+      holdings_created: holdingsCreated,
+      strategy_name: strategy.name,
+      transaction_ref: ref,
+    });
+  } catch (e) {
+    console.error('[child-invest] error:', e.message, e.stack);
+    if (originalChildBalance !== null) {
+      try {
+        await db
+          .from('family_members')
+          .update({ available_balance: originalChildBalance })
+          .eq('id', family_member_id);
+      } catch (rb) { console.error('[child-invest] rollback failed:', rb.message); }
+    }
+    return res.status(500).json({ error: 'Investment failed. Please try again.', debug: e.message });
   }
 });
 

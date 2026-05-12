@@ -71,15 +71,18 @@ export default async function handler(req, res) {
     // 3. Fetch strategy + holdings
     const { data: strategy, error: stratErr } = await db
       .from("strategies_c")
-      .select("id, name, holdings, min_investment, is_active")
+      .select("id, name, holdings, min_investment, status")
       .eq("id", strategy_id)
       .maybeSingle();
 
     if (stratErr) throw stratErr;
     if (!strategy) return res.status(404).json({ error: "Strategy not found." });
-    if (!strategy.is_active) return res.status(400).json({ error: "This strategy is no longer active." });
-    if (strategy.min_investment && amount < strategy.min_investment) {
-      return res.status(400).json({ error: `Minimum investment is R${(strategy.min_investment / 100).toFixed(2)}.` });
+    if (strategy.status !== "active") return res.status(400).json({ error: "This strategy is no longer active." });
+    // min_investment column is stored in rands; amount arrives in cents.
+    const minInvestmentRands = Number(strategy.min_investment || 0);
+    const minInvestmentCents = Math.round(minInvestmentRands * 100);
+    if (minInvestmentCents > 0 && amount < minInvestmentCents) {
+      return res.status(400).json({ error: `Minimum investment is R${minInvestmentRands.toFixed(2)}.` });
     }
 
     // 4. Deduct from child balance
@@ -91,7 +94,6 @@ export default async function handler(req, res) {
     if (deductErr) throw deductErr;
 
     // 5. Build holdings from strategy basket
-    const investAmountRands = amount / 100;
     const holdings = strategy.holdings || [];
     let holdingsCreated = 0;
 
@@ -106,75 +108,33 @@ export default async function handler(req, res) {
       const secMap = {};
       (securities || []).forEach(s => { secMap[s.symbol] = s; });
 
-      // Calculate total basket cost for proportional allocation
-      let totalBasketCostRands = 0;
       for (const h of holdings) {
         const sec = secMap[h.symbol];
-        if (sec?.last_price) {
-          totalBasketCostRands += sec.last_price * (h.weight || 1);
-        }
-      }
+        if (!sec?.last_price) continue;
 
-      if (totalBasketCostRands > 0) {
-        const scale = investAmountRands / totalBasketCostRands;
+        // Use the exact basket quantity defined in strategies_c.holdings.
+        const qty = Math.floor(Number(h.quantity || h.shares || 0));
+        if (qty <= 0) continue;
 
-        for (const h of holdings) {
-          const sec = secMap[h.symbol];
-          if (!sec?.last_price) continue;
-
-          const qty = Math.floor((h.weight || 1) * scale);
-          const marketValue = Math.round(qty * sec.last_price); // cents
-          if (qty <= 0) continue;
-
-          // Upsert stock_holding for child
-          try {
-            const { data: existing } = await db
-              .from("stock_holdings_c")
-              .select("id, quantity, avg_fill")
-              .eq("family_member_id", family_member_id)
-              .eq("security_id", sec.id)
-              .eq("strategy_id", strategy_id)
-              .maybeSingle();
-
-            if (existing) {
-              const oldQty = Number(existing.quantity || 0);
-              const oldAvgFill = Number(existing.avg_fill || 0);
-              const newQty = Math.floor(oldQty + qty);
-              const newAvgFill = newQty > 0
-                ? ((oldAvgFill * oldQty) + (sec.last_price * qty)) / newQty
-                : sec.last_price;
-
-              await db
-                .from("stock_holdings_c")
-                .update({
-                  quantity: newQty,
-                  avg_fill: Math.round(newAvgFill),
-                  market_value: newQty * sec.last_price,
-                  unrealized_pnl: 0,
-                  as_of_date: new Date().toISOString().split("T")[0],
-                  updated_at: new Date().toISOString(),
-                })
-                .eq("id", existing.id);
-            } else {
-              await db
-                .from("stock_holdings_c")
-                .insert({
-                  user_id: parentUserId,
-                  family_member_id: family_member_id,
-                  security_id: sec.id,
-                  quantity: qty,
-                  avg_fill: sec.last_price,
-                  market_value: marketValue,
-                  unrealized_pnl: 0,
-                  as_of_date: new Date().toISOString().split("T")[0],
-                  strategy_id: strategy_id,
-                  Status: "active",
-                });
-            }
-            holdingsCreated++;
-          } catch (e) {
-            console.warn(`[child-invest] holding upsert for ${h.symbol}:`, e.message);
-          }
+        // Child strategy orders start as pending holdings until real fills arrive.
+        try {
+          await db
+            .from("stock_holdings_c")
+            .insert({
+              user_id: parentUserId,
+              family_member_id: family_member_id,
+              security_id: sec.id,
+              quantity: qty,
+              avg_fill: null,
+              market_value: 0,
+              unrealized_pnl: 0,
+              as_of_date: null,
+              strategy_id: strategy_id,
+              Status: "active",
+            });
+          holdingsCreated++;
+        } catch (e) {
+          console.warn(`[child-invest] pending holding insert for ${h.symbol}:`, e.message);
         }
       }
     }

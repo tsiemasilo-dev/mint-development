@@ -30,6 +30,23 @@ function fmt(cents) {
 
 // ─── animation variants ──────────────────────────────────────────────────────
 
+function getChildKycState(child) {
+  const kycStatus = String(child?.kyc_status || "pending").toLowerCase();
+  const certificateStatus = String(child?.certificate_verification_status || "pending_review").toLowerCase();
+  const verified = certificateStatus === "verified" || kycStatus === "completed";
+  const rejected = kycStatus === "rejected" || certificateStatus === "rejected";
+
+  if (verified) {
+    return { label: "Verified", className: "bg-emerald-50 text-emerald-700 border-emerald-200", pulse: false };
+  }
+
+  if (rejected) {
+    return { label: "KYC Rejected", className: "bg-red-50 text-red-700 border-red-200", pulse: false };
+  }
+
+  return { label: "KYC Pending", className: "bg-amber-50 text-amber-700 border-amber-200", pulse: true };
+}
+
 const container = {
   hidden: {},
   show: { transition: { staggerChildren: 0.08, delayChildren: 0.05 } },
@@ -491,15 +508,19 @@ function AddMemberModal({ type, userId, profile, coGuardians = [], onSave, onClo
       }
 
       // 2. Patch family member record
+      // address_completed:true marks onboarding as finished — ChildDashboardPage
+      // reads this (along with the individual fields) to hide the "Complete
+      // profile" banner. Without it, every revisit re-prompts to sign.
       const updateRes = await fetch(`/api/family-members/${newChildMember.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           signed_agreement_url: uploadJson.publicUrl,
           signed_at: signedAt,
+          address_completed: true,
         }),
       });
-      
+
       if (!updateRes.ok) {
         // Fallback for older API versions or missing endpoint
         console.warn("[family] PATCH failed, trying metadata update via Supabase directly");
@@ -508,14 +529,16 @@ function AddMemberModal({ type, userId, profile, coGuardians = [], onSave, onClo
           .update({
             signed_agreement_url: uploadJson.publicUrl,
             signed_at: signedAt,
+            address_completed: true,
           })
           .eq("id", newChildMember.id);
       }
 
-      const finalMember = { 
-        ...newChildMember, 
-        signed_agreement_url: uploadJson.publicUrl, 
-        signed_at: signedAt 
+      const finalMember = {
+        ...newChildMember,
+        signed_agreement_url: uploadJson.publicUrl,
+        signed_at: signedAt,
+        address_completed: true,
       };
       setChildComplete({ member: finalMember });
       return true;
@@ -1083,6 +1106,7 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
   const [removingId, setRemovingId] = useState(null);
   const [removePassword, setRemovePassword] = useState("");
   const [removeError, setRemoveError] = useState("");
+  const [strategyBlock, setStrategyBlock] = useState(null);
 
   const displayName = [profile?.firstName, profile?.lastName].filter(Boolean).join(" ") || "My Account";
   const familyLastName = profile?.lastName || "";
@@ -1091,30 +1115,38 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
   const totalMembers = 1 + members.length;
 
   useEffect(() => {
-    if (userId) { fetchMembers(); fetchPortfolio(); }
+    if (userId) { fetchMembers(); }
   }, [userId]);
 
   async function fetchMembers() {
     setLoading(true);
     try {
-      const res = await fetch(`/api/family-members?user_id=${userId}`);
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch(`/api/family-members?user_id=${userId}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
       const json = await res.json();
-      setMembers(json.members || []);
+      const loadedMembers = json.members || [];
+      setMembers(loadedMembers);
+      fetchPortfolio(loadedMembers);
     } catch (e) { console.error("[family]", e); }
     finally { setLoading(false); }
   }
 
-  async function fetchPortfolio() {
+  async function fetchPortfolio(membersList = members) {
     if (!userId) return;
-    const spouseUserIds = members.filter(m => m.relationship === "spouse" && m.linked_user_id).map(m => m.linked_user_id);
-    const childMemberIds = members.filter(m => m.relationship === "child").map(m => m.id);
-    const allUserIds = [userId, ...spouseUserIds];
+    const spouseUserIds = membersList.filter(m => m.relationship === "spouse" && m.linked_user_id).map(m => m.linked_user_id);
+    const childLinkedUserIds = membersList.filter(m => m.relationship === "child" && m.linked_user_id).map(m => m.linked_user_id);
+    const childMemberIds = membersList.filter(m => m.relationship === "child").map(m => m.id);
+    const holdingsUserIds = [userId, ...spouseUserIds, ...childLinkedUserIds];
+    const walletUserIds = [userId, ...spouseUserIds];
     
     try {
       const [holdingsRes, childHoldingsRes, walletRes, childWalletRes] = await Promise.all([
-        supabase.from("stock_holdings_c").select("user_id, security_id, quantity, avg_fill").in("user_id", allUserIds).eq("Status", "active"),
+        supabase.from("stock_holdings_c").select("user_id, family_member_id, security_id, quantity, avg_fill").in("user_id", holdingsUserIds).is("family_member_id", null).eq("Status", "active"),
         supabase.from("stock_holdings_c").select("family_member_id, security_id, quantity, avg_fill").in("family_member_id", childMemberIds).eq("Status", "active"),
-        supabase.from("wallets").select("user_id, balance").in("user_id", allUserIds),
+        supabase.from("wallets").select("user_id, balance").in("user_id", walletUserIds),
         childMemberIds.length
           ? supabase.from("family_members").select("id, available_balance").in("id", childMemberIds)
           : Promise.resolve({ data: [] }),
@@ -1181,13 +1213,16 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
       setHeadBalance(headTotal);
 
       // Calculate other member balances
-      members.forEach(m => {
+      membersList.forEach(m => {
         if (m.relationship === "spouse" && m.linked_user_id) {
           const sHoldings = holdings.filter(h => h.user_id === m.linked_user_id);
           const sWallet = wallets.find(w => w.user_id === m.linked_user_id);
           balances[m.id] = sHoldings.reduce((s, h) => s + marketValueCents(h), 0) + Math.round((sWallet?.balance || 0) * 100);
         } else if (m.relationship === "child") {
-          const cHoldings = childHoldings.filter(h => h.family_member_id === m.id);
+          const cHoldings = [
+            ...childHoldings.filter(h => h.family_member_id === m.id),
+            ...(m.linked_user_id ? holdings.filter(h => h.user_id === m.linked_user_id) : []),
+          ];
           balances[m.id] = cHoldings.reduce((s, h) => s + marketValueCents(h), 0) + (childBalanceCentsMap[m.id] || 0);
         }
       });
@@ -1235,12 +1270,22 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
       });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
+        if (json.code === "child_holds_strategy") {
+          setStrategyBlock({ name: member.first_name || "This child", message: json.error });
+          setConfirmRemove(null);
+          setRemovePassword("");
+          setRemoveError("");
+          return;
+        }
         throw new Error(json.error || "Failed to remove member");
       }
-      setMembers(prev => prev.filter(m => m.id !== member.id));
+      const remaining = members.filter(m => m.id !== member.id);
+      setMembers(remaining);
       setConfirmRemove(null);
       setRemovePassword("");
       setRemoveError("");
+      // Refresh portfolio so the parent's wallet reflects any refunded child funds
+      fetchPortfolio(remaining);
     } catch (e) {
       console.error("[family] remove", e.message);
       setRemoveError(e?.message || "Failed to remove member.");
@@ -1431,12 +1476,7 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
                   const certVerified = certStatus === "verified";
                   const certIdMatched = certStatus === "id_matched_pending_review";
                   const certPending = !certVerified && !!child.certificate_url;
-                  const childKycStatus = String(child?.kyc_status || "pending").toLowerCase();
-                  const childKycLabel = childKycStatus === "completed"
-                    ? "KYC Completed"
-                    : childKycStatus === "rejected"
-                      ? "KYC Rejected"
-                      : "KYC Pending";
+                  const childKyc = getChildKycState(child);
                   return (
                     <motion.div key={child.id} variants={item} className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 8px rgba(91,33,182,0.07)" }}>
                       <div className="flex items-center gap-4 px-5 py-4">
@@ -1450,22 +1490,11 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
                               </span>
                               {age !== null && <span className="text-[11px] text-slate-400">{age} yr{age !== 1 ? "s" : ""}</span>}
                               <span
-                                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold tracking-wide border ${
-                                  childKycStatus === "completed"
-                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                    : childKycStatus === "rejected"
-                                      ? "bg-red-50 text-red-700 border-red-200"
-                                      : "bg-amber-50 text-amber-700 border-amber-200"
-                                }`}
+                                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold tracking-wide border ${childKyc.className}`}
                               >
-                                <span className={`h-1.5 w-1.5 rounded-full ${childKycStatus === "pending" ? "animate-pulse" : ""}`} style={{ backgroundColor: "currentColor" }} />
-                                {childKycLabel}
+                                <span className={`h-1.5 w-1.5 rounded-full ${childKyc.pulse ? "animate-pulse" : ""}`} style={{ backgroundColor: "currentColor" }} />
+                                {childKyc.label}
                               </span>
-                              {certVerified && (
-                                <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold bg-emerald-50 text-emerald-600">
-                                  <ShieldCheck className="h-2.5 w-2.5" />Verified
-                                </span>
-                              )}
                               {certIdMatched && !certVerified && (
                                 <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold bg-blue-50 text-blue-600">
                                   <Clock className="h-2.5 w-2.5" />ID Matched
@@ -1591,6 +1620,45 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
             onSave={handleMemberSaved}
             onClose={() => setAddingType(null)}
           />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {strategyBlock && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center px-6"
+          >
+            <motion.div
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setStrategyBlock(null)}
+            />
+            <motion.div
+              initial={{ scale: 0.92, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.92, opacity: 0, y: 10 }}
+              transition={{ type: "spring", stiffness: 320, damping: 26 }}
+              className="relative z-10 w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl"
+            >
+              <div className="flex flex-col items-center text-center">
+                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-50">
+                  <AlertCircle className="h-7 w-7 text-amber-500" />
+                </div>
+                <h3 className="text-[16px] font-bold text-slate-900">Child holds a strategy</h3>
+                <p className="mt-2 text-[13px] leading-relaxed text-slate-600">
+                  {strategyBlock.message || `${strategyBlock.name} still holds an active strategy. Please sell their investments before removing the account.`}
+                </p>
+                <button
+                  onClick={() => setStrategyBlock(null)}
+                  className="mt-5 w-full rounded-2xl bg-slate-900 px-4 py-3 text-[13px] font-bold text-white transition active:scale-[0.98]"
+                >
+                  Got it
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

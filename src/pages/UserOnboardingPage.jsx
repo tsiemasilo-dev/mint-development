@@ -4,6 +4,7 @@ import MandateViewer from "../components/MandateViewer";
 import AccountAgreementStep from "../components/AccountAgreementStep";
 import { supabase } from "../lib/supabase";
 import { useProfile } from "../lib/useProfile";
+import { markOnboardingComplete } from "../lib/useOnboardingStatus";
 import AddressAutocomplete from "../components/AddressAutocomplete";
 import "../styles/onboarding-process.css";
 
@@ -142,13 +143,17 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const [submitSuccess, setSubmitSuccess] = useState("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [showProceed, setShowProceed] = useState(false);
-  const [agreedTerms, setAgreedTerms] = useState(false);
-  const [agreedPrivacy, setAgreedPrivacy] = useState(false);
+  const [agreedAll, setAgreedAll] = useState(false);
+  const [sec1Open, setSec1Open] = useState(false);
+  const [sec2Open, setSec2Open] = useState(false);
+  const [sec3Open, setSec3Open] = useState(false);
+  const [signingStarted, setSigningStarted] = useState(false);
   const [existingOnboardingId, setExistingOnboardingId] = useState(null);
-  const [agreedRiskDisclosure, setAgreedRiskDisclosure] = useState(false);
+
   const [agreedMandate, setAgreedMandate] = useState(false);
   const [mandateValid, setMandateValid] = useState(false);
   const mandateDataRef = useRef(null);
+  const [mandateRequestTab, setMandateRequestTab] = useState(null);
   const [sourceOfFunds, setSourceOfFunds] = useState("");
   const [sourceOfFundsOther, setSourceOfFundsOther] = useState("");
   const [expectedMonthlyInvestment, setExpectedMonthlyInvestment] = useState("");
@@ -167,6 +172,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const bankDropdownRef = useRef(null);
   const [kycAlreadyVerified, setKycAlreadyVerified] = useState(false);
   const [kycVerificationDone, setKycVerificationDone] = useState(false);
+  const [identityCheckConfirmed, setIdentityCheckConfirmed] = useState(false);
   const [bankDone, setBankDone] = useState(false);
   const [bankLetterDone, setBankLetterDone] = useState(false);
   const [mandateDone, setMandateDone] = useState(false);
@@ -217,6 +223,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
     window.setTimeout(() => {
       setStep(nextStep);
       setIsFading(false);
+      window.scrollTo({ top: 0, behavior: "instant" });
     }, 260);
   };
 
@@ -255,7 +262,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
       try { raw = typeof record?.sumsub_raw === "string" ? JSON.parse(record.sumsub_raw) : (record?.sumsub_raw || {}); } catch { }
       raw[flagKey] = true;
       if (extraFields) Object.assign(raw, extraFields);
-      const updateQuery = supabase.from("user_onboarding").update({ sumsub_raw: JSON.stringify(raw) });
+      const updateQuery = supabase.from("user_onboarding").update({ sumsub_raw: raw });
       const { error } = id
         ? await updateQuery.eq("id", id).eq("user_id", userId)
         : await updateQuery.eq("user_id", userId);
@@ -266,29 +273,25 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   };
 
   const getNextIncompleteStep = (afterStep, justCompletedStep) => {
-    const identityCheckDone = !!existingOnboardingId || kycAlreadyVerified;
+    const identityCheckDone = identityCheckConfirmed || kycAlreadyVerified;
+    const financialDetailsDone = taxDone && bankDone && bankLetterDone && sofDone;
+    const finalAgreementsDone = riskDone && termsDone && agreementSignedDone;
     const steps = [
-      { step: 1, done: identityCheckDone },
-      { step: 2, done: kycVerificationDone },
+      { step: 1, done: identityCheckDone && kycVerificationDone },
       { step: 3, done: addressDone },
-      { step: 4, done: taxDone },
-      { step: 5, done: bankDone },
-      { step: 6, done: bankLetterDone },
-      { step: 7, done: mandateDone },
-      { step: 8, done: riskDone },
-      { step: 9, done: sofDone },
-      { step: 10, done: termsDone },
-      { step: 11, done: agreementSignedDone },
+      { step: 4, done: financialDetailsDone },
+      { step: 5, done: mandateDone },
+      { step: 6, done: finalAgreementsDone },
+      { step: 7, done: finalAgreementsDone },
     ];
     for (const s of steps) {
       if (s.step > afterStep && !s.done && s.step !== justCompletedStep) return s.step;
     }
-    return 11;
+    return 7;
   };
 
   const handleContinue = async () => {
     if (step === 0) {
-      await ensureOnboardingRecord();
       goToStep(getNextIncompleteStep(0));
     }
   };
@@ -351,7 +354,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
         identity_details: { identity_number: cleanIdNumber, applicantId: result.applicantId, savedAt: new Date().toISOString() },
       });
 
-      goToStep(getNextIncompleteStep(1));
+      setIdentityCheckConfirmed(true);
     } catch (err) {
       setIdentityCheckError(err?.message || "Failed to verify ID number.");
     } finally {
@@ -360,17 +363,15 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   };
 
   const getPrevIncompleteStep = (beforeStep) => {
-    const identityCheckDone = !!existingOnboardingId || kycAlreadyVerified;
+    const identityCheckDone = identityCheckConfirmed || kycAlreadyVerified;
+    const financialDetailsDone = taxDone && bankDone && bankLetterDone && sofDone;
+    const finalAgreementsDone = riskDone && termsDone && agreementSignedDone;
     const steps = [
-      { step: 9, done: termsDone },
-      { step: 8, done: sofDone },
-      { step: 7, done: riskDone },
-      { step: 6, done: mandateDone },
-      { step: 5, done: bankLetterDone },
-      { step: 4, done: bankDone },
-      { step: 3, done: taxDone },
-      { step: 2, done: true },
-      { step: 1, done: identityCheckDone },
+      { step: 6, done: finalAgreementsDone },
+      { step: 5, done: mandateDone },
+      { step: 4, done: financialDetailsDone },
+      { step: 3, done: addressDone },
+      { step: 1, done: identityCheckDone && kycVerificationDone },
     ];
     for (const s of steps) {
       if (s.step < beforeStep && !s.done) return s.step;
@@ -459,7 +460,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
       }
 
       setSubmitSuccess("Onboarding details saved successfully.");
-      goToStep(2);
+      goToStep(getNextIncompleteStep(3, 3));
     } catch (err) {
       setSubmitError(err?.message || "Failed to save onboarding details.");
     } finally {
@@ -550,32 +551,50 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
           }
           let raw = {};
           try { raw = typeof record.sumsub_raw === "string" ? JSON.parse(record.sumsub_raw) : (record.sumsub_raw || {}); } catch { }
+
+          // Populate field values from stored data
           if (raw.bank_details?.bank_account_name) setBankAccountName(raw.bank_details.bank_account_name);
-          if (raw.identity_details?.identity_number) {
-            setIdentityNumber(raw.identity_details.identity_number);
-          }
+          if (raw.identity_details?.identity_number) setIdentityNumber(raw.identity_details.identity_number);
           if (raw.bank_details?.bank_account_type) setBankAccountType(raw.bank_details.bank_account_type);
-          if (raw.tax_details?.tax_number) {
-            setTaxNumber(raw.tax_details.tax_number);
-            setTaxDone(true);
-          }
-          if (raw.address_details?.address || record.address) {
-            setAddress(raw.address_details?.address || record.address);
-            setAddressDone(true);
-          }
-          if (raw.mandate_data?.agreedMandate === true || raw.mandate_accepted === true) setMandateDone(true);
-          if (raw.risk_disclosure_accepted === true) setRiskDone(true);
-          if (raw.source_of_funds_accepted === true) setSofDone(true);
+          if (raw.tax_details?.tax_number) setTaxNumber(raw.tax_details.tax_number);
+          if (raw.address_details?.address || record.address) setAddress(raw.address_details?.address || record.address);
           if (raw.source_of_funds_details) {
             const { source_of_funds, source_of_funds_other, expected_monthly_investment } = raw.source_of_funds_details;
             if (source_of_funds) setSourceOfFunds(source_of_funds);
             if (source_of_funds_other) setSourceOfFundsOther(source_of_funds_other);
             if (expected_monthly_investment) setExpectedMonthlyInvestment(expected_monthly_investment);
           }
-          if (raw.bank_details_saved === true) setBankDone(true);
-          if (raw.bank_letter_uploaded === true) setBankLetterDone(true);
-          if (raw.address_saved === true) setAddressDone(true);
-          if (raw.terms_accepted === true) setTermsDone(true);
+
+          // If the user has fully completed onboarding, mark all steps done
+          const fullyComplete =
+            record.kyc_status === "onboarding_complete" ||
+            (!!raw?.signed_at) ||
+            (!!raw?.account_agreement_signed);
+
+          if (fullyComplete) {
+            setTaxDone(true);
+            setBankDone(true);
+            setBankLetterDone(true);
+            setSofDone(true);
+            setAddressDone(true);
+            setMandateDone(true);
+            setRiskDone(true);
+            setTermsDone(true);
+            setAgreementSignedDone(true);
+          } else {
+            // For in-progress users, check each flag individually
+            if (raw.identity_details_saved === true || raw.identity_details?.identity_number) setIdentityCheckConfirmed(true);
+            if (raw.tax_details?.tax_number || raw.tax_details_saved === true) setTaxDone(true);
+            if (raw.address_details?.address || record.address || raw.address_saved === true) setAddressDone(true);
+            if (raw.mandate_data?.agreedMandate === true || raw.mandate_accepted === true) setMandateDone(true);
+            if (raw.risk_disclosure_accepted === true) setRiskDone(true);
+            if (raw.source_of_funds_accepted === true) setSofDone(true);
+            if (raw.bank_details_saved === true) setBankDone(true);
+            if (raw.bank_letter_uploaded === true) setBankLetterDone(true);
+            if (raw.address_saved === true) setAddressDone(true);
+            if (raw.terms_accepted === true) setTermsDone(true);
+            if (raw.account_agreement_signed === true || raw.signed_at) setAgreementSignedDone(true);
+          }
         }
       } catch (err) {
         // ignore; user can still proceed normally
@@ -596,12 +615,11 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   }, [profile, profileLoading, bankAccountName]);
 
   useEffect(() => {
-    if (step !== 2) {
+    if (step !== 1) {
       setShowProceed(false);
     }
-    if (step !== 8) {
-      setAgreedTerms(false);
-      setAgreedPrivacy(false);
+    if (step !== 7) {
+      setAgreedAll(false);
     }
   }, [step]);
 
@@ -621,7 +639,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
           setKycAlreadyVerified(true);
           setKycVerificationDone(true);
 
-          if (step === 2) {
+          if (step === 1) {
             setShowProceed(true);
 
             try {
@@ -664,7 +682,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
     employmentStatus === "contractor";
 
   const showStudentSection = employmentStatus === "student";
-  const agreementReady = agreedTerms && agreedPrivacy;
+  const agreementReady = agreedAll;
   const sofReady =
     sourceOfFunds &&
     (sourceOfFunds !== "other" || sourceOfFundsOther.trim().length > 0) &&
@@ -700,12 +718,12 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
         const completePayload = {
           existing_onboarding_id: existingOnboardingId || null,
-          risk_disclosure_agreed: agreedRiskDisclosure || false,
+          risk_disclosure_agreed: agreedAll || false,
           source_of_funds: sourceOfFunds || null,
           source_of_funds_other: sourceOfFunds === "other" ? (sourceOfFundsOther || null) : null,
           expected_monthly_investment: expectedMonthlyInvestment || null,
-          agreed_terms: agreedTerms || false,
-          agreed_privacy: agreedPrivacy || false,
+          agreed_terms: agreedAll || false,
+          agreed_privacy: agreedAll || false,
           tax_number: taxNumber || null,
           bank_name: bankName || null,
           bank_account_name: bankAccountName || null,
@@ -731,6 +749,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
         const result = await res.json();
         if (result.success) {
           completionSuccess = true;
+          markOnboardingComplete();
         } else {
           console.error("Failed to complete onboarding via API:", result.error);
           throw new Error(result.error?.message || "Failed to save completion status. Please try again.");
@@ -791,19 +810,14 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                   </svg>
                 );
-                const identityCheckDone = !!existingOnboardingId || kycAlreadyVerified;
+                const identityCheckDone = identityCheckConfirmed || kycAlreadyVerified;
+                const financialDetailsDone = taxDone && bankDone && bankLetterDone && sofDone;
                 const steps = [
-                  { done: identityCheckDone, title: "Identity Check", doneDesc: "ID number confirmed", pendingDesc: "Confirm your ID number is unique in our records", badge: "Confirmed" },
-                  { done: kycAlreadyVerified, title: "Identification", doneDesc: "Identity verification complete", pendingDesc: "Verify your identity for security purposes", badge: "Verified" },
+                  { done: identityCheckDone && kycVerificationDone, title: "Identity & Verification", doneDesc: "Identity verified", pendingDesc: "Confirm your ID and complete identity verification", badge: "Verified" },
                   { done: addressDone, title: "Residential Address", doneDesc: "Address captured", pendingDesc: "Provide your current residential address", badge: "Captured" },
-                  { done: taxDone, title: "Tax Details", doneDesc: "Tax details captured", pendingDesc: "Provide your tax reference number", badge: "Captured" },
-                  { done: bankDone, title: "Bank Account", doneDesc: "Bank details saved", pendingDesc: "Add your bank account details", badge: "Saved" },
-                  { done: bankLetterDone, title: "Bank Confirmation Letter", doneDesc: "Letter uploaded", pendingDesc: "Upload your bank confirmation letter", badge: "Uploaded" },
+                  { done: financialDetailsDone, title: "Financial Details", doneDesc: "Financial details saved", pendingDesc: "Bank, tax, source of funds & more", badge: "Saved" },
                   { done: mandateDone, title: "Discretionary Mandate", doneDesc: "Mandate accepted", pendingDesc: "Review and accept the FSP investment mandate", badge: "Accepted" },
-                  { done: riskDone, title: "Risk Disclosure", doneDesc: "Risk disclosure acknowledged", pendingDesc: "Review investment risk disclosure", badge: "Acknowledged" },
-                  { done: sofDone, title: "Source of Funds", doneDesc: "Source of funds declared", pendingDesc: "Declare the origin of your investment funds", badge: "Declared" },
-                  { done: termsDone, title: "General Terms", doneDesc: "Terms and conditions accepted", pendingDesc: "Review and accept terms and conditions", badge: "Accepted" },
-                  { done: agreementSignedDone, title: "Account Agreement", doneDesc: "Agreement signed", pendingDesc: "Review and sign the formal account agreement", badge: "Signed" },
+                  { done: riskDone && termsDone && agreementSignedDone, title: "Final Agreements", doneDesc: "Agreements signed", pendingDesc: "Risk disclosure, terms & account agreement", badge: "Signed" },
                 ];
                 return (
                   <>
@@ -851,66 +865,64 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
               <div className="text-center mt-6 animate-fade-in delay-4">
                 <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  You'll be taken through our ten-step process
+                  You'll be taken through our five-step process
                 </p>
               </div>
             </div>
           ) : step === 1 ? (
             <div className="w-full max-w-xl mx-auto">
-              <div className="text-center mb-8 animate-fade-in delay-1">
-                <p
-                  className="text-xs uppercase tracking-[0.2em] mb-2"
-                  style={{ color: "hsl(270 20% 55%)" }}
-                >
-                  Step 1 of 11
-                </p>
-                <h2
-                  className="text-3xl font-light tracking-tight mb-2"
-                  style={{ color: "hsl(270 30% 25%)" }}
-                >
-                  Identity Check
-                </h2>
-                <p className="text-sm" style={{ color: "hsl(270 20% 50%)" }}>
-                  Enter your South African ID number before continuing
-                </p>
-              </div>
-
-              <div className="space-y-5">
-                <div className="animate-fade-in delay-2">
-                  <label htmlFor="identity-number">ID Number</label>
-                  <div className="glass-field">
-                    <input
-                      type="text"
-                      id="identity-number"
-                      placeholder="Enter your 13-digit ID number"
-                      value={identityNumber}
-                      onChange={(event) => setIdentityNumber(event.target.value.replace(/\D/g, "").slice(0, 13))}
-                      inputMode="numeric"
-                      autoComplete="off"
-                    />
-                  </div>
-                </div>
-
-                <div className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  We will check this number in onboarding pack records before allowing you to proceed.
-                </div>
-
-                <div className="pt-2 animate-fade-in delay-3">
-                  <button
-                    type="button"
-                    className="submit-btn"
-                    onClick={handleIdentityCheckContinue}
-                    disabled={identityCheckLoading}
-                  >
-                    {identityCheckLoading ? "Checking..." : "Continue"}
-                  </button>
-                  {identityCheckError ? (
-                    <p className="form-error" role="alert">
-                      {identityCheckError}
+              {!identityCheckConfirmed ? (
+                <>
+                  <div className="text-center mb-8 animate-fade-in delay-1">
+                    <p className="text-xs uppercase tracking-[0.2em] mb-2" style={{ color: "hsl(270 20% 55%)" }}>
+                      Step 1 of 5
                     </p>
-                  ) : null}
-                </div>
-              </div>
+                    <h2 className="text-3xl font-light tracking-tight mb-2" style={{ color: "hsl(270 30% 25%)" }}>
+                      Identity & Verification
+                    </h2>
+                    <p className="text-sm" style={{ color: "hsl(270 20% 50%)" }}>
+                      Enter your South African ID number to get started
+                    </p>
+                  </div>
+                  <div className="space-y-5">
+                    <div className="animate-fade-in delay-2">
+                      <label htmlFor="identity-number">ID Number</label>
+                      <div className="glass-field">
+                        <input
+                          type="text"
+                          id="identity-number"
+                          placeholder="Enter your 13-digit ID number"
+                          value={identityNumber}
+                          onChange={(event) => setIdentityNumber(event.target.value.replace(/\D/g, "").slice(0, 13))}
+                          inputMode="numeric"
+                          autoComplete="off"
+                        />
+                      </div>
+                    </div>
+                    <div className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
+                      We will check this number in onboarding pack records before allowing you to proceed.
+                    </div>
+                    <div className="pt-2 animate-fade-in delay-3">
+                      <button
+                        type="button"
+                        className="submit-btn"
+                        onClick={handleIdentityCheckContinue}
+                        disabled={identityCheckLoading}
+                      >
+                        {identityCheckLoading ? "Checking..." : "Continue"}
+                      </button>
+                      {identityCheckError ? (
+                        <p className="form-error" role="alert">{identityCheckError}</p>
+                      ) : null}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <SumsubVerification onVerified={() => {
+                  setKycVerificationDone(true);
+                  goToStep(getNextIncompleteStep(2));
+                }} />
+              )}
             </div>
           ) : step === 2 ? (
             <SumsubVerification onVerified={() => {
@@ -921,7 +933,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
             <div className="w-full max-w-xl mx-auto">
               <div className="text-center mb-8 animate-fade-in delay-1">
                 <p className="text-xs uppercase tracking-[0.2em] mb-2" style={{ color: "hsl(270 20% 55%)" }}>
-                  Step 3 of 11
+                  Step 2 of 5
                 </p>
                 <div className="hero-icon">
                   <WalletIcon width={48} height={48} />
@@ -937,13 +949,15 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               <div className="space-y-6">
                 <div className="animate-fade-in delay-2">
                   <label htmlFor="residential-address">Street Address</label>
-                  <AddressAutocomplete
-                    value={address}
-                    onChange={(value) => setAddress(value)}
-                    placeholder="Search for your residential address"
-                    containerClassName="glass-field-container"
-                    inputClassName="w-full bg-transparent border-none focus:ring-0 text-base py-1"
-                  />
+                  <div className="glass-field">
+                    <AddressAutocomplete
+                      value={address}
+                      onChange={(value) => setAddress(value)}
+                      placeholder="Search for your residential address"
+                      containerClassName=""
+                      inputClassName="w-full with-icon"
+                    />
+                  </div>
                   <p className="text-xs mt-2" style={{ color: "hsl(270 15% 60%)" }}>
                     Your address is required for regulatory compliance and credit assessment.
                   </p>
@@ -991,75 +1005,19 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               </div>
             </div>
           ) : step === 4 ? (
-            <div className="w-full max-w-xl mx-auto">
-              <div className="text-center mb-8 animate-fade-in delay-1">
+            <div className="w-full max-w-3xl mx-auto">
+              <div className="text-center mb-6 animate-fade-in delay-1">
                 <p className="text-xs uppercase tracking-[0.2em] mb-2" style={{ color: "hsl(270 20% 55%)" }}>
-                  Step 4 of 11
+                  Step 3 of 5
                 </p>
                 <div className="hero-icon">
                   <FileContractIcon width={48} height={48} />
                 </div>
                 <h2 className="text-3xl font-light tracking-tight mb-2" style={{ color: "hsl(270 30% 25%)" }}>
-                  Tax Information
+                  Financial Details
                 </h2>
                 <p className="text-sm" style={{ color: "hsl(270 20% 50%)" }}>
-                  Please provide your Tax Reference Number for compliance
-                </p>
-              </div>
-
-              <div className="space-y-6">
-                <div className="animate-fade-in delay-2">
-                  <label htmlFor="tax-number">Tax Reference Number</label>
-                  <div className="glass-field">
-                    <input
-                      type="text"
-                      id="tax-number"
-                      placeholder="Enter your 10-digit tax number"
-                      value={taxNumber}
-                      onChange={(event) => setTaxNumber(event.target.value.replace(/\D/g, "").slice(0, 10))}
-                      inputMode="numeric"
-                      autoComplete="off"
-                    />
-                  </div>
-                  <p className="text-xs mt-2" style={{ color: "hsl(270 15% 60%)" }}>
-                    Your tax number is required by SARS for investment reporting.
-                  </p>
-                </div>
-
-                <div className="pt-4 text-center animate-fade-in delay-3">
-                  <button
-                    type="button"
-                    className="continue-button"
-                    onClick={async () => {
-                      if (taxNumber && taxNumber.length > 5) {
-                        await saveProgressFlag("tax_details_saved", {
-                          tax_details: { tax_number: taxNumber, savedAt: new Date().toISOString() },
-                        });
-                        setTaxDone(true);
-                        goToStep(getNextIncompleteStep(4));
-                      }
-                    }}
-                    disabled={!taxNumber || taxNumber.length < 5}
-                  >
-                    Continue
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : step === 5 ? (
-            <div className="w-full max-w-3xl mx-auto bank-step-wrapper">
-              <div className="text-center animate-fade-in delay-1">
-                <div className="hero-icon">
-                  <BankIcon width={48} height={48} />
-                </div>
-                <h2
-                  className="text-3xl font-light tracking-tight mb-2"
-                  style={{ color: "hsl(270 30% 25%)" }}
-                >
-                  Bank Account Details
-                </h2>
-                <p className="text-sm mb-6" style={{ color: "hsl(270 20% 50%)" }}>
-                  Link your South African bank account to <span className="mint-brand">MINT</span>
+                  Complete all four sections below to continue
                 </p>
               </div>
 
@@ -1068,384 +1026,298 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step"></div>
-                <div className="progress-step"></div>
-                <div className="progress-step"></div>
-                <div className="progress-step"></div>
                 <div className="progress-step"></div>
                 <div className="progress-step"></div>
               </div>
 
-              <div className="bank-section animate-fade-in delay-2">
-                <div className="bank-section-label">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="15" height="15">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0 0 12 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75Z" />
-                  </svg>
-                  Select Your Bank
-                </div>
-                <div className="custom-select" ref={bankDropdownRef}>
-                  <div
-                    className={`bank-select-trigger ${bankDropdownOpen ? "active" : ""}`}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setBankDropdownOpen((prev) => !prev)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        setBankDropdownOpen((prev) => !prev);
-                      }
-                    }}
-                  >
-                    {bankName ? (
-                      <span className="bank-select-value">
-                        {selectedBankOption?.logo && (
-                          <img
-                            src={selectedBankOption.logo}
-                            alt=""
-                            className="bank-option-logo"
-                            onError={(e) => { e.target.style.display = "none"; }}
-                          />
-                        )}
-                        <span>{selectedBankOption?.label}</span>
-                      </span>
-                    ) : (
-                      <span className="bank-select-placeholder">Choose a bank</span>
-                    )}
-                    <svg className="bank-select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-                    </svg>
+              {/* ── Section 1: Tax Reference Number ── */}
+              <div className="animate-fade-in delay-2" style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', padding: '18px 20px', boxShadow: '0 2px 12px rgba(100,60,140,0.06)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'hsl(270 30% 25%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>1</span>
                   </div>
-                  <div className={`bank-dropdown-list ${bankDropdownOpen ? "active" : ""}`}>
-                    {southAfricanBanks.map((option) => (
-                      <div
-                        key={option.value || "placeholder"}
-                        className={`bank-dropdown-option ${bankName === option.value ? "selected" : ""}`}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => handleBankSelect(option.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            handleBankSelect(option.value);
-                          }
-                        }}
-                      >
-                        {option.logo && (
-                          <img
-                            src={option.logo}
-                            alt=""
-                            className="bank-option-logo"
-                            onError={(e) => { e.target.style.display = "none"; }}
-                          />
-                        )}
-                        <span>{option.label}</span>
-                        {bankName === option.value && (
-                          <svg className="bank-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="16" height="16">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                          </svg>
-                        )}
+                  <div>
+                    <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Tax Reference Number</div>
+                    <div style={{ fontSize: '12px', color: 'hsl(270 15% 60%)' }}>Required by SARS for investment reporting</div>
+                  </div>
+                </div>
+                <div className="glass-field">
+                  <input
+                    type="text"
+                    placeholder="Enter your 10-digit tax number"
+                    value={taxNumber}
+                    onChange={(e) => setTaxNumber(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                    inputMode="numeric"
+                    autoComplete="off"
+                  />
+                </div>
+              </div>
+
+              {/* ── Section 2: Bank Account Details ── */}
+              <div className={`animate-fade-in delay-2 bank-step-wrapper${bankDropdownOpen ? ' dropdown-open' : ''}`} style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', padding: '18px 20px', boxShadow: '0 2px 12px rgba(100,60,140,0.06)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'hsl(270 30% 25%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>2</span>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Bank Account Details</div>
+                    <div style={{ fontSize: '12px', color: 'hsl(270 15% 60%)' }}>Link your South African bank account</div>
+                  </div>
+                </div>
+                <div className="bank-section">
+                  <div className="bank-section-label">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0 0 12 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75Z" /></svg>
+                    Select Your Bank
+                  </div>
+                  <div className="custom-select" ref={bankDropdownRef}>
+                    <div
+                      className={`bank-select-trigger ${bankDropdownOpen ? "active" : ""}`}
+                      role="button" tabIndex={0}
+                      onClick={() => setBankDropdownOpen((p) => !p)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setBankDropdownOpen((p) => !p); } }}
+                    >
+                      {bankName ? (
+                        <span className="bank-select-value">
+                          {selectedBankOption?.logo && <img src={selectedBankOption.logo} alt="" className="bank-option-logo" onError={(e) => { e.target.style.display = "none"; }} />}
+                          <span>{selectedBankOption?.label}</span>
+                        </span>
+                      ) : <span className="bank-select-placeholder">Choose a bank</span>}
+                      <svg className="bank-select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16"><path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
+                    </div>
+                    <div className={`bank-dropdown-list ${bankDropdownOpen ? "active" : ""}`}>
+                      {southAfricanBanks.map((option) => (
+                        <div key={option.value || "placeholder"} className={`bank-dropdown-option ${bankName === option.value ? "selected" : ""}`} role="button" tabIndex={0} onClick={() => handleBankSelect(option.value)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleBankSelect(option.value); } }}>
+                          {option.logo && <img src={option.logo} alt="" className="bank-option-logo" onError={(e) => { e.target.style.display = "none"; }} />}
+                          <span>{option.label}</span>
+                          {bankName === option.value && <svg className="bank-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="16" height="16"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>}
+                        </div>
+                      ))}
+                    </div>
+                    <input type="hidden" value={bankName} />
+                  </div>
+                </div>
+                <div className="bank-account-fields hide-when-dropdown-open">
+                  <div className="bank-section-label">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" d="M5.25 8.25h15m-16.5 7.5h15m-1.8-13.5-3.9 19.5m-2.1-19.5-3.9 19.5" /></svg>
+                    Account Details
+                  </div>
+                  <div className="bank-inputs-card">
+                    <div className="bank-input-row">
+                      <label htmlFor="bank-account-name2">Account Holder Name</label>
+                      <div className="bank-input-field">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="18" height="18" className="bank-input-icon"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6.75a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.5 20.118a7.5 7.5 0 0 1 15 0A17.933 17.933 0 0 1 12 21.75a17.933 17.933 0 0 1-7.5-1.632Z" /></svg>
+                        <input type="text" id="bank-account-name2" placeholder="Enter account holder full name" value={bankAccountName} onChange={(e) => setBankAccountName(e.target.value)} autoComplete="name" />
                       </div>
-                    ))}
-                  </div>
-                  <input type="hidden" id="bank-name" name="bank-name" value={bankName} />
-                </div>
-              </div>
-
-              <div className="bank-account-fields animate-fade-in delay-3 hide-when-dropdown-open">
-                <div className="bank-section-label">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="15" height="15">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 8.25h15m-16.5 7.5h15m-1.8-13.5-3.9 19.5m-2.1-19.5-3.9 19.5" />
-                  </svg>
-                  Account Details
-                </div>
-                <div className="bank-inputs-card">
-                  <div className="bank-input-row">
-                    <label htmlFor="bank-account-name">Account Holder Name</label>
-                    <div className="bank-input-field">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="18" height="18" className="bank-input-icon">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6.75a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.5 20.118a7.5 7.5 0 0 1 15 0A17.933 17.933 0 0 1 12 21.75a17.933 17.933 0 0 1-7.5-1.632Z" />
-                      </svg>
-                      <input
-                        type="text"
-                        id="bank-account-name"
-                        placeholder="Enter account holder full name"
-                        value={bankAccountName}
-                        onChange={(event) => setBankAccountName(event.target.value)}
-                        autoComplete="name"
-                      />
+                    </div>
+                    <div className="bank-input-divider"></div>
+                    <div className="bank-input-row">
+                      <label htmlFor="bank-account-type2">Account Type</label>
+                      <div className="bank-input-field">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="18" height="18" className="bank-input-icon"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5m-16.5 5.25h16.5m-16.5 5.25h10.5" /></svg>
+                        <select id="bank-account-type2" value={bankAccountType} onChange={(e) => setBankAccountType(e.target.value)}>
+                          <option value="">Select account type</option>
+                          <option value="savings">Savings</option>
+                          <option value="cheque">Cheque / Current</option>
+                          <option value="business">Business</option>
+                          <option value="transmission">Transmission</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="bank-input-divider"></div>
+                    <div className="bank-input-row">
+                      <label htmlFor="bank-account-number2">Account Number</label>
+                      <div className="bank-input-field">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="18" height="18" className="bank-input-icon"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z" /></svg>
+                        <input type="text" id="bank-account-number2" placeholder="Enter your account number" value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value.replace(/\D/g, ""))} inputMode="numeric" autoComplete="off" />
+                      </div>
+                    </div>
+                    <div className="bank-input-divider"></div>
+                    <div className="bank-input-row">
+                      <label htmlFor="bank-branch-code2">Branch Code</label>
+                      <div className="bank-input-field">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="18" height="18" className="bank-input-icon"><path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>
+                        <input type="text" id="bank-branch-code2" placeholder={bankName === "other" ? "Enter your branch code" : "Select a bank above"} value={bankBranchCode} onChange={(e) => setBankBranchCode(e.target.value.replace(/\D/g, ""))} readOnly={bankName !== "other" && bankName !== ""} style={bankName !== "other" && bankName !== "" ? { opacity: 0.7, cursor: "default" } : {}} inputMode="numeric" autoComplete="off" />
+                      </div>
                     </div>
                   </div>
-                  <div className="bank-input-divider"></div>
-                  <div className="bank-input-row">
-                    <label htmlFor="bank-account-type">Account Type</label>
-                    <div className="bank-input-field">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="18" height="18" className="bank-input-icon">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5m-16.5 5.25h16.5m-16.5 5.25h10.5" />
-                      </svg>
-                      <select
-                        id="bank-account-type"
-                        value={bankAccountType}
-                        onChange={(event) => setBankAccountType(event.target.value)}
-                      >
-                        <option value="">Select account type</option>
-                        <option value="savings">Savings</option>
-                        <option value="cheque">Cheque / Current</option>
-                        <option value="business">Business</option>
-                        <option value="transmission">Transmission</option>
-                        <option value="other">Other</option>
+                </div>
+                <div className="bank-security-notice hide-when-dropdown-open">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="16" height="16" className="bank-security-icon"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" /></svg>
+                  <span>Your banking details are encrypted and stored securely.</span>
+                </div>
+              </div>
+
+              {/* ── Section 3: Bank Confirmation Letter ── */}
+              <div className="animate-fade-in delay-3" style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', padding: '18px 20px', boxShadow: '0 2px 12px rgba(100,60,140,0.06)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: bankLetterDone ? '#22c55e' : 'hsl(270 30% 25%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    {bankLetterDone
+                      ? <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+                      : <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>3</span>}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Bank Confirmation Letter</div>
+                    <div style={{ fontSize: '12px', color: 'hsl(270 15% 60%)' }}>PDF or image, not older than 3 months</div>
+                  </div>
+                  {bankLetterDone && <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '20px', background: '#dcfce7', color: '#16a34a', fontWeight: '600' }}>Uploaded</span>}
+                </div>
+                {bankLetterDone ? (
+                  <p style={{ fontSize: '13px', color: 'hsl(270 15% 55%)' }}>Your letter has been uploaded successfully.</p>
+                ) : (
+                  <>
+                    <div
+                      className="glass-field py-6 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-xl cursor-pointer hover:border-slate-400 transition-colors"
+                      onClick={() => document.getElementById('bank-letter-upload-v2').click()}
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="32" height="32" className="text-slate-400 mb-2"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /></svg>
+                      <p className="text-sm font-medium" style={{ color: 'hsl(270 30% 25%)' }}>Click to upload your letter</p>
+                      <p className="text-xs mt-1" style={{ color: 'hsl(270 15% 60%)' }}>PDF, JPG or PNG (max 5MB)</p>
+                      <input
+                        type="file" id="bank-letter-upload-v2" className="hidden" accept=".pdf,image/*"
+                        onChange={async (e) => {
+                          const file = e.target.files[0];
+                          if (!file) return;
+                          setIsSubmitting(true);
+                          setSubmitError("");
+                          try {
+                            const reader = new FileReader();
+                            reader.onload = async (evt) => {
+                              const base64 = evt.target.result;
+                              const { data: { session } } = await supabase.auth.getSession();
+                              const token = session?.access_token;
+                              const res = await fetch("/api/onboarding/upload-bank-letter", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                                body: JSON.stringify({ fileBase64: base64, fileType: file.type }),
+                              });
+                              const result = await res.json();
+                              if (result.success) {
+                                setBankLetterDone(true);
+                                await saveProgressFlag("bank_letter_uploaded", { bank_letter_url: result.publicUrl, bank_letter_uploaded_at: new Date().toISOString() });
+                              } else {
+                                setSubmitError(result.error || "Failed to upload file");
+                              }
+                              setIsSubmitting(false);
+                            };
+                            reader.readAsDataURL(file);
+                          } catch {
+                            setSubmitError("An error occurred during upload");
+                            setIsSubmitting(false);
+                          }
+                        }}
+                      />
+                    </div>
+                    {isSubmitting && (
+                      <div className="mt-3 flex items-center justify-center gap-2">
+                        <div className="w-4 h-4 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin"></div>
+                        <span className="text-xs text-slate-500">Uploading...</span>
+                      </div>
+                    )}
+                    {submitError && <p className="text-center mt-2 text-red-500 text-xs">{submitError}</p>}
+                  </>
+                )}
+              </div>
+
+              {/* ── Section 4: Source of Funds ── */}
+              <div className={`animate-fade-in delay-3${sofDropdownOpen ? ' dropdown-open' : ''}`} style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', padding: '18px 20px', boxShadow: '0 2px 12px rgba(100,60,140,0.06)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'hsl(270 30% 25%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>4</span>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Source of Funds</div>
+                    <div style={{ fontSize: '12px', color: 'hsl(270 15% 60%)' }}>Declare the origin of your investment funds</div>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="source-of-funds2" style={{ fontSize: '13px', fontWeight: '500', color: 'hsl(270 30% 25%)', display: 'block', marginBottom: '6px' }}>Primary Source of Funds</label>
+                    <div className="custom-select" ref={sofDropdownRef}>
+                      <div className={`glass-field select-trigger ${sofDropdownOpen ? "active" : ""}`} role="button" tabIndex={0} onClick={() => setSofDropdownOpen((p) => !p)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSofDropdownOpen((p) => !p); } }}>
+                        <div className="selected-value" data-placeholder="Select source of funds">{sourceOfFunds ? selectedSofOption?.label : ""}</div>
+                      </div>
+                      <div className={`custom-dropdown ${sofDropdownOpen ? "active" : ""}`}>
+                        {sourceOfFundsOptions.map((option) => (
+                          <div key={option.value || "placeholder"} className={`custom-option ${sourceOfFunds === option.value ? "selected" : ""}`} role="button" tabIndex={0} onClick={() => handleSofSelect(option.value)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleSofSelect(option.value); } }}>
+                            {option.label}
+                          </div>
+                        ))}
+                      </div>
+                      <input type="hidden" id="source-of-funds2" value={sourceOfFunds} />
+                    </div>
+                  </div>
+                  {sourceOfFunds === "other" && (
+                    <div className="hide-when-dropdown-open">
+                      <label style={{ fontSize: '13px', fontWeight: '500', color: 'hsl(270 30% 25%)', display: 'block', marginBottom: '6px' }}>Please describe your source of funds</label>
+                      <div className="glass-field"><input type="text" placeholder="Describe your source of funds" value={sourceOfFundsOther} onChange={(e) => setSourceOfFundsOther(e.target.value)} /></div>
+                    </div>
+                  )}
+                  <div className="hide-when-dropdown-open">
+                    <label htmlFor="expected-monthly-investment2" style={{ fontSize: '13px', fontWeight: '500', color: 'hsl(270 30% 25%)', display: 'block', marginBottom: '6px' }}>Expected Monthly Investment Amount</label>
+                    <div className="glass-field">
+                      <select id="expected-monthly-investment2" value={expectedMonthlyInvestment} onChange={(e) => setExpectedMonthlyInvestment(e.target.value)}>
+                        {monthlyInvestmentOptions.map((option) => (
+                          <option key={option.value || "placeholder"} value={option.value}>{option.label}</option>
+                        ))}
                       </select>
                     </div>
                   </div>
-                  <div className="bank-input-divider"></div>
-                  <div className="bank-input-row">
-                    <label htmlFor="bank-account-number">Account Number</label>
-                    <div className="bank-input-field">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="18" height="18" className="bank-input-icon">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z" />
-                      </svg>
-                      <input
-                        type="text"
-                        id="bank-account-number"
-                        placeholder="Enter your account number"
-                        value={bankAccountNumber}
-                        onChange={(event) => setBankAccountNumber(event.target.value.replace(/\D/g, ""))}
-                        inputMode="numeric"
-                        autoComplete="off"
-                      />
-                    </div>
-                  </div>
-                  <div className="bank-input-divider"></div>
-                  <div className="bank-input-row">
-                    <label htmlFor="bank-branch-code">Branch Code</label>
-                    <div className="bank-input-field">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="18" height="18" className="bank-input-icon">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
-                      </svg>
-                      <input
-                        type="text"
-                        id="bank-branch-code"
-                        placeholder={bankName === "other" ? "Enter your branch code" : "Select a bank above"}
-                        value={bankBranchCode}
-                        onChange={(event) => setBankBranchCode(event.target.value.replace(/\D/g, ""))}
-                        readOnly={bankName !== "other" && bankName !== ""}
-                        style={bankName !== "other" && bankName !== "" ? { opacity: 0.7, cursor: "default" } : {}}
-                        inputMode="numeric"
-                        autoComplete="off"
-                      />
-                    </div>
+                  <div className="hide-when-dropdown-open">
+                    <label className="checkbox-item" style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                      <input type="checkbox" checked={agreedSourceOfFunds} onChange={(e) => setAgreedSourceOfFunds(e.target.checked)} />
+                      <span className="checkbox-label" style={{ fontSize: '13px' }}>I declare that the funds I will use for investing are from legitimate sources and I am the beneficial owner of these funds</span>
+                    </label>
                   </div>
                 </div>
               </div>
 
-              <div className="bank-security-notice animate-fade-in delay-3 hide-when-dropdown-open">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="16" height="16" className="bank-security-icon">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
-                </svg>
-                <span>Your banking details are encrypted and stored securely. They will only be used for transactions you authorise.</span>
-              </div>
-
-              <div className="text-center mt-8 animate-fade-in delay-4 hide-when-dropdown-open">
+              {/* ── Continue: saves everything at once ── */}
+              <div className="text-center mt-8 animate-fade-in delay-4">
                 <button
                   type="button"
-                  className={`continue-button agreement-continue ${bankDetailsReady ? "enabled" : ""}`}
-                  disabled={!bankDetailsReady}
+                  className={`continue-button agreement-continue${taxNumber && taxNumber.length >= 6 && bankDetailsReady && bankLetterDone && sofReady ? ' enabled' : ''}`}
+                  disabled={!(taxNumber && taxNumber.length >= 6 && bankDetailsReady && bankLetterDone && sofReady)}
                   onClick={async () => {
                     try {
                       const { data: { session } } = await supabase.auth.getSession();
                       const userId = session?.user?.id;
                       if (userId) {
-                        await supabase.from("user_onboarding").update({
-                          bank_name: bankName || null,
-                          bank_account_number: bankAccountNumber || null,
-                          bank_branch_code: bankBranchCode || null,
-                        }).eq("user_id", userId);
+                        await supabase.from("user_onboarding").update({ bank_name: bankName || null, bank_account_number: bankAccountNumber || null, bank_branch_code: bankBranchCode || null }).eq("user_id", userId);
                       }
                     } catch { }
-                    await saveProgressFlag("bank_details_saved", {
-                      bank_details: {
-                        bank_name: bankName || null,
-                        bank_account_name: bankAccountName || null,
-                        bank_account_type: bankAccountType || null,
-                        bank_account_number: bankAccountNumber || null,
-                        bank_branch_code: bankBranchCode || null,
-                        savedAt: new Date().toISOString(),
-                      },
-                    });
+                    await saveProgressFlag("tax_details_saved", { tax_details: { tax_number: taxNumber, savedAt: new Date().toISOString() } });
+                    await saveProgressFlag("bank_details_saved", { bank_details: { bank_name: bankName || null, bank_account_name: bankAccountName || null, bank_account_type: bankAccountType || null, bank_account_number: bankAccountNumber || null, bank_branch_code: bankBranchCode || null, savedAt: new Date().toISOString() } });
+                    await saveProgressFlag("source_of_funds_accepted", { source_of_funds_details: { source_of_funds: sourceOfFunds, source_of_funds_other: sourceOfFunds === "other" ? sourceOfFundsOther : null, expected_monthly_investment: expectedMonthlyInvestment } });
+                    setTaxDone(true);
                     setBankDone(true);
-                    goToStep(getNextIncompleteStep(5, 5));
+                    setSofDone(true);
+                    goToStep(getNextIncompleteStep(4, 4));
                   }}
                 >
                   Continue
                 </button>
               </div>
-
-              <div className="text-center mt-6 animate-fade-in delay-4 hide-when-dropdown-open">
-                <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  Step 5 of 11
-                </p>
+              <div className="text-center mt-4 animate-fade-in delay-4">
+                <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>Step 3 of 5</p>
               </div>
             </div>
-          ) : step === 6 ? (
-            <div className="w-full max-w-xl mx-auto">
-              <div className="text-center mb-8 animate-fade-in delay-1">
-                <p className="text-xs uppercase tracking-[0.2em] mb-2" style={{ color: "hsl(270 20% 55%)" }}>
-                  Step 6 of 11
-                </p>
-                <div className="hero-icon">
-                  <FileContractIcon width={48} height={48} />
-                </div>
-                <h2 className="text-3xl font-light tracking-tight mb-2" style={{ color: "hsl(270 30% 25%)" }}>
-                  Bank Confirmation Letter
-                </h2>
-                <p className="text-sm" style={{ color: "hsl(270 20% 50%)" }}>
-                  Please upload a bank confirmation letter (PDF or Image) not older than 3 months.
-                </p>
-              </div>
 
-              <div className="space-y-6">
-                <div className="animate-fade-in delay-2">
-                  <div 
-                    className="glass-field py-8 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-xl cursor-pointer hover:border-slate-400 transition-colors"
-                    onClick={() => document.getElementById('bank-letter-upload').click()}
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="40" height="40" className="text-slate-400 mb-3">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
-                    </svg>
-                    <p className="text-sm font-medium" style={{ color: "hsl(270 30% 25%)" }}>
-                      {bankLetterDone ? "File uploaded successfully" : "Click to upload your letter"}
-                    </p>
-                    <p className="text-xs mt-1" style={{ color: "hsl(270 15% 60%)" }}>
-                      PDF, JPG or PNG (max 5MB)
-                    </p>
-                    <input 
-                      type="file" 
-                      id="bank-letter-upload" 
-                      className="hidden" 
-                      accept=".pdf,image/*"
-                      onChange={async (e) => {
-                        const file = e.target.files[0];
-                        if (!file) return;
-                        
-                        setIsSubmitting(true);
-                        setSubmitError("");
-                        
-                        try {
-                          if (!supabase) {
-                            setSubmitError("Supabase not initialized");
-                            setIsSubmitting(false);
-                            return;
-                          }
-                          const reader = new FileReader();
-                          reader.onload = async (event) => {
-                            const base64 = event.target.result;
-                            const { data: { session } } = await supabase.auth.getSession();
-                            const token = session?.access_token;
-                            
-                            const res = await fetch("/api/onboarding/upload-bank-letter", {
-                              method: "POST",
-                              headers: { 
-                                "Content-Type": "application/json",
-                                "Authorization": `Bearer ${token}`
-                              },
-                              body: JSON.stringify({ 
-                                fileBase64: base64,
-                                fileType: file.type
-                              })
-                            });
-                            
-                            const result = await res.json();
-                            if (result.success) {
-                              setBankLetterDone(true);
-                              await saveProgressFlag("bank_letter_uploaded", {
-                                bank_letter_url: result.publicUrl,
-                                bank_letter_uploaded_at: new Date().toISOString()
-                              });
-                            } else {
-                              setSubmitError(result.error || "Failed to upload file");
-                            }
-                            setIsSubmitting(false);
-                          };
-                          reader.readAsDataURL(file);
-                        } catch (err) {
-                          setSubmitError("An error occurred during upload");
-                          setIsSubmitting(false);
-                        }
-                      }}
-                    />
-                  </div>
-                  
-                  {bankLetterDone && (
-                    <div className="mt-4 flex items-center justify-center gap-2 text-green-600 animate-fade-in">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="20" height="20">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                      </svg>
-                      <span className="text-sm font-medium">Upload Complete</span>
-                    </div>
-                  )}
-
-                  {submitError && (
-                    <p className="text-center mt-4 text-red-500 text-xs animate-fade-in">{submitError}</p>
-                  )}
-                  
-                  {isSubmitting && (
-                    <div className="mt-4 flex flex-col items-center justify-center gap-2 animate-fade-in">
-                       <div className="w-5 h-5 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin"></div>
-                       <span className="text-xs text-slate-500">Uploading...</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="pt-4 text-center animate-fade-in delay-3">
-                  <button
-                    type="button"
-                    className={`continue-button ${bankLetterDone ? "" : "opacity-50 cursor-not-allowed"}`}
-                    disabled={!bankLetterDone || isSubmitting}
-                    onClick={() => goToStep(getNextIncompleteStep(6, 6))}
-                  >
-                    Continue
-                  </button>
-                </div>
-              </div>
-              
-              <div className="text-center mt-6 animate-fade-in delay-4">
-                <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  Step 7 of 11
-                </p>
-              </div>
-            </div>
-          ) : step === 7 ? (
+          ) : step === 5 ? (
             <div className="w-full max-w-3xl mx-auto">
               <div className="text-center animate-fade-in delay-1">
-                <div className="hero-icon">
-                  <FileContractIcon width={48} height={48} />
-                </div>
-                <h2
-                  className="text-3xl font-light tracking-tight mb-2"
-                  style={{ color: "hsl(270 30% 25%)" }}
-                >
-                  Discretionary FSP Mandate
-                </h2>
-                <p className="text-sm mb-6" style={{ color: "hsl(270 20% 50%)" }}>
-                  Please review and accept the investment management mandate
-                </p>
+                <div className="hero-icon"><FileContractIcon width={48} height={48} /></div>
+                <h2 className="text-3xl font-light tracking-tight mb-2" style={{ color: "hsl(270 30% 25%)" }}>Discretionary FSP Mandate</h2>
+                <p className="text-sm mb-6" style={{ color: "hsl(270 20% 50%)" }}>Please review and accept the investment management mandate</p>
               </div>
-
               <div className="progress-bar animate-fade-in delay-1">
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
                 <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step"></div>
-                <div className="progress-step"></div>
-                <div className="progress-step"></div>
                 <div className="progress-step"></div>
               </div>
-
               {(() => {
                 if (profileLoading) return null;
                 const missingFields = [
@@ -1458,59 +1330,30 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 ].filter(Boolean);
                 if (missingFields.length === 0) return null;
                 return (
-                  <div className="animate-fade-in delay-2" style={{
-                    background: "hsl(38 100% 97%)",
-                    border: "1px solid hsl(38 80% 75%)",
-                    borderRadius: "12px",
-                    padding: "14px 18px",
-                    marginBottom: "16px",
-                  }}>
+                  <div className="animate-fade-in delay-2" style={{ background: "hsl(38 100% 97%)", border: "1px solid hsl(38 80% 75%)", borderRadius: "12px", padding: "14px 18px", marginBottom: "16px" }}>
                     <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
                       <svg viewBox="0 0 24 24" fill="none" stroke="hsl(38 90% 45%)" strokeWidth="2" width="18" height="18" style={{ flexShrink: 0, marginTop: "1px" }}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
                       </svg>
                       <div>
-                        <p style={{ fontSize: "12px", fontWeight: "600", color: "hsl(38 70% 30%)", marginBottom: "6px" }}>
-                          Your profile is missing the following required fields. Please fill them in on the first tab of the mandate document below before you can continue:
-                        </p>
+                        <p style={{ fontSize: "12px", fontWeight: "600", color: "hsl(38 70% 30%)", marginBottom: "6px" }}>Your profile is missing the following required fields. Please fill them in on the first tab of the mandate document below before you can continue:</p>
                         <ul style={{ margin: 0, paddingLeft: "16px", listStyleType: "disc" }}>
-                          {missingFields.map((field) => (
-                            <li key={field} style={{ fontSize: "12px", color: "hsl(38 70% 30%)", marginBottom: "2px" }}>{field}</li>
-                          ))}
+                          {missingFields.map((field) => <li key={field} style={{ fontSize: "12px", color: "hsl(38 70% 30%)", marginBottom: "2px" }}>{field}</li>)}
                         </ul>
                       </div>
                     </div>
                   </div>
                 );
               })()}
-
-              <div className="animate-fade-in delay-2" style={{
-                borderRadius: '16px',
-                overflow: 'hidden',
-                border: '1px solid hsl(270 20% 90%)',
-                boxShadow: '0 4px 20px rgba(100, 60, 140, 0.08)',
-                background: 'white',
-              }}>
-                <MandateViewer
-                  profile={profile}
-                  onValidChange={setMandateValid}
-                  onDataChange={(data) => { mandateDataRef.current = data; }}
-                />
+              <div className="animate-fade-in delay-2" style={{ borderRadius: '16px', overflow: 'hidden', border: '1px solid hsl(270 20% 90%)', boxShadow: '0 4px 20px rgba(100, 60, 140, 0.08)', background: 'white' }}>
+                <MandateViewer profile={profile} onValidChange={setMandateValid} onDataChange={(data) => { mandateDataRef.current = data; }} requestTab={mandateRequestTab} />
               </div>
-
               <div className="checkbox-container animate-fade-in delay-3" style={{ display: 'block' }}>
                 <label className="checkbox-item">
-                  <input
-                    type="checkbox"
-                    checked={agreedMandate}
-                    onChange={(event) => setAgreedMandate(event.target.checked)}
-                  />
-                  <span className="checkbox-label">
-                    I have read and agree to the Discretionary FSP Mandate and authorise ALGOHIVE to manage my investments as described
-                  </span>
+                  <input type="checkbox" checked={agreedMandate} onChange={(e) => setAgreedMandate(e.target.checked)} />
+                  <span className="checkbox-label">I have read and agree to the Discretionary FSP Mandate and authorise ALGOHIVE to manage my investments as described</span>
                 </label>
               </div>
-
               {!mandateValid && agreedMandate && (
                 <div className="animate-fade-in" style={{ marginTop: "10px" }}>
                   {(() => {
@@ -1523,432 +1366,285 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                       !profile?.email?.trim() && "Email Address",
                     ].filter(Boolean);
                     if (missing.length > 0) {
-                      return (
-                        <p style={{ color: "#ef4444", fontSize: "12px", textAlign: "center" }}>
-                          Cannot continue — the following required fields are still empty in the mandate: <strong>{missing.join(", ")}</strong>. Please fill them in on Tab 1 of the mandate document above.
-                        </p>
-                      );
+                      return <p style={{ color: "#ef4444", fontSize: "12px", textAlign: "center" }}>Cannot continue — the following required fields are still empty in the mandate: <strong>{missing.join(", ")}</strong>. <button type="button" onClick={() => { setMandateRequestTab(null); setTimeout(() => setMandateRequestTab(0), 0); }} style={{ color: "#ef4444", textDecoration: "underline", background: "none", border: "none", cursor: "pointer", fontSize: "12px", fontWeight: "600", padding: 0 }}>Go to Tab 1 to fill them in.</button></p>;
                     }
-                    return (
-                      <p style={{ color: "#ef4444", fontSize: "12px", textAlign: "center" }}>
-                        Please enter your initials and complete all checkbox selections on the Schedules tab before continuing.
-                      </p>
-                    );
+                    return <p style={{ color: "#ef4444", fontSize: "12px", textAlign: "center" }}>Please enter your initials and complete all checkbox selections on the Schedules tab before continuing.</p>;
                   })()}
                 </div>
               )}
-
-              {submitError && (
-                <p className="text-center animate-fade-in" style={{ color: "#ef4444", fontSize: "12px", marginTop: "8px" }}>
-                  {submitError}
-                </p>
-              )}
-
+              {submitError && <p className="text-center animate-fade-in" style={{ color: "#ef4444", fontSize: "12px", marginTop: "8px" }}>{submitError}</p>}
               <div className="text-center mt-8 animate-fade-in delay-4">
                 <button
                   type="button"
                   className={`continue-button agreement-continue ${agreedMandate && mandateValid ? "enabled" : ""}`}
                   disabled={!agreedMandate || !mandateValid}
-                  onClick={async () => { await saveProgressFlag("mandate_accepted"); setMandateDone(true); goToStep(getNextIncompleteStep(7, 7)); }}
+                  onClick={async () => { await saveProgressFlag("mandate_accepted"); setMandateDone(true); goToStep(getNextIncompleteStep(5, 5)); }}
                 >
                   Continue
                 </button>
               </div>
-
               <div className="text-center mt-6 animate-fade-in delay-4">
-                <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  Step 7 of 11
-                </p>
+                <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>Step 4 of 5</p>
               </div>
             </div>
-          ) : step === 8 ? (
+
+          ) : step === 6 ? (
             <div className="w-full max-w-3xl mx-auto">
+              {!signingStarted && (
               <div className="text-center animate-fade-in delay-1">
-                <div className="hero-icon">
-                  <ShieldIcon width={48} height={48} />
-                </div>
-                <h2
-                  className="text-3xl font-light tracking-tight mb-2"
-                  style={{ color: "hsl(270 30% 25%)" }}
-                >
-                  Risk Disclosure
-                </h2>
-                <p className="text-sm mb-6" style={{ color: "hsl(270 20% 50%)" }}>
-                  Please review the investment risk disclosure
-                </p>
+                <div className="hero-icon"><ShieldIcon width={48} height={48} /></div>
+                <h2 className="text-3xl font-light tracking-tight mb-2" style={{ color: "hsl(270 30% 25%)" }}>Final Agreements</h2>
+                <p className="text-sm mb-6" style={{ color: "hsl(270 20% 50%)" }}>Review the risk disclosure, accept our terms, and sign your account agreement</p>
               </div>
-
-              <div className="progress-bar animate-fade-in delay-1">
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step"></div>
-                <div className="progress-step"></div>
-                <div className="progress-step"></div>
-              </div>
-
-              <div className="agreement-card animate-fade-in delay-2">
-                <div className="agreement-title">Investment Risk Disclosure</div>
-
-                <div className="agreement-section">
-                  <div className="section-title">1. Investment Risk Warning</div>
-                  <div className="agreement-text">
-                    Investing in financial instruments involves risk, including the possible loss of some or all of your principal investment. Past performance is not indicative of future results. The value of investments and the income derived from them may go down as well as up.
+              )}
+              {!signingStarted && (
+              <>{/* ── Section 1: Risk Disclosure (accordion) ── */}
+              <div className="animate-fade-in delay-2" style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', boxShadow: '0 2px 12px rgba(100,60,140,0.06)', overflow: 'hidden' }}>
+                <button type="button" onClick={() => setSec1Open(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '18px 20px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'hsl(270 30% 25%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>1</span>
                   </div>
-                </div>
-
-                <div className="agreement-section">
-                  <div className="section-title">2. Market Volatility</div>
-                  <div className="agreement-text">
-                    Financial markets can be volatile and unpredictable. Prices of securities, including those listed on the JSE, can fluctuate significantly due to various factors including economic conditions, political events, company performance, and market sentiment.
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Investment Risk Disclosure</div>
+                    <div style={{ fontSize: '12px', color: 'hsl(270 15% 60%)' }}>Review the risks before investing</div>
                   </div>
-                </div>
-
-                <div className="agreement-section">
-                  <div className="section-title">3. No Guaranteed Returns</div>
-                  <div className="agreement-text">
-                    MINT does not guarantee any returns on investments. All investment decisions are made at your own risk. You should only invest money that you can afford to lose without affecting your standard of living.
-                  </div>
-                </div>
-
-                <div className="agreement-section">
-                  <div className="section-title">4. Regulatory Compliance</div>
-                  <div className="agreement-text">
-                    MINT operates in compliance with South African financial regulations. We are committed to transparency and providing you with the information needed to make informed investment decisions. However, we do not provide personalised financial advice.
-                  </div>
-                </div>
-
-                <div className="agreement-section">
-                  <div className="section-title">5. Diversification Notice</div>
-                  <div className="agreement-text">
-                    Concentrating investments in a single security, sector, or asset class increases risk. We encourage you to diversify your portfolio and seek independent financial advice if needed.
-                  </div>
-                </div>
-              </div>
-
-              <div className="checkbox-container animate-fade-in delay-3" style={{ display: 'block' }}>
-                <label className="checkbox-item">
-                  <input
-                    type="checkbox"
-                    checked={agreedRiskDisclosure}
-                    onChange={(event) => setAgreedRiskDisclosure(event.target.checked)}
-                  />
-                  <span className="checkbox-label">
-                    I acknowledge that I have read and understand the investment risk disclosure
-                  </span>
-                </label>
-              </div>
-
-              <div className="text-center mt-8 animate-fade-in delay-4">
-                <button
-                  type="button"
-                  className={`continue-button agreement-continue ${agreedRiskDisclosure ? "enabled" : ""}`}
-                  disabled={!agreedRiskDisclosure}
-                  onClick={async () => { await saveProgressFlag("risk_disclosure_accepted"); setRiskDone(true); goToStep(getNextIncompleteStep(8, 8)); }}
-                >
-                  Continue
+                  <svg viewBox="0 0 24 24" fill="none" stroke="hsl(270 20% 55%)" strokeWidth="2" width="18" height="18" style={{ flexShrink: 0, transition: 'transform 0.2s', transform: sec1Open ? 'rotate(180deg)' : 'rotate(0deg)' }}><path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" /></svg>
                 </button>
-              </div>
-
-              <div className="text-center mt-6 animate-fade-in delay-4">
-                <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  Step 8 of 11
-                </p>
-              </div>
-            </div>
-          ) : step === 9 ? (
-            <div className="w-full max-w-3xl mx-auto">
-              <div className="text-center animate-fade-in delay-1">
-                <div className="hero-icon">
-                  <WalletIcon width={48} height={48} />
-                </div>
-                <h2
-                  className="text-3xl font-light tracking-tight mb-2"
-                  style={{ color: "hsl(270 30% 25%)" }}
-                >
-                  Source of Funds
-                </h2>
-                <p className="text-sm mb-6" style={{ color: "hsl(270 20% 50%)" }}>
-                  Declare the origin of your investment funds
-                </p>
-              </div>
-
-              <div className="progress-bar animate-fade-in delay-1">
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step"></div>
-                <div className="progress-step"></div>
-              </div>
-
-              <div className="space-y-5">
-                <div className="animate-fade-in delay-2">
-                  <label htmlFor="source-of-funds">Primary Source of Funds</label>
-                  <div className="custom-select" ref={sofDropdownRef}>
-                    <div
-                      className={`glass-field select-trigger ${sofDropdownOpen ? "active" : ""
-                        }`}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setSofDropdownOpen((prev) => !prev)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          setSofDropdownOpen((prev) => !prev);
-                        }
-                      }}
-                    >
-                      <div
-                        className="selected-value"
-                        data-placeholder="Select source of funds"
-                      >
-                        {sourceOfFunds ? selectedSofOption?.label : ""}
+                {sec1Open && (
+                  <div style={{ padding: '0 20px 18px' }}>
+                    <div className="agreement-card">
+                      <div className="agreement-section">
+                        <div className="section-title">1. Investment Risk Warning</div>
+                        <div className="agreement-text">Investing in financial instruments involves risk, including the possible loss of some or all of your principal investment. Past performance is not indicative of future results. The value of investments and the income derived from them may go down as well as up.</div>
+                      </div>
+                      <div className="agreement-section">
+                        <div className="section-title">2. Market Volatility</div>
+                        <div className="agreement-text">Financial markets can be volatile and unpredictable. Prices of securities, including those listed on the JSE, can fluctuate significantly due to various factors including economic conditions, political events, company performance, and market sentiment.</div>
+                      </div>
+                      <div className="agreement-section">
+                        <div className="section-title">3. No Guaranteed Returns</div>
+                        <div className="agreement-text">MINT does not guarantee any returns on investments. All investment decisions are made at your own risk. You should only invest money that you can afford to lose without affecting your standard of living.</div>
+                      </div>
+                      <div className="agreement-section">
+                        <div className="section-title">4. Regulatory Compliance</div>
+                        <div className="agreement-text">MINT operates in compliance with South African financial regulations. We are committed to transparency and providing you with the information needed to make informed investment decisions. However, we do not provide personalised financial advice.</div>
+                      </div>
+                      <div className="agreement-section">
+                        <div className="section-title">5. Diversification Notice</div>
+                        <div className="agreement-text">Concentrating investments in a single security, sector, or asset class increases risk. We encourage you to diversify your portfolio and seek independent financial advice if needed.</div>
                       </div>
                     </div>
-                    <div className={`custom-dropdown ${sofDropdownOpen ? "active" : ""}`}>
-                      {sourceOfFundsOptions.map((option) => (
-                        <div
-                          key={option.value || "placeholder"}
-                          className={`custom-option ${sourceOfFunds === option.value ? "selected" : ""
-                            }`}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => handleSofSelect(option.value)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter" || event.key === " ") {
-                              event.preventDefault();
-                              handleSofSelect(option.value);
-                            }
-                          }}
-                        >
-                          {option.label}
+                  </div>
+                )}
+              </div>
+
+              {/* ── Section 2: Terms & Conditions (accordion) ── */}
+              <div className="animate-fade-in delay-3" style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', boxShadow: '0 2px 12px rgba(100,60,140,0.06)', overflow: 'hidden' }}>
+                <button type="button" onClick={() => setSec2Open(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '18px 20px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'hsl(270 30% 25%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>2</span>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Terms &amp; Conditions</div>
+                    <div style={{ fontSize: '12px', color: 'hsl(270 15% 60%)' }}>Review and accept the MINT terms</div>
+                  </div>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="hsl(270 20% 55%)" strokeWidth="2" width="18" height="18" style={{ flexShrink: 0, transition: 'transform 0.2s', transform: sec2Open ? 'rotate(180deg)' : 'rotate(0deg)' }}><path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" /></svg>
+                </button>
+                {sec2Open && (
+                  <div style={{ padding: '0 20px 18px' }}>
+                    <div className="agreement-card">
+                      <div className="agreement-section">
+                        <div className="section-title">1. Introduction</div>
+                        <div className="agreement-text">Welcome to MINT. By accessing or using our services, you agree to be bound by these Terms and Conditions. Please read them carefully before proceeding. These terms govern your use of our platform and all related services.</div>
+                      </div>
+                      <div className="agreement-section">
+                        <div className="section-title">2. User Account</div>
+                        <div className="agreement-text">To use MINT, you must create an account. You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account. You agree to provide accurate and complete information during the onboarding process.</div>
+                      </div>
+                      <div className="agreement-section">
+                        <div className="section-title">3. Investment Services</div>
+                        <div className="agreement-text">MINT provides a platform for fractional investment in various assets. We are not a financial advisor, and the information provided through our platform does not constitute financial, investment, or tax advice. You should perform your own research or consult with a qualified advisor.</div>
+                      </div>
+                      <div className="agreement-section">
+                        <div className="section-title">4. Fees and Charges</div>
+                        <div className="agreement-text">MINT may charge fees for its services. These fees will be clearly disclosed to you. You agree to pay all fees associated with your use of our platform. We reserve the right to change our fee structure with prior notice to you.</div>
+                      </div>
+                      <div className="agreement-section">
+                        <div className="section-title">5. Privacy and Security</div>
+                        <div className="agreement-text">Your privacy is important to us. We collect and process your personal information in accordance with our Privacy Policy. We use industry-standard security measures to protect your data, but we cannot guarantee absolute security.</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Section 3: Account Agreement signing (accordion, always visible) ── */}
+              <div className="animate-fade-in delay-4" style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', boxShadow: '0 2px 12px rgba(100,60,140,0.06)', overflow: 'hidden' }}>
+                <button type="button" onClick={() => setSec3Open(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '18px 20px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'hsl(270 30% 25%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>3</span>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Sign Your Account Agreement</div>
+                    <div style={{ fontSize: '12px', color: 'hsl(270 15% 60%)' }}>Review and sign your client agreement</div>
+                  </div>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="hsl(270 20% 55%)" strokeWidth="2" width="18" height="18" style={{ flexShrink: 0, transition: 'transform 0.2s', transform: sec3Open ? 'rotate(180deg)' : 'rotate(0deg)' }}><path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" /></svg>
+                </button>
+                {sec3Open && (
+                  <div style={{ padding: '0 20px 18px' }}>
+                    <AccountAgreementStep
+                      profile={profile}
+                      onboardingData={{ bankName, bankAccountNumber, bankBranchCode, bankAccountType, taxNumber, identityNumber, sourceOfFunds, sourceOfFundsOther, expectedMonthlyInvestment }}
+                      existingOnboardingId={existingOnboardingId}
+                      initialPhase="sign"
+                      mode="text-only"
+                    />
+                  </div>
+                )}
+              </div>
+              </>)}
+
+              {/* ── Standalone Signature Section ── */}
+              <div
+                className={signingStarted ? "animate-fade-in" : "animate-fade-in delay-4"}
+                style={{
+                  marginBottom: signingStarted ? '0' : '12px',
+                  background: 'white',
+                  borderRadius: '16px',
+                  border: '1px solid hsl(270 20% 90%)',
+                  boxShadow: signingStarted ? '0 4px 24px rgba(83,47,126,0.10)' : '0 2px 12px rgba(100,60,140,0.06)',
+                  overflow: 'hidden',
+                }}
+              >
+                {!signingStarted && (
+                  <div style={{ padding: '18px 20px', borderBottom: '1px solid hsl(270 20% 90%)', background: 'hsl(270 50% 98%)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="hsl(270 30% 25%)" strokeWidth="1.5" width="20" height="20" style={{ flexShrink: 0 }}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" />
+                    </svg>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Your Signature</div>
+                      <div style={{ fontSize: '12px', color: 'hsl(270 15% 60%)' }}>Sign below to agree to all sections and complete onboarding</div>
+                    </div>
+                  </div>
+                )}
+                <div style={{ padding: signingStarted ? '0' : '20px' }}>
+                  <AccountAgreementStep
+                    profile={profile}
+                    onboardingData={{ bankName, bankAccountNumber, bankBranchCode, bankAccountType, taxNumber, identityNumber, sourceOfFunds, sourceOfFundsOther, expectedMonthlyInvestment }}
+                    existingOnboardingId={existingOnboardingId}
+                    initialPhase="sign"
+                    mode="signature-only"
+                    onSignStart={() => setSigningStarted(true)}
+                    onComplete={async (signingResults) => {
+                      setRiskDone(true);
+                      setTermsDone(true);
+                      await handleFinalComplete(signingResults);
+                      goToStep(7);
+                    }}
+                  />
+                </div>
+              </div>
+
+              {!signingStarted && (
+                <div className="text-center mt-4 animate-fade-in delay-4">
+                  <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>Step 5 of 5</p>
+                </div>
+              )}
+            </div>
+
+          ) : step === 7 ? (
+            <div className="w-full max-w-3xl mx-auto">
+              {(() => {
+                const tick = (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="16" height="16">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                );
+                const tickSm = (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="14" height="14">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                );
+                const identityCheckDone = identityCheckConfirmed || kycAlreadyVerified;
+                const financialDetailsDone = taxDone && bankDone && bankLetterDone && sofDone;
+                const reviewSteps = [
+                  { done: identityCheckDone && kycVerificationDone, title: "Identity & Verification", doneDesc: "Identity verified", pendingDesc: "Confirm your ID and complete identity verification", badge: "Verified" },
+                  { done: addressDone, title: "Residential Address", doneDesc: "Address captured", pendingDesc: "Provide your current residential address", badge: "Captured" },
+                  { done: financialDetailsDone, title: "Financial Details", doneDesc: "Financial details saved", pendingDesc: "Bank, tax, source of funds & more", badge: "Saved" },
+                  { done: mandateDone, title: "Discretionary Mandate", doneDesc: "Mandate accepted", pendingDesc: "Review and accept the FSP investment mandate", badge: "Accepted" },
+                  { done: riskDone && termsDone && agreementSignedDone, title: "Final Agreements", doneDesc: "Agreements signed", pendingDesc: "Risk disclosure, terms & account agreement", badge: "Signed" },
+                ];
+                const allDone = reviewSteps.every(s => s.done);
+                return (
+                  <>
+                    <div className="text-center animate-fade-in delay-1">
+                      <div className="hero-icon">
+                        {allDone
+                          ? <svg viewBox="0 0 24 24" fill="none" stroke="hsl(270 30% 25%)" strokeWidth="1.5" width="48" height="48"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+                          : <svg viewBox="0 0 24 24" fill="none" stroke="hsl(270 30% 25%)" strokeWidth="1.5" width="48" height="48"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V19.5a2.25 2.25 0 0 0 2.25 2.25h.75" /></svg>
+                        }
+                      </div>
+                      <h2 className="text-3xl font-light tracking-tight mb-2" style={{ color: "hsl(270 30% 25%)" }}>
+                        {allDone ? "You're all set!" : "Application Review"}
+                      </h2>
+                      <p className="text-sm mb-6" style={{ color: "hsl(270 20% 50%)" }}>
+                        {allDone ? "Your onboarding is complete. Welcome to MINT." : "Here's a summary of your onboarding progress"}
+                      </p>
+                    </div>
+                    <div className="steps-container animate-fade-in delay-2">
+                      {reviewSteps.map((s, i) => (
+                        <React.Fragment key={i}>
+                          <div className={`step-circle ${s.done ? 'step-circle-complete' : ''}`}>
+                            {s.done ? tick : i + 1}
+                          </div>
+                          {i < reviewSteps.length - 1 && <div className={`step-line ${s.done ? 'step-line-complete' : ''}`}></div>}
+                        </React.Fragment>
+                      ))}
+                    </div>
+                    <div className="step-info animate-fade-in delay-3">
+                      {reviewSteps.map((s, i) => (
+                        <div key={i} className={`step-item ${s.done ? 'step-item-complete' : ''}`}>
+                          <div className={`step-number ${s.done ? 'step-number-complete' : ''}`}>
+                            {s.done ? tickSm : i + 1}
+                          </div>
+                          <div className="step-content">
+                            <div className="step-title">
+                              {s.title}
+                              {s.done && <span className="step-verified-badge">{s.badge}</span>}
+                            </div>
+                            <div className="step-description">
+                              {s.done ? s.doneDesc : s.pendingDesc}
+                            </div>
+                          </div>
                         </div>
                       ))}
                     </div>
-                    <input
-                      type="hidden"
-                      id="source-of-funds"
-                      name="source-of-funds"
-                      value={sourceOfFunds}
-                    />
-                  </div>
-                </div>
-
-                <div
-                  className={`conditional-section hide-when-dropdown-open ${sourceOfFunds === "other" ? "active" : ""
-                    }`}
-                >
-                  <label htmlFor="source-of-funds-other">Please describe your source of funds</label>
-                  <div className="glass-field">
-                    <input
-                      type="text"
-                      id="source-of-funds-other"
-                      placeholder="Describe your source of funds"
-                      value={sourceOfFundsOther}
-                      onChange={(event) => setSourceOfFundsOther(event.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="animate-fade-in delay-3 hide-when-dropdown-open">
-                  <label htmlFor="expected-monthly-investment">Expected Monthly Investment Amount</label>
-                  <div className="glass-field">
-                    <select
-                      id="expected-monthly-investment"
-                      value={expectedMonthlyInvestment}
-                      onChange={(event) => setExpectedMonthlyInvestment(event.target.value)}
-                    >
-                      {monthlyInvestmentOptions.map((option) => (
-                        <option key={option.value || "placeholder"} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="animate-fade-in delay-3 hide-when-dropdown-open" style={{ display: 'block' }}>
-                  <label className="checkbox-item">
-                    <input
-                      type="checkbox"
-                      checked={agreedSourceOfFunds}
-                      onChange={(event) => setAgreedSourceOfFunds(event.target.checked)}
-                    />
-                    <span className="checkbox-label">
-                      I declare that the funds I will use for investing are from legitimate sources and I am the beneficial owner of these funds
-                    </span>
-                  </label>
-                </div>
-
-                <div className="text-center mt-8 animate-fade-in delay-4 hide-when-dropdown-open">
-                  <button
-                    type="button"
-                    className={`continue-button agreement-continue ${sofReady ? "enabled" : ""}`}
-                    disabled={!sofReady}
-                    onClick={async () => {
-                      await saveProgressFlag("source_of_funds_accepted", {
-                        source_of_funds_details: {
-                          source_of_funds: sourceOfFunds,
-                          source_of_funds_other: sourceOfFunds === "other" ? sourceOfFundsOther : null,
-                          expected_monthly_investment: expectedMonthlyInvestment,
-                        },
-                      });
-                      setSofDone(true); goToStep(getNextIncompleteStep(9, 9));
-                    }}
-                  >
-                    Continue
-                  </button>
-                </div>
-
-                <div className="text-center mt-6 animate-fade-in delay-4 hide-when-dropdown-open">
-                  <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                    Step 9 of 11
-                  </p>
-                </div>
-              </div>
+                    {allDone && (
+                      <div className="text-center mt-8 animate-fade-in delay-4">
+                        <button
+                          type="button"
+                          className="continue-button agreement-continue enabled"
+                          onClick={() => { if (onComplete) onComplete(); }}
+                        >
+                          Go to Dashboard
+                        </button>
+                      </div>
+                    )}
+                    {!allDone && (
+                      <div className="text-center mt-8 animate-fade-in delay-4">
+                        <button
+                          type="button"
+                          className="continue-button agreement-continue enabled"
+                          onClick={() => goToStep(getNextIncompleteStep(0))}
+                        >
+                          Continue Where I Left Off
+                        </button>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
-          ) : step === 10 ? (
-            <div className="w-full max-w-3xl mx-auto">
-              <div className="text-center animate-fade-in delay-1">
-                <div className="hero-icon">
-                  <FileContractIcon width={48} height={48} />
-                </div>
-                <h2
-                  className="text-3xl font-light tracking-tight mb-2"
-                  style={{ color: "hsl(270 30% 25%)" }}
-                >
-                  Contract Agreement
-                </h2>
-                <p className="text-sm mb-6" style={{ color: "hsl(270 20% 50%)" }}>
-                  Please review and accept our <span className="mint-brand">MINT</span> terms and conditions
-                </p>
-              </div>
-
-              <div className="progress-bar animate-fade-in delay-1">
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step active"></div>
-                <div className="progress-step"></div>
-              </div>
-
-              <div className="agreement-card animate-fade-in delay-2">
-                <div className="agreement-title">Terms and Conditions</div>
-
-                <div className="agreement-section">
-                  <div className="section-title">1. Introduction</div>
-                  <div className="agreement-text">
-                    Welcome to MINT. By accessing or using our services, you agree to be bound by these Terms and Conditions. Please read them carefully before proceeding. These terms govern your use of our platform and all related services.
-                  </div>
-                </div>
-
-                <div className="agreement-section">
-                  <div className="section-title">2. User Account</div>
-                  <div className="agreement-text">
-                    To use MINT, you must create an account. You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account. You agree to provide accurate and complete information during the onboarding process.
-                  </div>
-                </div>
-
-                <div className="agreement-section">
-                  <div className="section-title">3. Investment Services</div>
-                  <div className="agreement-text">
-                    MINT provides a platform for fractional investment in various assets. We are not a financial advisor, and the information provided through our platform does not constitute financial, investment, or tax advice. You should perform your own research or consult with a qualified advisor.
-                  </div>
-                </div>
-
-                <div className="agreement-section">
-                  <div className="section-title">4. Fees and Charges</div>
-                  <div className="agreement-text">
-                    MINT may charge fees for its services. These fees will be clearly disclosed to you. You agree to pay all fees associated with your use of our platform. We reserve the right to change our fee structure with prior notice to you.
-                  </div>
-                </div>
-
-                <div className="agreement-section">
-                  <div className="section-title">5. Privacy and Security</div>
-                  <div className="agreement-text">
-                    Your privacy is important to us. We collect and process your personal information in accordance with our Privacy Policy. We use industry-standard security measures to protect your data, but we cannot guarantee absolute security.
-                  </div>
-                </div>
-              </div>
-
-              <div className="checkbox-container animate-fade-in delay-3">
-                <label className="checkbox-item">
-                  <input
-                    type="checkbox"
-                    checked={agreedTerms}
-                    onChange={(event) => setAgreedTerms(event.target.checked)}
-                  />
-                  <span className="checkbox-label">
-                    I agree to the Terms and Conditions
-                  </span>
-                </label>
-                <label className="checkbox-item">
-                  <input
-                    type="checkbox"
-                    checked={agreedPrivacy}
-                    onChange={(event) => setAgreedPrivacy(event.target.checked)}
-                  />
-                  <span className="checkbox-label">
-                    I agree to the Privacy Policy
-                  </span>
-                </label>
-              </div>
-
-              <div className="text-center mt-8 animate-fade-in delay-4">
-                <button
-                  type="button"
-                  className={`continue-button agreement-continue ${agreementReady ? "enabled" : ""}`}
-                  disabled={!agreementReady}
-                  onClick={async () => {
-                    await saveProgressFlag("terms_accepted");
-                    setTermsDone(true);
-                    goToStep(getNextIncompleteStep(10));
-                  }}
-                >
-                  Continue
-                </button>
-              </div>
-
-              <div className="text-center mt-6 animate-fade-in delay-4">
-                <p className="text-xs" style={{ color: "hsl(270 15% 60%)" }}>
-                  Step 10 of 11
-                </p>
-              </div>
-            </div>
-          ) : step === 11 ? (
-            <AccountAgreementStep
-              profile={profile}
-              onboardingData={{
-                bankName,
-                bankAccountNumber,
-                bankBranchCode,
-                bankAccountType,
-                taxNumber,
-                identityNumber,
-                sourceOfFunds,
-                sourceOfFundsOther,
-                expectedMonthlyInvestment,
-              }}
-              existingOnboardingId={existingOnboardingId}
-              onComplete={handleFinalComplete}
-            />
           ) : null}
         </div>
       </div>

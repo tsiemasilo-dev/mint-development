@@ -464,13 +464,102 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "member_id and primary_user_id required" });
     }
     try {
+      // Read the member first so we know if it's a child and what funds to refund
+      const { data: member, error: fetchErr } = await db
+        .from("family_members")
+        .select("id, relationship, available_balance, first_name")
+        .eq("id", member_id)
+        .eq("primary_user_id", primary_user_id)
+        .maybeSingle();
+
+      if (fetchErr) throw fetchErr;
+      if (!member) return res.status(404).json({ error: "Family member not found." });
+
+      let refundedCents = 0;
+
+      // For children, block deletion if active investments exist, then refund cash
+      if (member.relationship === "child") {
+        // Block removal if the child still holds active investments
+        const { data: activeHoldings, error: holdErr } = await db
+          .from("stock_holdings_c")
+          .select("id")
+          .eq("family_member_id", member_id)
+          .eq("Status", "active")
+          .limit(1);
+        if (holdErr) throw holdErr;
+        if (activeHoldings && activeHoldings.length > 0) {
+          return res.status(409).json({
+            error: `${member.first_name || "This child"} still holds an active strategy. Please sell their investments before removing the account.`,
+            code: "child_holds_strategy",
+          });
+        }
+
+        const childBalanceCents = Number(member.available_balance || 0);
+
+        if (childBalanceCents > 0) {
+          const { data: wallet, error: walletErr } = await db
+            .from("wallets")
+            .select("balance")
+            .eq("user_id", primary_user_id)
+            .maybeSingle();
+          if (walletErr) throw walletErr;
+          if (!wallet) return res.status(404).json({ error: "Parent wallet not found." });
+
+          const parentBalanceCents = Math.round(Number(wallet.balance) * 100);
+          const newParentBalanceRands = (parentBalanceCents + childBalanceCents) / 100;
+
+          const { error: creditErr } = await db
+            .from("wallets")
+            .update({ balance: newParentBalanceRands, updated_at: new Date().toISOString() })
+            .eq("user_id", primary_user_id);
+          if (creditErr) throw creditErr;
+
+          // Zero out the child's balance so the funds aren't double-counted if delete fails later
+          await db
+            .from("family_members")
+            .update({ available_balance: 0 })
+            .eq("id", member_id);
+
+          const refundRef = `CHILD-REFUND-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          try {
+            await db.from("transactions").insert([
+              {
+                user_id: primary_user_id,
+                family_member_id: member_id,
+                type: "transfer_out",
+                direction: "debit",
+                amount: childBalanceCents,
+                description: `Refund from ${member.first_name || "child"}'s account on removal`,
+                store_reference: refundRef,
+                status: "completed",
+              },
+              {
+                user_id: primary_user_id,
+                family_member_id: null,
+                type: "transfer_in",
+                direction: "credit",
+                amount: childBalanceCents,
+                description: `Refund received from ${member.first_name || "child"}'s account on removal`,
+                store_reference: refundRef,
+                status: "completed",
+              },
+            ]);
+          } catch (txErr) {
+            console.error("[family] Refund transaction log failed (funds still moved):", txErr.message);
+          }
+
+          refundedCents = childBalanceCents;
+        }
+      }
+
       const { error } = await db
         .from("family_members")
         .delete()
         .eq("id", member_id)
         .eq("primary_user_id", primary_user_id);
       if (error) throw error;
-      return res.json({ success: true });
+
+      return res.json({ success: true, refunded_cents: refundedCents });
     } catch (e) {
       console.error("[family] DELETE error:", e.message);
       return res.status(500).json({ error: e.message });

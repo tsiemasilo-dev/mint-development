@@ -91,6 +91,12 @@ function teardownSingletonChannel() {
   singleton.channel = null;
 }
 
+export function markOnboardingComplete() {
+  singleton.isComplete = true;
+  singleton.isLoading = false;
+  notifyListeners();
+}
+
 export const useOnboardingStatus = ({ enabled = true } = {}) => {
   const [state, setState] = useState({
     onboardingComplete: singleton.isComplete,

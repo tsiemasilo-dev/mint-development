@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+﻿import React, { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "../lib/supabase";
 import {
   ArrowDownToLine,
@@ -32,7 +32,7 @@ import { useOnboardingStatus } from "../lib/useOnboardingStatus";
 import { useFinancialData, useInvestments } from "../lib/useFinancialData";
 import { useRealtimePrices } from "../lib/useRealtimePrices";
 import { getHoldingsArray, normalizeSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot } from "../lib/strategyUtils";
-import HomeSkeleton from "../components/HomeSkeleton";
+import { registerCacheResetCallback } from "../lib/userCacheReset.js";
 import Skeleton from "../components/Skeleton";
 import SwipeableBalanceCard from "../components/SwipeableBalanceCard";
 import OutstandingActionsSection from "../components/OutstandingActionsSection";
@@ -40,12 +40,24 @@ import TransactionHistorySection from "../components/TransactionHistorySection";
 import SettlementBadge from "../components/PendingBadge";
 import NotificationBell from "../components/NotificationBell";
 import FamilyDropdown from "../components/FamilyDropdown";
+import HomeSkeleton from "../components/HomeSkeleton";
 
 // Feature flags — set VITE_ENABLE_INSURE=true in Replit Secrets to preview.
 // Leave unset in Vercel production to keep the feature hidden from live users.
 const INSURE_ENABLED = import.meta.env.VITE_ENABLE_INSURE === "true";
 
 const CARD_VISIBILITY_KEY = "mintBalanceVisible";
+
+// Module-level caches to prevent section skeletons on remount
+let _cachedBestAssets = [];
+let _cachedBestStrategies = [];
+let _cachedHasAnyHoldings = false;
+
+registerCacheResetCallback(() => {
+  _cachedBestAssets = [];
+  _cachedBestStrategies = [];
+  _cachedHasAnyHoldings = false;
+});
 
 const HomePage = ({
   onOpenNotifications,
@@ -76,7 +88,7 @@ const HomePage = ({
   const { balance, investments, transactions, bestAssets, loading: financialLoading, refetch: fetchFinancialData } = useFinancialData();
   const { monthlyChangePercent } = useInvestments();
   const { lastUpdated: pricesLastUpdated } = useRealtimePrices();
-  const [bestStrategies, setBestStrategies] = useState([]);
+  const [bestStrategies, setBestStrategies] = useState(() => _cachedBestStrategies);
   const [holdingsSecurities, setHoldingsSecurities] = useState([]);
   const [failedLogos, setFailedLogos] = useState({});
   const [showPayModal, setShowPayModal] = useState(false);
@@ -86,8 +98,10 @@ const HomePage = ({
   const [loadingNews, setLoadingNews] = useState(false);
   const [homeTab, setHomeTab] = useState("balance");
   const [userId, setUserId] = useState(null);
-  const [localBestAssets, setLocalBestAssets] = useState([]);
-  const [hasAnyHoldings, setHasAnyHoldings] = useState(false);
+  const [localBestAssets, setLocalBestAssets] = useState(() => _cachedBestAssets);
+  const [hasAnyHoldings, setHasAnyHoldings] = useState(() => _cachedHasAnyHoldings);
+  const [loadingBestAssets, setLoadingBestAssets] = useState(() => _cachedBestAssets.length === 0);
+  const [loadingBestStrategies, setLoadingBestStrategies] = useState(() => _cachedBestStrategies.length === 0);
   const { onboardingComplete, loading: onboardingLoading, refetch: fetchOnboardingStatus } = useOnboardingStatus();
   const onboardingChecked = !onboardingLoading;
 
@@ -106,7 +120,7 @@ const HomePage = ({
   const [editingGoalId, setEditingGoalId] = useState(null);
 
   const assetsToDisplay = localBestAssets.length > 0 ? localBestAssets : (bestAssets || []);
-  const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(" ");
+  const displayName = [profile?.firstName, profile?.lastName].filter(Boolean).join(" ");
   const initials = displayName
     .split(" ")
     .filter(Boolean)
@@ -117,11 +131,13 @@ const HomePage = ({
 
   const fetchBestAssets = React.useCallback(async () => {
     if (!profile?.id) return;
+    setLoadingBestAssets(true);
     try {
       const { data: holdings, error: holdingsError } = await supabase
         .from('stock_holdings_c')
-        .select('id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, Status')
+        .select('id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, Status')
         .eq('user_id', profile.id)
+        .is('family_member_id', null)
         .eq('Status', 'active');
 
       if (holdingsError) throw holdingsError;
@@ -129,7 +145,7 @@ const HomePage = ({
       const directHoldings = (holdings || []).filter(h => !h.strategy_id && h.security_id);
       const strategyHoldings = (holdings || []).filter(h => h.strategy_id);
 
-      if (holdings && holdings.length > 0) setHasAnyHoldings(true);
+      if (holdings && holdings.length > 0) { _cachedHasAnyHoldings = true; setHasAnyHoldings(true); }
 
       if (directHoldings.length > 0) {
         const holdings = directHoldings;
@@ -184,6 +200,7 @@ const HomePage = ({
         const profitable = formatted.filter(a => !a.isPending && a.pnlPct > 0).sort((a, b) => b.pnlPct - a.pnlPct);
         const pending = formatted.filter(a => a.isPending);
         const sorted = [...profitable, ...pending].slice(0, 5);
+        _cachedBestAssets = sorted;
         setLocalBestAssets(sorted);
         return;
       }
@@ -226,49 +243,18 @@ const HomePage = ({
           const profitable = formatted.filter(a => !a.isPending && a.pnlPct > 0).sort((a, b) => b.pnlPct - a.pnlPct);
           const ranked = profitable.slice(0, 5);
           if (ranked.length > 0) {
+            _cachedBestAssets = ranked;
             setLocalBestAssets(ranked);
             return;
           }
         }
       }
 
-      const { data: allocData, error: allocError } = await supabase
-        .from('allocations')
-        .select('value, security_id')
-        .eq('user_id', profile.id)
-        .order('value', { ascending: false })
-        .limit(5);
-
-      if (allocError) throw allocError;
-
-      if (allocData && allocData.length > 0) {
-        const securityIds = allocData.map(item => item.security_id).filter(Boolean);
-        let securitiesMap = {};
-        if (securityIds.length > 0) {
-          const { data: secData } = await supabase
-            .from('securities_c')
-            .select('id, symbol, name, logo_url, change_percent')
-            .in('id', securityIds);
-          (secData || []).forEach(s => { securitiesMap[s.id] = s; });
-        }
-
-        const formatted = allocData
-          .filter(item => securitiesMap[item.security_id])
-          .map(item => {
-            const sec = securitiesMap[item.security_id];
-            return {
-              symbol: sec.symbol,
-              name: sec.name,
-              logo: sec.logo_url,
-              value: item.value,
-              change: Number(sec.change_percent) || 0,
-            };
-          });
-
-        setLocalBestAssets(formatted);
-      }
+      // allocations table removed — skip this fallback gracefully
     } catch (e) {
       console.error("Asset fetch error:", e.message);
+    } finally {
+      setLoadingBestAssets(false);
     }
   }, [profile?.id]);
 
@@ -280,8 +266,20 @@ const HomePage = ({
         .from('investment_goals')
         .select('id, name, target_amount, current_amount, is_active, target_date')
         .eq('user_id', profile.id)
+        .is('family_member_id', null)
         .eq('is_active', true)
         .order('created_at', { ascending: false });
+
+      if (error && (error.code === "42703" || String(error.message || "").includes("family_member_id"))) {
+        const fallback = await supabase
+          .from('investment_goals')
+          .select('id, name, target_amount, current_amount, is_active, target_date')
+          .eq('user_id', profile.id)
+          .eq('is_active', true)
+          .order('created_at', { ascending: false });
+        data = fallback.data;
+        error = fallback.error;
+      }
 
       if (error) throw error;
       setGoals(data || []);
@@ -367,11 +365,16 @@ const HomePage = ({
     };
   }, [profile?.id, fetchBestAssets, fetchGoals, fetchFinancialData, fetchRequiredActions, fetchOnboardingStatus]);
 
+  const priceDebounceRef = useRef(null);
   useEffect(() => {
     if (pricesLastUpdated && profile?.id) {
-      fetchBestAssets();
-      if (typeof fetchFinancialData === 'function') fetchFinancialData();
+      clearTimeout(priceDebounceRef.current);
+      priceDebounceRef.current = setTimeout(() => {
+        fetchBestAssets();
+        if (typeof fetchFinancialData === 'function') fetchFinancialData();
+      }, 800);
     }
+    return () => clearTimeout(priceDebounceRef.current);
   }, [pricesLastUpdated]);
 
   useEffect(() => {
@@ -384,6 +387,7 @@ const HomePage = ({
     const fetchStrategies = async () => {
       try {
         if (!profile?.id) return;
+        setLoadingBestStrategies(true);
 
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
@@ -410,7 +414,8 @@ const HomePage = ({
           return;
         }
 
-        const formatted = serverStrategies.map((s) => {
+        const formatted = serverStrategies
+          .map((s) => {
           const invested = s.investedAmount || 0;
           const currentValue = s.currentMarketValue != null ? Number(s.currentMarketValue.toFixed(2)) : invested;
           const isPending = invested === 0 && currentValue === 0;
@@ -440,10 +445,13 @@ const HomePage = ({
         const sorted = formatted
           .sort((a, b) => (b.change_pct || 0) - (a.change_pct || 0))
           .slice(0, 5);
+        _cachedBestStrategies = sorted;
         setBestStrategies(sorted);
       } catch (error) {
         console.error("Failed to load strategies", error);
-        setBestStrategies([]);
+        setBestStrategies((prev) => prev.length > 0 ? prev : []);
+      } finally {
+        setLoadingBestStrategies(false);
       }
     };
     fetchStrategies();
@@ -601,7 +609,8 @@ const HomePage = ({
     finally { setLoadingGoals(false); }
   };
 
-  if (loading || financialLoading) {
+
+  if (loading) {
     return <HomeSkeleton />;
   }
 
@@ -673,7 +682,7 @@ const HomePage = ({
     }
   };
 
-  const hasProfitableAssets = assetsToDisplay.length > 0;
+  const hasAssets = assetsToDisplay.length > 0;
   const hasInvestments = hasAnyHoldings || assetsToDisplay.length > 0;
   const hasStrategies = bestStrategies && bestStrategies.length > 0;
 
@@ -695,7 +704,7 @@ const HomePage = ({
               profile={profile}
               userId={userId}
               initials={initials}
-              avatarUrl={profile.avatarUrl}
+              avatarUrl={profile?.avatarUrl}
               onOpenFamily={onOpenFamily}
               onSelectMember={onSelectMember}
             />
@@ -723,13 +732,13 @@ const HomePage = ({
                     userId={userId}
                     isBackFacing
                     forceVisible={isCardVisible}
-                    mintNumber={profile.mintNumber}
+                    mintNumber={profile?.mintNumber}
                   />
                 </div>
               </div>
             </div>
           ) : (
-            <SwipeableBalanceCard userId={userId} mintNumber={profile.mintNumber} />
+            <SwipeableBalanceCard userId={userId} mintNumber={profile?.mintNumber} />
           )}
         </div>
       </div>
@@ -958,7 +967,7 @@ const HomePage = ({
                 <span>Based on your investment portfolio</span>
               </div>
             </div>
-            {hasInvestments && (
+            {hasInvestments && !loadingBestAssets && (
               <button
                 onClick={onOpenInvestments}
                 className="mb-1 text-xs font-semibold text-violet-600 active:opacity-70 transition-colors"
@@ -968,8 +977,24 @@ const HomePage = ({
             )}
           </div>
 
-          {hasProfitableAssets ? (
-            <div className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {loadingBestAssets ? (
+            <div className="flex gap-3 overflow-hidden pb-1">
+              {[0, 1].map((i) => (
+                <div key={i} className="flex min-w-[260px] flex-shrink-0 items-center gap-4 rounded-3xl bg-white p-4 shadow-md">
+                  <Skeleton className="h-12 w-12 rounded-2xl flex-shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-3 w-32" />
+                  </div>
+                  <div className="space-y-1 text-right">
+                    <Skeleton className="h-4 w-16" />
+                    <Skeleton className="h-3 w-14" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : hasAssets ? (
+            <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {assetsToDisplay.slice(0, 5).map((asset) => (
                 <div
                   key={asset.symbol}
@@ -1062,7 +1087,7 @@ const HomePage = ({
                 <span>Top performing curated portfolios</span>
               </div>
             </div>
-            {hasStrategies && (
+            {hasStrategies && !loadingBestStrategies && (
               <button
                 onClick={onOpenStrategies}
                 className="mb-1 text-xs font-semibold text-violet-600 active:opacity-70 transition-colors"
@@ -1072,8 +1097,29 @@ const HomePage = ({
             )}
           </div>
 
-          {hasStrategies ? (
-            <div className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {loadingBestStrategies ? (
+            <div className="flex gap-3 overflow-hidden pb-1">
+              {[0, 1].map((i) => (
+                <div key={i} className="flex min-w-[280px] flex-shrink-0 flex-col gap-3 rounded-3xl bg-white p-4 shadow-md">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-2 flex-1">
+                      <Skeleton className="h-4 w-28" />
+                      <Skeleton className="h-3 w-36" />
+                    </div>
+                    <div className="space-y-1 text-right">
+                      <Skeleton className="h-4 w-16" />
+                      <Skeleton className="h-3 w-14" />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Skeleton className="h-6 w-20 rounded-full" />
+                    <Skeleton className="h-7 w-20 rounded-full" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : hasStrategies ? (
+            <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {bestStrategies.slice(0, 5).map((strategy) => {
                 const holdingsSnapshot = getStrategyHoldingsSnapshot(strategy, holdingsBySymbol);
                 const pct = strategy.change_pct || 0;
@@ -1345,6 +1391,8 @@ const HomePage = ({
                     <div>
                       <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">Goal Name</label>
                       <input
+                        id="home-goal-name"
+                        name="home-goal-name"
                         type="text"
                         placeholder="e.g. New Car, Holiday"
                         value={newGoal.name}
@@ -1356,6 +1404,8 @@ const HomePage = ({
                     <div>
                       <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">Target Amount (R)</label>
                       <input
+                        id="home-goal-target"
+                        name="home-goal-target"
                         type="number"
                         placeholder="0.00"
                         value={newGoal.target_amount}
@@ -1367,6 +1417,8 @@ const HomePage = ({
                     <div>
                       <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">Target Date (Optional)</label>
                       <input
+                        id="home-goal-date"
+                        name="home-goal-date"
                         type="date"
                         value={newGoal.target_date}
                         onChange={(e) => setNewGoal(prev => ({ ...prev, target_date: e.target.value }))}

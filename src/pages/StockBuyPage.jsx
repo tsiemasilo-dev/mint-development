@@ -88,6 +88,8 @@ const StockBuyPage = ({ security, onBack, onContinue, paymentMethod }) => {
               Number of shares
             </label>
             <input
+              id="stock-buy-shares"
+              name="stock-buy-shares"
               type="number"
               min={minShares}
               step="1"

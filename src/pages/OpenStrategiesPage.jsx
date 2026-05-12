@@ -8,7 +8,7 @@ import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer } from "r
 import { supabase } from "../lib/supabase";
 import { getStrategiesWithMetrics, formatChangePct, formatChangeAbs, getChangeColor } from "../lib/strategyData.js";
 import { formatCurrency } from "../lib/formatCurrency";
-import { normalizeSymbol, getHoldingsArray, getHoldingSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot, calculateMinInvestment, getAdjustedShares } from "../lib/strategyUtils";
+import { normalizeSymbol, getHoldingsArray, getHoldingSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot, calculateMinInvestmentSync, getAdjustedShares } from "../lib/strategyUtils";
 
 const sortOptions = [
   "Recommended",
@@ -132,6 +132,8 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
   const [selectedSectorFilter, setSelectedSectorFilter] = useState(null);
   const [watchlist, setWatchlist] = useState(new Set());
   const [holdingsSecurities, setHoldingsSecurities] = useState([]);
+  const [strategyMinimums, setStrategyMinimums] = useState({}); // Map of strategy.id -> minimum value
+  const [minimumLoading, setMinimumLoading] = useState(true); // Loading state for minimums
   const carouselRef = useRef(null);
   const dragStartY = useRef(null);
   const isDragging = useRef(false);
@@ -238,7 +240,18 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
       isMounted = false;
     };
   }, [strategies]);
-  
+
+  // Calculate minimums synchronously from already-loaded holdingsBySymbol prices
+  useEffect(() => {
+    if (strategies.length === 0) return;
+    const minimums = {};
+    for (const strategy of strategies) {
+      minimums[strategy.id] = calculateMinInvestmentSync(strategy, holdingsBySymbol);
+    }
+    setStrategyMinimums(minimums);
+    setMinimumLoading(false);
+  }, [strategies, holdingsBySymbol]);
+
   const series = [
     { label: "Jan", returnPct: 1.2 },
     { label: "Feb", returnPct: 2.0 },
@@ -344,7 +357,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
       const matchesRisk = selectedRisks.size
         ? selectedRisks.has(strategy.risk_level || strategy.risk)
         : true;
-      const minInvest = calculateMinInvestment(strategy, holdingsBySymbol);
+      const minInvest = strategyMinimums[strategy.id];
       const matchesMinInvestment = selectedMinInvestment
         ? minInvest != null && (
           (minInvest >= 10000 && selectedMinInvestment === "R10,000+") ||
@@ -388,7 +401,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
       sorted.sort((a, b) => a.volatilityScore - b.volatilityScore);
     }
     if (selectedSort === "Lowest minimum") {
-      sorted.sort((a, b) => (calculateMinInvestment(a, holdingsBySymbol) || Infinity) - (calculateMinInvestment(b, holdingsBySymbol) || Infinity));
+      sorted.sort((a, b) => (strategyMinimums[a.id] || Infinity) - (strategyMinimums[b.id] || Infinity));
     }
     if (selectedSort === "Most popular") {
       sorted.sort((a, b) => b.popularityScore - a.popularityScore);
@@ -653,10 +666,10 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
                   formatted: hasYtd ? formatChangePct(ytdReturn) : 'N/A'
                 });
                 const holdings = getHoldingsArray(strategy);
-                
-                const calculatedMin = calculateMinInvestment(strategy, holdingsBySymbol);
-                const minInvestmentValue = calculatedMin || null;
-                const minInvestmentText = minInvestmentValue ? `Min. ${formatCurrency(minInvestmentValue, "R")}` : null;
+
+                const minInvestmentValue = strategyMinimums[strategy.id];
+                const minInvestmentText = minInvestmentValue ? `Min. ${formatCurrency(minInvestmentValue, "R")}` : (minimumLoading ? "Loading..." : null);
+                console.log(`[${strategy.name}] minInvestmentValue=${minInvestmentValue}, minimumLoading=${minimumLoading}, minInvestmentText=${minInvestmentText}`);
 
                 const sparkline = strategy.sparkline || [20, 22, 21, 24, 26, 25, 28, 30, 29, 32];
                 
@@ -978,7 +991,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold text-slate-900">{selectedStrategy.name}</h3>
                   <p className="text-sm text-slate-500">
-                    {calculateMinInvestment(selectedStrategy, holdingsBySymbol) ? `Min. ${formatCurrency(calculateMinInvestment(selectedStrategy, holdingsBySymbol), "R")}` : "Calculating..."}
+                    {strategyMinimums[selectedStrategy.id] ? `Min. ${formatCurrency(strategyMinimums[selectedStrategy.id], "R")}` : (minimumLoading ? "Loading..." : "N/A")}
                   </p>
                 </div>
                 <button
@@ -997,7 +1010,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
 
               <div className="flex items-center gap-3">
                 {(() => {
-                  const minInvest = calculateMinInvestment(selectedStrategy, holdingsBySymbol);
+                  const minInvest = strategyMinimums[selectedStrategy.id];
                   if (minInvest) {
                     return (
                       <>
@@ -1081,7 +1094,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
                     const sec = holdingsBySymbol.get(sym) || holdingsBySymbol.get(normalizeSymbol(sym));
                     return { ...h, logo_url: sec?.logo_url || null, shares: getAdjustedShares(h, holdingsBySymbol) };
                   });
-                  onOpenFactsheet({ ...selectedStrategy, calculatedMinInvestment: calculateMinInvestment(selectedStrategy, holdingsBySymbol), holdingsWithLogos: enrichedHoldings });
+                  onOpenFactsheet({ ...selectedStrategy, calculatedMinInvestment: strategyMinimums[selectedStrategy.id], holdingsWithLogos: enrichedHoldings });
                 }}
                 className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-200/70"
               >

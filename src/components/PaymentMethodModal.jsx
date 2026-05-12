@@ -15,10 +15,16 @@ const PaymentMethodModal = ({
   onSelectOzow,
   onEFTConfirm,
   onSelectWallet,
+  onSelectEFT,
+  childFamilyMemberId,
+  childFirstName,
+  childWalletBalanceCents,
 }) => {
   const [eftExpanded, setEftExpanded] = useState(false);
   const [copied, setCopied] = useState(null);
   const [showThankYou, setShowThankYou] = useState(false);
+  const [showTopUpPrompt, setShowTopUpPrompt] = useState(false);
+  const [showEFTPopup, setShowEFTPopup] = useState(false);
   const { profile, loading: profileLoading } = useProfile();
 
   // ── FIX 1: Mint number pulled directly from profile ──────────────────────
@@ -26,24 +32,55 @@ const PaymentMethodModal = ({
 
   // ── FIX 2: Wallet balance fetched from the wallets table ─────────────────
   const [walletBalance, setWalletBalance] = useState(0);
+  const [walletLabel, setWalletLabel] = useState("Wallet");
   const [walletLoading, setWalletLoading] = useState(true);
+  const hasChildBalanceSnapshot = childWalletBalanceCents !== undefined && childWalletBalanceCents !== null;
+  const isChildWallet = !!childFamilyMemberId || hasChildBalanceSnapshot;
 
   useEffect(() => {
-    if (!profile?.id) return;
     const fetchWallet = async () => {
       setWalletLoading(true);
-      const { data, error } = await supabase
-        .from("wallets")
-        .select("balance")
-        .eq("user_id", profile.id)
-        .single();
-      if (!error && data?.balance !== undefined) {
-        setWalletBalance(Number(data.balance));
+      if (isChildWallet) {
+        // Show child context immediately when provided by parent flow.
+        if (hasChildBalanceSnapshot) {
+          setWalletBalance(Number(childWalletBalanceCents || 0) / 100);
+          const first = childFirstName || "Child";
+          setWalletLabel(`${first}'s wallet`);
+          if (!childFamilyMemberId) {
+            setWalletLoading(false);
+            return;
+          }
+        }
+
+        try {
+          const res = await fetch(`/api/child-wallet?family_member_id=${encodeURIComponent(childFamilyMemberId)}`);
+          const json = await res.json();
+          if (!res.ok) throw new Error(json?.error || "Failed to fetch child wallet");
+          setWalletBalance(Number(json?.balance || 0) / 100);
+          const firstName = json?.first_name || "Child";
+          setWalletLabel(`${firstName}'s wallet`);
+        } catch (e) {
+          console.error("[payment-method-modal] child wallet fetch failed:", e);
+          setWalletBalance(0);
+          setWalletLabel("Child wallet");
+        }
+      } else if (profile?.id) {
+        const { data, error } = await supabase
+          .from("wallets")
+          .select("balance")
+          .eq("user_id", profile.id)
+          .single();
+        if (!error && data?.balance !== undefined) {
+          setWalletBalance(Number(data.balance));
+        }
+        setWalletLabel("Wallet");
       }
       setWalletLoading(false);
     };
+
+    if (!isChildWallet && !profile?.id) return;
     fetchWallet();
-  }, [profile?.id]);
+  }, [childFamilyMemberId, childFirstName, childWalletBalanceCents, hasChildBalanceSnapshot, isChildWallet, profile?.id]);
 
   const handleCopy = (value, label) => {
     navigator.clipboard.writeText(value).then(() => {
@@ -81,9 +118,8 @@ const PaymentMethodModal = ({
   const hasEnoughFunds = walletBalance >= totalAmountWithFees;
   const hasAnyFunds = walletBalance > 0;
 
-  if (!isOpen) return null;
-
   return (
+    <>
     <AnimatePresence>
       {isOpen && (
         <motion.div
@@ -138,87 +174,38 @@ const PaymentMethodModal = ({
                 {/* ── Pay with Wallet ── */}
                 <button
                   type="button"
-                  disabled={!isWalletReady || !hasEnoughFunds}
+                  disabled={!isWalletReady}
                   onClick={() => {
-                    if (hasEnoughFunds) onSelectWallet?.();
+                    if (hasEnoughFunds) {
+                      setShowTopUpPrompt(false);
+                      onSelectWallet?.();
+                    } else {
+                      setShowEFTPopup(true);
+                    }
                   }}
-                  className={`w-full flex items-center gap-4 rounded-2xl border-2 px-4 py-3.5 text-left transition active:scale-[0.98] ${!hasEnoughFunds
-                      ? "border-slate-100 bg-slate-50 opacity-60 cursor-not-allowed"
-                      : "border-slate-200 bg-white hover:border-violet-300 hover:bg-violet-50/40"
-                    }`}
+                  className="w-full flex items-center gap-4 rounded-2xl border-2 border-slate-200 bg-white px-4 py-3.5 text-left transition active:scale-[0.98] hover:border-violet-300 hover:bg-violet-50/40"
                 >
-                  <div
-                    className={`flex h-10 w-10 items-center justify-center rounded-xl flex-shrink-0 ${!hasEnoughFunds ? "bg-slate-200" : "bg-violet-100"
-                      }`}
-                  >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl flex-shrink-0 bg-violet-100">
                     {!isWalletReady ? (
                       <Loader2 className="h-5 w-5 text-slate-400 animate-spin" />
                     ) : (
-                      <Wallet
-                        className={`h-5 w-5 ${!hasEnoughFunds ? "text-slate-400" : "text-violet-600"
-                          }`}
-                      />
+                      <Wallet className="h-5 w-5 text-violet-600" />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p
-                      className={`text-sm font-semibold ${!hasEnoughFunds ? "text-slate-500" : "text-slate-900"
-                        }`}
-                    >
-                      Pay with Wallet
-                    </p>
+                    <p className="text-sm font-semibold text-slate-900">Pay with Wallet</p>
                     <p className="text-xs text-slate-500 mt-0.5">
                       {!isWalletReady
                         ? "Checking balance..."
-                        : !hasAnyFunds
-                          ? "No wallet balance — please top up"
-                          : !hasEnoughFunds
-                            ? "Insufficient wallet funds — top up to continue"
-                            : `Available: ${formatAmount(walletBalance)}`}
+                        : hasEnoughFunds
+                          ? `Available in ${walletLabel}: ${formatAmount(walletBalance)}`
+                          : `Available in ${walletLabel}: ${formatAmount(walletBalance)}`}
                     </p>
                   </div>
-                  <span
-                    className={`text-[11px] font-semibold rounded-full px-2 py-0.5 flex-shrink-0 ${!hasEnoughFunds
-                        ? "text-slate-400 bg-slate-200"
-                        : "text-violet-600 bg-violet-100"
-                      }`}
-                  >
-                    {!hasEnoughFunds ? (hasAnyFunds ? "Top Up Required" : "Top Up") : "Wallet"}
+                  <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 flex-shrink-0 ${hasEnoughFunds ? "text-violet-600 bg-violet-100" : "text-amber-600 bg-amber-100"}`}>
+                    {hasEnoughFunds ? "Wallet" : "Top Up"}
                   </span>
                 </button>
-
-                {/* ── Paystack (Coming Soon) ── */}
-                <div className="relative w-full">
-                  <div className="w-full flex items-center gap-4 rounded-2xl border-2 border-slate-100 bg-slate-50/60 px-4 py-3.5 opacity-60 select-none cursor-not-allowed">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white border border-slate-100 shadow-sm flex-shrink-0 p-1.5">
-                      <img
-                        src="/paystack-logo.svg"
-                        alt="Paystack"
-                        className="w-full h-full object-contain"
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-slate-500">Paystack</p>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        Card, instant EFT, bank transfer & more
-                      </p>
-                    </div>
-                  </div>
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                    <span
-                      className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-widest text-white shadow-md"
-                      style={{
-                        background:
-                          "linear-gradient(135deg, #1e293b 0%, #334155 50%, #1e293b 100%)",
-                        boxShadow:
-                          "0 1px 8px 0 rgba(15,23,42,0.18), inset 0 1px 0 rgba(255,255,255,0.08)",
-                        letterSpacing: "0.12em",
-                      }}
-                    >
-                      Coming Soon
-                    </span>
-                  </div>
-                </div>
 
                 {/* ── Ozow (Coming Soon) ── */}
                 <div className="relative w-full">
@@ -398,6 +385,119 @@ const PaymentMethodModal = ({
           </motion.div>
         </motion.div>
       )}
+    </AnimatePresence>
+
+      {/* ── EFT Top-Up Popup ── */}
+      <AnimatePresence>
+        {showEFTPopup && (
+          <motion.div
+            key="eft-popup-overlay"
+            className="fixed inset-0 z-[10002] flex items-end justify-center bg-black/50 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={(e) => { if (e.target === e.currentTarget) setShowEFTPopup(false); }}
+          >
+            <motion.div
+              className="w-full max-w-md rounded-t-3xl bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl overflow-hidden"
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowEFTPopup(false)}
+                    className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200 mr-1"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width={16} height={16}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+                  <h2 className="text-base font-semibold text-slate-900">Direct EFT</h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowEFTPopup(false)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="max-h-[75vh] overflow-y-auto">
+                {/* Bank header */}
+                <div className="flex items-center justify-between px-4 py-3 bg-[#001f5b]">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-white/50">Receiving Bank</p>
+                    <p className="text-[11px] text-white/70 mt-0.5">EFT / Bank Transfer</p>
+                  </div>
+                  <img src={STANDARD_BANK_LOGO} alt="Standard Bank" className="h-6 object-contain" />
+                </div>
+
+                <div className="px-5 py-4 space-y-2.5">
+                  {/* Account details */}
+                  <div className="space-y-1.5 pb-1">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] text-slate-400">Account Holder</p>
+                      <p className="text-xs font-semibold text-slate-900">MINT PLATFORMS (PTY) LTD</p>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] text-slate-400">Account Type</p>
+                      <p className="text-xs font-semibold text-slate-900">Business Current Account</p>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] text-slate-400">Branch</p>
+                      <p className="text-xs font-semibold text-slate-900">Sandton City</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
+                    <div>
+                      <p className="text-[10px] text-slate-400 mb-0.5">Account Number</p>
+                      <p className="text-xs font-bold text-slate-900 tracking-widest">02 154 470 0</p>
+                    </div>
+                    <CopyBtn value="021544700" label="eft-popup-account" />
+                  </div>
+
+                  <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
+                    <div>
+                      <p className="text-[10px] text-slate-400 mb-0.5">Branch Code</p>
+                      <p className="text-xs font-bold text-slate-900 tracking-widest">002064</p>
+                    </div>
+                    <CopyBtn value="002064" label="eft-popup-branch" />
+                  </div>
+
+                  <div className="flex items-center justify-between rounded-xl bg-violet-50 px-3 py-2">
+                    <div>
+                      <p className="text-[10px] text-violet-500 mb-0.5">Your Reference (Mint Number)</p>
+                      <p className="text-xs font-bold text-violet-900 tracking-widest">
+                        {profileLoading ? "Loading..." : mintNumber ?? "Not available"}
+                      </p>
+                    </div>
+                    {mintNumber && <CopyBtn value={mintNumber} label="eft-popup-mint" />}
+                  </div>
+
+                  <p className="text-[10px] text-slate-400 leading-relaxed">
+                    Use your Mint number as the reference. Deposits reflect within 1–2 business days.
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() => { setShowEFTPopup(false); setShowThankYou(true); }}
+                    className="w-full py-3.5 rounded-xl bg-slate-900 text-white text-sm font-semibold transition active:scale-95"
+                  >
+                    I've sent the payment
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── Thank-you confirmation popup ── */}
       <AnimatePresence>
@@ -426,16 +526,14 @@ const PaymentMethodModal = ({
                     <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                   </svg>
                 </div>
-                <h3 className="text-xl font-bold text-slate-800 mb-1 text-center">Thank You!</h3>
-                <p className="text-sm font-semibold text-emerald-600 text-center">Payment Received</p>
+                <h3 className="text-xl font-bold text-slate-800 mb-1 text-center">Payment Noted</h3>
+                <p className="text-sm font-semibold text-emerald-600 text-center">We'll be in touch</p>
               </div>
 
               {/* Body */}
               <div className="px-6 pt-5 pb-2">
                 <p className="text-sm text-slate-600 text-center leading-relaxed mb-5">
-                  We've noted your EFT payment. Your deposit will reflect within{" "}
-                  <span className="font-semibold text-slate-800">1–3 business days</span>{" "}
-                  once it clears with the bank.
+                  We will contact you as soon as your payment has been received and confirmed.
                 </p>
 
                 {/* Pending badge info */}
@@ -450,10 +548,10 @@ const PaymentMethodModal = ({
                   </div>
                   <div>
                     <p className="text-xs font-bold text-amber-700 uppercase tracking-wide mb-0.5">
-                      Balance Pending
+                      Payment Pending
                     </p>
                     <p className="text-xs text-amber-600 leading-relaxed">
-                      Your balance will show as <span className="font-semibold">Pending</span> until the payment is verified and confirmed by our team.
+                      EFT deposits typically reflect within <span className="font-semibold">1–3 business days</span> once cleared with the bank.
                     </p>
                   </div>
                 </div>
@@ -476,7 +574,7 @@ const PaymentMethodModal = ({
           </motion.div>
         )}
       </AnimatePresence>
-    </AnimatePresence>
+    </>
   );
 };
 

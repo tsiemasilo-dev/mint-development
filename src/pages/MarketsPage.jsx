@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useMemo, useId } from "react";
 import { createPortal } from "react-dom";
 import MaintenanceModal from "../components/MaintenanceModal.jsx";
+import { registerCacheResetCallback } from "../lib/userCacheReset.js";
 import { supabase } from "../lib/supabase.js";
 import { getMarketsSecuritiesWithMetrics } from "../lib/marketData.js";
 import { getStrategiesWithMetrics, getPublicStrategies, formatChangePct, formatChangeAbs, getChangeColor } from "../lib/strategyData.js";
@@ -13,7 +14,7 @@ import Skeleton from "../components/Skeleton";
 import { ChartContainer } from "../components/ui/line-charts-2";
 import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatCurrency } from "../lib/formatCurrency";
-import { normalizeSymbol, getHoldingsArray, getHoldingSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot, calculateMinInvestment, getAdjustedShares } from "../lib/strategyUtils";
+import { normalizeSymbol, getHoldingsArray, getHoldingSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot, calculateMinInvestment, calculateMinInvestmentSync, getAdjustedShares } from "../lib/strategyUtils";
 
 const sortOptions = ["Market Cap", "Dividend Yield", "P/E Ratio", "1M Performance", "YTD Performance"];
 
@@ -124,17 +125,27 @@ const StrategyMiniChart = ({ values }) => {
   );
 };
 
+let _mkSecurities = null;
+let _mkStrategies = null;
+let _mkPublicStrategies = null;
+let _mkHoldingsSecurities = null;
+
+registerCacheResetCallback(() => {
+  _mkStrategies = null;
+  _mkHoldingsSecurities = null;
+});
+
 const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNewsArticle, onOpenFactsheet, initialViewMode, onViewModeChange }) => {
   const { profile, loading: profileLoading } = useProfile();
   const [portalTarget, setPortalTarget] = useState(null);
-  const [securities, setSecurities] = useState([]);
-  const [strategies, setStrategies] = useState([]);
-  const [publicStrategies, setPublicStrategies] = useState([]);
+  const [securities, setSecurities] = useState(() => _mkSecurities || []);
+  const [strategies, setStrategies] = useState(() => _mkStrategies || []);
+  const [publicStrategies, setPublicStrategies] = useState(() => _mkPublicStrategies || []);
   const [holdingsSecurities, setHoldingsSecurities] = useState([]);
   const [newsArticles, setNewsArticles] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [strategiesLoading, setStrategiesLoading] = useState(true);
-  const [publicStrategiesLoading, setPublicStrategiesLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !_mkSecurities);
+  const [strategiesLoading, setStrategiesLoading] = useState(() => !_mkStrategies);
+  const [publicStrategiesLoading, setPublicStrategiesLoading] = useState(() => !_mkPublicStrategies);
   const [searchQuery, setSearchQuery] = useState("");
   const [strategiesSearchQuery, setStrategiesSearchQuery] = useState("");
   const [newsSearchQuery, setNewsSearchQuery] = useState("");
@@ -244,13 +255,11 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
 
   useEffect(() => {
     const fetchSecurities = async () => {
+      if (_mkSecurities) { setLoading(false); return; }
       setLoading(true);
-      
       try {
         const data = await getMarketsSecuritiesWithMetrics();
-        console.log("📊 Fetched securities:", data);
-        console.log("📊 Securities with prices:", data.filter(s => s.currentPrice != null).length);
-        console.log("📊 Securities without prices:", data.filter(s => s.currentPrice == null).length);
+        _mkSecurities = data;
         setSecurities(data);
       } catch (error) {
         console.error("Error fetching securities:", error);
@@ -265,11 +274,11 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   // Fetch strategies with metrics
   useEffect(() => {
     const fetchStrategies = async () => {
+      if (_mkStrategies) { setStrategiesLoading(false); return; }
       setStrategiesLoading(true);
-      
       try {
         const data = await getStrategiesWithMetrics();
-        console.log("✅ Fetched strategies:", data);
+        _mkStrategies = data;
         setStrategies(data);
       } catch (error) {
         console.error("Error fetching strategies:", error);
@@ -285,11 +294,11 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   // Fetch public strategies for OpenStrategies view
   useEffect(() => {
     const fetchPublicStrategies = async () => {
+      if (_mkPublicStrategies) { setPublicStrategiesLoading(false); return; }
       setPublicStrategiesLoading(true);
-      
       try {
         const data = await getPublicStrategies();
-        console.log("✅ Fetched public strategies:", data);
+        _mkPublicStrategies = data;
         setPublicStrategies(data);
       } catch (error) {
         console.error("Error fetching public strategies:", error);
@@ -533,7 +542,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
         ? selectedRisks.has(strategy.risk_level)
         : true;
       
-      const minInvest = calculateMinInvestment(strategy, holdingsBySymbol);
+      const minInvest = calculateMinInvestmentSync(strategy, holdingsBySymbol);
       let investmentCategory = null;
       if (minInvest != null) {
         if (minInvest >= 10000) investmentCategory = "R10,000+";
@@ -575,7 +584,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       sorted.sort((a, b) => (b.performance_score || 0) - (a.performance_score || 0));
     }
     if (strategySort === "Lowest minimum") {
-      sorted.sort((a, b) => (calculateMinInvestment(a, holdingsBySymbol) || 0) - (calculateMinInvestment(b, holdingsBySymbol) || 0));
+      sorted.sort((a, b) => (calculateMinInvestmentSync(a, holdingsBySymbol) || 0) - (calculateMinInvestmentSync(b, holdingsBySymbol) || 0));
     }
 
     return sorted;
@@ -1000,48 +1009,37 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
             <NotificationBell onClick={onOpenNotifications} />
           </header>
 
-          {/* Toggle between OpenStrategies, Invest, and News */}
-          <div className="flex gap-2 rounded-2xl bg-white/10 p-1 backdrop-blur-sm">
-            <button
-              onClick={() => {
-                setViewMode("openstrategies");
-                setActiveChips(buildChipsFromFilters(_savedStrat));
-              }}
-              className={`flex-1 rounded-xl px-3 py-2 text-xs font-semibold transition-all ${
-                viewMode === "openstrategies"
-                  ? "bg-white text-slate-900 shadow-md"
-                  : "text-white/70"
-              }`}
-            >
-              OpenStrategies
-            </button>
-            <button
-              onClick={() => {
-                setViewMode("invest");
-                setActiveChips(buildInvestChips({ sectors: selectedSectors, exchanges: selectedExchanges }));
-              }}
-              className={`flex-1 rounded-xl px-3 py-2 text-xs font-semibold transition-all ${
-                viewMode === "invest"
-                  ? "bg-white text-slate-900 shadow-md"
-                  : "text-white/70"
-              }`}
-            >
-              Invest
-            </button>
-            <button
-              onClick={() => {
-                setViewMode("news");
-                setActiveChips([]);
-              }}
-              className={`flex-1 rounded-xl px-3 py-2 text-xs font-semibold transition-all ${
-                viewMode === "news"
-                  ? "bg-white text-slate-900 shadow-md"
-                  : "text-white/70"
-              }`}
-            >
-              News
-            </button>
-          </div>
+          {/* Toggle between Mint Basket and Markets */}
+          {viewMode !== "news" && (
+            <div className="flex gap-2 rounded-2xl bg-white/10 p-1 backdrop-blur-sm">
+              <button
+                onClick={() => {
+                  setViewMode("openstrategies");
+                  setActiveChips(buildChipsFromFilters(_savedStrat));
+                }}
+                className={`flex-1 rounded-xl px-3 py-2 text-xs font-semibold transition-all ${
+                  viewMode === "openstrategies"
+                    ? "bg-white text-slate-900 shadow-md"
+                    : "text-white/70"
+                }`}
+              >
+                Mint Basket
+              </button>
+              <button
+                onClick={() => {
+                  setViewMode("invest");
+                  setActiveChips(buildInvestChips({ sectors: selectedSectors, exchanges: selectedExchanges }));
+                }}
+                className={`flex-1 rounded-xl px-3 py-2 text-xs font-semibold transition-all ${
+                  viewMode === "invest"
+                    ? "bg-white text-slate-900 shadow-md"
+                    : "text-white/70"
+                }`}
+              >
+                Markets
+              </button>
+            </div>
+          )}
 
           {viewMode === "invest" && (
             <>
@@ -1673,8 +1671,9 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 <p className="mt-1 text-xs text-slate-400">Check back soon for new investment strategies</p>
               </div>
             ) : (
-              /* Strategies grouped by sector */
-              [...new Set(filteredStrategies.map(s => s.sector || 'General'))].map((sector) => {
+              <>
+              {/* Strategies grouped by sector */}
+              {[...new Set(filteredStrategies.map(s => s.sector || 'General'))].map((sector) => {
                 const sectorStrategies = filteredStrategies.filter(s => (s.sector || 'General') === sector);
                 
                 if (sectorStrategies.length === 0) return null;
@@ -1682,7 +1681,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
               return (
                 <section key={sector}>
                   <div className="mb-4 flex items-center justify-between">
-                    <h2 className="text-lg font-bold text-slate-900">{sector}</h2>
+                    <h2 className="text-lg font-bold text-slate-900">{sector === 'General' ? 'Child Friendly' : sector}</h2>
                     <ChevronRight className="h-5 w-5 text-slate-400" />
                   </div>
                   <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 scrollbar-hide">
@@ -1697,7 +1696,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                           : strategy.description
                         : '';
                       
-                      const calcMin = calculateMinInvestment(strategy, holdingsBySymbol);
+                      const calcMin = calculateMinInvestmentSync(strategy, holdingsBySymbol);
                       const formattedMinInvestment = calcMin ? `Min. ${formatCurrency(calcMin, "R")}` : null;
                       
                       const sparkline = [20, 22, 21, 24, 26, 25, 28, 30, 29, 32];
@@ -1800,7 +1799,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                   </div>
                 </section>
               );
-            })
+            })}
+              </>
             )}
           </>
         ) : (
@@ -1917,14 +1917,14 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 <div className="flex-1">
                   <h2 className="text-lg font-semibold text-slate-900">{selectedStrategy.name}</h2>
                   <p className="text-sm text-slate-500">
-                    {calculateMinInvestment(selectedStrategy, holdingsBySymbol) ? `Min. ${formatCurrency(calculateMinInvestment(selectedStrategy, holdingsBySymbol), "R")}` : "Calculating..."}
+                    {calculateMinInvestmentSync(selectedStrategy, holdingsBySymbol) ? `Min. ${formatCurrency(calculateMinInvestmentSync(selectedStrategy, holdingsBySymbol), "R")}` : "Calculating..."}
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-3 mb-6">
                 {(() => {
-                  const minInvest = calculateMinInvestment(selectedStrategy, holdingsBySymbol);
+                  const minInvest = calculateMinInvestmentSync(selectedStrategy, holdingsBySymbol);
                   return minInvest ? (
                     <>
                       <p className="text-2xl font-semibold text-slate-900">
@@ -2094,7 +2094,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                     const sec = holdingsBySymbol.get(sym) || holdingsBySymbol.get(normalizeSymbol(sym));
                     return { ...h, logo_url: sec?.logo_url || null, shares: getAdjustedShares(h, holdingsBySymbol) };
                   });
-                  onOpenFactsheet({ ...selectedStrategy, calculatedMinInvestment: calculateMinInvestment(selectedStrategy, holdingsBySymbol), holdingsWithLogos: enrichedHoldings });
+                  onOpenFactsheet({ ...selectedStrategy, calculatedMinInvestment: calculateMinInvestmentSync(selectedStrategy, holdingsBySymbol), holdingsWithLogos: enrichedHoldings });
                 }}
                 className="mt-6 w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-4 font-semibold text-white shadow-lg transition-all active:scale-95"
               >

@@ -19,10 +19,14 @@ const ManageSubscriptionsPage = ({ onBack }) => {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       const data = await res.json();
-      if (!data.success) throw new Error(data.error || "Failed to load subscriptions");
-      setSubscriptions(data.subscriptions || []);
+      if (!data.success) {
+        // Table may not exist yet — treat as empty rather than crashing
+        setSubscriptions([]);
+      } else {
+        setSubscriptions(data.subscriptions || []);
+      }
     } catch (err) {
-      setError(err.message);
+      setSubscriptions([]);
     } finally {
       setLoading(false);
     }
@@ -122,7 +126,7 @@ const ManageSubscriptionsPage = ({ onBack }) => {
             {subscriptions.map((sub) => {
               const isActive = sub.status === "active";
               const isToggling = togglingId === sub.id;
-              const amountRands = (sub.amount_cents || 2900) / 100;
+              const amountRands = Number(sub.amount || 29);
 
               return (
                 <div
@@ -139,7 +143,7 @@ const ManageSubscriptionsPage = ({ onBack }) => {
                     <div className="flex items-start justify-between gap-2 mb-3">
                       <div>
                         <p className="text-sm font-semibold text-slate-900">
-                          {sub.strategy_name || "Strategy Subscription"}
+                          {sub.plan || "Strategy Subscription"}
                         </p>
                         <p className="text-xs text-slate-500 mt-0.5">
                           {formatCurrency(amountRands, "R")}/month
@@ -166,7 +170,7 @@ const ManageSubscriptionsPage = ({ onBack }) => {
                       <Calendar className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
                       <p className="text-xs text-slate-500">
                         {isActive
-                          ? `Next charge on ${formatDate(sub.next_billing_date)}`
+                          ? `Next charge on ${formatDate(sub.current_period_end)}`
                           : `Cancelled — no further charges`}
                       </p>
                     </div>
@@ -174,24 +178,10 @@ const ManageSubscriptionsPage = ({ onBack }) => {
                     {/* Toggle button */}
                     <button
                       type="button"
-                      disabled={isToggling}
-                      onClick={() => toggleStatus(sub)}
-                      className={`w-full rounded-xl py-2.5 text-xs font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed ${
-                        isActive
-                          ? "bg-rose-50 text-rose-600 border border-rose-100 hover:bg-rose-100"
-                          : "bg-violet-50 text-violet-700 border border-violet-100 hover:bg-violet-100"
-                      }`}
+                      disabled={true}
+                      className="w-full rounded-xl py-2.5 text-xs font-semibold bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60"
                     >
-                      {isToggling ? (
-                        <span className="flex items-center justify-center gap-1.5">
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          Updating…
-                        </span>
-                      ) : isActive ? (
-                        "Cancel Subscription"
-                      ) : (
-                        "Reactivate Subscription"
-                      )}
+                      {isActive ? "Cancel Subscription" : "Reactivate Subscription"}
                     </button>
                   </div>
                 </div>

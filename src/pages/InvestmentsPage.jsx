@@ -49,14 +49,9 @@ const InvestmentsPage = ({ onOpenNotifications, onOpenInvest }) => {
           return;
         }
 
-        const { data, error: allocationsError } = await supabase
-          .from("allocations")
-          .select("id, asset_class, weight, value, as_of_date")
-          .eq("user_id", userData.user.id)
-          .order("as_of_date", { ascending: false });
-
-        if (isMounted && !allocationsError) {
-          setAllocations(data || []);
+        // allocations table removed — set empty gracefully
+        if (isMounted) {
+          setAllocations([]);
         }
       } catch (error) {
         console.error("Failed to load allocations", error);
@@ -278,6 +273,8 @@ const InvestmentsPage = ({ onOpenNotifications, onOpenInvest }) => {
               <p className="mt-1 text-xs text-slate-400">Set your target amount and date.</p>
               <form className="mt-4 space-y-4" onSubmit={handleGoalSubmit}>
                 <input
+                  id="investment-goal-name"
+                  name="investment-goal-name"
                   type="text"
                   value={goalName}
                   onChange={(event) => setGoalName(event.target.value)}
@@ -286,6 +283,8 @@ const InvestmentsPage = ({ onOpenNotifications, onOpenInvest }) => {
                   required
                 />
                 <input
+                  id="investment-goal-target"
+                  name="investment-goal-target"
                   type="number"
                   min="1"
                   value={goalTarget}
@@ -295,6 +294,8 @@ const InvestmentsPage = ({ onOpenNotifications, onOpenInvest }) => {
                   required
                 />
                 <input
+                  id="investment-goal-date"
+                  name="investment-goal-date"
                   type="date"
                   value={goalDate}
                   onChange={(event) => setGoalDate(event.target.value)}

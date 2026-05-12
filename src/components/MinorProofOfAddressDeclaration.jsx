@@ -20,6 +20,7 @@ const VALUE_CLR     = [30, 41, 59];        // Slate-800
 const WHITE         = [255, 255, 255];
 
 const CEO_SIGNATURE_URL = "/assets/ceo-signature.png";
+const MINT_LOGO_URL = "/assets/mint-logo.png";
 
 const PAGE_W  = 210;
 const PAGE_H  = 297;
@@ -40,21 +41,41 @@ function formatDateLong(iso) {
   return iso;
 }
 
-async function fetchImageBase64(url) {
+async function fetchImageBase64(url, { whiten = false } = {}) {
   try {
     const res = await fetch(url);
     if (!res.ok) return null;
     const blob = await res.blob();
-    const data = await new Promise((resolve) => {
+    const dataUrl = await new Promise((resolve) => {
       const r = new FileReader();
       r.onloadend = () => resolve(r.result);
       r.readAsDataURL(blob);
     });
+    // Draw through canvas to normalise indexed/palette PNGs to RGBA —
+    // jsPDF addImage breaks on 4-bit colormap PNGs without this step.
+    // whiten=true fills every opaque pixel white (for logos on dark headers).
     return new Promise((resolve) => {
       const img = new Image();
-      img.onload = () => resolve({ data, width: img.width, height: img.height });
-      img.onerror = () => resolve({ data, width: 0, height: 0 });
-      img.src = data;
+      img.onload = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0);
+          if (whiten) {
+            ctx.globalCompositeOperation = "source-atop";
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          }
+          const normalised = canvas.toDataURL("image/png");
+          resolve({ data: normalised, width: img.width, height: img.height });
+        } catch {
+          resolve({ data: dataUrl, width: img.width, height: img.height });
+        }
+      };
+      img.onerror = () => resolve({ data: dataUrl, width: 0, height: 0 });
+      img.src = dataUrl;
     });
   } catch {
     return null;
@@ -107,7 +128,7 @@ function drawSectionHeading(doc, y, title) {
 }
 
 // ─── Rich branded header ──────────────────────────────────────────────────────
-function addPageHeader(doc, pageNum, totalPages) {
+function addPageHeader(doc, pageNum, totalPages, mintLogoB64) {
   // White background
   doc.setFillColor(...WHITE);
   doc.rect(0, 0, PAGE_W, PAGE_H, "F");
@@ -128,15 +149,25 @@ function addPageHeader(doc, pageNum, totalPages) {
   doc.circle(18, 5, 22, "F");
   doc.setGState(doc.GState({ opacity: 1 }));
 
-  // Company name
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
-  doc.setTextColor(...WHITE);
-  doc.text("Mint", MARGIN, HEADER_H / 2 - 1);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
-  doc.setTextColor(...MINT_LIGHT);
-  doc.text("Financial Services (Pty) Ltd  ·  FSP No. 55118", MARGIN, HEADER_H / 2 + 5);
+  // Mint logo or fallback text
+  if (mintLogoB64?.data && mintLogoB64.width > 0) {
+    const logoH = 10;
+    const logoW = logoH * (mintLogoB64.width / mintLogoB64.height);
+    doc.addImage(mintLogoB64.data, "PNG", MARGIN, (HEADER_H - logoH) / 2, logoW, logoH, undefined, "FAST");
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(...MINT_LIGHT);
+    doc.text("Financial Services (Pty) Ltd  ·  FSP No. 55118", MARGIN, HEADER_H / 2 + 8);
+  } else {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.setTextColor(...WHITE);
+    doc.text("Mint", MARGIN, HEADER_H / 2 - 1);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...MINT_LIGHT);
+    doc.text("Financial Services (Pty) Ltd  ·  FSP No. 55118", MARGIN, HEADER_H / 2 + 5);
+  }
 
   // "CONFIDENTIAL" badge top-right
   doc.setFillColor(255, 255, 255);
@@ -210,7 +241,10 @@ function addCeoSignature(doc, ceoSigB64, y) {
 
 async function buildSameAddressPdf({ parentProfile, coGuardianProfiles, childData, signatureDataUrl, signedAt }) {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
-  const ceoSigB64 = await fetchImageBase64(CEO_SIGNATURE_URL);
+  const [ceoSigB64, mintLogoB64] = await Promise.all([
+    fetchImageBase64(CEO_SIGNATURE_URL),
+    fetchImageBase64(MINT_LOGO_URL, { whiten: true }),
+  ]);
 
   const parentName = [parentProfile?.firstName, parentProfile?.lastName].filter(Boolean).join(" ") || "—";
   const parentId = parentProfile?.idNumber || "—";
@@ -224,7 +258,7 @@ async function buildSameAddressPdf({ parentProfile, coGuardianProfiles, childDat
   });
   const allGuardianNames = [parentName, ...coGuardianProfiles.map(g => [g.firstName, g.lastName].filter(Boolean).join(" "))].join(" and ");
 
-  addPageHeader(doc, 1, 1);
+  addPageHeader(doc, 1, 1, mintLogoB64);
 
   let y = HEADER_H + 9;
 
@@ -308,7 +342,7 @@ async function buildSameAddressPdf({ parentProfile, coGuardianProfiles, childDat
 
   if (y > PAGE_H - 110) {
     doc.addPage();
-    addPageHeader(doc, 2, 2);
+    addPageHeader(doc, 2, 2, mintLogoB64);
     y = MARGIN + 20;
   }
 
@@ -319,7 +353,7 @@ async function buildSameAddressPdf({ parentProfile, coGuardianProfiles, childDat
   y += 6;
 
   if (signatureDataUrl) {
-    doc.addImage(signatureDataUrl, "PNG", MARGIN, y, 60, 22, undefined, "FAST");
+    doc.addImage(signatureDataUrl, "JPEG", MARGIN, y, 60, 22, undefined, "FAST");
     y += 26;
   } else {
     y += 30;
@@ -364,7 +398,10 @@ async function buildSameAddressPdf({ parentProfile, coGuardianProfiles, childDat
 
 async function buildDifferentAddressPdf({ parentProfile, coGuardianProfiles, childData, childAddress, signatureDataUrl, signedAt }) {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
-  const ceoSigB64 = await fetchImageBase64(CEO_SIGNATURE_URL);
+  const [ceoSigB64, mintLogoB64] = await Promise.all([
+    fetchImageBase64(CEO_SIGNATURE_URL),
+    fetchImageBase64(MINT_LOGO_URL, { whiten: true }),
+  ]);
 
   const parentName = [parentProfile?.firstName, parentProfile?.lastName].filter(Boolean).join(" ") || "—";
   const parentId = parentProfile?.idNumber || "—";
@@ -379,7 +416,7 @@ async function buildDifferentAddressPdf({ parentProfile, coGuardianProfiles, chi
   const fullChildAddress = [childAddress.line1, childAddress.suburb, childAddress.city, childAddress.province, childAddress.postalCode].filter(Boolean).join(", ");
   const allGuardianNames = [parentName, ...coGuardianProfiles.map(g => [g.firstName, g.lastName].filter(Boolean).join(" "))].join(" and ");
 
-  addPageHeader(doc, 1, 1);
+  addPageHeader(doc, 1, 1, mintLogoB64);
 
   let y = HEADER_H + 9;
 
@@ -456,7 +493,7 @@ async function buildDifferentAddressPdf({ parentProfile, coGuardianProfiles, chi
 
   if (y > PAGE_H - 110) {
     doc.addPage();
-    addPageHeader(doc, 2, 2);
+    addPageHeader(doc, 2, 2, mintLogoB64);
     y = MARGIN + 20;
   }
 
@@ -467,7 +504,7 @@ async function buildDifferentAddressPdf({ parentProfile, coGuardianProfiles, chi
   y += 6;
 
   if (signatureDataUrl) {
-    doc.addImage(signatureDataUrl, "PNG", MARGIN, y, 60, 22, undefined, "FAST");
+    doc.addImage(signatureDataUrl, "JPEG", MARGIN, y, 60, 22, undefined, "FAST");
     y += 26;
   } else {
     y += 30;
@@ -562,7 +599,15 @@ export default function MinorProofOfAddressDeclaration({ childData, parentProfil
   // Init signature pads
   useEffect(() => {
     if (answer === "same" && sameCanvasRef.current && !samePadRef.current) {
-      samePadRef.current = new SignaturePad(sameCanvasRef.current, {
+      const canvas = sameCanvasRef.current;
+      const ratio = Math.max(window.devicePixelRatio || 1, 1);
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width > 0) {
+        canvas.width = Math.round(rect.width * ratio);
+        canvas.height = Math.round(rect.height * ratio);
+        canvas.getContext("2d").scale(ratio, ratio);
+      }
+      samePadRef.current = new SignaturePad(canvas, {
         backgroundColor: "rgb(255,255,255)", penColor: "rgb(30,27,75)", minWidth: 1, maxWidth: 2.5,
       });
     }
@@ -572,7 +617,15 @@ export default function MinorProofOfAddressDeclaration({ childData, parentProfil
     if (answer === "different" && addressStep === "sign" && diffCanvasRef.current && !diffPadRef.current) {
       setTimeout(() => {
         if (diffCanvasRef.current && !diffPadRef.current) {
-          diffPadRef.current = new SignaturePad(diffCanvasRef.current, {
+          const canvas = diffCanvasRef.current;
+          const ratio = Math.max(window.devicePixelRatio || 1, 1);
+          const rect = canvas.getBoundingClientRect();
+          if (rect.width > 0) {
+            canvas.width = Math.round(rect.width * ratio);
+            canvas.height = Math.round(rect.height * ratio);
+            canvas.getContext("2d").scale(ratio, ratio);
+          }
+          diffPadRef.current = new SignaturePad(canvas, {
             backgroundColor: "rgb(255,255,255)", penColor: "rgb(30,27,75)", minWidth: 1, maxWidth: 2.5,
           });
         }
@@ -586,7 +639,7 @@ export default function MinorProofOfAddressDeclaration({ childData, parentProfil
     }
     setSigning(true); setError("");
     try {
-      const signatureDataUrl = samePadRef.current.toDataURL("image/png");
+      const signatureDataUrl = samePadRef.current.toDataURL("image/jpeg", 0.92);
       const signedAt = new Date().toISOString();
       const pdfBuffer = await buildSameAddressPdf({ parentProfile, coGuardianProfiles, childData, signatureDataUrl, signedAt });
       const safeName = (childData?.first_name || "minor").toLowerCase().replace(/\s+/g, "-");
@@ -611,7 +664,7 @@ export default function MinorProofOfAddressDeclaration({ childData, parentProfil
     }
     setSigning(true); setError("");
     try {
-      const signatureDataUrl = diffPadRef.current.toDataURL("image/png");
+      const signatureDataUrl = diffPadRef.current.toDataURL("image/jpeg", 0.92);
       const signedAt = new Date().toISOString();
       const pdfBuffer = await buildDifferentAddressPdf({ parentProfile, coGuardianProfiles, childData, childAddress, signatureDataUrl, signedAt });
       const safeName = (childData?.first_name || "minor").toLowerCase().replace(/\s+/g, "-");
