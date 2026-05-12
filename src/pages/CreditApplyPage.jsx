@@ -839,6 +839,8 @@ const LoanCalculatorStep = ({ onSignedContinue }) => {
    const MAX_LOAN_PERIOD = 6;
    const [loanAmount, setLoanAmount] = useState(3000);
    const [loanPeriod, setLoanPeriod] = useState(3);
+   const [amountEditing, setAmountEditing] = useState(false);
+   const [amountInputText, setAmountInputText] = useState("");
    const amountTrackRef = useRef(null);
    const periodTrackRef = useRef(null);
    const dragRef = useRef({ active: false, type: null, startX: 0, startValue: 0, isTouch: false });
@@ -1157,10 +1159,37 @@ const LoanCalculatorStep = ({ onSignedContinue }) => {
             <div className="space-y-3">
                <div className="flex items-center justify-between">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Loan Amount</p>
-                  <div className="flex items-baseline gap-0.5">
-                     <span className="text-[12px] font-medium text-slate-400">R</span>
-                     <span className="text-[17px] font-bold tracking-[-0.02em] text-slate-900">{formatInt(loanAmount)}</span>
-                  </div>
+                  {amountEditing ? (
+                     <div className="flex items-baseline gap-0.5">
+                        <span className="text-[12px] font-medium text-slate-400">R</span>
+                        <input
+                           type="number"
+                           inputMode="numeric"
+                           autoFocus
+                           value={amountInputText}
+                           onChange={(e) => setAmountInputText(e.target.value)}
+                           onBlur={() => {
+                              const n = Number(amountInputText);
+                              if (!isNaN(n) && n > 0) {
+                                 const clamped = Math.min(MAX_LOAN_AMOUNT, Math.max(MIN_LOAN_AMOUNT, Math.round(n / AMOUNT_STEP) * AMOUNT_STEP));
+                                 setLoanAmount(clamped);
+                              }
+                              setAmountEditing(false);
+                           }}
+                           onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                           className="w-[80px] text-right text-[17px] font-bold tracking-[-0.02em] text-slate-900 bg-slate-100 rounded-md px-2 py-0.5 outline-none focus:ring-2 focus:ring-[#160d2a]/30"
+                        />
+                     </div>
+                  ) : (
+                     <button
+                        type="button"
+                        onClick={() => { setAmountInputText(String(loanAmount)); setAmountEditing(true); }}
+                        className="flex items-baseline gap-0.5 cursor-text"
+                     >
+                        <span className="text-[12px] font-medium text-slate-400">R</span>
+                        <span className="text-[17px] font-bold tracking-[-0.02em] text-slate-900">{formatInt(loanAmount)}</span>
+                     </button>
+                  )}
                </div>
                <div
                   ref={amountTrackRef}
@@ -1193,7 +1222,7 @@ const LoanCalculatorStep = ({ onSignedContinue }) => {
                </div>
                <div className="flex justify-between px-0.5">
                   <span className="text-[10px] text-slate-400 font-medium">R 1,000</span>
-                  <span className="text-[10px] text-slate-400 font-medium">R 9,000</span>
+                  <span className="text-[10px] text-slate-400 font-medium">R 10,000</span>
                </div>
             </div>
 
