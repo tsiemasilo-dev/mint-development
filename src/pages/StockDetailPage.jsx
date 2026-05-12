@@ -1,12 +1,21 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { ArrowLeft, TrendingUp, TrendingDown, Star, Check } from "lucide-react";
-import { getSecurityBySymbol, getSecurityPrices, normalizePriceSeries } from "../lib/marketData.js";
+import { ArrowLeft, Star, Check, ChevronDown, ChevronUp, X } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { getSecurityBySymbol, getSecurityPrices } from "../lib/marketData.js";
 import { supabase } from "../lib/supabase.js";
 import { useProfile } from "../lib/useProfile";
-import { checkOnboardingComplete } from "../lib/checkOnboardingComplete";
 import { useOnboardingStatus } from "../lib/useOnboardingStatus";
+import GoalLinkModal from "../components/GoalLinkModal.jsx";
 
-const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavigateToOnboarding }) => {
+const BROKER_FEE_RATE = 0.0025;
+const ISIN_FEE_PER_ASSET = 69;
+const TRANSACTION_FEE_RATE = 0.038;
+const CASH_BUFFER_RATE = 0.08;
+const MIN_INVESTMENT = 1000;
+
+const fmt = (val, cur = "R") => `${cur} ${Number(val).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavigateToOnboarding, onProceedToPayment }) => {
   const { onboardingComplete, loading: onboardingLoading } = useOnboardingStatus();
   const { profile } = useProfile();
   const [selectedPeriod, setSelectedPeriod] = useState("YTD");
@@ -18,6 +27,12 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
   const [watchlist, setWatchlist] = useState([]);
   const [watchlistAnimating, setWatchlistAnimating] = useState(false);
   const [buttonsVisible, setButtonsVisible] = useState(false);
+  // Buy sheet + goal modal state
+  const [showBuySheet, setShowBuySheet] = useState(false);
+  const [buyShares, setBuyShares] = useState(1);
+  const [buyFeeExpanded, setBuyFeeExpanded] = useState(false);
+  const [showGoalModal, setShowGoalModal] = useState(false);
+  const [pendingCheckout, setPendingCheckout] = useState(null);
   const periods = ["1W", "1M", "3M", "6M", "YTD", "1Y"];
 
   useEffect(() => {
@@ -213,6 +228,52 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
     if (priceHistory.length === 0 || index >= priceHistory.length) return '';
     const date = new Date(priceHistory[index].ts);
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  // ── Buy sheet fee calculations ──────────────────────────────────────────────
+  const { displayCurrency, priceValue } = useMemo(() => {
+    const currency = displaySecurity?.currency || "R";
+    const normalized = currency.toUpperCase() === "ZAC" ? "R" : currency;
+    const price = Number(displaySecurity?.currentPrice ?? 0);
+    const normPrice = currency.toUpperCase() === "ZAC" ? price / 100 : price;
+    return { displayCurrency: normalized, priceValue: Number.isFinite(normPrice) ? normPrice : 0 };
+  }, [displaySecurity]);
+
+  const minShares = useMemo(() => {
+    if (priceValue <= 0) return 1;
+    return Math.ceil(MIN_INVESTMENT / priceValue);
+  }, [priceValue]);
+
+  const validBuyShares = Number.isFinite(buyShares) && buyShares > 0 ? buyShares : 0;
+  const buyTotalAmount = validBuyShares * priceValue;
+  const buyIsInvalid = !Number.isFinite(buyShares) || buyShares <= 0 || buyShares < minShares;
+
+  const buyFees = useMemo(() => {
+    const buffered = buyTotalAmount * (1 + CASH_BUFFER_RATE);
+    const broker = buffered * BROKER_FEE_RATE;
+    const isin = ISIN_FEE_PER_ASSET * (validBuyShares > 0 ? 1 : 0);
+    const txn = buffered * TRANSACTION_FEE_RATE;
+    return { broker, isin, txn, total: buffered + broker + isin + txn };
+  }, [buyTotalAmount, validBuyShares]);
+
+  const handleOpenBuySheet = () => {
+    if (onboardingLoading) return;
+    if (!onboardingComplete) { setShowOnboardingModal(true); return; }
+    setBuyShares(minShares);
+    setBuyFeeExpanded(false);
+    setShowBuySheet(true);
+  };
+
+  const handleBuySheetInvest = () => {
+    if (buyIsInvalid) return;
+    setPendingCheckout({
+      security: displaySecurity,
+      amount: buyFees.total,
+      baseAmount: buyTotalAmount,
+      shareCount: validBuyShares,
+    });
+    setShowBuySheet(false);
+    setTimeout(() => setShowGoalModal(true), 320);
   };
 
   return (
@@ -521,7 +582,7 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
         {/* Watchlist — compact squircle */}
         <button
           onClick={toggleWatchlist}
-          className={`relative flex h-[62px] w-[90px] flex-shrink-0 flex-col items-center justify-center gap-1 rounded-[22px] text-[10px] font-semibold uppercase tracking-widest shadow-[0_6px_24px_rgba(0,0,0,0.10)] ring-1 transition-all duration-300 active:scale-95 ${
+          className={`relative flex h-[68px] w-[100px] flex-shrink-0 flex-col items-center justify-center gap-1.5 rounded-[22px] text-[10px] font-semibold uppercase tracking-widest shadow-[0_6px_24px_rgba(0,0,0,0.10)] ring-1 transition-all duration-300 active:scale-95 ${
             isWatched
               ? "bg-amber-400 text-amber-900 ring-amber-300/60"
               : "bg-white/95 text-slate-500 ring-slate-200/70"
@@ -530,38 +591,169 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
         >
           <span className={`transition-transform duration-300 ${watchlistAnimating ? "scale-125" : "scale-100"}`}>
             {isWatched ? (
-              <Star className={`h-5 w-5 fill-amber-800 text-amber-800 ${watchlistAnimating ? "animate-[spin_0.4s_ease-out]" : ""}`} />
+              <Star className={`h-6 w-6 fill-amber-800 text-amber-800 ${watchlistAnimating ? "animate-[spin_0.4s_ease-out]" : ""}`} />
             ) : (
-              <Star className="h-5 w-5 text-slate-400" />
+              <Star className="h-6 w-6 text-slate-400" />
             )}
           </span>
           <span>{isWatched ? "Saved" : "Watchlist"}</span>
         </button>
 
-        {/* Buy Now — dominant elongated pill */}
+        {/* Invest — dominant elongated pill */}
         <button
           type="button"
-          disabled={buyChecking}
-          onClick={async () => {
-            setBuyChecking(true);
-            try {
-              if (onboardingLoading) return;
-              if (!onboardingComplete) {
-                setShowOnboardingModal(true);
-                return;
-              }
-              onOpenBuy?.();
-            } finally {
-              setBuyChecking(false);
-            }
-          }}
-          className="relative flex h-[62px] flex-1 items-center justify-center overflow-hidden rounded-full bg-gradient-to-r from-[#0a0a0a] via-[#2d0f6b] to-[#7c3aed] text-[15px] font-bold tracking-wide text-white shadow-[0_10px_40px_rgba(109,40,217,0.50)] transition-all active:scale-[0.97] disabled:opacity-60"
+          onClick={handleOpenBuySheet}
+          className="relative flex h-[68px] flex-1 items-center justify-center overflow-hidden rounded-full bg-gradient-to-r from-[#0a0a0a] via-[#2d0f6b] to-[#7c3aed] text-[15px] font-bold tracking-wide text-white shadow-[0_10px_40px_rgba(109,40,217,0.50)] transition-all active:scale-[0.97]"
         >
-          {/* Inner shimmer line */}
           <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
-          {buyChecking ? "Checking…" : "Buy Now"}
+          Invest
         </button>
       </div>
+
+      {/* ── Buy Sheet Modal ─────────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {showBuySheet && (
+          <motion.div
+            key="buy-sheet-overlay"
+            className="fixed inset-0 z-[9000] flex items-end justify-center bg-black/50 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={(e) => { if (e.target === e.currentTarget) setShowBuySheet(false); }}
+          >
+            <motion.div
+              className="w-full max-w-md rounded-t-3xl bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl"
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+                <div className="flex items-center gap-3">
+                  {displaySecurity?.logo_url ? (
+                    <img src={displaySecurity.logo_url} alt={displaySecurity.symbol} className="h-8 w-8 rounded-full border border-slate-100 object-cover" />
+                  ) : (
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-100 text-xs font-bold text-violet-700">
+                      {displaySecurity?.symbol?.substring(0, 2)}
+                    </div>
+                  )}
+                  <h2 className="text-base font-semibold text-slate-900">Invest in {displaySecurity?.symbol}</h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowBuySheet(false)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="max-h-[75vh] overflow-y-auto px-5 py-5 space-y-4">
+                {/* Price per share */}
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Price per share</p>
+                  <p className="mt-2 text-3xl font-bold text-slate-900">{displayCurrency}{priceValue.toFixed(2)}</p>
+                </div>
+
+                {/* Shares input */}
+                <div>
+                  <label className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Number of shares</label>
+                  <input
+                    type="number"
+                    min={minShares}
+                    step="1"
+                    value={buyShares}
+                    onChange={(e) => setBuyShares(Number(e.target.value))}
+                    className={`mt-2 w-full rounded-2xl border bg-white px-4 py-3.5 text-base text-slate-800 shadow-sm outline-none focus:border-violet-400 ${buyIsInvalid ? "border-red-300" : "border-slate-200"}`}
+                  />
+                  {buyIsInvalid && (
+                    <p className="mt-1.5 text-xs text-red-500">
+                      Minimum {minShares} share{minShares !== 1 ? "s" : ""} required ({displayCurrency}{MIN_INVESTMENT.toLocaleString()} minimum)
+                    </p>
+                  )}
+                </div>
+
+                {/* Investment amount */}
+                <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3.5 shadow-sm">
+                  <span className="text-sm text-slate-600">Investment Amount</span>
+                  <span className="font-semibold text-slate-900">{fmt(buyTotalAmount, displayCurrency)}</span>
+                </div>
+
+                {/* Fee breakdown */}
+                <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => setBuyFeeExpanded(!buyFeeExpanded)}
+                    className="flex w-full items-center justify-between px-4 py-3"
+                  >
+                    <span className="text-xs font-semibold text-slate-600">Fee Breakdown</span>
+                    {buyFeeExpanded ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+                  </button>
+                  <AnimatePresence>
+                    {buyFeeExpanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="space-y-2 px-4 pb-3">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs text-slate-500">Broker Fee (0.25%)</p>
+                            <p className="text-xs font-semibold text-slate-900">{fmt(buyFees.broker, displayCurrency)}</p>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs text-slate-500">Custody Fee</p>
+                            <p className="text-xs font-semibold text-slate-900">{fmt(buyFees.isin, displayCurrency)}</p>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs text-slate-500">Transaction Fee (3.8%)</p>
+                            <p className="text-xs font-semibold text-slate-900">{fmt(buyFees.txn, displayCurrency)}</p>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                  <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50 px-4 py-3">
+                    <p className="text-xs font-semibold text-slate-700">Total Cost</p>
+                    <p className="text-sm font-bold text-slate-900">{fmt(buyFees.total, displayCurrency)}</p>
+                  </div>
+                </div>
+
+                {/* Invest button */}
+                <button
+                  type="button"
+                  disabled={buyIsInvalid}
+                  onClick={handleBuySheetInvest}
+                  className={`w-full rounded-2xl py-4 text-sm font-bold uppercase tracking-[0.18em] text-white shadow-lg transition-all active:scale-95 ${
+                    buyIsInvalid
+                      ? "cursor-not-allowed bg-slate-300"
+                      : "bg-gradient-to-r from-[#0a0a0a] via-[#2d0f6b] to-[#7c3aed] shadow-[0_8px_24px_rgba(109,40,217,0.40)]"
+                  }`}
+                >
+                  Invest
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Goal Link Modal ──────────────────────────────────────────────────── */}
+      <GoalLinkModal
+        isOpen={showGoalModal}
+        onClose={() => setShowGoalModal(false)}
+        onConfirm={(goalId) => {
+          setShowGoalModal(false);
+          if (onProceedToPayment && pendingCheckout) {
+            onProceedToPayment({ ...pendingCheckout, goalId });
+          }
+        }}
+        investmentAmount={pendingCheckout?.baseAmount}
+        assetName={pendingCheckout?.security?.name || pendingCheckout?.security?.symbol}
+      />
 
       {showOnboardingModal && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowOnboardingModal(false)}>
