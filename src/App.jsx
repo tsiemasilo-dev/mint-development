@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback, useMemo, lazy, Suspense, startTransition } from "react";
 import { supabase } from "./lib/supabase.js";
+import { getMarketsSecuritiesWithMetrics } from "./lib/marketData.js";
 import { setCachedSession, clearSessionCache } from "./lib/sessionCache.js";
 import { clearAllUserCaches } from "./lib/userCacheReset.js";
 import { App as CapacitorApp } from '@capacitor/app';
@@ -657,6 +658,7 @@ const App = () => {
 
   // Prefetch lazily-loaded chunks that users commonly navigate to, so the first
   // tap feels instant rather than waiting for the JS chunk to download.
+  // Also pre-warms the markets securities cache so the Markets tab feels instant.
   useEffect(() => {
     if (!isAuthenticated) return;
     const prefetch = () => {
@@ -665,6 +667,8 @@ const App = () => {
       import("./pages/InvestPage.jsx");
       import("./pages/PaymentPage.jsx");
       import("./pages/PaymentSuccessPage.jsx");
+      // Fire-and-forget: warm the markets data cache before the user navigates there
+      getMarketsSecuritiesWithMetrics().catch(() => {});
     };
     const schedule = window.requestIdleCallback
       ? () => window.requestIdleCallback(prefetch, { timeout: 3000 })

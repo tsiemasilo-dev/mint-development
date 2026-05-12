@@ -1291,7 +1291,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
     saveMarketsStrategyFilters({ sort: "Recommended", risks: new Set(), minInvestment: null, exposure: new Set(), timeHorizon: new Set(), sectors: new Set() });
   };
 
-  if (profileLoading || loading) {
+  if (profileLoading) {
     return (
       <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)]">
         <div className="rounded-b-[36px] bg-gradient-to-b from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-4 pb-12 pt-12">
@@ -1537,7 +1537,32 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
 
         {viewMode === "invest" ? (
           <>
-            {/* Filter and Sort Bar */}
+            {/* Inline skeleton cards — only shown on genuine first load when no data yet */}
+            {loading && securities.length === 0 && (
+              <div className="flex flex-col gap-6">
+                {/* Horizontal sparkline card skeleton */}
+                <div>
+                  <Skeleton className="mb-3 h-5 w-36 rounded-lg" />
+                  <div className="flex gap-3 overflow-x-hidden">
+                    {[1, 2, 3].map((i) => (
+                      <Skeleton key={i} className="h-32 w-44 flex-shrink-0 rounded-2xl" />
+                    ))}
+                  </div>
+                </div>
+                {/* List card skeletons */}
+                <div>
+                  <Skeleton className="mb-3 h-5 w-28 rounded-lg" />
+                  <div className="space-y-3">
+                    {[1, 2, 3, 4, 5, 6].map((i) => (
+                      <Skeleton key={i} className="h-20 w-full rounded-3xl" />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Filter bar + sections — hidden while skeleton is showing */}
+            {!(loading && securities.length === 0) && <>
             <div className="flex items-center justify-between gap-3">
               <button
                 onClick={() => {
@@ -1714,6 +1739,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
             </section>
               </>
             )}
+            </>}
 
             {/* All Securities List */}
             {searchQuery && (
