@@ -263,9 +263,9 @@ const SecuritySparklineCard = ({ security, onClick, onToggleWatchlist, isWatched
           <span className="flex-1 truncate text-sm font-bold text-slate-900">{security.symbol}</span>
           <div
             onClick={(e) => { e.stopPropagation(); onToggleWatchlist(e, security.symbol); }}
-            className="flex-shrink-0 p-0.5"
+            className="flex-shrink-0 p-1"
           >
-            <Star className={`h-3.5 w-3.5 ${isWatched ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
+            <Star className={`h-5 w-5 ${isWatched ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
           </div>
           <ChevronRight className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
         </div>
