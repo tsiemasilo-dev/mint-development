@@ -424,29 +424,25 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   // Mirror state in a ref so the scroll handler avoids stale-closure bugs.
   const [expandedSections, setExpandedSections] = useState(() => new Set(["largest"]));
   const expandedRef = useRef(new Set(["largest"]));
-  // Tracks which key is "first" so the scroll handler never collapses it.
-  const firstSectionKeyRef = useRef("largest");
-  // All sections that must stay pinned expanded regardless of scroll position.
-  const pinnedSectionsRef = useRef(new Set(["largest"]));
+  // Always-current watchlist length — read inside the scroll handler so it
+  // never has a stale view of which sections are pinned.
+  const watchedLengthRef = useRef(watchedSecurities.length);
+  useEffect(() => {
+    watchedLengthRef.current = watchedSecurities.length;
+  }, [watchedSecurities.length]);
 
+  // Set initial expanded / pinned state whenever securities or watchlist changes.
   useEffect(() => {
     if (!securities.length) return;
 
-    const hasWatchlist = watchedSecurities.length > 0;
+    const wLen = watchedSecurities.length;
+    const hasWatchlist = wLen > 0;
     const firstKey  = hasWatchlist ? "watchlist" : "largest";
     const secondKey = hasWatchlist ? "largest"   : "dividend";
     const firstItems = hasWatchlist ? watchedSecurities : largestCompanies;
 
-    firstSectionKeyRef.current = firstKey;
-
-    // Always expand first section; also expand second if first has fewer than 2 assets
     const initial = new Set([firstKey]);
-    const pinned = new Set([firstKey]);
-    if (firstItems.length < 2) {
-      initial.add(secondKey);
-      pinned.add(secondKey);
-    }
-    pinnedSectionsRef.current = pinned;
+    if (firstItems.length < 2) initial.add(secondKey);
 
     expandedRef.current = initial;
     setExpandedSections(new Set(initial));
@@ -464,14 +460,23 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
 
     const check = () => {
       const threshold = window.innerHeight * 0.3;
-      const firstKey = firstSectionKeyRef.current;
+
+      // Derive pinned keys fresh on every scroll tick from the live ref.
+      const wLen = watchedLengthRef.current;
+      const hasWatchlist = wLen > 0;
+      const firstKey  = hasWatchlist ? "watchlist" : "largest";
+      const secondKey = hasWatchlist ? "largest"   : "dividend";
+      const firstFew  = wLen < 2; // first section has fewer than 2 assets
+
       let changed = false;
 
       for (const [key, ref] of Object.entries(sectionMap)) {
         if (!ref.current) continue;
 
-        // Pinned sections always stay expanded — never collapse them
-        if (pinnedSectionsRef.current.has(key)) {
+        const isPinned = key === firstKey || (firstFew && key === secondKey);
+
+        if (isPinned) {
+          // Pinned sections must always be expanded.
           if (!expandedRef.current.has(key)) {
             expandedRef.current = new Set([...expandedRef.current, key]);
             changed = true;
