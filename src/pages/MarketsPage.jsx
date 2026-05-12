@@ -157,16 +157,16 @@ const SecuritySparklineCard = ({ security, onClick, onToggleWatchlist, isWatched
       style={{ background: "#eef1fa" }}
     >
       {/* Header */}
-      <div className="px-3.5 pt-3.5 pb-2">
-        <div className="flex items-center gap-2 mb-2.5">
+      <div className="px-3 pt-3 pb-1">
+        <div className="flex items-center gap-1.5 mb-2">
           {security.logo_url ? (
             <img
               src={security.logo_url}
               alt={security.symbol}
-              className="h-8 w-8 rounded-full border border-slate-100 object-cover flex-shrink-0"
+              className="h-7 w-7 rounded-full border border-slate-100 object-cover flex-shrink-0"
             />
           ) : (
-            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-purple-600 text-[10px] font-bold text-white">
+            <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-purple-600 text-[10px] font-bold text-white">
               {security.symbol?.substring(0, 2) || "—"}
             </div>
           )}
@@ -175,22 +175,22 @@ const SecuritySparklineCard = ({ security, onClick, onToggleWatchlist, isWatched
             onClick={(e) => { e.stopPropagation(); onToggleWatchlist(e, security.symbol); }}
             className="flex-shrink-0 p-0.5"
           >
-            <Star className={`h-4 w-4 ${isWatched ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
+            <Star className={`h-3.5 w-3.5 ${isWatched ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
           </div>
-          <ChevronRight className="h-4 w-4 text-slate-400 flex-shrink-0" />
+          <ChevronRight className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
         </div>
 
         {/* Change % */}
-        <p className={`text-lg font-bold leading-tight ${isPositive ? "text-emerald-500" : "text-red-500"}`}>
+        <p className={`text-base font-bold leading-tight ${isPositive ? "text-emerald-500" : "text-red-500"}`}>
           {isPositive ? "+" : ""}{security.changePct != null ? security.changePct.toFixed(2) : "—"}%
         </p>
 
         {/* Price */}
-        <p className="mt-1 leading-none">
+        <p className="mt-0.5 leading-none">
           {security.currentPrice != null ? (
             <>
               <span className="text-[10px] font-semibold text-slate-400 tracking-widest align-middle">R</span>
-              <span className="ml-0.5 text-base font-bold text-slate-700 tracking-tight tabular-nums">
+              <span className="ml-0.5 text-sm font-bold text-slate-700 tracking-tight tabular-nums">
                 {Number(security.currentPrice).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </>
@@ -201,7 +201,7 @@ const SecuritySparklineCard = ({ security, onClick, onToggleWatchlist, isWatched
       </div>
 
       {/* Sparkline chart */}
-      <div className="w-full" style={{ height: 80 }}>
+      <div className="w-full" style={{ height: 60 }}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={sparkData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
             <defs>
