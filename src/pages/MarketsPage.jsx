@@ -139,8 +139,8 @@ function symbolToHue(symbol) {
 const CompactSecurityRow = ({ security, onClick }) => {
   const isPositive = (security.changePct ?? 0) >= 0;
   const hue = symbolToHue(security.symbol);
-  const bg = `linear-gradient(135deg, hsl(${hue},55%,93%) 0%, hsl(${(hue + 25) % 360},45%,89%) 100%)`;
-  const borderColor = `hsl(${hue},40%,84%)`;
+  const bg = `linear-gradient(135deg, hsl(${hue},35%,97%) 0%, hsl(${(hue + 25) % 360},25%,94%) 100%)`;
+  const borderColor = `hsl(${hue},25%,90%)`;
 
   return (
     <button
