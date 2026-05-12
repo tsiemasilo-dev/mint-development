@@ -159,22 +159,31 @@ const CollapsibleSection = ({ title, securities, onOpenStockDetail, onToggleWatc
 
   React.useEffect(() => {
     if (hasExpandedRef.current) return;
-    const scrollRoot = document.querySelector(".app-content");
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !hasExpandedRef.current) {
-          hasExpandedRef.current = true;
-          setExpanded(true);
-        }
-      },
-      {
-        root: scrollRoot || null,
-        threshold: 0,
-        rootMargin: "0px 0px -20% 0px",
+
+    const check = () => {
+      if (hasExpandedRef.current || !sectionRef.current) return;
+      const scrollRoot = document.querySelector(".app-content");
+      if (!scrollRoot) return;
+      const rootRect = scrollRoot.getBoundingClientRect();
+      const secRect = sectionRef.current.getBoundingClientRect();
+      // Expand when the top of the section enters the bottom 80% of the scroll container
+      if (secRect.top < rootRect.bottom - rootRect.height * 0.15) {
+        hasExpandedRef.current = true;
+        setExpanded(true);
       }
-    );
-    if (sectionRef.current) observer.observe(sectionRef.current);
-    return () => observer.disconnect();
+    };
+
+    // Check once on mount (handles sections already partially in view)
+    const timer = setTimeout(check, 100);
+
+    const scrollRoot = document.querySelector(".app-content");
+    if (scrollRoot) scrollRoot.addEventListener("scroll", check, { passive: true });
+
+    return () => {
+      clearTimeout(timer);
+      const root = document.querySelector(".app-content");
+      if (root) root.removeEventListener("scroll", check);
+    };
   }, []);
 
   return (
