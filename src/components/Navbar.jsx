@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import {
   Home,
   PieChart,
-  TrendingUp,
+  Newspaper,
   MoreHorizontal,
 } from "lucide-react";
 
@@ -16,7 +16,7 @@ const Navbar = ({ activeTab, setActiveTab }) => {
   const tabs = [
     { id: "home", label: "Home", icon: Home },
     { id: "investments", label: "Portfolio", icon: PieChart },
-    { id: "markets", label: "Markets", icon: TrendingUp },
+    { id: "news", label: "News", icon: Newspaper },
     { id: "more", label: "More", icon: MoreHorizontal },
   ];
 

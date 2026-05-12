@@ -135,7 +135,7 @@ const getTokensFromHash = (hash) => {
 
 const recoveryTokens = isRecoveryMode ? getTokensFromHash(initialHash) : null;
 
-const mainTabs = ['home', 'credit', 'transact', 'investments', 'markets', 'deposit', 'more', 'welcome', 'auth'];
+const mainTabs = ['home', 'credit', 'transact', 'investments', 'markets', 'news', 'deposit', 'more', 'welcome', 'auth'];
 
 const App = () => {
   const [currentPage, setCurrentPage] = useState(
@@ -1189,7 +1189,7 @@ const App = () => {
   }
 
 
-  if (['home', 'credit', 'investments', 'markets', 'more'].includes(currentPage)) {
+  if (['home', 'credit', 'investments', 'markets', 'news', 'more'].includes(currentPage)) {
     return (
       <Suspense fallback={<HomeSkeleton />}>
         <>
@@ -1219,7 +1219,7 @@ const App = () => {
                 onOpenStrategies={() => { setMarketsInitialView("openstrategies"); navigateTo("markets"); }}
                 onOpenMarkets={() => { setMarketsInitialView("invest"); navigateTo("markets"); }}
                 onOpenDeposit={() => handleTabChange("deposit")}
-                onOpenNews={() => { setMarketsInitialView("news"); navigateTo("markets"); }}
+                onOpenNews={() => { handleTabChange("news"); }}
                 onOpenNewsArticle={(articleId) => { setSelectedArticleId(articleId); navigateTo("newsArticle"); }}
                 onOpenInstantLiquidity={() => navigateTo("instantLiquidity")}
                 onOpenFamily={() => navigateTo("familyDashboard")}
@@ -1262,6 +1262,27 @@ const App = () => {
                 initialViewMode={marketsInitialView}
                 onViewModeChange={(mode) => setMarketsInitialView(mode)}
                 onOpenNotifications={() => { setNotificationReturnPage("markets"); navigateTo("notifications"); }}
+                onOpenStockDetail={(security) => { setSelectedChildForInvest(null); setSelectedSecurity(security); navigateTo("stockDetail"); }}
+                onOpenNewsArticle={(articleId) => { setSelectedArticleId(articleId); navigateTo("newsArticle"); }}
+                onOpenFactsheet={(strategy) => { setSelectedChildForInvest(null); setSelectedStrategy(strategy); navigateTo("factsheet"); }}
+              />
+            </AppLayout>
+          </div>
+          {/* News tab – always mounted */}
+          <div style={{ display: currentPage === 'news' ? 'block' : 'none' }}>
+            <AppLayout
+              activeTab="news"
+              onTabChange={handleTabChange}
+              onWithdraw={() => {}}
+              onShowComingSoon={() => {}}
+              modal={null}
+              onCloseModal={() => {}}
+            >
+              <MarketsPage
+                onBack={undefined}
+                initialViewMode="news"
+                onViewModeChange={() => {}}
+                onOpenNotifications={() => { setNotificationReturnPage("news"); navigateTo("notifications"); }}
                 onOpenStockDetail={(security) => { setSelectedChildForInvest(null); setSelectedSecurity(security); navigateTo("stockDetail"); }}
                 onOpenNewsArticle={(articleId) => { setSelectedArticleId(articleId); navigateTo("newsArticle"); }}
                 onOpenFactsheet={(strategy) => { setSelectedChildForInvest(null); setSelectedStrategy(strategy); navigateTo("factsheet"); }}
