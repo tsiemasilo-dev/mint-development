@@ -88,7 +88,8 @@ def fetch_stock_returns_for_symbols(symbols, start_date):
                 break
             for row in batch:
                 key = (row["symbol"], row["as_of_date"])
-                index[key] = float(row["current_price"]) if row.get("current_price") else None
+                # stock_returns_c stores Yahoo Finance prices in cents (JSE stocks) — convert to rands
+                index[key] = float(row["current_price"]) / 100 if row.get("current_price") else None
             if len(batch) < limit:
                 break
             offset += limit
@@ -140,7 +141,8 @@ def get_period_window_start(period, as_of_date_str, stock_index, symbol):
 
 
 def get_period_base(symbol, as_of_date, fill_date, avg_fill, period, stock_index):
-    avg_fill_f = float(avg_fill) if avg_fill else None
+    # avg_fill is stored in cents in stock_holdings_c — convert to rands
+    avg_fill_f = float(avg_fill) / 100 if avg_fill else None
 
     if period == "1d":
         if as_of_date == fill_date:
@@ -259,8 +261,9 @@ def process_client_strategy(user_id, strategy_id, holdings, debug=False):
         day_realised_pnl  = 0.0
 
         # inception_cost = cost of current open positions only (changes with rebalances)
+        # avg_fill is in cents — divide by 100 to get rands
         inception_cost = sum(
-            float(h.get("avg_fill") or 0) * float(h.get("quantity") or 0)
+            (float(h.get("avg_fill") or 0) / 100) * float(h.get("quantity") or 0)
             for h in active_holdings
             if h.get("avg_fill")
             and not (h.get("Exit_date") == as_of_date and not h.get("is_active"))
@@ -288,13 +291,15 @@ def process_client_strategy(user_id, strategy_id, holdings, debug=False):
                 break
 
             if is_exit_day:
-                eod_price = float(avg_exit) if avg_exit else None
+                # avg_exit is in cents — divide by 100 to get rands
+                eod_price = float(avg_exit) / 100 if avg_exit else None
                 if eod_price is None:
                     skip_day    = True
                     skip_reason = f"{sym} null avg_exit on exit day {as_of_date}"
                     break
                 if avg_fill:
-                    day_realised_pnl += qty * (eod_price - float(avg_fill))
+                    # avg_fill is in cents — divide by 100 to get rands
+                    day_realised_pnl += qty * (eod_price - float(avg_fill) / 100)
             else:
                 eod_price = today_price
 
@@ -304,8 +309,8 @@ def process_client_strategy(user_id, strategy_id, holdings, debug=False):
             holdings_snapshot.append({
                 "symbol"       : sym,
                 "qty"          : qty,
-                "avg_fill"     : float(avg_fill) if avg_fill else None,
-                "avg_exit"     : float(avg_exit) if (is_exit_day and avg_exit) else None,
+                "avg_fill"     : float(avg_fill) / 100 if avg_fill else None,
+                "avg_exit"     : float(avg_exit) / 100 if (is_exit_day and avg_exit) else None,
                 "current_price": eod_price,
                 "is_fill_day"  : is_fill_day,
                 "is_exit_day"  : is_exit_day,

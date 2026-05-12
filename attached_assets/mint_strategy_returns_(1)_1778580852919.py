@@ -152,14 +152,17 @@ def process_strategy(strategy_id, holdings):
                 skip = True
                 break
 
-            basket_value += shares * current_price
+            # stock_returns_c stores Yahoo Finance prices in cents (JSE stocks) — convert to rands
+            current_price_rands = current_price / 100
+            basket_value += shares * current_price_rands
 
             for p in PERIODS:
                 if not period_valid[p]:
                     continue
                 abs_val = row.get(f"{p}_abs")
                 if abs_val is not None:
-                    period_pnls[p] += shares * abs_val
+                    # abs values are also in cents (price_now - price_base, both cents)
+                    period_pnls[p] += shares * (abs_val / 100)
                 else:
                     period_valid[p] = False
 
