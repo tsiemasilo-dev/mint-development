@@ -19,6 +19,7 @@ const AppLayout = ({ activeTab, onTabChange, onWithdraw, onShowComingSoon, modal
   const noOverlayTabs = [
     "home", "investments", "credit", "markets", "news", "more",
     "instantLiquidity", "creditApply", "creditRepay", "liquidityHistory", "unsecuredCreditDashboard",
+    "deposit",
   ];
   const showFamilyDropdown = !noOverlayTabs.includes(activeTab);
   const creditTabs = ["credit", "instantLiquidity", "creditApply", "creditRepay", "liquidityHistory", "unsecuredCreditDashboard"];
