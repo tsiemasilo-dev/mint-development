@@ -2,30 +2,31 @@ const fs = require("fs");
 const path = require("path");
 
 // Simple .env loader for local development (no dotenv dependency required)
-try {
-  const envPath = path.join(__dirname, "..", ".env");
-  if (fs.existsSync(envPath)) {
-    const envContent = fs.readFileSync(envPath, "utf8");
-    envContent.split("\n").forEach(line => {
-      // Basic key=value parsing
-      const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
-      if (match) {
-        const key = match[1];
-        let value = match[2] || "";
-        // Remove quotes if present
-        if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
-        if (value.startsWith("'") && value.endsWith("'")) value = value.slice(1, -1);
-        // Only set if not already set by system environment
-        if (!process.env[key]) {
-          process.env[key] = value;
+function loadEnvFile(filePath, forceOverride) {
+  try {
+    if (fs.existsSync(filePath)) {
+      const envContent = fs.readFileSync(filePath, "utf8");
+      envContent.split("\n").forEach(line => {
+        const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+        if (match) {
+          const key = match[1];
+          let value = match[2] || "";
+          if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
+          if (value.startsWith("'") && value.endsWith("'")) value = value.slice(1, -1);
+          if (forceOverride || !process.env[key]) {
+            process.env[key] = value;
+          }
         }
-      }
-    });
-    console.log("[Server] Local .env file loaded");
+      });
+      console.log(`[Server] Loaded ${path.basename(filePath)}`);
+    }
+  } catch (e) {
+    console.warn(`[Server] Could not load ${path.basename(filePath)}:`, e.message);
   }
-} catch (e) {
-  console.warn("[Server] Could not load .env file:", e.message);
 }
+// Load .env first (no override), then .env.local (force override) so local always wins
+loadEnvFile(path.join(__dirname, "..", ".env"), false);
+loadEnvFile(path.join(__dirname, "..", ".env.local"), true);
 
 const express = require("express");
 const cors = require("cors");
