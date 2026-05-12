@@ -1,0 +1,33 @@
+17:49:21.892 Running build in Portland, USA (West) – pdx1
+17:49:21.893 Build machine configuration: 4 cores, 8 GB
+17:49:21.979 Cloning github.com/mihle-matimba/mint (Branch: main, Commit: 0671fe9)
+17:49:26.164 Cloning completed: 4.185s
+17:49:26.298 Restored build cache from previous deployment (8biAZ1SQv1w1s9par4BFbULgyG36)
+17:49:26.543 Running "vercel build"
+17:49:27.414 Vercel CLI 50.9.6
+17:49:27.954 Installing dependencies...
+17:49:29.582 
+17:49:29.582 added 74 packages in 1s
+17:49:29.582 
+17:49:29.583 67 packages are looking for funding
+17:49:29.583   run `npm fund` for details
+17:49:29.706 
+17:49:29.707 > mint@1.0.0 build
+17:49:29.707 > vite build
+17:49:29.707 
+17:49:29.931 [36mvite v5.4.21 [32mbuilding for production...[36m[39m
+17:49:29.983 transforming...
+17:49:30.465 
+17:49:30.465 ../assets/fonts/future-earth.ttf referenced in ../assets/fonts/future-earth.ttf didn't resolve at build time, it will remain unchanged to be resolved at runtime
+17:49:32.484 [32m✓[39m 1724 modules transformed.
+17:49:32.491 [31mx[39m Build failed in 2.54s
+17:49:32.492 [31merror during build:
+17:49:32.492 [31m[vite:asset] Could not load /vercel/path0/src/assets/2025-10-16-jse-listed-companies.csv?url (imported by src/lib/useCreditCheck.js): ENOENT: no such file or directory, open '/vercel/path0/src/assets/2025-10-16-jse-listed-companies.csv'[31m
+17:49:32.492     at async open (node:internal/fs/promises:637:25)
+17:49:32.492     at async Object.readFile (node:internal/fs/promises:1269:14)
+17:49:32.492     at async fileToBuiltUrl (file:///vercel/path0/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:20428:19)
+17:49:32.492     at async Object.load (file:///vercel/path0/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:20328:17)
+17:49:32.492     at async PluginDriver.hookFirstAndGetPlugin (file:///vercel/path0/node_modules/rollup/dist/es/shared/node-entry.js:22453:28)
+17:49:32.492     at async file:///vercel/path0/node_modules/rollup/dist/es/shared/node-entry.js:21453:33
+17:49:32.492     at async Queue.work (file:///vercel/path0/node_modules/rollup/dist/es/shared/node-entry.js:22681:32)[39m
+17:49:32.520 Error: Command "npm run build" exited with 1

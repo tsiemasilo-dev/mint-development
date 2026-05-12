@@ -1,0 +1,60 @@
+PS C:\Users\tsiem\StudioProjects\mint> git stash 
+warning: in the working copy of 'android/app/capacitor.build.gradle', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'android/capacitor.settings.gradle', LF will be replaced by CRLF the next time Git touches it
+Saved working directory and index state WIP on Android.v1: a17334e Add swipe-back navigation gesture for Android users
+PS C:\Users\tsiem\StudioProjects\mint> git pull origin Android.v1
+From https://github.com/mihle-matimba/mint
+ * branch            Android.v1 -> FETCH_HEAD
+Updating a17334e..9812545
+Fast-forward
+ .../20260204-1117-48.9650487_1770203880836.gif     | Bin 0 -> 4946807 bytes
+ ...ht-C-Microsoft-Corporation-Al_1770201966912.txt | 111 +++++++++++++++++++++
+ attached_assets/image_1770201802046.png            | Bin 0 -> 36800 bytes
+ package-lock.json                                  |  10 ++
+ package.json                                       |   1 +
+ src/components/SwipeBackWrapper.jsx                |   3 +
+ src/hooks/useAndroidBackButton.js                  |  27 +++++
+ 7 files changed, 152 insertions(+)
+ create mode 100644 attached_assets/20260204-1117-48.9650487_1770203880836.gif
+ create mode 100644 attached_assets/Pasted-Windows-PowerShell-Copyright-C-Microsoft-Corporation-Al_1770201966912.txt
+ create mode 100644 attached_assets/image_1770201802046.png
+ create mode 100644 src/hooks/useAndroidBackButton.js
+PS C:\Users\tsiem\StudioProjects\mint> git pop
+git: 'pop' is not a git command. See 'git --help'.
+
+The most similar command is
+        log
+PS C:\Users\tsiem\StudioProjects\mint> git stash pop
+Auto-merging package-lock.json
+On branch Android.v1
+Your branch is up to date with 'origin/Android.v1'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+        modified:   package-lock.json
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+        .idea/
+
+no changes added to commit (use "git add" and/or "git commit -a")
+Dropped refs/stash@{0} (75ae90489309b611a56ea10f332c30928cc9f262)
+PS C:\Users\tsiem\StudioProjects\mint> git status
+On branch Android.v1
+Your branch is up to date with 'origin/Android.v1'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+        modified:   android/.idea/misc.xml
+        modified:   package-lock.json
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+        .idea/
+        android/.idea/compiler.xml
+        android/.idea/deploymentTargetSelector.xml
+
+no changes added to commit (use "git add" and/or "git commit -a")
+PS C:\Users\tsiem\StudioProjects\mint> 
