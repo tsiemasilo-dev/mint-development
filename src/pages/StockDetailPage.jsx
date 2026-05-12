@@ -207,7 +207,7 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)] text-slate-900">
+    <div className="min-h-screen bg-slate-50 text-slate-900">
       {/* Header */}
       <div className="rounded-b-[36px] bg-gradient-to-b from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-4 pb-8 pt-12 text-white">
         <div className="mx-auto w-full max-w-sm md:max-w-md">
@@ -428,49 +428,52 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
         </section>
 
         {/* Key Stats */}
-        <section className="mt-8">
-          <h3 className="text-sm font-semibold text-slate-700">Key Statistics</h3>
-          <div className="mt-4 grid grid-cols-2 gap-4">
-            {security.pe && (
-              <div className="rounded-2xl bg-slate-50 p-4">
-                <p className="text-xs text-slate-500">P/E Ratio</p>
-                <p className="mt-2 text-lg font-semibold text-slate-900">{Number(security.pe).toFixed(2)}</p>
-              </div>
-            )}
-            {security.eps && (
-              <div className="rounded-2xl bg-slate-50 p-4">
-                <p className="text-xs text-slate-500">EPS</p>
-                <p className="mt-2 text-lg font-semibold text-slate-900">{Number(security.eps).toFixed(2)}</p>
-              </div>
-            )}
-            {security.dividend_yield && (
-              <div className="rounded-2xl bg-slate-50 p-4">
-                <p className="text-xs text-slate-500">Dividend Yield</p>
-                <p className="mt-2 text-lg font-semibold text-emerald-600">{Number(security.dividend_yield).toFixed(2)}%</p>
-              </div>
-            )}
-            {security.beta && (
-              <div className="rounded-2xl bg-slate-50 p-4">
-                <p className="text-xs text-slate-500">Beta</p>
-                <p className="mt-2 text-lg font-semibold text-slate-900">{Number(security.beta).toFixed(2)}</p>
-              </div>
-            )}
-          </div>
-        </section>
+        {(security.pe || security.eps || security.dividend_yield || security.beta) && (
+          <section className="mt-8">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Key Statistics</p>
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              {security.pe && (
+                <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400">P/E Ratio</p>
+                  <p className="mt-2.5 text-2xl font-bold tracking-tight text-slate-900">{Number(security.pe).toFixed(2)}</p>
+                </div>
+              )}
+              {security.eps && (
+                <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400">EPS</p>
+                  <p className="mt-2.5 text-2xl font-bold tracking-tight text-slate-900">{Number(security.eps).toFixed(2)}</p>
+                </div>
+              )}
+              {security.dividend_yield && (
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4 shadow-sm">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-emerald-600/70">Dividend Yield</p>
+                  <p className="mt-2.5 text-2xl font-bold tracking-tight text-emerald-600">{Number(security.dividend_yield).toFixed(2)}%</p>
+                </div>
+              )}
+              {security.beta && (
+                <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Beta</p>
+                  <p className="mt-2.5 text-2xl font-bold tracking-tight text-slate-900">{Number(security.beta).toFixed(2)}</p>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
         {/* About */}
         {security.description && (
           <section className="mt-8">
-            <h3 className="text-sm font-semibold text-slate-700">About</h3>
-            <p className="mt-3 text-sm leading-relaxed text-slate-600">{security.description}</p>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">About</p>
+            <p className="mt-3 text-[15px] font-normal leading-7 text-slate-600">{security.description}</p>
             {security.website && (
               <a
                 href={security.website}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-3 inline-block text-sm font-medium text-purple-600 hover:text-purple-700"
+                className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-purple-600"
               >
-                Visit website →
+                Visit website
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17L17 7M7 7h10v10"/></svg>
               </a>
             )}
           </section>
@@ -479,15 +482,15 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
         {/* Sector & Industry */}
         {(security.sector || security.industry) && (
           <section className="mt-8">
-            <h3 className="text-sm font-semibold text-slate-700">Classification</h3>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Classification</p>
             <div className="mt-3 flex flex-wrap gap-2">
               {security.sector && (
-                <span className="rounded-full bg-purple-100 px-3 py-1.5 text-xs font-medium text-purple-700">
+                <span className="rounded-full border border-purple-200 bg-purple-50 px-3.5 py-1.5 text-xs font-semibold text-purple-700">
                   {security.sector}
                 </span>
               )}
               {security.industry && (
-                <span className="rounded-full bg-blue-100 px-3 py-1.5 text-xs font-medium text-blue-700">
+                <span className="rounded-full border border-blue-200 bg-blue-50 px-3.5 py-1.5 text-xs font-semibold text-blue-700">
                   {security.industry}
                 </span>
               )}
@@ -496,51 +499,49 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
         )}
 
         {/* Action Buttons */}
-        <div className="mt-8 space-y-3">
-          <div className="grid grid-cols-1 gap-3">
-            <button
-              type="button"
-              disabled={buyChecking}
-              onClick={async () => {
-                setBuyChecking(true);
-                try {
+        <div className="mt-10 flex gap-3">
+          <button
+            onClick={toggleWatchlist}
+            className={`relative flex flex-1 items-center justify-center gap-2 overflow-hidden rounded-2xl border-2 py-4 text-sm font-semibold transition-all duration-300 active:scale-95 ${
+              isWatched
+                ? "border-yellow-400 bg-yellow-50 text-yellow-700"
+                : "border-slate-200 bg-white text-slate-700"
+            } ${watchlistAnimating ? "scale-95" : ""}`}
+          >
+            <span className={`flex items-center gap-2 transition-all duration-300 ${watchlistAnimating ? "scale-110" : "scale-100"}`}>
+              {isWatched ? (
+                <>
+                  <Star className={`h-4.5 w-4.5 fill-yellow-400 text-yellow-400 ${watchlistAnimating ? "animate-[spin_0.4s_ease-out]" : ""}`} />
+                  Watchlisted
+                </>
+              ) : (
+                <>
+                  <Star className="h-4 w-4" />
+                  Watchlist
+                </>
+              )}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            disabled={buyChecking}
+            onClick={async () => {
+              setBuyChecking(true);
+              try {
                 if (onboardingLoading) return;
                 if (!onboardingComplete) {
                   setShowOnboardingModal(true);
                   return;
                 }
-                  onOpenBuy?.();
-                } finally {
-                  setBuyChecking(false);
-                }
-              }}
-              className="rounded-2xl bg-gradient-to-r from-black to-purple-600 py-4 font-semibold text-white shadow-lg transition-all active:scale-95 disabled:opacity-60"
-            >
-              {buyChecking ? "Checking…" : "Buy"}
-            </button>
-          </div>
-
-          <button
-            onClick={toggleWatchlist}
-            className={`w-full relative overflow-hidden rounded-2xl border-2 py-3.5 font-semibold transition-all duration-300 active:scale-95 ${
-              isWatched
-                ? "border-yellow-400 bg-yellow-50 text-yellow-700"
-                : "border-slate-200 bg-white text-slate-900"
-            } ${watchlistAnimating ? "scale-95" : ""}`}
+                onOpenBuy?.();
+              } finally {
+                setBuyChecking(false);
+              }
+            }}
+            className="flex flex-[1.4] items-center justify-center rounded-2xl bg-gradient-to-r from-black to-purple-600 py-4 text-sm font-semibold text-white shadow-lg transition-all active:scale-95 disabled:opacity-60"
           >
-            <span className={`flex items-center justify-center gap-2 transition-all duration-300 ${watchlistAnimating ? "scale-110" : "scale-100"}`}>
-              {isWatched ? (
-                <>
-                  <Star className={`h-5 w-5 fill-yellow-400 text-yellow-400 ${watchlistAnimating ? "animate-[spin_0.4s_ease-out]" : ""}`} />
-                  Watchlisted
-                </>
-              ) : (
-                <>
-                  <Star className="h-5 w-5" />
-                  Add to Watchlist
-                </>
-              )}
-            </span>
+            {buyChecking ? "Checking…" : "Buy Now"}
           </button>
         </div>
       </div>
