@@ -1008,48 +1008,37 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
             <NotificationBell onClick={onOpenNotifications} />
           </header>
 
-          {/* Toggle between OpenStrategies, Invest, and News */}
-          <div className="flex gap-2 rounded-2xl bg-white/10 p-1 backdrop-blur-sm">
-            <button
-              onClick={() => {
-                setViewMode("openstrategies");
-                setActiveChips(buildChipsFromFilters(_savedStrat));
-              }}
-              className={`flex-1 rounded-xl px-3 py-2 text-xs font-semibold transition-all ${
-                viewMode === "openstrategies"
-                  ? "bg-white text-slate-900 shadow-md"
-                  : "text-white/70"
-              }`}
-            >
-              OpenStrategies
-            </button>
-            <button
-              onClick={() => {
-                setViewMode("invest");
-                setActiveChips(buildInvestChips({ sectors: selectedSectors, exchanges: selectedExchanges }));
-              }}
-              className={`flex-1 rounded-xl px-3 py-2 text-xs font-semibold transition-all ${
-                viewMode === "invest"
-                  ? "bg-white text-slate-900 shadow-md"
-                  : "text-white/70"
-              }`}
-            >
-              Invest
-            </button>
-            <button
-              onClick={() => {
-                setViewMode("news");
-                setActiveChips([]);
-              }}
-              className={`flex-1 rounded-xl px-3 py-2 text-xs font-semibold transition-all ${
-                viewMode === "news"
-                  ? "bg-white text-slate-900 shadow-md"
-                  : "text-white/70"
-              }`}
-            >
-              News
-            </button>
-          </div>
+          {/* Toggle between Mint Basket and Markets */}
+          {viewMode !== "news" && (
+            <div className="flex gap-2 rounded-2xl bg-white/10 p-1 backdrop-blur-sm">
+              <button
+                onClick={() => {
+                  setViewMode("openstrategies");
+                  setActiveChips(buildChipsFromFilters(_savedStrat));
+                }}
+                className={`flex-1 rounded-xl px-3 py-2 text-xs font-semibold transition-all ${
+                  viewMode === "openstrategies"
+                    ? "bg-white text-slate-900 shadow-md"
+                    : "text-white/70"
+                }`}
+              >
+                Mint Basket
+              </button>
+              <button
+                onClick={() => {
+                  setViewMode("invest");
+                  setActiveChips(buildInvestChips({ sectors: selectedSectors, exchanges: selectedExchanges }));
+                }}
+                className={`flex-1 rounded-xl px-3 py-2 text-xs font-semibold transition-all ${
+                  viewMode === "invest"
+                    ? "bg-white text-slate-900 shadow-md"
+                    : "text-white/70"
+                }`}
+              >
+                Markets
+              </button>
+            </div>
+          )}
 
           {viewMode === "invest" && (
             <>
