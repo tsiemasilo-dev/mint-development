@@ -159,6 +159,7 @@ const CollapsibleSection = ({ title, securities, onOpenStockDetail, onToggleWatc
 
   React.useEffect(() => {
     if (hasExpandedRef.current) return;
+    const scrollRoot = document.querySelector(".app-content");
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting && !hasExpandedRef.current) {
@@ -166,7 +167,11 @@ const CollapsibleSection = ({ title, securities, onOpenStockDetail, onToggleWatc
           setExpanded(true);
         }
       },
-      { threshold: 0.05, rootMargin: "0px 0px -8% 0px" }
+      {
+        root: scrollRoot || null,
+        threshold: 0,
+        rootMargin: "0px 0px -20% 0px",
+      }
     );
     if (sectionRef.current) observer.observe(sectionRef.current);
     return () => observer.disconnect();
