@@ -1247,8 +1247,8 @@ const App = () => {
               />
             </AppLayout>
           </div>
-          {/* Markets / News tab – always mounted (News bottom nav tab shows markets content) */}
-          <div style={{ display: ['markets', 'news'].includes(currentPage) ? 'block' : 'none' }}>
+          {/* Markets tab – always mounted */}
+          <div style={{ display: currentPage === 'markets' ? 'block' : 'none' }}>
             <AppLayout
               activeTab={currentPage}
               onTabChange={handleTabChange}
@@ -1261,7 +1261,28 @@ const App = () => {
                 onBack={undefined}
                 initialViewMode={marketsInitialView}
                 onViewModeChange={(mode) => setMarketsInitialView(mode)}
-                onOpenNotifications={() => { setNotificationReturnPage(currentPage); navigateTo("notifications"); }}
+                onOpenNotifications={() => { setNotificationReturnPage("markets"); navigateTo("notifications"); }}
+                onOpenStockDetail={(security) => { setSelectedChildForInvest(null); setSelectedSecurity(security); navigateTo("stockDetail"); }}
+                onOpenNewsArticle={(articleId) => { setSelectedArticleId(articleId); navigateTo("newsArticle"); }}
+                onOpenFactsheet={(strategy) => { setSelectedChildForInvest(null); setSelectedStrategy(strategy); navigateTo("factsheet"); }}
+              />
+            </AppLayout>
+          </div>
+          {/* News tab – always mounted */}
+          <div style={{ display: currentPage === 'news' ? 'block' : 'none' }}>
+            <AppLayout
+              activeTab="news"
+              onTabChange={handleTabChange}
+              onWithdraw={() => {}}
+              onShowComingSoon={() => {}}
+              modal={null}
+              onCloseModal={() => {}}
+            >
+              <MarketsPage
+                onBack={undefined}
+                initialViewMode="news"
+                onViewModeChange={() => {}}
+                onOpenNotifications={() => { setNotificationReturnPage("news"); navigateTo("notifications"); }}
                 onOpenStockDetail={(security) => { setSelectedChildForInvest(null); setSelectedSecurity(security); navigateTo("stockDetail"); }}
                 onOpenNewsArticle={(articleId) => { setSelectedArticleId(articleId); navigateTo("newsArticle"); }}
                 onOpenFactsheet={(strategy) => { setSelectedChildForInvest(null); setSelectedStrategy(strategy); navigateTo("factsheet"); }}
