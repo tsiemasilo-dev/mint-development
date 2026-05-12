@@ -444,6 +444,11 @@ console.log('[startup] Supabase URL set:', !!SUPABASE_URL);
 console.log('[startup] Supabase anon key set:', !!SUPABASE_ANON_KEY);
 console.log('[startup] Supabase service role key set:', !!SUPABASE_SERVICE_ROLE_KEY);
 
+// Polyfill WebSocket for Node.js < 22
+if (!global.WebSocket) {
+  try { global.WebSocket = require('ws'); } catch (_) {}
+}
+
 let supabase = null;
 let supabaseAdmin = null;
 try {
