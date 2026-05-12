@@ -426,6 +426,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const expandedRef = useRef(new Set(["largest"]));
   // Tracks which key is "first" so the scroll handler never collapses it.
   const firstSectionKeyRef = useRef("largest");
+  // All sections that must stay pinned expanded regardless of scroll position.
+  const pinnedSectionsRef = useRef(new Set(["largest"]));
 
   useEffect(() => {
     if (!securities.length) return;
@@ -439,7 +441,12 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
 
     // Always expand first section; also expand second if first has fewer than 2 assets
     const initial = new Set([firstKey]);
-    if (firstItems.length < 2) initial.add(secondKey);
+    const pinned = new Set([firstKey]);
+    if (firstItems.length < 2) {
+      initial.add(secondKey);
+      pinned.add(secondKey);
+    }
+    pinnedSectionsRef.current = pinned;
 
     expandedRef.current = initial;
     setExpandedSections(new Set(initial));
@@ -463,8 +470,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       for (const [key, ref] of Object.entries(sectionMap)) {
         if (!ref.current) continue;
 
-        // First section is always pinned expanded — never collapse it
-        if (key === firstKey) {
+        // Pinned sections always stay expanded — never collapse them
+        if (pinnedSectionsRef.current.has(key)) {
           if (!expandedRef.current.has(key)) {
             expandedRef.current = new Set([...expandedRef.current, key]);
             changed = true;
