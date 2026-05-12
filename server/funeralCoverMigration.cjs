@@ -402,7 +402,13 @@ async function upsertRows(client, table, rows, conflictCols) {
 
 async function runFuneralCoverMigration(pgPool) {
   if (!pgPool) return;
-  const client = await pgPool.connect();
+  let client;
+  try {
+    client = await pgPool.connect();
+  } catch (e) {
+    console.error('[funeral-cover] Could not connect to database:', e.message);
+    return;
+  }
   try {
     await client.query(DDL);
 
