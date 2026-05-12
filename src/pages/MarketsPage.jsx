@@ -13,6 +13,7 @@ import FamilyDropdown from "../components/FamilyDropdown";
 import Skeleton from "../components/Skeleton";
 import { ChartContainer } from "../components/ui/line-charts-2";
 import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { motion, AnimatePresence } from "framer-motion";
 import { formatCurrency } from "../lib/formatCurrency";
 import { normalizeSymbol, getHoldingsArray, getHoldingSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot, calculateMinInvestment, calculateMinInvestmentSync, getAdjustedShares } from "../lib/strategyUtils";
 
@@ -122,6 +123,100 @@ const StrategyMiniChart = ({ values }) => {
         </ComposedChart>
       </ResponsiveContainer>
     </ChartContainer>
+  );
+};
+
+const CompactSecurityRow = ({ security, onClick }) => {
+  const isPositive = (security.changePct ?? 0) >= 0;
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-2 w-full rounded-xl px-3 py-2.5 text-left active:scale-[0.97] transition-transform"
+      style={{ background: "#eef1fa" }}
+    >
+      {security.logo_url ? (
+        <img src={security.logo_url} alt={security.symbol} className="h-7 w-7 rounded-full border border-slate-100 object-cover flex-shrink-0" />
+      ) : (
+        <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-purple-600 text-[9px] font-bold text-white">
+          {security.symbol?.substring(0, 2) || "—"}
+        </div>
+      )}
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-bold text-slate-900 truncate">{security.symbol}</p>
+        <p className={`text-xs font-semibold ${isPositive ? "text-emerald-500" : "text-red-500"}`}>
+          {isPositive ? "+" : ""}{security.changePct != null ? security.changePct.toFixed(2) : "—"}%
+        </p>
+      </div>
+      <ChevronRight className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+    </button>
+  );
+};
+
+const CollapsibleSection = ({ title, securities, onOpenStockDetail, onToggleWatchlist, watchlist, sparklineData, startExpanded = false }) => {
+  const [expanded, setExpanded] = React.useState(startExpanded);
+  const hasExpandedRef = React.useRef(startExpanded);
+  const sectionRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (hasExpandedRef.current) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !hasExpandedRef.current) {
+          hasExpandedRef.current = true;
+          setExpanded(true);
+        }
+      },
+      { threshold: 0.05, rootMargin: "0px 0px -8% 0px" }
+    );
+    if (sectionRef.current) observer.observe(sectionRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <section ref={sectionRef}>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-lg font-bold text-slate-900">{title}</h2>
+        <ChevronRight className="h-5 w-5 text-slate-400" />
+      </div>
+      <AnimatePresence mode="wait" initial={false}>
+        {expanded ? (
+          <motion.div
+            key="expanded"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.32, ease: [0.25, 0.46, 0.45, 0.94] }}
+            className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-4 scrollbar-hide"
+          >
+            {securities.map((security) => (
+              <SecuritySparklineCard
+                key={security.id}
+                security={security}
+                onClick={() => onOpenStockDetail(security)}
+                onToggleWatchlist={onToggleWatchlist}
+                isWatched={watchlist.includes(security.symbol)}
+                sparklinePoints={sparklineData[security.id]}
+              />
+            ))}
+          </motion.div>
+        ) : (
+          <motion.div
+            key="collapsed"
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.18 }}
+            className="grid grid-cols-2 gap-2 pb-2"
+          >
+            {securities.slice(0, 4).map((security) => (
+              <CompactSecurityRow
+                key={security.id}
+                security={security}
+                onClick={() => onOpenStockDetail(security)}
+              />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </section>
   );
 };
 
@@ -1401,85 +1496,44 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
             {!searchQuery && (
               <>
                 {watchedSecurities.length > 0 && (
-                  <section>
-                    <div className="mb-4 flex items-center justify-between">
-                      <h2 className="text-lg font-bold text-slate-900">My Watchlist</h2>
-                      <ChevronRight className="h-5 w-5 text-slate-400" />
-                    </div>
-                    <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-4 scrollbar-hide">
-                      {watchedSecurities.map((security) => (
-                        <SecuritySparklineCard
-                          key={security.id}
-                          security={security}
-                          onClick={() => onOpenStockDetail(security)}
-                          onToggleWatchlist={toggleWatchlist}
-                          isWatched={true}
-                          sparklinePoints={sparklineData[security.id]}
-                        />
-                      ))}
-                    </div>
-                  </section>
+                  <CollapsibleSection
+                    title="My Watchlist"
+                    securities={watchedSecurities}
+                    onOpenStockDetail={onOpenStockDetail}
+                    onToggleWatchlist={toggleWatchlist}
+                    watchlist={watchlist}
+                    sparklineData={sparklineData}
+                    startExpanded={true}
+                  />
                 )}
 
-                {/* Largest Companies Section */}
-                <section>
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-bold text-slate-900">Largest companies</h2>
-                <ChevronRight className="h-5 w-5 text-slate-400" />
-              </div>
-              <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-4 scrollbar-hide">
-                {largestCompanies.map((security) => (
-                  <SecuritySparklineCard
-                    key={security.id}
-                    security={security}
-                    onClick={() => onOpenStockDetail(security)}
-                    onToggleWatchlist={toggleWatchlist}
-                    isWatched={watchlist.includes(security.symbol)}
-                    sparklinePoints={sparklineData[security.id]}
-                  />
-                ))}
-              </div>
-            </section>
+                <CollapsibleSection
+                  title="Largest companies"
+                  securities={largestCompanies}
+                  onOpenStockDetail={onOpenStockDetail}
+                  onToggleWatchlist={toggleWatchlist}
+                  watchlist={watchlist}
+                  sparklineData={sparklineData}
+                  startExpanded={watchedSecurities.length === 0}
+                />
 
-            {/* Highest Dividend Yield Section */}
-            <section>
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-bold text-slate-900">Highest dividend yield</h2>
-                <ChevronRight className="h-5 w-5 text-slate-400" />
-              </div>
-              <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-4 scrollbar-hide">
-                {highestDividendYield.map((security) => (
-                  <SecuritySparklineCard
-                    key={security.id}
-                    security={security}
-                    onClick={() => onOpenStockDetail(security)}
-                    onToggleWatchlist={toggleWatchlist}
-                    isWatched={watchlist.includes(security.symbol)}
-                    sparklinePoints={sparklineData[security.id]}
-                  />
-                ))}
-              </div>
-            </section>
+                <CollapsibleSection
+                  title="Highest dividend yield"
+                  securities={highestDividendYield}
+                  onOpenStockDetail={onOpenStockDetail}
+                  onToggleWatchlist={toggleWatchlist}
+                  watchlist={watchlist}
+                  sparklineData={sparklineData}
+                />
 
-            {/* Gainers Section */}
-            <section>
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-bold text-slate-900">Gainers</h2>
-                <ChevronRight className="h-5 w-5 text-slate-400" />
-              </div>
-              <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-4 scrollbar-hide">
-                {gainers.map((security) => (
-                  <SecuritySparklineCard
-                    key={security.id}
-                    security={security}
-                    onClick={() => onOpenStockDetail(security)}
-                    onToggleWatchlist={toggleWatchlist}
-                    isWatched={watchlist.includes(security.symbol)}
-                    sparklinePoints={sparklineData[security.id]}
-                  />
-                ))}
-              </div>
-            </section>
+                <CollapsibleSection
+                  title="Gainers"
+                  securities={gainers}
+                  onOpenStockDetail={onOpenStockDetail}
+                  onToggleWatchlist={toggleWatchlist}
+                  watchlist={watchlist}
+                  sparklineData={sparklineData}
+                />
 
             {/* All Section */}
             <section>
