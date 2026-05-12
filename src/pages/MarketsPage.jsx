@@ -435,33 +435,24 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
 
   useEffect(() => {
     if (!securities.length) return;
-    const scrollEl = document.querySelector(".app-content");
-    if (!scrollEl) return;
 
-    const initialScrollTop = scrollEl.scrollTop;
     const sectionMap = {
       watchlist: secRefWatchlist,
       largest:   secRefLargest,
       dividend:  secRefDividend,
       gainers:   secRefGainers,
     };
-    let rafId;
 
-    const poll = () => {
-      // Wait until user has scrolled at least 20px
-      if (scrollEl.scrollTop <= initialScrollTop + 20) {
-        rafId = requestAnimationFrame(poll);
-        return;
-      }
-
-      const rootRect = scrollEl.getBoundingClientRect();
-      const threshold = rootRect.top + rootRect.height * 0.75;
+    const check = () => {
+      // Sections expand when their header enters the top 75% of the viewport.
+      // window.innerHeight is used because the window (not .app-content) scrolls.
+      const threshold = window.innerHeight * 0.75;
       let changed = false;
 
       for (const [key, ref] of Object.entries(sectionMap)) {
         if (!expandedRef.current.has(key) && ref.current) {
-          const rect = ref.current.getBoundingClientRect();
-          if (rect.top < threshold) {
+          const { top } = ref.current.getBoundingClientRect();
+          if (top < threshold) {
             expandedRef.current = new Set([...expandedRef.current, key]);
             changed = true;
           }
@@ -470,14 +461,14 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
 
       if (changed) setExpandedSections(new Set(expandedRef.current));
 
-      // Stop when all 4 sections are expanded
-      if (expandedRef.current.size < 4) {
-        rafId = requestAnimationFrame(poll);
+      // Stop listening once every section is expanded
+      if (expandedRef.current.size >= Object.keys(sectionMap).length) {
+        window.removeEventListener("scroll", check);
       }
     };
 
-    rafId = requestAnimationFrame(poll);
-    return () => cancelAnimationFrame(rafId);
+    window.addEventListener("scroll", check, { passive: true });
+    return () => window.removeEventListener("scroll", check);
   }, [securities.length]);
 
   // Real price history for sparkline cards — keyed by security id
