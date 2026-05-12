@@ -44,8 +44,8 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
   useEffect(() => {
     const handleScroll = () => {
       setButtonsVisible((prev) => {
-        if (!prev && window.scrollY > 200) return true;
-        if (prev && window.scrollY < 120) return false;
+        if (!prev && window.scrollY > 520) return true;
+        if (prev && window.scrollY < 380) return false;
         return prev;
       });
     };
@@ -588,14 +588,14 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
           onClick={toggleWatchlist}
           className={`relative flex h-[68px] w-[100px] flex-shrink-0 flex-col items-center justify-center gap-1.5 rounded-[22px] text-[10px] font-semibold uppercase tracking-widest shadow-[0_6px_24px_rgba(0,0,0,0.10)] ring-1 transition-all duration-300 active:scale-95 ${
             isWatched
-              ? "bg-gradient-to-br from-[#1a1150] to-[#3b1b7a] text-violet-200 ring-violet-700/40"
+              ? "bg-amber-50 text-amber-700 ring-amber-200/80"
               : "bg-white/95 text-slate-500 ring-slate-200/70"
           } ${watchlistAnimating ? "scale-95" : ""}`}
           style={{ backdropFilter: "blur(14px)" }}
         >
           <span className={`transition-transform duration-300 ${watchlistAnimating ? "scale-125" : "scale-100"}`}>
             {isWatched ? (
-              <Star className={`h-6 w-6 fill-violet-300 text-violet-300 ${watchlistAnimating ? "animate-[spin_0.4s_ease-out]" : ""}`} />
+              <Star className={`h-6 w-6 fill-amber-400 text-amber-400 ${watchlistAnimating ? "animate-[spin_0.4s_ease-out]" : ""}`} />
             ) : (
               <Star className="h-6 w-6 text-slate-400" />
             )}
