@@ -61,13 +61,14 @@ export const calculateMinInvestmentSync = (strategy, holdingsBySymbol) => {
   for (const holding of holdings) {
     const rawSymbol = holding.symbol || holding.ticker;
     if (!rawSymbol) continue;
-    const shares = Number(holding.shares || holding.quantity || 1);
-    if (shares <= 0) continue;
     const normalizedSym = normalizeSymbol(rawSymbol);
     const security = holdingsBySymbol.get(rawSymbol) || holdingsBySymbol.get(normalizedSym);
     if (!security?.last_price) continue;
     foundAny = true;
-    total += shares * (Number(security.last_price) / 100);
+    const pricePerShare = Number(security.last_price);
+    const shares = Number(holding.shares || holding.quantity || 1);
+    if (shares <= 0) continue;
+    total += shares * pricePerShare;
   }
   if (!foundAny) {
     return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : null;
@@ -77,10 +78,6 @@ export const calculateMinInvestmentSync = (strategy, holdingsBySymbol) => {
 
 export const calculateMinInvestment = async (strategy, holdingsBySymbol) => {
   const holdings = getHoldingsArray(strategy);
-
-  console.log(`🔍 [${strategy?.name}] Starting minimum calculation. Holdings:`, holdings);
-
-  console.log(`🔍 [${strategy?.name}] Starting minimum calculation. Holdings:`, holdings);
 
   // If no holdings, use min_investment from database
   if (!holdings.length) {

@@ -167,10 +167,17 @@ const MorePage = ({ onNavigate, onBeforeLogout }) => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-white px-6 pt-10 pb-24">
+      <div className="min-h-screen bg-white px-6 pt-10 pb-24 flex flex-col gap-4">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500 shadow-sm">
           {error}
         </div>
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-3 rounded-2xl px-4 py-4 text-left text-red-600 border border-red-100 bg-red-50 active:scale-[0.99] transition"
+        >
+          <LogOut className="h-5 w-5" />
+          <span className="text-base font-medium">Log out</span>
+        </button>
       </div>
     );
   }
