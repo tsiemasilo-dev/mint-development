@@ -1,27 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 
-const useNeon = import.meta.env.VITE_USE_NEON === 'true';
-
-// When VITE_USE_NEON is enabled the Neon API server runs on the same origin
-// (proxied by Vite: /rest/v1, /auth/v1 → localhost:3002). We point the
-// Supabase client at the current page origin so all API calls go through the
-// proxy without touching the production Supabase project.
-const supabaseUrl = useNeon
-  ? (typeof window !== 'undefined' ? window.location.origin : '')
-  : (import.meta.env.VITE_SUPABASE_URL || '');
-
-const supabaseAnonKey = useNeon
-  ? 'neon-test-anon-key'
-  : (import.meta.env.VITE_SUPABASE_ANON_KEY || '');
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('Missing Supabase environment variables. Please check your secrets.');
   console.error('VITE_SUPABASE_URL:', supabaseUrl ? 'set' : 'not set');
   console.error('VITE_SUPABASE_ANON_KEY:', supabaseAnonKey ? 'set' : 'not set');
-}
-
-if (useNeon) {
-  console.info('[mint] Neon mode active — all Supabase calls routed to localhost:3002');
 }
 
 // ── Global auth cache & deduplication patch ───────────────────────────────────

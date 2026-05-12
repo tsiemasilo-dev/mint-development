@@ -88,7 +88,6 @@ EXPERIAN_MOCK = "true"
 
 [userenv.development]
 VITE_ENABLE_INSURE = "true"
-VITE_USE_NEON = "false"
 
 [postMerge]
 path = "scripts/post-merge.sh"

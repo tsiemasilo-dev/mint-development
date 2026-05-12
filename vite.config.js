@@ -19,22 +19,6 @@ export default defineConfig({
         target: 'http://localhost:3001',
         changeOrigin: true,
       },
-      '/rest/v1': {
-        target: 'http://localhost:3002',
-        changeOrigin: true,
-      },
-      '/auth/v1': {
-        target: 'http://localhost:3002',
-        changeOrigin: true,
-      },
-      '/storage/v1': {
-        target: 'http://localhost:3002',
-        changeOrigin: true,
-      },
-      '/realtime/v1': {
-        target: 'http://localhost:3002',
-        changeOrigin: true,
-      },
     },
   }
 });
