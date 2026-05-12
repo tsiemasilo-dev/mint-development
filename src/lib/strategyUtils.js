@@ -61,13 +61,16 @@ export const calculateMinInvestmentSync = (strategy, holdingsBySymbol) => {
   for (const holding of holdings) {
     const rawSymbol = holding.symbol || holding.ticker;
     if (!rawSymbol) continue;
-    const shares = Number(holding.shares || holding.quantity || 1);
-    if (shares <= 0) continue;
     const normalizedSym = normalizeSymbol(rawSymbol);
     const security = holdingsBySymbol.get(rawSymbol) || holdingsBySymbol.get(normalizedSym);
     if (!security?.last_price) continue;
     foundAny = true;
-    total += shares * (Number(security.last_price) / 100);
+    const pricePerShare = Number(security.last_price) / 100;
+    const rawShares = Number(holding.shares || holding.quantity || 1);
+    const shares = (rawShares > 0 && pricePerShare > 0 && rawShares * pricePerShare < MIN_ASSET_VALUE)
+      ? Math.ceil(MIN_ASSET_VALUE / pricePerShare)
+      : rawShares;
+    total += shares * pricePerShare;
   }
   if (!foundAny) {
     return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : null;
