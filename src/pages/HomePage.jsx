@@ -420,8 +420,11 @@ const HomePage = ({
 
         const formatted = serverStrategies
           .map((s) => {
-          const invested = s.investedAmount || 0;
-          const currentValue = s.currentMarketValue != null ? Number(s.currentMarketValue.toFixed(2)) : invested;
+          const invested = Number(s.investedAmount) || 0;
+          const rawCurrent = s.currentMarketValue;
+          const currentValue = rawCurrent != null && Number.isFinite(Number(rawCurrent))
+            ? Number(Number(rawCurrent).toFixed(2))
+            : invested;
           const isPending = s.isPending === true || (invested === 0 && currentValue === 0);
           const stratPnlRands = currentValue - invested;
           const changePctVal = invested > 0 ? (stratPnlRands / invested) * 100 : 0;
@@ -959,9 +962,33 @@ const HomePage = ({
 
         {/* Pending Orders */}
         {(() => {
-          const pendingAssets = (assetsToDisplay || []).filter(a => a.isPending);
-          const pendingStrategies = (bestStrategies || []).filter(s => s.isPending);
-          if (pendingAssets.length === 0 && pendingStrategies.length === 0) return null;
+          const safeAssets = Array.isArray(assetsToDisplay) ? assetsToDisplay : [];
+          const safeStrategies = Array.isArray(bestStrategies) ? bestStrategies : [];
+          const pendingAssets = safeAssets.filter(a => a && a.isPending);
+          const pendingStrategies = safeStrategies.filter(s => s && s.isPending);
+          const items = [
+            ...pendingStrategies.map(s => ({
+              kind: "strategy",
+              key: `pending-strat-${s.id || s.name || Math.random()}`,
+              title: s.name || "Strategy",
+              subtitle: `Strategy • ${s.risk_level || "Balanced"}`,
+              image: s.image_url || s.icon_url || null,
+              amountLabel: Number(s.investedAmount) > 0
+                ? `R${Number(s.investedAmount).toFixed(2)} placed`
+                : "Awaiting fill",
+              symbolFallback: null,
+            })),
+            ...pendingAssets.map(a => ({
+              kind: "asset",
+              key: `pending-asset-${a.symbol || a.name || Math.random()}`,
+              title: a.symbol || a.name || "Asset",
+              subtitle: a.name || "Awaiting fill",
+              image: a.logo || null,
+              amountLabel: "Awaiting fill",
+              symbolFallback: a.symbol || "•",
+            })),
+          ];
+          if (items.length === 0) return null;
           return (
             <section>
               <div className="flex items-end justify-between px-5 mb-3">
@@ -978,84 +1005,51 @@ const HomePage = ({
                 </div>
               </div>
 
-              <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {pendingStrategies.map((strategy) => (
-                  <div
-                    key={`pending-strat-${strategy.id}`}
-                    className="flex-shrink-0 w-[280px] snap-start rounded-3xl p-4 text-white shadow-[0_8px_28px_-6px_rgba(76,29,149,0.45)] relative overflow-hidden"
-                    style={{ background: "linear-gradient(135deg,#5b21b6 0%,#7c3aed 55%,#a855f7 100%)" }}
-                  >
-                    <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/10 blur-xl" />
-                    <div className="relative flex items-start gap-3">
-                      <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-white/15 ring-1 ring-white/30 flex-shrink-0">
-                        {strategy.image_url || strategy.icon_url ? (
-                          <img
-                            src={strategy.image_url || strategy.icon_url}
-                            alt={strategy.name}
-                            className="h-full w-full object-cover"
-                            referrerPolicy="no-referrer"
-                          />
-                        ) : (
-                          <LayoutGrid className="h-5 w-5 text-white" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <p className="truncate text-sm font-bold">{strategy.name}</p>
+              <div
+                className="mx-4 rounded-3xl p-1 shadow-[0_10px_32px_-10px_rgba(76,29,149,0.45)] relative overflow-hidden"
+                style={{ background: "linear-gradient(135deg,#5b21b6 0%,#7c3aed 55%,#a855f7 100%)" }}
+              >
+                <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+                <div className="relative rounded-[22px] bg-white/5 backdrop-blur-sm divide-y divide-white/15">
+                  {items.map((item) => {
+                    const failed = item.kind === "asset" && failedLogos[item.title];
+                    return (
+                      <div key={item.key} className="flex items-center gap-3 px-4 py-3.5">
+                        <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-white/15 ring-1 ring-white/25 flex-shrink-0">
+                          {item.image && !failed ? (
+                            <img
+                              src={item.image}
+                              alt={item.title}
+                              className="h-full w-full object-cover"
+                              referrerPolicy="no-referrer"
+                              crossOrigin="anonymous"
+                              onError={() => {
+                                if (item.kind === "asset") {
+                                  setFailedLogos((prev) => ({ ...prev, [item.title]: true }));
+                                }
+                              }}
+                            />
+                          ) : item.symbolFallback ? (
+                            <span className="text-[11px] font-bold text-white">{item.symbolFallback}</span>
+                          ) : (
+                            <LayoutGrid className="h-5 w-5 text-white" />
+                          )}
                         </div>
-                        <p className="text-[11px] font-medium text-white/70 line-clamp-1">
-                          Strategy • {strategy.risk_level || "Balanced"}
-                        </p>
+                        <div className="flex-1 min-w-0">
+                          <p className="truncate text-sm font-bold text-white">{item.title}</p>
+                          <p className="text-[11px] font-medium text-white/70 line-clamp-1">{item.subtitle}</p>
+                        </div>
+                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white ring-1 ring-white/25">
+                            <Clock3 className="h-2.5 w-2.5" />
+                            Pending
+                          </span>
+                          <p className="text-[11px] font-semibold text-white/80 whitespace-nowrap">{item.amountLabel}</p>
+                        </div>
                       </div>
-                    </div>
-                    <div className="relative mt-3 flex items-center justify-between">
-                      <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white ring-1 ring-white/30">
-                        <Clock3 className="h-3 w-3" />
-                        Pending
-                      </span>
-                      <p className="text-[11px] font-semibold text-white/80">
-                        {strategy.investedAmount > 0 ? `R${strategy.investedAmount.toFixed(2)} placed` : "Awaiting fill"}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-
-                {pendingAssets.map((asset) => (
-                  <div
-                    key={`pending-asset-${asset.symbol}`}
-                    className="flex-shrink-0 w-[260px] snap-start rounded-3xl p-4 text-white shadow-[0_8px_28px_-6px_rgba(76,29,149,0.45)] relative overflow-hidden"
-                    style={{ background: "linear-gradient(135deg,#5b21b6 0%,#7c3aed 55%,#a855f7 100%)" }}
-                  >
-                    <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/10 blur-xl" />
-                    <div className="relative flex items-start gap-3">
-                      <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-white/40 flex-shrink-0">
-                        {failedLogos[asset.symbol] || !asset.logo ? (
-                          <span className="text-xs font-bold text-slate-700">{asset.symbol}</span>
-                        ) : (
-                          <img
-                            src={asset.logo}
-                            alt={asset.name}
-                            className="h-10 w-10 object-contain"
-                            referrerPolicy="no-referrer"
-                            crossOrigin="anonymous"
-                            onError={() => setFailedLogos((prev) => ({ ...prev, [asset.symbol]: true }))}
-                          />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="truncate text-sm font-bold">{asset.symbol}</p>
-                        <p className="text-[11px] font-medium text-white/70 line-clamp-1">{asset.name}</p>
-                      </div>
-                    </div>
-                    <div className="relative mt-3 flex items-center justify-between">
-                      <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white ring-1 ring-white/30">
-                        <Clock3 className="h-3 w-3" />
-                        Pending
-                      </span>
-                      <p className="text-[11px] font-semibold text-white/80">Awaiting fill</p>
-                    </div>
-                  </div>
-                ))}
+                    );
+                  })}
+                </div>
               </div>
             </section>
           );
