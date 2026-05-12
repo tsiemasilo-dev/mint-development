@@ -186,16 +186,14 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange, onLinkBan
           .eq('user_id', profile.id)
           .order('as_of_date', { ascending: false });
 
-        if (returnsData && returnsData.length > 0) {
-          const latestByStrategy = {};
-          for (const row of returnsData) {
-            if (!latestByStrategy[row.strategy_id]) {
-              latestByStrategy[row.strategy_id] = row;
-            }
+        const latestByStrategy = {};
+        for (const row of (returnsData || [])) {
+          if (!latestByStrategy[row.strategy_id]) {
+            latestByStrategy[row.strategy_id] = row;
           }
-          const totalCents = Object.values(latestByStrategy).reduce((sum, row) => sum + (row.basket_value || 0), 0);
-          setTotalPortfolioFromReturns(totalCents / 100);
         }
+        const totalCents = Object.values(latestByStrategy).reduce((sum, row) => sum + (row.basket_value || 0), 0);
+        setTotalPortfolioFromReturns(totalCents / 100);
 
       } catch (err) {
         console.error("Initialization error:", err.message);
@@ -460,7 +458,7 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange, onLinkBan
             <div className="relative z-10 grid grid-cols-2 gap-4 border-t border-white/10 pt-5">
               <div>
                 <p className="text-[8px] font-black uppercase tracking-[0.15em] text-white/50 mb-1">Total Portfolio</p>
-                {loading ? <div className="h-5 w-24 bg-white/20 animate-pulse rounded mt-1" /> : <p className="text-sm font-bold text-white">{formatZar(totalPortfolioFromReturns ?? totalPortfolioValue)}</p>}
+                {loading ? <div className="h-5 w-24 bg-white/20 animate-pulse rounded mt-1" /> : <p className="text-sm font-bold text-white">{formatZar(totalPortfolioFromReturns)}</p>}
               </div>
               <div>
                 <p className="text-[8px] font-black uppercase tracking-[0.15em] text-white/50 mb-1">Eligible Assets</p>
