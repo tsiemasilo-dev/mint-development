@@ -4,7 +4,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "node server/index.cjs & npx vite --port 5000",
+    "dev": "node neon-server/index.cjs & node server/index.cjs & npx vite --port 5000",
+    "neon": "node neon-server/index.cjs",
     "server": "node server/index.cjs",
     "build": "vite build",
     "preview": "vite preview",
