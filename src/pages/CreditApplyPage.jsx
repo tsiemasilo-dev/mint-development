@@ -1319,7 +1319,7 @@ const LoanCalculatorStep = ({ onSignedContinue }) => {
             >
                <div className="flex items-center gap-2">
                   <Info className="h-3.5 w-3.5 text-slate-400" />
-                  <span className="text-[11px] font-semibold text-slate-500 group-active:text-slate-700">Fee Breakdown (NCA Schedule)</span>
+                  <span className="text-[11px] font-semibold text-slate-500 group-active:text-slate-700">Fee Breakdown</span>
                </div>
                {showFees ? <ChevronUp className="h-3.5 w-3.5 text-slate-400" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-400" />}
             </button>
@@ -1342,11 +1342,6 @@ const LoanCalculatorStep = ({ onSignedContinue }) => {
                </div>
             )}
 
-            {/* NCA compliance inline */}
-            <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2">
-               <ShieldCheck className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-               <span className="text-[11px] font-medium text-slate-500">NCA-compliant · Interest: <strong className="text-slate-700">4.5% p.m.</strong> ({effectiveInterestRatePct.toFixed(0)}% over {loanPeriod} months, max 27%)</span>
-            </div>
          </div>
 
          {/* ── CTA ── */}
