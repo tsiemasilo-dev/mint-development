@@ -1,0 +1,165 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html dir="ltr" lang="en">
+<head>
+  <meta content="width=device-width" name="viewport" />
+  <meta content="text/html; charset=UTF-8" http-equiv="Content-Type" />
+  <meta name="x-apple-disable-message-reformatting" />
+  <meta content="IE=edge" http-equiv="X-UA-Compatible" />
+  <meta content="telephone=no,address=no,email=no,date=no,url=no" name="format-detection" />
+  <style>
+    @media only screen and (max-width: 600px) {
+      .wrap { padding: 16px 8px !important; }
+      .card { border-radius: 20px !important; padding: 20px !important; }
+      .title { font-size: 22px !important; }
+    }
+  </style>
+</head>
+
+<body style="margin:0;padding:0;background:#f8fafc;">
+
+  <!-- Preheader -->
+  <div style="display:none;overflow:hidden;line-height:1px;opacity:0;max-height:0;max-width:0;">
+    We have put together a concise summary of the key measures announced in the Budget Speech
+  </div>
+
+  <!-- bg-slate-50 outer wrap -->
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f8fafc">
+    <tr>
+      <td class="wrap" align="center" style="padding:48px 16px 40px;">
+
+        <!-- rounded-3xl bg-white p-6 shadow-md  →  the article card -->
+        <table role="presentation" class="card" width="100%" cellpadding="0" cellspacing="0" border="0"
+          style="max-width:600px;background:#ffffff;border-radius:24px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.10),0 2px 4px -2px rgba(0,0,0,0.10);overflow:hidden;">
+
+          <!-- ── Card inner padding wrapper ── -->
+          <tr>
+            <td style="padding:24px 24px 0 24px;">
+
+              <!-- mb-6 flex items-center gap-3 border-b border-slate-100 pb-6 -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                style="border-bottom:1px solid #f1f5f9;padding-bottom:24px;margin-bottom:24px;">
+                <tr>
+                  <!-- flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 -->
+                  <td width="48" valign="middle" style="padding-right:12px;">
+                    <div style="width:48px;height:48px;border-radius:50%;background:#f1f5f9;text-align:center;line-height:48px;">
+                      <img src="https://www.mymint.co.za/assets/mint-logo.svg"
+                        width="24" height="24" alt="Mint"
+                        style="display:inline-block;vertical-align:middle;border:0;outline:none;" />
+                    </div>
+                  </td>
+                  <td valign="middle">
+                    <!-- text-sm font-semibold text-slate-900 -->
+                    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;font-weight:600;color:#0f172a;line-height:1.4;">
+                      Mint News
+                    </div>
+                    <!-- text-xs text-slate-500 -->
+                    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:12px;color:#64748b;margin-top:2px;">
+                      25 February 2026 &bull; 08:00 AM
+                    </div>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- text-2xl font-bold text-slate-900  (mb-4) -->
+              <div class="title" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:24px;line-height:1.3;font-weight:700;color:#0f172a;margin-bottom:16px;">
+                2026 Budget Speech: What Matters Most
+              </div>
+
+              <!-- Source + channel pills  (mb-6 flex flex-wrap gap-2) -->
+              <div style="margin-bottom:24px;">
+                <!-- rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 -->
+                <span style="display:inline-block;background:#f1f5f9;border-radius:9999px;padding:4px 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:12px;font-weight:600;color:#475569;margin-right:8px;">
+                  Mint Circle Update
+                </span>
+                <!-- rounded-full bg-violet-100 px-3 py-1 text-xs font-semibold text-violet-700 -->
+                <span style="display:inline-block;background:#ede9fe;border-radius:9999px;padding:4px 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:12px;font-weight:600;color:#6d28d9;">
+                  Budget
+                </span>
+              </div>
+
+              <!-- Body text  →  whitespace-pre-wrap text-sm leading-relaxed text-slate-700 -->
+              <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;line-height:1.625;color:#334155;">
+
+                <p style="margin:0 0 16px;">Dear Mint Circle,</p>
+
+                <p style="margin:0 0 20px;">We know many of you are constantly on the move. To keep you informed without adding noise, we have put together a concise summary of the key measures announced in the 2026 Budget Speech on 25 February 2026.</p>
+
+                <p style="margin:0 0 8px;font-weight:700;color:#0f172a;">1) VAT Registration Threshold</p>
+                <p style="margin:0 0 20px;">The compulsory VAT registration threshold increases from <strong>R1,000,000</strong> to <strong>R2,300,000</strong> in annual turnover.</p>
+
+                <p style="margin:0 0 8px;font-weight:700;color:#0f172a;">2) Fuel Levy Adjustment</p>
+                <ul style="margin:0 0 20px;padding-left:20px;">
+                  <li style="margin-bottom:6px;">Total fuel levy increases by <strong>21 cents per litre</strong>.</li>
+                  <li style="margin-bottom:6px;">General fuel levy rises by <strong>9c for petrol</strong> and <strong>8c for diesel</strong>.</li>
+                  <li style="margin-bottom:6px;">RAF levy increases by <strong>7c</strong>.</li>
+                </ul>
+
+                <p style="margin:0 0 8px;font-weight:700;color:#0f172a;">3) Alcohol and Tobacco Excise</p>
+                <ul style="margin:0 0 20px;padding-left:20px;">
+                  <li style="margin-bottom:6px;">Cigarettes (20 pack): <strong>R22.81</strong> to <strong>R23.58</strong>.</li>
+                  <li style="margin-bottom:6px;">Beer or cider (340ml): <strong>+8c</strong>.</li>
+                  <li style="margin-bottom:6px;">Wine (750ml): <strong>+15c</strong>.</li>
+                  <li style="margin-bottom:6px;">Spirits (750ml): <strong>+R3.20</strong>.</li>
+                </ul>
+
+                <p style="margin:0 0 8px;font-weight:700;color:#0f172a;">4) Tax-Free Savings and Retirement Incentives</p>
+                <ul style="margin:0 0 20px;padding-left:20px;">
+                  <li style="margin-bottom:6px;">Annual TFSA contribution limit increases from <strong>R36,000</strong> to <strong>R46,000</strong>.</li>
+                  <li style="margin-bottom:6px;">Retirement fund deduction limit increases from <strong>R350,000</strong> to <strong>R430,000</strong>.</li>
+                  <li style="margin-bottom:6px;">Primary residence CGT exclusion increases from <strong>R2,000,000</strong> to <strong>R3,000,000</strong>.</li>
+                </ul>
+
+                <p style="margin:0 0 8px;font-weight:700;color:#0f172a;">5) Social Grants and Consumer Spend</p>
+                <ul style="margin:0 0 20px;padding-left:20px;">
+                  <li style="margin-bottom:6px;">Old age grant increases from <strong>R2,315</strong> to <strong>R2,400</strong>.</li>
+                  <li style="margin-bottom:6px;">Child support grant increases from <strong>R560</strong> to <strong>R580</strong>.</li>
+                  <li style="margin-bottom:6px;">Foster care grant increases from <strong>R1,250</strong> to <strong>R1,295</strong>.</li>
+                </ul>
+
+                <p style="margin:0 0 8px;font-weight:700;color:#0f172a;">6) Personal Income Tax Adjustments</p>
+                <p style="margin:0 0 8px;">Tax brackets are adjusted for inflation:</p>
+                <ul style="margin:0 0 20px;padding-left:20px;">
+                  <li style="margin-bottom:6px;">First bracket moves from <strong>R237,100</strong> to <strong>R245,100</strong>.</li>
+                  <li style="margin-bottom:6px;">Top bracket now starts at <strong>R1,878,600</strong> (previously <strong>R1,817,000</strong>).</li>
+                  <li style="margin-bottom:6px;">Primary rebate increases from <strong>R17,235</strong> to <strong>R17,820</strong>.</li>
+                  <li style="margin-bottom:6px;">Tax-free threshold (under 65) rises from <strong>R95,750</strong> to <strong>R99,000</strong>.</li>
+                </ul>
+
+                <p style="margin:0 0 20px;">As always, we remain focused on translating policy developments into practical financial implications for our managed portfolios. Accordingly, our platform strategies continue to be actively managed within their stated mandates to reflect prevailing economic, fiscal and market conditions.</p>
+
+                <p style="margin:0;font-weight:600;color:#0f172a;">Warm regards,<br/>The Mint Team</p>
+
+              </div>
+
+              <!-- mt-8 border-t border-slate-100 pt-6  →  Related Topics -->
+              <div style="margin-top:32px;border-top:1px solid #f1f5f9;padding-top:24px;">
+                <!-- text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3 -->
+                <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#64748b;margin-bottom:12px;">
+                  Related Topics
+                </div>
+                <!-- rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 -->
+                <span style="display:inline-block;border:1px solid #e2e8f0;border-radius:9999px;background:#ffffff;padding:4px 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:12px;font-weight:500;color:#475569;margin:0 6px 6px 0;">Budget 2026</span>
+                <span style="display:inline-block;border:1px solid #e2e8f0;border-radius:9999px;background:#ffffff;padding:4px 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:12px;font-weight:500;color:#475569;margin:0 6px 6px 0;">Tax</span>
+                <span style="display:inline-block;border:1px solid #e2e8f0;border-radius:9999px;background:#ffffff;padding:4px 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:12px;font-weight:500;color:#475569;margin:0 6px 6px 0;">South Africa</span>
+                <span style="display:inline-block;border:1px solid #e2e8f0;border-radius:9999px;background:#ffffff;padding:4px 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:12px;font-weight:500;color:#475569;margin:0 6px 6px 0;">Investing</span>
+              </div>
+
+            </td>
+          </tr>
+
+          <!-- Disclaimer footer -->
+          <tr>
+            <td style="padding:16px 24px 24px;border-top:1px solid #f1f5f9;margin-top:16px;">
+              <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:12px;line-height:1.6;color:#94a3b8;">
+                This communication is for informational purposes and does not constitute personal financial advice. For strategy-specific guidance, please consult your Mint advisor.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+
+</body>
+</html>
