@@ -1,0 +1,45 @@
+21:17:53.655 Running build in Washington, D.C., USA (East) – iad1
+21:17:53.655 Build machine configuration: 4 cores, 8 GB
+21:17:53.782 Cloning github.com/mihle-matimba/mint-development (Branch: main, Commit: 76d48d1)
+21:18:03.426 Warning: Failed to fetch one or more git submodules
+21:18:03.426 Cloning completed: 9.644s
+21:18:03.693 Restored build cache from previous deployment (GoHVNr5kcakB6wcdBjv27Za1rGgG)
+21:18:03.989 Running "vercel build"
+21:18:05.100 Vercel CLI 53.3.2
+21:18:06.245 Installing dependencies...
+21:18:07.390 
+21:18:07.391 up to date in 994ms
+21:18:07.391 
+21:18:07.391 76 packages are looking for funding
+21:18:07.392   run `npm fund` for details
+21:18:07.578 
+21:18:07.578 > mint@1.0.0 build
+21:18:07.579 > vite build
+21:18:07.579 
+21:18:07.912 vite v7.3.2 building client environment for production...
+21:18:08.357 transforming...
+21:18:08.590 
+21:18:08.590 ../assets/fonts/future-earth.ttf referenced in ../assets/fonts/future-earth.ttf didn't resolve at build time, it will remain unchanged to be resolved at runtime
+21:18:14.741 ✓ 2646 modules transformed.
+21:18:14.743 ✗ Build failed in 6.79s
+21:18:14.744 error during build:
+21:18:14.744 src/lib/useSignaturePad.js (66:9): Identifier "useEffect" has already been declared
+21:18:14.744 file: /vercel/path0/src/lib/useSignaturePad.js:66:9
+21:18:14.745 
+21:18:14.745 64:  */
+21:18:14.745 65: 
+21:18:14.745 66: import { useEffect, useRef, useCallback, useState } from "react";
+21:18:14.745              ^
+21:18:14.745 67: import SignaturePad from "signature_pad";
+21:18:14.745 
+21:18:14.745     at getRollupError (file:///vercel/path0/node_modules/rollup/dist/es/shared/parseAst.js:402:41)
+21:18:14.745     at error (file:///vercel/path0/node_modules/rollup/dist/es/shared/parseAst.js:398:42)
+21:18:14.746     at Module.error (file:///vercel/path0/node_modules/rollup/dist/es/shared/node-entry.js:17040:16)
+21:18:14.746     at Module.addImport (file:///vercel/path0/node_modules/rollup/dist/es/shared/node-entry.js:17567:22)
+21:18:14.746     at ImportDeclaration.initialise (file:///vercel/path0/node_modules/rollup/dist/es/shared/node-entry.js:13090:28)
+21:18:14.746     at convertNode (file:///vercel/path0/node_modules/rollup/dist/es/shared/node-entry.js:16437:10)
+21:18:14.746     at convertNodeList (file:///vercel/path0/node_modules/rollup/dist/es/shared/node-entry.js:16447:38)
+21:18:14.747     at Array.program (file:///vercel/path0/node_modules/rollup/dist/es/shared/node-entry.js:16297:21)
+21:18:14.747     at convertNode (file:///vercel/path0/node_modules/rollup/dist/es/shared/node-entry.js:16436:28)
+21:18:14.747     at convertProgram (file:///vercel/path0/node_modules/rollup/dist/es/shared/node-entry.js:15677:12)
+21:18:14.867 Error: Command "npm run build" exited with 1
