@@ -150,7 +150,8 @@ const SecuritySparklineCard = ({ security, onClick, onToggleWatchlist, isWatched
   return (
     <button
       onClick={onClick}
-      className="relative flex-shrink-0 w-44 snap-center rounded-2xl bg-white text-left shadow-[0_2px_12px_-2px_rgba(0,0,0,0.10)] border border-slate-100 transition-all active:scale-[0.96] overflow-hidden"
+      className="relative flex-shrink-0 w-44 snap-center rounded-2xl text-left shadow-[0_2px_12px_-2px_rgba(0,0,0,0.08)] border border-[#e8edf8] transition-all active:scale-[0.96] overflow-hidden"
+      style={{ background: "#eef1fa" }}
     >
       {/* Header */}
       <div className="px-3.5 pt-3.5 pb-2">
@@ -190,7 +191,7 @@ const SecuritySparklineCard = ({ security, onClick, onToggleWatchlist, isWatched
       </div>
 
       {/* Sparkline chart */}
-      <div className="w-full" style={{ height: 80, background: "#f0f3fc" }}>
+      <div className="w-full" style={{ height: 80 }}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={sparkData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
             <defs>
