@@ -139,13 +139,13 @@ function symbolToHue(symbol) {
 const CompactSecurityRow = ({ security, onClick }) => {
   const isPositive = (security.changePct ?? 0) >= 0;
   const hue = symbolToHue(security.symbol);
-  const bg = `linear-gradient(135deg, hsl(${hue},35%,97%) 0%, hsl(${(hue + 25) % 360},25%,94%) 100%)`;
-  const borderColor = `hsl(${hue},25%,90%)`;
+  const bg = `linear-gradient(135deg, hsl(${hue},18%,98.5%) 0%, hsl(${(hue + 25) % 360},12%,96.5%) 100%)`;
+  const borderColor = `hsl(${hue},15%,92%)`;
 
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-3 w-full rounded-2xl px-3.5 py-3.5 text-left active:scale-[0.97] transition-transform border"
+      className="flex items-center gap-3 w-full rounded-2xl px-3.5 py-2.5 text-left active:scale-[0.97] transition-transform border"
       style={{ background: bg, borderColor }}
     >
       {security.logo_url ? (
@@ -199,7 +199,7 @@ const CollapsibleSection = ({ title, securities, onOpenStockDetail, onToggleWatc
             initial={{ opacity: 1 }}
             exit={{ opacity: 0, scale: 0.98 }}
             transition={{ duration: 0.18 }}
-            className="grid grid-cols-2 gap-2 pb-2"
+            className="grid grid-cols-2 gap-1.5 pb-2"
           >
             {securities.slice(0, 4).map((security) => (
               <CompactSecurityRow
