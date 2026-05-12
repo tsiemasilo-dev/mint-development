@@ -462,6 +462,9 @@ export default function AccountAgreementStep({
   existingOnboardingId,
   onBack,
   onComplete,
+  onSignStart,
+  initialPhase = "review",
+  mode = "full",
 }) {
   const {
     bankName = "", bankAccountNumber = "", bankBranchCode = "",
@@ -471,16 +474,18 @@ export default function AccountAgreementStep({
     bankAccountType = "SAVINGS",
   } = onboardingData;
 
-  const [phase, setPhase] = useState("review");
+  const [phase, setPhase] = useState(initialPhase);
   const [error, setError] = useState("");
   const [pdfUrl, setPdfUrl] = useState("");
   const [signedAt, setSignedAt] = useState(null);
   const [downloadedAt, setDownloadedAt] = useState(null);
   const [packDetail, setPackDetail] = useState(null);
   const [fetchedOnboarding, setFetchedOnboarding] = useState({});
+  const [isSigningInProgress, setIsSigningInProgress] = useState(false);
 
   const canvasRef = useRef(null);
   const sigPadRef = useRef(null);
+  const pendingCompleteRef = useRef(null);
   const signatureDataUrlRef = useRef(null);
   const [sigEmpty, setSigEmpty] = useState(true);
 
@@ -602,7 +607,14 @@ export default function AccountAgreementStep({
       return;
     }
     setError("");
-    setPhase("processing");
+
+    if (mode === "signature-only") {
+      onSignStart?.();
+      setPhase("success");
+      setIsSigningInProgress(true);
+    } else {
+      setPhase("processing");
+    }
 
     try {
       const sigDataUrl = sigPadRef.current.toDataURL("image/png");
@@ -731,23 +743,26 @@ export default function AccountAgreementStep({
         }
       }
 
-      setPhase("success");
+      const signingResults = { signed_agreement_url: publicUrl, signed_at: now, downloaded_at: now };
 
-      if (onComplete) {
-        try {
-          await onComplete({
-            signed_agreement_url: publicUrl,
-            signed_at: now,
-            downloaded_at: now,
-          });
-        } catch (completeErr) {
-          console.error("onComplete error:", completeErr);
+      if (mode === "signature-only") {
+        pendingCompleteRef.current = signingResults;
+        setIsSigningInProgress(false);
+      } else {
+        setPhase("success");
+        if (onComplete) {
+          try {
+            await onComplete(signingResults);
+          } catch (completeErr) {
+            console.error("onComplete error:", completeErr);
+          }
         }
       }
     } catch (err) {
       console.error("Sign error:", err);
       setError(err?.message || "Something went wrong. Please try again.");
       setPhase("sign");
+      setIsSigningInProgress(false);
     }
   };
 
@@ -927,6 +942,155 @@ export default function AccountAgreementStep({
   if (phase === "sign") {
     const { day, month, year } = todayParts();
 
+    // ── text-only mode: polished document view ──────────────────────────────
+    if (mode === "text-only") {
+      const clauseHeading = (num, text) => (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "20px 0 8px" }}>
+          <span style={{ flexShrink: 0, width: 22, height: 22, borderRadius: 6, background: purple, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: "white" }}>{num}</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: purple, textTransform: "uppercase", letterSpacing: "0.08em" }}>{text}</span>
+        </div>
+      );
+      const subClause = (label, text) => (
+        <div style={{ display: "flex", gap: 10, marginBottom: 6, paddingLeft: 8 }}>
+          <span style={{ flexShrink: 0, fontSize: 12, fontWeight: 600, color: purpleMid, minWidth: 28 }}>{label}</span>
+          <span style={{ fontSize: 12, color: "#444", lineHeight: 1.6 }}>{text}</span>
+        </div>
+      );
+      return (
+        <div>
+          {/* ── Parties ── */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 20 }}>
+            <div style={{ padding: "16px 18px", borderRadius: 12, background: "hsl(270 30% 24%)" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Service Provider</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "white", marginBottom: 3 }}>Mint Platforms (Pty) Ltd</div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", lineHeight: 1.5 }}>
+                Trading as <strong style={{ color: "rgba(255,255,255,0.85)" }}>Mint</strong><br />
+                Reg: 2024/644796/07
+              </div>
+            </div>
+            <div style={{ padding: "16px 18px", borderRadius: 12, background: purplePale, border: `1px solid ${purpleBorder}` }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: purpleMid, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Client</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: purple, marginBottom: 3 }}>{fullName || "—"}</div>
+              <div style={{ fontSize: 11, color: purpleMid, lineHeight: 1.5 }}>
+                ID: {identityNumber || "—"}<br />
+                {address || ""}
+              </div>
+            </div>
+          </div>
+
+          <hr style={{ border: "none", borderTop: `1px solid ${purpleBorder}`, margin: "4px 0 4px" }} />
+
+          {/* ── Clauses ── */}
+          {clauseHeading("1", "Appointment")}
+          <p style={{ fontSize: 12, color: "#444", lineHeight: 1.6, margin: "0 0 8px" }}>The Client appoints <strong>Mint Platforms (Pty) Ltd</strong> as its authorised securities administrator for custody, administration and record-keeping of securities.</p>
+          {subClause("1.1", "Facilitate opening and administration of the Client's securities account with the appointed nominee custodian.")}
+          {subClause("1.2", "Administer and facilitate the holding of securities beneficially owned by the Client through the nominee and custody structure.")}
+          {subClause("1.3", "Interface with transfer secretaries, custodians, central securities depositories, and settlement agents.")}
+          {subClause("1.4", "Provide client and investment information to Strate, the appointed nominee custodian, and related service providers.")}
+
+          {clauseHeading("2", "Nominee & Underlying Account Arrangements")}
+          {subClause("2.1", "Securities acquired through Mint may be held through a nominee structure or underlying accounts in the Client's name.")}
+          {subClause("2.2", "Mint is authorised to facilitate the opening of such underlying accounts in the Client's name.")}
+          {subClause("2.3", "The Client consents to Mint providing the Client's information to relevant service providers for establishing such accounts.")}
+
+          {clauseHeading("3", "Record of Ownership")}
+          {subClause("3.1", "The Client remains the beneficial owner of any securities purchased or held through Mint.")}
+          {subClause("3.2", "Mint will maintain internal records reflecting the Client's beneficial ownership of securities.")}
+
+          {clauseHeading("4", "Client Instructions")}
+          {subClause("4.1", "Mint will act on Client instructions regarding subscriptions, transfers, disposals, corporate actions, and other administrative matters.")}
+
+          {clauseHeading("5", "Information Sharing")}
+          {subClause("5.1", "The Client authorises Mint to share relevant information with custodians, transfer secretaries, registry service providers, and settlement agents solely to administer the Client's securities holdings.")}
+
+          {clauseHeading("6", "Term")}
+          <p style={{ fontSize: 12, color: "#444", lineHeight: 1.6, margin: "0 0 8px", paddingLeft: 8 }}>This Agreement commences on the date of signature and remains in effect until terminated by either party upon written notice.</p>
+
+          {clauseHeading("7", "Governing Law")}
+          <p style={{ fontSize: 12, color: "#444", lineHeight: 1.6, margin: "0 0 8px", paddingLeft: 8 }}>This Agreement is governed by the laws of the <strong>Republic of South Africa</strong>.</p>
+
+          {clauseHeading("8", "Signatures")}
+          <p style={{ fontSize: 12, color: "#444", lineHeight: 1.6, margin: "0 0 12px", paddingLeft: 8 }}>Signed at <strong>Mint Platforms</strong> on this <strong>{day}</strong> day of <strong>{month}</strong> 20<strong>{year}</strong>.</p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div style={{ padding: "12px 14px", borderRadius: 10, background: purplePale, border: `1px solid ${purpleBorder}` }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: purpleMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>For Mint</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: purple }}>Lonwabo Damane</div>
+              <div style={{ fontSize: 11, color: purpleMid }}>Chief Executive Officer</div>
+            </div>
+            <div style={{ padding: "12px 14px", borderRadius: 10, background: purplePale, border: `1px solid ${purpleBorder}` }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: purpleMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>For the Client</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: purple }}>{fullName || "—"}</div>
+              <div style={{ fontSize: 11, color: purpleMid }}>ID: {identityNumber || "—"}</div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ── signature-only mode: just the pad + disclaimer + button ─────────────
+    if (mode === "signature-only") {
+      return (
+        <div>
+          <div style={{
+            background: "white", border: `2px dashed ${purpleBorder}`,
+            borderRadius: 16, overflow: "hidden", marginBottom: 16, position: "relative",
+          }}>
+            <div style={{
+              padding: "10px 16px", borderBottom: `1px solid ${purpleBorder}`,
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+              background: purplePale,
+            }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: purpleMid, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                Signature of {fullName}
+              </span>
+              <button type="button" onClick={clearSignature} style={{
+                fontSize: 11, color: purpleMid, background: "none", border: "none",
+                cursor: "pointer", padding: "2px 8px", borderRadius: 6, fontFamily: "inherit",
+              }}>Clear</button>
+            </div>
+            {sigEmpty && (
+              <div style={{
+                position: "absolute", top: "55%", left: "50%",
+                transform: "translate(-50%,-50%)", pointerEvents: "none", textAlign: "center",
+              }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke={purpleBorder} strokeWidth="1" width={32} height={32} style={{ margin: "0 auto 6px" }}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" />
+                </svg>
+                <p style={{ fontSize: 12, color: purpleBorder, margin: 0 }}>Draw your signature here</p>
+              </div>
+            )}
+            <canvas ref={canvasRef} style={{ display: "block", width: "100%", height: 160, cursor: "crosshair", touchAction: "none" }} />
+          </div>
+          <div style={{
+            display: "flex", gap: 8, marginBottom: 20,
+            padding: "10px 14px", borderRadius: 8,
+            background: "hsl(270 50% 98%)", border: `1px solid ${purpleBorder}`,
+          }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke={mintAccent} strokeWidth="1.5" width={14} height={14} style={{ flexShrink: 0, marginTop: 1 }}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+            </svg>
+            <p style={{ margin: 0, fontSize: 11, color: purpleMid, lineHeight: 1.5 }}>
+              By drawing your signature you confirm that you have read and agree to the Investment Risk Disclosure,
+              Terms &amp; Conditions, and the Client Securities Administration and Nominee Appointment Agreement.
+              This constitutes a legally binding electronic signature.
+            </p>
+          </div>
+          {error && <p className="form-error" role="alert" style={{ textAlign: "center", marginBottom: 12 }}>{error}</p>}
+          <div className="text-center">
+            <button
+              type="button"
+              className={`continue-button agreement-continue ${!sigEmpty ? "enabled" : ""}`}
+              disabled={sigEmpty}
+              onClick={handleSign}
+            >
+              Sign &amp; Complete Onboarding
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // ── full mode (default): heading + text + signature ──────────────────────
     return (
       <div className="w-full max-w-3xl mx-auto">
         <div className="text-center mb-6 animate-fade-in delay-1">
@@ -1145,6 +1309,116 @@ export default function AccountAgreementStep({
   // PHASE: SUCCESS
   // ─────────────────────────────────────────────────────────────────────────
   if (phase === "success") {
+    // ── signature-only mode: full professional success screen ────────────────
+    if (mode === "signature-only") {
+      const items = [
+        "Risk Disclosure accepted",
+        "Terms & Conditions accepted",
+        "Account Agreement signed",
+        "Signed PDF saved to your account",
+      ];
+      return (
+        <div className="animate-fade-in" style={{ padding: "40px 24px 32px", textAlign: "center" }}>
+          <style>{`@keyframes sigSpin { to { transform: rotate(360deg); } }`}</style>
+
+          {/* Icon */}
+          <div style={{
+            width: 80, height: 80, borderRadius: "50%", margin: "0 auto 24px",
+            background: "linear-gradient(135deg, hsl(152 65% 42%) 0%, hsl(152 55% 32%) 100%)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: "0 8px 32px rgba(16,185,129,0.28)",
+          }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" width={40} height={40}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+            </svg>
+          </div>
+
+          {/* Heading */}
+          <h2 style={{ fontSize: 26, fontWeight: 600, color: purple, marginBottom: 10, letterSpacing: "-0.3px" }}>
+            Agreement Signed
+          </h2>
+          <p style={{ fontSize: 14, color: purpleMid, lineHeight: 1.7, marginBottom: 28, maxWidth: 380, margin: "0 auto 28px" }}>
+            Your signature has been recorded. You have agreed to the Risk Disclosure,
+            Terms &amp; Conditions, and Client Securities Agreement.
+          </p>
+
+          {/* Status list */}
+          <div style={{
+            background: "white", border: `1px solid hsl(270 20% 90%)`,
+            borderRadius: 16, overflow: "hidden", marginBottom: 28,
+            boxShadow: "0 2px 12px rgba(83,47,126,0.07)", textAlign: "left",
+          }}>
+            {items.map((item, i) => (
+              <div key={item} style={{
+                display: "flex", alignItems: "center", gap: 14,
+                padding: "14px 20px",
+                borderBottom: i < items.length - 1 ? `1px solid hsl(270 20% 93%)` : "none",
+              }}>
+                <div style={{
+                  width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
+                  background: isSigningInProgress && i === 3
+                    ? "hsl(270 20% 93%)"
+                    : "hsl(152 65% 42%)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  {isSigningInProgress && i === 3 ? (
+                    <div style={{
+                      width: 14, height: 14, borderRadius: "50%",
+                      border: "2px solid hsl(270 20% 75%)",
+                      borderTopColor: purple,
+                      animation: "sigSpin 0.8s linear infinite",
+                    }} />
+                  ) : (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" width={14} height={14}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                    </svg>
+                  )}
+                </div>
+                <span style={{
+                  fontSize: 14, fontWeight: 500,
+                  color: isSigningInProgress && i === 3 ? purpleMid : purple,
+                }}>
+                  {item}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Continue button */}
+          <button
+            type="button"
+            disabled={isSigningInProgress}
+            onClick={async () => {
+              if (onComplete && pendingCompleteRef.current) {
+                try { await onComplete(pendingCompleteRef.current); } catch (e) { console.error("onComplete error:", e); }
+              }
+            }}
+            style={{
+              display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 10,
+              padding: "14px 48px", borderRadius: 14, border: "none",
+              cursor: isSigningInProgress ? "not-allowed" : "pointer",
+              background: isSigningInProgress ? "hsl(270 15% 80%)" : "hsl(270 30% 25%)",
+              color: "white", fontSize: 15, fontWeight: 600, fontFamily: "inherit",
+              boxShadow: isSigningInProgress ? "none" : "0 4px 18px rgba(83,47,126,0.28)",
+              transition: "all 0.2s",
+              width: "100%", maxWidth: 360,
+            }}
+          >
+            {isSigningInProgress && (
+              <div style={{
+                width: 16, height: 16, borderRadius: "50%",
+                border: "2px solid rgba(255,255,255,0.4)",
+                borderTopColor: "white",
+                animation: "sigSpin 0.8s linear infinite",
+                flexShrink: 0,
+              }} />
+            )}
+            {isSigningInProgress ? "Saving your agreement…" : "Continue to Dashboard"}
+          </button>
+        </div>
+      );
+    }
+
     return (
       <div className="w-full max-w-md mx-auto text-center animate-fade-in" style={{ paddingTop: 40 }}>
         <div style={{

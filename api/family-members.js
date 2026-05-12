@@ -558,7 +558,8 @@ export default async function handler(req, res) {
         .eq("id", member_id)
         .eq("primary_user_id", primary_user_id);
       if (error) throw error;
-      return res.json({ success: true });
+
+      return res.json({ success: true, refunded_cents: refundedCents });
     } catch (e) {
       console.error("[family] DELETE error:", e.message);
       return res.status(500).json({ error: e.message });

@@ -15,7 +15,6 @@ const cache = {
 export const getStrategiesWithMetrics = async () => {
   const now = Date.now();
 
-  // Check cache
   if (cache.strategies.data && (now - cache.strategies.timestamp) < cache.strategies.ttl) {
     console.log("📦 Using cached strategies data");
     return cache.strategies.data;
@@ -29,57 +28,59 @@ export const getStrategiesWithMetrics = async () => {
   try {
     console.log("🔍 Fetching strategies with metrics from Supabase...");
 
-    // Fetch strategies with nested strategy_metrics
-    const { data: strategies, error: strategiesError } = await supabase
-      .from("strategies_c")
-      .select(`
-        *,
-        strategy_metrics!strategy_metrics_strategy_id_fkey(*)
-      `)
-      .eq("status", "active")
-      .order("name", { ascending: true })
-      .order("as_of_date", { foreignTable: "strategy_metrics", ascending: false })
-      .limit(1, { foreignTable: "strategy_metrics" });
+    // Fetch strategies and their latest returns in parallel.
+    // strategy_metrics table has been removed — use strategies_returns_c instead.
+    const [strategiesResult, returnsResult] = await Promise.all([
+      supabase
+        .from("strategies_c")
+        .select("*")
+        .eq("status", "active")
+        .order("name", { ascending: true }),
+      supabase
+        .from("strategies_returns_c")
+        .select("strategy_id, as_of_date, ytd_pct, \"5d_pct\", \"1m_pct\", \"6m_pct\"")
+        .order("as_of_date", { ascending: false }),
+    ]);
 
-    if (strategiesError) {
-      console.error("❌ Error fetching strategies:", strategiesError);
+    if (strategiesResult.error) {
+      console.error("❌ Error fetching strategies:", strategiesResult.error);
       return [];
     }
 
-    if (!strategies || strategies.length === 0) {
+    const strategies = strategiesResult.data || [];
+    if (strategies.length === 0) {
       console.warn("⚠️ No active strategies found");
       return [];
     }
 
-    // Process strategies to get latest metrics
-    const processedStrategies = strategies.map((strategy) => {
-      // Get the most recent metric (they should be sorted by as_of_date desc in the query)
-      const latestMetric = Array.isArray(strategy.strategy_metrics) && strategy.strategy_metrics.length > 0
-        ? strategy.strategy_metrics[0]
-        : null;
+    // Build a map of the most-recent return row per strategy
+    const latestReturnByStrategy = {};
+    for (const row of (returnsResult.data || [])) {
+      if (!latestReturnByStrategy[row.strategy_id]) {
+        latestReturnByStrategy[row.strategy_id] = row;
+      }
+    }
 
+    const processedStrategies = strategies.map((strategy) => {
+      const ret = latestReturnByStrategy[strategy.id] || null;
       return {
         ...strategy,
-        // Keep the raw metrics array for reference
-        metrics: strategy.strategy_metrics || [],
-        // Flatten the latest metric to top level for easy access
-        latest_metric: latestMetric,
-        // Helper fields for display
-        last_close: latestMetric?.portfolio_value || null,
-        prev_close: latestMetric?.prev_close || null,
-        change_abs: latestMetric?.change_abs || null,
-        change_pct: latestMetric?.r_1d_pct || null,
-        as_of_date: latestMetric?.as_of_date || null,
-        r_1w: latestMetric?.r_1w_pct || null,
-        r_1m: latestMetric?.r_1m_pct || null,
-        r_3m: latestMetric?.r_3m_pct || null,
-        r_6m: latestMetric?.r_6m_pct || null,
-        r_ytd: latestMetric?.r_ytd_pct || null,
-        r_1y: latestMetric?.r_1y_pct || null,
+        metrics: [],
+        latest_metric: ret,
+        last_close: null,
+        prev_close: null,
+        change_abs: null,
+        change_pct: null,
+        as_of_date: ret?.as_of_date || null,
+        r_1w: null,
+        r_1m: ret ? ret["1m_pct"] / 100 : null,
+        r_3m: null,
+        r_6m: ret ? ret["6m_pct"] / 100 : null,
+        r_ytd: ret ? ret.ytd_pct / 100 : null,
+        r_1y: null,
       };
     });
 
-    // Update cache
     cache.strategies.data = processedStrategies;
     cache.strategies.timestamp = now;
 
@@ -100,7 +101,6 @@ export const getStrategiesWithMetrics = async () => {
 export const getPublicStrategies = async () => {
   const now = Date.now();
 
-  // Check cache
   if (cache.publicStrategies.data && (now - cache.publicStrategies.timestamp) < cache.publicStrategies.ttl) {
     console.log("📦 Using cached public strategies data");
     return cache.publicStrategies.data;
@@ -114,47 +114,50 @@ export const getPublicStrategies = async () => {
   try {
     console.log("🔍 Fetching public strategies from Supabase...");
 
-    // Fetch only active and public strategies with their latest metrics
-    const { data: strategies, error } = await supabase
-      .from("strategies_c")
-      .select(`
-        id, slug, name, short_name, description, risk_level, objective, sector, tags, base_currency, min_investment, provider_name, benchmark_symbol, benchmark_name, fee_type, management_fee_bps, performance_fee_pct, high_water_mark, status, is_public, is_featured, icon_url, image_url, holdings, created_at, updated_at,
-        strategy_metrics!strategy_metrics_strategy_id_fkey(
-          as_of_date,
-          r_ytd_pct
-        )
-      `)
-      .eq("status", "active")
-      .eq("is_public", true)
-      .order("is_featured", { ascending: false })
-      .order("name", { ascending: true })
-      .order("as_of_date", { foreignTable: "strategy_metrics", ascending: false })
-      .limit(1, { foreignTable: "strategy_metrics" });
+    // Fetch strategies and returns in parallel — no strategy_metrics join.
+    const [strategiesResult, returnsResult] = await Promise.all([
+      supabase
+        .from("strategies_c")
+        .select("id, slug, name, short_name, description, risk_level, objective, sector, tags, base_currency, min_investment, provider_name, benchmark_symbol, benchmark_name, fee_type, management_fee_bps, performance_fee_pct, high_water_mark, status, is_public, is_featured, icon_url, image_url, holdings, created_at, updated_at")
+        .eq("status", "active")
+        .eq("is_public", true)
+        .order("is_featured", { ascending: false })
+        .order("name", { ascending: true }),
+      supabase
+        .from("strategies_returns_c")
+        .select("strategy_id, as_of_date, ytd_pct")
+        .order("as_of_date", { ascending: false }),
+    ]);
 
-    if (error) {
-      console.error("❌ Error fetching public strategies:", error);
+    if (strategiesResult.error) {
+      console.error("❌ Error fetching public strategies:", strategiesResult.error);
       return [];
     }
 
-    if (!strategies || strategies.length === 0) {
+    const strategies = strategiesResult.data || [];
+    if (strategies.length === 0) {
       console.warn("⚠️ No public strategies found");
       return [];
     }
 
-    // Process strategies to use latest metrics from database
-    const processedStrategies = (strategies || []).map((strategy) => {
-      const latestMetric = Array.isArray(strategy.strategy_metrics) && strategy.strategy_metrics.length > 0
-        ? strategy.strategy_metrics[0]
-        : null;
+    // Latest return row per strategy
+    const latestReturnByStrategy = {};
+    for (const row of (returnsResult.data || [])) {
+      if (!latestReturnByStrategy[row.strategy_id]) {
+        latestReturnByStrategy[row.strategy_id] = row;
+      }
+    }
 
+    const processedStrategies = strategies.map((strategy) => {
+      const ret = latestReturnByStrategy[strategy.id] || null;
       return {
         ...strategy,
-        latest_metric: latestMetric,
-        r_ytd: latestMetric?.r_ytd_pct || null,
+        latest_metric: ret,
+        r_ytd: ret ? ret.ytd_pct / 100 : null,
+        as_of_date: ret?.as_of_date || null,
       };
     });
 
-    // Update cache
     cache.publicStrategies.data = processedStrategies;
     cache.publicStrategies.timestamp = now;
 
@@ -179,42 +182,45 @@ export const getStrategyById = async (strategyId) => {
   }
 
   try {
-    const { data: strategy, error } = await supabase
-      .from("strategies_c")
-      .select(`
-        *,
-        strategy_metrics!strategy_metrics_strategy_id_fkey(*)
-      `)
-      .eq("id", strategyId)
-      .order("as_of_date", { foreignTable: "strategy_metrics", ascending: false })
-      .limit(1, { foreignTable: "strategy_metrics" })
-      .single();
+    // Fetch strategy and its latest returns in parallel — no strategy_metrics join.
+    const [strategyResult, returnsResult] = await Promise.all([
+      supabase
+        .from("strategies_c")
+        .select("*")
+        .eq("id", strategyId)
+        .single(),
+      supabase
+        .from("strategies_returns_c")
+        .select("strategy_id, as_of_date, ytd_pct, \"5d_pct\", \"1m_pct\", \"6m_pct\"")
+        .eq("strategy_id", strategyId)
+        .order("as_of_date", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
 
-    if (error) {
-      console.error("❌ Error fetching strategy:", error);
+    if (strategyResult.error) {
+      console.error("❌ Error fetching strategy:", strategyResult.error);
       return null;
     }
 
-    // Get the most recent metric
-    const latestMetric = Array.isArray(strategy.strategy_metrics) && strategy.strategy_metrics.length > 0
-      ? strategy.strategy_metrics[0]
-      : null;
+    const strategy = strategyResult.data;
+    const ret = returnsResult.data || null;
 
     return {
       ...strategy,
-      metrics: strategy.strategy_metrics || [],
-      latest_metric: latestMetric,
-      last_close: latestMetric?.portfolio_value || null,
-      prev_close: latestMetric?.prev_close || null,
-      change_abs: latestMetric?.change_abs || null,
-      change_pct: latestMetric?.r_1d_pct || null,
-      as_of_date: latestMetric?.as_of_date || null,
-      r_1w: latestMetric?.r_1w_pct || null,
-      r_1m: latestMetric?.r_1m_pct || null,
-      r_3m: latestMetric?.r_3m_pct || null,
-      r_6m: latestMetric?.r_6m_pct || null,
-      r_ytd: latestMetric?.r_ytd_pct || null,
-      r_1y: latestMetric?.r_1y_pct || null,
+      metrics: [],
+      latest_metric: ret,
+      last_close: null,
+      prev_close: null,
+      change_abs: null,
+      change_pct: null,
+      as_of_date: ret?.as_of_date || null,
+      r_1w: null,
+      r_1m: ret ? ret["1m_pct"] / 100 : null,
+      r_3m: null,
+      r_6m: ret ? ret["6m_pct"] / 100 : null,
+      r_ytd: ret ? ret.ytd_pct / 100 : null,
+      r_1y: null,
     };
 
   } catch (error) {
@@ -361,17 +367,23 @@ export const getStrategyPriceHistory = async (strategyId, timeframe = "6M") => {
 
     const holdings = strategy.holdings;
     if (!Array.isArray(holdings) || holdings.length === 0) {
-      console.warn(`⚠️ Strategy ${strategyId} has no holdings, generating from metrics...`);
-      const { data: metrics } = await supabase
-        .from("strategy_metrics")
-        .select("portfolio_value, r_1w_pct, r_1m_pct, r_3m_pct, r_6m_pct, r_ytd_pct, r_1y_pct")
+      console.warn(`⚠️ Strategy ${strategyId} has no holdings, generating from returns...`);
+      const { data: ret } = await supabase
+        .from("strategies_returns_c")
+        .select("ytd_pct, \"5d_pct\", \"1m_pct\", \"6m_pct\"")
         .eq("strategy_id", strategyId)
         .order("as_of_date", { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
-      if (metrics && metrics.portfolio_value) {
-        const result = generateSyntheticHistory(metrics, timeframe, startDate, currentDate);
+      if (ret) {
+        const syntheticMetrics = {
+          r_1w: ret["5d_pct"] ? ret["5d_pct"] / 100 : null,
+          r_1m: ret["1m_pct"] ? ret["1m_pct"] / 100 : null,
+          r_6m: ret["6m_pct"] ? ret["6m_pct"] / 100 : null,
+          r_ytd: ret.ytd_pct ? ret.ytd_pct / 100 : null,
+        };
+        const result = generateSyntheticHistory(syntheticMetrics, timeframe, startDate, currentDate);
         cache.priceHistory.set(cacheKey, { data: result, timestamp: Date.now() });
         console.log(`✅ Generated ${result.length} synthetic NAV points for strategy ${strategyId} (${timeframe})`);
         return result;
@@ -887,7 +899,68 @@ export const getStockMonthlyReturns = async (securityId, startDate = null, actua
   }
 };
 
-export const getOverallPortfolioMonthlyReturns = async (strategyIds, stockSecurityIds, strategies, rawHoldings) => {
+/**
+ * Fetch monthly returns for a strategy from client_strategy_returns_c.
+ * Groups rows by calendar month, takes the last basket_value per month,
+ * and computes MoM % return from basket_value changes.
+ * Returns {} if no rows found (caller should fall back to price-history path).
+ */
+export const getStrategyMonthlyReturnsFromDB = async (userId, strategyId, startDate = null) => {
+  if (!supabase || !userId || !strategyId) return {};
+
+  try {
+    const { data: rows, error } = await supabase
+      .from("client_strategy_returns_c")
+      .select("as_of_date, basket_value")
+      .eq("user_id", userId)
+      .eq("strategy_id", strategyId)
+      .order("as_of_date", { ascending: true });
+
+    if (error || !rows || rows.length < 2) return {};
+
+    // The very first row is the entry-day baseline
+    const entryBv = rows[0].basket_value;
+    const entryYm = rows[0].as_of_date.slice(0, 7);
+
+    // Keep last row per calendar month (month-end value)
+    const monthlyLast = {};
+    rows.forEach(row => {
+      const ym = row.as_of_date.slice(0, 7);
+      monthlyLast[ym] = row.basket_value;
+    });
+
+    const sortedMonths = Object.keys(monthlyLast).sort();
+    const result = {};
+
+    sortedMonths.forEach((currKey, i) => {
+      const currBv = monthlyLast[currKey];
+      let baseBv;
+
+      if (i === 0) {
+        // First month: return from entry day to month-end
+        baseBv = entryBv;
+      } else {
+        // All subsequent months: MoM from previous month-end
+        baseBv = monthlyLast[sortedMonths[i - 1]];
+      }
+
+      if (!baseBv || baseBv === 0) return;
+      // Skip the entry month if month-end equals entry day (single row — no intra-month move to show)
+      if (i === 0 && currBv === entryBv) return;
+
+      const [year, month] = currKey.split("-");
+      if (!result[year]) result[year] = {};
+      result[year][month] = (currBv - baseBv) / baseBv;
+    });
+
+    return result;
+  } catch (err) {
+    console.error("[getStrategyMonthlyReturnsFromDB] error:", err);
+    return {};
+  }
+};
+
+export const getOverallPortfolioMonthlyReturns = async (strategyIds, stockSecurityIds, strategies, rawHoldings, userId = null) => {
   // Skip cache when there are stock holdings — live prices must always be fresh
   const hasStockHoldings = stockSecurityIds && stockSecurityIds.length > 0;
   const cacheKey = `monthly_returns_overall_${strategyIds.sort().join("_")}_${stockSecurityIds.sort().join("_")}`;
@@ -905,9 +978,17 @@ export const getOverallPortfolioMonthlyReturns = async (strategyIds, stockSecuri
       const strategy = strategies.find(s => s.strategyId === sid);
       const invested = strategy?.investedAmount || 0;
       const current = strategy?.currentValue || 0;
-      const actualPnlPct = invested > 0 ? (current - invested) / invested : null;
-      const returns = await getMonthlyReturns(sid, strategy?.firstInvestedDate || null, actualPnlPct);
-      const value = invested || current || 0;
+      const value = current || invested || 0;
+
+      let returns = {};
+      if (userId && strategy?.hasReturnsData) {
+        returns = await getStrategyMonthlyReturnsFromDB(userId, sid, strategy?.firstInvestedDate || null);
+      }
+      if (Object.keys(returns).length === 0) {
+        const actualPnlPct = invested > 0 ? (current - invested) / invested : null;
+        returns = await getMonthlyReturns(sid, strategy?.firstInvestedDate || null, actualPnlPct);
+      }
+
       if (Object.keys(returns).length > 0) {
         allMonthlyData.push({ returns, value });
       }

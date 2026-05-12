@@ -21,11 +21,15 @@ import { useRequiredActions } from "../lib/useRequiredActions";
 import { useSumsubStatus } from "../lib/useSumsubStatus";
 import OriginButton from "../components/OriginButton";
 
-const MorePage = ({ onNavigate }) => {
+let _moreProfileCache = null;
+let _moreCacheUserId = null;
+
+const MorePage = ({ onNavigate, onBeforeLogout }) => {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
   const [error, setError] = useState("");
   const [subscriptionPlan, setSubscriptionPlan] = useState(null);
+  const [loadTrigger, setLoadTrigger] = useState(0);
   const { bankLinked } = useRequiredActions();
   const { kycVerified, kycPending, kycNeedsResubmission } = useSumsubStatus();
 
@@ -42,29 +46,53 @@ const MorePage = ({ onNavigate }) => {
     .join("")
     .toUpperCase();
 
+  // Clear cache and reset state when the signed-in user changes
   useEffect(() => {
+    if (!supabase) return;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        _moreProfileCache = null;
+        _moreCacheUserId = null;
+        setProfile(null);
+        setSubscriptionPlan(null);
+        setLoading(false);
+      } else if (event === 'SIGNED_IN') {
+        const incomingId = session?.user?.id;
+        if (incomingId && incomingId !== _moreCacheUserId) {
+          _moreProfileCache = null;
+          _moreCacheUserId = null;
+          setProfile(null);
+          setLoading(true);
+          setLoadTrigger(t => t + 1);
+        }
+      }
+    });
+    return () => subscription?.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (_moreProfileCache) {
+      setProfile(_moreProfileCache.profile);
+      setSubscriptionPlan(_moreProfileCache.plan);
+      setLoading(false);
+      return;
+    }
     let alive = true;
 
     const loadProfile = async () => {
       try {
         if (!supabase) {
-          if (alive) {
-            setError("Supabase is not configured.");
-            setLoading(false);
-          }
+          if (alive) { setError("Supabase is not configured."); setLoading(false); }
           return;
         }
 
         const { data: userData, error: userError } = await supabase.auth.getUser();
         if (userError || !userData?.user) {
-          if (alive) {
-            setError("Unable to load profile.");
-            setLoading(false);
-          }
+          if (alive) { setError("Unable to load profile."); setLoading(false); }
           return;
         }
 
-        const { data: profileData, error: profileError } = await supabase
+        const { data: profileData } = await supabase
           .from("profiles")
           .select("first_name, last_name, email, avatar_url")
           .eq("id", userData.user.id)
@@ -83,32 +111,30 @@ const MorePage = ({ onNavigate }) => {
 
         if (alive) {
           const metadata = userData.user.user_metadata || {};
-          setProfile(profileData || {
+          const resolvedProfile = profileData || {
             first_name: metadata.first_name || "",
             last_name: metadata.last_name || "",
             email: userData.user.email || "",
             avatar_url: metadata.avatar_url || "",
-          });
+          };
+          _moreProfileCache = { profile: resolvedProfile, plan: plan || "free" };
+          _moreCacheUserId = userData.user.id;
+          setProfile(resolvedProfile);
           setSubscriptionPlan(plan || "free");
           setLoading(false);
         }
       } catch (err) {
         console.error("Failed to load profile", err);
-        if (alive) {
-          setError("Unable to load profile.");
-          setLoading(false);
-        }
+        if (alive) { setError("Unable to load profile."); setLoading(false); }
       }
     };
 
     loadProfile();
-
-    return () => {
-      alive = false;
-    };
-  }, []);
+    return () => { alive = false; };
+  }, [loadTrigger]);
 
   const handleLogout = async () => {
+    onBeforeLogout?.();
     try {
       if (supabase) {
         await supabase.auth.signOut();
@@ -141,10 +167,17 @@ const MorePage = ({ onNavigate }) => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-white px-6 pt-10 pb-24">
+      <div className="min-h-screen bg-white px-6 pt-10 pb-24 flex flex-col gap-4">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500 shadow-sm">
           {error}
         </div>
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-3 rounded-2xl px-4 py-4 text-left text-red-600 border border-red-100 bg-red-50 active:scale-[0.99] transition"
+        >
+          <LogOut className="h-5 w-5" />
+          <span className="text-base font-medium">Log out</span>
+        </button>
       </div>
     );
   }

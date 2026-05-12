@@ -1,5 +1,6 @@
-import { useSyncExternalStore, useCallback } from "react";
+import { useSyncExternalStore } from "react";
 import { supabase } from "./supabase";
+import { logDebug, CAT } from "./debugLog.js";
 
 const globalState = {
   lastUpdated: null,
@@ -10,17 +11,22 @@ const globalState = {
   isSettingUp: false,
 };
 
+let teardownTimer = null;
+
 function notifyListeners() {
   globalState.listeners.forEach((listener) => listener());
-}
-
-function getSnapshot() {
-  return globalState;
 }
 
 function subscribe(listener) {
   globalState.listeners.add(listener);
   globalState.subscriberCount++;
+
+  // Cancel any pending teardown caused by a brief unmount during navigation
+  if (teardownTimer) {
+    clearTimeout(teardownTimer);
+    teardownTimer = null;
+    logDebug(CAT.REALTIME, "🔌 Realtime teardown cancelled — subscriber rejoined");
+  }
 
   if (globalState.subscriberCount === 1 && !globalState.channel && !globalState.isSettingUp) {
     setupRealtimePrices();
@@ -29,9 +35,17 @@ function subscribe(listener) {
   return () => {
     globalState.listeners.delete(listener);
     globalState.subscriberCount--;
+
     if (globalState.subscriberCount <= 0) {
-      teardownRealtimePrices();
-      globalState.subscriberCount = 0;
+      // Delay teardown by 2 s to avoid thrashing during tab switches and navigation
+      logDebug(CAT.REALTIME, "🔌 Realtime subscriber count → 0, scheduling teardown in 2 s");
+      teardownTimer = setTimeout(() => {
+        if (globalState.subscriberCount <= 0) {
+          teardownRealtimePrices();
+          globalState.subscriberCount = 0;
+        }
+        teardownTimer = null;
+      }, 2000);
     }
   };
 }
@@ -40,17 +54,14 @@ export function setupRealtimePrices() {
   if (!supabase || globalState.channel || globalState.isSettingUp) return;
 
   globalState.isSettingUp = true;
+  logDebug(CAT.REALTIME, "🔌 Realtime prices subscription — SETTING UP");
   console.log("[realtime-prices] Setting up singleton subscription");
 
   globalState.channel = supabase
     .channel("prices-realtime-singleton")
     .on(
       "postgres_changes",
-      {
-        event: "UPDATE",
-        schema: "public",
-        table: "securities_c",
-      },
+      { event: "UPDATE", schema: "public", table: "securities_c" },
       (payload) => {
         const changed = payload.new;
         if (
@@ -67,11 +78,7 @@ export function setupRealtimePrices() {
     )
     .on(
       "postgres_changes",
-      {
-        event: "INSERT",
-        schema: "public",
-        table: "stock_returns_c",
-      },
+      { event: "INSERT", schema: "public", table: "stock_returns_c" },
       (payload) => {
         console.log("[realtime-prices] New price record inserted for security:", payload.new?.security_id);
         globalState.lastUpdated = Date.now();
@@ -80,11 +87,7 @@ export function setupRealtimePrices() {
     )
     .on(
       "postgres_changes",
-      {
-        event: "UPDATE",
-        schema: "public",
-        table: "stock_holdings_c",
-      },
+      { event: "UPDATE", schema: "public", table: "stock_holdings_c" },
       (payload) => {
         console.log("[realtime-prices] Holding updated:", payload.new?.id);
         globalState.lastUpdated = Date.now();
@@ -112,6 +115,7 @@ export function setupRealtimePrices() {
 
 export function teardownRealtimePrices() {
   if (globalState.channel) {
+    logDebug(CAT.REALTIME, "🔌 Realtime prices subscription — TEARING DOWN");
     console.log("[realtime-prices] Tearing down subscription");
     supabase.removeChannel(globalState.channel);
     globalState.channel = null;

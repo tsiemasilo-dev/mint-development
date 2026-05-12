@@ -138,17 +138,22 @@ export default async function handler(req, res) {
         // Legacy bank/tax details
         if (bank_name || bank_account_name || bank_account_type || bank_account_number || bank_branch_code) {
           rawData.bank_details = {
-            bank_name: bank_name || null,
-            bank_account_name: bank_account_name || null,
-            bank_account_type: bank_account_type || null,
-            bank_account_number: bank_account_number || null,
-            bank_branch_code: bank_branch_code || null,
+            ...(rawData.bank_details || {}),
+            ...(bank_name ? { bank_name } : {}),
+            ...(bank_account_name ? { bank_account_name } : {}),
+            ...(bank_account_type ? { bank_account_type } : {}),
+            ...(bank_account_number ? { bank_account_number } : {}),
+            ...(bank_branch_code ? { bank_branch_code } : {}),
             savedAt: new Date().toISOString(),
           };
         }
 
         if (tax_number) {
-          rawData.tax_details = { tax_number, savedAt: new Date().toISOString() };
+          rawData.tax_details = {
+            ...(rawData.tax_details || {}),
+            tax_number,
+            savedAt: new Date().toISOString(),
+          };
         }
 
         await db

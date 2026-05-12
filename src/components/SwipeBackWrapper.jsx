@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback, useEffect, Suspense } from 'react';
 import { Capacitor } from '@capacitor/core';
 
 let Haptics = null;
@@ -194,7 +194,7 @@ const SwipeBackWrapper = ({
   return (
     <div 
       ref={containerRef}
-      className="swipe-back-container relative w-full h-full overflow-hidden"
+      className="swipe-back-container relative w-full h-full min-h-screen overflow-hidden"
       style={{ position: 'relative' }}
     >
       {showPreviousPage && (
@@ -233,7 +233,9 @@ const SwipeBackWrapper = ({
           />
         )}
         
-        {children}
+        <Suspense fallback={<div className="min-h-screen bg-[#f8f9fc]" />}>
+          {children}
+        </Suspense>
       </div>
     </div>
   );

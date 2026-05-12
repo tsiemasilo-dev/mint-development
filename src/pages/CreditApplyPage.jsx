@@ -504,23 +504,44 @@ const EnrichmentStage = ({ onSubmit, defaultValues, employerOptions, employerLoc
 const ResultStage = ({ score, isCalculating, engineFailed, breakdown, engineResult, onRunAssessment, onContinue, isPrefetching = false, onReapply }) => {
    const [showAllData, setShowAllData] = useState(false);
    const [loaderValue, setLoaderValue] = useState(0);
+   const tweenRef = useRef(null);
 
    useEffect(() => {
-      let interval;
+      let countInterval;
+      let peakTimeout;
+
+      const clearAll = () => {
+         clearInterval(countInterval);
+         clearInterval(tweenRef.current);
+         clearTimeout(peakTimeout);
+      };
+      clearAll();
+
       if (isCalculating) {
          setLoaderValue(0);
-         interval = setInterval(() => {
-            setLoaderValue(prev => {
-               if (prev >= 99) return 99;
-               return prev + 0.5;
-            });
+         countInterval = setInterval(() => {
+            setLoaderValue(prev => (prev >= 100 ? 100 : prev + 0.5));
          }, 20);
       } else if (score > 0) {
-         setLoaderValue(score);
+         // Peak at 100, pause briefly, then tween down to the real score
+         setLoaderValue(100);
+         peakTimeout = setTimeout(() => {
+            tweenRef.current = setInterval(() => {
+               setLoaderValue(prev => {
+                  const diff = score - prev;
+                  if (Math.abs(diff) <= 0.8) {
+                     clearInterval(tweenRef.current);
+                     return score;
+                  }
+                  return prev + (diff > 0 ? 0.8 : -0.8);
+               });
+            }, 16);
+         }, 700);
       } else if (engineFailed) {
          setLoaderValue(0);
       }
-      return () => clearInterval(interval);
+
+      return clearAll;
    }, [isCalculating, score, engineFailed]);
 
    const sanitizeData = (value) => {
@@ -559,7 +580,7 @@ const ResultStage = ({ score, isCalculating, engineFailed, breakdown, engineResu
             ? "Borderline – manual review"
             : "Decline";
 
-   const progressDeg = (isCalculating ? loaderValue : score) * 3.6;
+   const progressDeg = loaderValue * 3.6;
 
    const statusMessages = [
       'Initializing...',
@@ -645,7 +666,7 @@ const ResultStage = ({ score, isCalculating, engineFailed, breakdown, engineResu
                            filter: 'drop-shadow(0 1px 2px rgba(75, 34, 214, 0.1))'
                         }}
                      >
-                        {Math.round(isCalculating ? loaderValue : score)}%
+                        {Math.round(loaderValue)}%
                      </span>
                      <span className="text-[11px] font-medium text-slate-400 mt-2 tracking-widest uppercase">
                         {statusText}
@@ -833,14 +854,12 @@ const ResultStage = ({ score, isCalculating, engineFailed, breakdown, engineResu
 const LoanCalculatorStep = ({ onSignedContinue }) => {
    const LIGHT_THRESHOLD = 0.36;
    const MIN_LOAN_AMOUNT = 1000;
-   const MAX_LOAN_AMOUNT = 10000;
+   const MAX_LOAN_AMOUNT = 9000;
    const AMOUNT_STEP = 100;
    const MIN_LOAN_PERIOD = 3;
    const MAX_LOAN_PERIOD = 6;
    const [loanAmount, setLoanAmount] = useState(3000);
    const [loanPeriod, setLoanPeriod] = useState(3);
-   const [amountEditing, setAmountEditing] = useState(false);
-   const [amountInputText, setAmountInputText] = useState("");
    const amountTrackRef = useRef(null);
    const periodTrackRef = useRef(null);
    const dragRef = useRef({ active: false, type: null, startX: 0, startValue: 0, isTouch: false });
@@ -1155,74 +1174,44 @@ const LoanCalculatorStep = ({ onSignedContinue }) => {
 
          {/* ── Sliders card ── */}
          <div className="bg-white rounded-[24px] px-5 py-5">
-            {/* Amount slider */}
+            {/* Amount input */}
             <div className="space-y-3">
                <div className="flex items-center justify-between">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Loan Amount</p>
-                  {amountEditing ? (
-                     <div className="flex items-baseline gap-0.5">
-                        <span className="text-[12px] font-medium text-slate-400">R</span>
-                        <input
-                           type="number"
-                           inputMode="numeric"
-                           autoFocus
-                           value={amountInputText}
-                           onChange={(e) => setAmountInputText(e.target.value)}
-                           onBlur={() => {
-                              const n = Number(amountInputText);
-                              if (!isNaN(n) && n > 0) {
-                                 const clamped = Math.min(MAX_LOAN_AMOUNT, Math.max(MIN_LOAN_AMOUNT, Math.round(n / AMOUNT_STEP) * AMOUNT_STEP));
-                                 setLoanAmount(clamped);
-                              }
-                              setAmountEditing(false);
-                           }}
-                           onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
-                           className="w-[80px] text-right text-[17px] font-bold tracking-[-0.02em] text-slate-900 bg-slate-100 rounded-md px-2 py-0.5 outline-none focus:ring-2 focus:ring-[#160d2a]/30"
-                        />
-                     </div>
-                  ) : (
-                     <button
-                        type="button"
-                        onClick={() => { setAmountInputText(String(loanAmount)); setAmountEditing(true); }}
-                        className="flex items-baseline gap-0.5 cursor-text"
-                     >
-                        <span className="text-[12px] font-medium text-slate-400">R</span>
-                        <span className="text-[17px] font-bold tracking-[-0.02em] text-slate-900">{formatInt(loanAmount)}</span>
-                     </button>
-                  )}
+                  <span className="text-[10px] text-slate-400 font-medium">R {formatInt(MIN_LOAN_AMOUNT)} – R {formatInt(MAX_LOAN_AMOUNT)}</span>
                </div>
-               <div
-                  ref={amountTrackRef}
-                  className="relative h-[54px] rounded-2xl bg-slate-100 overflow-visible cursor-pointer select-none touch-none"
-                  onMouseDown={(e) => beginDrag("amount", e)}
-               >
-                  <div
-                     className="absolute top-0 left-0 h-[54px] rounded-2xl overflow-hidden flex items-center justify-between px-4"
-                     style={{
-                        width: `${Math.max(4, amountPct * 100)}%`,
-                        background: "linear-gradient(90deg, #160d2a 0%, #2a1a46 100%)"
+               <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[15px] font-semibold text-slate-400 pointer-events-none">R</span>
+                  <input
+                     type="number"
+                     inputMode="numeric"
+                     min={MIN_LOAN_AMOUNT}
+                     max={MAX_LOAN_AMOUNT}
+                     step={AMOUNT_STEP}
+                     value={loanAmount}
+                     onChange={(e) => {
+                        const raw = Number(e.target.value);
+                        if (!isNaN(raw)) setLoanAmount(clamp(raw, MIN_LOAN_AMOUNT, MAX_LOAN_AMOUNT));
                      }}
-                  >
-                     <div className="flex items-baseline gap-1" style={{ opacity: amountPct < LIGHT_THRESHOLD ? 0 : 1 }}>
-                        <span className="text-[12px] font-medium text-white/50">R</span>
-                        <span className="text-[22px] font-bold tracking-[-0.02em] text-white leading-none">{formatInt(loanAmount)}</span>
-                     </div>
-                     <div className="flex flex-col gap-[3px] ml-2 shrink-0">
-                        <span className="block w-[3px] h-[3px] rounded-full bg-white/20" />
-                        <span className="block w-[3px] h-[3px] rounded-full bg-white/20" />
-                        <span className="block w-[3px] h-[3px] rounded-full bg-white/20" />
-                     </div>
-                  </div>
-                  <div
-                     className={`absolute top-1/2 -translate-y-1/2 text-[13px] font-bold text-slate-700 whitespace-nowrap transition-opacity ${amountPct < LIGHT_THRESHOLD ? "opacity-100" : "opacity-0"}`}
-                     style={{ left: `calc(${Math.max(4, amountPct * 100)}% + 10px)` }}
-                  >
-                     R {formatInt(loanAmount)}
-                  </div>
+                     onBlur={(e) => {
+                        const raw = Number(e.target.value);
+                        const snapped = snap(isNaN(raw) ? MIN_LOAN_AMOUNT : raw, MIN_LOAN_AMOUNT, MAX_LOAN_AMOUNT, AMOUNT_STEP);
+                        setLoanAmount(snapped);
+                     }}
+                     className="w-full h-[54px] rounded-2xl bg-slate-100 pl-9 pr-4 text-[22px] font-bold tracking-[-0.02em] text-slate-900 outline-none focus:ring-2 focus:ring-[#2a1a46]/30 appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  />
                </div>
                <div className="flex justify-between px-0.5">
-                  <span className="text-[10px] text-slate-400 font-medium">R 1,000</span>
-                  <span className="text-[10px] text-slate-400 font-medium">R 10,000</span>
+                  <button
+                     type="button"
+                     onClick={() => setLoanAmount(a => snap(Math.max(MIN_LOAN_AMOUNT, a - AMOUNT_STEP), MIN_LOAN_AMOUNT, MAX_LOAN_AMOUNT, AMOUNT_STEP))}
+                     className="text-[11px] font-semibold text-[#2a1a46] bg-slate-100 rounded-xl px-3 py-1.5 active:opacity-70"
+                  >− R{formatInt(AMOUNT_STEP)}</button>
+                  <button
+                     type="button"
+                     onClick={() => setLoanAmount(a => snap(Math.min(MAX_LOAN_AMOUNT, a + AMOUNT_STEP), MIN_LOAN_AMOUNT, MAX_LOAN_AMOUNT, AMOUNT_STEP))}
+                     className="text-[11px] font-semibold text-[#2a1a46] bg-slate-100 rounded-xl px-3 py-1.5 active:opacity-70"
+                  >+ R{formatInt(AMOUNT_STEP)}</button>
                </div>
             </div>
 
@@ -1274,7 +1263,7 @@ const LoanCalculatorStep = ({ onSignedContinue }) => {
             </div>
 
             <p className="mt-4 text-[10px] text-slate-400 font-medium text-center">
-               Min R1,000 · Max R10,000 · Term 3–6 months
+               Min R1,000 · Max R9,000 · Term 3–6 months
             </p>
          </div>
 
@@ -1819,7 +1808,12 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
    const handleRunAssessment = async () => {
       lockInputs();
       if (proceedToStep3) proceedToStep3();
-      await runEngine();
+      const result = await runEngine();
+      if (result?.errorCode === 'TRUID_REQUIRED') {
+         // Bank not linked — redirect back to TruID connect step
+         setStep(1);
+         setAutoStartTruID(true);
+      }
    };
 
    const handleLoanAgreementAccepted = useCallback(async (quote) => {

@@ -104,6 +104,13 @@ export default async function handler(req, res) {
     return res.status(405).json({ success: false, error: "Method not allowed" });
   }
 
+  let rollbackUserId = null;
+  let rollbackPaymentMethod = null;
+  let rollbackDeductionSuccessful = false;
+  let rollbackOriginalWalletBalance = null;
+  let rollbackChildFamilyMemberId = null;
+  let rollbackOriginalChildBalanceCents = null;
+
   try {
     if (!supabase) {
       return res.status(500).json({ success: false, error: "Database not connected" });
@@ -116,10 +123,34 @@ export default async function handler(req, res) {
 
     const db = supabaseAdmin || supabase;
     const userId = user.id;
-    const { securityId, symbol, name, amount, baseAmount, strategyId, paymentReference, paymentMethod, shareCount } = req.body;
+    rollbackUserId = userId;
+    const { securityId, symbol, name, amount, baseAmount, strategyId, paymentReference, paymentMethod, shareCount, childUserId, childFamilyMemberId } = req.body;
+    rollbackPaymentMethod = paymentMethod;
     // baseAmount = investment amount excluding fees (used for holdings/quantity calculations)
     // amount = total charged including fees (used for transaction records)
     const investAmount = (baseAmount && baseAmount > 0) ? baseAmount : amount;
+    // targetUserId: child's linked auth user for kid strategies, otherwise the investor themselves.
+    // targetFamilyMemberId: family_members.id used by child dashboards and holdings filters.
+    const targetUserId = childUserId || userId;
+    let targetFamilyMemberId = childFamilyMemberId || null;
+
+    // Backfill family member id when only childUserId is provided.
+    if (!targetFamilyMemberId && childUserId) {
+      const { data: linkedChild } = await db
+        .from("family_members")
+        .select("id")
+        .eq("primary_user_id", userId)
+        .eq("linked_user_id", childUserId)
+        .eq("relationship", "child")
+        .maybeSingle();
+      targetFamilyMemberId = linkedChild?.id || null;
+    }
+
+    const withFamilyMemberFilter = (query) => {
+      return targetFamilyMemberId
+        ? query.eq("family_member_id", targetFamilyMemberId)
+        : query.is("family_member_id", null);
+    };
 
     if ((!securityId && !strategyId) || !amount || Number(amount) <= 0 || !paymentReference) {
       return res.status(400).json({ success: false, error: "Missing required fields: securityId or strategyId, amount, paymentReference" });
@@ -137,43 +168,83 @@ export default async function handler(req, res) {
     }
 
     // ── WALLET PAYMENT HANDLER (PROMPT 1) ───────────────────────────────────
-    let originalWalletBalance = null;
     let newWalletBalance = null;
-    let deductionSuccessful = false;
 
     if (paymentMethod === "wallet") {
-      const { data: wallet, error: walletQueryError } = await db
-        .from("wallets")
-        .select("balance")
-        .eq("user_id", userId)
-        .maybeSingle();
+      if (targetFamilyMemberId) {
+        const { data: childWallet, error: childWalletErr } = await db
+          .from("family_members")
+          .select("id, primary_user_id, relationship, available_balance")
+          .eq("id", targetFamilyMemberId)
+          .maybeSingle();
 
-      if (walletQueryError || !wallet) {
-        return res.status(400).json({ success: false, error: "Wallet not found" });
+        if (childWalletErr || !childWallet) {
+          return res.status(400).json({ success: false, error: "Child wallet not found" });
+        }
+        if (childWallet.primary_user_id !== userId || childWallet.relationship !== "child") {
+          return res.status(403).json({ success: false, error: "Unauthorized child wallet access" });
+        }
+
+        const chargeCents = Math.round(Number(amount) * 100);
+        const childBalanceCents = Number(childWallet.available_balance || 0);
+        if (childBalanceCents < chargeCents) {
+          return res.status(400).json({ success: false, error: "Insufficient child wallet funds" });
+        }
+
+        const newChildBalanceCents = childBalanceCents - chargeCents;
+        const { error: childDeductErr } = await db
+          .from("family_members")
+          .update({ available_balance: newChildBalanceCents })
+          .eq("id", targetFamilyMemberId)
+          .eq("available_balance", childBalanceCents);
+
+        if (childDeductErr) {
+          return res.status(409).json({ success: false, error: "Failed to deduct child wallet balance" });
+        }
+
+        rollbackDeductionSuccessful = true;
+        rollbackChildFamilyMemberId = targetFamilyMemberId;
+        rollbackOriginalChildBalanceCents = childBalanceCents;
+        newWalletBalance = newChildBalanceCents / 100;
+
+        const feeDeducted = amount - (baseAmount || amount);
+        console.log(`[Wallet] Deducted R${amount} from child wallet ${targetFamilyMemberId}. Base: R${baseAmount || amount}, Fee: R${feeDeducted.toFixed(2)}, Final balance: R${newWalletBalance}`);
+      } else {
+        const { data: wallet, error: walletQueryError } = await db
+          .from("wallets")
+          .select("balance")
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (walletQueryError || !wallet) {
+          return res.status(400).json({ success: false, error: "Wallet not found" });
+        }
+
+        const originalWalletBalance = Number(wallet.balance);
+        if (originalWalletBalance < amount) {
+          return res.status(400).json({ success: false, error: "Insufficient funds" });
+        }
+
+        newWalletBalance = originalWalletBalance - amount;
+        const { data: updatedWallet, error: deductError } = await db
+          .from("wallets")
+          .update({ balance: newWalletBalance })
+          .eq("user_id", userId)
+          .eq("balance", originalWalletBalance)
+          .select("balance")
+          .maybeSingle();
+
+        if (deductError || !updatedWallet) {
+          console.error("[record-investment] WALLET DEDUCTION ERROR:", deductError?.message || "balance changed concurrently");
+          return res.status(409).json({ success: false, error: deductError ? "Failed to deduct wallet balance" : "Wallet balance changed — please retry" });
+        }
+
+        rollbackDeductionSuccessful = true;
+        rollbackOriginalWalletBalance = originalWalletBalance;
+
+        const feeDeducted = amount - (baseAmount || amount);
+        console.log(`[Wallet] Deducted R${amount} from user ${userId}. Base: R${baseAmount || amount}, Fee: R${feeDeducted.toFixed(2)}, Final balance: R${newWalletBalance}`);
       }
-
-      originalWalletBalance = Number(wallet.balance);
-      if (originalWalletBalance < amount) {
-        return res.status(400).json({ success: false, error: "Insufficient funds" });
-      }
-
-      newWalletBalance = originalWalletBalance - amount;
-      const { data: updatedWallet, error: deductError } = await db
-        .from("wallets")
-        .update({ balance: newWalletBalance })
-        .eq("user_id", userId)
-        .eq("balance", originalWalletBalance)
-        .select("balance")
-        .maybeSingle();
-
-      if (deductError || !updatedWallet) {
-        console.error("[record-investment] WALLET DEDUCTION ERROR:", deductError?.message || "balance changed concurrently");
-        return res.status(409).json({ success: false, error: deductError ? "Failed to deduct wallet balance" : "Wallet balance changed — please retry" });
-      }
-      
-      deductionSuccessful = true;
-      const feeDeducted = amount - (baseAmount || amount);
-      console.log(`[Wallet] Deducted R${amount} from user ${userId}. Base: R${baseAmount || amount}, Fee: R${feeDeducted.toFixed(2)}, Final balance: R${newWalletBalance}`);
     }
 
     const { data: existingTx } = await db
@@ -229,21 +300,10 @@ export default async function handler(req, res) {
       const secBySymbol = {};
       (securitiesData || []).forEach(s => { secBySymbol[s.symbol] = s; });
 
-      // Compute total basket cost at current prices so we can scale by investAmount
-      let totalBasketCostRands = 0;
-      for (const holding of strategyHoldings) {
-        const sec = secBySymbol[holding.symbol];
-        if (!sec) continue;
-        const qty = Number(holding.quantity || holding.shares || 0);
-        const priceCents = Number(sec.last_price || 0);
-        if (qty > 0 && priceCents > 0) totalBasketCostRands += (qty * priceCents) / 100;
-      }
-      // investAmount is how much the user actually put in (before fees)
-      const scalingRatio = totalBasketCostRands > 0 ? investAmount / totalBasketCostRands : 1;
-      console.log("[record-investment] Basket cost:", totalBasketCostRands.toFixed(2), "investAmount:", investAmount, "scalingRatio:", scalingRatio.toFixed(6));
+      // Strategy component quantities come directly from strategies_c.holdings.
+      // Do not scale component shares by investment amount.
 
       const now = new Date().toISOString();
-      const today = now.split("T")[0];
       const insertedHoldings = [];
       const skippedSymbols = [];
 
@@ -261,23 +321,17 @@ export default async function handler(req, res) {
           continue;
         }
 
-        // Scale shares proportionally to what the user actually invested (ENFORCE INTEGER)
-        const holdingQty = Math.floor(rawHoldingQty * scalingRatio);
+        const holdingQty = Math.floor(rawHoldingQty);
 
-        const priceCents = Number(sec.last_price || 0);
-        if (priceCents <= 0) {
-          console.warn("[record-investment] No price found for:", holding.symbol);
-          skippedSymbols.push(holding.symbol);
-          continue;
-        }
-
-        const { data: existing, error: lookupErr } = await db
-          .from("stock_holdings_c")
-          .select("id, quantity, avg_fill")
-          .eq("user_id", userId)
-          .eq("security_id", sec.id)
-          .eq("strategy_id", strategyId)
-          .maybeSingle();
+        const holdingsLookupQuery = withFamilyMemberFilter(
+          db
+            .from("stock_holdings_c")
+            .select("id, quantity")
+            .eq("user_id", targetUserId)
+            .eq("security_id", sec.id)
+            .eq("strategy_id", strategyId)
+        );
+        const { data: existing, error: lookupErr } = await holdingsLookupQuery.maybeSingle();
 
         if (lookupErr) {
           console.error("[record-investment] Error looking up holding for", holding.symbol, lookupErr.message);
@@ -286,17 +340,10 @@ export default async function handler(req, res) {
 
         if (existing) {
           const oldQty = Number(existing.quantity || 0);
-          const oldAvgFill = Number(existing.avg_fill || 0);
           const newQty = Math.floor(oldQty + holdingQty);
-          const newAvgFill = newQty > 0
-            ? ((oldAvgFill * oldQty) + (priceCents * holdingQty)) / newQty
-            : priceCents;
 
           const { error: updateErr } = await db.from("stock_holdings_c").update({
             quantity: newQty,
-            avg_fill: Math.round(newAvgFill),
-            market_value: Math.round(newQty * priceCents),
-            as_of_date: today,
             updated_at: now,
           }).eq("id", existing.id);
 
@@ -306,14 +353,15 @@ export default async function handler(req, res) {
           }
         } else {
           const { error: insertErr } = await db.from("stock_holdings_c").insert({
-            user_id: userId,
+            user_id: targetUserId,
+            family_member_id: targetFamilyMemberId,
             security_id: sec.id,
             strategy_id: strategyId,
             quantity: holdingQty,
-            avg_fill: priceCents,
-            market_value: Math.round(holdingQty * priceCents),
+            avg_fill: null,
+            market_value: 0,
             unrealized_pnl: 0,
-            as_of_date: today,
+            as_of_date: null,
             Status: "active",
           });
 
@@ -323,7 +371,7 @@ export default async function handler(req, res) {
           }
         }
 
-        insertedHoldings.push({ symbol: holding.symbol, quantity: holdingQty, priceCents });
+        insertedHoldings.push({ symbol: holding.symbol, quantity: holdingQty, priceCents: null, pendingFill: true });
       }
 
       if (skippedSymbols.length > 0) {
@@ -335,7 +383,7 @@ export default async function handler(req, res) {
       const { data: existingUS } = await db
         .from("user_strategies")
         .select("id, invested_amount")
-        .eq("user_id", userId)
+        .eq("user_id", targetUserId)
         .eq("strategy_id", strategyId)
         .maybeSingle();
 
@@ -353,7 +401,7 @@ export default async function handler(req, res) {
         const { error: usInsertErr } = await db
           .from("user_strategies")
           .insert({
-            user_id: userId,
+            user_id: targetUserId,
             strategy_id: strategyId,
             invested_amount: investmentAmountCents,
             status: "active",
@@ -403,12 +451,14 @@ export default async function handler(req, res) {
       const marketValueCents = Math.round(quantity * (currentPriceCents || (avgFillCents)));
 
 
-      const { data: existing, error: fetchError } = await db
-        .from("stock_holdings_c")
-        .select("id, quantity, avg_fill, market_value")
-        .eq("user_id", userId)
-        .eq("security_id", securityId)
-        .maybeSingle();
+      const securityLookupQuery = withFamilyMemberFilter(
+        db
+          .from("stock_holdings_c")
+          .select("id, quantity, avg_fill, market_value")
+          .eq("user_id", targetUserId)
+          .eq("security_id", securityId)
+      );
+      const { data: existing, error: fetchError } = await securityLookupQuery.maybeSingle();
 
       if (fetchError) {
         return res.status(500).json({ success: false, error: fetchError.message });
@@ -440,7 +490,8 @@ export default async function handler(req, res) {
         const { data, error } = await db
           .from("stock_holdings_c")
           .insert({
-            user_id: userId,
+            user_id: targetUserId,
+            family_member_id: targetFamilyMemberId,
             security_id: securityId,
             quantity: quantity,
             avg_fill: null,
@@ -468,7 +519,8 @@ export default async function handler(req, res) {
     const { error: txError } = await db
       .from("transactions")
       .insert({
-        user_id: userId,
+        user_id: targetUserId,
+        family_member_id: targetFamilyMemberId,
         direction: "debit",
         name: isStrategyInvestment ? `Strategy Investment: ${name || symbol || "Strategy"}` : `Purchased ${name || symbol || "Stock"}`,
         description: descriptionText,
@@ -501,7 +553,7 @@ export default async function handler(req, res) {
     }).catch(() => {});
 
     // ── Strategy subscription: create R29/month record if this is an additional strategy ──
-    if (isStrategyInvestment && strategyId) {
+    if (isStrategyInvestment && strategyId && !targetFamilyMemberId) {
       try {
         // Check if user has any OTHER active strategy (making this the 2nd+)
         const { data: otherStrategies } = await db
@@ -522,24 +574,24 @@ export default async function handler(req, res) {
           const nextBillingDate = next.toISOString().split("T")[0];
 
           const { error: subError } = await db
-            .from("strategy_subscriptions")
+            .from("subscriptions")
             .upsert(
               {
                 user_id: userId,
-                strategy_id: strategyId,
-                strategy_name: name || "Strategy",
-                next_billing_date: nextBillingDate,
-                amount_cents: 2900,
+                plan: name || "Strategy",
+                amount: 29,
+                currency: "ZAR",
+                current_period_end: nextBillingDate,
                 status: "active",
                 updated_at: new Date().toISOString(),
               },
-              { onConflict: "user_id,strategy_id" }
+              { onConflict: "user_id,plan" }
             );
 
           if (subError) {
             console.warn("[record-investment] Strategy subscription upsert failed:", subError.message);
           } else {
-            console.log(`[record-investment] Subscription created for user ${userId}, strategy ${strategyId}. First billing: ${nextBillingDate}`);
+            console.log(`[record-investment] Subscription created for user ${userId}, strategy ${name}. First billing: ${nextBillingDate}`);
           }
         }
       } catch (subErr) {
@@ -556,11 +608,16 @@ export default async function handler(req, res) {
     console.error("[record-investment] Error:", error);
 
     // Rollback wallet deduction if anything failed after deduction was successful
-    if (typeof paymentMethod !== 'undefined' && paymentMethod === "wallet" && typeof deductionSuccessful !== 'undefined' && deductionSuccessful && typeof originalWalletBalance !== 'undefined' && originalWalletBalance !== null) {
+    if (rollbackPaymentMethod === "wallet" && rollbackDeductionSuccessful) {
       try {
         const db = supabaseAdmin || supabase;
-        console.log(`[Wallet] Rollback — Attempting to restore user wallet balance to ${originalWalletBalance}`);
-        await db.from("wallets").update({ balance: originalWalletBalance }).eq("user_id", userId);
+        if (rollbackChildFamilyMemberId && rollbackOriginalChildBalanceCents !== null) {
+          console.log(`[Wallet] Rollback — restoring child wallet ${rollbackChildFamilyMemberId} balance to ${rollbackOriginalChildBalanceCents} cents`);
+          await db.from("family_members").update({ available_balance: rollbackOriginalChildBalanceCents }).eq("id", rollbackChildFamilyMemberId);
+        } else if (rollbackOriginalWalletBalance !== null && rollbackUserId) {
+          console.log(`[Wallet] Rollback — Attempting to restore user wallet balance to ${rollbackOriginalWalletBalance}`);
+          await db.from("wallets").update({ balance: rollbackOriginalWalletBalance }).eq("user_id", rollbackUserId);
+        }
       } catch (rollbackErr) {
         console.error("[Wallet] Rollback CRITICAL FAILURE:", rollbackErr.message);
       }

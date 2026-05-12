@@ -15,21 +15,38 @@ const DDL = `
   );
 `;
 
-async function runStrategySubscriptionMigration(pgPool) {
-  if (!pgPool) {
-    console.warn("[strategy-sub-migration] No pgPool — skipping");
-    return;
-  }
-  let client;
+async function ensureSupabaseTable(supabaseAdmin, supabaseAnon) {
+  const client = supabaseAdmin || supabaseAnon;
+  if (!client) return;
   try {
-    client = await pgPool.connect();
-    await client.query(DDL);
-    console.log("[strategy-sub-migration] strategy_subscriptions table ready");
+    const { error } = await client.rpc("exec_sql", { query: DDL });
+    if (error) {
+      console.warn("[strategy-sub-migration] Supabase exec_sql warning:", error.message);
+    } else {
+      console.log("[strategy-sub-migration] strategy_subscriptions table ensured in Supabase");
+    }
   } catch (e) {
-    console.error("[strategy-sub-migration] Migration failed:", e.message);
-  } finally {
-    if (client) client.release();
+    console.warn("[strategy-sub-migration] Could not ensure Supabase table:", e.message);
   }
+}
+
+async function runStrategySubscriptionMigration(pgPool, supabaseAdmin, supabaseAnon) {
+  // 1. Local Postgres (for dev/cron)
+  if (pgPool) {
+    let client;
+    try {
+      client = await pgPool.connect();
+      await client.query(DDL);
+      console.log("[strategy-sub-migration] strategy_subscriptions table ready (local pg)");
+    } catch (e) {
+      console.error("[strategy-sub-migration] Local migration failed:", e.message);
+    } finally {
+      if (client) client.release();
+    }
+  }
+
+  // 2. Supabase (for production / Vercel)
+  await ensureSupabaseTable(supabaseAdmin, supabaseAnon);
 }
 
 module.exports = { runStrategySubscriptionMigration };

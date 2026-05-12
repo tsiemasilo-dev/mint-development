@@ -17,6 +17,8 @@ const PaymentPage = ({
   onOpenDeposit,
   initialMethod,
   fees,
+  childId,
+  childFamilyMemberId,
 }) => {
   const { profile } = useProfile();
   const [paymentStatus, setPaymentStatus] = useState(
@@ -33,15 +35,45 @@ const PaymentPage = ({
   const hasInitialized = useRef(false);
   const isMounted = useRef(true);
   const [isMethodModalOpen, setIsMethodModalOpen] = useState(!initialMethod);
+  const isChildWalletPurchase = !!childFamilyMemberId;
 
   // Wallet state
-  const walletBalance = profile?.wallet_balance || 0;
+  const [childWalletBalance, setChildWalletBalance] = useState(0);
+  const [childWalletName, setChildWalletName] = useState("Child");
+  const walletBalance = isChildWalletPurchase
+    ? childWalletBalance
+    : (profile?.wallet_balance || 0);
   const [walletLoading, setWalletLoading] = useState(true);
 
   // Sync loading state with profile loading
   useEffect(() => {
-    if (profile?.id) setWalletLoading(false);
-  }, [profile]);
+    if (!isChildWalletPurchase) {
+      if (profile?.id) setWalletLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const loadChildWallet = async () => {
+      setWalletLoading(true);
+      try {
+        const res = await fetch(`/api/child-wallet?family_member_id=${encodeURIComponent(childFamilyMemberId)}`);
+        const json = await res.json();
+        if (!res.ok) throw new Error(json?.error || "Failed to load child wallet");
+        if (cancelled) return;
+        setChildWalletBalance((Number(json?.balance || 0)) / 100);
+        setChildWalletName(json?.first_name || "Child");
+      } catch (e) {
+        console.error("[payment] child wallet load error:", e);
+      } finally {
+        if (!cancelled) setWalletLoading(false);
+      }
+    };
+
+    loadChildWallet();
+    return () => {
+      cancelled = true;
+    };
+  }, [childFamilyMemberId, isChildWalletPurchase, profile?.id]);
 
   // Wallet modal state
   const [walletConfirmOpen, setWalletConfirmOpen] = useState(initialMethod === "wallet");
@@ -133,6 +165,8 @@ const PaymentPage = ({
             paymentReference,
             paymentMethod: finalMethod,
             ...(shareCount ? { shareCount: Number(shareCount) } : {}),
+            ...(childId ? { childUserId: childId } : {}),
+            ...(childFamilyMemberId ? { childFamilyMemberId } : {}),
             ...(fees ? {
               feesBreakdown: {
                 bufferedBase: fees.bufferedBase,
@@ -186,7 +220,7 @@ const PaymentPage = ({
       }
       return { success: false, error: "Retries exhausted" };
     },
-    [amount, baseAmount, isStrategyPurchase, selectedMethod, shareCount, strategy],
+    [amount, baseAmount, childFamilyMemberId, childId, isStrategyPurchase, selectedMethod, shareCount, strategy],
   );
 
   const launchPaystack = useCallback(() => {
@@ -273,8 +307,12 @@ const PaymentPage = ({
       console.log("Wallet payment API response:", recorded);
 
       if (!recorded.success) {
-        if (recorded.error === "Insufficient funds") {
-          throw new Error("You have insufficient wallet funds for this investment");
+        if (recorded.error === "Insufficient funds" || recorded.error === "Insufficient child wallet funds") {
+          throw new Error(
+            isChildWalletPurchase
+              ? "You have insufficient child wallet funds for this investment"
+              : "You have insufficient wallet funds for this investment"
+          );
         }
         throw new Error(recorded.error || "Failed to record investment");
       }
@@ -287,6 +325,9 @@ const PaymentPage = ({
       const finalNewBalance = recorded.newWalletBalance ?? (walletBalance - totalToDeduct);
       setWalletNewBalance(finalNewBalance);
       setWalletAmountDeducted(totalToDeduct);
+      if (isChildWalletPurchase) {
+        setChildWalletBalance(finalNewBalance);
+      }
       setPaymentStatus("wallet-done");
       setWalletSuccessOpen(true);
     } catch (err) {
@@ -376,13 +417,8 @@ const PaymentPage = ({
   }, [profile, launchPaystack, selectedMethod]);
 
   if (paymentStatus === "eft-pending") {
-    return (
-      <PaymentPendingPage
-        strategy={strategy?.name}
-        amount={amount}
-        onDone={() => onCancel?.()}
-      />
-    );
+    onCancel?.();
+    return null;
   }
 
   return (
@@ -394,6 +430,7 @@ const PaymentPage = ({
         baseAmount={baseAmount}
         strategyName={strategy?.name}
         walletBalance={walletBalance}
+        walletLabel={isChildWalletPurchase ? `${childWalletName}'s wallet` : "Wallet Balance"}
         walletLoading={walletLoading}
         isProcessing={paymentStatus === "processing"}
         onCancel={() => {
@@ -421,6 +458,7 @@ const PaymentPage = ({
         strategyName={strategy?.name}
         amountDeducted={walletAmountDeducted}
         newBalance={walletNewBalance}
+        balanceLabel={isChildWalletPurchase ? `${childWalletName}'s wallet` : "New Balance"}
         onDone={() => {
           setWalletSuccessOpen(false);
           onSuccess?.({ reference: `WALLET-${Date.now()}`, method: "wallet" });
@@ -445,9 +483,12 @@ const PaymentPage = ({
           onClose={() => onBack?.()}
           amount={amount}
           strategyName={strategy?.name}
+          childFamilyMemberId={childFamilyMemberId}
+          childFirstName={isChildWalletPurchase ? childWalletName : null}
+          childWalletBalanceCents={isChildWalletPurchase ? Math.round(walletBalance * 100) : null}
           onSelectPaystack={() => handleMethodSelection("paystack")}
           onSelectWallet={() => handleMethodSelection("wallet")}
-          onEFTConfirm={() => handleMethodSelection("direct_eft")}
+          onEFTConfirm={() => { setIsMethodModalOpen(false); onCancel?.(); }}
         />
 
         <section className="mt-20 rounded-3xl border border-slate-100 bg-white p-8 shadow-sm text-center">
@@ -627,6 +668,7 @@ const WalletConfirmModal = ({
   baseAmount,
   strategyName,
   walletBalance,
+  walletLabel,
   walletLoading,
   isProcessing,
   onCancel,
@@ -690,7 +732,7 @@ const WalletConfirmModal = ({
 
         <div className="space-y-3 mb-6">
           <div className="flex justify-between items-center px-1">
-            <span className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">Wallet Balance</span>
+            <span className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">{walletLabel || "Wallet Balance"}</span>
             <span className="text-xs font-bold text-slate-700">{walletLoading ? "..." : fmt(walletBalance)}</span>
           </div>
           
@@ -743,7 +785,7 @@ const WalletConfirmModal = ({
 };
 
 // ── WalletSuccessModal ────────────────────────────────────────────────────────
-const WalletSuccessModal = ({ isOpen, strategyName, amountDeducted, newBalance, onDone }) => {
+const WalletSuccessModal = ({ isOpen, strategyName, amountDeducted, newBalance, balanceLabel, onDone }) => {
   const fmt = (v) =>
     `R${Number(v).toLocaleString("en-ZA", {
       minimumFractionDigits: 2,
@@ -775,7 +817,7 @@ const WalletSuccessModal = ({ isOpen, strategyName, amountDeducted, newBalance, 
             <span className="text-xs font-bold text-rose-600">-{fmt(amountDeducted)}</span>
           </div>
           <div className="pt-3 border-t border-slate-200 flex justify-between items-center">
-            <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider">New Balance</span>
+            <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider">{balanceLabel || "New Balance"}</span>
             <span className="text-sm font-bold text-emerald-600">{fmt(newBalance)}</span>
           </div>
         </div>

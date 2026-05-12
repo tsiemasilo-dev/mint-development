@@ -1,18 +1,51 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "./supabase";
+import { logDebug, CAT } from "./debugLog.js";
+import { getCachedSession, setCachedSession } from "./sessionCache.js";
+import { registerCacheResetCallback } from "./userCacheReset.js";
 
 async function getAuthToken() {
   if (!supabase) return null;
-  const { data: { session } } = await supabase.auth.getSession();
-  return session?.access_token || null;
+  const session = await getCachedSession();
+  if (session?.access_token) return session.access_token;
+  try {
+    const { data: refreshData } = await supabase.auth.refreshSession();
+    if (refreshData?.session?.access_token) return refreshData.session.access_token;
+  } catch {}
+  return null;
+}
+
+function getHoldingsList(result) {
+  if (Array.isArray(result)) return result;
+  if (Array.isArray(result?.holdings)) return result.holdings;
+  return [];
+}
+
+function getClosedHoldingsList(result) {
+  if (Array.isArray(result?.closedHoldings)) return result.closedHoldings;
+  return [];
 }
 
 async function fetchServerHoldings(token) {
   try {
-    const res = await fetch("/api/user/holdings", {
-      headers: { Authorization: `Bearer ${token}` },
+    let activeToken = token || await getAuthToken();
+    if (!activeToken) return { holdings: [], closedHoldings: [] };
+
+    let res = await fetch("/api/user/holdings", {
+      headers: { Authorization: `Bearer ${activeToken}` },
       signal: AbortSignal.timeout(12000),
     });
+
+    if (res.status === 401) {
+      activeToken = await getAuthToken();
+      if (activeToken) {
+        res = await fetch("/api/user/holdings", {
+          headers: { Authorization: `Bearer ${activeToken}` },
+          signal: AbortSignal.timeout(12000),
+        });
+      }
+    }
+
     if (!res.ok) {
       console.error("Failed to fetch holdings from server:", res.status);
       return { holdings: [], closedHoldings: [] };
@@ -31,10 +64,24 @@ async function fetchServerHoldings(token) {
 
 async function fetchServerTransactions(token, limit = 50) {
   try {
-    const res = await fetch(`/api/user/transactions?limit=${limit}`, {
-      headers: { Authorization: `Bearer ${token}` },
+    let activeToken = token || await getAuthToken();
+    if (!activeToken) return [];
+
+    let res = await fetch(`/api/user/transactions?limit=${limit}`, {
+      headers: { Authorization: `Bearer ${activeToken}` },
       signal: AbortSignal.timeout(12000),
     });
+
+    if (res.status === 401) {
+      activeToken = await getAuthToken();
+      if (activeToken) {
+        res = await fetch(`/api/user/transactions?limit=${limit}`, {
+          headers: { Authorization: `Bearer ${activeToken}` },
+          signal: AbortSignal.timeout(12000),
+        });
+      }
+    }
+
     if (!res.ok) {
       console.error("Failed to fetch transactions from server:", res.status);
       return [];
@@ -52,32 +99,47 @@ async function fetchServerTransactions(token, limit = 50) {
 }
 
 let financialDataCache = null;
+let financialDataLastFetch = 0;
+const VISIBILITY_REFETCH_COOLDOWN_MS = 45000;
+
+export const clearFinancialDataCache = () => {
+  financialDataCache = null;
+  financialDataLastFetch = 0;
+};
+
+const emptyFinancialData = {
+  balance: 0,
+  investments: 0,
+  availableCredit: 0,
+  transactions: [],
+  holdings: [],
+  creditInfo: null,
+  bestAssets: [],
+  loading: false,
+  error: null,
+};
 
 export const useFinancialData = () => {
-  const [data, setData] = useState(financialDataCache || {
-    balance: 0,
-    investments: 0,
-    availableCredit: 0,
-    transactions: [],
-    holdings: [],
-    creditInfo: null,
-    bestAssets: [],
-    loading: true,
-    error: null,
-  });
+  const [data, setData] = useState(() =>
+    financialDataCache
+      ? { ...financialDataCache, loading: false, error: null }
+      : { ...emptyFinancialData, loading: true }
+  );
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async ({ silent = false, _trigger = "unknown" } = {}) => {
+    logDebug(CAT.FETCH, `📥 useFinancialData fetch start — trigger: ${_trigger}, silent: ${silent}`);
     if (!supabase) {
       setData((prev) => ({ ...prev, loading: false, error: "Database not connected" }));
       return;
     }
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const session = await getCachedSession();
       if (!session?.user) {
         setData((prev) => ({ ...prev, loading: false }));
         return;
       }
+      setCachedSession(session);
 
       const userId = session.user.id;
       const token = session.access_token;
@@ -94,8 +156,15 @@ export const useFinancialData = () => {
         supabase.from("wallets").select("balance").eq("user_id", userId).maybeSingle(),
       ]);
 
-      const safeHoldings = Array.isArray(holdings) ? holdings : [];
+      const safeHoldings = getHoldingsList(holdings);
       const safeTxns = Array.isArray(allServerTransactions) ? allServerTransactions : [];
+
+      if (silent && safeHoldings.length === 0 && financialDataCache?.holdings?.length > 0) {
+        console.warn("[useFinancialData] Background refresh returned empty holdings — keeping cached data");
+        setData((prev) => ({ ...prev, loading: false }));
+        return;
+      }
+
       const transactions = safeTxns.slice(0, 20);
       const allTransactions = safeTxns;
       const creditInfo = creditResult.data;
@@ -131,22 +200,29 @@ export const useFinancialData = () => {
         .filter((t) => expenseTypes.includes(t.direction))
         .reduce((sum, t) => sum + Math.abs((t.amount || 0) / 100), 0);
       const availableCredit = Math.max(0, (totalIncome - totalExpenses) * 0.2);
-      const walletBalance = walletResult.data?.balance ?? 0;
+      // Guard: if wallet query failed, preserve cached balance to avoid showing R0
+      const walletBalance = walletResult.error
+        ? (financialDataCache?.balance ?? 0)
+        : (walletResult.data?.balance ?? 0);
 
       const newData = {
         balance: walletBalance,
         investments: totalInvestments,
         availableCredit,
         transactions,
-        holdings,
+        holdings: safeHoldings,
         creditInfo,
         bestAssets,
         loading: false,
         error: null,
       };
-      
+
       financialDataCache = newData;
+      financialDataLastFetch = Date.now();
       setData(newData);
+
+      logDebug(CAT.FETCH, `✅ useFinancialData done — balance: R${walletBalance}`, { walletBalance, totalInvestments });
+      console.log("[useFinancialData] Updated balance from DB:", walletBalance);
     } catch (err) {
       console.error("Error fetching financial data:", err);
       setData((prev) => ({
@@ -158,23 +234,37 @@ export const useFinancialData = () => {
   }, []);
 
   useEffect(() => {
+    if (financialDataCache) {
+      fetchData({ silent: true, _trigger: "mount-with-cache" });
+      return;
+    }
     const safetyTimer = setTimeout(() => {
       setData((prev) => {
         if (!prev.loading) return prev;
         console.warn("[useFinancialData] Safety timeout reached, unblocking UI");
+        logDebug(CAT.LOADING, "⏱ Safety timer fired — useFinancialData loading forced off after 15 s");
         return { ...prev, loading: false };
       });
     }, 15000);
-    fetchData().finally(() => clearTimeout(safetyTimer));
+    fetchData({ _trigger: "mount-no-cache" }).finally(() => clearTimeout(safetyTimer));
     return () => clearTimeout(safetyTimer);
   }, [fetchData]);
 
   useEffect(() => {
     const handleVisibility = () => {
-      if (document.visibilityState === "visible") fetchData();
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      const timeSinceLast = now - financialDataLastFetch;
+      if (timeSinceLast < VISIBILITY_REFETCH_COOLDOWN_MS) {
+        logDebug(CAT.VISIBILITY, `👁  useFinancialData skip refetch — cooldown (${Math.round(timeSinceLast / 1000)}s < 45s)`);
+        return;
+      }
+      logDebug(CAT.VISIBILITY, "👁  useFinancialData refetch triggered by tab focus");
+      fetchData({ silent: true, _trigger: "visibility" });
     };
     const handleUpdate = () => {
-      fetchData();
+      logDebug(CAT.FETCH, "📡 useFinancialData refetch via financial-data-updated event");
+      fetchData({ _trigger: "event" });
     };
     document.addEventListener("visibilitychange", handleVisibility);
     window.addEventListener("financial-data-updated", handleUpdate);
@@ -187,8 +277,18 @@ export const useFinancialData = () => {
   return { ...data, refetch: fetchData };
 };
 
+let _mintBalanceCache = null;
+
+export function clearUserFinancialCache() {
+  _mintBalanceCache = null;
+  _txCache = null;
+  _txCacheLimit = null;
+}
+
+registerCacheResetCallback(clearUserFinancialCache);
+
 export const useMintBalance = () => {
-  const [data, setData] = useState({
+  const [data, setData] = useState(() => _mintBalanceCache || {
     totalBalance: 0,
     investments: 0,
     availableCredit: 0,
@@ -206,7 +306,7 @@ export const useMintBalance = () => {
       }
 
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const session = await getCachedSession();
         if (!session?.user) {
           setData((prev) => ({ ...prev, loading: false }));
           return;
@@ -220,7 +320,7 @@ export const useMintBalance = () => {
           fetchServerTransactions(token, 100),
         ]);
 
-        const holdings = Array.isArray(holdingsRaw) ? holdingsRaw : [];
+        const holdings = getHoldingsList(holdingsRaw);
         const allServerTransactions = Array.isArray(allServerTransactionsRaw) ? allServerTransactionsRaw : [];
         const recentTransactions = allServerTransactions.slice(0, 10);
         const allTransactions = allServerTransactions;
@@ -247,7 +347,7 @@ export const useMintBalance = () => {
           amount: formatTransactionAmount((t.amount || 0) / 100, t.direction),
         }));
 
-        setData({
+        const nextData = {
           totalBalance,
           investments: totalInvestments,
           availableCredit,
@@ -255,7 +355,9 @@ export const useMintBalance = () => {
           recentChanges,
           loading: false,
           error: null,
-        });
+        };
+        _mintBalanceCache = nextData;
+        setData(nextData);
       } catch (err) {
         console.error("Error fetching mint balance:", err);
         setData((prev) => ({ ...prev, loading: false, error: err.message }));
@@ -274,9 +376,16 @@ export const useMintBalance = () => {
   return data;
 };
 
+let _txCache = null;
+let _txCacheLimit = null;
+
 export const useTransactions = (limit = 20) => {
-  const [transactions, setTransactions] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [transactions, setTransactions] = useState(() =>
+    _txCache && _txCacheLimit === limit ? _txCache : []
+  );
+  const [loading, setLoading] = useState(() =>
+    !(_txCache && _txCacheLimit === limit)
+  );
 
   useEffect(() => {
     const fetchTransactions = async () => {
@@ -293,6 +402,8 @@ export const useTransactions = (limit = 20) => {
         }
 
         const data = await fetchServerTransactions(token, limit);
+        _txCache = data;
+        _txCacheLimit = limit;
         setTransactions(data);
       } catch (err) {
         console.error("Error fetching transactions:", err);
@@ -329,7 +440,7 @@ export const useCreditInfo = () => {
       }
 
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const session = await getCachedSession();
         if (!session?.user) {
           setData((prev) => ({ ...prev, loading: false }));
           return;
@@ -383,27 +494,34 @@ export const useCreditInfo = () => {
   return data;
 };
 
-export const useInvestments = () => {
-  const [data, setData] = useState({
-    totalInvestments: 0,
-    monthlyChange: 0,
-    monthlyChangePercent: 0,
-    portfolioMix: [],
-    goals: [],
-    holdings: [],
-    closedHoldings: [],
-    loading: true,
-    hasInvestments: false,
-  });
+let investmentsDataCache = null;
+let investmentsDataLastFetch = 0;
 
-  const fetchInvestments = useCallback(async () => {
+export const useInvestments = () => {
+  const [data, setData] = useState(() =>
+    investmentsDataCache
+      ? { ...investmentsDataCache, loading: false }
+      : {
+          totalInvestments: 0,
+          monthlyChange: 0,
+          monthlyChangePercent: 0,
+          portfolioMix: [],
+          goals: [],
+          holdings: [],
+          closedHoldings: [],
+          loading: true,
+          hasInvestments: false,
+        }
+  );
+
+  const fetchInvestments = useCallback(async ({ silent = false } = {}) => {
     if (!supabase) {
       setData((prev) => ({ ...prev, loading: false }));
       return;
     }
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const session = await getCachedSession();
       if (!session?.user) {
         setData((prev) => ({ ...prev, loading: false }));
         return;
@@ -417,9 +535,15 @@ export const useInvestments = () => {
         supabase.from("investment_goals").select("*").eq("user_id", userId),
       ]);
 
-      const holdings = holdingsResult.holdings;
-      const closedHoldings = holdingsResult.closedHoldings;
+      const holdings = getHoldingsList(holdingsResult);
+      const closedHoldings = getClosedHoldingsList(holdingsResult);
       const goals = goalsResult.data || [];
+
+      if (silent && holdings.length === 0 && investmentsDataCache?.holdings?.length > 0) {
+        console.warn("[useInvestments] Background refresh returned empty holdings — keeping cached data");
+        setData((prev) => ({ ...prev, loading: false }));
+        return;
+      }
 
       const liveHV = (h) => h.last_price != null && h.quantity != null ? (h.last_price * h.quantity) / 100 : (h.market_value || 0) / 100;
       const totalInvestments = holdings.reduce((sum, h) => sum + liveHV(h), 0);
@@ -473,7 +597,7 @@ export const useInvestments = () => {
         };
       });
 
-      setData({
+      const newInvestmentsData = {
         totalInvestments,
         monthlyChange,
         monthlyChangePercent,
@@ -483,7 +607,10 @@ export const useInvestments = () => {
         closedHoldings,
         loading: false,
         hasInvestments: holdings.length > 0,
-      });
+      };
+      investmentsDataCache = newInvestmentsData;
+      investmentsDataLastFetch = Date.now();
+      setData(newInvestmentsData);
     } catch (err) {
       console.error("Error fetching investments:", err);
       setData((prev) => ({ ...prev, loading: false }));
@@ -491,12 +618,19 @@ export const useInvestments = () => {
   }, []);
 
   useEffect(() => {
+    if (investmentsDataCache) {
+      fetchInvestments({ silent: true });
+      return;
+    }
     fetchInvestments();
   }, [fetchInvestments]);
 
   useEffect(() => {
     const handleVisibility = () => {
-      if (document.visibilityState === "visible") fetchInvestments();
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - investmentsDataLastFetch < VISIBILITY_REFETCH_COOLDOWN_MS) return;
+      fetchInvestments({ silent: true });
     };
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);

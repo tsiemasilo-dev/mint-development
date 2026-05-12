@@ -136,6 +136,12 @@ export const useProfile = ({ enabled = true } = {}) => {
     if (!enabled) return;
     loadProfile();
 
+    // Safety timer — if the profile hasn't loaded in 6 s, release the skeleton
+    // so the page doesn't hang forever (e.g. when getUser is slow/throttled)
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 6000);
+
     let authSub;
     if (supabase) {
       const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -157,6 +163,7 @@ export const useProfile = ({ enabled = true } = {}) => {
     };
     window.addEventListener("profile-updated", handleProfileUpdate);
     return () => {
+      clearTimeout(safetyTimer);
       if (authSub) authSub.unsubscribe();
       window.removeEventListener("profile-updated", handleProfileUpdate);
     };

@@ -1,3 +1,5 @@
+import { supabase } from "./supabase.js";
+
 export const normalizeSymbol = (symbol) => {
   if (typeof symbol !== "string") return symbol;
   const trimmed = symbol.trim();
@@ -49,35 +51,93 @@ const getMinFromPrice = (price) => {
 };
 
 
-export const calculateMinInvestment = (strategy, holdingsBySymbol) => {
+export const calculateMinInvestmentSync = (strategy, holdingsBySymbol) => {
   const holdings = getHoldingsArray(strategy);
   if (!holdings.length) {
-    const strategyPrice = Number(strategy?.last_close || strategy?.nav || strategy?.min_investment || 0);
-    if (!strategyPrice || strategyPrice <= 0 || !isFinite(strategyPrice)) return null;
-    // If it's the DB min_investment, it's likely in cents, so normalize to Rands
-    return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : Math.round(strategyPrice);
+    return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : null;
   }
   let total = 0;
-  let matched = 0;
+  let foundAny = false;
   for (const holding of holdings) {
-    const rawSymbol = holding.ticker || holding.symbol || holding;
+    const rawSymbol = holding.symbol || holding.ticker;
+    if (!rawSymbol) continue;
     const normalizedSym = normalizeSymbol(rawSymbol);
     const security = holdingsBySymbol.get(rawSymbol) || holdingsBySymbol.get(normalizedSym);
-    if (security?.last_price != null) {
-      // Prices are in Rands (from marketData.js)
-      const pricePerShare = Number(security.last_price);
-      if (!pricePerShare || pricePerShare <= 0 || !isFinite(pricePerShare)) continue;
-      const shares = Number(holding.shares || holding.quantity || 1);
-      total += shares * pricePerShare;
-      matched++;
-    }
+    if (!security?.last_price) continue;
+    foundAny = true;
+    const pricePerShare = Number(security.last_price);
+    const shares = Number(holding.shares || holding.quantity || 1);
+    if (shares <= 0) continue;
+    total += shares * pricePerShare;
   }
-  if (matched === 0) {
-    const strategyPrice = Number(strategy?.last_close || strategy?.nav || strategy?.min_investment || 0);
-    if (!strategyPrice || strategyPrice <= 0 || !isFinite(strategyPrice)) return null;
-    return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : Math.round(strategyPrice);
+  if (!foundAny) {
+    return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : null;
   }
   return Math.round(total);
+};
+
+export const calculateMinInvestment = async (strategy, holdingsBySymbol) => {
+  const holdings = getHoldingsArray(strategy);
+
+  // If no holdings, use min_investment from database
+  if (!holdings.length) {
+    console.log(`⚠️ [${strategy?.name}] No holdings found, returning null or DB value`);
+    return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : null;
+  }
+
+  if (!supabase) {
+    console.log(`❌ [${strategy?.name}] Supabase not available`);
+    return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : null;
+  }
+
+  try {
+    let total = 0;
+    console.log(`📊 [${strategy?.name}] Processing ${holdings.length} holdings`);
+
+    for (const holding of holdings) {
+      const symbol = holding.symbol || holding.ticker;
+      const shares = Number(holding.shares || holding.quantity || 1);
+
+      console.log(`  → Holding: symbol=${symbol}, shares=${shares}`);
+
+      if (!symbol || shares <= 0) {
+        console.log(`  ⊘ Skipped: no symbol or invalid shares`);
+        continue;
+      }
+
+      console.log(`  🔎 Querying stock_intraday_c for ${symbol}...`);
+      const { data, error } = await supabase
+        .from("stock_intraday_c")
+        .select("current_price")
+        .eq("symbol", symbol)
+        .order("timestamp", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        console.warn(`  ❌ Error fetching price for ${symbol}:`, error.message);
+        continue;
+      }
+
+      if (!data?.current_price) {
+        console.warn(`  ❌ No price data found for ${symbol}:`, data);
+        continue;
+      }
+
+      const contribution = shares * data.current_price;
+      console.log(`  ✓ ${symbol}: ${shares} × ${data.current_price} = ${contribution} cents`);
+      total += contribution;
+    }
+
+    // Convert from cents to Rands and add 8% markup
+    const resultBeforeMarkup = Math.round(total / 100);
+    const result = Math.round(resultBeforeMarkup * 1.08);
+    console.log(`✅ [${strategy?.name}] Total: ${total} cents → R${resultBeforeMarkup} + 8% markup → R${result}`);
+    return result;
+  } catch (err) {
+    console.error(`❌ [${strategy?.name}] Error calculating min investment:`, err);
+    return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : null;
+  }
 };
 
 export const getAdjustedShares = (holding, holdingsBySymbol) => {

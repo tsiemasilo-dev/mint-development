@@ -4,6 +4,7 @@ const AnimatedLabelInput = forwardRef(
   (
     {
       id,
+      name,
       label,
       placeholder,
       autoComplete,
@@ -28,6 +29,7 @@ const AnimatedLabelInput = forwardRef(
           ref={ref}
           type={type}
           id={id}
+          name={name || id}
           placeholder={placeholder}
           required={required}
           autoComplete={autoComplete}
@@ -50,6 +52,7 @@ const AnimatedLabelInput = forwardRef(
           ref={ref}
           type={type}
           id={id}
+          name={name || id}
           placeholder=" "
           required={required}
           autoComplete={autoComplete}

@@ -6,7 +6,7 @@ import { useInvestments } from "../lib/useFinancialData";
 import { useRealtimePrices } from "../lib/useRealtimePrices";
 import { useProfile } from "../lib/useProfile";
 import { useUserStrategies, useStrategyChartData, useStrategyPeriodReturns } from "../lib/useUserStrategies";
-import { getMonthlyReturns, getStockMonthlyReturns, getOverallPortfolioMonthlyReturns } from "../lib/strategyData";
+import { getMonthlyReturns, getStockMonthlyReturns, getOverallPortfolioMonthlyReturns, getStrategyMonthlyReturnsFromDB } from "../lib/strategyData";
 import { useStockQuotes, useStockChart } from "../lib/useStockData";
 import { clearMarketDataCache } from "../lib/marketData";
 import SwipeBackWrapper from "../components/SwipeBackWrapper.jsx";
@@ -163,7 +163,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   const stockDropdownRef = useRef(null);
   const { profile } = useProfile();
   const { strategies, selectedStrategy: userSelectedStrategy, loading: strategiesLoading, selectStrategy, refetch: refetchStrategies } = useUserStrategies();
-  const { chartData: realChartData, loading: chartLoading } = useStrategyChartData(userSelectedStrategy?.strategyId, timeFilter, userSelectedStrategy?.firstInvestedDate || null);
+  const { chartData: realChartData, loading: chartLoading } = useStrategyChartData(userSelectedStrategy?.strategyId, timeFilter, userSelectedStrategy?.firstInvestedDate || null, profile?.id);
   const { returnData: periodReturnData, loading: periodReturnLoading } = useStrategyPeriodReturns(profile?.id, userSelectedStrategy?.strategyId, timeFilter);
 
   const fullName = [profile?.firstName || profile?.first_name, profile?.lastName || profile?.last_name]
@@ -316,15 +316,21 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           strategies.map(s => s.strategyId).filter(Boolean),
           individualHoldingSecurityIds,
           strategies,
-          (rawHoldings || []).filter(h => !h.strategy_id)
+          (rawHoldings || []).filter(h => !h.strategy_id),
+          profile?.id
         );
       } else {
         const matchedStrategy = strategies.find(s => s.strategyId === calendarFilter);
         if (matchedStrategy) {
-          const invested = matchedStrategy.investedAmount || 0;
-          const current = matchedStrategy.currentValue || 0;
-          const actualPnlPct = invested > 0 ? (current - invested) / invested : null;
-          data = await getMonthlyReturns(calendarFilter, matchedStrategy.firstInvestedDate || null, actualPnlPct);
+          if (profile?.id && matchedStrategy.hasReturnsData) {
+            data = await getStrategyMonthlyReturnsFromDB(profile.id, calendarFilter, matchedStrategy.firstInvestedDate || null);
+          }
+          if (!data || Object.keys(data).length === 0) {
+            const invested = matchedStrategy.investedAmount || 0;
+            const current = matchedStrategy.currentValue || 0;
+            const actualPnlPct = invested > 0 ? (current - invested) / invested : null;
+            data = await getMonthlyReturns(calendarFilter, matchedStrategy.firstInvestedDate || null, actualPnlPct);
+          }
         } else {
           const matchedHolding = (rawHoldings || []).find(h => h.security_id === calendarFilter && !h.strategy_id);
           const investedVal = matchedHolding ? (matchedHolding.avg_fill * matchedHolding.quantity) / 100 : 0;
@@ -427,7 +433,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           currentValue: sCv,
           investedAmount: sIa,
           change: sPnlPct,
-          ytd_return: s.metrics?.r_ytd,
+          ytd_return: s.ytd_pct != null ? s.ytd_pct : s.metrics?.r_ytd,
         });
       }
     });
@@ -442,6 +448,11 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
 
   const getChartData = () => {
     if (realChartData && realChartData.length > 0) {
+      // Pre-computed P&L format from client_strategy_returns_c — first point has day:null, value:0
+      if (realChartData[0]?.day === null && realChartData[0]?.value === 0) {
+        return realChartData;
+      }
+      // Legacy NAV-based format from strategy_price_history — scale to user P&L
       const currentValue = currentStrategy.currentValue || 0;
       const costBasis = currentStrategy.investedAmount || 0;
       if (currentValue > 0 && realChartData.length > 0) {
