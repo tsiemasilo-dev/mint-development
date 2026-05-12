@@ -518,32 +518,27 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
           pointerEvents: buttonsVisible ? "auto" : "none",
         }}
       >
-        {/* Watchlist pill */}
+        {/* Watchlist — compact squircle */}
         <button
           onClick={toggleWatchlist}
-          className={`relative flex flex-1 items-center justify-center gap-2 rounded-full py-4 text-[13px] font-semibold tracking-wide shadow-[0_8px_30px_rgba(0,0,0,0.12)] ring-1 transition-all duration-300 active:scale-95 ${
+          className={`relative flex h-[62px] w-[90px] flex-shrink-0 flex-col items-center justify-center gap-1 rounded-[22px] text-[10px] font-semibold uppercase tracking-widest shadow-[0_6px_24px_rgba(0,0,0,0.10)] ring-1 transition-all duration-300 active:scale-95 ${
             isWatched
-              ? "bg-yellow-400/95 text-yellow-900 ring-yellow-300/60 shadow-yellow-200/60"
-              : "bg-white/95 text-slate-800 ring-slate-200/80"
+              ? "bg-amber-400 text-amber-900 ring-amber-300/60"
+              : "bg-white/95 text-slate-500 ring-slate-200/70"
           } ${watchlistAnimating ? "scale-95" : ""}`}
-          style={{ backdropFilter: "blur(12px)" }}
+          style={{ backdropFilter: "blur(14px)" }}
         >
-          <span className={`flex items-center gap-2 transition-transform duration-300 ${watchlistAnimating ? "scale-110" : "scale-100"}`}>
+          <span className={`transition-transform duration-300 ${watchlistAnimating ? "scale-125" : "scale-100"}`}>
             {isWatched ? (
-              <>
-                <Star className={`h-4 w-4 fill-yellow-700 text-yellow-700 ${watchlistAnimating ? "animate-[spin_0.4s_ease-out]" : ""}`} />
-                Watchlisted
-              </>
+              <Star className={`h-5 w-5 fill-amber-800 text-amber-800 ${watchlistAnimating ? "animate-[spin_0.4s_ease-out]" : ""}`} />
             ) : (
-              <>
-                <Star className="h-4 w-4 text-slate-500" />
-                Watchlist
-              </>
+              <Star className="h-5 w-5 text-slate-400" />
             )}
           </span>
+          <span>{isWatched ? "Saved" : "Watchlist"}</span>
         </button>
 
-        {/* Buy pill */}
+        {/* Buy Now — dominant elongated pill */}
         <button
           type="button"
           disabled={buyChecking}
@@ -560,8 +555,10 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
               setBuyChecking(false);
             }
           }}
-          className="flex flex-[1.4] items-center justify-center rounded-full bg-gradient-to-r from-[#0f0f0f] via-[#2d0f6b] to-[#6d28d9] py-4 text-[13px] font-semibold tracking-wide text-white shadow-[0_8px_30px_rgba(109,40,217,0.45)] transition-all active:scale-95 disabled:opacity-60"
+          className="relative flex h-[62px] flex-1 items-center justify-center overflow-hidden rounded-full bg-gradient-to-r from-[#0a0a0a] via-[#2d0f6b] to-[#7c3aed] text-[15px] font-bold tracking-wide text-white shadow-[0_10px_40px_rgba(109,40,217,0.50)] transition-all active:scale-[0.97] disabled:opacity-60"
         >
+          {/* Inner shimmer line */}
+          <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
           {buyChecking ? "Checking…" : "Buy Now"}
         </button>
       </div>
