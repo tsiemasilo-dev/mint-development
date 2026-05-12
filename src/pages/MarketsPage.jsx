@@ -126,28 +126,42 @@ const StrategyMiniChart = ({ values }) => {
   );
 };
 
+// Deterministic hue from ticker symbol so each asset gets its own pastel colour
+function symbolToHue(symbol) {
+  const str = symbol || "XX";
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash * 31) + str.charCodeAt(i)) & 0xffffffff;
+  }
+  return Math.abs(hash) % 360;
+}
+
 const CompactSecurityRow = ({ security, onClick }) => {
   const isPositive = (security.changePct ?? 0) >= 0;
+  const hue = symbolToHue(security.symbol);
+  const bg = `linear-gradient(135deg, hsl(${hue},55%,93%) 0%, hsl(${(hue + 25) % 360},45%,89%) 100%)`;
+  const borderColor = `hsl(${hue},40%,84%)`;
+
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-2 w-full rounded-xl px-3 py-2.5 text-left active:scale-[0.97] transition-transform"
-      style={{ background: "#eef1fa" }}
+      className="flex items-center gap-3 w-full rounded-2xl px-3.5 py-3.5 text-left active:scale-[0.97] transition-transform border"
+      style={{ background: bg, borderColor }}
     >
       {security.logo_url ? (
-        <img src={security.logo_url} alt={security.symbol} className="h-7 w-7 rounded-full border border-slate-100 object-cover flex-shrink-0" />
+        <img src={security.logo_url} alt={security.symbol} className="h-9 w-9 rounded-full border border-white/70 object-cover flex-shrink-0 shadow-sm" />
       ) : (
-        <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-purple-600 text-[9px] font-bold text-white">
+        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-purple-600 text-[10px] font-bold text-white shadow-sm">
           {security.symbol?.substring(0, 2) || "—"}
         </div>
       )}
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-bold text-slate-900 truncate">{security.symbol}</p>
-        <p className={`text-xs font-semibold ${isPositive ? "text-emerald-500" : "text-red-500"}`}>
+        <p className="text-sm font-bold text-slate-900 truncate">{security.symbol}</p>
+        <p className={`text-xs font-semibold ${isPositive ? "text-emerald-600" : "text-red-500"}`}>
           {isPositive ? "+" : ""}{security.changePct != null ? security.changePct.toFixed(2) : "—"}%
         </p>
       </div>
-      <ChevronRight className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+      <ChevronRight className="h-4 w-4 text-slate-400/70 flex-shrink-0" />
     </button>
   );
 };
