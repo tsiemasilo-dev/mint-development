@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import MaintenanceModal from "../components/MaintenanceModal.jsx";
 import { registerCacheResetCallback } from "../lib/userCacheReset.js";
 import { supabase } from "../lib/supabase.js";
-import { getMarketsSecuritiesWithMetrics } from "../lib/marketData.js";
+import { getMarketsSecuritiesWithMetrics, getSecurityPrices } from "../lib/marketData.js";
 import { getStrategiesWithMetrics, getPublicStrategies, formatChangePct, formatChangeAbs, getChangeColor } from "../lib/strategyData.js";
 import { useProfile } from "../lib/useProfile";
 import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Star } from "lucide-react";
@@ -142,8 +142,11 @@ function generateSparkline(security) {
   return points.map((p, i) => ({ i, v: p }));
 }
 
-const SecuritySparklineCard = ({ security, onClick, onToggleWatchlist, isWatched }) => {
-  const sparkData = React.useMemo(() => generateSparkline(security), [security.symbol, security.changePct]);
+const SecuritySparklineCard = ({ security, onClick, onToggleWatchlist, isWatched, sparklinePoints }) => {
+  const sparkData = React.useMemo(() => {
+    if (sparklinePoints && sparklinePoints.length >= 2) return sparklinePoints;
+    return generateSparkline(security);
+  }, [sparklinePoints, security.symbol, security.changePct]);
   const isPositive = (security.changePct ?? 0) >= 0;
   const gradientId = `sg-${security.id || security.symbol}`;
 
@@ -335,6 +338,62 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const watchedSecurities = useMemo(() => {
     return securities.filter((s) => watchlist.includes(s.symbol));
   }, [securities, watchlist]);
+
+  // Real price history for sparkline cards — keyed by security id
+  const [sparklineData, setSparklineData] = useState({});
+
+  useEffect(() => {
+    if (!securities.length) return;
+    let cancelled = false;
+
+    const fetchSparklines = async () => {
+      // Collect unique ids from all card sections (up to ~30 securities)
+      const byMarketCap = [...securities]
+        .filter((s) => s.market_cap)
+        .sort((a, b) => b.market_cap - a.market_cap)
+        .slice(0, 10);
+      const byDividend = [...securities]
+        .filter((s) => s.dividend_yield && s.dividend_yield > 0)
+        .sort((a, b) => b.dividend_yield - a.dividend_yield)
+        .slice(0, 10);
+      const byGain = [...securities]
+        .filter((s) => s.changePct != null)
+        .sort((a, b) => (b.changePct || 0) - (a.changePct || 0))
+        .slice(0, 10);
+      const watched = securities.filter((s) => watchlist.includes(s.symbol));
+
+      const seen = new Set();
+      const toFetch = [];
+      for (const s of [...watched, ...byMarketCap, ...byDividend, ...byGain]) {
+        if (s.id && !seen.has(s.id)) { seen.add(s.id); toFetch.push(s); }
+      }
+
+      const results = await Promise.allSettled(
+        toFetch.map((s) => getSecurityPrices(s.id, "1M").then((pts) => ({ id: s.id, pts })))
+      );
+
+      if (cancelled) return;
+
+      const map = {};
+      for (const r of results) {
+        if (r.status === "fulfilled" && r.value.pts && r.value.pts.length >= 2) {
+          const pts = r.value.pts;
+          const closes = pts.map((p) => p.close).filter((c) => c != null);
+          const min = Math.min(...closes);
+          const max = Math.max(...closes);
+          const range = max - min || 1;
+          map[r.value.id] = pts
+            .filter((p) => p.close != null)
+            .map((p, i) => ({ i, v: ((p.close - min) / range) * 90 + 5 }));
+        }
+      }
+      setSparklineData(map);
+    };
+
+    fetchSparklines();
+    return () => { cancelled = true; };
+  }, [securities.length, watchlist.join(",")]);
+
 
   const holdingsBySymbol = useMemo(() => buildHoldingsBySymbol(holdingsSecurities), [holdingsSecurities]);
   const previewGradientId = useId();
@@ -1355,6 +1414,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                           onClick={() => onOpenStockDetail(security)}
                           onToggleWatchlist={toggleWatchlist}
                           isWatched={true}
+                          sparklinePoints={sparklineData[security.id]}
                         />
                       ))}
                     </div>
@@ -1375,6 +1435,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                     onClick={() => onOpenStockDetail(security)}
                     onToggleWatchlist={toggleWatchlist}
                     isWatched={watchlist.includes(security.symbol)}
+                    sparklinePoints={sparklineData[security.id]}
                   />
                 ))}
               </div>
@@ -1394,6 +1455,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                     onClick={() => onOpenStockDetail(security)}
                     onToggleWatchlist={toggleWatchlist}
                     isWatched={watchlist.includes(security.symbol)}
+                    sparklinePoints={sparklineData[security.id]}
                   />
                 ))}
               </div>
@@ -1413,6 +1475,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                     onClick={() => onOpenStockDetail(security)}
                     onToggleWatchlist={toggleWatchlist}
                     isWatched={watchlist.includes(security.symbol)}
+                    sparklinePoints={sparklineData[security.id]}
                   />
                 ))}
               </div>
