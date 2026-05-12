@@ -17,7 +17,7 @@ const AppLayout = ({ activeTab, onTabChange, onWithdraw, onShowComingSoon, modal
     .toUpperCase();
   // Pages that render their own inline FamilyDropdown or don't need it
   const noOverlayTabs = [
-    "home", "investments", "credit", "markets", "more",
+    "home", "investments", "credit", "markets", "news", "more",
     "instantLiquidity", "creditApply", "creditRepay", "liquidityHistory", "unsecuredCreditDashboard",
   ];
   const showFamilyDropdown = !noOverlayTabs.includes(activeTab);
