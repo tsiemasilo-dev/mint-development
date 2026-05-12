@@ -421,18 +421,29 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const secRefDividend  = useRef(null);
   const secRefGainers   = useRef(null);
 
-  // Always start with "largest" expanded. When watchlist loads, mark that expanded too.
-  // Mirror state in a ref so the rAF poll avoids stale-closure bugs.
+  // Mirror state in a ref so the scroll handler avoids stale-closure bugs.
   const [expandedSections, setExpandedSections] = useState(() => new Set(["largest"]));
   const expandedRef = useRef(new Set(["largest"]));
+  // Tracks which key is "first" so the scroll handler never collapses it.
+  const firstSectionKeyRef = useRef("largest");
 
   useEffect(() => {
-    if (watchedSecurities.length > 0 && !expandedRef.current.has("watchlist")) {
-      // Watchlist is first, so only it starts expanded; largest drops to second and starts collapsed
-      expandedRef.current = new Set(["watchlist"]);
-      setExpandedSections(new Set(expandedRef.current));
-    }
-  }, [watchedSecurities.length]);
+    if (!securities.length) return;
+
+    const hasWatchlist = watchedSecurities.length > 0;
+    const firstKey  = hasWatchlist ? "watchlist" : "largest";
+    const secondKey = hasWatchlist ? "largest"   : "dividend";
+    const firstItems = hasWatchlist ? watchedSecurities : largestCompanies;
+
+    firstSectionKeyRef.current = firstKey;
+
+    // Always expand first section; also expand second if first has fewer than 2 assets
+    const initial = new Set([firstKey]);
+    if (firstItems.length < 2) initial.add(secondKey);
+
+    expandedRef.current = initial;
+    setExpandedSections(new Set(initial));
+  }, [watchedSecurities.length, securities.length]);
 
   useEffect(() => {
     if (!securities.length) return;
@@ -445,13 +456,22 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
     };
 
     const check = () => {
-      // Expand when a section's heading crosses the centre of the viewport;
-      // collapse again when it scrolls back below that line.
       const threshold = window.innerHeight * 0.3;
+      const firstKey = firstSectionKeyRef.current;
       let changed = false;
 
       for (const [key, ref] of Object.entries(sectionMap)) {
         if (!ref.current) continue;
+
+        // First section is always pinned expanded — never collapse it
+        if (key === firstKey) {
+          if (!expandedRef.current.has(key)) {
+            expandedRef.current = new Set([...expandedRef.current, key]);
+            changed = true;
+          }
+          continue;
+        }
+
         const { top } = ref.current.getBoundingClientRect();
         const shouldBeExpanded = top < threshold;
         const isExpanded = expandedRef.current.has(key);
