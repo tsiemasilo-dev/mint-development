@@ -1196,8 +1196,13 @@ const LoanCalculatorStep = ({ onSignedContinue }) => {
                      step={AMOUNT_STEP}
                      value={loanAmount}
                      onChange={(e) => {
-                        const raw = Number(e.target.value);
-                        if (!isNaN(raw)) setLoanAmount(clamp(raw, MIN_LOAN_AMOUNT, MAX_LOAN_AMOUNT));
+                        const raw = e.target.value;
+                        if (raw === "") {
+                           setLoanAmount("");
+                           return;
+                        }
+                        const n = Number(raw);
+                        if (!isNaN(n)) setLoanAmount(n);
                      }}
                      onBlur={(e) => {
                         const raw = Number(e.target.value);
