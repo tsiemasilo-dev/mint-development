@@ -1471,21 +1471,12 @@ const App = () => {
   if (currentPage === "stockDetail") {
     return (
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
-        <AppLayout
-          activeTab="markets"
-          onTabChange={handleTabChange}
-          onWithdraw={() => {}}
-          onShowComingSoon={() => {}}
-          modal={null}
-          onCloseModal={() => {}}
-        >
-          <StockDetailPage
-            security={selectedSecurity}
-            onBack={goBack}
-            onOpenBuy={() => navigateTo("stockBuy")}
-            onNavigateToOnboarding={() => navigateTo("identityCheck")}
-          />
-        </AppLayout>
+        <StockDetailPage
+          security={selectedSecurity}
+          onBack={goBack}
+          onOpenBuy={() => navigateTo("stockBuy")}
+          onNavigateToOnboarding={() => navigateTo("identityCheck")}
+        />
       </SwipeBackWrapper>
     );
   }

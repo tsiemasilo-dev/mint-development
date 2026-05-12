@@ -207,7 +207,7 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
+    <div className="min-h-screen bg-slate-50 text-slate-900 pb-[calc(5rem+env(safe-area-inset-bottom))]">
       {/* Header */}
       <div className="rounded-b-[36px] bg-gradient-to-b from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-4 pb-8 pt-12 text-white">
         <div className="mx-auto w-full max-w-sm md:max-w-md">
@@ -498,52 +498,53 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
           </section>
         )}
 
-        {/* Action Buttons */}
-        <div className="mt-10 flex gap-3">
-          <button
-            onClick={toggleWatchlist}
-            className={`relative flex flex-1 items-center justify-center gap-2 overflow-hidden rounded-2xl border-2 py-4 text-sm font-semibold transition-all duration-300 active:scale-95 ${
-              isWatched
-                ? "border-yellow-400 bg-yellow-50 text-yellow-700"
-                : "border-slate-200 bg-white text-slate-700"
-            } ${watchlistAnimating ? "scale-95" : ""}`}
-          >
-            <span className={`flex items-center gap-2 transition-all duration-300 ${watchlistAnimating ? "scale-110" : "scale-100"}`}>
-              {isWatched ? (
-                <>
-                  <Star className={`h-4.5 w-4.5 fill-yellow-400 text-yellow-400 ${watchlistAnimating ? "animate-[spin_0.4s_ease-out]" : ""}`} />
-                  Watchlisted
-                </>
-              ) : (
-                <>
-                  <Star className="h-4 w-4" />
-                  Watchlist
-                </>
-              )}
-            </span>
-          </button>
+      </div>
 
-          <button
-            type="button"
-            disabled={buyChecking}
-            onClick={async () => {
-              setBuyChecking(true);
-              try {
-                if (onboardingLoading) return;
-                if (!onboardingComplete) {
-                  setShowOnboardingModal(true);
-                  return;
-                }
-                onOpenBuy?.();
-              } finally {
-                setBuyChecking(false);
+      {/* Sticky Action Bar */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 flex gap-3 border-t border-slate-100 bg-white/90 px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur-md">
+        <button
+          onClick={toggleWatchlist}
+          className={`relative flex flex-1 items-center justify-center gap-2 overflow-hidden rounded-2xl border-2 py-4 text-sm font-semibold transition-all duration-300 active:scale-95 ${
+            isWatched
+              ? "border-yellow-400 bg-yellow-50 text-yellow-700"
+              : "border-slate-200 bg-slate-50 text-slate-700"
+          } ${watchlistAnimating ? "scale-95" : ""}`}
+        >
+          <span className={`flex items-center gap-2 transition-all duration-300 ${watchlistAnimating ? "scale-110" : "scale-100"}`}>
+            {isWatched ? (
+              <>
+                <Star className={`h-4 w-4 fill-yellow-400 text-yellow-400 ${watchlistAnimating ? "animate-[spin_0.4s_ease-out]" : ""}`} />
+                Watchlisted
+              </>
+            ) : (
+              <>
+                <Star className="h-4 w-4" />
+                Watchlist
+              </>
+            )}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          disabled={buyChecking}
+          onClick={async () => {
+            setBuyChecking(true);
+            try {
+              if (onboardingLoading) return;
+              if (!onboardingComplete) {
+                setShowOnboardingModal(true);
+                return;
               }
-            }}
-            className="flex flex-[1.4] items-center justify-center rounded-2xl bg-gradient-to-r from-black to-purple-600 py-4 text-sm font-semibold text-white shadow-lg transition-all active:scale-95 disabled:opacity-60"
-          >
-            {buyChecking ? "Checking…" : "Buy Now"}
-          </button>
-        </div>
+              onOpenBuy?.();
+            } finally {
+              setBuyChecking(false);
+            }
+          }}
+          className="flex flex-[1.4] items-center justify-center rounded-2xl bg-gradient-to-r from-black to-purple-600 py-4 text-sm font-semibold text-white shadow-lg transition-all active:scale-95 disabled:opacity-60"
+        >
+          {buyChecking ? "Checking…" : "Buy Now"}
+        </button>
       </div>
 
       {showOnboardingModal && (
