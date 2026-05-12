@@ -233,8 +233,9 @@ function generateSparkline(security) {
 }
 
 const SecuritySparklineCard = ({ security, onClick, onToggleWatchlist, isWatched, sparklinePoints }) => {
+  const hasRealData = sparklinePoints && sparklinePoints.length >= 2;
   const sparkData = React.useMemo(() => {
-    if (sparklinePoints && sparklinePoints.length >= 2) return sparklinePoints;
+    if (hasRealData) return sparklinePoints;
     return generateSparkline(security);
   }, [sparklinePoints, security.symbol, security.changePct]);
   const isPositive = (security.changePct ?? 0) >= 0;
@@ -291,7 +292,7 @@ const SecuritySparklineCard = ({ security, onClick, onToggleWatchlist, isWatched
       </div>
 
       {/* Sparkline chart */}
-      <div className="w-full" style={{ height: 60 }}>
+      <div className="relative w-full" style={{ height: 60 }}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={sparkData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
             <defs>
@@ -308,10 +309,33 @@ const SecuritySparklineCard = ({ security, onClick, onToggleWatchlist, isWatched
               fill={`url(#${gradientId})`}
               dot={false}
               activeDot={false}
-              isAnimationActive={false}
+              isAnimationActive={hasRealData}
+              animationBegin={0}
+              animationDuration={700}
+              animationEasing="ease-out"
             />
           </ComposedChart>
         </ResponsiveContainer>
+
+        {/* Left-to-right shimmer sweep while real price data is still loading */}
+        <AnimatePresence>
+          {!hasRealData && (
+            <motion.div
+              key="chart-shimmer"
+              className="pointer-events-none absolute inset-0"
+              initial={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.4 }}
+            >
+              <motion.div
+                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/35 to-transparent"
+                initial={{ x: "-100%" }}
+                animate={{ x: "100%" }}
+                transition={{ duration: 1.1, ease: "easeInOut", repeat: Infinity, repeatDelay: 0.25 }}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </button>
   );
