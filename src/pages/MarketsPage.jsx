@@ -152,39 +152,32 @@ const CompactSecurityRow = ({ security, onClick }) => {
   );
 };
 
-const CollapsibleSection = ({ title, securities, onOpenStockDetail, onToggleWatchlist, watchlist, sparklineData, startExpanded = false }) => {
+const CollapsibleSection = ({ title, securities, onOpenStockDetail, onToggleWatchlist, watchlist, sparklineData, startExpanded = false, scrollEl }) => {
   const [expanded, setExpanded] = React.useState(startExpanded);
   const hasExpandedRef = React.useRef(startExpanded);
   const sectionRef = React.useRef(null);
 
   React.useEffect(() => {
-    if (hasExpandedRef.current) return;
+    if (hasExpandedRef.current || !scrollEl) return;
 
     const check = () => {
       if (hasExpandedRef.current || !sectionRef.current) return;
-      const scrollRoot = document.querySelector(".app-content");
-      if (!scrollRoot) return;
-      const rootRect = scrollRoot.getBoundingClientRect();
+      const rootRect = scrollEl.getBoundingClientRect();
       const secRect = sectionRef.current.getBoundingClientRect();
-      // Expand when the top of the section enters the bottom 80% of the scroll container
-      if (secRect.top < rootRect.bottom - rootRect.height * 0.15) {
+      // Expand when section top scrolls into the lower 85% of the scroll container
+      if (secRect.top < rootRect.bottom - rootRect.height * 0.1) {
         hasExpandedRef.current = true;
         setExpanded(true);
+        scrollEl.removeEventListener("scroll", check);
       }
     };
 
-    // Check once on mount (handles sections already partially in view)
-    const timer = setTimeout(check, 100);
+    // Check immediately — catches sections already in view on mount
+    check();
+    scrollEl.addEventListener("scroll", check, { passive: true });
 
-    const scrollRoot = document.querySelector(".app-content");
-    if (scrollRoot) scrollRoot.addEventListener("scroll", check, { passive: true });
-
-    return () => {
-      clearTimeout(timer);
-      const root = document.querySelector(".app-content");
-      if (root) root.removeEventListener("scroll", check);
-    };
-  }, []);
+    return () => scrollEl.removeEventListener("scroll", check);
+  }, [scrollEl]);
 
   return (
     <section ref={sectionRef}>
@@ -447,6 +440,13 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const watchedSecurities = useMemo(() => {
     return securities.filter((s) => watchlist.includes(s.symbol));
   }, [securities, watchlist]);
+
+  // Scroll container for CollapsibleSection detection
+  const [scrollEl, setScrollEl] = useState(null);
+  useEffect(() => {
+    const el = document.querySelector(".app-content");
+    if (el) setScrollEl(el);
+  }, []);
 
   // Real price history for sparkline cards — keyed by security id
   const [sparklineData, setSparklineData] = useState({});
@@ -1518,6 +1518,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                     watchlist={watchlist}
                     sparklineData={sparklineData}
                     startExpanded={true}
+                    scrollEl={scrollEl}
                   />
                 )}
 
@@ -1529,6 +1530,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                   watchlist={watchlist}
                   sparklineData={sparklineData}
                   startExpanded={watchedSecurities.length === 0}
+                  scrollEl={scrollEl}
                 />
 
                 <CollapsibleSection
@@ -1538,6 +1540,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                   onToggleWatchlist={toggleWatchlist}
                   watchlist={watchlist}
                   sparklineData={sparklineData}
+                  scrollEl={scrollEl}
                 />
 
                 <CollapsibleSection
@@ -1547,6 +1550,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                   onToggleWatchlist={toggleWatchlist}
                   watchlist={watchlist}
                   sparklineData={sparklineData}
+                  scrollEl={scrollEl}
                 />
 
             {/* All Section */}
