@@ -428,7 +428,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
 
   useEffect(() => {
     if (watchedSecurities.length > 0 && !expandedRef.current.has("watchlist")) {
-      expandedRef.current = new Set([...expandedRef.current, "watchlist"]);
+      // Watchlist is first, so only it starts expanded; largest drops to second and starts collapsed
+      expandedRef.current = new Set(["watchlist"]);
       setExpandedSections(new Set(expandedRef.current));
     }
   }, [watchedSecurities.length]);
