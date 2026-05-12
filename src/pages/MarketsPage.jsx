@@ -447,7 +447,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
     const check = () => {
       // Expand when a section's heading crosses the centre of the viewport;
       // collapse again when it scrolls back below that line.
-      const threshold = window.innerHeight * 0.5;
+      const threshold = window.innerHeight * 0.3;
       let changed = false;
 
       for (const [key, ref] of Object.entries(sectionMap)) {
