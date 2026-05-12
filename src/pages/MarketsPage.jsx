@@ -369,7 +369,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       }
 
       const results = await Promise.allSettled(
-        toFetch.map((s) => getSecurityPrices(s.id, "1M").then((pts) => ({ id: s.id, pts })))
+        toFetch.map((s) => getSecurityPrices(s.id, "3M").then((pts) => ({ id: s.id, pts })))
       );
 
       if (cancelled) return;
