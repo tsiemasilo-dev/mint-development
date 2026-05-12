@@ -1271,10 +1271,13 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
         const json = await res.json().catch(() => ({}));
         throw new Error(json.error || "Failed to remove member");
       }
-      setMembers(prev => prev.filter(m => m.id !== member.id));
+      const remaining = members.filter(m => m.id !== member.id);
+      setMembers(remaining);
       setConfirmRemove(null);
       setRemovePassword("");
       setRemoveError("");
+      // Refresh portfolio so the parent's wallet reflects any refunded child funds
+      fetchPortfolio(remaining);
     } catch (e) {
       console.error("[family] remove", e.message);
       setRemoveError(e?.message || "Failed to remove member.");

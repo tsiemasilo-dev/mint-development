@@ -464,13 +464,97 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "member_id and primary_user_id required" });
     }
     try {
+      // Read the member first so we know if it's a child and what funds to refund
+      const { data: member, error: fetchErr } = await db
+        .from("family_members")
+        .select("id, relationship, available_balance, first_name")
+        .eq("id", member_id)
+        .eq("primary_user_id", primary_user_id)
+        .maybeSingle();
+
+      if (fetchErr) throw fetchErr;
+      if (!member) return res.status(404).json({ error: "Family member not found." });
+
+      let refundedCents = 0;
+
+      // For children, refund the cash balance to the parent's wallet before deletion
+      if (member.relationship === "child") {
+        const childBalanceCents = Number(member.available_balance || 0);
+
+        if (childBalanceCents > 0) {
+          const { data: wallet, error: walletErr } = await db
+            .from("wallets")
+            .select("balance")
+            .eq("user_id", primary_user_id)
+            .maybeSingle();
+          if (walletErr) throw walletErr;
+          if (!wallet) return res.status(404).json({ error: "Parent wallet not found." });
+
+          const parentBalanceCents = Math.round(Number(wallet.balance) * 100);
+          const newParentBalanceRands = (parentBalanceCents + childBalanceCents) / 100;
+
+          const { error: creditErr } = await db
+            .from("wallets")
+            .update({ balance: newParentBalanceRands, updated_at: new Date().toISOString() })
+            .eq("user_id", primary_user_id);
+          if (creditErr) throw creditErr;
+
+          // Zero out the child's balance so the funds aren't double-counted if delete fails later
+          await db
+            .from("family_members")
+            .update({ available_balance: 0 })
+            .eq("id", member_id);
+
+          const refundRef = `CHILD-REFUND-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          try {
+            await db.from("transactions").insert([
+              {
+                user_id: primary_user_id,
+                family_member_id: member_id,
+                type: "transfer_out",
+                direction: "debit",
+                amount: childBalanceCents,
+                description: `Refund from ${member.first_name || "child"}'s account on removal`,
+                store_reference: refundRef,
+                status: "completed",
+              },
+              {
+                user_id: primary_user_id,
+                family_member_id: null,
+                type: "transfer_in",
+                direction: "credit",
+                amount: childBalanceCents,
+                description: `Refund received from ${member.first_name || "child"}'s account on removal`,
+                store_reference: refundRef,
+                status: "completed",
+              },
+            ]);
+          } catch (txErr) {
+            console.error("[family] Refund transaction log failed (funds still moved):", txErr.message);
+          }
+
+          refundedCents = childBalanceCents;
+        }
+
+        // Clean up any child investment rows so the delete doesn't hit FK constraints
+        try {
+          await db
+            .from("stock_holdings_c")
+            .delete()
+            .eq("family_member_id", member_id);
+        } catch (holdErr) {
+          console.warn("[family] stock_holdings_c cleanup warning:", holdErr.message);
+        }
+      }
+
       const { error } = await db
         .from("family_members")
         .delete()
         .eq("id", member_id)
         .eq("primary_user_id", primary_user_id);
       if (error) throw error;
-      return res.json({ success: true });
+
+      return res.json({ success: true, refunded_cents: refundedCents });
     } catch (e) {
       console.error("[family] DELETE error:", e.message);
       return res.status(500).json({ error: e.message });
