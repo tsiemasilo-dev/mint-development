@@ -663,7 +663,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                   window.dispatchEvent(new CustomEvent("navigate-within-app", { detail: { page: "memberPortfolio", member } }))
                 }
               />
-              <p className="text-xl font-bold text-white mt-1 tracking-tight">{fullName}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white mt-1">{fullName}</p>
             </div>
             <button
               className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 backdrop-blur-sm transition hover:bg-white/10"
