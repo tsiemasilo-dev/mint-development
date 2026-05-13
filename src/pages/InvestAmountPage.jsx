@@ -4,6 +4,7 @@ import { formatCurrency } from "../lib/formatCurrency";
 import PdfViewer from "../components/PdfViewer";
 import { supabase } from "../lib/supabase";
 import { useOnboardingStatus } from "../lib/useOnboardingStatus";
+import GiftToggleV2 from "../components/GiftToggleV2";
 
 const BROKER_FEE_RATE = 0.0025;
 const ISIN_FEE_PER_ASSET = 69;
@@ -19,7 +20,7 @@ function firstBillingDate() {
   return d.toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" });
 }
 
-const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod }) => {
+const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWithGiftOpen = false }) => {
   const currentStrategy = strategy || {
     name: "",
     tickers: [],
@@ -38,6 +39,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod }) => {
   const [agreementChecked, setAgreementChecked] = useState(false);
   const [showMandateModal, setShowMandateModal] = useState(false);
   const [feeExpanded, setFeeExpanded] = useState(false);
+  const [giftEnabled, setGiftEnabled] = useState(startWithGiftOpen);
 
   useEffect(() => {
     if (minimumInvestment && minimumInvestment > 0) {
@@ -389,8 +391,17 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod }) => {
           <p className="text-xs text-violet-700">{getInfoText()}</p>
         </div>
 
+        <GiftToggleV2
+          enabled={giftEnabled}
+          onToggle={setGiftEnabled}
+          security={{ id: currentStrategy.id, symbol: currentStrategy.name, name: currentStrategy.name }}
+          assetType="strategy"
+          totalCostCents={Math.round(fees.totalCost * 100)}
+          amountDisplay={formatCurrency(fees.totalCost, currency)}
+        />
+
         {/* Continue Button or Onboarding Block */}
-        {!isLoadingStatus && !isFullyOnboarded ? (
+        {!giftEnabled && !isLoadingStatus && !isFullyOnboarded ? (
           <div className="w-full rounded-2xl border border-rose-200 bg-rose-50 p-4 text-center">
             <h3 className="text-sm font-semibold text-rose-800 mb-2">
               Onboarding Required
@@ -412,7 +423,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod }) => {
               Complete Onboarding
             </button>
           </div>
-        ) : (
+        ) : !giftEnabled && (
           <button
             type="button"
             onClick={handleContinue}

@@ -17,7 +17,7 @@ import {
   Users,
   X,
   LayoutGrid,
-  Newspaper,
+  Gift,
   Target,
   Plus,
   Calendar,
@@ -82,6 +82,7 @@ const HomePage = ({
   onOpenFamily,
   onOpenInsure,
   onSelectMember,
+  onNavigate,
 }) => {
   const { profile, loading } = useProfile();
   const { bankLinked, loading: actionsLoading, refetch: fetchRequiredActions } = useRequiredActions();
@@ -757,7 +758,7 @@ const HomePage = ({
             {[
               { label: "Invest", icon: LayoutGrid, onClick: onOpenStrategies || onOpenInvest },
               { label: "Deposit", icon: ArrowDownToLine, onClick: onOpenDeposit },
-              { label: "News", icon: Newspaper, onClick: () => (onOpenNews ? onOpenNews("news") : (onOpenInvest && onOpenInvest("news"))) },
+              { label: "Gifting", icon: Gift, onClick: () => onNavigate?.("giftStrategies") },
               { label: "Goals", icon: Target, onClick: () => setShowGoalsModal(true) },
             ].map((item, index) => {
               const Icon = item.icon;
@@ -796,7 +797,7 @@ const HomePage = ({
               </p>
               <div className="flex items-center gap-2 text-xs text-slate-500">
                 <span className="flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 text-slate-500 bg-slate-50">
-                  <Newspaper className="h-2.5 w-2.5" />
+                  <Gift className="h-2.5 w-2.5" />
                 </span>
                 <span>Latest updates for your portfolio</span>
               </div>

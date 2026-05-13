@@ -45,6 +45,7 @@ const StockBuyPage = lazy(() => import("./pages/StockBuyPage.jsx"));
 const GiftCodeEntryPage = lazy(() => import("./pages/GiftCodeEntryPage.jsx"));
 const GiftPreviewPage = lazy(() => import("./pages/GiftPreviewPage.jsx"));
 const SentGiftsPageV2 = lazy(() => import("./pages/SentGiftsPageV2.jsx"));
+const GiftStrategyPickerPage = lazy(() => import("./pages/GiftStrategyPickerPage.jsx"));
 const NewsArticlePage = lazy(() => import("./pages/NewsArticlePage.jsx"));
 const ActivityPage = lazy(() => import("./pages/ActivityPage.jsx"));
 const ActionsPage = lazy(() => import("./pages/ActionsPage.jsx"));
@@ -153,6 +154,7 @@ const App = () => {
   );
   const [giftToken, setGiftToken] = useState(initialGiftToken);
   const [giftPreviewData, setGiftPreviewData] = useState(null);
+  const [pageParams, setPageParams] = useState(null);
   const [previousPageName, setPreviousPageName] = useState(null);
   const [authStep, setAuthStep] = useState(isRecoveryMode ? "newPassword" : "email");
   const [isCheckingAuth, setIsCheckingAuth] = useState(!storedSession && !hasError);
@@ -1239,6 +1241,7 @@ const App = () => {
                 onOpenInstantLiquidity={() => navigateTo("instantLiquidity")}
                 onOpenFamily={() => navigateTo("familyDashboard")}
                 onOpenInsure={() => navigateTo("funeralCover")}
+                onNavigate={navigateTo}
               />
             </AppLayout>
           </div>
@@ -2369,6 +2372,51 @@ const App = () => {
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <Suspense fallback={<div className="min-h-screen bg-[#f8f6fa]" />}>
           <SentGiftsPageV2 onBack={goBack} />
+        </Suspense>
+      </SwipeBackWrapper>
+    );
+  }
+
+  if (currentPage === "giftStrategies") {
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <AppLayout
+          activeTab="home"
+          onTabChange={handleTabChange}
+          onWithdraw={handleWithdrawRequest}
+          onShowComingSoon={handleShowComingSoon}
+          modal={null}
+          onCloseModal={() => {}}
+        >
+          <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
+            <GiftStrategyPickerPage
+              onBack={goBack}
+              onNavigate={(page, params) => {
+                if (page === "giftStrategyInvest") {
+                  setPageParams(params);
+                  navigateTo("giftStrategyInvest");
+                } else {
+                  navigateTo(page);
+                }
+              }}
+            />
+          </Suspense>
+        </AppLayout>
+      </SwipeBackWrapper>
+    );
+  }
+
+  if (currentPage === "giftStrategyInvest") {
+    const strategy = pageParams?.strategy;
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
+          <InvestAmountPage
+            strategy={strategy}
+            onBack={goBack}
+            onContinue={() => navigateTo("home")}
+            startWithGiftOpen
+          />
         </Suspense>
       </SwipeBackWrapper>
     );

@@ -1,11 +1,13 @@
 import React, { useState } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ShieldAlert } from "lucide-react";
 
 export default function GiftCodeEntryPage({ onBack, onNavigate }) {
   const [idNumber, setIdNumber] = useState("");
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  // Hard gate state when FICA/mint setup is incomplete
+  const [ficaGate, setFicaGate] = useState(null); // null | { giftPreview, reason }
 
   const canSubmit = idNumber.replace(/\D/g, "").length === 13 && code.replace(/\D/g, "").length === 6;
 
@@ -13,6 +15,7 @@ export default function GiftCodeEntryPage({ onBack, onNavigate }) {
     if (!canSubmit) return;
     setLoading(true);
     setError(null);
+    setFicaGate(null);
     try {
       const res = await fetch("/api/gift/verify-code", {
         method: "POST",
@@ -30,25 +33,25 @@ export default function GiftCodeEntryPage({ onBack, onNavigate }) {
       }
 
       const { registration_status, kyc_done, mint_number_set, gift_preview } = data;
+      const cleanCode = code.replace(/\D/g, "");
+      const cleanId = idNumber.replace(/\D/g, "");
 
       if (registration_status === "not_registered") {
-        onNavigate?.("auth", { pendingGiftCode: code.replace(/\D/g, ""), pendingIdNumber: idNumber.replace(/\D/g, ""), giftPreview: gift_preview });
-        return;
-      }
-      if (!kyc_done) {
-        onNavigate?.("userOnboarding", { pendingGiftCode: code.replace(/\D/g, ""), pendingIdNumber: idNumber.replace(/\D/g, ""), giftPreview: gift_preview });
-        return;
-      }
-      if (!mint_number_set) {
-        onNavigate?.("userOnboarding", { pendingGiftCode: code.replace(/\D/g, ""), pendingIdNumber: idNumber.replace(/\D/g, ""), giftPreview: gift_preview });
+        onNavigate?.("auth", { pendingGiftCode: cleanCode, pendingIdNumber: cleanId, giftPreview: gift_preview });
         return;
       }
 
-      onNavigate?.("giftPreview", {
-        code: code.replace(/\D/g, ""),
-        idNumber: idNumber.replace(/\D/g, ""),
-        giftPreview: gift_preview,
-      });
+      // Hard gate — FICA or mint setup incomplete
+      if (!kyc_done || !mint_number_set) {
+        const reason = !kyc_done
+          ? "Your identity (FICA) verification is not complete. You must verify your identity before you can claim an investment gift."
+          : "Your Mint account setup is not complete. You must finish account setup before you can claim an investment gift.";
+        setFicaGate({ giftPreview: gift_preview, reason, cleanCode, cleanId });
+        setLoading(false);
+        return;
+      }
+
+      onNavigate?.("giftPreview", { code: cleanCode, idNumber: cleanId, giftPreview: gift_preview });
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {
@@ -56,6 +59,69 @@ export default function GiftCodeEntryPage({ onBack, onNavigate }) {
     }
   }
 
+  // ── FICA hard gate screen ─────────────────────────────────────────────────
+  if (ficaGate) {
+    return (
+      <div className="min-h-screen bg-[#f8f6fa] flex flex-col">
+        <div className="bg-white px-4 pt-12 pb-4 flex items-center gap-3 shadow-sm">
+          <button onClick={() => setFicaGate(null)} className="p-2 rounded-xl hover:bg-slate-100 transition-colors">
+            <ArrowLeft size={20} className="text-slate-700" />
+          </button>
+          <h1 className="text-lg font-bold text-slate-800">Verification Required</h1>
+        </div>
+
+        <div className="flex-1 flex items-start justify-center px-5 pt-8">
+          <div className="w-full max-w-sm space-y-5">
+            {/* Gift preview mini-card */}
+            {ficaGate.giftPreview && (
+              <div className="bg-gradient-to-br from-violet-50 to-indigo-50 rounded-3xl p-5 text-center">
+                <div className="text-3xl mb-2">🎁</div>
+                <p className="text-slate-600 text-sm">
+                  <span className="font-semibold text-slate-800">{ficaGate.giftPreview.sender_name || "Someone"}</span> gifted you
+                </p>
+                <p className="text-lg font-extrabold text-slate-900 mt-1">{ficaGate.giftPreview.asset_name}</p>
+              </div>
+            )}
+
+            {/* Hard gate message */}
+            <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-4">
+              <ShieldAlert size={20} className="text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-amber-800 mb-1">Action required before claiming</p>
+                <p className="text-xs text-amber-700 leading-relaxed">{ficaGate.reason}</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-500 text-center leading-relaxed px-4">
+              This is a regulatory requirement. Once your verification is complete, return here with the same code to claim your gift.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => onNavigate?.("userOnboarding", {
+                pendingGiftCode: ficaGate.cleanCode,
+                pendingIdNumber: ficaGate.cleanId,
+                giftPreview: ficaGate.giftPreview,
+              })}
+              className="w-full py-4 rounded-2xl bg-gradient-to-br from-violet-700 to-indigo-800 text-white font-bold text-sm active:scale-95 transition-all"
+            >
+              Complete Verification
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setFicaGate(null)}
+              className="w-full py-3 rounded-2xl border border-slate-200 text-slate-600 font-semibold text-sm"
+            >
+              Back
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Normal entry screen ───────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#f8f6fa] flex flex-col">
       <div className="bg-white px-4 pt-12 pb-4 flex items-center gap-3 shadow-sm">
