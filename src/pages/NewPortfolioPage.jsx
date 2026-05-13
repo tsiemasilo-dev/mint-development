@@ -1833,9 +1833,9 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                                     <div className="flex items-center gap-3">
                                       {stock.isStrategy && stock.topLogos?.length > 0 ? (
                                         <div className="flex-shrink-0 flex items-center">
-                                          <div className="flex -space-x-2 items-center justify-center h-11 bg-gradient-to-br from-violet-50 to-purple-50 rounded-2xl px-2 border border-violet-100/60">
+                                          <div className="flex -space-x-2">
                                             {stock.topLogos.slice(0, 5).map((logo, li) => (
-                                              <img key={li} src={logo} className="w-6 h-6 rounded-full object-cover border-2 border-white shadow-sm" referrerPolicy="no-referrer" crossOrigin="anonymous" />
+                                              <img key={li} src={logo} className="w-7 h-7 rounded-full object-cover border-2 border-white shadow-sm" referrerPolicy="no-referrer" crossOrigin="anonymous" />
                                             ))}
                                           </div>
                                         </div>
