@@ -406,6 +406,11 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
         });
       });
     }
+    // Build symbol → logo lookup from securities list and raw holdings
+    const logoBySymbol = {};
+    (stocksList || []).forEach(s => { if (s.logo) logoBySymbol[s.ticker] = s.logo; });
+    (rawHoldings || []).forEach(h => { if (h.logo_url) logoBySymbol[h.symbol] = h.logo_url; });
+
     strategies.forEach(s => {
       const sym = s.shortName || s.name || "Strategy";
       if (!holdingsMap.has(sym)) {
@@ -413,7 +418,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
         const topLogos = holdingsArr
           .sort((a, b) => (b.weight || 0) - (a.weight || 0))
           .slice(0, 5)
-          .map(h => h.logo_url || h.logo || null)
+          .map(h => h.logo_url || h.logo || logoBySymbol[h.symbol] || logoBySymbol[h.ticker] || null)
           .filter(Boolean);
         const sCv = s.currentValue || s.investedAmount || 0;
         const sIa = s.investedAmount || 0;
