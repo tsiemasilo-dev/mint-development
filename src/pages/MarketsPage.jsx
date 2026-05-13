@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import MaintenanceModal from "../components/MaintenanceModal.jsx";
 import { registerCacheResetCallback } from "../lib/userCacheReset.js";
 import { supabase } from "../lib/supabase.js";
-import { getMarketsSecuritiesWithMetrics } from "../lib/marketData.js";
+import { getMarketsSecuritiesWithMetrics, getSecurityPrices } from "../lib/marketData.js";
 import { getStrategiesWithMetrics, getPublicStrategies, formatChangePct, formatChangeAbs, getChangeColor } from "../lib/strategyData.js";
 import { useProfile } from "../lib/useProfile";
 import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Star } from "lucide-react";
@@ -13,6 +13,7 @@ import FamilyDropdown from "../components/FamilyDropdown";
 import Skeleton from "../components/Skeleton";
 import { ChartContainer } from "../components/ui/line-charts-2";
 import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { motion, AnimatePresence } from "framer-motion";
 import { formatCurrency } from "../lib/formatCurrency";
 import { normalizeSymbol, getHoldingsArray, getHoldingSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot, calculateMinInvestment, calculateMinInvestmentSync, getAdjustedShares } from "../lib/strategyUtils";
 
@@ -122,6 +123,221 @@ const StrategyMiniChart = ({ values }) => {
         </ComposedChart>
       </ResponsiveContainer>
     </ChartContainer>
+  );
+};
+
+// Deterministic hue from ticker symbol so each asset gets its own pastel colour
+function symbolToHue(symbol) {
+  const str = symbol || "XX";
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash * 31) + str.charCodeAt(i)) & 0xffffffff;
+  }
+  return Math.abs(hash) % 360;
+}
+
+const CompactSecurityRow = ({ security, onClick }) => {
+  const isPositive = (security.changePct ?? 0) >= 0;
+  const hue = symbolToHue(security.symbol);
+  const bg = `linear-gradient(135deg, hsl(${hue},18%,98.5%) 0%, hsl(${(hue + 25) % 360},12%,96.5%) 100%)`;
+  const borderColor = `hsl(${hue},15%,92%)`;
+
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-3 w-full rounded-2xl px-3.5 py-2.5 text-left active:scale-[0.97] transition-transform border"
+      style={{ background: bg, borderColor }}
+    >
+      {security.logo_url ? (
+        <img src={security.logo_url} alt={security.symbol} className="h-9 w-9 rounded-full border border-white/70 object-cover flex-shrink-0 shadow-sm" />
+      ) : (
+        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-purple-600 text-[10px] font-bold text-white shadow-sm">
+          {security.symbol?.substring(0, 2) || "—"}
+        </div>
+      )}
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-bold text-slate-900 truncate">{security.symbol}</p>
+        <p className={`text-xs font-semibold ${isPositive ? "text-emerald-600" : "text-red-500"}`}>
+          {isPositive ? "+" : ""}{security.changePct != null ? security.changePct.toFixed(2) : "—"}%
+        </p>
+      </div>
+      <ChevronRight className="h-4 w-4 text-slate-400/70 flex-shrink-0" />
+    </button>
+  );
+};
+
+const CollapsibleSection = ({ title, securities, onOpenStockDetail, onToggleWatchlist, watchlist, sparklineData, isExpanded, sectionRef }) => {
+  return (
+    <section ref={sectionRef}>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">{title}</h2>
+        <ChevronRight className="h-4 w-4 text-slate-300" />
+      </div>
+      <AnimatePresence mode="wait" initial={false}>
+        {isExpanded ? (
+          <motion.div
+            key="expanded"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.32, ease: [0.25, 0.46, 0.45, 0.94] }}
+            className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-4 scrollbar-hide"
+          >
+            {securities.map((security) => (
+              <SecuritySparklineCard
+                key={security.id}
+                security={security}
+                onClick={() => onOpenStockDetail(security)}
+                onToggleWatchlist={onToggleWatchlist}
+                isWatched={watchlist.includes(security.symbol)}
+                sparklinePoints={sparklineData[security.id]}
+              />
+            ))}
+          </motion.div>
+        ) : (
+          <motion.div
+            key="collapsed"
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.18 }}
+            className="grid grid-cols-2 gap-1.5 pb-2"
+          >
+            {securities.slice(0, 4).map((security) => (
+              <CompactSecurityRow
+                key={security.id}
+                security={security}
+                onClick={() => onOpenStockDetail(security)}
+              />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </section>
+  );
+};
+
+// Deterministic sparkline from symbol string so each asset gets a unique curve
+function generateSparkline(security) {
+  const sym = security.symbol || "XX";
+  const seed = sym.split("").reduce((acc, c, i) => acc + c.charCodeAt(0) * (i + 1), 0);
+  const changePct = security.changePct || 0;
+  const points = [];
+  let val = 50;
+  for (let i = 0; i < 14; i++) {
+    const pseudo = ((seed * (i + 7) * 2654435761) >>> 0) % 1000;
+    const noise = (pseudo / 1000 - 0.5) * 6;
+    const trend = changePct * 0.12;
+    val = Math.max(5, Math.min(95, val + noise + trend));
+    points.push(val);
+  }
+  return points.map((p, i) => ({ i, v: p }));
+}
+
+const SecuritySparklineCard = ({ security, onClick, onToggleWatchlist, isWatched, sparklinePoints }) => {
+  const hasRealData = sparklinePoints && sparklinePoints.length >= 2;
+  const sparkData = React.useMemo(() => {
+    if (hasRealData) return sparklinePoints;
+    return generateSparkline(security);
+  }, [sparklinePoints, security.symbol, security.changePct]);
+  const isPositive = (security.changePct ?? 0) >= 0;
+  const gradientId = `sg-${security.id || security.symbol}`;
+
+  return (
+    <button
+      onClick={onClick}
+      className="relative flex-shrink-0 w-44 snap-center rounded-2xl text-left shadow-[0_2px_12px_-2px_rgba(0,0,0,0.08)] border border-[#e8edf8] transition-all active:scale-[0.96] overflow-hidden"
+      style={{ background: "#eef1fa" }}
+    >
+      {/* Header */}
+      <div className="px-3 pt-3 pb-1">
+        <div className="flex items-center gap-1.5 mb-2">
+          {security.logo_url ? (
+            <img
+              src={security.logo_url}
+              alt={security.symbol}
+              className="h-7 w-7 rounded-full border border-slate-100 object-cover flex-shrink-0"
+            />
+          ) : (
+            <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-purple-600 text-[10px] font-bold text-white">
+              {security.symbol?.substring(0, 2) || "—"}
+            </div>
+          )}
+          <span className="flex-1 truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900">{security.symbol}</span>
+          <div
+            onClick={(e) => { e.stopPropagation(); onToggleWatchlist(e, security.symbol); }}
+            className="flex-shrink-0 p-1"
+          >
+            <Star className={`h-5 w-5 ${isWatched ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
+          </div>
+          <ChevronRight className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+        </div>
+
+        {/* Change % */}
+        <p className={`text-base font-bold leading-tight ${isPositive ? "text-emerald-500" : "text-red-500"}`}>
+          {isPositive ? "+" : ""}{security.changePct != null ? security.changePct.toFixed(2) : "—"}%
+        </p>
+
+        {/* Price */}
+        <p className="mt-0.5 leading-none">
+          {security.currentPrice != null ? (
+            <>
+              <span className="text-[10px] font-semibold text-slate-400 tracking-widest align-middle">R</span>
+              <span className="ml-0.5 text-sm font-bold text-slate-700 tracking-tight tabular-nums">
+                {Number(security.currentPrice).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </>
+          ) : (
+            <span className="text-sm text-slate-400">—</span>
+          )}
+        </p>
+      </div>
+
+      {/* Sparkline chart */}
+      <div className="relative w-full" style={{ height: 60 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={sparkData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#2563eb" stopOpacity={0.25} />
+                <stop offset="100%" stopColor="#2563eb" stopOpacity={0.03} />
+              </linearGradient>
+            </defs>
+            <Area
+              type="monotone"
+              dataKey="v"
+              stroke="#2563eb"
+              strokeWidth={2}
+              fill={`url(#${gradientId})`}
+              dot={false}
+              activeDot={false}
+              isAnimationActive={hasRealData}
+              animationBegin={0}
+              animationDuration={700}
+              animationEasing="ease-out"
+            />
+          </ComposedChart>
+        </ResponsiveContainer>
+
+        {/* Left-to-right shimmer sweep while real price data is still loading */}
+        <AnimatePresence>
+          {!hasRealData && (
+            <motion.div
+              key="chart-shimmer"
+              className="pointer-events-none absolute inset-0"
+              initial={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.4 }}
+            >
+              <motion.div
+                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/35 to-transparent"
+                initial={{ x: "-100%" }}
+                animate={{ x: "100%" }}
+                transition={{ duration: 1.1, ease: "easeInOut", repeat: Infinity, repeatDelay: 0.25 }}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </button>
   );
 };
 
@@ -236,6 +452,153 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const watchedSecurities = useMemo(() => {
     return securities.filter((s) => watchlist.includes(s.symbol));
   }, [securities, watchlist]);
+
+  // Section refs for scroll-based expand detection
+  const secRefWatchlist = useRef(null);
+  const secRefLargest   = useRef(null);
+  const secRefDividend  = useRef(null);
+  const secRefGainers   = useRef(null);
+
+  // Mirror state in a ref so the scroll handler avoids stale-closure bugs.
+  const [expandedSections, setExpandedSections] = useState(() => new Set(["largest"]));
+  const expandedRef = useRef(new Set(["largest"]));
+  // Always-current watchlist length — read inside the scroll handler so it
+  // never has a stale view of which sections are pinned.
+  const watchedLengthRef = useRef(watchedSecurities.length);
+  useEffect(() => {
+    watchedLengthRef.current = watchedSecurities.length;
+  }, [watchedSecurities.length]);
+
+  // Set initial expanded / pinned state whenever securities or watchlist changes.
+  useEffect(() => {
+    if (!securities.length) return;
+
+    const wLen = watchedSecurities.length;
+    const hasWatchlist = wLen > 0;
+    const firstKey  = hasWatchlist ? "watchlist" : "largest";
+    const secondKey = hasWatchlist ? "largest"   : "dividend";
+    const firstItems = hasWatchlist ? watchedSecurities : largestCompanies;
+
+    const initial = new Set([firstKey]);
+    if (firstItems.length < 2) initial.add(secondKey);
+
+    expandedRef.current = initial;
+    setExpandedSections(new Set(initial));
+  }, [watchedSecurities.length, securities.length]);
+
+  useEffect(() => {
+    if (!securities.length) return;
+
+    const sectionMap = {
+      watchlist: secRefWatchlist,
+      largest:   secRefLargest,
+      dividend:  secRefDividend,
+      gainers:   secRefGainers,
+    };
+
+    const check = () => {
+      const threshold = window.innerHeight * 0.3;
+
+      // Derive pinned keys fresh on every scroll tick from the live ref.
+      const wLen = watchedLengthRef.current;
+      const hasWatchlist = wLen > 0;
+      const firstKey  = hasWatchlist ? "watchlist" : "largest";
+      const secondKey = hasWatchlist ? "largest"   : "dividend";
+      const firstFew  = wLen < 2; // first section has fewer than 2 assets
+
+      let changed = false;
+
+      for (const [key, ref] of Object.entries(sectionMap)) {
+        if (!ref.current) continue;
+
+        const isPinned = key === firstKey || (firstFew && key === secondKey);
+
+        if (isPinned) {
+          // Pinned sections must always be expanded.
+          if (!expandedRef.current.has(key)) {
+            expandedRef.current = new Set([...expandedRef.current, key]);
+            changed = true;
+          }
+          continue;
+        }
+
+        const { top } = ref.current.getBoundingClientRect();
+        const shouldBeExpanded = top < threshold;
+        const isExpanded = expandedRef.current.has(key);
+
+        if (shouldBeExpanded && !isExpanded) {
+          expandedRef.current = new Set([...expandedRef.current, key]);
+          changed = true;
+        } else if (!shouldBeExpanded && isExpanded) {
+          const next = new Set(expandedRef.current);
+          next.delete(key);
+          expandedRef.current = next;
+          changed = true;
+        }
+      }
+
+      if (changed) setExpandedSections(new Set(expandedRef.current));
+    };
+
+    window.addEventListener("scroll", check, { passive: true });
+    return () => window.removeEventListener("scroll", check);
+  }, [securities.length]);
+
+  // Real price history for sparkline cards — keyed by security id
+  const [sparklineData, setSparklineData] = useState({});
+
+  useEffect(() => {
+    if (!securities.length) return;
+    let cancelled = false;
+
+    const fetchSparklines = async () => {
+      // Collect unique ids from all card sections (up to ~30 securities)
+      const byMarketCap = [...securities]
+        .filter((s) => s.market_cap)
+        .sort((a, b) => b.market_cap - a.market_cap)
+        .slice(0, 10);
+      const byDividend = [...securities]
+        .filter((s) => s.dividend_yield && s.dividend_yield > 0)
+        .sort((a, b) => b.dividend_yield - a.dividend_yield)
+        .slice(0, 10);
+      const byGain = [...securities]
+        .filter((s) => s.changePct != null)
+        .sort((a, b) => (b.changePct || 0) - (a.changePct || 0))
+        .slice(0, 10);
+      const watched = securities.filter((s) => watchlist.includes(s.symbol));
+
+      const seen = new Set();
+      const toFetch = [];
+      for (const s of [...watched, ...byMarketCap, ...byDividend, ...byGain]) {
+        if (s.id && !seen.has(s.id)) { seen.add(s.id); toFetch.push(s); }
+      }
+
+      const results = await Promise.allSettled(
+        toFetch.map((s) => getSecurityPrices(s.id, "1M").then((pts) => ({ id: s.id, pts: pts.slice(-14) })))
+      );
+
+      if (cancelled) return;
+
+      const map = {};
+      for (const r of results) {
+        if (r.status === "fulfilled" && r.value.pts && r.value.pts.length >= 2) {
+          const pts = r.value.pts;
+          const closes = pts.map((p) => p.close).filter((c) => c != null);
+          const min = Math.min(...closes);
+          const max = Math.max(...closes);
+          const range = max - min || 1;
+          map[r.value.id] = pts
+            .filter((p) => p.close != null)
+            .map((p, i) => ({ i, v: ((p.close - min) / range) * 90 + 5 }));
+        }
+      }
+      setSparklineData(map);
+    };
+
+    fetchSparklines();
+    return () => { cancelled = true; };
+  }, [securities.length, watchlist.join(",")]);
+
 
   const holdingsBySymbol = useMemo(() => buildHoldingsBySymbol(holdingsSecurities), [holdingsSecurities]);
   const previewGradientId = useId();
@@ -952,7 +1315,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
     saveMarketsStrategyFilters({ sort: "Recommended", risks: new Set(), minInvestment: null, exposure: new Set(), timeHorizon: new Set(), sectors: new Set() });
   };
 
-  if (profileLoading || loading) {
+  if (profileLoading) {
     return (
       <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)]">
         <div className="rounded-b-[36px] bg-gradient-to-b from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-4 pb-12 pt-12">
@@ -1011,16 +1374,16 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
 
           {/* Toggle between Mint Basket and Markets */}
           {viewMode !== "news" && (
-            <div className="flex gap-2 rounded-2xl bg-white/10 p-1 backdrop-blur-sm">
+            <div className="flex gap-1.5 rounded-2xl bg-black/20 p-1 backdrop-blur-sm ring-1 ring-white/10">
               <button
                 onClick={() => {
                   setViewMode("openstrategies");
                   setActiveChips(buildChipsFromFilters(_savedStrat));
                 }}
-                className={`flex-1 rounded-xl px-3 py-2 text-xs font-semibold transition-all ${
+                className={`flex-1 rounded-xl px-3 py-2.5 text-[10px] font-semibold tracking-[0.18em] uppercase transition-all duration-200 ${
                   viewMode === "openstrategies"
-                    ? "bg-white text-slate-900 shadow-md"
-                    : "text-white/70"
+                    ? "bg-white text-slate-900 shadow-[0_2px_8px_rgba(0,0,0,0.18)]"
+                    : "text-white/60 hover:text-white/85"
                 }`}
               >
                 Mint Basket
@@ -1030,10 +1393,10 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                   setViewMode("invest");
                   setActiveChips(buildInvestChips({ sectors: selectedSectors, exchanges: selectedExchanges }));
                 }}
-                className={`flex-1 rounded-xl px-3 py-2 text-xs font-semibold transition-all ${
+                className={`flex-1 rounded-xl px-3 py-2.5 text-[10px] font-semibold tracking-[0.18em] uppercase transition-all duration-200 ${
                   viewMode === "invest"
-                    ? "bg-white text-slate-900 shadow-md"
-                    : "text-white/70"
+                    ? "bg-white text-slate-900 shadow-[0_2px_8px_rgba(0,0,0,0.18)]"
+                    : "text-white/60 hover:text-white/85"
                 }`}
               >
                 Markets
@@ -1044,13 +1407,13 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
           {viewMode === "invest" && (
             <>
               <div className="relative">
-                <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/50" />
+                <Search className="pointer-events-none absolute left-4 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-white/70" />
                 <input
                   type="text"
                   placeholder="Search by name, symbol, or sector..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full rounded-2xl border border-white/20 bg-white/10 px-12 py-3 text-sm text-white placeholder-white/50 backdrop-blur-sm focus:border-white/40 focus:bg-white/15 focus:outline-none"
+                  className="w-full rounded-2xl border border-white/20 bg-white/10 py-3 pl-10 pr-4 text-sm text-white placeholder-white/50 focus:border-white/40 focus:bg-white/15 focus:outline-none"
                 />
               </div>
             </>
@@ -1059,13 +1422,13 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
           {viewMode === "openstrategies" && (
             <>
               <div className="relative">
-                <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/50" />
+                <Search className="pointer-events-none absolute left-4 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-white/70" />
                 <input
                   type="text"
                   placeholder="Search strategies..."
                   value={strategiesSearchQuery}
                   onChange={(e) => setStrategiesSearchQuery(e.target.value)}
-                  className="w-full rounded-2xl border border-white/20 bg-white/10 px-12 py-3 text-sm text-white placeholder-white/50 backdrop-blur-sm focus:border-white/40 focus:bg-white/15 focus:outline-none"
+                  className="w-full rounded-2xl border border-white/20 bg-white/10 py-3 pl-10 pr-4 text-sm text-white placeholder-white/50 focus:border-white/40 focus:bg-white/15 focus:outline-none"
                 />
               </div>
             </>
@@ -1074,13 +1437,13 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
           {viewMode === "news" && (
             <>
               <div className="relative">
-                <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/50" />
+                <Search className="pointer-events-none absolute left-4 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-white/70" />
                 <input
                   type="text"
                   placeholder="Search news..."
                   value={newsSearchQuery}
                   onChange={(e) => setNewsSearchQuery(e.target.value)}
-                  className="w-full rounded-2xl border border-white/20 bg-white/10 px-12 py-3 text-sm text-white placeholder-white/50 backdrop-blur-sm focus:border-white/40 focus:bg-white/15 focus:outline-none"
+                  className="w-full rounded-2xl border border-white/20 bg-white/10 py-3 pl-10 pr-4 text-sm text-white placeholder-white/50 focus:border-white/40 focus:bg-white/15 focus:outline-none"
                 />
               </div>
             </>
@@ -1198,7 +1561,32 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
 
         {viewMode === "invest" ? (
           <>
-            {/* Filter and Sort Bar */}
+            {/* Inline skeleton cards — only shown on genuine first load when no data yet */}
+            {loading && securities.length === 0 && (
+              <div className="flex flex-col gap-6">
+                {/* Horizontal sparkline card skeleton */}
+                <div>
+                  <Skeleton className="mb-3 h-5 w-36 rounded-lg" />
+                  <div className="flex gap-3 overflow-x-hidden">
+                    {[1, 2, 3].map((i) => (
+                      <Skeleton key={i} className="h-32 w-44 flex-shrink-0 rounded-2xl" />
+                    ))}
+                  </div>
+                </div>
+                {/* List card skeletons */}
+                <div>
+                  <Skeleton className="mb-3 h-5 w-28 rounded-lg" />
+                  <div className="space-y-3">
+                    {[1, 2, 3, 4, 5, 6].map((i) => (
+                      <Skeleton key={i} className="h-20 w-full rounded-3xl" />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Filter bar + sections — hidden while skeleton is showing */}
+            {!(loading && securities.length === 0) && <>
             <div className="flex items-center justify-between gap-3">
               <button
                 onClick={() => {
@@ -1243,246 +1631,56 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
             {!searchQuery && (
               <>
                 {watchedSecurities.length > 0 && (
-                  <section>
-                    <div className="mb-4 flex items-center justify-between">
-                      <h2 className="text-lg font-bold text-slate-900">My Watchlist</h2>
-                      <ChevronRight className="h-5 w-5 text-slate-400" />
-                    </div>
-                    <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-4 scrollbar-hide">
-                      {watchedSecurities.map((security) => (
-                        <button
-                          key={security.id}
-                          onClick={() => onOpenStockDetail(security)}
-                          className="relative flex-shrink-0 w-64 snap-center rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-5 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
-                        >
-                          <div onClick={(e) => toggleWatchlist(e, security.symbol)} className="absolute top-3 right-3 z-10">
-                            <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
-                          </div>
-                          <div className="flex items-start gap-3">
-                            {security.logo_url ? (
-                              <img
-                                src={security.logo_url}
-                                alt={security.symbol}
-                                className="h-12 w-12 rounded-full border border-slate-100 object-cover flex-shrink-0"
-                              />
-                            ) : (
-                              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-purple-600 text-sm font-bold text-white">
-                                {security.symbol?.substring(0, 2) || "—"}
-                              </div>
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <p className="truncate text-sm font-bold text-slate-900">
-                                {security.short_name || security.name}
-                              </p>
-                              <p className="mt-0.5 text-xs text-slate-500">{security.symbol}</p>
-                              <div className="mt-2">
-                                {security.currentPrice != null ? (
-                                  <>
-                                    <p className="text-lg font-bold text-slate-900">
-                                      <span className="text-xs text-slate-400 font-normal">{getDisplayCurrency(security)}</span>{' '}
-                                      {formatPrice(security)}
-                                    </p>
-                                    {security.changePct != null && (
-                                      <p className={`mt-1 text-xs font-semibold ${
-                                        security.changePct >= 0 ? 'text-emerald-600' : 'text-red-600'
-                                      }`}>
-                                        {security.changePct >= 0 ? '+' : ''}{security.changePct.toFixed(2)}%
-                                      </p>
-                                    )}
-                                  </>
-                                ) : (
-                                  <p className="text-xs text-slate-500">No pricing data</p>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </section>
+                  <CollapsibleSection
+                    title="My Watchlist"
+                    securities={watchedSecurities}
+                    onOpenStockDetail={onOpenStockDetail}
+                    onToggleWatchlist={toggleWatchlist}
+                    watchlist={watchlist}
+                    sparklineData={sparklineData}
+                    isExpanded={expandedSections.has("watchlist")}
+                    sectionRef={secRefWatchlist}
+                  />
                 )}
 
-                {/* Largest Companies Section */}
-                <section>
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-bold text-slate-900">Largest companies</h2>
-                <ChevronRight className="h-5 w-5 text-slate-400" />
-              </div>
-              <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-4 scrollbar-hide">
-                {largestCompanies.map((security) => (
-                  <button
-                    key={security.id}
-                    onClick={() => onOpenStockDetail(security)}
-                    className="relative flex-shrink-0 w-64 snap-center rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-5 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
-                  >
-                    <div onClick={(e) => toggleWatchlist(e, security.symbol)} className="absolute top-3 right-3 z-10">
-                      <Star className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
-                    </div>
-                    <div className="flex items-start gap-3">
-                      {security.logo_url ? (
-                        <img
-                          src={security.logo_url}
-                          alt={security.symbol}
-                          className="h-12 w-12 rounded-full border border-slate-100 object-cover flex-shrink-0"
-                        />
-                      ) : (
-                        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-purple-600 text-sm font-bold text-white">
-                          {security.symbol?.substring(0, 2) || "—"}
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="truncate text-sm font-bold text-slate-900">
-                          {security.short_name || security.name}
-                        </p>
-                        <p className="mt-0.5 text-xs text-slate-500">{security.symbol}</p>
-                        <div className="mt-2">
-                          {security.currentPrice != null ? (
-                            <>
-                              <p className="text-lg font-bold text-slate-900">
-                                <span className="text-xs text-slate-400 font-normal">{getDisplayCurrency(security)}</span>{' '}
-                                {formatPrice(security)}
-                              </p>
-                              {security.changePct != null && (
-                                <p className={`mt-1 text-xs font-semibold ${
-                                  security.changePct >= 0 ? 'text-emerald-600' : 'text-red-600'
-                                }`}>
-                                  {security.changePct >= 0 ? '+' : ''}{security.changePct.toFixed(2)}%
-                                </p>
-                              )}
-                            </>
-                          ) : (
-                            <p className="text-xs text-slate-500">No pricing data</p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </section>
+                <CollapsibleSection
+                  title="Largest companies"
+                  securities={largestCompanies}
+                  onOpenStockDetail={onOpenStockDetail}
+                  onToggleWatchlist={toggleWatchlist}
+                  watchlist={watchlist}
+                  sparklineData={sparklineData}
+                  isExpanded={expandedSections.has("largest")}
+                  sectionRef={secRefLargest}
+                />
 
-            {/* Highest Dividend Yield Section */}
-            <section>
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-bold text-slate-900">Highest dividend yield</h2>
-                <ChevronRight className="h-5 w-5 text-slate-400" />
-              </div>
-              <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-4 scrollbar-hide">
-                {highestDividendYield.map((security) => (
-                  <button
-                    key={security.id}
-                    onClick={() => onOpenStockDetail(security)}
-                    className="relative flex-shrink-0 w-64 snap-center rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-5 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
-                  >
-                    <div onClick={(e) => toggleWatchlist(e, security.symbol)} className="absolute top-3 right-3 z-10">
-                      <Star className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
-                    </div>
-                    <div className="flex items-start gap-3">
-                      {security.logo_url ? (
-                        <img
-                          src={security.logo_url}
-                          alt={security.symbol}
-                          className="h-12 w-12 rounded-full border border-slate-100 object-cover flex-shrink-0"
-                        />
-                      ) : (
-                        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 text-sm font-bold text-white">
-                          {security.symbol?.substring(0, 2) || "—"}
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="truncate text-sm font-bold text-slate-900">
-                          {security.short_name || security.name}
-                        </p>
-                        <p className="mt-0.5 text-xs text-slate-500">{security.symbol}</p>
-                        <div className="mt-2">
-                          {security.currentPrice != null ? (
-                            <div className="flex items-baseline gap-2">
-                              <p className="text-lg font-bold text-slate-900">
-                                <span className="text-xs text-slate-400 font-normal">{getDisplayCurrency(security)}</span>{' '}
-                                {formatPrice(security)}
-                              </p>
-                              {security.changePct != null && (
-                                <span className={`text-xs font-semibold ${
-                                  security.changePct >= 0 ? 'text-emerald-600' : 'text-red-600'
-                                }`}>
-                                  {security.changePct >= 0 ? '+' : ''}{security.changePct.toFixed(2)}%
-                                </span>
-                              )}
-                            </div>
-                          ) : (
-                            <p className="text-sm text-slate-400">—</p>
-                          )}
-                        </div>
-                        <div className="mt-2 flex items-center gap-2">
-                          <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-700">
-                            {Number(security.dividend_yield).toFixed(2)}% yield
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </section>
+                <CollapsibleSection
+                  title="Highest dividend yield"
+                  securities={highestDividendYield}
+                  onOpenStockDetail={onOpenStockDetail}
+                  onToggleWatchlist={toggleWatchlist}
+                  watchlist={watchlist}
+                  sparklineData={sparklineData}
+                  isExpanded={expandedSections.has("dividend")}
+                  sectionRef={secRefDividend}
+                />
 
-            {/* Gainers Section */}
-            <section>
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-bold text-slate-900">Gainers</h2>
-                <ChevronRight className="h-5 w-5 text-slate-400" />
-              </div>
-              <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-4 scrollbar-hide">
-                {gainers.map((security) => (
-                  <button
-                    key={security.id}
-                    onClick={() => onOpenStockDetail(security)}
-                    className="relative flex-shrink-0 w-64 snap-center rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-5 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
-                  >
-                    <div onClick={(e) => toggleWatchlist(e, security.symbol)} className="absolute top-3 right-3 z-10">
-                      <Star className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
-                    </div>
-                    <div className="flex items-start gap-3">
-                      {security.logo_url ? (
-                        <img
-                          src={security.logo_url}
-                          alt={security.symbol}
-                          className="h-12 w-12 rounded-full border border-slate-100 object-cover flex-shrink-0"
-                        />
-                      ) : (
-                        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-blue-600 text-sm font-bold text-white">
-                          {security.symbol?.substring(0, 2) || "—"}
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="truncate text-sm font-bold text-slate-900">
-                          {security.short_name || security.name}
-                        </p>
-                        <p className="mt-0.5 text-xs text-slate-500">{security.symbol}</p>
-                        <div className="mt-2">
-                          {security.currentPrice != null ? (
-                            <p className="text-lg font-bold text-slate-900">
-                              <span className="text-xs text-slate-400 font-normal">{getDisplayCurrency(security)}</span>{' '}
-                              {formatPrice(security)}
-                            </p>
-                          ) : (
-                            <p className="text-xs text-slate-500">No pricing data</p>
-                          )}
-                        </div>
-                        <p className={`mt-1 text-xs font-semibold ${security.changePct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                          {security.changePct >= 0 ? '+' : ''}{security.changePct?.toFixed(2)}%
-                        </p>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </section>
+                <CollapsibleSection
+                  title="Gainers"
+                  securities={gainers}
+                  onOpenStockDetail={onOpenStockDetail}
+                  onToggleWatchlist={toggleWatchlist}
+                  watchlist={watchlist}
+                  sparklineData={sparklineData}
+                  isExpanded={expandedSections.has("gainers")}
+                  sectionRef={secRefGainers}
+                />
 
             {/* All Section */}
             <section>
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-bold text-slate-900">All</h2>
-                <ChevronRight className="h-5 w-5 text-slate-400" />
+                <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">All</h2>
+                <ChevronRight className="h-4 w-4 text-slate-300" />
               </div>
               <div className="space-y-3">
                 {filteredSecurities.map((security) => (
@@ -1507,7 +1705,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
-                            <p className="truncate text-sm font-semibold text-slate-900">
+                            <p className="truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900">
                               {security.short_name || security.name}
                             </p>
                             <p className="text-xs text-slate-500">
@@ -1565,11 +1763,12 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
             </section>
               </>
             )}
+            </>}
 
             {/* All Securities List */}
             {searchQuery && (
               <section>
-                <h2 className="mb-4 text-lg font-bold text-slate-900">Search results</h2>
+                <h2 className="mb-4 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Search results</h2>
                 {filteredSecurities.length === 0 ? (
                   <div className="rounded-3xl bg-white px-6 py-12 text-center shadow-md">
                     <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100">
@@ -1681,8 +1880,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
               return (
                 <section key={sector}>
                   <div className="mb-4 flex items-center justify-between">
-                    <h2 className="text-lg font-bold text-slate-900">{sector === 'General' ? 'Child Friendly' : sector}</h2>
-                    <ChevronRight className="h-5 w-5 text-slate-400" />
+                    <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">{sector === 'General' ? 'Child Friendly' : sector}</h2>
+                    <ChevronRight className="h-4 w-4 text-slate-300" />
                   </div>
                   <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 scrollbar-hide">
                     {sectorStrategies.map((strategy) => {
@@ -1717,7 +1916,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                         <div className="flex items-start gap-3">
                           <div className="flex-1 flex items-start justify-between gap-4">
                             <div className="text-left space-y-1">
-                              <p className="text-sm font-semibold text-slate-900">{displayName}</p>
+                              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900">{displayName}</p>
                               <div>
                                 <p className="text-xs text-slate-600 line-clamp-1">
                                   {strategy.risk_level || 'Balanced'} {strategy.objective && `• ${strategy.objective}`}

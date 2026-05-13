@@ -1,12 +1,21 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { ArrowLeft, TrendingUp, TrendingDown, Star, Check } from "lucide-react";
-import { getSecurityBySymbol, getSecurityPrices, normalizePriceSeries } from "../lib/marketData.js";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import { ArrowLeft, Star, Check, ChevronDown, ChevronUp, X } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { getSecurityBySymbol, getSecurityPrices } from "../lib/marketData.js";
 import { supabase } from "../lib/supabase.js";
 import { useProfile } from "../lib/useProfile";
-import { checkOnboardingComplete } from "../lib/checkOnboardingComplete";
 import { useOnboardingStatus } from "../lib/useOnboardingStatus";
+import GoalLinkModal from "../components/GoalLinkModal.jsx";
 
-const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavigateToOnboarding }) => {
+const BROKER_FEE_RATE = 0.0025;
+const ISIN_FEE_PER_ASSET = 69;
+const TRANSACTION_FEE_RATE = 0.038;
+const CASH_BUFFER_RATE = 0.08;
+const MIN_INVESTMENT = 1000;
+
+const fmt = (val, cur = "R") => `${cur} ${Number(val).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavigateToOnboarding, onProceedToPayment }) => {
   const { onboardingComplete, loading: onboardingLoading } = useOnboardingStatus();
   const { profile } = useProfile();
   const [selectedPeriod, setSelectedPeriod] = useState("YTD");
@@ -17,6 +26,13 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
   const [loading, setLoading] = useState(true);
   const [watchlist, setWatchlist] = useState([]);
   const [watchlistAnimating, setWatchlistAnimating] = useState(false);
+  const [buttonsVisible, setButtonsVisible] = useState(false);
+  // Buy sheet + goal modal state
+  const [showBuySheet, setShowBuySheet] = useState(false);
+  const [buyShares, setBuyShares] = useState(1);
+  const [buyFeeExpanded, setBuyFeeExpanded] = useState(false);
+  const [showGoalModal, setShowGoalModal] = useState(false);
+  const [pendingCheckout, setPendingCheckout] = useState(null);
   const periods = ["1W", "1M", "3M", "6M", "YTD", "1Y"];
 
   useEffect(() => {
@@ -24,6 +40,18 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
       setWatchlist(profile.watchlist);
     }
   }, [profile]);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setButtonsVisible((prev) => {
+        if (!prev && window.scrollY > 520) return true;
+        if (prev && window.scrollY < 380) return false;
+        return prev;
+      });
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   const isWatched = useMemo(() => {
     return watchlist.includes(initialSecurity?.symbol);
@@ -206,8 +234,54 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
+  // ── Buy sheet fee calculations ──────────────────────────────────────────────
+  const { displayCurrency, priceValue } = useMemo(() => {
+    const currency = displaySecurity?.currency || "R";
+    const normalized = currency.toUpperCase() === "ZAC" ? "R" : currency;
+    const price = Number(displaySecurity?.currentPrice ?? 0);
+    const normPrice = currency.toUpperCase() === "ZAC" ? price / 100 : price;
+    return { displayCurrency: normalized, priceValue: Number.isFinite(normPrice) ? normPrice : 0 };
+  }, [displaySecurity]);
+
+  const minShares = useMemo(() => {
+    if (priceValue <= 0) return 1;
+    return Math.ceil(MIN_INVESTMENT / priceValue);
+  }, [priceValue]);
+
+  const validBuyShares = Number.isFinite(buyShares) && buyShares > 0 ? buyShares : 0;
+  const buyTotalAmount = validBuyShares * priceValue;
+  const buyIsInvalid = !Number.isFinite(buyShares) || buyShares <= 0 || buyShares < minShares;
+
+  const buyFees = useMemo(() => {
+    const buffered = buyTotalAmount * (1 + CASH_BUFFER_RATE);
+    const broker = buffered * BROKER_FEE_RATE;
+    const isin = ISIN_FEE_PER_ASSET * (validBuyShares > 0 ? 1 : 0);
+    const txn = buffered * TRANSACTION_FEE_RATE;
+    return { broker, isin, txn, total: buffered + broker + isin + txn };
+  }, [buyTotalAmount, validBuyShares]);
+
+  const handleOpenBuySheet = () => {
+    if (onboardingLoading) return;
+    if (!onboardingComplete) { setShowOnboardingModal(true); return; }
+    setBuyShares(minShares);
+    setBuyFeeExpanded(false);
+    setShowBuySheet(true);
+  };
+
+  const handleBuySheetInvest = () => {
+    if (buyIsInvalid) return;
+    setPendingCheckout({
+      security: displaySecurity,
+      amount: buyFees.total,
+      baseAmount: buyTotalAmount,
+      shareCount: validBuyShares,
+    });
+    setShowBuySheet(false);
+    setTimeout(() => setShowGoalModal(true), 320);
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)] text-slate-900">
+    <div className="min-h-screen bg-slate-50 text-slate-900 pb-[calc(5rem+env(safe-area-inset-bottom))]">
       {/* Header */}
       <div className="rounded-b-[36px] bg-gradient-to-b from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-4 pb-8 pt-12 text-white">
         <div className="mx-auto w-full max-w-sm md:max-w-md">
@@ -428,49 +502,52 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
         </section>
 
         {/* Key Stats */}
-        <section className="mt-8">
-          <h3 className="text-sm font-semibold text-slate-700">Key Statistics</h3>
-          <div className="mt-4 grid grid-cols-2 gap-4">
-            {security.pe && (
-              <div className="rounded-2xl bg-slate-50 p-4">
-                <p className="text-xs text-slate-500">P/E Ratio</p>
-                <p className="mt-2 text-lg font-semibold text-slate-900">{Number(security.pe).toFixed(2)}</p>
-              </div>
-            )}
-            {security.eps && (
-              <div className="rounded-2xl bg-slate-50 p-4">
-                <p className="text-xs text-slate-500">EPS</p>
-                <p className="mt-2 text-lg font-semibold text-slate-900">{Number(security.eps).toFixed(2)}</p>
-              </div>
-            )}
-            {security.dividend_yield && (
-              <div className="rounded-2xl bg-slate-50 p-4">
-                <p className="text-xs text-slate-500">Dividend Yield</p>
-                <p className="mt-2 text-lg font-semibold text-emerald-600">{Number(security.dividend_yield).toFixed(2)}%</p>
-              </div>
-            )}
-            {security.beta && (
-              <div className="rounded-2xl bg-slate-50 p-4">
-                <p className="text-xs text-slate-500">Beta</p>
-                <p className="mt-2 text-lg font-semibold text-slate-900">{Number(security.beta).toFixed(2)}</p>
-              </div>
-            )}
-          </div>
-        </section>
+        {(security.pe || security.eps || security.dividend_yield || security.beta) && (
+          <section className="mt-8">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Key Statistics</p>
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              {security.pe && (
+                <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400">P/E Ratio</p>
+                  <p className="mt-2.5 text-2xl font-bold tracking-tight text-slate-900">{Number(security.pe).toFixed(2)}</p>
+                </div>
+              )}
+              {security.eps && (
+                <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400">EPS</p>
+                  <p className="mt-2.5 text-2xl font-bold tracking-tight text-slate-900">{Number(security.eps).toFixed(2)}</p>
+                </div>
+              )}
+              {security.dividend_yield && (
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4 shadow-sm">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-emerald-600/70">Dividend Yield</p>
+                  <p className="mt-2.5 text-2xl font-bold tracking-tight text-emerald-600">{Number(security.dividend_yield).toFixed(2)}%</p>
+                </div>
+              )}
+              {security.beta && (
+                <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Beta</p>
+                  <p className="mt-2.5 text-2xl font-bold tracking-tight text-slate-900">{Number(security.beta).toFixed(2)}</p>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
         {/* About */}
         {security.description && (
           <section className="mt-8">
-            <h3 className="text-sm font-semibold text-slate-700">About</h3>
-            <p className="mt-3 text-sm leading-relaxed text-slate-600">{security.description}</p>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">About</p>
+            <p className="mt-3 text-[15px] font-normal leading-7 text-slate-600">{security.description}</p>
             {security.website && (
               <a
                 href={security.website}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-3 inline-block text-sm font-medium text-purple-600 hover:text-purple-700"
+                className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-purple-600"
               >
-                Visit website →
+                Visit website
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17L17 7M7 7h10v10"/></svg>
               </a>
             )}
           </section>
@@ -479,15 +556,15 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
         {/* Sector & Industry */}
         {(security.sector || security.industry) && (
           <section className="mt-8">
-            <h3 className="text-sm font-semibold text-slate-700">Classification</h3>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Classification</p>
             <div className="mt-3 flex flex-wrap gap-2">
               {security.sector && (
-                <span className="rounded-full bg-purple-100 px-3 py-1.5 text-xs font-medium text-purple-700">
+                <span className="rounded-full border border-purple-200 bg-purple-50 px-3.5 py-1.5 text-xs font-semibold text-purple-700">
                   {security.sector}
                 </span>
               )}
               {security.industry && (
-                <span className="rounded-full bg-blue-100 px-3 py-1.5 text-xs font-medium text-blue-700">
+                <span className="rounded-full border border-blue-200 bg-blue-50 px-3.5 py-1.5 text-xs font-semibold text-blue-700">
                   {security.industry}
                 </span>
               )}
@@ -495,55 +572,192 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
           </section>
         )}
 
-        {/* Action Buttons */}
-        <div className="mt-8 space-y-3">
-          <div className="grid grid-cols-1 gap-3">
-            <button
-              type="button"
-              disabled={buyChecking}
-              onClick={async () => {
-                setBuyChecking(true);
-                try {
-                if (onboardingLoading) return;
-                if (!onboardingComplete) {
-                  setShowOnboardingModal(true);
-                  return;
-                }
-                  onOpenBuy?.();
-                } finally {
-                  setBuyChecking(false);
-                }
-              }}
-              className="rounded-2xl bg-gradient-to-r from-black to-purple-600 py-4 font-semibold text-white shadow-lg transition-all active:scale-95 disabled:opacity-60"
-            >
-              {buyChecking ? "Checking…" : "Buy"}
-            </button>
-          </div>
-
-          <button
-            onClick={toggleWatchlist}
-            className={`w-full relative overflow-hidden rounded-2xl border-2 py-3.5 font-semibold transition-all duration-300 active:scale-95 ${
-              isWatched
-                ? "border-yellow-400 bg-yellow-50 text-yellow-700"
-                : "border-slate-200 bg-white text-slate-900"
-            } ${watchlistAnimating ? "scale-95" : ""}`}
-          >
-            <span className={`flex items-center justify-center gap-2 transition-all duration-300 ${watchlistAnimating ? "scale-110" : "scale-100"}`}>
-              {isWatched ? (
-                <>
-                  <Star className={`h-5 w-5 fill-yellow-400 text-yellow-400 ${watchlistAnimating ? "animate-[spin_0.4s_ease-out]" : ""}`} />
-                  Watchlisted
-                </>
-              ) : (
-                <>
-                  <Star className="h-5 w-5" />
-                  Add to Watchlist
-                </>
-              )}
-            </span>
-          </button>
-        </div>
       </div>
+
+      {/* Sticky Action Bar */}
+      <div
+        className="fixed bottom-0 left-0 right-0 z-50 flex gap-3 px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-2 transition-all duration-300 ease-out"
+        style={{
+          transform: buttonsVisible ? "translateY(0)" : "translateY(calc(100% + 2rem))",
+          opacity: buttonsVisible ? 1 : 0,
+          pointerEvents: buttonsVisible ? "auto" : "none",
+        }}
+      >
+        {/* Watchlist — compact squircle */}
+        <button
+          onClick={toggleWatchlist}
+          className={`relative flex h-[68px] w-[100px] flex-shrink-0 flex-col items-center justify-center gap-1.5 rounded-[22px] text-[10px] font-semibold uppercase tracking-widest shadow-[0_6px_24px_rgba(0,0,0,0.10)] ring-1 transition-all duration-300 active:scale-95 ${
+            isWatched
+              ? "bg-amber-50 text-amber-700 ring-amber-200/80"
+              : "bg-white/95 text-slate-500 ring-slate-200/70"
+          } ${watchlistAnimating ? "scale-95" : ""}`}
+          style={{ backdropFilter: "blur(14px)" }}
+        >
+          <span className={`transition-transform duration-300 ${watchlistAnimating ? "scale-125" : "scale-100"}`}>
+            {isWatched ? (
+              <Star className={`h-6 w-6 fill-amber-400 text-amber-400 ${watchlistAnimating ? "animate-[spin_0.4s_ease-out]" : ""}`} />
+            ) : (
+              <Star className="h-6 w-6 text-slate-400" />
+            )}
+          </span>
+          <span>{isWatched ? "Saved" : "Watchlist"}</span>
+        </button>
+
+        {/* Invest — dominant elongated pill */}
+        <button
+          type="button"
+          onClick={handleOpenBuySheet}
+          className="relative flex h-[68px] flex-1 items-center justify-center overflow-hidden rounded-full bg-gradient-to-r from-[#0a0a0a] via-[#2d0f6b] to-[#7c3aed] text-[15px] font-bold tracking-wide text-white shadow-[0_10px_40px_rgba(109,40,217,0.50)] transition-all active:scale-[0.97]"
+        >
+          <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
+          Invest
+        </button>
+      </div>
+
+      {/* ── Buy Sheet Modal ─────────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {showBuySheet && (
+          <motion.div
+            key="buy-sheet-overlay"
+            className="fixed inset-0 z-[9000] flex items-end justify-center bg-black/50 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={(e) => { if (e.target === e.currentTarget) setShowBuySheet(false); }}
+          >
+            <motion.div
+              className="w-full max-w-md rounded-t-3xl bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl"
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+                <div className="flex items-center gap-3">
+                  {displaySecurity?.logo_url ? (
+                    <img src={displaySecurity.logo_url} alt={displaySecurity.symbol} className="h-8 w-8 rounded-full border border-slate-100 object-cover" />
+                  ) : (
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-100 text-xs font-bold text-violet-700">
+                      {displaySecurity?.symbol?.substring(0, 2)}
+                    </div>
+                  )}
+                  <h2 className="text-base font-semibold text-slate-900">Invest in {displaySecurity?.symbol}</h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowBuySheet(false)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="max-h-[75vh] overflow-y-auto px-5 py-5 space-y-4">
+                {/* Price per share */}
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Price per share</p>
+                  <p className="mt-2 text-3xl font-bold text-slate-900">{displayCurrency}{priceValue.toFixed(2)}</p>
+                </div>
+
+                {/* Shares input */}
+                <div>
+                  <label className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Number of shares</label>
+                  <input
+                    type="number"
+                    min={minShares}
+                    step="1"
+                    value={buyShares}
+                    onChange={(e) => setBuyShares(Number(e.target.value))}
+                    className={`mt-2 w-full rounded-2xl border bg-white px-4 py-3.5 text-base text-slate-800 shadow-sm outline-none focus:border-violet-400 ${buyIsInvalid ? "border-red-300" : "border-slate-200"}`}
+                  />
+                  {buyIsInvalid && (
+                    <p className="mt-1.5 text-xs text-red-500">
+                      Minimum {minShares} share{minShares !== 1 ? "s" : ""} required ({displayCurrency}{MIN_INVESTMENT.toLocaleString()} minimum)
+                    </p>
+                  )}
+                </div>
+
+                {/* Investment amount */}
+                <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3.5 shadow-sm">
+                  <span className="text-sm text-slate-600">Investment Amount</span>
+                  <span className="font-semibold text-slate-900">{fmt(buyTotalAmount, displayCurrency)}</span>
+                </div>
+
+                {/* Fee breakdown */}
+                <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => setBuyFeeExpanded(!buyFeeExpanded)}
+                    className="flex w-full items-center justify-between px-4 py-3"
+                  >
+                    <span className="text-xs font-semibold text-slate-600">Fee Breakdown</span>
+                    {buyFeeExpanded ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+                  </button>
+                  <AnimatePresence>
+                    {buyFeeExpanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="space-y-2 px-4 pb-3">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs text-slate-500">Broker Fee (0.25%)</p>
+                            <p className="text-xs font-semibold text-slate-900">{fmt(buyFees.broker, displayCurrency)}</p>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs text-slate-500">Custody Fee</p>
+                            <p className="text-xs font-semibold text-slate-900">{fmt(buyFees.isin, displayCurrency)}</p>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs text-slate-500">Transaction Fee (3.8%)</p>
+                            <p className="text-xs font-semibold text-slate-900">{fmt(buyFees.txn, displayCurrency)}</p>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                  <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50 px-4 py-3">
+                    <p className="text-xs font-semibold text-slate-700">Total Cost</p>
+                    <p className="text-sm font-bold text-slate-900">{fmt(buyFees.total, displayCurrency)}</p>
+                  </div>
+                </div>
+
+                {/* Invest button */}
+                <button
+                  type="button"
+                  disabled={buyIsInvalid}
+                  onClick={handleBuySheetInvest}
+                  className={`w-full rounded-2xl py-4 text-sm font-bold uppercase tracking-[0.18em] text-white shadow-lg transition-all active:scale-95 ${
+                    buyIsInvalid
+                      ? "cursor-not-allowed bg-slate-300"
+                      : "bg-gradient-to-r from-[#0a0a0a] via-[#2d0f6b] to-[#7c3aed] shadow-[0_8px_24px_rgba(109,40,217,0.40)]"
+                  }`}
+                >
+                  Invest
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Goal Link Modal ──────────────────────────────────────────────────── */}
+      <GoalLinkModal
+        isOpen={showGoalModal}
+        onClose={() => setShowGoalModal(false)}
+        onConfirm={(goalId) => {
+          setShowGoalModal(false);
+          if (onProceedToPayment && pendingCheckout) {
+            onProceedToPayment({ ...pendingCheckout, goalId });
+          }
+        }}
+        investmentAmount={pendingCheckout?.baseAmount}
+        assetName={pendingCheckout?.security?.name || pendingCheckout?.security?.symbol}
+      />
 
       {showOnboardingModal && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowOnboardingModal(false)}>

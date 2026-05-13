@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback, useMemo, lazy, Suspense, startTransition } from "react";
 import { supabase } from "./lib/supabase.js";
+import { getMarketsSecuritiesWithMetrics } from "./lib/marketData.js";
 import { setCachedSession, clearSessionCache } from "./lib/sessionCache.js";
 import { clearAllUserCaches } from "./lib/userCacheReset.js";
 import { App as CapacitorApp } from '@capacitor/app';
@@ -657,6 +658,7 @@ const App = () => {
 
   // Prefetch lazily-loaded chunks that users commonly navigate to, so the first
   // tap feels instant rather than waiting for the JS chunk to download.
+  // Also pre-warms the markets securities cache so the Markets tab feels instant.
   useEffect(() => {
     if (!isAuthenticated) return;
     const prefetch = () => {
@@ -665,6 +667,8 @@ const App = () => {
       import("./pages/InvestPage.jsx");
       import("./pages/PaymentPage.jsx");
       import("./pages/PaymentSuccessPage.jsx");
+      // Fire-and-forget: warm the markets data cache before the user navigates there
+      getMarketsSecuritiesWithMetrics().catch(() => {});
     };
     const schedule = window.requestIdleCallback
       ? () => window.requestIdleCallback(prefetch, { timeout: 3000 })
@@ -1476,6 +1480,82 @@ const App = () => {
           onBack={goBack}
           onOpenBuy={() => navigateTo("stockBuy")}
           onNavigateToOnboarding={() => navigateTo("identityCheck")}
+          onProceedToPayment={({ security, amount, baseAmount, shareCount, goalId }) => {
+            setStockCheckout({ security, amount, baseAmount: baseAmount || amount, shareCount });
+            setSelectedGoalId(goalId || null);
+            selectedGoalIdRef.current = goalId || null;
+            goalInvestAmountRef.current = baseAmount || amount;
+            pendingPaymentTypeRef.current = "stock";
+            setShowPaymentMethodModal(true);
+          }}
+        />
+        <PaymentMethodModal
+          isOpen={showPaymentMethodModal}
+          onClose={() => setShowPaymentMethodModal(false)}
+          amount={stockCheckout.amount}
+          strategyName={stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock"}
+          onSelectPaystack={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("paystack"); navigateTo("stockPayment"); }}
+          onSelectWallet={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("wallet"); navigateTo("stockPayment"); }}
+          onSelectOzow={async () => {
+            try {
+              const { data: { user } } = await supabase.auth.getUser();
+              const baseUrl = window.location.origin;
+              const resp = await fetch("/api/ozow/initiate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  amount: stockCheckout.amount,
+                  strategyName: stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock",
+                  strategyId: stockCheckout.security?.id || null,
+                  userId: user?.id || null,
+                  userEmail: user?.email || null,
+                  successUrl: `${baseUrl}/?ozow=success`,
+                  cancelUrl: `${baseUrl}/?ozow=cancel`,
+                  errorUrl: `${baseUrl}/?ozow=error`,
+                }),
+              });
+              const data = await resp.json();
+              if (data.success && data.action_url) {
+                const form = document.createElement("form");
+                form.method = "POST";
+                form.action = data.action_url;
+                Object.entries(data).forEach(([key, value]) => {
+                  if (["success", "action_url"].includes(key)) return;
+                  const input = document.createElement("input");
+                  input.type = "hidden"; input.name = key; input.value = value;
+                  form.appendChild(input);
+                });
+                document.body.appendChild(form);
+                form.submit();
+                document.body.removeChild(form);
+              } else {
+                alert(data.error || "Failed to initiate Ozow payment.");
+              }
+            } catch (err) { alert("Could not connect to Ozow. Please try another payment method."); }
+          }}
+          onEFTConfirm={async () => {
+            setShowPaymentMethodModal(false);
+            try {
+              const { data: { session } } = await supabase.auth.getSession();
+              const token = session?.access_token;
+              const headers = { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+              await fetch("/api/eft-deposit", {
+                method: "POST", headers,
+                body: JSON.stringify({
+                  amount: stockCheckout.amount,
+                  baseAmount: stockCheckout.baseAmount || stockCheckout.amount,
+                  reference: `EFT-${Date.now()}`,
+                  securityId: stockCheckout.security?.id,
+                  symbol: stockCheckout.security?.symbol || "",
+                  name: stockCheckout.security?.name || "",
+                  ...(stockCheckout.shareCount ? { shareCount: Number(stockCheckout.shareCount) } : {}),
+                }),
+              });
+            } catch (e) { console.error("EFT record error:", e); }
+            navigationHistory.current = [];
+            setPreviousPageName(null);
+            setCurrentPage("home");
+          }}
         />
       </SwipeBackWrapper>
     );

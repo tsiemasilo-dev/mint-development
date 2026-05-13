@@ -24,7 +24,7 @@ const TransactionHistorySection = ({ items, onViewAll }) => {
   return (
     <section className="rounded-3xl bg-white px-5 py-5 shadow-md">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-semibold text-slate-900">Transaction history</h2>
+        <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900">Transaction history</h2>
         <button
           type="button"
           onClick={onViewAll}

@@ -24,7 +24,7 @@ const NavigationPill = ({ activeTab = "credit", onTabChange, className = "", the
               disabled={tab.disabled}
               onClick={() => !tab.disabled && handleTabClick(tab.id)}
               className={`
-                relative rounded-full px-4 py-1.5 text-xs font-semibold transition-colors duration-300
+                relative rounded-full px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] transition-colors duration-300
                 ${isActive ? (isLight ? "text-white" : "text-slate-900") : (isLight ? "text-slate-500" : "text-white/70")}
                 ${tab.disabled ? (isLight ? "text-slate-300 cursor-default" : "text-white/30 cursor-default") : (!isActive ? (isLight ? "hover:text-slate-900" : "hover:text-white") : "")}
                 outline-none tap-highlight-transparent

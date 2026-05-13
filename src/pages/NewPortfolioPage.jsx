@@ -406,14 +406,19 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
         });
       });
     }
+    // Build symbol → logo lookup from securities list and raw holdings
+    const logoBySymbol = {};
+    (stocksList || []).forEach(s => { if (s.logo) logoBySymbol[s.ticker] = s.logo; });
+    (rawHoldings || []).forEach(h => { if (h.logo_url) logoBySymbol[h.symbol] = h.logo_url; });
+
     strategies.forEach(s => {
       const sym = s.shortName || s.name || "Strategy";
       if (!holdingsMap.has(sym)) {
         const holdingsArr = s.holdings || [];
         const topLogos = holdingsArr
           .sort((a, b) => (b.weight || 0) - (a.weight || 0))
-          .slice(0, 3)
-          .map(h => h.logo_url || null)
+          .slice(0, 5)
+          .map(h => h.logo_url || h.logo || logoBySymbol[h.symbol] || logoBySymbol[h.ticker] || null)
           .filter(Boolean);
         const sCv = s.currentValue || s.investedAmount || 0;
         const sIa = s.investedAmount || 0;
@@ -663,7 +668,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                   window.dispatchEvent(new CustomEvent("navigate-within-app", { detail: { page: "memberPortfolio", member } }))
                 }
               />
-              <p className="text-lg font-medium text-white/90 mt-1">{fullName}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white mt-1">{fullName}</p>
             </div>
             <button
               className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 backdrop-blur-sm transition hover:bg-white/10"
@@ -700,7 +705,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                     </button>
                   </div>
                   {!balanceVisible ? (
-                    <p className="mt-1 text-sm text-white/60">Account Value</p>
+                    <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/60">Account Value</p>
                   ) : (
                     <>
                       <div className="mt-1 flex items-center gap-2.5">
@@ -712,7 +717,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                           {isPnlPos ? '▲' : '▼'} {isPnlPos ? '+' : ''}{totalPnlPct.toFixed(1)}%
                         </span>
                       </div>
-                      <p className="mt-0.5 text-xs text-white/50">Account Value</p>
+                      <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/50">Account Value</p>
                     </>
                   )}
                 </>
@@ -739,7 +744,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                   setTabDirection(newIdx > oldIdx ? 1 : -1);
                   setActiveTab(tab.id);
                 }}
-                className={`relative overflow-hidden px-4 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 ${activeTab === tab.id
+                className={`relative overflow-hidden px-4 py-2.5 rounded-full text-[10px] font-semibold uppercase tracking-[0.18em] transition-all duration-300 ${activeTab === tab.id
                     ? "bg-violet-500 text-white shadow-lg shadow-violet-500/30"
                     : "border border-white/60 text-white backdrop-blur-xl hover:bg-white/20"
                   }`}
@@ -1010,7 +1015,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
 
                 <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50">
                   <div className="flex items-center justify-between mb-1">
-                    <p className="text-sm font-semibold text-slate-900">Portfolio Holdings</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900">Portfolio Holdings</p>
                   </div>
                   <p className="text-xs text-slate-400 mb-4">All holdings by weight</p>
 
@@ -1024,7 +1029,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 overflow-hidden">
                             {holding.isStrategy && holding.topLogos?.length > 0 ? (
                               <div className="flex -space-x-1.5 items-center justify-center">
-                                {holding.topLogos.slice(0, 3).map((logo, li) => (
+                                {holding.topLogos.slice(0, 5).map((logo, li) => (
                                   <img key={li} src={logo} className="w-5 h-5 rounded-full object-cover border border-white shadow-sm" referrerPolicy="no-referrer" crossOrigin="anonymous" />
                                 ))}
                               </div>
@@ -1064,7 +1069,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                 {/* Calendar Returns */}
                 <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50">
                   <div className="flex items-center justify-between gap-2 mb-4">
-                    <p className="text-sm font-semibold text-slate-900">Calendar Returns</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900">Calendar Returns</p>
                     <div className="flex items-center gap-2">
                       <div className="relative" ref={calendarFilterRef}>
                         <button
@@ -1430,7 +1435,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                           style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
                         >
                           <div className="flex items-center justify-between mb-4">
-                            <p className="text-sm font-semibold text-slate-900">My Stocks</p>
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900">My Stocks</p>
                             {myTotalPages > 1 && (
                               <div className="flex items-center gap-2">
                                 <button
@@ -1595,7 +1600,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                     {investmentGoals && investmentGoals.length > 0 && (
                       <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50">
                         <div className="flex items-center justify-between mb-4">
-                          <p className="text-sm font-semibold text-slate-900">Your Goals</p>
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900">Your Goals</p>
                           <span className="text-xs font-semibold text-violet-600 bg-violet-50 rounded-full px-2 py-0.5">{investmentGoals.length}</span>
                         </div>
                         <div className="space-y-3">
@@ -1786,7 +1791,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                           style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
                         >
                           <div className="flex items-center justify-between mb-4">
-                            <p className="text-sm font-semibold text-slate-900">Your Assets</p>
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900">Your Assets</p>
                             {holdingsTotalPages > 1 && (
                               <div className="flex items-center gap-2">
                                 <button
@@ -1826,26 +1831,30 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                                     }}
                                   >
                                     <div className="flex items-center gap-3">
-                                      <div className="h-11 w-11 rounded-full bg-white border border-slate-200 shadow-sm overflow-hidden flex-shrink-0">
-                                        {stock.isStrategy && stock.topLogos?.length > 0 ? (
-                                          <div className="flex -space-x-1.5 items-center justify-center h-full w-full bg-gradient-to-br from-violet-50 to-purple-50">
-                                            {stock.topLogos.slice(0, 3).map((logo, li) => (
-                                              <img key={li} src={logo} className="w-5 h-5 rounded-full object-cover border border-white shadow-sm" referrerPolicy="no-referrer" crossOrigin="anonymous" />
+                                      {stock.isStrategy && stock.topLogos?.length > 0 ? (
+                                        <div className="flex-shrink-0 flex items-center">
+                                          <div className="flex -space-x-2">
+                                            {stock.topLogos.slice(0, 5).map((logo, li) => (
+                                              <img key={li} src={logo} className="w-7 h-7 rounded-full object-cover border-2 border-white shadow-sm" referrerPolicy="no-referrer" crossOrigin="anonymous" />
                                             ))}
                                           </div>
-                                        ) : !stock.logo || failedLogos[stock.ticker] ? (
-                                          <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-100 to-purple-100 text-xs font-bold text-violet-700">
-                                            {stock.ticker.slice(0, 2)}
-                                          </div>
-                                        ) : (
-                                          <img
-                                            src={stock.logo}
-                                            alt={stock.name}
-                                            className="h-full w-full object-cover"
-                                            onError={() => setFailedLogos(prev => ({ ...prev, [stock.ticker]: true }))}
-                                          />
-                                        )}
-                                      </div>
+                                        </div>
+                                      ) : (
+                                        <div className="h-11 w-11 rounded-full bg-white border border-slate-200 shadow-sm overflow-hidden flex-shrink-0">
+                                          {!stock.logo || failedLogos[stock.ticker] ? (
+                                            <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-100 to-purple-100 text-xs font-bold text-violet-700">
+                                              {stock.ticker.slice(0, 2)}
+                                            </div>
+                                          ) : (
+                                            <img
+                                              src={stock.logo}
+                                              alt={stock.name}
+                                              className="h-full w-full object-cover"
+                                              onError={() => setFailedLogos(prev => ({ ...prev, [stock.ticker]: true }))}
+                                            />
+                                          )}
+                                        </div>
+                                      )}
 
                                       <div className="flex-1 min-w-0">
                                         <p className="text-sm font-semibold text-slate-900 truncate">{stock.name}</p>
@@ -1957,7 +1966,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
 
                         {closedHoldings && closedHoldings.length > 0 && (
                           <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50" style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}>
-                            <p className="text-sm font-semibold text-slate-900 mb-4">Closed Positions</p>
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900 mb-4">Closed Positions</p>
                             <div className="space-y-3">
                               {closedHoldings.map((h) => {
                                 const exitPriceRands = (h.exit_price || 0) / 100;
@@ -2003,7 +2012,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                           return (
                             <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50 mt-4">
                               <div className="flex items-center justify-between mb-4">
-                                <p className="text-sm font-semibold text-slate-900">Other Stocks</p>
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900">Other Stocks</p>
                                 {otherTotalPages > 1 && (
                                   <div className="flex items-center gap-2">
                                     <button
@@ -2070,7 +2079,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                         {investmentGoals && investmentGoals.length > 0 && (
                           <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50 mt-4">
                             <div className="flex items-center justify-between mb-4">
-                              <p className="text-sm font-semibold text-slate-900">Your Goals</p>
+                              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900">Your Goals</p>
                               <span className="text-xs font-semibold text-violet-600 bg-violet-50 rounded-full px-2 py-0.5">{investmentGoals.length}</span>
                             </div>
                             <div className="space-y-3">
