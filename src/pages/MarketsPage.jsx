@@ -170,8 +170,8 @@ const CollapsibleSection = ({ title, securities, onOpenStockDetail, onToggleWatc
   return (
     <section ref={sectionRef}>
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-lg font-bold text-slate-900">{title}</h2>
-        <ChevronRight className="h-5 w-5 text-slate-400" />
+        <h2 className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">{title}</h2>
+        <ChevronRight className="h-4 w-4 text-slate-300" />
       </div>
       <AnimatePresence mode="wait" initial={false}>
         {isExpanded ? (
@@ -261,7 +261,7 @@ const SecuritySparklineCard = ({ security, onClick, onToggleWatchlist, isWatched
               {security.symbol?.substring(0, 2) || "—"}
             </div>
           )}
-          <span className="flex-1 truncate text-sm font-bold text-slate-900">{security.symbol}</span>
+          <span className="flex-1 truncate text-[11px] font-bold uppercase tracking-[0.12em] text-slate-900">{security.symbol}</span>
           <div
             onClick={(e) => { e.stopPropagation(); onToggleWatchlist(e, security.symbol); }}
             className="flex-shrink-0 p-1"
@@ -1679,8 +1679,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
             {/* All Section */}
             <section>
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-bold text-slate-900">All</h2>
-                <ChevronRight className="h-5 w-5 text-slate-400" />
+                <h2 className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">All</h2>
+                <ChevronRight className="h-4 w-4 text-slate-300" />
               </div>
               <div className="space-y-3">
                 {filteredSecurities.map((security) => (
@@ -1705,7 +1705,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
-                            <p className="truncate text-sm font-semibold text-slate-900">
+                            <p className="truncate text-[11px] font-bold uppercase tracking-[0.12em] text-slate-900">
                               {security.short_name || security.name}
                             </p>
                             <p className="text-xs text-slate-500">
@@ -1768,7 +1768,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
             {/* All Securities List */}
             {searchQuery && (
               <section>
-                <h2 className="mb-4 text-lg font-bold text-slate-900">Search results</h2>
+                <h2 className="mb-4 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Search results</h2>
                 {filteredSecurities.length === 0 ? (
                   <div className="rounded-3xl bg-white px-6 py-12 text-center shadow-md">
                     <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100">
@@ -1880,8 +1880,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
               return (
                 <section key={sector}>
                   <div className="mb-4 flex items-center justify-between">
-                    <h2 className="text-lg font-bold text-slate-900">{sector === 'General' ? 'Child Friendly' : sector}</h2>
-                    <ChevronRight className="h-5 w-5 text-slate-400" />
+                    <h2 className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">{sector === 'General' ? 'Child Friendly' : sector}</h2>
+                    <ChevronRight className="h-4 w-4 text-slate-300" />
                   </div>
                   <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 scrollbar-hide">
                     {sectorStrategies.map((strategy) => {
@@ -1916,7 +1916,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                         <div className="flex items-start gap-3">
                           <div className="flex-1 flex items-start justify-between gap-4">
                             <div className="text-left space-y-1">
-                              <p className="text-sm font-semibold text-slate-900">{displayName}</p>
+                              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-900">{displayName}</p>
                               <div>
                                 <p className="text-xs text-slate-600 line-clamp-1">
                                   {strategy.risk_level || 'Balanced'} {strategy.objective && `• ${strategy.objective}`}
