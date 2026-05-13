@@ -1374,16 +1374,16 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
 
           {/* Toggle between Mint Basket and Markets */}
           {viewMode !== "news" && (
-            <div className="flex gap-2 rounded-2xl bg-white/10 p-1 backdrop-blur-sm">
+            <div className="flex gap-1.5 rounded-2xl bg-black/20 p-1 backdrop-blur-sm ring-1 ring-white/10">
               <button
                 onClick={() => {
                   setViewMode("openstrategies");
                   setActiveChips(buildChipsFromFilters(_savedStrat));
                 }}
-                className={`flex-1 rounded-xl px-3 py-2 text-xs font-semibold transition-all ${
+                className={`flex-1 rounded-xl px-3 py-2.5 text-[11px] font-bold tracking-[0.12em] uppercase transition-all duration-200 ${
                   viewMode === "openstrategies"
-                    ? "bg-white text-slate-900 shadow-md"
-                    : "text-white/70"
+                    ? "bg-white text-slate-900 shadow-[0_2px_8px_rgba(0,0,0,0.18)]"
+                    : "text-white/60 hover:text-white/85"
                 }`}
               >
                 Mint Basket
@@ -1393,10 +1393,10 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                   setViewMode("invest");
                   setActiveChips(buildInvestChips({ sectors: selectedSectors, exchanges: selectedExchanges }));
                 }}
-                className={`flex-1 rounded-xl px-3 py-2 text-xs font-semibold transition-all ${
+                className={`flex-1 rounded-xl px-3 py-2.5 text-[11px] font-bold tracking-[0.12em] uppercase transition-all duration-200 ${
                   viewMode === "invest"
-                    ? "bg-white text-slate-900 shadow-md"
-                    : "text-white/70"
+                    ? "bg-white text-slate-900 shadow-[0_2px_8px_rgba(0,0,0,0.18)]"
+                    : "text-white/60 hover:text-white/85"
                 }`}
               >
                 Markets
