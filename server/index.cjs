@@ -1,31 +1,31 @@
 const fs = require("fs");
 const path = require("path");
 
-// Simple .env loader for local development (no dotenv dependency required)
-try {
-  const envPath = path.join(__dirname, "..", ".env");
-  if (fs.existsSync(envPath)) {
-    const envContent = fs.readFileSync(envPath, "utf8");
-    envContent.split("\n").forEach(line => {
-      // Basic key=value parsing
-      const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
-      if (match) {
-        const key = match[1];
-        let value = match[2] || "";
-        // Remove quotes if present
-        if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
-        if (value.startsWith("'") && value.endsWith("'")) value = value.slice(1, -1);
-        // Only set if not already set by system environment
-        if (!process.env[key]) {
-          process.env[key] = value;
+function loadEnvFile(envPath) {
+  try {
+    if (fs.existsSync(envPath)) {
+      const envContent = fs.readFileSync(envPath, "utf8");
+      envContent.split("\n").forEach(line => {
+        const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+        if (match) {
+          const key = match[1];
+          let value = match[2] || "";
+          if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
+          if (value.startsWith("'") && value.endsWith("'")) value = value.slice(1, -1);
+          if (!process.env[key]) process.env[key] = value;
         }
-      }
-    });
-    console.log("[Server] Local .env file loaded");
+      });
+      console.log(`[Server] Loaded ${path.basename(envPath)}`);
+      return true;
+    }
+  } catch (e) {
+    console.warn(`[Server] Could not load ${path.basename(envPath)}:`, e.message);
   }
-} catch (e) {
-  console.warn("[Server] Could not load .env file:", e.message);
+  return false;
 }
+
+const root = path.join(__dirname, "..");
+loadEnvFile(path.join(root, ".env.local")) || loadEnvFile(path.join(root, ".env"));
 
 const express = require("express");
 const cors = require("cors");
@@ -8150,27 +8150,20 @@ async function giftAllocateStrategyHoldings(db, userId, strategyId, strategyHold
       if (!sec?.last_price) continue;
       const qty = Math.floor((h.weight || 1) * scale);
       if (qty <= 0) continue;
-      const avgFillCents = Math.round(sec.last_price * 100);
       try {
-        const { data: existing } = await db.from("stock_holdings_c").select("id, quantity, avg_fill")
+        const { data: existing } = await db.from("stock_holdings_c").select("id, quantity")
           .eq("user_id", userId).eq("security_id", sec.id).eq("strategy_id", strategyId).is("family_member_id", null).maybeSingle();
         if (existing) {
-          const oldQty = Number(existing.quantity || 0);
-          const oldAvg = Number(existing.avg_fill || 0);
-          const newQty = oldQty + qty;
           await db.from("stock_holdings_c").update({
-            quantity: newQty,
-            avg_fill: newQty > 0 ? Math.round((oldAvg * oldQty + avgFillCents * qty) / newQty) : avgFillCents,
-            market_value: Math.round(newQty * sec.last_price * 100),
-            unrealized_pnl: 0,
-            as_of_date: new Date().toISOString().split("T")[0],
-            updated_at: new Date().toISOString(),
+            quantity: Number(existing.quantity || 0) + qty,
+            avg_fill: null, market_value: 0, unrealized_pnl: 0,
+            as_of_date: null, updated_at: new Date().toISOString(),
           }).eq("id", existing.id);
         } else {
           await db.from("stock_holdings_c").insert({
             user_id: userId, security_id: sec.id, quantity: qty,
-            avg_fill: avgFillCents, market_value: Math.round(qty * sec.last_price * 100),
-            unrealized_pnl: 0, as_of_date: new Date().toISOString().split("T")[0],
+            avg_fill: null, market_value: 0,
+            unrealized_pnl: 0, as_of_date: null,
             strategy_id: strategyId, Status: "active",
           });
         }
@@ -8182,13 +8175,13 @@ async function giftAllocateStrategyHoldings(db, userId, strategyId, strategyHold
   if (holdingsCreated === 0) {
     const sorted = [...strategyHoldings].sort((a, b) => (b.weight || 0) - (a.weight || 0));
     const fallback = secMap[sorted[0]?.symbol];
-    if (fallback?.last_price) {
+    if (fallback?.id) {
+      const qty = Math.max(1, Math.floor((investAmountRands / (fallback.last_price || 1))));
       try {
-        const priceCents = Math.round(fallback.last_price * 100);
         await db.from("stock_holdings_c").insert({
-          user_id: userId, security_id: fallback.id, quantity: 1,
-          avg_fill: priceCents, market_value: priceCents, unrealized_pnl: 0,
-          as_of_date: new Date().toISOString().split("T")[0], strategy_id: strategyId, Status: "active",
+          user_id: userId, security_id: fallback.id, quantity: qty,
+          avg_fill: null, market_value: 0, unrealized_pnl: 0,
+          as_of_date: null, strategy_id: strategyId, Status: "active",
         });
         holdingsCreated = 1;
       } catch (e) { console.warn("[gift] strategy fallback holding:", e.message); }
@@ -8200,30 +8193,24 @@ async function giftAllocateStrategyHoldings(db, userId, strategyId, strategyHold
 async function giftAllocateStockHolding(db, userId, securityId, amountCents) {
   const { data: sec } = await db.from("securities_c").select("id, symbol, last_price").eq("id", securityId).maybeSingle();
   if (!sec?.last_price) return 0;
-  const qty = Math.floor((amountCents / 100) / sec.last_price);
-  const finalQty = qty > 0 ? qty : 1;
-  const avgFillCents = Math.round(sec.last_price * 100);
+  const qty = Math.max(1, Math.floor((amountCents / 100) / sec.last_price));
   try {
-    const { data: existing } = await db.from("stock_holdings_c").select("id, quantity, avg_fill")
+    const { data: existing } = await db.from("stock_holdings_c").select("id, quantity")
       .eq("user_id", userId).eq("security_id", sec.id).is("strategy_id", null).is("family_member_id", null).maybeSingle();
     if (existing) {
-      const oldQty = Number(existing.quantity || 0);
-      const oldAvg = Number(existing.avg_fill || 0);
-      const newQty = oldQty + finalQty;
       await db.from("stock_holdings_c").update({
-        quantity: newQty,
-        avg_fill: Math.round((oldAvg * oldQty + avgFillCents * finalQty) / newQty),
-        market_value: Math.round(newQty * sec.last_price * 100),
-        unrealized_pnl: 0, as_of_date: new Date().toISOString().split("T")[0], updated_at: new Date().toISOString(),
+        quantity: Number(existing.quantity || 0) + qty,
+        avg_fill: null, market_value: 0, unrealized_pnl: 0,
+        as_of_date: null, updated_at: new Date().toISOString(),
       }).eq("id", existing.id);
     } else {
       await db.from("stock_holdings_c").insert({
-        user_id: userId, security_id: sec.id, quantity: finalQty,
-        avg_fill: avgFillCents, market_value: Math.round(finalQty * sec.last_price * 100),
-        unrealized_pnl: 0, as_of_date: new Date().toISOString().split("T")[0], Status: "active",
+        user_id: userId, security_id: sec.id, quantity: qty,
+        avg_fill: null, market_value: 0,
+        unrealized_pnl: 0, as_of_date: null, Status: "active",
       });
     }
-    return finalQty;
+    return qty;
   } catch (e) { console.warn("[gift] stock holding insert:", e.message); return 0; }
 }
 

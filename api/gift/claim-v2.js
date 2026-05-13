@@ -22,30 +22,26 @@ async function allocateStrategyHoldings(db, userId, strategyId, strategyHoldings
       const sec = secMap[h.symbol];
       if (!sec?.last_price) continue;
       const qty = Math.max(1, Math.round((h.weight || 1) * scale));
-      const priceCents = Math.round(sec.last_price * 100);
-      const marketValueCents = Math.round(qty * sec.last_price * 100);
       try {
         const { data: existing } = await db.from("stock_holdings_c")
-          .select("id, quantity, avg_fill")
+          .select("id, quantity")
           .eq("user_id", userId).eq("security_id", sec.id)
           .eq("strategy_id", strategyId).is("family_member_id", null).maybeSingle();
         if (existing) {
-          const oldQty = Number(existing.quantity || 0);
-          const oldAvg = Number(existing.avg_fill || priceCents);
-          const newQty = oldQty + qty;
+          // Add quantity and mark pending — broker fill will set avg_fill
           await db.from("stock_holdings_c").update({
-            quantity: newQty,
-            avg_fill: Math.round((oldAvg * oldQty + priceCents * qty) / newQty),
-            market_value: Math.round(newQty * sec.last_price * 100),
+            quantity: Number(existing.quantity || 0) + qty,
+            avg_fill: null,
+            market_value: 0,
             unrealized_pnl: 0,
-            as_of_date: new Date().toISOString().split("T")[0],
+            as_of_date: null,
             updated_at: new Date().toISOString(),
           }).eq("id", existing.id);
         } else {
           await db.from("stock_holdings_c").insert({
             user_id: userId, security_id: sec.id, quantity: qty,
-            avg_fill: priceCents, market_value: marketValueCents,
-            unrealized_pnl: 0, as_of_date: new Date().toISOString().split("T")[0],
+            avg_fill: null, market_value: 0,
+            unrealized_pnl: 0, as_of_date: null,
             strategy_id: strategyId, Status: "active",
           });
         }
@@ -62,33 +58,29 @@ async function allocateStockHolding(db, userId, securityId, amountCents) {
   if (!sec?.last_price) return { qty: 0, holdingId: null };
 
   const qty = Math.max(1, Math.floor((amountCents / 100) / sec.last_price));
-  const priceCents = Math.round(sec.last_price * 100);
-  const marketValueCents = Math.round(qty * sec.last_price * 100);
 
   try {
     const { data: existing } = await db.from("stock_holdings_c")
-      .select("id, quantity, avg_fill")
+      .select("id, quantity")
       .eq("user_id", userId).eq("security_id", sec.id)
       .is("strategy_id", null).is("family_member_id", null).maybeSingle();
 
     if (existing) {
-      const oldQty = Number(existing.quantity || 0);
-      const oldAvg = Number(existing.avg_fill || priceCents);
-      const newQty = oldQty + qty;
+      // Add quantity and mark pending — broker fill will set avg_fill
       await db.from("stock_holdings_c").update({
-        quantity: newQty,
-        avg_fill: Math.round((oldAvg * oldQty + priceCents * qty) / newQty),
-        market_value: Math.round(newQty * sec.last_price * 100),
+        quantity: Number(existing.quantity || 0) + qty,
+        avg_fill: null,
+        market_value: 0,
         unrealized_pnl: 0,
-        as_of_date: new Date().toISOString().split("T")[0],
+        as_of_date: null,
         updated_at: new Date().toISOString(),
       }).eq("id", existing.id);
       return { qty, holdingId: existing.id };
     } else {
       const { data: inserted } = await db.from("stock_holdings_c").insert({
         user_id: userId, security_id: sec.id, quantity: qty,
-        avg_fill: priceCents, market_value: marketValueCents,
-        unrealized_pnl: 0, as_of_date: new Date().toISOString().split("T")[0],
+        avg_fill: null, market_value: 0,
+        unrealized_pnl: 0, as_of_date: null,
         Status: "active",
       }).select("id").single();
       return { qty, holdingId: inserted?.id || null };

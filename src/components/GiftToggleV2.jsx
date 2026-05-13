@@ -8,6 +8,7 @@ export default function GiftToggleV2({
   security,
   totalCostCents,
   amountDisplay,
+  assetType = "stock",
 }) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -43,8 +44,10 @@ export default function GiftToggleV2({
           ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify({
-          asset_type: "stock",
-          security_id: security?.id,
+          asset_type: assetType,
+          ...(assetType === "strategy"
+            ? { strategy_id: security?.id }
+            : { security_id: security?.id }),
           security_symbol: security?.symbol,
           asset_name: security?.name || security?.symbol,
           amount: totalCostCents,
