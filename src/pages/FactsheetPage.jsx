@@ -161,10 +161,11 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
               "6M": returnsData["6m_pct"] ? returnsData["6m_pct"] / 100 : null,
               "YTD": returnsData.ytd_pct ? returnsData.ytd_pct / 100 : null,
             });
-            setAnalytics({
+            // Preserve any curves already populated by fetchCumulativeData (race condition fix)
+            setAnalytics(prev => ({
               as_of_date: returnsData.as_of_date,
-              curves: {}
-            });
+              curves: prev?.curves ?? {}
+            }));
           }
         } else if (isMounted) {
           setAnalytics(null);
