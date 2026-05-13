@@ -42,6 +42,9 @@ const NotificationSettingsPage = lazy(() => import("./pages/NotificationSettings
 const MintBalancePage = lazy(() => import("./pages/MintBalancePage.jsx"));
 const StockDetailPage = lazy(() => import("./pages/StockDetailPage.jsx"));
 const StockBuyPage = lazy(() => import("./pages/StockBuyPage.jsx"));
+const GiftCodeEntryPage = lazy(() => import("./pages/GiftCodeEntryPage.jsx"));
+const GiftPreviewPage = lazy(() => import("./pages/GiftPreviewPage.jsx"));
+const SentGiftsPageV2 = lazy(() => import("./pages/SentGiftsPageV2.jsx"));
 const NewsArticlePage = lazy(() => import("./pages/NewsArticlePage.jsx"));
 const ActivityPage = lazy(() => import("./pages/ActivityPage.jsx"));
 const ActionsPage = lazy(() => import("./pages/ActionsPage.jsx"));
@@ -95,6 +98,12 @@ const clearUserStorage = () => {
 const initialHash = window.location.hash;
 const isRecoveryMode = initialHash.includes('type=recovery');
 
+// Detect /gift/claim/:token deep link
+const initialGiftToken = (() => {
+  const match = window.location.pathname.match(/^\/gift\/claim\/([a-f0-9]+)$/i);
+  return match ? match[1] : null;
+})();
+
 const getHashParams = (hash) => {
   if (!hash) return {};
   return Object.fromEntries(new URLSearchParams(hash.substring(1)));
@@ -140,8 +149,10 @@ const mainTabs = ['home', 'credit', 'transact', 'investments', 'markets', 'news'
 
 const App = () => {
   const [currentPage, setCurrentPage] = useState(
-    hasError ? "linkExpired" : (isRecoveryMode ? "auth" : (storedSession ? "home" : "welcome"))
+    hasError ? "linkExpired" : initialGiftToken ? "giftClaim" : (isRecoveryMode ? "auth" : (storedSession ? "home" : "welcome"))
   );
+  const [giftToken, setGiftToken] = useState(initialGiftToken);
+  const [giftPreviewData, setGiftPreviewData] = useState(null);
   const [previousPageName, setPreviousPageName] = useState(null);
   const [authStep, setAuthStep] = useState(isRecoveryMode ? "newPassword" : "email");
   const [isCheckingAuth, setIsCheckingAuth] = useState(!storedSession && !hasError);
@@ -2317,6 +2328,50 @@ const App = () => {
 
   if (currentPage === "userOnboarding") {
     return <UserOnboardingPage onComplete={() => setCurrentPage("home")} />;
+  }
+
+  if (currentPage === "giftClaim") {
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-[#f8f6fa]" />}>
+        <GiftCodeEntryPage
+          onBack={() => navigateTo("home")}
+          onNavigate={(page, params) => {
+            if (page === "giftPreview") {
+              setGiftPreviewData(params);
+              navigateTo("giftPreview");
+            } else {
+              navigateTo(page);
+            }
+          }}
+        />
+      </Suspense>
+    );
+  }
+
+  if (currentPage === "giftPreview") {
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <Suspense fallback={<div className="min-h-screen bg-[#f8f6fa]" />}>
+          <GiftPreviewPage
+            code={giftPreviewData?.code}
+            idNumber={giftPreviewData?.idNumber}
+            giftPreview={giftPreviewData?.giftPreview}
+            onBack={goBack}
+            onNavigate={navigateTo}
+          />
+        </Suspense>
+      </SwipeBackWrapper>
+    );
+  }
+
+  if (currentPage === "sentGifts") {
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <Suspense fallback={<div className="min-h-screen bg-[#f8f6fa]" />}>
+          <SentGiftsPageV2 onBack={goBack} />
+        </Suspense>
+      </SwipeBackWrapper>
+    );
   }
 
   if (currentPage === "welcome") {

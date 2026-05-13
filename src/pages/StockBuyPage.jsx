@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ChevronDown, ChevronUp } from "lucide-react";
 import { formatCurrency } from "../lib/formatCurrency";
+import GiftToggleV2 from "../components/GiftToggleV2";
 
 const BROKER_FEE_RATE = 0.0025;
 const ISIN_FEE_PER_ASSET = 69;
@@ -27,6 +28,7 @@ const StockBuyPage = ({ security, onBack, onContinue, paymentMethod }) => {
 
   const [shares, setShares] = useState(minShares);
   const [feeExpanded, setFeeExpanded] = useState(false);
+  const [giftEnabled, setGiftEnabled] = useState(false);
 
   useEffect(() => {
     if (shares < minShares) setShares(minShares);
@@ -47,7 +49,6 @@ const StockBuyPage = ({ security, onBack, onContinue, paymentMethod }) => {
     const isinTotal = ISIN_FEE_PER_ASSET * numAssets;
     const transactionAmount = bufferedBase * TRANSACTION_FEE_RATE;
     const totalCost = bufferedBase + brokerAmount + isinTotal + transactionAmount;
-
     return { brokerAmount, isinTotal, transactionAmount, totalCost };
   }, [totalAmount, numAssets]);
 
@@ -55,7 +56,7 @@ const StockBuyPage = ({ security, onBack, onContinue, paymentMethod }) => {
 
   const handleSubmit = (event) => {
     event.preventDefault();
-    if (!security || isInvalid) return;
+    if (!security || isInvalid || giftEnabled) return;
     onContinue?.(fees.totalCost, security, totalAmount, validShares);
   };
 
@@ -134,11 +135,7 @@ const StockBuyPage = ({ security, onBack, onContinue, paymentMethod }) => {
                 </div>
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-slate-600">Transaction Fee (3.8%)</p>
-                  <div className="text-right">
-                    <p className="text-xs font-semibold text-slate-900">
-                      {formatCurrency(fees.transactionAmount, displayCurrency)}
-                    </p>
-                  </div>
+                  <p className="text-xs font-semibold text-slate-900">{formatCurrency(fees.transactionAmount, displayCurrency)}</p>
                 </div>
               </div>
             )}
@@ -148,13 +145,23 @@ const StockBuyPage = ({ security, onBack, onContinue, paymentMethod }) => {
             </div>
           </div>
 
-          <button
-            type="submit"
-            disabled={isInvalid}
-            className={`w-full rounded-2xl py-4 text-sm font-semibold uppercase tracking-[0.2em] text-white shadow-lg transition-all active:scale-95 ${isInvalid ? "bg-slate-300 cursor-not-allowed" : "bg-gradient-to-r from-black to-purple-600"}`}
-          >
-            Invest
-          </button>
+          {!giftEnabled && (
+            <button
+              type="submit"
+              disabled={isInvalid}
+              className={`w-full rounded-2xl py-4 text-sm font-semibold uppercase tracking-[0.2em] text-white shadow-lg transition-all active:scale-95 ${isInvalid ? "bg-slate-300 cursor-not-allowed" : "bg-gradient-to-r from-black to-purple-600"}`}
+            >
+              Invest
+            </button>
+          )}
+
+          <GiftToggleV2
+            enabled={giftEnabled}
+            onToggle={setGiftEnabled}
+            security={security}
+            totalCostCents={Math.round(fees.totalCost * 100)}
+            amountDisplay={formatCurrency(fees.totalCost, displayCurrency)}
+          />
         </form>
       </div>
     </div>
