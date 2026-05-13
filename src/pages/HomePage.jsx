@@ -753,7 +753,7 @@ const HomePage = ({
       <div className="mx-auto -mt-10 flex w-full max-w-sm flex-col gap-6 px-4 pb-10 md:max-w-md md:px-8">
         <section className="flex flex-col gap-3">
           {/* Row 1 — primary actions */}
-          <div className="grid grid-cols-4 gap-2 text-[11px] font-medium">
+          <div className="grid grid-cols-4 gap-2 text-[11px] font-bold uppercase tracking-[0.12em]">
             {[
               { label: "Invest", icon: LayoutGrid, onClick: onOpenStrategies || onOpenInvest },
               { label: "Deposit", icon: ArrowDownToLine, onClick: onOpenDeposit },
@@ -791,7 +791,7 @@ const HomePage = ({
         <section className="rounded-3xl bg-white shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] overflow-hidden">
           <div className="flex items-end justify-between px-5 py-4 border-b border-slate-100">
             <div className="space-y-1">
-              <p className="text-sm font-semibold text-slate-900">
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-900">
                 Market Insights
               </p>
               <div className="flex items-center gap-2 text-xs text-slate-500">
@@ -860,7 +860,7 @@ const HomePage = ({
         <section className="rounded-3xl bg-white shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] overflow-hidden">
           <div className="flex items-end justify-between px-5 py-4 border-b border-slate-100">
             <div className="space-y-1">
-              <p className="text-sm font-semibold text-slate-900">
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-900">
                 Investment Goals
               </p>
               <div className="flex items-center gap-2 text-xs text-slate-500">
@@ -1059,7 +1059,7 @@ const HomePage = ({
         <section>
           <div className="flex items-end justify-between px-5 mb-3">
             <div className="space-y-1">
-              <p className="text-sm font-semibold text-slate-900">
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-900">
                 Your best performing assets
               </p>
               <div className="flex items-center gap-2 text-xs text-slate-500">
@@ -1179,7 +1179,7 @@ const HomePage = ({
         <section>
           <div className="flex items-end justify-between px-5 mb-3">
             <div className="space-y-1">
-              <p className="text-sm font-semibold text-slate-900">
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-900">
                 Your best performing strategies
               </p>
               <div className="flex items-center gap-2 text-xs text-slate-500">
