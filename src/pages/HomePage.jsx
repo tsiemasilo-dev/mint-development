@@ -753,7 +753,7 @@ const HomePage = ({
       <div className="mx-auto -mt-10 flex w-full max-w-sm flex-col gap-6 px-4 pb-10 md:max-w-md md:px-8">
         <section className="flex flex-col gap-3">
           {/* Row 1 — primary actions */}
-          <div className="grid grid-cols-4 gap-2 text-[11px] font-bold uppercase tracking-[0.12em]">
+          <div className="grid grid-cols-4 gap-2">
             {[
               { label: "Invest", icon: LayoutGrid, onClick: onOpenStrategies || onOpenInvest },
               { label: "Deposit", icon: ArrowDownToLine, onClick: onOpenDeposit },
@@ -771,7 +771,7 @@ const HomePage = ({
                   <span className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-50 text-violet-700">
                     <Icon className="h-4 w-4" />
                   </span>
-                  <span className="text-center leading-tight">{item.label}</span>
+                  <span className="text-center text-[11px] font-bold uppercase tracking-[0.12em] leading-tight">{item.label}</span>
                 </button>
               );
             })}
