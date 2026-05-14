@@ -34,7 +34,7 @@ const QuickActionsCarousel = () => {
                 index === currentIndex ? "opacity-100" : "opacity-0 hidden"
               }`}
             >
-              <div className="aspect-square rounded-2xl bg-gradient-to-br from-slate-300 to-slate-400 flex flex-col items-center justify-center gap-3 p-6">
+              <div className="h-32 rounded-2xl bg-gradient-to-br from-slate-300 to-slate-400 flex flex-col items-center justify-center gap-3 p-6">
                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-200">
                   <span className="text-xs font-bold text-slate-600">
                     {item.id}
