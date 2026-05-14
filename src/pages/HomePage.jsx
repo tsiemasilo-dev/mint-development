@@ -782,7 +782,7 @@ const HomePage = ({
           <QuickActionsCarousel
             items={[
               { id: 1, label: "Invest", description: "Start investing", image: "/carousel/item-1.jpg", onClick: onOpenStrategies || onOpenInvest },
-              { id: 2, label: "Child Account", description: "Manage kids", image: "/carousel/item-2.jpg", onClick: onOpenFamily },
+              { id: 2, label: "Child Account", description: "Manage kids", image: "https://mfxnghmuccevsxwcetej.supabase.co/storage/v1/object/public/Mint%20Assets/PSD%20MINT%20EMAIL%20TEMPLATE%20HEADER%20STANDARD%20Child%20Account%20Verified%201.png", onClick: onOpenFamily },
               { id: 3, label: "News", description: "Market insights", image: "/carousel/item-3.jpg", onClick: () => onOpenNews && onOpenNews("news") },
               { id: 4, label: "Gifting", description: "Send gifts", image: "/carousel/item-4.jpg", onClick: () => {} },
             ]}
