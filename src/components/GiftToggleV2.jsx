@@ -1,6 +1,55 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Gift, Copy, Check, AlertCircle } from "lucide-react";
 import { supabase } from "../lib/supabase";
+
+const CONFETTI_COLORS = ["#7c3aed","#a78bfa","#f59e0b","#10b981","#ef4444","#3b82f6","#ec4899","#f97316"];
+
+function ConfettiBurst({ active }) {
+  const particles = useRef(
+    Array.from({ length: 48 }, (_, i) => ({
+      id: i,
+      color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+      x: (Math.random() - 0.5) * 320,
+      y: -(80 + Math.random() * 220),
+      rotate: Math.random() * 720,
+      scale: 0.6 + Math.random() * 0.8,
+      delay: Math.random() * 0.3,
+      shape: Math.random() > 0.5 ? "rect" : "circle",
+    }))
+  ).current;
+
+  if (!active) return null;
+
+  return (
+    <div className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden" style={{ zIndex: 50 }}>
+      {particles.map(p => (
+        <div
+          key={p.id}
+          style={{
+            position: "absolute",
+            width: p.shape === "circle" ? 10 : 8,
+            height: p.shape === "circle" ? 10 : 14,
+            borderRadius: p.shape === "circle" ? "50%" : 2,
+            background: p.color,
+            animation: `confetti-fly 1.1s ease-out ${p.delay}s forwards`,
+            "--tx": `${p.x}px`,
+            "--ty": `${p.y}px`,
+            "--rot": `${p.rotate}deg`,
+            transform: "scale(0)",
+            opacity: 1,
+          }}
+        />
+      ))}
+      <style>{`
+        @keyframes confetti-fly {
+          0%   { transform: scale(0) translate(0,0) rotate(0deg); opacity: 1; }
+          60%  { opacity: 1; }
+          100% { transform: scale(var(--s,1)) translate(var(--tx), var(--ty)) rotate(var(--rot)); opacity: 0; }
+        }
+      `}</style>
+    </div>
+  );
+}
 
 export default function GiftToggleV2({
   enabled,
@@ -19,6 +68,7 @@ export default function GiftToggleV2({
   const [expiresAt, setExpiresAt] = useState(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState(null);
+  const [celebrate, setCelebrate] = useState(false);
 
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail.trim());
   const canProceed = firstName.trim() && lastName.trim() && emailValid;
@@ -69,6 +119,8 @@ export default function GiftToggleV2({
       setGiftCode(data.token);
       setExpiresAt(data.expires_at);
       setStep("success");
+      setCelebrate(true);
+      setTimeout(() => setCelebrate(false), 1600);
     } catch {
       setError("Something went wrong. Please try again.");
       setStep("confirming");
@@ -213,27 +265,45 @@ export default function GiftToggleV2({
 
       {/* Success — show code */}
       {enabled && step === "success" && giftCode && (
-        <div className="mt-3 bg-emerald-50 border border-emerald-200 rounded-2xl p-5 space-y-4">
-          <div className="text-center">
-            <p className="text-sm font-semibold text-slate-800 mb-1">Gift sent!</p>
-            <p className="text-xs text-slate-500">
-              Share this code with {firstName} — they'll need it + their SA ID to claim on Mint.{expiresAt ? ` Expires at ${formatExpiry(expiresAt)}.` : ""}
+        <div className="mt-3 relative" style={{ animation: "gift-pop 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards" }}>
+          <ConfettiBurst active={celebrate} />
+          <style>{`
+            @keyframes gift-pop {
+              0%   { opacity: 0; transform: scale(0.85) translateY(12px); }
+              100% { opacity: 1; transform: scale(1) translateY(0); }
+            }
+            @keyframes gift-pulse {
+              0%, 100% { box-shadow: 0 0 0 0 rgba(124,58,237,0.35); }
+              50%       { box-shadow: 0 0 0 10px rgba(124,58,237,0); }
+            }
+          `}</style>
+          <div className="bg-gradient-to-br from-violet-600 to-indigo-700 rounded-2xl p-5 space-y-4">
+            <div className="text-center">
+              <div className="text-4xl mb-2" style={{ animation: "gift-pop 0.6s 0.1s cubic-bezier(0.34,1.56,0.64,1) both" }}>🎁</div>
+              <p className="text-base font-bold text-white mb-1">Gift sent!</p>
+              <p className="text-xs text-violet-200 leading-relaxed">
+                Share this code with {firstName} — they'll need it + their SA ID to claim on Mint.{expiresAt ? ` Expires at ${formatExpiry(expiresAt)}.` : ""}
+              </p>
+            </div>
+            <div
+              className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 flex flex-col items-center gap-3 border border-white/20"
+              style={{ animation: "gift-pulse 2s 0.8s ease-in-out infinite" }}
+            >
+              <p className="text-xs font-bold text-violet-200 uppercase tracking-widest">Claim Code</p>
+              <p className="text-4xl font-black tracking-[0.4em] text-white font-mono">{giftCode}</p>
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="flex items-center gap-1.5 rounded-xl bg-white px-5 py-2 text-sm font-bold text-violet-700 active:scale-95 transition-all"
+              >
+                {copied ? <Check size={14} /> : <Copy size={14} />}
+                {copied ? "Copied!" : "Copy Code"}
+              </button>
+            </div>
+            <p className="text-xs text-violet-300 text-center leading-relaxed">
+              Recipient enters this code + SA ID on Mint to claim their investment.
             </p>
           </div>
-          <div className="bg-white rounded-2xl p-4 flex flex-col items-center gap-3 border border-emerald-100">
-            <p className="text-4xl font-black tracking-[0.4em] text-slate-900 font-mono">{giftCode}</p>
-            <button
-              type="button"
-              onClick={handleCopy}
-              className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-5 py-2 text-sm font-semibold text-white active:scale-95 transition-all"
-            >
-              {copied ? <Check size={14} /> : <Copy size={14} />}
-              {copied ? "Copied!" : "Copy Code"}
-            </button>
-          </div>
-          <p className="text-xs text-slate-400 text-center leading-relaxed">
-            The recipient enters this code + their SA ID number on the Mint app to claim their investment.
-          </p>
         </div>
       )}
     </div>
