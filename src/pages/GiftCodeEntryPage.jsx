@@ -1,13 +1,13 @@
 import React, { useState } from "react";
-import { ArrowLeft, ShieldAlert } from "lucide-react";
+import { ArrowLeft, ShieldAlert, UserPlus } from "lucide-react";
 
 export default function GiftCodeEntryPage({ onBack, onNavigate }) {
   const [idNumber, setIdNumber] = useState("");
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  // Hard gate state when FICA/mint setup is incomplete
-  const [ficaGate, setFicaGate] = useState(null); // null | { giftPreview, reason }
+  const [ficaGate, setFicaGate] = useState(null); // null | { giftPreview, reason, cleanCode, cleanId }
+  const [signupGate, setSignupGate] = useState(null); // null | { giftPreview, cleanCode, cleanId }
 
   const canSubmit = idNumber.replace(/\D/g, "").length === 13 && code.replace(/\D/g, "").length === 6;
 
@@ -37,7 +37,8 @@ export default function GiftCodeEntryPage({ onBack, onNavigate }) {
       const cleanId = idNumber.replace(/\D/g, "");
 
       if (registration_status === "not_registered") {
-        onNavigate?.("auth", { pendingGiftCode: cleanCode, pendingIdNumber: cleanId, giftPreview: gift_preview });
+        setSignupGate({ giftPreview: gift_preview, cleanCode, cleanId });
+        setLoading(false);
         return;
       }
 
@@ -57,6 +58,66 @@ export default function GiftCodeEntryPage({ onBack, onNavigate }) {
     } finally {
       setLoading(false);
     }
+  }
+
+  // ── Not a Mint client — prompt to sign up ────────────────────────────────
+  if (signupGate) {
+    return (
+      <div className="min-h-screen bg-[#f8f6fa] flex flex-col">
+        <div className="bg-white px-4 pt-12 pb-4 flex items-center gap-3 shadow-sm">
+          <button onClick={() => setSignupGate(null)} className="p-2 rounded-xl hover:bg-slate-100 transition-colors">
+            <ArrowLeft size={20} className="text-slate-700" />
+          </button>
+          <h1 className="text-lg font-bold text-slate-800">Create an Account</h1>
+        </div>
+
+        <div className="flex-1 flex items-start justify-center px-5 pt-8">
+          <div className="w-full max-w-sm space-y-5">
+            {/* Gift preview */}
+            {signupGate.giftPreview && (
+              <div className="bg-gradient-to-br from-violet-50 to-indigo-50 rounded-3xl p-5 text-center">
+                <div className="text-3xl mb-2">🎁</div>
+                <p className="text-slate-600 text-sm">
+                  <span className="font-semibold text-slate-800">{signupGate.giftPreview.sender_name || "Someone"}</span> gifted you
+                </p>
+                <p className="text-lg font-extrabold text-slate-900 mt-1">{signupGate.giftPreview.asset_name}</p>
+              </div>
+            )}
+
+            {/* Message */}
+            <div className="flex items-start gap-3 bg-violet-50 border border-violet-100 rounded-2xl px-4 py-4">
+              <UserPlus size={20} className="text-violet-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-violet-800 mb-1">You're not on Mint yet</p>
+                <p className="text-xs text-violet-700 leading-relaxed">
+                  To claim this investment gift you need a Mint account. Sign up — it only takes a few minutes. Your gift will be waiting for you once you're set up.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => onNavigate?.("auth", {
+                pendingGiftCode: signupGate.cleanCode,
+                pendingIdNumber: signupGate.cleanId,
+                giftPreview: signupGate.giftPreview,
+              })}
+              className="w-full py-4 rounded-2xl bg-gradient-to-br from-violet-700 to-indigo-800 text-white font-bold text-sm active:scale-95 transition-all"
+            >
+              Sign Up & Claim Gift
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSignupGate(null)}
+              className="w-full py-3 rounded-2xl border border-slate-200 text-slate-600 font-semibold text-sm"
+            >
+              Back
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   // ── FICA hard gate screen ─────────────────────────────────────────────────
