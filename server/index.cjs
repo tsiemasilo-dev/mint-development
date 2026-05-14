@@ -8369,18 +8369,7 @@ app.post("/api/gift/create", async (req, res) => {
           from: "Mint <noreply@mymint.co.za>",
           to: [recipientEmail],
           subject: `${senderName} gifted you R${amountRands.toFixed(2)} on Mint`,
-          html: `
-<div style="font-family:Inter,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#ffffff">
-  <h2 style="font-size:22px;font-weight:700;color:#0f172a;margin:0 0 8px">${senderName} gifted you an investment 🎁</h2>
-  <p style="font-size:15px;color:#475569;margin:0 0 24px">You've received <strong>R${amountRands.toFixed(2)}</strong> invested in <strong>${asset_name}</strong> on Mint.</p>
-  <div style="background:#f8f7ff;border:1px solid #e2d9ff;border-radius:16px;padding:24px;text-align:center;margin-bottom:24px">
-    <p style="font-size:12px;font-weight:600;color:#7c3aed;text-transform:uppercase;letter-spacing:0.08em;margin:0 0 8px">Your 6-digit claim code</p>
-    <p style="font-size:40px;font-weight:900;letter-spacing:0.35em;color:#0f172a;margin:0;font-family:monospace">${giftToken}</p>
-    <p style="font-size:12px;color:#94a3b8;margin:12px 0 0">Open the Mint app → Claim a Gift → enter this code + your SA ID</p>
-  </div>
-  <a href="${claimUrl}" style="display:block;background:#6d28d9;color:#ffffff;text-decoration:none;text-align:center;padding:14px 24px;border-radius:12px;font-size:15px;font-weight:700;margin-bottom:24px">${isRegistration ? "Register & Claim Gift" : "Claim My Gift on Mint"}</a>
-  <p style="font-size:12px;color:#94a3b8;text-align:center;margin:0">This gift expires in 4 hours. Mint (Pty) Ltd is a registered FSP (55118).</p>
-</div>`,
+          html: `<p>${senderName} has gifted you R${amountRands.toFixed(2)} in ${asset_name}.</p><p><a href="${claimUrl}">${isRegistration ? "Register & Claim Gift" : "Claim My Investment Gift"}</a></p>`,
         });
       } catch (e) { console.warn("[gift/create] recipient email:", e.message); }
     }

@@ -12,7 +12,6 @@ export default function GiftToggleV2({
 }) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [recipientEmail, setRecipientEmail] = useState("");
   const [message, setMessage] = useState("");
   const [step, setStep] = useState("form"); // form | confirming | loading | success
   const [giftCode, setGiftCode] = useState(null);
@@ -20,14 +19,12 @@ export default function GiftToggleV2({
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState(null);
 
-  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail.trim());
-  const canProceed = firstName.trim() && lastName.trim() && emailValid;
+  const canProceed = firstName.trim() && lastName.trim();
 
   function handleToggle(val) {
     setStep("form");
     setFirstName("");
     setLastName("");
-    setRecipientEmail("");
     setMessage("");
     setGiftCode(null);
     setError(null);
@@ -54,7 +51,6 @@ export default function GiftToggleV2({
           security_symbol: security?.symbol,
           asset_name: security?.name || security?.symbol,
           amount: totalCostCents,
-          recipient_identifier: recipientEmail.trim().toLowerCase(),
           recipient_first_name: firstName.trim(),
           recipient_last_name: lastName.trim(),
           message: message.trim() || undefined,
@@ -135,15 +131,6 @@ export default function GiftToggleV2({
             </div>
           </div>
           <div>
-            <label className="text-xs font-semibold text-slate-600 mb-1 block">Recipient Email <span className="text-red-500">*</span></label>
-            <input
-              type="email" value={recipientEmail}
-              onChange={e => setRecipientEmail(e.target.value)}
-              placeholder="john@example.com"
-              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300"
-            />
-          </div>
-          <div>
             <label className="text-xs font-semibold text-slate-600 mb-1 block">
               Personal message <span className="text-slate-400 font-normal">(optional)</span>
             </label>
@@ -181,7 +168,6 @@ export default function GiftToggleV2({
           </div>
           <div className="bg-white rounded-xl p-3 space-y-2">
             <Row label="To" value={`${firstName} ${lastName}`} />
-            <Row label="Email" value={recipientEmail.trim().toLowerCase()} />
             <Row label="Asset" value={security?.name || security?.symbol} />
             {amountDisplay && <Row label="Amount" value={amountDisplay} valueClass="text-violet-700 font-bold" />}
             {message && (
@@ -217,7 +203,7 @@ export default function GiftToggleV2({
           <div className="text-center">
             <p className="text-sm font-semibold text-slate-800 mb-1">Gift sent!</p>
             <p className="text-xs text-slate-500">
-              The code has been sent to {recipientEmail.trim().toLowerCase()}. {firstName} enters it with their SA ID on the Mint app to claim. Expires at {formatExpiry(expiresAt)}.
+              Share this code with {firstName} — they enter it with their SA ID on the Mint app to claim. Expires at {formatExpiry(expiresAt)}.
             </p>
           </div>
           <div className="bg-white rounded-2xl p-4 flex flex-col items-center gap-3 border border-emerald-100">
