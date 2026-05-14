@@ -8639,11 +8639,9 @@ app.post("/api/gift/create-v2", async (req, res) => {
   <h2 style="font-size:22px;font-weight:700;color:#0f172a;margin:0 0 8px">${senderName} gifted you an investment 🎁</h2>
   <p style="font-size:15px;color:#475569;margin:0 0 24px">You've received <strong>R${amountRands.toFixed(2)}</strong> invested in <strong>${asset_name}</strong> on Mint.</p>
   <div style="background:#f8f7ff;border:1px solid #e2d9ff;border-radius:16px;padding:24px;text-align:center;margin-bottom:24px">
-    <p style="font-size:12px;font-weight:600;color:#7c3aed;text-transform:uppercase;letter-spacing:0.08em;margin:0 0 8px">Your 6-digit claim code</p>
-    <p style="font-size:40px;font-weight:900;letter-spacing:0.35em;color:#0f172a;margin:0;font-family:monospace">${gift.token}</p>
-    <p style="font-size:12px;color:#94a3b8;margin:12px 0 0">Open the Mint app → Claim a Gift → enter this code + your SA ID</p>
+    <p style="font-size:14px;color:#475569;margin:0">Ask ${senderName} for the 6-digit claim code, then open the Mint app, tap <strong>Claim a Gift</strong> and enter the code + your SA ID number.</p>
   </div>
-  <a href="${APP_URL}" style="display:block;background:#6d28d9;color:#ffffff;text-decoration:none;text-align:center;padding:14px 24px;border-radius:12px;font-size:15px;font-weight:700;margin-bottom:24px">Claim My Gift on Mint</a>
+  <a href="${APP_URL}" style="display:block;background:#6d28d9;color:#ffffff;text-decoration:none;text-align:center;padding:14px 24px;border-radius:12px;font-size:15px;font-weight:700;margin-bottom:24px">Open Mint App</a>
   <p style="font-size:12px;color:#94a3b8;text-align:center;margin:0">This gift expires in 4 hours. Mint (Pty) Ltd is a registered FSP (55118).</p>
 </div>`,
         });
