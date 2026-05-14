@@ -781,7 +781,7 @@ const HomePage = ({
           {/* Quick Actions Carousel */}
           <QuickActionsCarousel
             items={[
-              { id: 1, label: "Invest", description: "Start investing", image: "https://mfxnghmuccevsxwcetej.supabase.co/storage/v1/object/public/Mint%20Assets/MINT%20Basket.avif", onClick: onOpenStrategies || onOpenInvest },
+              { id: 1, label: "Invest", description: "Start investing", image: "https://mfxnghmuccevsxwcetej.supabase.co/storage/v1/object/public/Mint%20Assets/MINT%20Basket.avif", objectFit: "object-contain", onClick: onOpenStrategies || onOpenInvest },
               { id: 2, label: "Child Account", description: "Manage kids", image: "https://mfxnghmuccevsxwcetej.supabase.co/storage/v1/object/public/Mint%20Assets/PSD%20MINT%20EMAIL%20TEMPLATE%20HEADER%20STANDARD%20Child%20Account%20Verified%201.png", onClick: onOpenFamily },
               { id: 3, label: "News", description: "Market insights", image: "https://mfxnghmuccevsxwcetej.supabase.co/storage/v1/object/public/Mint%20Assets/News.avif", onClick: () => onOpenNews && onOpenNews("news") },
               { id: 4, label: "Gifting", description: "Send gifts", image: "https://mfxnghmuccevsxwcetej.supabase.co/storage/v1/object/public/Mint%20Assets/Gifting.avif", onClick: () => {} },
