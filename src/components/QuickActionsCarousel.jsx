@@ -40,7 +40,7 @@ const QuickActionsCarousel = ({ items }) => {
                 <img
                   src={item.image}
                   alt={item.label}
-                  className="h-48 w-full rounded-2xl object-cover"
+                  className={`h-48 w-full rounded-2xl ${item.objectFit || "object-cover"}`}
                 />
               ) : (
                 <div className="h-48 rounded-2xl bg-gradient-to-br from-slate-300 to-slate-400 flex flex-col items-center justify-center gap-3 p-6">
