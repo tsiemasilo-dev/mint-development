@@ -8620,21 +8620,47 @@ app.post("/api/gift/create-v2", async (req, res) => {
     });
   } catch (e) { console.warn("[gift/create-v2] tx:", e.message); }
 
-  // Send recipient notification email
+  // Send sender confirmation + recipient notification emails
   const recipientEmail = recipient_identifier?.trim().toLowerCase();
-  if (recipientEmail) {
-    try {
-      const resend = getResendClient();
-      if (resend) {
-        const { data: senderProfile } = await db.from("profiles").select("first_name, last_name").eq("id", user.id).maybeSingle();
-        const senderName = [senderProfile?.first_name, senderProfile?.last_name].filter(Boolean).join(" ") || "Someone";
-        const amountRands = amount / 100;
-        const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://mymint.co.za";
-        await resend.emails.send({
-          from: "Mint <noreply@mymint.co.za>",
-          to: [recipientEmail],
-          subject: `${senderName} gifted you R${amountRands.toFixed(2)} on Mint`,
-          html: `
+  try {
+    const resend = getResendClient();
+    if (resend) {
+      const { data: senderProfile } = await db.from("profiles").select("first_name, last_name, email").eq("id", user.id).maybeSingle();
+      const senderName = [senderProfile?.first_name, senderProfile?.last_name].filter(Boolean).join(" ") || "Someone";
+      const amountRands = amount / 100;
+      const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://mymint.co.za";
+
+      // Sender confirmation
+      if (senderProfile?.email) {
+        try {
+          await resend.emails.send({
+            from: "Mint <noreply@mymint.co.za>",
+            to: [senderProfile.email],
+            subject: `Your gift of R${amountRands.toFixed(2)} in ${asset_name} has been sent`,
+            html: `
+<div style="font-family:Inter,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#ffffff">
+  <h2 style="font-size:22px;font-weight:700;color:#0f172a;margin:0 0 8px">Gift sent! 🎁</h2>
+  <p style="font-size:15px;color:#475569;margin:0 0 24px">Hi ${senderProfile.first_name || "there"}, your gift of <strong>R${amountRands.toFixed(2)}</strong> in <strong>${asset_name}</strong> to ${recipient_first_name} ${recipient_last_name} has been sent successfully.</p>
+  <div style="background:#f8f7ff;border:1px solid #e2d9ff;border-radius:16px;padding:20px;margin-bottom:24px">
+    <p style="font-size:12px;font-weight:600;color:#7c3aed;text-transform:uppercase;letter-spacing:0.08em;margin:0 0 6px">What happens next?</p>
+    <p style="font-size:13px;color:#475569;margin:0">Share the 6-digit claim code with ${recipient_first_name}. They'll need it along with their SA ID number to claim the gift on Mint. The gift expires in 4 hours.</p>
+  </div>
+  <a href="${APP_URL}" style="display:block;background:#6d28d9;color:#ffffff;text-decoration:none;text-align:center;padding:14px 24px;border-radius:12px;font-size:15px;font-weight:700;margin-bottom:24px">Open Mint App</a>
+  <p style="font-size:12px;color:#94a3b8;text-align:center;margin:0">Mint (Pty) Ltd is a registered FSP (55118).</p>
+</div>`,
+          });
+          console.log(`[gift/create-v2] Sender confirmation sent to ${senderProfile.email}`);
+        } catch (e) { console.warn("[gift/create-v2] sender email:", e.message); }
+      }
+
+      // Recipient notification
+      if (recipientEmail) {
+        try {
+          await resend.emails.send({
+            from: "Mint <noreply@mymint.co.za>",
+            to: [recipientEmail],
+            subject: `${senderName} gifted you R${amountRands.toFixed(2)} on Mint`,
+            html: `
 <div style="font-family:Inter,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#ffffff">
   <h2 style="font-size:22px;font-weight:700;color:#0f172a;margin:0 0 8px">${senderName} gifted you an investment 🎁</h2>
   <p style="font-size:15px;color:#475569;margin:0 0 24px">You've received <strong>R${amountRands.toFixed(2)}</strong> invested in <strong>${asset_name}</strong> on Mint.</p>
@@ -8644,11 +8670,12 @@ app.post("/api/gift/create-v2", async (req, res) => {
   <a href="${APP_URL}" style="display:block;background:#6d28d9;color:#ffffff;text-decoration:none;text-align:center;padding:14px 24px;border-radius:12px;font-size:15px;font-weight:700;margin-bottom:24px">Open Mint App</a>
   <p style="font-size:12px;color:#94a3b8;text-align:center;margin:0">This gift expires in 4 hours. Mint (Pty) Ltd is a registered FSP (55118).</p>
 </div>`,
-        });
-        console.log(`[gift/create-v2] Recipient email sent to ${recipientEmail}`);
+          });
+          console.log(`[gift/create-v2] Recipient email sent to ${recipientEmail}`);
+        } catch (e) { console.warn("[gift/create-v2] recipient email:", e.message); }
       }
-    } catch (e) { console.warn("[gift/create-v2] recipient email:", e.message); }
-  }
+    }
+  } catch (e) { console.warn("[gift/create-v2] emails:", e.message); }
 
   return res.json({ success: true, token: gift.token, expires_at: gift.expires_at, gift_id: gift.id });
 });
