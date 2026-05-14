@@ -8484,23 +8484,6 @@ app.post("/api/gift/cancel", async (req, res) => {
   return res.json({ success: true, refunded_amount: gift.amount });
 });
 
-app.get("/api/gift/sent", async (req, res) => {
-  const authHeader = req.headers.authorization || "";
-  const token = authHeader.replace("Bearer ", "");
-  const db = supabaseAdmin || supabase;
-  if (!db) return res.status(500).json({ error: "Database not available" });
-
-  const { data: { user }, error: authErr } = await db.auth.getUser(token);
-  if (authErr || !user) return res.status(401).json({ error: "Unauthorized" });
-
-  const { data: gifts, error } = await db.from("gift_claims")
-    .select("id, recipient_identifier, amount, asset_type, asset_name, status, message, expires_at, created_at, claimed_at, cancelled_at")
-    .eq("sender_user_id", user.id).order("created_at", { ascending: false }).limit(50);
-
-  if (error) return res.status(500).json({ error: "Failed to load gifts." });
-  return res.json({ gifts: gifts || [] });
-});
-
 app.get("/api/gift/:token", async (req, res) => {
   const db = supabaseAdmin || supabase;
   if (!db) return res.status(500).json({ error: "Database not available" });
