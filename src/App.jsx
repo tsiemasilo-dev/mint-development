@@ -72,6 +72,7 @@ import { useOnboardingStatus } from "./lib/useOnboardingStatus.js";
 import { checkOnboardingComplete } from "./lib/checkOnboardingComplete.js";
 import MaintenanceModal from "./components/MaintenanceModal.jsx";
 import HomeSkeleton from "./components/HomeSkeleton.jsx";
+import GiftReceivedPopup from "./components/GiftReceivedPopup.jsx";
 
 const PERSISTENT_KEYS = [
   'mint_device_id',
@@ -1211,6 +1212,7 @@ const App = () => {
       <Suspense fallback={<HomeSkeleton />}>
         <>
           {showOpenStrategiesMaintenance && <MaintenanceModal onClose={() => setShowOpenStrategiesMaintenance(false)} />}
+          <GiftReceivedPopup onClaim={() => navigateTo("giftCodeEntry")} />
           {/* Home tab – always mounted */}
           <div style={{ display: currentPage === 'home' ? 'block' : 'none' }}>
             <AppLayout
