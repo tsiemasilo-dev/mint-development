@@ -348,7 +348,7 @@ const UnsecuredCreditDashboard = ({ profile, onTabChange, onOpenNotifications })
       : (loan?.status ? String(loan.status).replace(/_/g, " ") : "Unknown");
 
   // ─── Display rate strings ────────────────────────────────────────────────
-  const monthlyRatePct = 4.5;
+  const monthlyRatePct = 5;
   const maxEffectiveRatePct = 27;
   const effectiveRatePct = Math.min(maxEffectiveRatePct, Math.max(0, months * monthlyRatePct));
   const annualRate = `${Number.isInteger(effectiveRatePct) ? effectiveRatePct.toFixed(0) : effectiveRatePct.toFixed(1)}%`;
@@ -543,7 +543,7 @@ const UnsecuredCreditDashboard = ({ profile, onTabChange, onOpenNotifications })
         head: [["Item", "Rate / Detail", "Amount (ZAR)"]],
         body: [
           ["Principal amount disbursed", "—", formatZar(principal)],
-          ["Interest (4.5% p.m. on reducing balance)", `${annualRate} over ${months || 0} months (max 27%)`, formatZar(totalInterest)],
+          ["Interest (5% p.m. on reducing balance)", `${annualRate} over ${months || 0} months (max 27%)`, formatZar(totalInterest)],
           ["Monthly admin fee × " + months, "R69.00 per month (fixed)", formatZar(totalAdminFees)],
           ["", "", ""],
           [{ content: "TOTAL COST OF CREDIT (TCC)", styles: { fontStyle: "bold" } }, { content: "Interest + admin fees", styles: {} }, { content: formatZar(totalRepay - principal), styles: { fontStyle: "bold" } }],
