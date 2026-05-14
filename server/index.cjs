@@ -8554,7 +8554,7 @@ app.post("/api/gift/create-v2", async (req, res) => {
   const { data: { user }, error: authErr } = await db.auth.getUser(token);
   if (authErr || !user) return res.status(401).json({ error: "Unauthorized" });
 
-  const { asset_type, strategy_id, security_id, security_symbol, asset_name, amount, recipient_first_name, recipient_last_name, message } = req.body || {};
+  const { asset_type, strategy_id, security_id, security_symbol, asset_name, amount, recipient_identifier, recipient_first_name, recipient_last_name, message } = req.body || {};
 
   if (!asset_name) return res.status(400).json({ error: "asset_name is required." });
   if (!amount || typeof amount !== "number" || amount <= 0) return res.status(400).json({ error: "amount must be a positive number in cents." });
@@ -8590,7 +8590,7 @@ app.post("/api/gift/create-v2", async (req, res) => {
 
   const { data: gift, error: insertErr } = await db.from("gift_claims").insert({
     sender_user_id: user.id,
-    recipient_identifier: null,
+    recipient_identifier: recipient_identifier?.trim().toLowerCase() || null,
     recipient_user_id: null,
     amount, asset_type,
     strategy_id: strategy_id || null,
@@ -8619,6 +8619,38 @@ app.post("/api/gift/create-v2", async (req, res) => {
       status: "posted", transaction_date: now, created_at: now,
     });
   } catch (e) { console.warn("[gift/create-v2] tx:", e.message); }
+
+  // Send recipient notification email
+  const recipientEmail = recipient_identifier?.trim().toLowerCase();
+  if (recipientEmail) {
+    try {
+      const resend = getResendClient();
+      if (resend) {
+        const { data: senderProfile } = await db.from("profiles").select("first_name, last_name").eq("id", user.id).maybeSingle();
+        const senderName = [senderProfile?.first_name, senderProfile?.last_name].filter(Boolean).join(" ") || "Someone";
+        const amountRands = amount / 100;
+        const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://mymint.co.za";
+        await resend.emails.send({
+          from: "Mint <noreply@mymint.co.za>",
+          to: [recipientEmail],
+          subject: `${senderName} gifted you R${amountRands.toFixed(2)} on Mint`,
+          html: `
+<div style="font-family:Inter,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#ffffff">
+  <h2 style="font-size:22px;font-weight:700;color:#0f172a;margin:0 0 8px">${senderName} gifted you an investment 🎁</h2>
+  <p style="font-size:15px;color:#475569;margin:0 0 24px">You've received <strong>R${amountRands.toFixed(2)}</strong> invested in <strong>${asset_name}</strong> on Mint.</p>
+  <div style="background:#f8f7ff;border:1px solid #e2d9ff;border-radius:16px;padding:24px;text-align:center;margin-bottom:24px">
+    <p style="font-size:12px;font-weight:600;color:#7c3aed;text-transform:uppercase;letter-spacing:0.08em;margin:0 0 8px">Your 6-digit claim code</p>
+    <p style="font-size:40px;font-weight:900;letter-spacing:0.35em;color:#0f172a;margin:0;font-family:monospace">${gift.token}</p>
+    <p style="font-size:12px;color:#94a3b8;margin:12px 0 0">Open the Mint app → Claim a Gift → enter this code + your SA ID</p>
+  </div>
+  <a href="${APP_URL}" style="display:block;background:#6d28d9;color:#ffffff;text-decoration:none;text-align:center;padding:14px 24px;border-radius:12px;font-size:15px;font-weight:700;margin-bottom:24px">Claim My Gift on Mint</a>
+  <p style="font-size:12px;color:#94a3b8;text-align:center;margin:0">This gift expires in 4 hours. Mint (Pty) Ltd is a registered FSP (55118).</p>
+</div>`,
+        });
+        console.log(`[gift/create-v2] Recipient email sent to ${recipientEmail}`);
+      }
+    } catch (e) { console.warn("[gift/create-v2] recipient email:", e.message); }
+  }
 
   return res.json({ success: true, token: gift.token, expires_at: gift.expires_at, gift_id: gift.id });
 });
