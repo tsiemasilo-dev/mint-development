@@ -217,7 +217,7 @@ export default function GiftToggleV2({
           <div className="text-center">
             <p className="text-sm font-semibold text-slate-800 mb-1">Gift sent!</p>
             <p className="text-xs text-slate-500">
-              A notification has been sent to {recipientEmail.trim().toLowerCase()}. You can also share this code directly with {firstName}. Expires at {formatExpiry(expiresAt)}.
+              This code has been emailed to {recipientEmail.trim().toLowerCase()}. {firstName} can also enter it manually in the Mint app with their SA ID. Expires at {formatExpiry(expiresAt)}.
             </p>
           </div>
           <div className="bg-white rounded-2xl p-4 flex flex-col items-center gap-3 border border-emerald-100">
