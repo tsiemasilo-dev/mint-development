@@ -8612,18 +8612,22 @@ app.post("/api/gift/create-v2", async (req, res) => {
   const { data: senderProfile } = await db.from("profiles").select("first_name, last_name").eq("id", user.id).maybeSingle();
   const senderName = [senderProfile?.first_name, senderProfile?.last_name].filter(Boolean).join(" ") || "Someone";
 
-  // In-app notification if recipient is an existing Mint user
+  // In-app notification — only for fully KYC'd Mint users
   if (recipientEmail) {
     try {
       const { data: recipientProfile } = await db.from("profiles").select("id").eq("email", recipientEmail).maybeSingle();
       if (recipientProfile?.id) {
-        await db.from("notifications").insert({
-          user_id: recipientProfile.id,
-          title: `You've received an investment gift! 🎁`,
-          body: `${senderName} gifted you ${asset_name} on Mint. Ask them for the 6-digit claim code to claim it.`,
-          type: "investment",
-          payload: { action: "gift_received", gift_id: gift.id, asset_name },
-        });
+        const { data: onboarding } = await db.from("user_onboarding").select("kyc_status").eq("user_id", recipientProfile.id).maybeSingle();
+        const kycDone = onboarding?.kyc_status === "verified" || onboarding?.kyc_status === "onboarding_complete";
+        if (kycDone) {
+          await db.from("notifications").insert({
+            user_id: recipientProfile.id,
+            title: `You've been gifted ${asset_name}! 🎁`,
+            body: `${senderName} gifted you ${asset_name} on Mint. Ask them for your 6-digit claim code to claim it.`,
+            type: "investment",
+            payload: { action: "gift_received", gift_id: gift.id, asset_name },
+          });
+        }
       }
     } catch (e) { console.warn("[gift/create-v2] in-app notification:", e.message); }
   }
