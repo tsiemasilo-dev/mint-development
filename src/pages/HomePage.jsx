@@ -779,7 +779,14 @@ const HomePage = ({
           </div>
 
           {/* Quick Actions Carousel */}
-          <QuickActionsCarousel />
+          <QuickActionsCarousel
+            items={[
+              { id: 1, label: "Invest", description: "Start investing", image: "/carousel/item-1.jpg", onClick: onOpenStrategies || onOpenInvest },
+              { id: 2, label: "Child Account", description: "Manage kids", image: "/carousel/item-2.jpg", onClick: onOpenFamily },
+              { id: 3, label: "News", description: "Market insights", image: "/carousel/item-3.jpg", onClick: () => onOpenNews && onOpenNews("news") },
+              { id: 4, label: "Gifting", description: "Send gifts", image: "/carousel/item-4.jpg", onClick: () => {} },
+            ]}
+          />
         </section>
 
         {onboardingChecked && outstandingActions.length > 0 ? (

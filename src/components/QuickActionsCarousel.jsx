@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from "react";
 
-const QuickActionsCarousel = () => {
+const QuickActionsCarousel = ({ items }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  const carouselItems = [
-    { id: 1, label: "Item 1", description: "Quick action item" },
-    { id: 2, label: "Item 2", description: "Quick action item" },
-    { id: 3, label: "Item 3", description: "Quick action item" },
-    { id: 4, label: "Item 4", description: "Quick action item" },
+  const carouselItems = items || [
+    { id: 1, label: "Item 1", description: "Quick action item", image: "/carousel/item-1.jpg", onClick: null },
+    { id: 2, label: "Item 2", description: "Quick action item", image: "/carousel/item-2.jpg", onClick: null },
+    { id: 3, label: "Item 3", description: "Quick action item", image: "/carousel/item-3.jpg", onClick: null },
+    { id: 4, label: "Item 4", description: "Quick action item", image: "/carousel/item-4.jpg", onClick: null },
   ];
 
   useEffect(() => {
@@ -28,26 +28,36 @@ const QuickActionsCarousel = () => {
       <div className="relative rounded-2xl overflow-hidden">
         <div className="flex gap-4">
           {carouselItems.map((item, index) => (
-            <div
+            <button
               key={item.id}
+              onClick={item.onClick}
               className={`w-full flex-shrink-0 transform transition-opacity duration-500 ease-in-out ${
                 index === currentIndex ? "opacity-100" : "opacity-0 hidden"
               }`}
+              type="button"
             >
-              <div className="h-48 rounded-2xl bg-gradient-to-br from-slate-300 to-slate-400 flex flex-col items-center justify-center gap-3 p-6">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-200">
-                  <span className="text-xs font-bold text-slate-600">
-                    {item.id}
-                  </span>
+              {item.image ? (
+                <img
+                  src={item.image}
+                  alt={item.label}
+                  className="h-48 w-full rounded-2xl object-cover"
+                />
+              ) : (
+                <div className="h-48 rounded-2xl bg-gradient-to-br from-slate-300 to-slate-400 flex flex-col items-center justify-center gap-3 p-6">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-200">
+                    <span className="text-xs font-bold text-slate-600">
+                      {item.id}
+                    </span>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-semibold text-slate-700">
+                      {item.label}
+                    </p>
+                    <p className="text-xs text-slate-600">{item.description}</p>
+                  </div>
                 </div>
-                <div className="text-center">
-                  <p className="text-sm font-semibold text-slate-700">
-                    {item.label}
-                  </p>
-                  <p className="text-xs text-slate-600">{item.description}</p>
-                </div>
-              </div>
-            </div>
+              )}
+            </button>
           ))}
         </div>
 
