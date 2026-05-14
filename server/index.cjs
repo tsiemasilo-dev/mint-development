@@ -8605,8 +8605,8 @@ app.post("/api/gift/create-v2", async (req, res) => {
 
   if (insertErr) {
     await db.from("wallets").update({ balance: originalBalance }).eq("user_id", user.id);
-    console.error("[gift/create-v2] insert error:", insertErr.message);
-    return res.status(500).json({ error: "Failed to create gift." });
+    console.error("[gift/create-v2] insert error:", insertErr.message, insertErr.details, insertErr.hint);
+    return res.status(500).json({ error: "Failed to create gift.", detail: insertErr.message });
   }
 
   const now = new Date().toISOString();
