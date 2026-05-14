@@ -37,11 +37,16 @@ const QuickActionsCarousel = ({ items }) => {
               type="button"
             >
               {item.image ? (
-                <img
-                  src={item.image}
-                  alt={item.label}
-                  className={`h-48 w-full rounded-2xl ${item.objectFit || "object-cover"}`}
-                />
+                <div
+                  className="h-48 w-full rounded-2xl overflow-hidden"
+                  style={{ backgroundColor: item.bgColor || "transparent" }}
+                >
+                  <img
+                    src={item.image}
+                    alt={item.label}
+                    className={`h-full w-full ${item.objectFit || "object-cover"}`}
+                  />
+                </div>
               ) : (
                 <div className="h-48 rounded-2xl bg-gradient-to-br from-slate-300 to-slate-400 flex flex-col items-center justify-center gap-3 p-6">
                   <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-200">
