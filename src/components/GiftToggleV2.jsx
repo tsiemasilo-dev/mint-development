@@ -263,46 +263,53 @@ export default function GiftToggleV2({
         </div>
       )}
 
-      {/* Success — show code */}
+      {/* Success — full-screen centered overlay */}
       {enabled && step === "success" && giftCode && (
-        <div className="mt-3 relative" style={{ animation: "gift-pop 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards" }}>
-          <ConfettiBurst active={celebrate} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6" style={{ background: "rgba(15,23,42,0.7)", backdropFilter: "blur(6px)", animation: "fade-in 0.3s ease forwards" }}>
           <style>{`
-            @keyframes gift-pop {
-              0%   { opacity: 0; transform: scale(0.85) translateY(12px); }
-              100% { opacity: 1; transform: scale(1) translateY(0); }
-            }
-            @keyframes gift-pulse {
-              0%, 100% { box-shadow: 0 0 0 0 rgba(124,58,237,0.35); }
-              50%       { box-shadow: 0 0 0 10px rgba(124,58,237,0); }
-            }
+            @keyframes fade-in   { from { opacity:0 } to { opacity:1 } }
+            @keyframes gift-pop  { 0% { opacity:0; transform:scale(0.8) translateY(20px) } 100% { opacity:1; transform:scale(1) translateY(0) } }
+            @keyframes gift-pulse { 0%,100% { box-shadow:0 0 0 0 rgba(124,58,237,0.4) } 50% { box-shadow:0 0 0 12px rgba(124,58,237,0) } }
+            @keyframes emoji-bounce { 0%,100% { transform:translateY(0) } 50% { transform:translateY(-8px) } }
           `}</style>
-          <div className="bg-gradient-to-br from-violet-600 to-indigo-700 rounded-2xl p-5 space-y-4">
+
+          {/* Confetti bursts from center */}
+          <ConfettiBurst active={celebrate} />
+
+          {/* Card */}
+          <div className="w-full max-w-sm bg-gradient-to-br from-violet-600 to-indigo-700 rounded-3xl p-6 space-y-5 shadow-2xl" style={{ animation: "gift-pop 0.45s cubic-bezier(0.34,1.56,0.64,1) forwards" }}>
             <div className="text-center">
-              <div className="text-4xl mb-2" style={{ animation: "gift-pop 0.6s 0.1s cubic-bezier(0.34,1.56,0.64,1) both" }}>🎁</div>
-              <p className="text-base font-bold text-white mb-1">Gift sent!</p>
+              <div className="text-5xl mb-3" style={{ animation: "emoji-bounce 1.6s 0.5s ease-in-out infinite" }}>🎁</div>
+              <p className="text-xl font-black text-white mb-1">Gift Sent!</p>
               <p className="text-xs text-violet-200 leading-relaxed">
                 Share this code with {firstName} — they'll need it + their SA ID to claim on Mint.{expiresAt ? ` Expires at ${formatExpiry(expiresAt)}.` : ""}
               </p>
             </div>
-            <div
-              className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 flex flex-col items-center gap-3 border border-white/20"
-              style={{ animation: "gift-pulse 2s 0.8s ease-in-out infinite" }}
-            >
-              <p className="text-xs font-bold text-violet-200 uppercase tracking-widest">Claim Code</p>
-              <p className="text-4xl font-black tracking-[0.4em] text-white font-mono">{giftCode}</p>
+
+            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-5 flex flex-col items-center gap-3 border border-white/20" style={{ animation: "gift-pulse 2s 0.9s ease-in-out infinite" }}>
+              <p className="text-[10px] font-bold text-violet-200 uppercase tracking-widest">Claim Code</p>
+              <p className="text-5xl font-black tracking-[0.4em] text-white font-mono">{giftCode}</p>
               <button
                 type="button"
                 onClick={handleCopy}
-                className="flex items-center gap-1.5 rounded-xl bg-white px-5 py-2 text-sm font-bold text-violet-700 active:scale-95 transition-all"
+                className="flex items-center gap-2 rounded-xl bg-white px-6 py-2.5 text-sm font-bold text-violet-700 active:scale-95 transition-all"
               >
-                {copied ? <Check size={14} /> : <Copy size={14} />}
+                {copied ? <Check size={15} /> : <Copy size={15} />}
                 {copied ? "Copied!" : "Copy Code"}
               </button>
             </div>
+
             <p className="text-xs text-violet-300 text-center leading-relaxed">
-              Recipient enters this code + SA ID on Mint to claim their investment.
+              Recipient enters this code + SA ID on the Mint app to claim their investment.
             </p>
+
+            <button
+              type="button"
+              onClick={() => { setStep("form"); setGiftCode(null); }}
+              className="w-full py-3 rounded-2xl bg-white/10 border border-white/20 text-white text-sm font-semibold active:scale-95 transition-all"
+            >
+              Done
+            </button>
           </div>
         </div>
       )}
