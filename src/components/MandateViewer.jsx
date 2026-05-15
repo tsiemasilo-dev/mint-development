@@ -878,7 +878,8 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
           </button>
         </div>
 
-      <div ref={fullRef} style={discretionType === "limited" ? { display: "none" } : {}}>
+      <div ref={fullRef}>
+      {discretionType !== "limited" && <>
         <h2 style={h2Style}>SCHEDULE – FULL DISCRETION</h2>
 
         <div style={warningBoxStyle}>
@@ -925,11 +926,11 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
         </div>
 
         <InitialsBox value={initials} onChange={setInitials} showError={showErrors} />
+      </>}
       </div>
 
-      {!discretionType && <hr style={{ margin: "30px 0", border: "none", borderTop: "2px solid #ccc" }} />}
-
-      <div ref={limitedRef} style={discretionType === "full" ? { display: "none" } : {}}>
+      <div ref={limitedRef}>
+      {discretionType !== "full" && <>
         <h2 style={h2Style}>SCHEDULE – LIMITED DISCRETION</h2>
 
         <div style={warningBoxStyle}>
@@ -995,6 +996,7 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
         <p style={{ marginTop: "15px", fontSize: "10px" }}>* Risk preference is determined considering the current set of information and circumstances of the Client but may change over time.</p>
 
         <InitialsBox value={initials} onChange={setInitials} showError={showErrors} />
+      </>}
       </div>
 
       <hr style={{ margin: "30px 0", border: "none", borderTop: "2px solid #ccc" }} />
