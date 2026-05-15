@@ -322,7 +322,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       } else {
         const matchedStrategy = strategies.find(s => s.strategyId === calendarFilter);
         if (matchedStrategy) {
-          if (profile?.id && matchedStrategy.hasReturnsData) {
+          if (profile?.id) {
             data = await getStrategyMonthlyReturnsFromDB(profile.id, calendarFilter, matchedStrategy.firstInvestedDate || null);
           }
           if (!data || Object.keys(data).length === 0) {

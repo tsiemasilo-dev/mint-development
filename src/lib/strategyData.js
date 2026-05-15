@@ -981,7 +981,7 @@ export const getOverallPortfolioMonthlyReturns = async (strategyIds, stockSecuri
       const value = current || invested || 0;
 
       let returns = {};
-      if (userId && strategy?.hasReturnsData) {
+      if (userId) {
         returns = await getStrategyMonthlyReturnsFromDB(userId, sid, strategy?.firstInvestedDate || null);
       }
       if (Object.keys(returns).length === 0) {
