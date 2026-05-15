@@ -85,6 +85,8 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
 
   const manualOverrideRef = useRef(false);
 
+  const activateTimerRef = useRef(null);
+
   useEffect(() => {
     const sections = [
       { ref: sec1HeaderRef, index: 0 },
@@ -100,8 +102,11 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
 
     const activate = (index) => {
       if (manualOverrideRef.current) return;
-      setters.forEach((set, i) => set(i === index));
-      if (index === 2) setShowErrors(true);
+      if (activateTimerRef.current) clearTimeout(activateTimerRef.current);
+      activateTimerRef.current = setTimeout(() => {
+        setters.forEach((set, i) => set(i === index));
+        if (index === 2) setShowErrors(true);
+      }, 300);
     };
 
     const observers = sections.map(({ ref, index }) => {
@@ -109,13 +114,16 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
         ([entry]) => {
           if (entry.isIntersecting) activate(index);
         },
-        { rootMargin: '-15% 0px -75% 0px', threshold: 0 }
+        { rootMargin: '0px 0px -55% 0px', threshold: 0.85 }
       );
       if (ref.current) observer.observe(ref.current);
       return observer;
     });
 
-    return () => observers.forEach((obs) => obs.disconnect());
+    return () => {
+      observers.forEach((obs) => obs.disconnect());
+      if (activateTimerRef.current) clearTimeout(activateTimerRef.current);
+    };
   }, []);
 
   const [checkedBoxes, setCheckedBoxes] = useState(savedData?.checkedBoxes || {});
