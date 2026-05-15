@@ -9,7 +9,7 @@ const TRANSACTION_FEE_RATE = 0.038;
 const CASH_BUFFER_RATE = 0.08;
 const MIN_INVESTMENT = 1000;
 
-const StockBuyPage = ({ security, onBack, onContinue, paymentMethod }) => {
+const StockBuyPage = ({ security, onBack, onContinue, paymentMethod, onGiftDone }) => {
   const { displayCurrency, priceValue } = useMemo(() => {
     const currency = security?.currency || "R";
     const normalizedCurrency = currency.toUpperCase() === "ZAC" ? "R" : currency;
@@ -158,6 +158,7 @@ const StockBuyPage = ({ security, onBack, onContinue, paymentMethod }) => {
           <GiftToggleV2
             enabled={giftEnabled}
             onToggle={setGiftEnabled}
+            onDone={onGiftDone}
             security={security}
             totalCostCents={Math.round(fees.totalCost * 100)}
             amountDisplay={formatCurrency(fees.totalCost, displayCurrency)}

@@ -1,6 +1,13 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { ArrowLeft, Gift, Copy, Check, Clock, CheckCircle2, XCircle, Timer } from "lucide-react";
+import { ArrowLeft, Gift, Copy, Check, Clock, CheckCircle2, XCircle, Timer, Send } from "lucide-react";
 import { supabase } from "../lib/supabase";
+
+const HOME_BG = {
+  backgroundColor: '#f8f6fa',
+  backgroundImage: 'linear-gradient(180deg, #0d0d12 0%, #0e0a14 0.5%, #100b18 1%, #120c1c 1.5%, #150e22 2%, #181028 2.5%, #1c122f 3%, #201436 3.5%, #25173e 4%, #2a1a46 5%, #301d4f 6%, #362158 7%, #3d2561 8%, #44296b 9%, #4c2e75 10%, #54337f 11%, #5d3889 12%, #663e93 13%, #70449d 14%, #7a4aa7 15%, #8451b0 16%, #8e58b9 17%, #9860c1 18%, #a268c8 19%, #ac71ce 20%, #b57ad3 21%, #be84d8 22%, #c68edc 23%, #cd98e0 24%, #d4a2e3 25%, #daace6 26%, #dfb6e9 27%, #e4c0eb 28%, #e8c9ed 29%, #ecd2ef 30%, #efdaf1 31%, #f2e1f3 32%, #f4e7f5 33%, #f6ecf7 34%, #f8f0f9 35%, #f9f3fa 36%, #faf5fb 38%, #fbf7fc 40%, #fcf9fd 42%, #fdfafd 45%, #faf8fc 55%, #f8f6fa 100%)',
+  backgroundRepeat: 'no-repeat',
+  backgroundSize: '100% 100vh',
+};
 
 const fmt = (cents) =>
   `R${(Number(cents) / 100).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -22,17 +29,17 @@ function useCountdown(expiresAt) {
   const m = Math.floor((remaining % 3600000) / 60000);
   const s = Math.floor((remaining % 60000) / 1000);
   const isExpired = remaining === 0;
-  const isLow = remaining > 0 && remaining < 60 * 60 * 1000; // < 1h
+  const isLow = remaining > 0 && remaining < 60 * 60 * 1000;
 
   return { h, m, s, isExpired, isLow, remaining };
 }
 
 function CountdownBadge({ expiresAt }) {
   const { h, m, s, isExpired, isLow } = useCountdown(expiresAt);
-  if (isExpired) return <span className="text-xs font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">Expired</span>;
+  if (isExpired) return <span className="text-[11px] font-semibold text-red-600 bg-red-50 px-2.5 py-1 rounded-full">Expired</span>;
   const label = h > 0 ? `${h}h ${m}m` : `${m}m ${s}s`;
   return (
-    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 ${isLow ? "text-red-600 bg-red-50" : "text-violet-700 bg-violet-50"}`}>
+    <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5 ${isLow ? "text-red-600 bg-red-50" : "text-slate-600 bg-slate-100"}`}>
       <Timer size={10} />{label}
     </span>
   );
@@ -57,59 +64,65 @@ function ActiveGiftCard({ gift, onExtend, onCancel }) {
   }
 
   return (
-    <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-slate-800 truncate">{gift.asset_name}</p>
-          <p className="text-xs text-slate-500 mt-0.5">To: {gift.recipient_name || "Recipient"}</p>
-          {gift.personal_message && (
-            <p className="text-xs text-slate-400 italic mt-0.5 line-clamp-1">"{gift.personal_message}"</p>
-          )}
+    <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+      <div className="p-4 space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shrink-0">
+              <Gift size={16} className="text-white" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-800 truncate">{gift.asset_name}</p>
+              <p className="text-xs text-slate-400 mt-0.5">To: {gift.recipient_name || "Recipient"}</p>
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <p className="text-sm font-bold text-slate-800">{fmt(gift.amount)}</p>
+            <div className="mt-1"><CountdownBadge expiresAt={gift.expires_at} /></div>
+          </div>
         </div>
-        <div className="text-right shrink-0">
-          <p className="text-base font-bold text-slate-800">{fmt(gift.amount)}</p>
-          <div className="mt-1"><CountdownBadge expiresAt={gift.expires_at} /></div>
+
+        {gift.personal_message && (
+          <p className="text-xs text-slate-400 italic line-clamp-1 pl-[52px]">"{gift.personal_message}"</p>
+        )}
+
+        <div className="bg-slate-50 rounded-xl p-3 flex items-center justify-between gap-3">
+          <p className="text-lg font-black tracking-[0.3em] text-slate-900 font-mono">{gift.token}</p>
+          <button
+            onClick={handleCopy}
+            className="flex items-center gap-1.5 bg-slate-900 text-white text-xs font-semibold px-3.5 py-2 rounded-lg active:scale-95 transition-all shrink-0"
+          >
+            {copied ? <Check size={12} /> : <Copy size={12} />}
+            {copied ? "Copied" : "Copy"}
+          </button>
         </div>
       </div>
 
-      {/* Code display */}
-      <div className="bg-slate-50 rounded-xl p-3 flex items-center justify-between gap-3">
-        <p className="text-xl font-black tracking-[0.35em] text-slate-900 font-mono">{gift.token}</p>
-        <button
-          onClick={handleCopy}
-          className="flex items-center gap-1.5 bg-slate-900 text-white text-xs font-semibold px-3 py-1.5 rounded-lg active:scale-95 transition-all shrink-0"
-        >
-          {copied ? <Check size={12} /> : <Copy size={12} />}
-          {copied ? "Copied" : "Copy"}
-        </button>
-      </div>
-
-      {/* Extension buttons — shown when < 1h or always */}
       {!isExpired && (
-        <div className="space-y-2">
+        <div className="px-4 pb-4 space-y-2">
           {isLow && (
-            <p className="text-xs font-semibold text-amber-700 text-center">Expiring soon — extend to keep active</p>
+            <p className="text-[11px] font-semibold text-amber-700 text-center">Expiring soon — extend to keep active</p>
           )}
           <div className="flex gap-2">
             <button
               onClick={() => handleExtend("10h")}
               disabled={!!extending}
-              className="flex-1 rounded-xl border border-violet-200 bg-violet-50 py-2 text-xs font-semibold text-violet-700 active:scale-95 transition-all disabled:opacity-60"
+              className="flex-1 rounded-xl border border-slate-200 bg-slate-50 py-2.5 text-xs font-semibold text-slate-700 active:scale-95 transition-all disabled:opacity-60"
             >
-              {extending === "10h" ? "…" : "+10h — 5% fee"}
+              {extending === "10h" ? "…" : "+10 hours (5% fee)"}
             </button>
             <button
               onClick={() => handleExtend("24h")}
               disabled={!!extending}
-              className="flex-1 rounded-xl border border-violet-200 bg-violet-50 py-2 text-xs font-semibold text-violet-700 active:scale-95 transition-all disabled:opacity-60"
+              className="flex-1 rounded-xl border border-slate-200 bg-slate-50 py-2.5 text-xs font-semibold text-slate-700 active:scale-95 transition-all disabled:opacity-60"
             >
-              {extending === "24h" ? "…" : "+24h — 9% fee"}
+              {extending === "24h" ? "…" : "+24 hours (9% fee)"}
             </button>
           </div>
         </div>
       )}
 
-      <div className="flex justify-end pt-1">
+      <div className="border-t border-slate-100 px-4 py-2.5 flex justify-end">
         <button
           onClick={() => onCancel(gift.id)}
           className="text-xs font-semibold text-red-500 hover:text-red-700 transition-colors"
@@ -127,24 +140,53 @@ const HISTORY_META = {
   cancelled: { label: "Cancelled", color: "text-red-600 bg-red-50", icon: XCircle },
 };
 
-function HistoryCard({ gift }) {
+function HistoryCard({ gift, onClaimToSelf }) {
   const meta = HISTORY_META[gift.status] || HISTORY_META.expired;
   const Icon = meta.icon;
   const sentDate = gift.created_at ? new Date(gift.created_at).toLocaleDateString("en-ZA") : null;
+  const [claiming, setClaiming] = useState(false);
+  const canClaimToSelf = gift.status === "expired" || gift.status === "cancelled";
+
+  async function handleClaimToSelf() {
+    if (!window.confirm(`Add ${gift.asset_name} to your own portfolio? R${(gift.amount / 100).toFixed(2)} will be deducted from your wallet.`)) return;
+    setClaiming(true);
+    const success = await onClaimToSelf(gift.id);
+    if (!success) setClaiming(false);
+  }
 
   return (
-    <div className="bg-white rounded-2xl p-4 shadow-sm flex items-start justify-between gap-3">
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-slate-800 truncate">{gift.asset_name}</p>
-        <p className="text-xs text-slate-500 mt-0.5">To: {gift.recipient_name || "Recipient"}</p>
-        {sentDate && <p className="text-xs text-slate-400 mt-0.5">Sent {sentDate}</p>}
-      </div>
-      <div className="text-right shrink-0">
-        <p className="text-sm font-bold text-slate-800">{fmt(gift.amount)}</p>
-        <div className={`inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${meta.color}`}>
-          <Icon size={10} />{meta.label}
+    <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+      <div className="p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
+              <Gift size={16} className="text-slate-400" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-800 truncate">{gift.asset_name}</p>
+              <p className="text-xs text-slate-400 mt-0.5">To: {gift.recipient_name || "Recipient"}</p>
+              {sentDate && <p className="text-[11px] text-slate-300 mt-0.5">{sentDate}</p>}
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <p className="text-sm font-bold text-slate-800">{fmt(gift.amount)}</p>
+            <div className={`inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium ${meta.color}`}>
+              <Icon size={10} />{meta.label}
+            </div>
+          </div>
         </div>
       </div>
+      {canClaimToSelf && (
+        <div className="border-t border-slate-100 px-4 py-3">
+          <button
+            onClick={handleClaimToSelf}
+            disabled={claiming}
+            className="w-full py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 active:scale-95 transition-all disabled:opacity-60"
+          >
+            {claiming ? "Adding…" : "Add to my portfolio"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -213,27 +255,50 @@ export default function SentGiftsPageV2({ onBack }) {
     } catch { alert("Something went wrong."); }
   }
 
-  return (
-    <div className="min-h-screen bg-[#f8f6fa]">
-      <div className="bg-white px-4 pt-12 pb-4 flex items-center gap-3 shadow-sm">
-        <button onClick={onBack} className="p-2 rounded-xl hover:bg-slate-100 transition-colors">
-          <ArrowLeft size={20} className="text-slate-700" />
-        </button>
-        <h1 className="text-lg font-bold text-slate-800">Sent Gifts</h1>
-      </div>
+  async function handleClaimToSelf(giftId) {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      const res = await fetch("/api/gift/claim-to-self", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
+        body: JSON.stringify({ gift_id: giftId }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) { alert(data.error || "Failed to add to portfolio."); return false; }
+      setHistory(prev => prev.map(g => g.id === giftId ? { ...g, status: "claimed" } : g));
+      alert(`${data.asset_name} has been added to your portfolio!`);
+      return true;
+    } catch { alert("Something went wrong."); return false; }
+  }
 
-      {/* Tabs */}
-      <div className="px-4 pt-4">
-        <div className="flex bg-slate-100 rounded-2xl p-1 max-w-xs">
+  return (
+    <div className="min-h-screen" style={HOME_BG}>
+      <header className="rounded-b-[36px] bg-gradient-to-b from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-4 pb-6 pt-12 text-white">
+        <div className="flex items-center gap-3">
+          <button onClick={onBack} className="p-2 -ml-2 rounded-xl hover:bg-white/10 transition-colors">
+            <ArrowLeft size={20} />
+          </button>
+          <div className="flex-1">
+            <h1 className="text-lg font-bold">Sent Gifts</h1>
+          </div>
+          <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
+            <Send size={16} className="text-white/80" />
+          </div>
+        </div>
+      </header>
+
+      <div className="px-4 pt-5">
+        <div className="flex bg-white rounded-2xl p-1 shadow-sm max-w-xs">
           {["active", "history"].map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all capitalize ${tab === t ? "bg-white shadow-sm text-slate-800" : "text-slate-500"}`}
+              className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all capitalize ${tab === t ? "bg-slate-900 text-white shadow-sm" : "text-slate-400"}`}
             >
               {t}
               {t === "active" && active.length > 0 && (
-                <span className="ml-1.5 bg-violet-600 text-white text-xs rounded-full px-1.5 py-0.5">{active.length}</span>
+                <span className={`ml-1.5 text-[10px] rounded-full px-1.5 py-0.5 ${tab === t ? "bg-white/20 text-white" : "bg-violet-600 text-white"}`}>{active.length}</span>
               )}
             </button>
           ))}
@@ -247,20 +312,20 @@ export default function SentGiftsPageV2({ onBack }) {
           </div>
         )}
         {error && !loading && (
-          <div className="bg-red-50 rounded-2xl p-5 text-center">
+          <div className="bg-white rounded-2xl p-5 text-center shadow-sm">
             <p className="text-red-600 text-sm">{error}</p>
-            <button onClick={loadGifts} className="mt-3 text-xs font-semibold text-red-500">Try again</button>
+            <button onClick={loadGifts} className="mt-3 text-xs font-semibold text-violet-600">Try again</button>
           </div>
         )}
 
         {!loading && !error && tab === "active" && (
           active.length === 0 ? (
-            <div className="bg-white rounded-3xl p-10 text-center shadow-sm">
-              <div className="w-14 h-14 rounded-2xl bg-violet-50 flex items-center justify-center mx-auto mb-4">
-                <Gift size={24} className="text-violet-500" />
+            <div className="bg-white rounded-2xl p-10 text-center shadow-sm">
+              <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
+                <Gift size={22} className="text-slate-400" />
               </div>
-              <h2 className="text-base font-bold text-slate-800 mb-1">No active gifts</h2>
-              <p className="text-sm text-slate-400">Active gifts and their claim codes appear here.</p>
+              <h2 className="text-sm font-bold text-slate-800 mb-1">No active gifts</h2>
+              <p className="text-xs text-slate-400">Active gifts and their claim codes appear here.</p>
             </div>
           ) : (
             active.map(g => (
@@ -271,11 +336,11 @@ export default function SentGiftsPageV2({ onBack }) {
 
         {!loading && !error && tab === "history" && (
           history.length === 0 ? (
-            <div className="bg-white rounded-3xl p-10 text-center shadow-sm">
+            <div className="bg-white rounded-2xl p-10 text-center shadow-sm">
               <p className="text-sm text-slate-400">No gift history yet.</p>
             </div>
           ) : (
-            history.map(g => <HistoryCard key={g.id} gift={g} />)
+            history.map(g => <HistoryCard key={g.id} gift={g} onClaimToSelf={handleClaimToSelf} />)
           )
         )}
       </div>
