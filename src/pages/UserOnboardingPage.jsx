@@ -788,7 +788,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
   return (
     <div
-      className={`onboarding-process ${isFading ? "fade-out" : "fade-in"} ${isDropdownOpen || sofDropdownOpen || bankDropdownOpen ? "dropdown-open" : ""
+      className={`onboarding-process ${isFading ? "fade-out" : "fade-in"} ${isDropdownOpen || bankDropdownOpen ? "dropdown-open" : ""
         }`}
     >
       <div className="min-h-screen flex items-center justify-center px-4 py-8 relative">
@@ -1265,13 +1265,24 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   <div>
                     <label htmlFor="source-of-funds2" style={{ fontSize: '13px', fontWeight: '500', color: 'hsl(270 30% 25%)', display: 'block', marginBottom: '6px' }}>Primary Source of Funds</label>
                     <div className="custom-select" ref={sofDropdownRef}>
-                      <div className={`glass-field select-trigger ${sofDropdownOpen ? "active" : ""}`} role="button" tabIndex={0} onClick={() => setSofDropdownOpen((p) => !p)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSofDropdownOpen((p) => !p); } }}>
-                        <div className="selected-value" data-placeholder="Select source of funds">{sourceOfFunds ? selectedSofOption?.label : ""}</div>
+                      <div
+                        className={`bank-select-trigger ${sofDropdownOpen ? "active" : ""}`}
+                        role="button" tabIndex={0}
+                        onClick={() => setSofDropdownOpen((p) => !p)}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSofDropdownOpen((p) => !p); } }}
+                      >
+                        {sourceOfFunds
+                          ? <span className="bank-select-value">{selectedSofOption?.label}</span>
+                          : <span className="bank-select-placeholder">Select source of funds</span>}
+                        <svg className="bank-select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16"><path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
                       </div>
-                      <div className={`custom-dropdown ${sofDropdownOpen ? "active" : ""}`}>
-                        {sourceOfFundsOptions.map((option) => (
-                          <div key={option.value || "placeholder"} className={`custom-option ${sourceOfFunds === option.value ? "selected" : ""}`} role="button" tabIndex={0} onClick={() => handleSofSelect(option.value)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleSofSelect(option.value); } }}>
-                            {option.label}
+                      <div className={`bank-dropdown-list ${sofDropdownOpen ? "active" : ""}`}>
+                        {sourceOfFundsOptions.filter(o => o.value).map((option) => (
+                          <div key={option.value} className={`bank-dropdown-option ${sourceOfFunds === option.value ? "selected" : ""}`} role="button" tabIndex={0}
+                            onClick={() => handleSofSelect(option.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleSofSelect(option.value); } }}>
+                            <span>{option.label}</span>
+                            {sourceOfFunds === option.value && <svg className="bank-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="16" height="16"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>}
                           </div>
                         ))}
                       </div>
