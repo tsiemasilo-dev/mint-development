@@ -207,6 +207,41 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
 
   const isMandateValid = initials.trim().length > 0 && allGroupsValid() && discretionType !== null && requiredFieldsFilled;
 
+  const sec1Done = requiredFieldsFilled && initials.trim().length > 0;
+  const sec2Done = initials.trim().length > 0;
+  const sec3Done = allGroupsValid() && discretionType !== null;
+
+  const prevSec1Done = useRef(sec1Done);
+  const prevSec2Done = useRef(sec2Done);
+  const prevSec3Done = useRef(sec3Done);
+
+  useEffect(() => {
+    if (sec1Done && !prevSec1Done.current) {
+      const t = setTimeout(() => setSec1Open(false), 1200);
+      prevSec1Done.current = true;
+      return () => clearTimeout(t);
+    }
+    prevSec1Done.current = sec1Done;
+  }, [sec1Done]);
+
+  useEffect(() => {
+    if (sec2Done && !prevSec2Done.current) {
+      const t = setTimeout(() => setSec2Open(false), 1200);
+      prevSec2Done.current = true;
+      return () => clearTimeout(t);
+    }
+    prevSec2Done.current = sec2Done;
+  }, [sec2Done]);
+
+  useEffect(() => {
+    if (sec3Done && !prevSec3Done.current) {
+      const t = setTimeout(() => setSec3Open(false), 1200);
+      prevSec3Done.current = true;
+      return () => clearTimeout(t);
+    }
+    prevSec3Done.current = sec3Done;
+  }, [sec3Done]);
+
   const getAddendumChecked = useCallback((sectionIndex, itemIndex) => {
     if (!discretionType) return false;
     const prefix = discretionType === "full" ? "full" : "lim";
