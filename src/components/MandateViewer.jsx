@@ -1095,8 +1095,10 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
       {/* ── Section 2: Introduction & Terms ── */}
       <div ref={sec2HeaderRef} style={{ background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', boxShadow: '0 2px 12px rgba(100,60,140,0.06)', overflow: 'hidden' }}>
         <button type="button" onClick={() => { manualOverrideRef.current = true; setSec2Open(o => { const next = !o; if (!next) manuallyClosed.current.add(1); else manuallyClosed.current.delete(1); return next; }); setTimeout(() => { manualOverrideRef.current = false; }, 1200); }} style={accordionHeaderStyle}>
-          <div style={accordionCircleStyle(false)}>
-            <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>2</span>
+          <div style={accordionCircleStyle(initials.trim().length > 0)}>
+            {initials.trim().length > 0
+              ? <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+              : <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>2</span>}
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Introduction &amp; Terms</div>
