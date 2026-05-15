@@ -84,6 +84,7 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
   }, [requestTab]);
 
   const manualOverrideRef = useRef(false);
+  const manuallyClosed = useRef(new Set());
 
   useEffect(() => {
     const t = setTimeout(() => setSec1Open(true), 2000);
@@ -95,11 +96,11 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
 
     const handleScroll = () => {
       if (manualOverrideRef.current) return;
-      if (sec2HeaderRef.current) {
+      if (sec2HeaderRef.current && !manuallyClosed.current.has(1)) {
         const { top } = sec2HeaderRef.current.getBoundingClientRect();
         if (top < TRIGGER) setSec2Open(true);
       }
-      if (sec3HeaderRef.current) {
+      if (sec3HeaderRef.current && !manuallyClosed.current.has(2)) {
         const { top } = sec3HeaderRef.current.getBoundingClientRect();
         if (top < TRIGGER) { setSec3Open(true); setShowErrors(true); }
       }
@@ -1074,7 +1075,7 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
 
       {/* ── Section 1: Cover Page & Client Details ── */}
       <div ref={sec1HeaderRef} style={{ background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', boxShadow: '0 2px 12px rgba(100,60,140,0.06)', overflow: 'hidden' }}>
-        <button type="button" onClick={() => { manualOverrideRef.current = true; setSec1Open(o => !o); setTimeout(() => { manualOverrideRef.current = false; }, 1200); }} style={accordionHeaderStyle}>
+        <button type="button" onClick={() => { manualOverrideRef.current = true; setSec1Open(o => { const next = !o; if (!next) manuallyClosed.current.add(0); else manuallyClosed.current.delete(0); return next; }); setTimeout(() => { manualOverrideRef.current = false; }, 1200); }} style={accordionHeaderStyle}>
           <div style={accordionCircleStyle(requiredFieldsFilled && initials.trim().length > 0)}>
             {requiredFieldsFilled && initials.trim().length > 0
               ? <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
@@ -1093,7 +1094,7 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
 
       {/* ── Section 2: Introduction & Terms ── */}
       <div ref={sec2HeaderRef} style={{ background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', boxShadow: '0 2px 12px rgba(100,60,140,0.06)', overflow: 'hidden' }}>
-        <button type="button" onClick={() => { manualOverrideRef.current = true; setSec2Open(o => !o); setTimeout(() => { manualOverrideRef.current = false; }, 1200); }} style={accordionHeaderStyle}>
+        <button type="button" onClick={() => { manualOverrideRef.current = true; setSec2Open(o => { const next = !o; if (!next) manuallyClosed.current.add(1); else manuallyClosed.current.delete(1); return next; }); setTimeout(() => { manualOverrideRef.current = false; }, 1200); }} style={accordionHeaderStyle}>
           <div style={accordionCircleStyle(false)}>
             <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>2</span>
           </div>
@@ -1110,7 +1111,7 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
 
       {/* ── Section 3: Schedules & Annexures ── */}
       <div ref={sec3HeaderRef} style={{ background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', boxShadow: '0 2px 12px rgba(100,60,140,0.06)', overflow: 'hidden' }}>
-        <button type="button" onClick={() => { manualOverrideRef.current = true; setSec3Open(o => !o); if (!sec3Open) setShowErrors(true); setTimeout(() => { manualOverrideRef.current = false; }, 1200); }} style={accordionHeaderStyle}>
+        <button type="button" onClick={() => { manualOverrideRef.current = true; setSec3Open(o => { const next = !o; if (!next) manuallyClosed.current.add(2); else manuallyClosed.current.delete(2); return next; }); if (!sec3Open) setShowErrors(true); setTimeout(() => { manualOverrideRef.current = false; }, 1200); }} style={accordionHeaderStyle}>
           <div style={accordionCircleStyle(allGroupsValid() && discretionType !== null)}>
             {allGroupsValid() && discretionType !== null
               ? <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
