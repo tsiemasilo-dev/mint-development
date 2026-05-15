@@ -1115,6 +1115,35 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                     <input type="hidden" value={bankName} />
                   </div>
                 </div>
+                <div className="bank-section hide-when-dropdown-open" ref={accountTypeDropdownRef} style={{ position: 'relative', zIndex: 10 }}>
+                  <div className="bank-section-label">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5 7.5 3m0 0L12 7.5M7.5 3v13.5m13.5 0L16.5 21m0 0L12 16.5m4.5 4.5V7.5" /></svg>
+                    Account Type
+                  </div>
+                  <div className="custom-select">
+                    <div
+                      className={`bank-select-trigger ${accountTypeDropdownOpen ? "active" : ""}`}
+                      role="button" tabIndex={0}
+                      onClick={() => setAccountTypeDropdownOpen(p => !p)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setAccountTypeDropdownOpen(p => !p); } }}
+                    >
+                      {bankAccountType
+                        ? <span className="bank-select-value">{accountTypeOptions.find(o => o.value === bankAccountType)?.label}</span>
+                        : <span className="bank-select-placeholder">Select account type</span>}
+                      <svg className="bank-select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16"><path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
+                    </div>
+                    <div className={`bank-dropdown-list ${accountTypeDropdownOpen ? "active" : ""}`}>
+                      {accountTypeOptions.map((option) => (
+                        <div key={option.value} className={`bank-dropdown-option ${bankAccountType === option.value ? "selected" : ""}`} role="button" tabIndex={0}
+                          onClick={() => { setBankAccountType(option.value); setAccountTypeDropdownOpen(false); }}
+                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setBankAccountType(option.value); setAccountTypeDropdownOpen(false); } }}>
+                          <span>{option.label}</span>
+                          {bankAccountType === option.value && <svg className="bank-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="16" height="16"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
                 <div className="bank-account-fields hide-when-dropdown-open">
                   <div className="bank-section-label">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" d="M5.25 8.25h15m-16.5 7.5h15m-1.8-13.5-3.9 19.5m-2.1-19.5-3.9 19.5" /></svg>
@@ -1126,33 +1155,6 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                       <div className="bank-input-field">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="18" height="18" className="bank-input-icon"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6.75a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.5 20.118a7.5 7.5 0 0 1 15 0A17.933 17.933 0 0 1 12 21.75a17.933 17.933 0 0 1-7.5-1.632Z" /></svg>
                         <input type="text" id="bank-account-name2" placeholder="Enter account holder full name" value={bankAccountName} onChange={(e) => setBankAccountName(e.target.value)} autoComplete="name" />
-                      </div>
-                    </div>
-                    <div className="bank-input-divider"></div>
-                    <div className="bank-input-row" style={{ paddingBottom: '0.75rem', position: 'relative', zIndex: 10 }}>
-                      <label htmlFor="bank-account-type2" style={{ paddingTop: '0.75rem', display: 'block' }}>Account Type</label>
-                      <div className="custom-select" ref={accountTypeDropdownRef} style={{ marginTop: '0.5rem' }}>
-                        <div
-                          className={`bank-select-trigger ${accountTypeDropdownOpen ? "active" : ""}`}
-                          role="button" tabIndex={0}
-                          onClick={() => setAccountTypeDropdownOpen(p => !p)}
-                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setAccountTypeDropdownOpen(p => !p); } }}
-                        >
-                          {bankAccountType
-                            ? <span className="bank-select-value">{accountTypeOptions.find(o => o.value === bankAccountType)?.label}</span>
-                            : <span className="bank-select-placeholder">Select account type</span>}
-                          <svg className="bank-select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16"><path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
-                        </div>
-                        <div className={`bank-dropdown-list ${accountTypeDropdownOpen ? "active" : ""}`}>
-                          {accountTypeOptions.map((option) => (
-                            <div key={option.value} className={`bank-dropdown-option ${bankAccountType === option.value ? "selected" : ""}`} role="button" tabIndex={0}
-                              onClick={() => { setBankAccountType(option.value); setAccountTypeDropdownOpen(false); }}
-                              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setBankAccountType(option.value); setAccountTypeDropdownOpen(false); } }}>
-                              <span>{option.label}</span>
-                              {bankAccountType === option.value && <svg className="bank-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="16" height="16"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>}
-                            </div>
-                          ))}
-                        </div>
                       </div>
                     </div>
                     <div className="bank-input-divider"></div>
@@ -1295,9 +1297,12 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                       <div className="glass-field"><input type="text" placeholder="Describe your source of funds" value={sourceOfFundsOther} onChange={(e) => setSourceOfFundsOther(e.target.value)} /></div>
                     </div>
                   )}
-                  <div>
-                    <label htmlFor="expected-monthly-investment2" style={{ fontSize: '13px', fontWeight: '500', color: 'hsl(270 30% 25%)', display: 'block', marginBottom: '6px' }}>Expected Monthly Investment Amount</label>
-                    <div className="custom-select" ref={monthlyInvestmentDropdownRef} style={{ position: 'relative', zIndex: 10 }}>
+                  <div className="bank-section" ref={monthlyInvestmentDropdownRef} style={{ position: 'relative', zIndex: 10, marginBottom: 0 }}>
+                    <div className="bank-section-label">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+                      Expected Monthly Investment
+                    </div>
+                    <div className="custom-select">
                       <div
                         className={`bank-select-trigger ${monthlyInvestmentDropdownOpen ? "active" : ""}`}
                         role="button" tabIndex={0}
