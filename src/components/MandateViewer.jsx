@@ -246,6 +246,8 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
     if (sec3Open) {
       setSec1Open(false);
       setSec2Open(false);
+      manuallyClosed.current.add(0);
+      manuallyClosed.current.add(1);
     }
   }, [sec3Open]);
 
