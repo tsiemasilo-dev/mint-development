@@ -42,6 +42,10 @@ const NotificationSettingsPage = lazy(() => import("./pages/NotificationSettings
 const MintBalancePage = lazy(() => import("./pages/MintBalancePage.jsx"));
 const StockDetailPage = lazy(() => import("./pages/StockDetailPage.jsx"));
 const StockBuyPage = lazy(() => import("./pages/StockBuyPage.jsx"));
+const GiftCodeEntryPage = lazy(() => import("./pages/GiftCodeEntryPage.jsx"));
+const GiftPreviewPage = lazy(() => import("./pages/GiftPreviewPage.jsx"));
+const SentGiftsPageV2 = lazy(() => import("./pages/SentGiftsPageV2.jsx"));
+const GiftStrategyPickerPage = lazy(() => import("./pages/GiftStrategyPickerPage.jsx"));
 const NewsArticlePage = lazy(() => import("./pages/NewsArticlePage.jsx"));
 const ActivityPage = lazy(() => import("./pages/ActivityPage.jsx"));
 const ActionsPage = lazy(() => import("./pages/ActionsPage.jsx"));
@@ -68,6 +72,7 @@ import { useOnboardingStatus } from "./lib/useOnboardingStatus.js";
 import { checkOnboardingComplete } from "./lib/checkOnboardingComplete.js";
 import MaintenanceModal from "./components/MaintenanceModal.jsx";
 import HomeSkeleton from "./components/HomeSkeleton.jsx";
+import GiftReceivedPopup from "./components/GiftReceivedPopup.jsx";
 
 const PERSISTENT_KEYS = [
   'mint_device_id',
@@ -94,6 +99,12 @@ const clearUserStorage = () => {
 
 const initialHash = window.location.hash;
 const isRecoveryMode = initialHash.includes('type=recovery');
+
+// Detect /gift/claim/:token deep link
+const initialGiftToken = (() => {
+  const match = window.location.pathname.match(/^\/gift\/claim\/([a-f0-9]+)$/i);
+  return match ? match[1] : null;
+})();
 
 const getHashParams = (hash) => {
   if (!hash) return {};
@@ -140,8 +151,11 @@ const mainTabs = ['home', 'credit', 'transact', 'investments', 'markets', 'news'
 
 const App = () => {
   const [currentPage, setCurrentPage] = useState(
-    hasError ? "linkExpired" : (isRecoveryMode ? "auth" : (storedSession ? "home" : "welcome"))
+    hasError ? "linkExpired" : initialGiftToken ? "giftClaim" : (isRecoveryMode ? "auth" : (storedSession ? "home" : "welcome"))
   );
+  const [giftToken, setGiftToken] = useState(initialGiftToken);
+  const [giftPreviewData, setGiftPreviewData] = useState(null);
+  const [pageParams, setPageParams] = useState(null);
   const [previousPageName, setPreviousPageName] = useState(null);
   const [authStep, setAuthStep] = useState(isRecoveryMode ? "newPassword" : "email");
   const [isCheckingAuth, setIsCheckingAuth] = useState(!storedSession && !hasError);
@@ -1198,6 +1212,7 @@ const App = () => {
       <Suspense fallback={<HomeSkeleton />}>
         <>
           {showOpenStrategiesMaintenance && <MaintenanceModal onClose={() => setShowOpenStrategiesMaintenance(false)} />}
+          <GiftReceivedPopup onClaim={() => navigateTo("giftCodeEntry")} />
           {/* Home tab – always mounted */}
           <div style={{ display: currentPage === 'home' ? 'block' : 'none' }}>
             <AppLayout
@@ -1228,6 +1243,7 @@ const App = () => {
                 onOpenInstantLiquidity={() => navigateTo("instantLiquidity")}
                 onOpenFamily={() => navigateTo("familyDashboard")}
                 onOpenInsure={() => navigateTo("funeralCover")}
+                onNavigate={navigateTo}
               />
             </AppLayout>
           </div>
@@ -1568,6 +1584,7 @@ const App = () => {
           security={selectedSecurity}
           paymentMethod={pendingPaymentMethod}
           onBack={goBack}
+          onGiftDone={() => navigateTo("home")}
           onContinue={(amount, security, baseAmount, shareCount) => {
             setStockCheckout({ security, amount, baseAmount: baseAmount || amount, shareCount });
             setPendingGoalFlow({
@@ -1797,6 +1814,7 @@ const App = () => {
           onBack={goBack}
           strategy={selectedStrategy}
           paymentMethod={pendingPaymentMethod}
+          onGiftDone={() => navigateTo("home")}
           onContinue={(amount, baseAmount, shareCount, fees) => {
             setInvestmentAmount(amount);
             setBaseInvestmentAmount(baseAmount || amount);
@@ -2317,6 +2335,96 @@ const App = () => {
 
   if (currentPage === "userOnboarding") {
     return <UserOnboardingPage onComplete={() => setCurrentPage("home")} />;
+  }
+
+  if (currentPage === "giftClaim" || currentPage === "giftCodeEntry") {
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-[#f8f6fa]" />}>
+        <GiftCodeEntryPage
+          onBack={() => navigateTo("home")}
+          onNavigate={(page, params) => {
+            if (page === "giftPreview") {
+              setGiftPreviewData(params);
+              navigateTo("giftPreview");
+            } else {
+              navigateTo(page);
+            }
+          }}
+        />
+      </Suspense>
+    );
+  }
+
+  if (currentPage === "giftPreview") {
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <Suspense fallback={<div className="min-h-screen bg-[#f8f6fa]" />}>
+          <GiftPreviewPage
+            code={giftPreviewData?.code}
+            idNumber={giftPreviewData?.idNumber}
+            giftPreview={giftPreviewData?.giftPreview}
+            onBack={goBack}
+            onNavigate={navigateTo}
+          />
+        </Suspense>
+      </SwipeBackWrapper>
+    );
+  }
+
+  if (currentPage === "sentGifts") {
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <Suspense fallback={<div className="min-h-screen bg-[#f8f6fa]" />}>
+          <SentGiftsPageV2 onBack={goBack} />
+        </Suspense>
+      </SwipeBackWrapper>
+    );
+  }
+
+  if (currentPage === "giftStrategies") {
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <AppLayout
+          activeTab="home"
+          onTabChange={handleTabChange}
+          onWithdraw={handleWithdrawRequest}
+          onShowComingSoon={handleShowComingSoon}
+          modal={null}
+          onCloseModal={() => {}}
+        >
+          <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
+            <GiftStrategyPickerPage
+              onBack={goBack}
+              onNavigate={(page, params) => {
+                if (page === "giftStrategyInvest") {
+                  setPageParams(params);
+                  navigateTo("giftStrategyInvest");
+                } else {
+                  navigateTo(page);
+                }
+              }}
+            />
+          </Suspense>
+        </AppLayout>
+      </SwipeBackWrapper>
+    );
+  }
+
+  if (currentPage === "giftStrategyInvest") {
+    const strategy = pageParams?.strategy;
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
+          <InvestAmountPage
+            strategy={strategy}
+            onBack={goBack}
+            onContinue={() => navigateTo("home")}
+            onGiftDone={() => navigateTo("home")}
+            startWithGiftOpen
+          />
+        </Suspense>
+      </SwipeBackWrapper>
+    );
   }
 
   if (currentPage === "welcome") {
