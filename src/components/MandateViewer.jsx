@@ -65,16 +65,21 @@ const CHECKBOX_GROUPS = {
 };
 
 const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, requestTab }) => {
-  const [activeTab, setActiveTab] = useState(0);
+  const [sec1Open, setSec1Open] = useState(true);
+  const [sec2Open, setSec2Open] = useState(false);
+  const [sec3Open, setSec3Open] = useState(false);
   const [initials, setInitials] = useState(savedData?.initials || "");
-  const scrollRef = useRef(null);
+  const sec1HeaderRef = useRef(null);
+  const sec2HeaderRef = useRef(null);
+  const sec3HeaderRef = useRef(null);
   const fullRef = useRef(null);
   const limitedRef = useRef(null);
 
   useEffect(() => {
     if (requestTab !== undefined && requestTab !== null) {
-      setActiveTab(requestTab);
-      if (scrollRef.current) scrollRef.current.scrollTop = 0;
+      if (requestTab === 0) { setSec1Open(true); setTimeout(() => sec1HeaderRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }
+      else if (requestTab === 1) { setSec2Open(true); setTimeout(() => sec2HeaderRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }
+      else if (requestTab === 2) { setSec3Open(true); setShowErrors(true); setTimeout(() => sec3HeaderRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }
     }
   }, [requestTab]);
   const [checkedBoxes, setCheckedBoxes] = useState(savedData?.checkedBoxes || {});
@@ -112,10 +117,8 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
     setDiscretionType(type);
     setTimeout(() => {
       const ref = type === "full" ? fullRef : limitedRef;
-      if (ref.current && scrollRef.current) {
-        const containerTop = scrollRef.current.getBoundingClientRect().top;
-        const elementTop = ref.current.getBoundingClientRect().top;
-        scrollRef.current.scrollTop += (elementTop - containerTop) - 10;
+      if (ref.current) {
+        ref.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
     }, 50);
   };
@@ -188,14 +191,6 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
     if (onValidChange) onValidChange(isMandateValid);
   }, [isMandateValid, onValidChange]);
 
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = 0;
-    }
-    if (activeTab === 2) {
-      setShowErrors(true);
-    }
-  }, [activeTab]);
 
   const extractCountryCode = (phone) => {
     if (!phone) return { countryCode: "", cellCode: "", number: "" };
@@ -1032,167 +1027,80 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
     </div>
   );
 
-  const tabSections = [renderCoverPage, renderMainSections, renderSchedules];
+  const accordionHeaderStyle = {
+    width: '100%', display: 'flex', alignItems: 'center', gap: '12px',
+    padding: '18px 20px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left',
+  };
+  const accordionCircleStyle = (done) => ({
+    width: '28px', height: '28px', borderRadius: '50%',
+    background: done ? '#22c55e' : 'hsl(270 30% 25%)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  });
 
   return (
-    <div>
-      <div style={{
-        display: "flex",
-        borderBottom: "2px solid hsl(270 20% 90%)",
-        marginBottom: "0",
-        background: "hsl(270 30% 97%)",
-        borderRadius: "12px 12px 0 0",
-        overflow: "hidden",
-      }}>
-        {TAB_LABELS.map((label, idx) => (
-          <button
-            key={idx}
-            type="button"
-            onClick={() => {
-              if (activeTab === 2 && !allGroupsValid()) {
-                setShowErrors(true);
-              }
-              setActiveTab(idx);
-            }}
-            style={{
-              flex: 1,
-              padding: "12px 8px",
-              fontSize: "11px",
-              fontWeight: activeTab === idx ? "700" : "500",
-              color: activeTab === idx ? "hsl(270 50% 40%)" : "hsl(270 15% 55%)",
-              background: activeTab === idx ? "white" : "transparent",
-              border: "none",
-              borderBottom: activeTab === idx ? "2px solid hsl(270 60% 55%)" : "2px solid transparent",
-              cursor: "pointer",
-              transition: "all 0.2s ease",
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
 
-      <div
-        ref={scrollRef}
-        style={{
-          maxHeight: "60vh",
-          overflowY: "auto",
-          background: "white",
-          borderRadius: "0 0 12px 12px",
-          WebkitOverflowScrolling: "touch",
-        }}
-      >
-        {tabSections[activeTab]()}
-      </div>
-
-      <div style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "12px 16px 4px",
-      }}>
-        <button
-          type="button"
-          onClick={() => {
-            if (activeTab > 0) {
-              setActiveTab(activeTab - 1);
-              if (scrollRef.current) scrollRef.current.scrollTop = 0;
-            }
-          }}
-          disabled={activeTab === 0}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "4px",
-            background: activeTab === 0 ? "transparent" : "hsl(270 30% 96%)",
-            border: activeTab === 0 ? "1px solid transparent" : "1px solid hsl(270 25% 88%)",
-            borderRadius: "8px",
-            padding: "6px 12px",
-            fontSize: "12px",
-            fontWeight: "600",
-            color: activeTab === 0 ? "transparent" : "hsl(270 40% 45%)",
-            cursor: activeTab === 0 ? "default" : "pointer",
-            transition: "all 0.2s ease",
-            visibility: activeTab === 0 ? "hidden" : "visible",
-          }}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-          Previous
+      {/* ── Section 1: Cover Page & Client Details ── */}
+      <div ref={sec1HeaderRef} style={{ background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', boxShadow: '0 2px 12px rgba(100,60,140,0.06)', overflow: 'hidden' }}>
+        <button type="button" onClick={() => setSec1Open(o => !o)} style={accordionHeaderStyle}>
+          <div style={accordionCircleStyle(requiredFieldsFilled && initials.trim().length > 0)}>
+            {requiredFieldsFilled && initials.trim().length > 0
+              ? <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+              : <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>1</span>}
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Discretionary FSP Mandate</div>
+            <div style={{ fontSize: '12px', color: 'hsl(270 15% 60%)' }}>Cover page &amp; your client details</div>
+          </div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="hsl(270 20% 55%)" strokeWidth="2" width="18" height="18" style={{ flexShrink: 0, transition: 'transform 0.2s', transform: sec1Open ? 'rotate(180deg)' : 'rotate(0deg)' }}><path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" /></svg>
         </button>
-
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          {TAB_LABELS.map((_, idx) => (
-            <button
-              key={idx}
-              type="button"
-              onClick={() => {
-                if (activeTab === 2 && !allGroupsValid()) {
-                  setShowErrors(true);
-                }
-                setActiveTab(idx);
-                if (scrollRef.current) scrollRef.current.scrollTop = 0;
-              }}
-              style={{
-                width: activeTab === idx ? "24px" : "8px",
-                height: "8px",
-                borderRadius: "4px",
-                background: activeTab === idx ? "hsl(270 60% 55%)" : "hsl(270 20% 85%)",
-                border: "none",
-                cursor: "pointer",
-                transition: "all 0.3s ease",
-                padding: 0,
-              }}
-              aria-label={`Go to section ${idx + 1}`}
-            />
-          ))}
-        </div>
-
-        <button
-          type="button"
-          onClick={() => {
-            if (activeTab < TAB_LABELS.length - 1) {
-              if (activeTab === 2 && !allGroupsValid()) {
-                setShowErrors(true);
-                return;
-              }
-              setActiveTab(activeTab + 1);
-              if (scrollRef.current) scrollRef.current.scrollTop = 0;
-            }
-          }}
-          disabled={activeTab === TAB_LABELS.length - 1}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "4px",
-            background: activeTab === TAB_LABELS.length - 1 ? "transparent" : "linear-gradient(135deg, #7c3aed, #a855f7)",
-            border: "none",
-            borderRadius: "8px",
-            padding: "6px 12px",
-            fontSize: "12px",
-            fontWeight: "600",
-            color: activeTab === TAB_LABELS.length - 1 ? "transparent" : "#fff",
-            cursor: activeTab === TAB_LABELS.length - 1 ? "default" : "pointer",
-            transition: "all 0.2s ease",
-            visibility: activeTab === TAB_LABELS.length - 1 ? "hidden" : "visible",
-            boxShadow: activeTab === TAB_LABELS.length - 1 ? "none" : "0 2px 8px rgba(124, 58, 237, 0.3)",
-          }}
-        >
-          Next
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-        </button>
+        {sec1Open && (
+          <div style={{ borderTop: '1px solid hsl(270 20% 92%)' }}>
+            {renderCoverPage()}
+          </div>
+        )}
       </div>
 
-      <p style={{
-        textAlign: "center",
-        fontSize: "11px",
-        color: "hsl(270 15% 60%)",
-        margin: "4px 0 0",
-      }}>
-        Section {activeTab + 1} of {TAB_LABELS.length}
-      </p>
+      {/* ── Section 2: Introduction & Terms ── */}
+      <div ref={sec2HeaderRef} style={{ background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', boxShadow: '0 2px 12px rgba(100,60,140,0.06)', overflow: 'hidden' }}>
+        <button type="button" onClick={() => setSec2Open(o => !o)} style={accordionHeaderStyle}>
+          <div style={accordionCircleStyle(false)}>
+            <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>2</span>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Introduction &amp; Terms</div>
+            <div style={{ fontSize: '12px', color: 'hsl(270 15% 60%)' }}>Mandate terms and conditions</div>
+          </div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="hsl(270 20% 55%)" strokeWidth="2" width="18" height="18" style={{ flexShrink: 0, transition: 'transform 0.2s', transform: sec2Open ? 'rotate(180deg)' : 'rotate(0deg)' }}><path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" /></svg>
+        </button>
+        {sec2Open && (
+          <div style={{ borderTop: '1px solid hsl(270 20% 92%)' }}>
+            {renderMainSections()}
+          </div>
+        )}
+      </div>
+
+      {/* ── Section 3: Schedules & Annexures ── */}
+      <div ref={sec3HeaderRef} style={{ background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', boxShadow: '0 2px 12px rgba(100,60,140,0.06)', overflow: 'hidden' }}>
+        <button type="button" onClick={() => { setSec3Open(o => !o); if (!sec3Open) setShowErrors(true); }} style={accordionHeaderStyle}>
+          <div style={accordionCircleStyle(allGroupsValid() && discretionType !== null)}>
+            {allGroupsValid() && discretionType !== null
+              ? <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+              : <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>3</span>}
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Schedules &amp; Annexures</div>
+            <div style={{ fontSize: '12px', color: 'hsl(270 15% 60%)' }}>Complete your investment preferences</div>
+          </div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="hsl(270 20% 55%)" strokeWidth="2" width="18" height="18" style={{ flexShrink: 0, transition: 'transform 0.2s', transform: sec3Open ? 'rotate(180deg)' : 'rotate(0deg)' }}><path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" /></svg>
+        </button>
+        {sec3Open && (
+          <div style={{ borderTop: '1px solid hsl(270 20% 92%)' }}>
+            {renderSchedules()}
+          </div>
+        )}
+      </div>
+
     </div>
   );
 };
