@@ -615,6 +615,20 @@ async function migrateWalletColumns() {
 }
 migrateWalletColumns();
 
+async function migrateGiftClaimsColumns() {
+  const db = supabaseAdmin || supabase;
+  if (!db) return;
+  try {
+    await db.rpc('exec_sql', {
+      query: "ALTER TABLE gift_claims ADD COLUMN IF NOT EXISTS extension_fees INTEGER DEFAULT 0"
+    });
+    console.log('[gift_claims] extension_fees column ensured');
+  } catch (e) {
+    console.log('[gift_claims] extension_fees column may need manual addition:', e.message);
+  }
+}
+migrateGiftClaimsColumns();
+
 async function ensureUserSessionsTable() {
   if (!pgPool) return;
   const client = await pgPool.connect();
@@ -655,7 +669,7 @@ cron.schedule("*/15 * * * *", async () => {
   // Find expired gifts before updating
   const { data: expiredGifts } = await db
     .from("gift_claims")
-    .select("id, sender_user_id, amount, asset_name")
+    .select("id, sender_user_id, amount, asset_name, extension_fees")
     .eq("status", "pending_claim")
     .lt("expires_at", new Date().toISOString());
 
@@ -672,34 +686,44 @@ cron.schedule("*/15 * * * *", async () => {
     .in("id", ids);
   if (error) { console.error("[gift-expire-cron] update error:", error.message); return; }
 
-  // Refund each sender + notify
+  // Funds were held, not debited — release the hold.
+  // Refund extension fees (those were debited immediately) + notify.
   const now = new Date().toISOString();
   for (const gift of expiredGifts) {
-    const amountRands = gift.amount / 100;
     try {
-      // Refund wallet
-      const { data: wallet } = await db.from("wallets").select("balance").eq("user_id", gift.sender_user_id).maybeSingle();
-      if (wallet) {
-        await db.from("wallets").update({ balance: (wallet.balance || 0) + amountRands }).eq("user_id", gift.sender_user_id);
+      // Cancel the pending hold transaction
+      await db.from("transactions")
+        .update({ status: "cancelled", description: "Gift expired — hold released" })
+        .eq("store_reference", `GIFT2-HOLD-${gift.id}`);
+
+      // Refund extension fees if any were charged
+      const extFeesCents = Number(gift.extension_fees || 0);
+      if (extFeesCents > 0) {
+        const extFeesRands = extFeesCents / 100;
+        const { data: wallet } = await db.from("wallets").select("balance").eq("user_id", gift.sender_user_id).maybeSingle();
+        if (wallet) {
+          await db.from("wallets").update({ balance: (wallet.balance || 0) + extFeesRands }).eq("user_id", gift.sender_user_id);
+        }
+        await db.from("transactions").insert({
+          user_id: gift.sender_user_id, direction: "credit",
+          name: `Extension Fee Refund — ${gift.asset_name}`,
+          description: "Gift expired — extension fees returned to wallet",
+          amount: extFeesCents, store_reference: `GIFT2-EXTFEE-REFUND-${gift.id}`,
+          currency: "ZAR", status: "posted", transaction_date: now, created_at: now,
+        });
+        console.log(`[gift-expire-cron] Refunded R${extFeesRands.toFixed(2)} extension fees to user ${gift.sender_user_id} for gift ${gift.id}`);
       }
-      // Refund transaction
-      await db.from("transactions").insert({
-        user_id: gift.sender_user_id, direction: "credit",
-        name: `Gift Refund — ${gift.asset_name}`,
-        description: "Gift expired unclaimed — funds returned to wallet",
-        amount: gift.amount, store_reference: `GIFT2-REFUND-${gift.id}`,
-        currency: "ZAR", status: "posted", transaction_date: now, created_at: now,
-      });
+
       // Notify sender
       await db.from("notifications").insert({
         user_id: gift.sender_user_id,
-        title: "Gift expired — funds returned",
-        body: `Your gift of ${gift.asset_name} was not claimed. R${amountRands.toFixed(2)} has been returned to your wallet.`,
+        title: "Gift expired",
+        body: `Your gift of ${gift.asset_name} was not claimed.${extFeesCents > 0 ? ` Extension fees of R${(extFeesCents / 100).toFixed(2)} have been refunded.` : ""} No funds were deducted from your wallet.`,
         type: "investment",
         payload: { action: "gift_expired_refund", gift_id: gift.id, asset_name: gift.asset_name },
       });
-      console.log(`[gift-expire-cron] Refunded R${amountRands.toFixed(2)} to user ${gift.sender_user_id} for gift ${gift.id}`);
-    } catch (e) { console.error(`[gift-expire-cron] refund error for gift ${gift.id}:`, e.message); }
+      console.log(`[gift-expire-cron] Released hold for gift ${gift.id} — no wallet debit to reverse`);
+    } catch (e) { console.error(`[gift-expire-cron] error for gift ${gift.id}:`, e.message); }
   }
   console.log(`[gift-expire-cron] Processed ${expiredGifts.length} expired gifts at`, now);
 });
@@ -8685,28 +8709,40 @@ app.post("/api/gift/cancel", async (req, res) => {
   const { gift_id } = req.body || {};
   if (!gift_id) return res.status(400).json({ error: "gift_id is required." });
 
-  const { data: gift, error: giftErr } = await db.from("gift_claims").select("id, sender_user_id, amount, status, asset_name").eq("id", gift_id).maybeSingle();
+  const { data: gift, error: giftErr } = await db.from("gift_claims").select("id, sender_user_id, amount, status, asset_name, extension_fees").eq("id", gift_id).maybeSingle();
   if (giftErr || !gift) return res.status(404).json({ error: "Gift not found." });
   if (gift.sender_user_id !== user.id) return res.status(403).json({ error: "Only the sender can cancel a gift." });
   if (gift.status === "claimed") return res.status(400).json({ error: "Cannot cancel a claimed gift." });
   if (gift.status === "cancelled") return res.status(400).json({ error: "Gift is already cancelled." });
-  if (gift.status === "expired") return res.status(400).json({ error: "Gift has already expired and been refunded." });
+  if (gift.status === "expired") return res.status(400).json({ error: "Gift has already expired." });
 
-  const { data: wallet } = await db.from("wallets").select("balance").eq("user_id", user.id).maybeSingle();
-  const { error: walletErr } = await db.from("wallets").update({ balance: Number(wallet?.balance || 0) + gift.amount / 100 }).eq("user_id", user.id);
-  if (walletErr) return res.status(500).json({ error: "Failed to refund wallet." });
+  // Funds were held, not debited — no wallet refund needed for the base amount.
+  // However, extension fees were already debited, so refund those.
+  const extFeesCents = Number(gift.extension_fees || 0);
+  if (extFeesCents > 0) {
+    const extFeesRands = extFeesCents / 100;
+    const { data: wallet } = await db.from("wallets").select("balance").eq("user_id", user.id).maybeSingle();
+    await db.from("wallets").update({ balance: Number(wallet?.balance || 0) + extFeesRands }).eq("user_id", user.id);
+    try {
+      await db.from("transactions").insert({
+        user_id: user.id, direction: "credit",
+        name: `Extension Fee Refund — ${gift.asset_name}`,
+        description: "Gift cancelled — extension fees returned to wallet",
+        amount: extFeesCents, store_reference: `GIFT-CANCEL-EXTFEE-${gift.id}`, status: "posted",
+      });
+    } catch (e) { console.warn("[gift/cancel] ext fee refund tx:", e.message); }
+  }
 
   await db.from("gift_claims").update({ status: "cancelled", cancelled_at: new Date().toISOString() }).eq("id", gift.id);
 
+  // Remove the pending hold transaction
   try {
-    await db.from("transactions").insert({
-      user_id: user.id, direction: "credit",
-      name: `Gift Cancelled — ${gift.asset_name}`, description: "Gift refunded to wallet",
-      amount: gift.amount, store_reference: `GIFT-CANCEL-${gift.id}`, status: "posted",
-    });
-  } catch (e) { console.warn("[gift/cancel] tx:", e.message); }
+    await db.from("transactions")
+      .update({ status: "cancelled", description: "Gift cancelled — hold released" })
+      .eq("store_reference", `GIFT2-HOLD-${gift.id}`);
+  } catch (e) { console.warn("[gift/cancel] hold tx update:", e.message); }
 
-  return res.json({ success: true, refunded_amount: gift.amount });
+  return res.json({ success: true, extension_fees_refunded: extFeesCents });
 });
 
 app.get("/api/gift/sent", async (req, res) => {
@@ -8811,9 +8847,8 @@ app.post("/api/gift/create-v2", async (req, res) => {
   const amountRands = amount / 100;
   if (originalBalance < amountRands) return res.status(400).json({ error: "Insufficient wallet balance." });
 
-  const { error: deductErr } = await db.from("wallets").update({ balance: originalBalance - amountRands })
-    .eq("user_id", user.id).eq("balance", originalBalance);
-  if (deductErr) return res.status(500).json({ error: "Failed to deduct wallet balance." });
+  // Hold funds: don't debit yet, just verify balance is sufficient.
+  // Actual debit happens when the gift is claimed.
 
   const messagePayload = JSON.stringify({
     fn: recipient_first_name.trim(),
@@ -8824,7 +8859,6 @@ app.post("/api/gift/create-v2", async (req, res) => {
   let code;
   try { code = await generateUniqueGiftCode(db); }
   catch (e) {
-    await db.from("wallets").update({ balance: originalBalance }).eq("user_id", user.id);
     return res.status(500).json({ error: "Failed to generate gift code. Please try again." });
   }
 
@@ -8846,7 +8880,6 @@ app.post("/api/gift/create-v2", async (req, res) => {
   }).select("id, token, expires_at").single();
 
   if (insertErr) {
-    await db.from("wallets").update({ balance: originalBalance }).eq("user_id", user.id);
     console.error("[gift/create-v2] insert error:", insertErr.message, insertErr.details, insertErr.hint);
     return res.status(500).json({ error: "Failed to create gift.", detail: insertErr.message });
   }
@@ -8855,10 +8888,10 @@ app.post("/api/gift/create-v2", async (req, res) => {
   try {
     await db.from("transactions").insert({
       user_id: user.id, direction: "debit",
-      name: `Investment Gift — ${asset_name}`,
-      description: `Gift to ${recipient_first_name.trim()} ${recipient_last_name.trim()}`,
-      amount, store_reference: `GIFT2-${gift.id}`, currency: "ZAR",
-      status: "posted", transaction_date: now, created_at: now,
+      name: `Investment Gift — ${asset_name} (held)`,
+      description: `Gift to ${recipient_first_name.trim()} ${recipient_last_name.trim()} — funds held until claimed`,
+      amount, store_reference: `GIFT2-HOLD-${gift.id}`, currency: "ZAR",
+      status: "pending", transaction_date: now, created_at: now,
     });
   } catch (e) { console.warn("[gift/create-v2] tx:", e.message); }
 
@@ -9164,6 +9197,17 @@ app.post("/api/gift/claim-v2", async (req, res) => {
   if (new Date(gift.expires_at) < new Date()) return res.status(400).json({ error: "This gift has expired." });
   if (gift.sender_user_id === user.id) return res.status(400).json({ error: "You cannot claim your own gift." });
 
+  // Debit sender's wallet now that gift is being claimed
+  const giftAmountRands = gift.amount / 100;
+  const { data: senderWallet } = await db.from("wallets").select("balance").eq("user_id", gift.sender_user_id).maybeSingle();
+  if (!senderWallet) return res.status(500).json({ error: "Sender wallet not found." });
+  const senderBalance = Number(senderWallet.balance);
+  if (senderBalance < giftAmountRands) return res.status(400).json({ error: "Sender has insufficient funds. The gift cannot be claimed." });
+
+  const { error: debitErr } = await db.from("wallets").update({ balance: senderBalance - giftAmountRands })
+    .eq("user_id", gift.sender_user_id).eq("balance", senderBalance);
+  if (debitErr) return res.status(500).json({ error: "Failed to process gift payment." });
+
   let holdingsCreated = 0;
   let holdingId = null;
 
@@ -9175,9 +9219,25 @@ app.post("/api/gift/claim-v2", async (req, res) => {
     holdingsCreated = result > 0 ? 1 : 0;
   }
 
-  if (holdingsCreated === 0) return res.status(500).json({ error: "Failed to allocate holdings. Please try again." });
+  if (holdingsCreated === 0) {
+    // Rollback sender wallet debit
+    await db.from("wallets").update({ balance: senderBalance }).eq("user_id", gift.sender_user_id);
+    return res.status(500).json({ error: "Failed to allocate holdings. Please try again." });
+  }
 
+  const totalExtFees = Number(gift.extension_fees || 0);
+  const totalChargedCents = gift.amount + totalExtFees;
   const now = new Date().toISOString();
+
+  // Sender debit transaction (mark the held amount as posted)
+  try {
+    // Update the held transaction to posted
+    await db.from("transactions")
+      .update({ status: "posted", description: `Gift to recipient — claimed and settled` })
+      .eq("store_reference", `GIFT2-HOLD-${gift.id}`);
+  } catch (e) { console.warn("[gift/claim-v2] update hold tx:", e.message); }
+
+  // Recipient credit transaction
   try {
     await db.from("transactions").insert({
       user_id: user.id, direction: "credit",
@@ -9231,7 +9291,7 @@ app.post("/api/gift/extend", async (req, res) => {
   if (!gift_id) return res.status(400).json({ error: "gift_id is required." });
   if (!EXTENSIONS[extension]) return res.status(400).json({ error: "extension must be '10h' or '24h'." });
 
-  const { data: gift } = await db.from("gift_claims").select("id, sender_user_id, amount, asset_name, status, expires_at")
+  const { data: gift } = await db.from("gift_claims").select("id, sender_user_id, amount, asset_name, status, expires_at, extension_fees")
     .eq("id", gift_id).maybeSingle();
   if (!gift) return res.status(404).json({ error: "Gift not found." });
   if (gift.sender_user_id !== user.id) return res.status(403).json({ error: "Only the sender can extend a gift." });
@@ -9246,6 +9306,7 @@ app.post("/api/gift/extend", async (req, res) => {
   const currentBalance = Number(wallet.balance);
   if (currentBalance < feeRands) return res.status(400).json({ error: "Insufficient wallet balance to pay extension fee." });
 
+  // Extension fee is debited immediately
   const { error: feeErr } = await db.from("wallets").update({ balance: currentBalance - feeRands })
     .eq("user_id", user.id).eq("balance", currentBalance);
   if (feeErr) return res.status(500).json({ error: "Failed to deduct extension fee." });
@@ -9253,7 +9314,11 @@ app.post("/api/gift/extend", async (req, res) => {
   const base = new Date(gift.expires_at) > new Date() ? new Date(gift.expires_at) : new Date();
   const newExpiresAt = new Date(base.getTime() + hours * 3600000).toISOString();
 
-  const { error: updateErr } = await db.from("gift_claims").update({ expires_at: newExpiresAt }).eq("id", gift.id);
+  // Track total extension fees on the gift for final settlement on claim
+  const currentExtFees = Number(gift.extension_fees || 0);
+  const { error: updateErr } = await db.from("gift_claims")
+    .update({ expires_at: newExpiresAt, extension_fees: currentExtFees + feeCents })
+    .eq("id", gift.id);
   if (updateErr) {
     await db.from("wallets").update({ balance: currentBalance }).eq("user_id", user.id);
     return res.status(500).json({ error: "Failed to extend gift." });

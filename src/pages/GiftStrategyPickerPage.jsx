@@ -168,7 +168,7 @@ function CategoryPill({ label, active, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition-all ${
+      className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
         active
           ? "bg-white text-slate-900 shadow-sm"
           : "bg-white/20 text-white/70 hover:bg-white/30"

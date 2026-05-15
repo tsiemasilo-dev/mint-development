@@ -336,59 +336,96 @@ export default function GiftToggleV2({
       </AnimatePresence>
 
       {enabled && step === "success" && giftCode && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-5" style={{ background: "rgba(10,10,20,0.75)", backdropFilter: "blur(8px)", animation: "gtv-fade 0.3s ease forwards" }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(10,10,20,0.6)", backdropFilter: "blur(12px)", animation: "gtv-fade 0.3s ease forwards" }}>
           <style>{`
             @keyframes gtv-fade { from { opacity:0 } to { opacity:1 } }
-            @keyframes gtv-pop  { 0% { opacity:0; transform:scale(0.9) translateY(16px) } 100% { opacity:1; transform:scale(1) translateY(0) } }
+            @keyframes gtv-slide { 0% { opacity:0; transform:translateY(40px) } 100% { opacity:1; transform:translateY(0) } }
           `}</style>
 
           <ConfettiBurst active={celebrate} />
 
-          <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl" style={{ animation: "gtv-pop 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards" }}>
-            <div className="bg-gradient-to-b from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-6 pt-7 pb-6 text-center relative">
-              <button
-                type="button"
-                onClick={() => { setStep("form"); setGiftCode(null); onDone?.(); }}
-                className="absolute top-4 right-4 w-7 h-7 rounded-full bg-white/15 flex items-center justify-center hover:bg-white/25 transition-colors"
-              >
-                <X size={12} className="text-white" />
-              </button>
-              <div className="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-sm flex items-center justify-center mx-auto mb-3 border border-white/20">
-                <Gift size={24} className="text-white" />
+          <div className="w-full max-w-sm" style={{ animation: "gtv-slide 0.5s cubic-bezier(0.16,1,0.3,1) forwards" }}>
+            <div className="bg-white rounded-[28px] overflow-hidden" style={{ boxShadow: "0 8px 40px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.04)" }}>
+              {/* Top accent bar */}
+              <div className="h-1 bg-gradient-to-r from-violet-500 via-fuchsia-400 to-violet-500" />
+
+              <div className="px-6 pt-5 pb-5">
+                {/* Close */}
+                <button
+                  type="button"
+                  onClick={() => { setStep("form"); setGiftCode(null); onDone?.(); }}
+                  className="absolute top-8 right-7 w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors z-10"
+                >
+                  <X size={14} className="text-slate-500" />
+                </button>
+
+                {/* Gift illustration */}
+                <div className="flex justify-center mb-3">
+                  <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="12" y="38" width="56" height="34" rx="6" fill="url(#giftBox)" />
+                    <rect x="8" y="30" width="64" height="14" rx="5" fill="url(#giftLid)" />
+                    <rect x="36" y="30" width="8" height="42" rx="1" fill="#e9d5ff" opacity="0.6" />
+                    <rect x="8" y="35" width="64" height="4" rx="1" fill="#e9d5ff" opacity="0.4" />
+                    <path d="M40 30C40 30 32 14 24 18C16 22 28 30 40 30Z" fill="#f0abfc" opacity="0.8" />
+                    <path d="M40 30C40 30 48 14 56 18C64 22 52 30 40 30Z" fill="#c4b5fd" opacity="0.8" />
+                    <circle cx="40" cy="28" r="5" fill="#a78bfa" />
+                    <circle cx="40" cy="28" r="2.5" fill="#f5f3ff" />
+                    <defs>
+                      <linearGradient id="giftBox" x1="12" y1="38" x2="68" y2="72" gradientUnits="userSpaceOnUse">
+                        <stop stopColor="#8b5cf6" />
+                        <stop offset="1" stopColor="#d946ef" />
+                      </linearGradient>
+                      <linearGradient id="giftLid" x1="8" y1="30" x2="72" y2="44" gradientUnits="userSpaceOnUse">
+                        <stop stopColor="#7c3aed" />
+                        <stop offset="1" stopColor="#c026d3" />
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                </div>
+
+                {/* Header */}
+                <div className="text-center mb-5">
+                  <p className="text-[16px] font-bold text-slate-900">Gift sent to {firstName}</p>
+                  <p className="text-[12px] text-slate-400 mt-0.5">
+                    {expiresAt ? `Expires ${formatExpiry(expiresAt)}` : "Share the code below"}
+                  </p>
+                </div>
+
+                {/* Code card */}
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 mb-4">
+                  <p className="text-[10px] font-medium text-slate-400 uppercase tracking-[0.12em] mb-2.5 text-center">Claim code</p>
+                  <div className="flex justify-center gap-1.5">
+                    {String(giftCode).split("").map((digit, i) => (
+                      <div key={i} className="w-10 h-12 rounded-xl bg-white border border-slate-200 flex items-center justify-center shadow-sm">
+                        <span className="text-xl font-bold text-slate-900 font-mono">{digit}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <button
+                  type="button"
+                  onClick={handleCopy}
+                  className="w-full flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-6 py-3.5 text-sm font-semibold text-white active:scale-[0.98] transition-all mb-2"
+                >
+                  {copied ? <Check size={15} /> : <Copy size={15} />}
+                  {copied ? "Copied!" : "Copy Code"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setStep("form"); setGiftCode(null); onDone?.(); }}
+                  className="w-full py-3 rounded-2xl text-slate-500 text-sm font-medium active:scale-[0.98] transition-all"
+                >
+                  Done
+                </button>
+
+                {/* Footer hint */}
+                <p className="text-[10px] text-slate-300 text-center mt-1">
+                  Recipient enters code + SA ID on Mint to claim
+                </p>
               </div>
-              <p className="text-lg font-bold text-white mb-1">Gift Sent</p>
-              <p className="text-xs text-violet-200 leading-relaxed">
-                Share this code with {firstName} — they'll need it and their SA ID to claim.
-                {expiresAt ? ` Expires ${formatExpiry(expiresAt)}.` : ""}
-              </p>
-            </div>
-
-            <div className="px-6 py-5 space-y-4">
-              <div className="bg-slate-50 rounded-2xl p-5 text-center">
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.15em] mb-2">Claim Code</p>
-                <p className="text-4xl font-black tracking-[0.35em] text-slate-900 font-mono">{giftCode}</p>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleCopy}
-                className="w-full flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white active:scale-[0.98] transition-all"
-              >
-                {copied ? <Check size={15} /> : <Copy size={15} />}
-                {copied ? "Copied!" : "Copy Code"}
-              </button>
-
-              <p className="text-[11px] text-slate-400 text-center leading-relaxed">
-                Recipient enters this code + SA ID on the Mint app to claim their investment.
-              </p>
-
-              <button
-                type="button"
-                onClick={() => { setStep("form"); setGiftCode(null); onDone?.(); }}
-                className="w-full py-3 rounded-xl bg-slate-100 text-slate-600 text-sm font-semibold active:scale-[0.98] transition-all"
-              >
-                Done
-              </button>
             </div>
           </div>
         </div>
