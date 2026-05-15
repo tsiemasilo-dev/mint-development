@@ -299,8 +299,7 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
 
   const missingFieldStyle = (value) => {
     if (value && value.trim()) return {};
-    if (showErrors) return { borderBottom: "1.5px solid #ef4444", background: "#fef2f2" };
-    return { borderBottom: "1.5px dashed #94a3b8", background: "#f1f5f9" };
+    return { borderBottom: "1.5px dashed #ef4444", background: "#fef2f2" };
   };
 
   const pageStyle = {
