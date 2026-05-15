@@ -114,7 +114,7 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
         ([entry]) => {
           if (entry.isIntersecting) activate(index);
         },
-        { rootMargin: '0px 0px -55% 0px', threshold: 0.85 }
+        { rootMargin: '0px 0px -88% 0px', threshold: 0 }
       );
       if (ref.current) observer.observe(ref.current);
       return observer;
@@ -1101,11 +1101,9 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
           </div>
           <svg viewBox="0 0 24 24" fill="none" stroke="hsl(270 20% 55%)" strokeWidth="2" width="18" height="18" style={{ flexShrink: 0, transition: 'transform 0.2s', transform: sec1Open ? 'rotate(180deg)' : 'rotate(0deg)' }}><path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" /></svg>
         </button>
-        {sec1Open && (
-          <div style={{ borderTop: '1px solid hsl(270 20% 92%)' }}>
-            {renderCoverPage()}
-          </div>
-        )}
+        <div style={{ display: 'grid', gridTemplateRows: sec1Open ? '1fr' : '0fr', transition: 'grid-template-rows 0.4s ease', borderTop: sec1Open ? '1px solid hsl(270 20% 92%)' : 'none' }}>
+          <div style={{ overflow: 'hidden' }}>{renderCoverPage()}</div>
+        </div>
       </div>
 
       {/* ── Section 2: Introduction & Terms ── */}
@@ -1118,13 +1116,11 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
             <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Introduction &amp; Terms</div>
             <div style={{ fontSize: '12px', color: 'hsl(270 15% 60%)' }}>Mandate terms and conditions</div>
           </div>
-          <svg viewBox="0 0 24 24" fill="none" stroke="hsl(270 20% 55%)" strokeWidth="2" width="18" height="18" style={{ flexShrink: 0, transition: 'transform 0.2s', transform: sec2Open ? 'rotate(180deg)' : 'rotate(0deg)' }}><path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" /></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="hsl(270 20% 55%)" strokeWidth="2" width="18" height="18" style={{ flexShrink: 0, transition: 'transform 0.4s ease', transform: sec2Open ? 'rotate(180deg)' : 'rotate(0deg)' }}><path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" /></svg>
         </button>
-        {sec2Open && (
-          <div style={{ borderTop: '1px solid hsl(270 20% 92%)' }}>
-            {renderMainSections()}
-          </div>
-        )}
+        <div style={{ display: 'grid', gridTemplateRows: sec2Open ? '1fr' : '0fr', transition: 'grid-template-rows 0.4s ease', borderTop: sec2Open ? '1px solid hsl(270 20% 92%)' : 'none' }}>
+          <div style={{ overflow: 'hidden' }}>{renderMainSections()}</div>
+        </div>
       </div>
 
       {/* ── Section 3: Schedules & Annexures ── */}
@@ -1139,13 +1135,11 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
             <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Schedules &amp; Annexures</div>
             <div style={{ fontSize: '12px', color: 'hsl(270 15% 60%)' }}>Complete your investment preferences</div>
           </div>
-          <svg viewBox="0 0 24 24" fill="none" stroke="hsl(270 20% 55%)" strokeWidth="2" width="18" height="18" style={{ flexShrink: 0, transition: 'transform 0.2s', transform: sec3Open ? 'rotate(180deg)' : 'rotate(0deg)' }}><path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" /></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="hsl(270 20% 55%)" strokeWidth="2" width="18" height="18" style={{ flexShrink: 0, transition: 'transform 0.4s ease', transform: sec3Open ? 'rotate(180deg)' : 'rotate(0deg)' }}><path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" /></svg>
         </button>
-        {sec3Open && (
-          <div style={{ borderTop: '1px solid hsl(270 20% 92%)' }}>
-            {renderSchedules()}
-          </div>
-        )}
+        <div style={{ display: 'grid', gridTemplateRows: sec3Open ? '1fr' : '0fr', transition: 'grid-template-rows 0.4s ease', borderTop: sec3Open ? '1px solid hsl(270 20% 92%)' : 'none' }}>
+          <div style={{ overflow: 'hidden' }}>{renderSchedules()}</div>
+        </div>
       </div>
 
     </div>
