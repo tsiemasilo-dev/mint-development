@@ -125,6 +125,14 @@ const monthlyInvestmentOptions = [
   { value: "over_100000", label: "More than R100,000" },
 ];
 
+const accountTypeOptions = [
+  { value: "savings", label: "Savings" },
+  { value: "cheque", label: "Cheque / Current" },
+  { value: "business", label: "Business" },
+  { value: "transmission", label: "Transmission" },
+  { value: "other", label: "Other" },
+];
+
 const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const { profile, loading: profileLoading } = useProfile();
   const [step, setStep] = useState(0);
@@ -159,6 +167,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const [expectedMonthlyInvestment, setExpectedMonthlyInvestment] = useState("");
   const [agreedSourceOfFunds, setAgreedSourceOfFunds] = useState(false);
   const [sofDropdownOpen, setSofDropdownOpen] = useState(false);
+  const [accountTypeDropdownOpen, setAccountTypeDropdownOpen] = useState(false);
+  const [monthlyInvestmentDropdownOpen, setMonthlyInvestmentDropdownOpen] = useState(false);
   const [bankName, setBankName] = useState("");
   const [bankAccountName, setBankAccountName] = useState("");
   const [bankAccountType, setBankAccountType] = useState("");
@@ -192,6 +202,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   });
   const dropdownRef = useRef(null);
   const sofDropdownRef = useRef(null);
+  const accountTypeDropdownRef = useRef(null);
+  const monthlyInvestmentDropdownRef = useRef(null);
 
   const selectedOption = employmentOptions.find(
     (option) => option.value === employmentStatus
@@ -478,6 +490,12 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
       }
       if (bankDropdownRef.current && !bankDropdownRef.current.contains(event.target)) {
         setBankDropdownOpen(false);
+      }
+      if (accountTypeDropdownRef.current && !accountTypeDropdownRef.current.contains(event.target)) {
+        setAccountTypeDropdownOpen(false);
+      }
+      if (monthlyInvestmentDropdownRef.current && !monthlyInvestmentDropdownRef.current.contains(event.target)) {
+        setMonthlyInvestmentDropdownOpen(false);
       }
     };
 
@@ -1111,18 +1129,30 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                       </div>
                     </div>
                     <div className="bank-input-divider"></div>
-                    <div className="bank-input-row">
-                      <label htmlFor="bank-account-type2">Account Type</label>
-                      <div className="bank-input-field">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="18" height="18" className="bank-input-icon"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5m-16.5 5.25h16.5m-16.5 5.25h10.5" /></svg>
-                        <select id="bank-account-type2" value={bankAccountType} onChange={(e) => setBankAccountType(e.target.value)}>
-                          <option value="">Select account type</option>
-                          <option value="savings">Savings</option>
-                          <option value="cheque">Cheque / Current</option>
-                          <option value="business">Business</option>
-                          <option value="transmission">Transmission</option>
-                          <option value="other">Other</option>
-                        </select>
+                    <div className="bank-input-row" style={{ paddingBottom: '0.75rem', position: 'relative', zIndex: accountTypeDropdownOpen ? 60 : 'auto' }}>
+                      <label htmlFor="bank-account-type2" style={{ paddingTop: '0.75rem', display: 'block' }}>Account Type</label>
+                      <div className="custom-select" ref={accountTypeDropdownRef} style={{ marginTop: '0.5rem' }}>
+                        <div
+                          className={`bank-select-trigger ${accountTypeDropdownOpen ? "active" : ""}`}
+                          role="button" tabIndex={0}
+                          onClick={() => setAccountTypeDropdownOpen(p => !p)}
+                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setAccountTypeDropdownOpen(p => !p); } }}
+                        >
+                          {bankAccountType
+                            ? <span className="bank-select-value">{accountTypeOptions.find(o => o.value === bankAccountType)?.label}</span>
+                            : <span className="bank-select-placeholder">Select account type</span>}
+                          <svg className="bank-select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16"><path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
+                        </div>
+                        <div className={`bank-dropdown-list ${accountTypeDropdownOpen ? "active" : ""}`}>
+                          {accountTypeOptions.map((option) => (
+                            <div key={option.value} className={`bank-dropdown-option ${bankAccountType === option.value ? "selected" : ""}`} role="button" tabIndex={0}
+                              onClick={() => { setBankAccountType(option.value); setAccountTypeDropdownOpen(false); }}
+                              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setBankAccountType(option.value); setAccountTypeDropdownOpen(false); } }}>
+                              <span>{option.label}</span>
+                              {bankAccountType === option.value && <svg className="bank-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="16" height="16"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>}
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
                     <div className="bank-input-divider"></div>
@@ -1221,7 +1251,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               </div>
 
               {/* ── Section 4: Source of Funds ── */}
-              <div className={`animate-fade-in delay-3${sofDropdownOpen ? ' dropdown-open' : ''}`} style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', padding: '18px 20px', boxShadow: '0 2px 12px rgba(100,60,140,0.06)' }}>
+              <div className={`animate-fade-in delay-3${sofDropdownOpen ? ' dropdown-open' : ''}`} style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', padding: '18px 20px', boxShadow: '0 2px 12px rgba(100,60,140,0.06)', position: 'relative', zIndex: sofDropdownOpen ? 200 : 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
                   <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'hsl(270 30% 25%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>4</span>
@@ -1256,12 +1286,28 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   )}
                   <div className="hide-when-dropdown-open">
                     <label htmlFor="expected-monthly-investment2" style={{ fontSize: '13px', fontWeight: '500', color: 'hsl(270 30% 25%)', display: 'block', marginBottom: '6px' }}>Expected Monthly Investment Amount</label>
-                    <div className="glass-field">
-                      <select id="expected-monthly-investment2" value={expectedMonthlyInvestment} onChange={(e) => setExpectedMonthlyInvestment(e.target.value)}>
-                        {monthlyInvestmentOptions.map((option) => (
-                          <option key={option.value || "placeholder"} value={option.value}>{option.label}</option>
+                    <div className="custom-select" ref={monthlyInvestmentDropdownRef} style={{ position: 'relative', zIndex: monthlyInvestmentDropdownOpen ? 60 : 'auto' }}>
+                      <div
+                        className={`bank-select-trigger ${monthlyInvestmentDropdownOpen ? "active" : ""}`}
+                        role="button" tabIndex={0}
+                        onClick={() => setMonthlyInvestmentDropdownOpen(p => !p)}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setMonthlyInvestmentDropdownOpen(p => !p); } }}
+                      >
+                        {expectedMonthlyInvestment
+                          ? <span className="bank-select-value">{monthlyInvestmentOptions.find(o => o.value === expectedMonthlyInvestment)?.label}</span>
+                          : <span className="bank-select-placeholder">Select amount range</span>}
+                        <svg className="bank-select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16"><path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
+                      </div>
+                      <div className={`bank-dropdown-list ${monthlyInvestmentDropdownOpen ? "active" : ""}`}>
+                        {monthlyInvestmentOptions.filter(o => o.value).map((option) => (
+                          <div key={option.value} className={`bank-dropdown-option ${expectedMonthlyInvestment === option.value ? "selected" : ""}`} role="button" tabIndex={0}
+                            onClick={() => { setExpectedMonthlyInvestment(option.value); setMonthlyInvestmentDropdownOpen(false); }}
+                            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpectedMonthlyInvestment(option.value); setMonthlyInvestmentDropdownOpen(false); } }}>
+                            <span>{option.label}</span>
+                            {expectedMonthlyInvestment === option.value && <svg className="bank-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="16" height="16"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>}
+                          </div>
                         ))}
-                      </select>
+                      </div>
                     </div>
                   </div>
                   <div className="hide-when-dropdown-open">
