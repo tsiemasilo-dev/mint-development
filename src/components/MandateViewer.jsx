@@ -86,7 +86,7 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
   const manualOverrideRef = useRef(false);
 
   useEffect(() => {
-    const TRIGGER = window.innerHeight * 0.38;
+    const TRIGGER = window.innerHeight * 0.50;
 
     const handleScroll = () => {
       if (manualOverrideRef.current) return;
