@@ -225,17 +225,20 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
   const editableInputStyle = {
     width: "100%",
     border: "none",
-    borderBottom: "1.5px solid #7c3aed",
-    padding: "2px 0",
+    borderBottom: "1.5px solid #94a3b8",
+    padding: "3px 4px",
     fontSize: "11px",
-    background: "rgba(124, 58, 237, 0.04)",
-    color: "#333",
+    background: "#f8fafc",
+    color: "#1e293b",
     outline: "none",
+    borderRadius: "2px 2px 0 0",
   };
 
-  const missingFieldStyle = (value) => ({
-    ...(value && value.trim() ? {} : { borderBottom: showErrors ? "1.5px solid #ef4444" : "1.5px solid #7c3aed" }),
-  });
+  const missingFieldStyle = (value) => {
+    if (value && value.trim()) return {};
+    if (showErrors) return { borderBottom: "1.5px solid #ef4444", background: "#fef2f2" };
+    return { borderBottom: "1.5px dashed #94a3b8", background: "#f1f5f9" };
+  };
 
   const pageStyle = {
     background: "white",
