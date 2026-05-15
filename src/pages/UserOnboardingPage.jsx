@@ -1129,7 +1129,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                       </div>
                     </div>
                     <div className="bank-input-divider"></div>
-                    <div className="bank-input-row" style={{ paddingBottom: '0.75rem', position: 'relative', zIndex: accountTypeDropdownOpen ? 60 : 'auto' }}>
+                    <div className="bank-input-row" style={{ paddingBottom: '0.75rem', position: 'relative', zIndex: 10 }}>
                       <label htmlFor="bank-account-type2" style={{ paddingTop: '0.75rem', display: 'block' }}>Account Type</label>
                       <div className="custom-select" ref={accountTypeDropdownRef} style={{ marginTop: '0.5rem' }}>
                         <div
@@ -1297,7 +1297,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   )}
                   <div>
                     <label htmlFor="expected-monthly-investment2" style={{ fontSize: '13px', fontWeight: '500', color: 'hsl(270 30% 25%)', display: 'block', marginBottom: '6px' }}>Expected Monthly Investment Amount</label>
-                    <div className="custom-select" ref={monthlyInvestmentDropdownRef} style={{ position: 'relative', zIndex: monthlyInvestmentDropdownOpen ? 60 : 'auto' }}>
+                    <div className="custom-select" ref={monthlyInvestmentDropdownRef} style={{ position: 'relative', zIndex: 10 }}>
                       <div
                         className={`bank-select-trigger ${monthlyInvestmentDropdownOpen ? "active" : ""}`}
                         role="button" tabIndex={0}
