@@ -145,14 +145,15 @@ export default async function handler(req, res) {
       await db.from("transactions").insert({
         user_id: parentUserId,
         family_member_id: family_member_id,
-        type: "investment",
+        name: `Strategy Investment: ${strategy.name}`,
         direction: "debit",
         amount: amount,
         description: `${strategy.name} investment for ${child.first_name}`,
         store_reference: ref,
         status: "completed",
+        transaction_date: new Date().toISOString(),
       });
-    } catch (e) { console.warn("[child-invest] tx insert:", e.message); }
+    } catch (e) { console.error("[child-invest] tx insert failed:", e.message); }
 
     return res.json({
       success: true,
