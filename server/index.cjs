@@ -1,31 +1,31 @@
 const fs = require("fs");
 const path = require("path");
 
-// Simple .env loader for local development (no dotenv dependency required)
-try {
-  const envPath = path.join(__dirname, "..", ".env");
-  if (fs.existsSync(envPath)) {
-    const envContent = fs.readFileSync(envPath, "utf8");
-    envContent.split("\n").forEach(line => {
-      // Basic key=value parsing
-      const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
-      if (match) {
-        const key = match[1];
-        let value = match[2] || "";
-        // Remove quotes if present
-        if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
-        if (value.startsWith("'") && value.endsWith("'")) value = value.slice(1, -1);
-        // Only set if not already set by system environment
-        if (!process.env[key]) {
-          process.env[key] = value;
+function loadEnvFile(envPath) {
+  try {
+    if (fs.existsSync(envPath)) {
+      const envContent = fs.readFileSync(envPath, "utf8");
+      envContent.split("\n").forEach(line => {
+        const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+        if (match) {
+          const key = match[1];
+          let value = match[2] || "";
+          if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
+          if (value.startsWith("'") && value.endsWith("'")) value = value.slice(1, -1);
+          if (!process.env[key]) process.env[key] = value;
         }
-      }
-    });
-    console.log("[Server] Local .env file loaded");
+      });
+      console.log(`[Server] Loaded ${path.basename(envPath)}`);
+      return true;
+    }
+  } catch (e) {
+    console.warn(`[Server] Could not load ${path.basename(envPath)}:`, e.message);
   }
-} catch (e) {
-  console.warn("[Server] Could not load .env file:", e.message);
+  return false;
 }
+
+const root = path.join(__dirname, "..");
+loadEnvFile(path.join(root, ".env.local")) || loadEnvFile(path.join(root, ".env"));
 
 const express = require("express");
 const cors = require("cors");
@@ -36,6 +36,19 @@ const { Resend } = require("resend");
 const { runFuneralCoverMigration } = require("./funeralCoverMigration.cjs");
 const { runStrategySubscriptionMigration } = require("./strategySubscriptionMigration.cjs");
 const cron = require("node-cron");
+const multer = require("multer");
+const Anthropic = require("@anthropic-ai/sdk");
+
+const uploadPdf = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 }, fileFilter: (_, file, cb) => {
+  cb(null, file.mimetype === "application/pdf" || file.mimetype.startsWith("image/"));
+}});
+
+let _anthropicClient = null;
+function getAnthropicClient() {
+  const key = process.env.ANTHROPIC_API_KEY || process.env.VITE_ANTHROPIC_API_KEY;
+  if (!_anthropicClient && key) _anthropicClient = new Anthropic({ apiKey: key });
+  return _anthropicClient;
+}
 
 // Helper to check both standard and VITE_ prefixed env vars
 const readEnv = (key) => process.env[key] || process.env[`VITE_${key}`];
@@ -602,6 +615,20 @@ async function migrateWalletColumns() {
 }
 migrateWalletColumns();
 
+async function migrateGiftClaimsColumns() {
+  const db = supabaseAdmin || supabase;
+  if (!db) return;
+  try {
+    await db.rpc('exec_sql', {
+      query: "ALTER TABLE gift_claims ADD COLUMN IF NOT EXISTS extension_fees INTEGER DEFAULT 0"
+    });
+    console.log('[gift_claims] extension_fees column ensured');
+  } catch (e) {
+    console.log('[gift_claims] extension_fees column may need manual addition:', e.message);
+  }
+}
+migrateGiftClaimsColumns();
+
 async function ensureUserSessionsTable() {
   if (!pgPool) return;
   const client = await pgPool.connect();
@@ -633,6 +660,73 @@ async function ensureUserSessionsTable() {
 ensureUserSessionsTable();
 runFuneralCoverMigration(pgPool);
 runStrategySubscriptionMigration(pgPool, supabaseAdmin, supabase);
+
+// ── Gift expiry cron — every 15 minutes ────────────────────────────────────
+cron.schedule("*/15 * * * *", async () => {
+  const db = supabaseAdmin || supabase;
+  if (!db) return;
+
+  // Find expired gifts before updating
+  const { data: expiredGifts } = await db
+    .from("gift_claims")
+    .select("id, sender_user_id, amount, asset_name, extension_fees")
+    .eq("status", "pending_claim")
+    .lt("expires_at", new Date().toISOString());
+
+  if (!expiredGifts?.length) {
+    console.log("[gift-expire-cron] no expired gifts at", new Date().toISOString());
+    return;
+  }
+
+  // Mark as expired
+  const ids = expiredGifts.map(g => g.id);
+  const { error } = await db
+    .from("gift_claims")
+    .update({ status: "expired" })
+    .in("id", ids);
+  if (error) { console.error("[gift-expire-cron] update error:", error.message); return; }
+
+  // Funds were held, not debited — release the hold.
+  // Refund extension fees (those were debited immediately) + notify.
+  const now = new Date().toISOString();
+  for (const gift of expiredGifts) {
+    try {
+      // Cancel the pending hold transaction
+      await db.from("transactions")
+        .update({ status: "cancelled", description: "Gift expired — hold released" })
+        .eq("store_reference", `GIFT2-HOLD-${gift.id}`);
+
+      // Refund extension fees if any were charged
+      const extFeesCents = Number(gift.extension_fees || 0);
+      if (extFeesCents > 0) {
+        const extFeesRands = extFeesCents / 100;
+        const { data: wallet } = await db.from("wallets").select("balance").eq("user_id", gift.sender_user_id).maybeSingle();
+        if (wallet) {
+          await db.from("wallets").update({ balance: (wallet.balance || 0) + extFeesRands }).eq("user_id", gift.sender_user_id);
+        }
+        await db.from("transactions").insert({
+          user_id: gift.sender_user_id, direction: "credit",
+          name: `Extension Fee Refund — ${gift.asset_name}`,
+          description: "Gift expired — extension fees returned to wallet",
+          amount: extFeesCents, store_reference: `GIFT2-EXTFEE-REFUND-${gift.id}`,
+          currency: "ZAR", status: "posted", transaction_date: now, created_at: now,
+        });
+        console.log(`[gift-expire-cron] Refunded R${extFeesRands.toFixed(2)} extension fees to user ${gift.sender_user_id} for gift ${gift.id}`);
+      }
+
+      // Notify sender
+      await db.from("notifications").insert({
+        user_id: gift.sender_user_id,
+        title: "Gift expired",
+        body: `Your gift of ${gift.asset_name} was not claimed.${extFeesCents > 0 ? ` Extension fees of R${(extFeesCents / 100).toFixed(2)} have been refunded.` : ""} No funds were deducted from your wallet.`,
+        type: "investment",
+        payload: { action: "gift_expired_refund", gift_id: gift.id, asset_name: gift.asset_name },
+      });
+      console.log(`[gift-expire-cron] Released hold for gift ${gift.id} — no wallet debit to reverse`);
+    } catch (e) { console.error(`[gift-expire-cron] error for gift ${gift.id}:`, e.message); }
+  }
+  console.log(`[gift-expire-cron] Processed ${expiredGifts.length} expired gifts at`, now);
+});
 
 // ── Monthly strategy subscription billing cron ─────────────────────────────
 // Runs daily at 22:00 UTC (midnight SAST). Charges R29 for each due subscription.
@@ -2396,6 +2490,169 @@ app.post("/api/banking/unlink", async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
+// ── Bank Confirmation Letter Verification (disabled — set ENABLE_BANK_LETTER_VERIFY=true to activate) ──
+if (readEnv("ENABLE_BANK_LETTER_VERIFY") === "true") {
+app.post("/api/banking/verify-letter", uploadPdf.single("file"), async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (!token) return res.status(401).json({ success: false, error: "Missing token" });
+
+    const db = supabaseAdmin || supabase;
+    const authClient = supabaseAdmin || supabase;
+    if (!authClient) return res.status(500).json({ success: false, error: "Database not configured" });
+
+    const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
+    if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
+
+    const claude = getAnthropicClient();
+    if (!claude) return res.status(500).json({ success: false, error: "Document verification service not configured" });
+
+    if (!req.file) return res.status(400).json({ success: false, error: "No file uploaded" });
+
+    // 1. Fetch the user's profile and bank details
+    const [profileResult, onboardingResult] = await Promise.all([
+      db.from("profiles").select("first_name, last_name, id_number").eq("id", user.id).maybeSingle(),
+      db.from("user_onboarding").select("bank_name, bank_account_number")
+        .eq("user_id", user.id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    ]);
+
+    const profile = profileResult.data;
+    const onboarding = onboardingResult.data;
+
+    if (!profile) return res.status(400).json({ success: false, error: "User profile not found. Please complete your profile first." });
+
+    const userName = `${profile.first_name || ""} ${profile.last_name || ""}`.trim();
+    const userIdNumber = profile.id_number || "";
+    const userBankAccount = onboarding?.bank_account_number || "";
+    const userBankName = onboarding?.bank_name || "";
+
+    // 2. Send the document to Claude Vision for extraction
+    const fileBase64 = req.file.buffer.toString("base64");
+    const isPdf = req.file.mimetype === "application/pdf";
+    const mediaType = isPdf ? "application/pdf" : req.file.mimetype;
+
+    const content = isPdf
+      ? [{ type: "document", source: { type: "base64", media_type: "application/pdf", data: fileBase64 } },
+         { type: "text", text: `Extract the following fields from this bank confirmation letter. Return ONLY valid JSON, no other text.
+{
+  "account_holder_name": "full name on the letter",
+  "id_number": "ID/passport number if present, or null",
+  "bank_name": "name of the bank",
+  "account_number": "bank account number",
+  "branch_code": "branch code if present, or null",
+  "account_type": "account type if present, or null",
+  "letter_date": "date on the letter if present, or null",
+  "is_valid_bank_letter": true/false
+}` }]
+      : [{ type: "image", source: { type: "base64", media_type: mediaType, data: fileBase64 } },
+         { type: "text", text: `Extract the following fields from this bank confirmation letter image. Return ONLY valid JSON, no other text.
+{
+  "account_holder_name": "full name on the letter",
+  "id_number": "ID/passport number if present, or null",
+  "bank_name": "name of the bank",
+  "account_number": "bank account number",
+  "branch_code": "branch code if present, or null",
+  "account_type": "account type if present, or null",
+  "letter_date": "date on the letter if present, or null",
+  "is_valid_bank_letter": true/false
+}` }];
+
+    const response = await claude.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1024,
+      messages: [{ role: "user", content }],
+    });
+
+    const raw = response.content?.[0]?.text || "";
+    let extracted;
+    try {
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      extracted = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
+    } catch {
+      console.error("[BankVerify] Failed to parse Claude response:", raw);
+      return res.status(422).json({ success: false, error: "Could not read the document. Please upload a clearer image or PDF." });
+    }
+
+    if (!extracted.is_valid_bank_letter) {
+      return res.json({
+        success: false,
+        match: false,
+        reason: "The uploaded document does not appear to be a valid bank confirmation letter.",
+        extracted,
+      });
+    }
+
+    // 3. Compare extracted fields against user data
+    const normalize = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const checks = [];
+    const issues = [];
+
+    // Name match — fuzzy: check if each part of the user's name appears in the extracted name
+    const extractedName = normalize(extracted.account_holder_name);
+    const nameParts = userName.toLowerCase().split(/\s+/).filter(Boolean);
+    const nameMatched = nameParts.length > 0 && nameParts.every(part => extractedName.includes(normalize(part)));
+    checks.push({ field: "name", expected: userName, found: extracted.account_holder_name || "", match: nameMatched });
+    if (!nameMatched) issues.push("Account holder name does not match your profile name.");
+
+    // ID number match
+    if (userIdNumber && extracted.id_number) {
+      const idMatch = normalize(userIdNumber) === normalize(extracted.id_number);
+      checks.push({ field: "id_number", expected: userIdNumber, found: extracted.id_number, match: idMatch });
+      if (!idMatch) issues.push("ID number on the letter does not match your profile.");
+    } else if (userIdNumber && !extracted.id_number) {
+      checks.push({ field: "id_number", expected: userIdNumber, found: null, match: false });
+      issues.push("No ID number found on the letter.");
+    }
+
+    // Account number match
+    if (userBankAccount && extracted.account_number) {
+      const accMatch = normalize(userBankAccount) === normalize(extracted.account_number);
+      checks.push({ field: "account_number", expected: userBankAccount, found: extracted.account_number, match: accMatch });
+      if (!accMatch) issues.push("Account number does not match the one on file.");
+    }
+
+    // Bank name match
+    if (userBankName && extracted.bank_name) {
+      const bankMatch = normalize(userBankName).includes(normalize(extracted.bank_name)) ||
+                         normalize(extracted.bank_name).includes(normalize(userBankName));
+      checks.push({ field: "bank_name", expected: userBankName, found: extracted.bank_name, match: bankMatch });
+      if (!bankMatch) issues.push("Bank name does not match.");
+    }
+
+    const allMatch = issues.length === 0;
+
+    // 4. Log the verification result
+    console.log(`[BankVerify] User ${user.id}: match=${allMatch}, checks=${JSON.stringify(checks)}`);
+
+    // 5. If all match, mark bank as verified
+    if (allMatch) {
+      try {
+        await db.from("required_actions").update({ bank_linked: true, bank_in_review: false }).eq("user_id", user.id);
+      } catch (e) {
+        console.warn("[BankVerify] Could not update required_actions:", e.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      match: allMatch,
+      checks,
+      issues,
+      extracted: {
+        account_holder_name: extracted.account_holder_name,
+        bank_name: extracted.bank_name,
+        account_number: extracted.account_number ? `****${extracted.account_number.slice(-4)}` : null,
+        letter_date: extracted.letter_date,
+      },
+    });
+  } catch (error) {
+    console.error("[BankVerify] Error:", error);
+    res.status(500).json({ success: false, error: "Verification failed. Please try again." });
+  }
+});
+} // end ENABLE_BANK_LETTER_VERIFY
 
 app.post("/api/account/reset", async (req, res) => {
   try {
@@ -8110,6 +8367,1052 @@ app.post('/api/child-invest', async (req, res) => {
     return res.status(500).json({ error: 'Investment failed. Please try again.', debug: e.message });
   }
 });
+
+// ─── Gift routes ────────────────────────────────────────────────────────────
+
+const giftOtpStore = new Map(); // userId → { code, expiresAt }
+
+async function giftAllocateStrategyHoldings(db, userId, strategyId, strategyHoldings, amountCents) {
+  const investAmountRands = amountCents / 100;
+  let holdingsCreated = 0;
+  if (!strategyHoldings.length) return 0;
+
+  const symbols = strategyHoldings.map(h => h.symbol).filter(Boolean);
+  const { data: securities } = await db.from("securities_c").select("id, symbol, last_price").in("symbol", symbols);
+  const secMap = {};
+  (securities || []).forEach(s => { secMap[s.symbol] = s; });
+
+  let totalBasketCost = 0;
+  for (const h of strategyHoldings) {
+    if (secMap[h.symbol]?.last_price) totalBasketCost += secMap[h.symbol].last_price * (h.weight || 1);
+  }
+
+  if (totalBasketCost > 0) {
+    const scale = investAmountRands / totalBasketCost;
+    for (const h of strategyHoldings) {
+      const sec = secMap[h.symbol];
+      if (!sec?.last_price) continue;
+      const qty = Math.floor((h.weight || 1) * scale);
+      if (qty <= 0) continue;
+      try {
+        const { data: existing } = await db.from("stock_holdings_c").select("id, quantity")
+          .eq("user_id", userId).eq("security_id", sec.id).eq("strategy_id", strategyId).is("family_member_id", null).maybeSingle();
+        if (existing) {
+          await db.from("stock_holdings_c").update({
+            quantity: Number(existing.quantity || 0) + qty,
+            avg_fill: null, market_value: 0, unrealized_pnl: 0,
+            as_of_date: null, settlement_status: "pending",
+            updated_at: new Date().toISOString(),
+          }).eq("id", existing.id);
+        } else {
+          await db.from("stock_holdings_c").insert({
+            user_id: userId, security_id: sec.id, quantity: qty,
+            avg_fill: null, market_value: 0,
+            unrealized_pnl: 0, as_of_date: null,
+            strategy_id: strategyId, Status: "active",
+            settlement_status: "pending",
+          });
+        }
+        holdingsCreated++;
+      } catch (e) { console.warn(`[gift] holding upsert ${h.symbol}:`, e.message); }
+    }
+  }
+
+  if (holdingsCreated === 0) {
+    const sorted = [...strategyHoldings].sort((a, b) => (b.weight || 0) - (a.weight || 0));
+    const fallback = secMap[sorted[0]?.symbol];
+    if (fallback?.id) {
+      const qty = Math.max(1, Math.floor((investAmountRands / (fallback.last_price || 1))));
+      try {
+        await db.from("stock_holdings_c").insert({
+          user_id: userId, security_id: fallback.id, quantity: qty,
+          avg_fill: null, market_value: 0, unrealized_pnl: 0,
+          as_of_date: null, strategy_id: strategyId, Status: "active",
+          settlement_status: "pending",
+        });
+        holdingsCreated = 1;
+      } catch (e) { console.warn("[gift] strategy fallback holding:", e.message); }
+    }
+  }
+  return holdingsCreated;
+}
+
+async function giftAllocateStockHolding(db, userId, securityId, amountCents) {
+  const { data: sec } = await db.from("securities_c").select("id, symbol, last_price").eq("id", securityId).maybeSingle();
+  if (!sec?.last_price) return 0;
+  const qty = Math.max(1, Math.floor((amountCents / 100) / sec.last_price));
+  try {
+    const { data: existing } = await db.from("stock_holdings_c").select("id, quantity")
+      .eq("user_id", userId).eq("security_id", sec.id).is("strategy_id", null).is("family_member_id", null).maybeSingle();
+    if (existing) {
+      await db.from("stock_holdings_c").update({
+        quantity: Number(existing.quantity || 0) + qty,
+        avg_fill: null, market_value: 0, unrealized_pnl: 0,
+        as_of_date: null, settlement_status: "pending",
+        updated_at: new Date().toISOString(),
+      }).eq("id", existing.id);
+    } else {
+      await db.from("stock_holdings_c").insert({
+        user_id: userId, security_id: sec.id, quantity: qty,
+        avg_fill: null, market_value: 0,
+        unrealized_pnl: 0, as_of_date: null, Status: "active",
+        settlement_status: "pending",
+      });
+    }
+    return qty;
+  } catch (e) { console.warn("[gift] stock holding insert:", e.message); return 0; }
+}
+
+app.post("/api/gift/request-otp", async (req, res) => {
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.replace("Bearer ", "");
+  const db = supabaseAdmin || supabase;
+  if (!db) return res.status(500).json({ error: "Database not available" });
+
+  const { data: { user }, error: authErr } = await db.auth.getUser(token);
+  if (authErr || !user) return res.status(401).json({ error: "Unauthorized" });
+
+  const { data: profile } = await db.from("profiles").select("first_name, email").eq("id", user.id).maybeSingle();
+  if (!profile?.email) return res.status(400).json({ error: "No email address on your account." });
+
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  giftOtpStore.set(user.id, { code, expiresAt: Date.now() + 10 * 60 * 1000 });
+
+  const resend = getResendClient();
+  if (resend) {
+    try {
+      await resend.emails.send({
+        from: process.env.RESEND_FROM || "Mint <onboarding@resend.dev>",
+        to: [profile.email],
+        subject: `Your Mint gift verification code: ${code}`,
+        html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px">
+          <h2 style="font-size:22px;font-weight:700;color:#0f172a;margin-bottom:8px">Gift verification</h2>
+          <p style="color:#475569;font-size:15px;margin-bottom:24px">Hi ${profile.first_name || "there"}, use the code below to confirm your investment gift. It expires in 10 minutes.</p>
+          <div style="background:#f1f5f9;border-radius:16px;padding:24px 32px;text-align:center;margin-bottom:24px">
+            <span style="font-size:40px;font-weight:800;letter-spacing:12px;color:#7c3aed">${code}</span>
+          </div>
+          <p style="color:#94a3b8;font-size:13px">If you didn't request this, you can safely ignore this email.</p>
+        </div>`,
+      });
+    } catch (e) { console.warn("[gift/request-otp] email:", e.message); }
+  }
+  console.log(`\n[gift/request-otp] OTP for ${profile.email}: ${code}\n`);
+  res.json({ success: true });
+});
+
+app.post("/api/gift/create", async (req, res) => {
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.replace("Bearer ", "");
+  const db = supabaseAdmin || supabase;
+  if (!db) return res.status(500).json({ error: "Database not available" });
+
+  const { data: { user }, error: authErr } = await db.auth.getUser(token);
+  if (authErr || !user) return res.status(401).json({ error: "Unauthorized" });
+
+  const { recipient_identifier, amount, asset_type, strategy_id, security_id, security_symbol, asset_name, message, otp } = req.body || {};
+
+  if (!recipient_identifier?.trim()) return res.status(400).json({ error: "Recipient email or phone is required." });
+  if (!amount || typeof amount !== "number" || amount <= 0) return res.status(400).json({ error: "Amount must be a positive number (in cents)." });
+  if (!["strategy", "stock"].includes(asset_type)) return res.status(400).json({ error: "asset_type must be 'strategy' or 'stock'." });
+  if (!asset_name) return res.status(400).json({ error: "asset_name is required." });
+  if (asset_type === "strategy" && !strategy_id) return res.status(400).json({ error: "strategy_id required for strategy gifts." });
+  if (asset_type === "stock" && !security_id) return res.status(400).json({ error: "security_id required for stock gifts." });
+
+  const stored = giftOtpStore.get(user.id);
+  if (!stored || stored.expiresAt < Date.now()) return res.status(400).json({ error: "Verification code expired. Please request a new one." });
+  if (stored.code !== String(otp)) return res.status(400).json({ error: "Incorrect verification code." });
+  giftOtpStore.delete(user.id);
+
+  const identifier = recipient_identifier.trim().toLowerCase();
+
+  const { data: senderProfile } = await db.from("profiles").select("first_name, last_name, email").eq("id", user.id).maybeSingle();
+  if (!senderProfile) return res.status(400).json({ error: "Sender profile not found." });
+  if (senderProfile.email?.toLowerCase() === identifier) return res.status(400).json({ error: "You cannot gift to yourself." });
+
+  const { data: wallet } = await db.from("wallets").select("balance").eq("user_id", user.id).maybeSingle();
+  const walletBalanceCents = Math.round(Number(wallet?.balance || 0) * 100);
+  if (walletBalanceCents < amount) return res.status(400).json({ error: "Insufficient wallet balance." });
+
+  const isEmail = identifier.includes("@");
+  let recipientUserId = null;
+  let recipientEmail = null;
+
+  if (isEmail) {
+    const { data: rp } = await db.from("profiles").select("id, email").eq("email", identifier).maybeSingle();
+    if (rp) { recipientUserId = rp.id; recipientEmail = rp.email; } else { recipientEmail = identifier; }
+  } else {
+    const { data: rp } = await db.from("profiles").select("id, email").eq("phone", identifier).maybeSingle();
+    if (rp) { recipientUserId = rp.id; recipientEmail = rp.email; }
+  }
+
+  const status = recipientUserId ? "pending_claim" : "pending_registration";
+  const giftToken = crypto.randomBytes(24).toString("hex");
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { error: walletErr } = await db.from("wallets").update({ balance: (walletBalanceCents - amount) / 100 }).eq("user_id", user.id);
+  if (walletErr) return res.status(500).json({ error: "Failed to deduct from wallet." });
+
+  const { data: gift, error: giftErr } = await db.from("gift_claims").insert({
+    sender_user_id: user.id,
+    recipient_identifier: identifier,
+    recipient_user_id: recipientUserId,
+    amount, asset_type,
+    strategy_id: strategy_id || null,
+    security_id: security_id || null,
+    security_symbol: security_symbol || null,
+    asset_name,
+    token: giftToken,
+    status,
+    message: message?.trim() || null,
+    expires_at: expiresAt,
+  }).select("id, token, status").single();
+
+  if (giftErr) {
+    await db.from("wallets").update({ balance: walletBalanceCents / 100 }).eq("user_id", user.id);
+    console.error("[gift/create] insert error:", giftErr.message);
+    return res.status(500).json({ error: "Failed to create gift." });
+  }
+
+  try {
+    await db.from("transactions").insert({
+      user_id: user.id, direction: "debit",
+      name: `Investment Gift — ${asset_name}`, description: `Gift to ${identifier}`,
+      amount, store_reference: `GIFT-${gift.id}`, status: "posted",
+    });
+  } catch (e) { console.warn("[gift/create] tx insert:", e.message); }
+
+  if (recipientUserId) {
+    const senderName = [senderProfile.first_name, senderProfile.last_name].filter(Boolean).join(" ") || "Someone";
+    try {
+      await db.from("notifications").insert({
+        user_id: recipientUserId,
+        title: `You've received an investment gift!`,
+        body: `${senderName} gifted you R${(amount / 100).toFixed(2)} in ${asset_name}. Tap to claim it.`,
+        type: "investment",
+        payload: { action: "gift_received", gift_id: gift.id, token: giftToken, asset_name, amount },
+      });
+    } catch (e) { console.warn("[gift/create] notification:", e.message); }
+  }
+
+  const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://mymint.co.za";
+  const claimPath = status === "pending_registration" ? `/register?gift=${gift.id}&token=${giftToken}` : `/gift/claim/${giftToken}`;
+  const claimUrl = `${APP_URL}${claimPath}`;
+  const resend = getResendClient();
+  if (resend) {
+    const senderName = [senderProfile.first_name, senderProfile.last_name].filter(Boolean).join(" ") || "Someone";
+    const amountRands = amount / 100;
+    const isRegistration = status === "pending_registration";
+    if (senderProfile.email) {
+      try {
+        await resend.emails.send({
+          from: "Mint <noreply@mymint.co.za>",
+          to: [senderProfile.email],
+          subject: `Your gift of R${amountRands.toFixed(2)} in ${asset_name} has been sent`,
+          html: `<p>Hi ${senderProfile.first_name || "there"},</p><p>Your gift of R${amountRands.toFixed(2)} in ${asset_name} to ${identifier} has been sent.</p>`,
+        });
+      } catch (e) { console.warn("[gift/create] sender email:", e.message); }
+    }
+    if (isEmail && recipientEmail) {
+      try {
+        await resend.emails.send({
+          from: "Mint <noreply@mymint.co.za>",
+          to: [recipientEmail],
+          subject: `${senderName} gifted you R${amountRands.toFixed(2)} on Mint`,
+          html: `
+<div style="font-family:Inter,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#ffffff">
+  <h2 style="font-size:22px;font-weight:700;color:#0f172a;margin:0 0 8px">${senderName} gifted you an investment 🎁</h2>
+  <p style="font-size:15px;color:#475569;margin:0 0 24px">You've received <strong>R${amountRands.toFixed(2)}</strong> invested in <strong>${asset_name}</strong> on Mint.</p>
+  <div style="background:#f8f7ff;border:1px solid #e2d9ff;border-radius:16px;padding:24px;text-align:center;margin-bottom:24px">
+    <p style="font-size:12px;font-weight:600;color:#7c3aed;text-transform:uppercase;letter-spacing:0.08em;margin:0 0 8px">Your 6-digit claim code</p>
+    <p style="font-size:40px;font-weight:900;letter-spacing:0.35em;color:#0f172a;margin:0;font-family:monospace">${giftToken}</p>
+    <p style="font-size:12px;color:#94a3b8;margin:12px 0 0">Open the Mint app → Claim a Gift → enter this code + your SA ID</p>
+  </div>
+  <a href="${claimUrl}" style="display:block;background:#6d28d9;color:#ffffff;text-decoration:none;text-align:center;padding:14px 24px;border-radius:12px;font-size:15px;font-weight:700;margin-bottom:24px">${isRegistration ? "Register & Claim Gift" : "Claim My Gift on Mint"}</a>
+  <p style="font-size:12px;color:#94a3b8;text-align:center;margin:0">This gift expires in 4 hours. Mint (Pty) Ltd is a registered FSP (55118).</p>
+</div>`,
+        });
+      } catch (e) { console.warn("[gift/create] recipient email:", e.message); }
+    }
+  }
+
+  return res.json({ success: true, gift_id: gift.id, status: gift.status, token: gift.token });
+});
+
+app.post("/api/gift/claim", async (req, res) => {
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.replace("Bearer ", "");
+  const db = supabaseAdmin || supabase;
+  if (!db) return res.status(500).json({ error: "Database not available" });
+
+  const { data: { user }, error: authErr } = await db.auth.getUser(token);
+  if (authErr || !user) return res.status(401).json({ error: "Unauthorized" });
+
+  const { token: giftToken } = req.body || {};
+  if (!giftToken) return res.status(400).json({ error: "Token is required." });
+
+  const { data: gift, error: giftErr } = await db.from("gift_claims").select("*").eq("token", giftToken).maybeSingle();
+  if (giftErr || !gift) return res.status(404).json({ error: "Gift not found." });
+
+  if (gift.status === "claimed") return res.status(400).json({ error: "This gift has already been claimed." });
+  if (gift.status === "expired") return res.status(400).json({ error: "This gift has expired." });
+  if (gift.status === "cancelled") return res.status(400).json({ error: "This gift was cancelled." });
+  if (gift.status === "pending_registration") return res.status(400).json({ error: "You need to complete registration and KYC before claiming this gift." });
+  if (new Date(gift.expires_at) < new Date()) return res.status(400).json({ error: "This gift has expired." });
+  if (gift.sender_user_id === user.id) return res.status(400).json({ error: "You cannot claim your own gift." });
+  if (gift.recipient_user_id && gift.recipient_user_id !== user.id) return res.status(403).json({ error: "This gift was sent to a different account." });
+
+  const { data: onboarding } = await db.from("user_onboarding").select("kyc_status").eq("user_id", user.id).maybeSingle();
+  const kycStatus = onboarding?.kyc_status;
+  if (kycStatus !== "verified" && kycStatus !== "onboarding_complete") {
+    return res.status(403).json({ error: "FICA verification required to claim this gift.", kyc_required: true });
+  }
+
+  let holdingsAllocated = 0;
+  if (gift.asset_type === "strategy" && gift.strategy_id) {
+    const { data: strategy } = await db.from("strategies_c").select("id, holdings").eq("id", gift.strategy_id).maybeSingle();
+    holdingsAllocated = await giftAllocateStrategyHoldings(db, user.id, gift.strategy_id, strategy?.holdings || [], gift.amount);
+  } else if (gift.asset_type === "stock" && gift.security_id) {
+    holdingsAllocated = await giftAllocateStockHolding(db, user.id, gift.security_id, gift.amount);
+  }
+
+  if (holdingsAllocated === 0) {
+    console.error(`[gift/claim] failed to allocate holdings for gift ${gift.id}`);
+    return res.status(500).json({ error: "Failed to allocate holdings. Please try again." });
+  }
+
+  try {
+    await db.from("transactions").insert({
+      user_id: user.id, direction: "credit",
+      name: `Gift Received — ${gift.asset_name}`, description: `Investment gift from sender`,
+      amount: gift.amount, store_reference: `GIFT-CLAIM-${gift.id}`, status: "posted",
+    });
+  } catch (e) { console.warn("[gift/claim] tx insert:", e.message); }
+
+  const { error: updateErr } = await db.from("gift_claims")
+    .update({ status: "claimed", recipient_user_id: user.id, claimed_at: new Date().toISOString() })
+    .eq("id", gift.id);
+
+  if (updateErr) return res.status(500).json({ error: "Failed to finalise claim." });
+
+  return res.json({ success: true, holdings_allocated: holdingsAllocated, amount: gift.amount, asset_name: gift.asset_name, asset_type: gift.asset_type });
+});
+
+app.post("/api/gift/cancel", async (req, res) => {
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.replace("Bearer ", "");
+  const db = supabaseAdmin || supabase;
+  if (!db) return res.status(500).json({ error: "Database not available" });
+
+  const { data: { user }, error: authErr } = await db.auth.getUser(token);
+  if (authErr || !user) return res.status(401).json({ error: "Unauthorized" });
+
+  const { gift_id } = req.body || {};
+  if (!gift_id) return res.status(400).json({ error: "gift_id is required." });
+
+  const { data: gift, error: giftErr } = await db.from("gift_claims").select("id, sender_user_id, amount, status, asset_name, extension_fees").eq("id", gift_id).maybeSingle();
+  if (giftErr || !gift) return res.status(404).json({ error: "Gift not found." });
+  if (gift.sender_user_id !== user.id) return res.status(403).json({ error: "Only the sender can cancel a gift." });
+  if (gift.status === "claimed") return res.status(400).json({ error: "Cannot cancel a claimed gift." });
+  if (gift.status === "cancelled") return res.status(400).json({ error: "Gift is already cancelled." });
+  if (gift.status === "expired") return res.status(400).json({ error: "Gift has already expired." });
+
+  // Funds were held, not debited — no wallet refund needed for the base amount.
+  // However, extension fees were already debited, so refund those.
+  const extFeesCents = Number(gift.extension_fees || 0);
+  if (extFeesCents > 0) {
+    const extFeesRands = extFeesCents / 100;
+    const { data: wallet } = await db.from("wallets").select("balance").eq("user_id", user.id).maybeSingle();
+    await db.from("wallets").update({ balance: Number(wallet?.balance || 0) + extFeesRands }).eq("user_id", user.id);
+    try {
+      await db.from("transactions").insert({
+        user_id: user.id, direction: "credit",
+        name: `Extension Fee Refund — ${gift.asset_name}`,
+        description: "Gift cancelled — extension fees returned to wallet",
+        amount: extFeesCents, store_reference: `GIFT-CANCEL-EXTFEE-${gift.id}`, status: "posted",
+      });
+    } catch (e) { console.warn("[gift/cancel] ext fee refund tx:", e.message); }
+  }
+
+  await db.from("gift_claims").update({ status: "cancelled", cancelled_at: new Date().toISOString() }).eq("id", gift.id);
+
+  // Remove the pending hold transaction
+  try {
+    await db.from("transactions")
+      .update({ status: "cancelled", description: "Gift cancelled — hold released" })
+      .eq("store_reference", `GIFT2-HOLD-${gift.id}`);
+  } catch (e) { console.warn("[gift/cancel] hold tx update:", e.message); }
+
+  return res.json({ success: true, extension_fees_refunded: extFeesCents });
+});
+
+app.get("/api/gift/sent", async (req, res) => {
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.replace("Bearer ", "");
+  const db = supabaseAdmin || supabase;
+  if (!db) return res.status(500).json({ error: "Database not available" });
+
+  const { data: { user }, error: authErr } = await db.auth.getUser(token);
+  if (authErr || !user) return res.status(401).json({ error: "Unauthorized" });
+
+  const { data: gifts, error } = await db.from("gift_claims")
+    .select("id, amount, asset_type, asset_name, token, status, message, expires_at, created_at, claimed_at, cancelled_at")
+    .eq("sender_user_id", user.id).order("created_at", { ascending: false }).limit(100);
+
+  if (error) return res.status(500).json({ error: "Failed to load gifts." });
+
+  const parseRecipientName = (msg) => {
+    try { const p = JSON.parse(msg || "{}"); return [p.fn, p.ln].filter(Boolean).join(" ") || null; } catch { return null; }
+  };
+  const parseMsg = (msg) => {
+    try { return JSON.parse(msg || "{}").msg || null; } catch { return null; }
+  };
+
+  const formatted = (gifts || []).map(g => ({
+    ...g,
+    recipient_name: parseRecipientName(g.message),
+    personal_message: parseMsg(g.message),
+  }));
+
+  return res.json({
+    active: formatted.filter(g => g.status === "pending_claim"),
+    history: formatted.filter(g => g.status !== "pending_claim"),
+  });
+});
+
+app.get("/api/gift/:token", async (req, res) => {
+  const db = supabaseAdmin || supabase;
+  if (!db) return res.status(500).json({ error: "Database not available" });
+
+  const { token } = req.params;
+  if (!token) return res.status(400).json({ error: "Token is required." });
+
+  const { data: gift, error } = await db.from("gift_claims")
+    .select("id, amount, asset_type, asset_name, status, message, expires_at, sender_user_id")
+    .eq("token", token).maybeSingle();
+
+  if (error) return res.status(500).json({ error: "Failed to load gift." });
+  if (!gift) return res.status(404).json({ error: "Gift not found." });
+
+  let senderName = "Someone";
+  try {
+    const { data: sender } = await db.from("profiles").select("first_name, last_name").eq("id", gift.sender_user_id).maybeSingle();
+    if (sender) senderName = [sender.first_name, sender.last_name].filter(Boolean).join(" ") || "Someone";
+  } catch (_) {}
+
+  return res.json({ id: gift.id, amount: gift.amount, asset_type: gift.asset_type, asset_name: gift.asset_name, status: gift.status, message: gift.message, expires_at: gift.expires_at, sender_name: senderName });
+});
+
+// ─── Gift v2 routes ──────────────────────────────────────────────────────────
+
+const giftV2RateLimit = new Map(); // ip → { count, resetAt }
+function checkGiftRateLimit(ip) {
+  const now = Date.now();
+  const entry = giftV2RateLimit.get(ip);
+  if (!entry || entry.resetAt < now) { giftV2RateLimit.set(ip, { count: 1, resetAt: now + 10 * 60 * 1000 }); return true; }
+  if (entry.count >= 5) return false;
+  entry.count++;
+  return true;
+}
+
+async function generateUniqueGiftCode(db) {
+  for (let i = 0; i < 10; i++) {
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const { data: existing } = await db.from("gift_claims").select("id").eq("token", code).eq("status", "pending_claim").maybeSingle();
+    if (!existing) return code;
+  }
+  throw new Error("Could not generate unique gift code");
+}
+
+app.post("/api/gift/create-v2", async (req, res) => {
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.replace("Bearer ", "");
+  const db = supabaseAdmin || supabase;
+  if (!db) return res.status(500).json({ error: "Database not available" });
+
+  const { data: { user }, error: authErr } = await db.auth.getUser(token);
+  if (authErr || !user) return res.status(401).json({ error: "Unauthorized" });
+
+  const { asset_type, strategy_id, security_id, security_symbol, asset_name, amount, recipient_identifier, recipient_first_name, recipient_last_name, message } = req.body || {};
+
+  if (!asset_name) return res.status(400).json({ error: "asset_name is required." });
+  if (!amount || typeof amount !== "number" || amount <= 0) return res.status(400).json({ error: "amount must be a positive number in cents." });
+  if (!["strategy", "stock"].includes(asset_type)) return res.status(400).json({ error: "asset_type must be 'strategy' or 'stock'." });
+  if (!recipient_first_name?.trim()) return res.status(400).json({ error: "recipient_first_name is required." });
+  if (!recipient_last_name?.trim()) return res.status(400).json({ error: "recipient_last_name is required." });
+
+  const { data: wallet, error: walletErr } = await db.from("wallets").select("balance").eq("user_id", user.id).maybeSingle();
+  if (walletErr || !wallet) return res.status(400).json({ error: "Wallet not found." });
+
+  const originalBalance = Number(wallet.balance);
+  const amountRands = amount / 100;
+  if (originalBalance < amountRands) return res.status(400).json({ error: "Insufficient wallet balance." });
+
+  // Hold funds: don't debit yet, just verify balance is sufficient.
+  // Actual debit happens when the gift is claimed.
+
+  const messagePayload = JSON.stringify({
+    fn: recipient_first_name.trim(),
+    ln: recipient_last_name.trim(),
+    ...(message?.trim() ? { msg: message.trim() } : {}),
+  });
+
+  let code;
+  try { code = await generateUniqueGiftCode(db); }
+  catch (e) {
+    return res.status(500).json({ error: "Failed to generate gift code. Please try again." });
+  }
+
+  const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
+
+  const { data: gift, error: insertErr } = await db.from("gift_claims").insert({
+    sender_user_id: user.id,
+    recipient_identifier: recipient_identifier?.trim().toLowerCase() || null,
+    recipient_user_id: null,
+    amount, asset_type,
+    strategy_id: strategy_id || null,
+    security_id: security_id || null,
+    security_symbol: security_symbol || null,
+    asset_name,
+    token: code,
+    status: "pending_claim",
+    message: messagePayload,
+    expires_at: expiresAt,
+  }).select("id, token, expires_at").single();
+
+  if (insertErr) {
+    console.error("[gift/create-v2] insert error:", insertErr.message, insertErr.details, insertErr.hint);
+    return res.status(500).json({ error: "Failed to create gift.", detail: insertErr.message });
+  }
+
+  const now = new Date().toISOString();
+  try {
+    await db.from("transactions").insert({
+      user_id: user.id, direction: "debit",
+      name: `Investment Gift — ${asset_name} (held)`,
+      description: `Gift to ${recipient_first_name.trim()} ${recipient_last_name.trim()} — funds held until claimed`,
+      amount, store_reference: `GIFT2-HOLD-${gift.id}`, currency: "ZAR",
+      status: "pending", transaction_date: now, created_at: now,
+    });
+  } catch (e) { console.warn("[gift/create-v2] tx:", e.message); }
+
+  // Post-creation: emails + in-app notification
+  const recipientEmail = recipient_identifier?.trim().toLowerCase();
+  const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://mymint.co.za";
+
+  // Fetch sender name + use auth email (more reliable than profiles.email)
+  const senderAuthEmail = user.email;
+  const { data: senderProfile } = await db.from("profiles").select("first_name, last_name").eq("id", user.id).maybeSingle();
+  const senderName = [senderProfile?.first_name, senderProfile?.last_name].filter(Boolean).join(" ") || "Someone";
+
+  // Check recipient status: on app? KYC'd?
+  let recipientStatus = "not_registered"; // not_registered | needs_kyc | ready
+  if (recipientEmail) {
+    try {
+      const { data: recipientProfile } = await db.from("profiles").select("id").eq("email", recipientEmail).maybeSingle();
+      if (recipientProfile?.id) {
+        const { data: onboarding } = await db.from("user_onboarding").select("kyc_status").eq("user_id", recipientProfile.id).maybeSingle();
+        const kycDone = onboarding?.kyc_status === "verified" || onboarding?.kyc_status === "onboarding_complete";
+        recipientStatus = kycDone ? "ready" : "needs_kyc";
+        if (kycDone) {
+          await db.from("notifications").insert({
+            user_id: recipientProfile.id,
+            title: `You've been gifted ${asset_name}! 🎁`,
+            body: `${senderName} gifted you ${asset_name} on Mint. Ask them for your 6-digit claim code to claim it.`,
+            type: "investment",
+            payload: { action: "gift_received", gift_id: gift.id, asset_name },
+          });
+        }
+      }
+    } catch (e) { console.warn("[gift/create-v2] recipient status check:", e.message); }
+  }
+
+  const resend = getResendClient();
+  if (resend) {
+    // Sender confirmation email
+    if (senderAuthEmail) {
+      try {
+        await resend.emails.send({
+          from: "Mint <noreply@mymint.co.za>",
+          to: [senderAuthEmail],
+          subject: `Your gift of ${asset_name} has been sent 🎁`,
+          html: `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f1eef6;font-family:'Inter','Helvetica Neue',Arial,sans-serif">
+<div style="max-width:480px;margin:0 auto;background:#ffffff;border-radius:0 0 16px 16px;overflow:hidden">
+  <!-- Header -->
+  <div style="background:linear-gradient(135deg,#c4b5fd 0%,#a78bfa 30%,#8b5cf6 60%,#7c3aed 100%);padding:40px 32px 48px;text-align:center">
+    <div style="margin-bottom:24px">
+      <img src="${APP_URL}/assets/LOGO 2 WHITE MINT.svg" alt="Mint" width="56" height="56" style="display:inline-block" />
+    </div>
+    <div style="font-size:56px;line-height:1;margin-bottom:16px">🎁</div>
+    <h1 style="font-family:'Inter','Helvetica Neue',Arial,sans-serif;font-size:28px;font-weight:800;color:#ffffff;margin:0 0 6px;letter-spacing:-0.5px">gift sent!</h1>
+    <p style="font-family:'Inter','Helvetica Neue',Arial,sans-serif;font-size:13px;font-weight:600;color:rgba(255,255,255,0.75);margin:0;text-transform:uppercase;letter-spacing:2px">doing gifting differently</p>
+  </div>
+
+  <!-- Body -->
+  <div style="padding:32px 28px 24px">
+    <p style="font-size:15px;color:#475569;line-height:1.6;margin:0 0 24px">Hi ${senderProfile?.first_name || "there"}, your gift of <strong>R${amountRands.toFixed(2)}</strong> in <strong>${asset_name}</strong> to ${recipient_first_name} ${recipient_last_name} has been sent successfully.</p>
+
+    <div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);border:1px solid #e2d9ff;border-radius:16px;padding:24px;margin-bottom:24px">
+      <p style="font-size:12px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px">What happens next?</p>
+      <table style="width:100%;border-collapse:collapse">
+        <tr>
+          <td style="padding:6px 12px 6px 0;vertical-align:top;width:24px">
+            <div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">1</div>
+          </td>
+          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5"><strong>Share the 6-digit claim code</strong> with ${recipient_first_name} (find it in your Sent Gifts page)</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 12px 6px 0;vertical-align:top">
+            <div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">2</div>
+          </td>
+          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5">${recipient_first_name} enters the code + their <strong>SA ID number</strong> on the Mint app</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 12px 6px 0;vertical-align:top">
+            <div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">3</div>
+          </td>
+          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5">The investment is <strong>transferred to their portfolio</strong> — you'll get a notification when they claim</td>
+        </tr>
+      </table>
+    </div>
+
+    <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:12px;padding:14px 16px;margin-bottom:24px">
+      <p style="font-size:13px;color:#92400e;margin:0;line-height:1.5">⏱ This gift <strong>expires in 4 hours</strong>. You can extend or cancel it from your Sent Gifts page.</p>
+    </div>
+
+    <a href="${APP_URL}" style="display:block;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#ffffff;text-decoration:none;text-align:center;padding:16px 24px;border-radius:14px;font-size:16px;font-weight:700;margin-bottom:20px">View Sent Gifts</a>
+    <p style="font-size:12px;color:#94a3b8;text-align:center;margin:0">Mint (Pty) Ltd is a registered FSP (55118).</p>
+  </div>
+</div>
+</body>
+</html>`,
+        });
+        console.log(`[gift/create-v2] Sender confirmation sent to ${senderAuthEmail}`);
+      } catch (e) { console.warn("[gift/create-v2] sender email:", e.message); }
+    }
+
+    // Recipient notification email — content depends on their status
+    if (recipientEmail) {
+      let emailSteps, emailCta, emailSubject;
+      if (recipientStatus === "not_registered") {
+        emailSubject = `You've been gifted an investment — sign up on Mint to claim it 🎁`;
+        emailSteps = `
+        <tr>
+          <td style="padding:6px 12px 6px 0;vertical-align:top;width:24px">
+            <div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">1</div>
+          </td>
+          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5"><strong>Sign up</strong> for a free Mint account</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 12px 6px 0;vertical-align:top">
+            <div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">2</div>
+          </td>
+          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5">Complete your <strong>FICA verification</strong> (takes ~2 min)</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 12px 6px 0;vertical-align:top">
+            <div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">3</div>
+          </td>
+          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5">Ask <strong>${senderName}</strong> for the 6-digit code, then tap <strong>Claim a Gift</strong> and enter the code + your SA ID</td>
+        </tr>`;
+        emailCta = "Sign Up on Mint";
+      } else if (recipientStatus === "needs_kyc") {
+        emailSubject = `${senderName} gifted you an investment — complete KYC to claim 🎁`;
+        emailSteps = `
+        <tr>
+          <td style="padding:6px 12px 6px 0;vertical-align:top;width:24px">
+            <div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">1</div>
+          </td>
+          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5">Open the Mint app and complete your <strong>FICA verification</strong></td>
+        </tr>
+        <tr>
+          <td style="padding:6px 12px 6px 0;vertical-align:top">
+            <div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">2</div>
+          </td>
+          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5">Ask <strong>${senderName}</strong> for the 6-digit claim code</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 12px 6px 0;vertical-align:top">
+            <div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">3</div>
+          </td>
+          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5">Tap <strong>Claim a Gift</strong> and enter the code + your SA ID number</td>
+        </tr>`;
+        emailCta = "Complete KYC on Mint";
+      } else {
+        emailSubject = `${senderName} gifted you an investment on Mint 🎁`;
+        emailSteps = `
+        <tr>
+          <td style="padding:6px 12px 6px 0;vertical-align:top;width:24px">
+            <div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">1</div>
+          </td>
+          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5">Ask <strong>${senderName}</strong> for the 6-digit claim code</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 12px 6px 0;vertical-align:top">
+            <div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">2</div>
+          </td>
+          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5">Sign in to the Mint app and tap <strong>Claim a Gift</strong></td>
+        </tr>
+        <tr>
+          <td style="padding:6px 12px 6px 0;vertical-align:top">
+            <div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">3</div>
+          </td>
+          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5">Enter the code + your SA ID number</td>
+        </tr>`;
+        emailCta = "Open Mint App";
+      }
+
+      try {
+        await resend.emails.send({
+          from: "Mint <noreply@mymint.co.za>",
+          to: [recipientEmail],
+          subject: emailSubject,
+          html: `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f1eef6;font-family:'Inter','Helvetica Neue',Arial,sans-serif">
+<div style="max-width:480px;margin:0 auto;background:#ffffff;border-radius:0 0 16px 16px;overflow:hidden">
+  <!-- Header -->
+  <div style="background:linear-gradient(135deg,#c4b5fd 0%,#a78bfa 30%,#8b5cf6 60%,#7c3aed 100%);padding:40px 32px 48px;text-align:center">
+    <div style="margin-bottom:24px">
+      <img src="${APP_URL}/assets/LOGO 2 WHITE MINT.svg" alt="Mint" width="56" height="56" style="display:inline-block" />
+    </div>
+    <div style="font-size:56px;line-height:1;margin-bottom:16px">🎁</div>
+    <h1 style="font-family:'Inter','Helvetica Neue',Arial,sans-serif;font-size:28px;font-weight:800;color:#ffffff;margin:0 0 6px;letter-spacing:-0.5px">you received a gift</h1>
+    <p style="font-family:'Inter','Helvetica Neue',Arial,sans-serif;font-size:13px;font-weight:600;color:rgba(255,255,255,0.75);margin:0;text-transform:uppercase;letter-spacing:2px">doing gifting differently</p>
+  </div>
+
+  <!-- Body -->
+  <div style="padding:32px 28px 24px">
+    <h2 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 8px">${senderName} sent you a gift</h2>
+    <p style="font-size:15px;color:#475569;line-height:1.6;margin:0 0 24px">You've been gifted an investment in <strong>${asset_name}</strong> on Mint.</p>
+
+    <div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);border:1px solid #e2d9ff;border-radius:16px;padding:24px;margin-bottom:24px">
+      <p style="font-size:12px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px">How to claim your gift</p>
+      <table style="width:100%;border-collapse:collapse">${emailSteps}</table>
+    </div>
+
+    <a href="${APP_URL}" style="display:block;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#ffffff;text-decoration:none;text-align:center;padding:16px 24px;border-radius:14px;font-size:16px;font-weight:700;margin-bottom:20px">${emailCta}</a>
+
+    <p style="font-size:12px;color:#94a3b8;text-align:center;line-height:1.5;margin:0">This gift expires in 4 hours.<br>Mint (Pty) Ltd is a registered FSP (55118).</p>
+  </div>
+</div>
+</body>
+</html>`,
+        });
+        console.log(`[gift/create-v2] Recipient email sent to ${recipientEmail} (status: ${recipientStatus})`);
+      } catch (e) { console.warn("[gift/create-v2] recipient email:", e.message); }
+    }
+  } else {
+    console.warn("[gift/create-v2] RESEND_API_KEY not set — skipping emails");
+  }
+
+  return res.json({ success: true, token: gift.token, expires_at: gift.expires_at, gift_id: gift.id });
+});
+
+app.post("/api/gift/verify-code", async (req, res) => {
+  const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket?.remoteAddress || "unknown";
+  if (!checkGiftRateLimit(ip)) return res.status(429).json({ error: "Too many attempts. Please wait 10 minutes before trying again." });
+
+  const db = supabaseAdmin || supabase;
+  if (!db) return res.status(500).json({ error: "Database not available" });
+
+  const { id_number, code } = req.body || {};
+  if (!id_number || String(id_number).replace(/\D/g, "").length !== 13) return res.status(400).json({ error: "A valid 13-digit SA ID number is required." });
+  if (!code || String(code).replace(/\D/g, "").length !== 6) return res.status(400).json({ error: "A valid 6-digit gift code is required." });
+
+  const cleanCode = String(code).replace(/\D/g, "");
+  const cleanId = String(id_number).replace(/\D/g, "");
+
+  const { data: gift } = await db.from("gift_claims")
+    .select("id, sender_user_id, asset_name, message, status, expires_at")
+    .eq("token", cleanCode).eq("status", "pending_claim").maybeSingle();
+
+  if (!gift) return res.status(404).json({ error: "Gift not found. Check the code and try again." });
+  if (new Date(gift.expires_at) < new Date()) return res.status(400).json({ error: "This gift has expired." });
+
+  let senderName = "Someone";
+  try {
+    const { data: sender } = await db.from("profiles").select("first_name, last_name").eq("id", gift.sender_user_id).maybeSingle();
+    if (sender) senderName = [sender.first_name, sender.last_name].filter(Boolean).join(" ") || "Someone";
+  } catch (_) {}
+
+  let personalMessage = null;
+  try { personalMessage = JSON.parse(gift.message || "{}").msg || null; } catch (_) {}
+
+  const giftPreview = { asset_name: gift.asset_name, sender_name: senderName, message: personalMessage, expires_at: gift.expires_at };
+
+  const { data: profile } = await db.from("profiles").select("id, first_name, last_name, mint_number")
+    .eq("id_number", cleanId).maybeSingle();
+
+  if (!profile) return res.json({ registration_status: "not_registered", kyc_status: null, mint_number_set: false, gift_preview: giftPreview });
+
+  const { data: onboarding } = await db.from("user_onboarding").select("kyc_status").eq("user_id", profile.id).maybeSingle();
+  const kycStatus = onboarding?.kyc_status || "pending";
+  const kycDone = kycStatus === "verified" || kycStatus === "onboarding_complete";
+
+  return res.json({
+    registration_status: "registered",
+    kyc_status: kycStatus,
+    kyc_done: kycDone,
+    mint_number_set: !!profile.mint_number,
+    gift_preview: giftPreview,
+  });
+});
+
+app.post("/api/gift/claim-v2", async (req, res) => {
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.replace("Bearer ", "");
+  const db = supabaseAdmin || supabase;
+  if (!db) return res.status(500).json({ error: "Database not available" });
+
+  const { data: { user }, error: authErr } = await db.auth.getUser(token);
+  if (authErr || !user) return res.status(401).json({ error: "Unauthorized" });
+
+  const { code, id_number } = req.body || {};
+  if (!code) return res.status(400).json({ error: "code is required." });
+  if (!id_number?.trim()) return res.status(400).json({ error: "id_number is required." });
+
+  const cleanCode = String(code).replace(/\D/g, "");
+  const cleanId = String(id_number).replace(/\D/g, "");
+
+  const { data: claimantProfile } = await db.from("profiles").select("id, id_number, first_name, last_name, mint_number")
+    .eq("id", user.id).maybeSingle();
+  if (!claimantProfile) return res.status(400).json({ error: "Profile not found." });
+  if (claimantProfile.id_number !== cleanId) return res.status(403).json({ error: "SA ID number does not match your account." });
+  if (!claimantProfile.mint_number) return res.status(403).json({ error: "Please complete your Mint account setup before claiming.", mint_number_required: true });
+
+  const { data: onboarding } = await db.from("user_onboarding").select("kyc_status").eq("user_id", user.id).maybeSingle();
+  const kycStatus = onboarding?.kyc_status;
+  if (kycStatus !== "verified" && kycStatus !== "onboarding_complete") {
+    return res.status(403).json({ error: "FICA verification required to claim this gift.", kyc_required: true });
+  }
+
+  const { data: gift } = await db.from("gift_claims").select("*").eq("token", cleanCode).eq("status", "pending_claim").maybeSingle();
+  if (!gift) return res.status(404).json({ error: "Gift not found or already claimed." });
+  if (new Date(gift.expires_at) < new Date()) return res.status(400).json({ error: "This gift has expired." });
+  if (gift.sender_user_id === user.id) return res.status(400).json({ error: "You cannot claim your own gift." });
+
+  // Debit sender's wallet now that gift is being claimed
+  const giftAmountRands = gift.amount / 100;
+  const { data: senderWallet } = await db.from("wallets").select("balance").eq("user_id", gift.sender_user_id).maybeSingle();
+  if (!senderWallet) return res.status(500).json({ error: "Sender wallet not found." });
+  const senderBalance = Number(senderWallet.balance);
+  if (senderBalance < giftAmountRands) return res.status(400).json({ error: "Sender has insufficient funds. The gift cannot be claimed." });
+
+  const { error: debitErr } = await db.from("wallets").update({ balance: senderBalance - giftAmountRands })
+    .eq("user_id", gift.sender_user_id).eq("balance", senderBalance);
+  if (debitErr) return res.status(500).json({ error: "Failed to process gift payment." });
+
+  let holdingsCreated = 0;
+  let holdingId = null;
+
+  if (gift.asset_type === "strategy" && gift.strategy_id) {
+    const { data: strategy } = await db.from("strategies_c").select("id, holdings").eq("id", gift.strategy_id).maybeSingle();
+    holdingsCreated = await giftAllocateStrategyHoldings(db, user.id, gift.strategy_id, strategy?.holdings || [], gift.amount);
+  } else if (gift.asset_type === "stock" && gift.security_id) {
+    const result = await giftAllocateStockHolding(db, user.id, gift.security_id, gift.amount);
+    holdingsCreated = result > 0 ? 1 : 0;
+  }
+
+  if (holdingsCreated === 0) {
+    // Rollback sender wallet debit
+    await db.from("wallets").update({ balance: senderBalance }).eq("user_id", gift.sender_user_id);
+    return res.status(500).json({ error: "Failed to allocate holdings. Please try again." });
+  }
+
+  const totalExtFees = Number(gift.extension_fees || 0);
+  const totalChargedCents = gift.amount + totalExtFees;
+  const now = new Date().toISOString();
+
+  // Sender debit transaction (mark the held amount as posted)
+  try {
+    // Update the held transaction to posted
+    await db.from("transactions")
+      .update({ status: "posted", description: `Gift to recipient — claimed and settled` })
+      .eq("store_reference", `GIFT2-HOLD-${gift.id}`);
+  } catch (e) { console.warn("[gift/claim-v2] update hold tx:", e.message); }
+
+  // Recipient credit transaction
+  try {
+    await db.from("transactions").insert({
+      user_id: user.id, direction: "credit",
+      name: `Gift Received — ${gift.asset_name}`, description: "Investment gift claimed",
+      amount: gift.amount, store_reference: `GIFT2-CLAIM-${gift.id}`,
+      currency: "ZAR", status: "posted", settlement_status: "pending",
+      transaction_date: now, created_at: now,
+    });
+  } catch (e) { console.warn("[gift/claim-v2] tx:", e.message); }
+
+  await db.from("gift_claims").update({
+    status: "claimed", recipient_user_id: user.id, recipient_identifier: cleanId, claimed_at: now,
+  }).eq("id", gift.id);
+
+  const recipientName = [claimantProfile.first_name, claimantProfile.last_name].filter(Boolean).join(" ") || "Your recipient";
+  try {
+    await db.from("notifications").insert({
+      user_id: gift.sender_user_id,
+      title: "Gift claimed!",
+      body: `${recipientName} claimed your gift of ${gift.asset_name}.`,
+      type: "investment",
+      payload: { action: "gift_claimed", gift_id: gift.id, asset_name: gift.asset_name },
+    });
+  } catch (e) { console.warn("[gift/claim-v2] sender notification:", e.message); }
+
+  // Receiver confirmation notification
+  try {
+    await db.from("notifications").insert({
+      user_id: user.id,
+      title: "Gift claimed successfully!",
+      body: `You claimed ${gift.asset_name}. It will appear in your portfolio once the order is filled.`,
+      type: "investment",
+      payload: { action: "gift_claim_confirmed", gift_id: gift.id, asset_name: gift.asset_name },
+    });
+  } catch (e) { console.warn("[gift/claim-v2] receiver notification:", e.message); }
+
+  return res.json({ success: true, asset_name: gift.asset_name, portfolio_redirect: true });
+});
+
+app.post("/api/gift/extend", async (req, res) => {
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.replace("Bearer ", "");
+  const db = supabaseAdmin || supabase;
+  if (!db) return res.status(500).json({ error: "Database not available" });
+
+  const { data: { user }, error: authErr } = await db.auth.getUser(token);
+  if (authErr || !user) return res.status(401).json({ error: "Unauthorized" });
+
+  const EXTENSIONS = { "10h": { hours: 10, feePct: 0.05 }, "24h": { hours: 24, feePct: 0.09 } };
+  const { gift_id, extension } = req.body || {};
+  if (!gift_id) return res.status(400).json({ error: "gift_id is required." });
+  if (!EXTENSIONS[extension]) return res.status(400).json({ error: "extension must be '10h' or '24h'." });
+
+  const { data: gift } = await db.from("gift_claims").select("id, sender_user_id, amount, asset_name, status, expires_at, extension_fees")
+    .eq("id", gift_id).maybeSingle();
+  if (!gift) return res.status(404).json({ error: "Gift not found." });
+  if (gift.sender_user_id !== user.id) return res.status(403).json({ error: "Only the sender can extend a gift." });
+  if (gift.status !== "pending_claim") return res.status(400).json({ error: "Only active pending gifts can be extended." });
+
+  const { hours, feePct } = EXTENSIONS[extension];
+  const feeCents = Math.round(gift.amount * feePct);
+  const feeRands = feeCents / 100;
+
+  const { data: wallet } = await db.from("wallets").select("balance").eq("user_id", user.id).maybeSingle();
+  if (!wallet) return res.status(400).json({ error: "Wallet not found." });
+  const currentBalance = Number(wallet.balance);
+  if (currentBalance < feeRands) return res.status(400).json({ error: "Insufficient wallet balance to pay extension fee." });
+
+  // Extension fee is debited immediately
+  const { error: feeErr } = await db.from("wallets").update({ balance: currentBalance - feeRands })
+    .eq("user_id", user.id).eq("balance", currentBalance);
+  if (feeErr) return res.status(500).json({ error: "Failed to deduct extension fee." });
+
+  const base = new Date(gift.expires_at) > new Date() ? new Date(gift.expires_at) : new Date();
+  const newExpiresAt = new Date(base.getTime() + hours * 3600000).toISOString();
+
+  // Track total extension fees on the gift for final settlement on claim
+  const currentExtFees = Number(gift.extension_fees || 0);
+  const { error: updateErr } = await db.from("gift_claims")
+    .update({ expires_at: newExpiresAt, extension_fees: currentExtFees + feeCents })
+    .eq("id", gift.id);
+  if (updateErr) {
+    await db.from("wallets").update({ balance: currentBalance }).eq("user_id", user.id);
+    return res.status(500).json({ error: "Failed to extend gift." });
+  }
+
+  const now = new Date().toISOString();
+  try {
+    await db.from("transactions").insert({
+      user_id: user.id, direction: "debit",
+      name: `Gift Extension Fee — ${gift.asset_name}`,
+      description: `Extended by ${hours}h (${feePct * 100}% fee)`,
+      amount: feeCents, store_reference: `GIFT2-EXT-${gift.id}-${extension}`,
+      currency: "ZAR", status: "posted", transaction_date: now, created_at: now,
+    });
+  } catch (e) { console.warn("[gift/extend] tx:", e.message); }
+
+  return res.json({ success: true, new_expires_at: newExpiresAt, fee_charged: feeCents });
+});
+
+app.post("/api/gift/expire", async (req, res) => {
+  const db = supabaseAdmin || supabase;
+  if (!db) return res.status(500).json({ error: "Database not available" });
+  const { error } = await db.from("gift_claims").update({ status: "expired" })
+    .eq("status", "pending_claim").lt("expires_at", new Date().toISOString());
+  if (error) return res.status(500).json({ error: "Failed to expire gifts." });
+  return res.json({ success: true });
+});
+
+// Claim expired/cancelled gift to sender's own portfolio
+app.post("/api/gift/claim-to-self", async (req, res) => {
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.replace("Bearer ", "");
+  const db = supabaseAdmin || supabase;
+  if (!db) return res.status(500).json({ error: "Database not available" });
+
+  const { data: { user }, error: authErr } = await db.auth.getUser(token);
+  if (authErr || !user) return res.status(401).json({ error: "Unauthorized" });
+
+  const { gift_id } = req.body || {};
+  if (!gift_id) return res.status(400).json({ error: "gift_id is required." });
+
+  const { data: gift } = await db.from("gift_claims")
+    .select("*")
+    .eq("id", gift_id).eq("sender_user_id", user.id).maybeSingle();
+
+  if (!gift) return res.status(404).json({ error: "Gift not found." });
+  if (gift.status === "claimed") return res.status(400).json({ error: "This gift has already been claimed." });
+  if (gift.status === "pending_claim") return res.status(400).json({ error: "This gift is still active. Cancel or wait for it to expire first." });
+
+  // Only allow for expired or cancelled gifts
+  if (gift.status !== "expired" && gift.status !== "cancelled") {
+    return res.status(400).json({ error: "This gift cannot be added to your portfolio." });
+  }
+
+  // Allocate holdings to sender
+  let holdingsCreated = 0;
+  if (gift.asset_type === "strategy" && gift.strategy_id) {
+    const { data: strategy } = await db.from("strategies_c").select("id, holdings").eq("id", gift.strategy_id).maybeSingle();
+    holdingsCreated = await giftAllocateStrategyHoldings(db, user.id, gift.strategy_id, strategy?.holdings || [], gift.amount);
+  } else if (gift.asset_type === "stock" && gift.security_id) {
+    const result = await giftAllocateStockHolding(db, user.id, gift.security_id, gift.amount);
+    holdingsCreated = result > 0 ? 1 : 0;
+  }
+
+  if (holdingsCreated === 0) return res.status(500).json({ error: "Failed to allocate holdings." });
+
+  // Deduct refunded amount from wallet (since they were already refunded on expiry)
+  const amountRands = gift.amount / 100;
+  const { data: wallet } = await db.from("wallets").select("balance").eq("user_id", user.id).maybeSingle();
+  if (!wallet || (wallet.balance || 0) < amountRands) {
+    return res.status(400).json({ error: `Insufficient wallet balance. You need R${amountRands.toFixed(2)} to add this to your portfolio.` });
+  }
+  await db.from("wallets").update({ balance: wallet.balance - amountRands }).eq("user_id", user.id);
+
+  // Create transaction
+  const now = new Date().toISOString();
+  await db.from("transactions").insert({
+    user_id: user.id, direction: "debit",
+    name: `Self-claimed Gift — ${gift.asset_name}`,
+    description: "Expired gift added to own portfolio",
+    amount: gift.amount, store_reference: `GIFT2-SELF-${gift.id}`,
+    currency: "ZAR", status: "posted", settlement_status: "pending",
+    transaction_date: now, created_at: now,
+  });
+
+  // Update gift status
+  await db.from("gift_claims").update({
+    status: "claimed", recipient_user_id: user.id, claimed_at: now,
+  }).eq("id", gift.id);
+
+  return res.json({ success: true, asset_name: gift.asset_name });
+});
+
+// ─── End gift routes ─────────────────────────────────────────────────────────
 
 // Catch-all 404 handler - MUST be after all route definitions
 app.use((req, res) => {

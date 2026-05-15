@@ -14,6 +14,7 @@ import {
   User,
   FileText,
   Users,
+  Gift,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import ProfileSkeleton from "../components/ProfileSkeleton";
@@ -152,6 +153,7 @@ const MorePage = ({ onNavigate, onBeforeLogout }) => {
       { id: "family", label: "Family Dashboard", icon: Users, onClick: () => onNavigate?.("familyDashboard") },
       { id: "settings", label: "Settings", icon: Settings, onClick: () => onNavigate?.("settings") },
       { id: "statements", label: "Statements", icon: FileText, onClick: () => onNavigate?.("statements") },
+      { id: "sentGifts", label: "Sent Gifts", icon: Gift, onClick: () => onNavigate?.("sentGifts") },
     ],
     [
       { id: "help", label: "Help & FAQs", icon: HelpCircle },
