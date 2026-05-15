@@ -1162,7 +1162,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                       <label htmlFor="bank-account-number2">Account Number</label>
                       <div className="bank-input-field">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="18" height="18" className="bank-input-icon"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z" /></svg>
-                        <input type="text" id="bank-account-number2" placeholder="Enter your account number" value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value.replace(/\D/g, ""))} inputMode="numeric" autoComplete="off" />
+                        <input type="text" id="bank-account-number2" placeholder="Enter your account number" value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value.replace(/\D/g, "").slice(0, 13))} inputMode="numeric" autoComplete="off" maxLength={13} />
                       </div>
                     </div>
                     <div className="bank-input-divider"></div>
