@@ -139,31 +139,36 @@ export default async function handler(req, res) {
       }
 
       // 5. Record transactions (amounts in cents)
+      const childName = child.first_name || "child";
       const { error: txErr } = await db.from("transactions").insert([
         {
           user_id: parentUserId,
           family_member_id: family_member_id,
-          type: "transfer_out",
+          name: `Transfer to ${childName}`,
           direction: "debit",
           amount: amountCents,
-          description: `Transfer to ${child.first_name || "child"}'s account`,
+          description: `Transfer to ${childName}'s account`,
           store_reference: transferRef,
-          status: "completed",
+          currency: "ZAR",
+          status: "posted",
+          transaction_date: new Date().toISOString(),
         },
         {
           user_id: parentUserId,
           family_member_id: family_member_id,
-          type: "transfer_in",
+          name: "Received from parent",
           direction: "credit",
           amount: amountCents,
           description: "Received from parent",
           store_reference: transferRef,
-          status: "completed",
+          currency: "ZAR",
+          status: "posted",
+          transaction_date: new Date().toISOString(),
         },
       ]);
 
       if (txErr) {
-        console.error("[child-wallet] Transaction insert failed (transfer still applied):", txErr.message);
+        console.error("[child-wallet] Transaction insert failed (transfer still applied):", txErr);
         // Don't rollback — money moved, just log the missing records
       }
 
