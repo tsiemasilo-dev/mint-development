@@ -65,7 +65,7 @@ const CHECKBOX_GROUPS = {
 };
 
 const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, requestTab }) => {
-  const [sec1Open, setSec1Open] = useState(true);
+  const [sec1Open, setSec1Open] = useState(false);
   const [sec2Open, setSec2Open] = useState(false);
   const [sec3Open, setSec3Open] = useState(false);
   const [initials, setInitials] = useState(savedData?.initials || "");
@@ -84,6 +84,11 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
   }, [requestTab]);
 
   const manualOverrideRef = useRef(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setSec1Open(true), 2000);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     const TRIGGER = window.innerHeight * 0.50;
