@@ -8,7 +8,7 @@ import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer } from "r
 import { supabase } from "../lib/supabase";
 import { getStrategiesWithMetrics, formatChangePct, formatChangeAbs, getChangeColor } from "../lib/strategyData.js";
 import { formatCurrency } from "../lib/formatCurrency";
-import { normalizeSymbol, getHoldingsArray, getHoldingSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot, calculateMinInvestmentSync, getAdjustedShares } from "../lib/strategyUtils";
+import { normalizeSymbol, getHoldingsArray, getHoldingSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot, calculateMinInvestmentSync, getAdjustedShares, enrichSecuritiesWithIntradayPrices } from "../lib/strategyUtils";
 
 const sortOptions = [
   "Recommended",
@@ -206,7 +206,7 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
           chunks.map((symbols) => (
             supabase
               .from("securities_c")
-              .select("symbol, name, logo_url, last_price, ytd_performance, ytd_start_price")
+              .select("id, symbol, name, logo_url, last_price, ytd_performance, ytd_start_price")
               .in("symbol", symbols)
           )),
         );
@@ -221,13 +221,8 @@ const OpenStrategiesPage = ({ onBack, onOpenFactsheet }) => {
         });
 
         if (isMounted && merged.length) {
-          // Temporary debug: log ytd_performance for all strategy holdings
-          const nullYtd = merged.filter(s => s.ytd_performance == null);
-          const withYtd = merged.filter(s => s.ytd_performance != null);
-          console.log(`[YTD debug] ${merged.length} securities fetched | ${withYtd.length} have ytd_performance | ${nullYtd.length} are NULL`);
-          if (nullYtd.length) console.log('[YTD debug] NULL ytd_performance:', nullYtd.map(s => s.symbol).join(', '));
-          console.log('[YTD debug] Values:', withYtd.map(s => `${s.symbol}=${Number(s.ytd_performance).toFixed(1)}%`).join(', '));
-          setHoldingsSecurities(merged);
+          const enriched = await enrichSecuritiesWithIntradayPrices(merged);
+          setHoldingsSecurities(enriched);
         }
       } catch (error) {
         console.error("Error fetching holdings securities:", error);
