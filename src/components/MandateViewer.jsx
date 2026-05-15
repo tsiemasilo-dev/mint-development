@@ -242,6 +242,13 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
     prevSec3Done.current = sec3Done;
   }, [sec3Done]);
 
+  useEffect(() => {
+    if (sec3Open) {
+      setSec1Open(false);
+      setSec2Open(false);
+    }
+  }, [sec3Open]);
+
   const getAddendumChecked = useCallback((sectionIndex, itemIndex) => {
     if (!discretionType) return false;
     const prefix = discretionType === "full" ? "full" : "lim";
