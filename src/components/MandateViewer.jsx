@@ -104,7 +104,7 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
       if (manualOverrideRef.current) return;
       if (activateTimerRef.current) clearTimeout(activateTimerRef.current);
       activateTimerRef.current = setTimeout(() => {
-        setters.forEach((set, i) => set(i === index));
+        setters[index](true);
         if (index === 2) setShowErrors(true);
       }, 300);
     };
