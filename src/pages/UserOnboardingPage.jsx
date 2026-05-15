@@ -125,6 +125,14 @@ const monthlyInvestmentOptions = [
   { value: "over_100000", label: "More than R100,000" },
 ];
 
+const accountTypeOptions = [
+  { value: "savings", label: "Savings" },
+  { value: "cheque", label: "Cheque / Current" },
+  { value: "business", label: "Business" },
+  { value: "transmission", label: "Transmission" },
+  { value: "other", label: "Other" },
+];
+
 const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const { profile, loading: profileLoading } = useProfile();
   const [step, setStep] = useState(0);
@@ -159,6 +167,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const [expectedMonthlyInvestment, setExpectedMonthlyInvestment] = useState("");
   const [agreedSourceOfFunds, setAgreedSourceOfFunds] = useState(false);
   const [sofDropdownOpen, setSofDropdownOpen] = useState(false);
+  const [accountTypeDropdownOpen, setAccountTypeDropdownOpen] = useState(false);
+  const [monthlyInvestmentDropdownOpen, setMonthlyInvestmentDropdownOpen] = useState(false);
   const [bankName, setBankName] = useState("");
   const [bankAccountName, setBankAccountName] = useState("");
   const [bankAccountType, setBankAccountType] = useState("");
@@ -192,6 +202,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   });
   const dropdownRef = useRef(null);
   const sofDropdownRef = useRef(null);
+  const accountTypeDropdownRef = useRef(null);
+  const monthlyInvestmentDropdownRef = useRef(null);
 
   const selectedOption = employmentOptions.find(
     (option) => option.value === employmentStatus
@@ -479,6 +491,12 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
       if (bankDropdownRef.current && !bankDropdownRef.current.contains(event.target)) {
         setBankDropdownOpen(false);
       }
+      if (accountTypeDropdownRef.current && !accountTypeDropdownRef.current.contains(event.target)) {
+        setAccountTypeDropdownOpen(false);
+      }
+      if (monthlyInvestmentDropdownRef.current && !monthlyInvestmentDropdownRef.current.contains(event.target)) {
+        setMonthlyInvestmentDropdownOpen(false);
+      }
     };
 
     document.addEventListener("click", handleOutsideClick);
@@ -576,7 +594,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
             setBankDone(true);
             setBankLetterDone(true);
             setSofDone(true);
-            setAddressDone(true);
+            // Respect explicit admin reset: address_saved === false overrides fullyComplete
+            if (raw?.address_saved !== false) setAddressDone(true);
             setMandateDone(true);
             setRiskDone(true);
             setTermsDone(true);
@@ -769,7 +788,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
 
   return (
     <div
-      className={`onboarding-process ${isFading ? "fade-out" : "fade-in"} ${isDropdownOpen || sofDropdownOpen || bankDropdownOpen ? "dropdown-open" : ""
+      className={`onboarding-process ${isFading ? "fade-out" : "fade-in"} ${isDropdownOpen || bankDropdownOpen ? "dropdown-open" : ""
         }`}
     >
       <div className="min-h-screen flex items-center justify-center px-4 py-8 relative">
@@ -1096,6 +1115,35 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                     <input type="hidden" value={bankName} />
                   </div>
                 </div>
+                <div className="bank-section hide-when-dropdown-open" ref={accountTypeDropdownRef} style={{ position: 'relative', zIndex: 10 }}>
+                  <div className="bank-section-label">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5 7.5 3m0 0L12 7.5M7.5 3v13.5m13.5 0L16.5 21m0 0L12 16.5m4.5 4.5V7.5" /></svg>
+                    Account Type
+                  </div>
+                  <div className="custom-select">
+                    <div
+                      className={`bank-select-trigger ${accountTypeDropdownOpen ? "active" : ""}`}
+                      role="button" tabIndex={0}
+                      onClick={() => setAccountTypeDropdownOpen(p => !p)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setAccountTypeDropdownOpen(p => !p); } }}
+                    >
+                      {bankAccountType
+                        ? <span className="bank-select-value">{accountTypeOptions.find(o => o.value === bankAccountType)?.label}</span>
+                        : <span className="bank-select-placeholder">Select account type</span>}
+                      <svg className="bank-select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16"><path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
+                    </div>
+                    <div className={`bank-dropdown-list ${accountTypeDropdownOpen ? "active" : ""}`}>
+                      {accountTypeOptions.map((option) => (
+                        <div key={option.value} className={`bank-dropdown-option ${bankAccountType === option.value ? "selected" : ""}`} role="button" tabIndex={0}
+                          onClick={() => { setBankAccountType(option.value); setAccountTypeDropdownOpen(false); }}
+                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setBankAccountType(option.value); setAccountTypeDropdownOpen(false); } }}>
+                          <span>{option.label}</span>
+                          {bankAccountType === option.value && <svg className="bank-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="16" height="16"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
                 <div className="bank-account-fields hide-when-dropdown-open">
                   <div className="bank-section-label">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" d="M5.25 8.25h15m-16.5 7.5h15m-1.8-13.5-3.9 19.5m-2.1-19.5-3.9 19.5" /></svg>
@@ -1111,25 +1159,10 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                     </div>
                     <div className="bank-input-divider"></div>
                     <div className="bank-input-row">
-                      <label htmlFor="bank-account-type2">Account Type</label>
-                      <div className="bank-input-field">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="18" height="18" className="bank-input-icon"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5m-16.5 5.25h16.5m-16.5 5.25h10.5" /></svg>
-                        <select id="bank-account-type2" value={bankAccountType} onChange={(e) => setBankAccountType(e.target.value)}>
-                          <option value="">Select account type</option>
-                          <option value="savings">Savings</option>
-                          <option value="cheque">Cheque / Current</option>
-                          <option value="business">Business</option>
-                          <option value="transmission">Transmission</option>
-                          <option value="other">Other</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div className="bank-input-divider"></div>
-                    <div className="bank-input-row">
                       <label htmlFor="bank-account-number2">Account Number</label>
                       <div className="bank-input-field">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="18" height="18" className="bank-input-icon"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z" /></svg>
-                        <input type="text" id="bank-account-number2" placeholder="Enter your account number" value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value.replace(/\D/g, ""))} inputMode="numeric" autoComplete="off" />
+                        <input type="text" id="bank-account-number2" placeholder="Enter your account number" value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value.replace(/\D/g, "").slice(0, 13))} inputMode="numeric" autoComplete="off" maxLength={13} />
                       </div>
                     </div>
                     <div className="bank-input-divider"></div>
@@ -1220,7 +1253,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               </div>
 
               {/* ── Section 4: Source of Funds ── */}
-              <div className={`animate-fade-in delay-3${sofDropdownOpen ? ' dropdown-open' : ''}`} style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', padding: '18px 20px', boxShadow: '0 2px 12px rgba(100,60,140,0.06)' }}>
+              <div className="animate-fade-in delay-3" style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', padding: '18px 20px', boxShadow: '0 2px 12px rgba(100,60,140,0.06)', position: 'relative', zIndex: 20, transform: 'translateZ(0)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
                   <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'hsl(270 30% 25%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>4</span>
@@ -1234,13 +1267,24 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   <div>
                     <label htmlFor="source-of-funds2" style={{ fontSize: '13px', fontWeight: '500', color: 'hsl(270 30% 25%)', display: 'block', marginBottom: '6px' }}>Primary Source of Funds</label>
                     <div className="custom-select" ref={sofDropdownRef}>
-                      <div className={`glass-field select-trigger ${sofDropdownOpen ? "active" : ""}`} role="button" tabIndex={0} onClick={() => setSofDropdownOpen((p) => !p)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSofDropdownOpen((p) => !p); } }}>
-                        <div className="selected-value" data-placeholder="Select source of funds">{sourceOfFunds ? selectedSofOption?.label : ""}</div>
+                      <div
+                        className={`bank-select-trigger ${sofDropdownOpen ? "active" : ""}`}
+                        role="button" tabIndex={0}
+                        onClick={() => setSofDropdownOpen((p) => !p)}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSofDropdownOpen((p) => !p); } }}
+                      >
+                        {sourceOfFunds
+                          ? <span className="bank-select-value">{selectedSofOption?.label}</span>
+                          : <span className="bank-select-placeholder">Select source of funds</span>}
+                        <svg className="bank-select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16"><path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
                       </div>
-                      <div className={`custom-dropdown ${sofDropdownOpen ? "active" : ""}`}>
-                        {sourceOfFundsOptions.map((option) => (
-                          <div key={option.value || "placeholder"} className={`custom-option ${sourceOfFunds === option.value ? "selected" : ""}`} role="button" tabIndex={0} onClick={() => handleSofSelect(option.value)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleSofSelect(option.value); } }}>
-                            {option.label}
+                      <div className={`bank-dropdown-list ${sofDropdownOpen ? "active" : ""}`}>
+                        {sourceOfFundsOptions.filter(o => o.value).map((option) => (
+                          <div key={option.value} className={`bank-dropdown-option ${sourceOfFunds === option.value ? "selected" : ""}`} role="button" tabIndex={0}
+                            onClick={() => handleSofSelect(option.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleSofSelect(option.value); } }}>
+                            <span>{option.label}</span>
+                            {sourceOfFunds === option.value && <svg className="bank-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="16" height="16"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>}
                           </div>
                         ))}
                       </div>
@@ -1248,22 +1292,41 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                     </div>
                   </div>
                   {sourceOfFunds === "other" && (
-                    <div className="hide-when-dropdown-open">
+                    <div>
                       <label style={{ fontSize: '13px', fontWeight: '500', color: 'hsl(270 30% 25%)', display: 'block', marginBottom: '6px' }}>Please describe your source of funds</label>
                       <div className="glass-field"><input type="text" placeholder="Describe your source of funds" value={sourceOfFundsOther} onChange={(e) => setSourceOfFundsOther(e.target.value)} /></div>
                     </div>
                   )}
-                  <div className="hide-when-dropdown-open">
-                    <label htmlFor="expected-monthly-investment2" style={{ fontSize: '13px', fontWeight: '500', color: 'hsl(270 30% 25%)', display: 'block', marginBottom: '6px' }}>Expected Monthly Investment Amount</label>
-                    <div className="glass-field">
-                      <select id="expected-monthly-investment2" value={expectedMonthlyInvestment} onChange={(e) => setExpectedMonthlyInvestment(e.target.value)}>
-                        {monthlyInvestmentOptions.map((option) => (
-                          <option key={option.value || "placeholder"} value={option.value}>{option.label}</option>
+                  <div className="bank-section" ref={monthlyInvestmentDropdownRef} style={{ position: 'relative', zIndex: 10, marginBottom: 0 }}>
+                    <div className="bank-section-label">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+                      Expected Monthly Investment
+                    </div>
+                    <div className="custom-select">
+                      <div
+                        className={`bank-select-trigger ${monthlyInvestmentDropdownOpen ? "active" : ""}`}
+                        role="button" tabIndex={0}
+                        onClick={() => setMonthlyInvestmentDropdownOpen(p => !p)}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setMonthlyInvestmentDropdownOpen(p => !p); } }}
+                      >
+                        {expectedMonthlyInvestment
+                          ? <span className="bank-select-value">{monthlyInvestmentOptions.find(o => o.value === expectedMonthlyInvestment)?.label}</span>
+                          : <span className="bank-select-placeholder">Select amount range</span>}
+                        <svg className="bank-select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16"><path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
+                      </div>
+                      <div className={`bank-dropdown-list ${monthlyInvestmentDropdownOpen ? "active" : ""}`}>
+                        {monthlyInvestmentOptions.filter(o => o.value).map((option) => (
+                          <div key={option.value} className={`bank-dropdown-option ${expectedMonthlyInvestment === option.value ? "selected" : ""}`} role="button" tabIndex={0}
+                            onClick={() => { setExpectedMonthlyInvestment(option.value); setMonthlyInvestmentDropdownOpen(false); }}
+                            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpectedMonthlyInvestment(option.value); setMonthlyInvestmentDropdownOpen(false); } }}>
+                            <span>{option.label}</span>
+                            {expectedMonthlyInvestment === option.value && <svg className="bank-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="16" height="16"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>}
+                          </div>
                         ))}
-                      </select>
+                      </div>
                     </div>
                   </div>
-                  <div className="hide-when-dropdown-open">
+                  <div>
                     <label className="checkbox-item" style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
                       <input type="checkbox" checked={agreedSourceOfFunds} onChange={(e) => setAgreedSourceOfFunds(e.target.checked)} />
                       <span className="checkbox-label" style={{ fontSize: '13px' }}>I declare that the funds I will use for investing are from legitimate sources and I am the beneficial owner of these funds</span>

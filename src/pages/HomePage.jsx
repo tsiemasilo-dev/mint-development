@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "../lib/supabase";
 import {
   ArrowDownToLine,
@@ -42,6 +42,7 @@ import SettlementBadge from "../components/PendingBadge";
 import NotificationBell from "../components/NotificationBell";
 import FamilyDropdown from "../components/FamilyDropdown";
 import HomeSkeleton from "../components/HomeSkeleton";
+import QuickActionsCarousel from "../components/QuickActionsCarousel";
 
 // Feature flags — set VITE_ENABLE_INSURE=true in Replit Secrets to preview.
 // Leave unset in Vercel production to keep the feature hidden from live users.
@@ -754,7 +755,7 @@ const HomePage = ({
       <div className="mx-auto -mt-10 flex w-full max-w-sm flex-col gap-6 px-4 pb-10 md:max-w-md md:px-8">
         <section className="flex flex-col gap-3">
           {/* Row 1 — primary actions */}
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-4 gap-2 text-[11px] font-medium">
             {[
               { label: "Invest", icon: LayoutGrid, onClick: onOpenStrategies || onOpenInvest },
               { label: "Deposit", icon: ArrowDownToLine, onClick: onOpenDeposit },
@@ -772,12 +773,21 @@ const HomePage = ({
                   <span className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-50 text-violet-700">
                     <Icon className="h-4 w-4" />
                   </span>
-                  <span className="text-center text-[10px] font-semibold uppercase tracking-[0.18em] leading-tight">{item.label}</span>
+                  <span className="text-center leading-tight">{item.label}</span>
                 </button>
               );
             })}
           </div>
 
+          {/* Quick Actions Carousel */}
+          <QuickActionsCarousel
+            items={[
+              { id: 1, label: "Invest", description: "Start investing", image: "https://mfxnghmuccevsxwcetej.supabase.co/storage/v1/object/public/Mint%20Assets/MINT%20Basket.avif", onClick: onOpenStrategies || onOpenInvest },
+              { id: 2, label: "Child Account", description: "Manage kids", image: "https://mfxnghmuccevsxwcetej.supabase.co/storage/v1/object/public/Mint%20Assets/PSD%20MINT%20EMAIL%20TEMPLATE%20HEADER%20STANDARD%20Child%20Account%20Verified%201.png", onClick: onOpenFamily },
+              { id: 3, label: "News", description: "Market insights", image: "https://mfxnghmuccevsxwcetej.supabase.co/storage/v1/object/public/Mint%20Assets/News.avif", onClick: () => onOpenNews && onOpenNews("news") },
+              { id: 4, label: "Gifting", description: "Send gifts", image: "https://mfxnghmuccevsxwcetej.supabase.co/storage/v1/object/public/Mint%20Assets/Gifting.avif", onClick: () => {} },
+            ]}
+          />
         </section>
 
         {onboardingChecked && outstandingActions.length > 0 ? (
@@ -792,7 +802,7 @@ const HomePage = ({
         <section className="rounded-3xl bg-white shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] overflow-hidden">
           <div className="flex items-end justify-between px-5 py-4 border-b border-slate-100">
             <div className="space-y-1">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900">
+              <p className="text-sm font-semibold text-slate-900">
                 Market Insights
               </p>
               <div className="flex items-center gap-2 text-xs text-slate-500">
@@ -861,7 +871,7 @@ const HomePage = ({
         <section className="rounded-3xl bg-white shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] overflow-hidden">
           <div className="flex items-end justify-between px-5 py-4 border-b border-slate-100">
             <div className="space-y-1">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900">
+              <p className="text-sm font-semibold text-slate-900">
                 Investment Goals
               </p>
               <div className="flex items-center gap-2 text-xs text-slate-500">
@@ -1060,7 +1070,7 @@ const HomePage = ({
         <section>
           <div className="flex items-end justify-between px-5 mb-3">
             <div className="space-y-1">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900">
+              <p className="text-sm font-semibold text-slate-900">
                 Your best performing assets
               </p>
               <div className="flex items-center gap-2 text-xs text-slate-500">
@@ -1180,7 +1190,7 @@ const HomePage = ({
         <section>
           <div className="flex items-end justify-between px-5 mb-3">
             <div className="space-y-1">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900">
+              <p className="text-sm font-semibold text-slate-900">
                 Your best performing strategies
               </p>
               <div className="flex items-center gap-2 text-xs text-slate-500">
