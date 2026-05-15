@@ -1251,7 +1251,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               </div>
 
               {/* ── Section 4: Source of Funds ── */}
-              <div className={`animate-fade-in delay-3${sofDropdownOpen ? ' dropdown-open' : ''}`} style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', padding: '18px 20px', boxShadow: '0 2px 12px rgba(100,60,140,0.06)', position: 'relative', zIndex: sofDropdownOpen ? 200 : 1 }}>
+              <div className="animate-fade-in delay-3" style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', padding: '18px 20px', boxShadow: '0 2px 12px rgba(100,60,140,0.06)', position: 'relative', zIndex: 20 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
                   <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'hsl(270 30% 25%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>4</span>
@@ -1279,12 +1279,12 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                     </div>
                   </div>
                   {sourceOfFunds === "other" && (
-                    <div className="hide-when-dropdown-open">
+                    <div>
                       <label style={{ fontSize: '13px', fontWeight: '500', color: 'hsl(270 30% 25%)', display: 'block', marginBottom: '6px' }}>Please describe your source of funds</label>
                       <div className="glass-field"><input type="text" placeholder="Describe your source of funds" value={sourceOfFundsOther} onChange={(e) => setSourceOfFundsOther(e.target.value)} /></div>
                     </div>
                   )}
-                  <div className="hide-when-dropdown-open">
+                  <div>
                     <label htmlFor="expected-monthly-investment2" style={{ fontSize: '13px', fontWeight: '500', color: 'hsl(270 30% 25%)', display: 'block', marginBottom: '6px' }}>Expected Monthly Investment Amount</label>
                     <div className="custom-select" ref={monthlyInvestmentDropdownRef} style={{ position: 'relative', zIndex: monthlyInvestmentDropdownOpen ? 60 : 'auto' }}>
                       <div
@@ -1310,7 +1310,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                       </div>
                     </div>
                   </div>
-                  <div className="hide-when-dropdown-open">
+                  <div>
                     <label className="checkbox-item" style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
                       <input type="checkbox" checked={agreedSourceOfFunds} onChange={(e) => setAgreedSourceOfFunds(e.target.checked)} />
                       <span className="checkbox-label" style={{ fontSize: '13px' }}>I declare that the funds I will use for investing are from legitimate sources and I am the beneficial owner of these funds</span>
