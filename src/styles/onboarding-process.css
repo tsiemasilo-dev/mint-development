@@ -558,7 +558,6 @@
 .onboarding-process.dropdown-open .hide-when-dropdown-open {
   opacity: 0 !important;
   pointer-events: none;
-  transform: translateY(6px);
 }
 
 .onboarding-process .grid-2 {
