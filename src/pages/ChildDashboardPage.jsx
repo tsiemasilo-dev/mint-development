@@ -22,7 +22,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { calculateMinInvestmentSync, buildHoldingsBySymbol, getHoldingsArray, normalizeSymbol } from "../lib/strategyUtils.js";
+import { calculateMinInvestmentSync, buildHoldingsBySymbol, getHoldingsArray, normalizeSymbol, enrichSecuritiesWithIntradayPrices } from "../lib/strategyUtils.js";
 
 // --- helpers ----------------------------------------------------------------
 
@@ -371,9 +371,10 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
       if (allSymbols.length > 0) {
         const { data: secs } = await supabase
           .from("securities_c")
-          .select("symbol, name, logo_url, last_price")
+          .select("id, symbol, name, logo_url, last_price")
           .in("symbol", allSymbols);
-        (secs || []).forEach(s => { secMap[s.symbol] = s; });
+        const enrichedSecs = await enrichSecuritiesWithIntradayPrices(secs || []);
+        enrichedSecs.forEach(s => { secMap[s.symbol] = s; });
       }
 
       // Fetch latest YTD returns from strategies_returns_c, newest row per strategy.
@@ -1651,7 +1652,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
         });
       }
 
-      // Fetch logos AND last_price so calculateMinInvestmentSync uses live prices
+      // Fetch logos AND intraday price so calculateMinInvestmentSync uses live prices
       const allSymbols = [...new Set(
         rows.flatMap(s => (Array.isArray(s.holdings) ? s.holdings : []).map(h => h.symbol || h.ticker).filter(Boolean))
       )];
@@ -1659,9 +1660,10 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
       if (allSymbols.length > 0) {
         const { data: secs } = await supabase
           .from("securities_c")
-          .select("symbol, name, logo_url, last_price")
+          .select("id, symbol, name, logo_url, last_price")
           .in("symbol", allSymbols);
-        (secs || []).forEach(s => { secMap[s.symbol] = s; });
+        const enrichedSecs = await enrichSecuritiesWithIntradayPrices(secs || []);
+        enrichedSecs.forEach(s => { secMap[s.symbol] = s; });
       }
 
       const enriched = rows.map(s => {

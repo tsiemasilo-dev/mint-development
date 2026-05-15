@@ -3,7 +3,8 @@ import { createPortal } from "react-dom";
 import MaintenanceModal from "../components/MaintenanceModal.jsx";
 import { registerCacheResetCallback } from "../lib/userCacheReset.js";
 import { supabase } from "../lib/supabase.js";
-import { getMarketsSecuritiesWithMetrics, getSecurityPrices } from "../lib/marketData.js";
+import { getMarketsSecuritiesWithMetrics, getSecurityPrices, clearMarketDataCache } from "../lib/marketData.js";
+import { useRealtimePrices } from "../lib/useRealtimePrices";
 import { getStrategiesWithMetrics, getPublicStrategies, formatChangePct, formatChangeAbs, getChangeColor } from "../lib/strategyData.js";
 import { useProfile } from "../lib/useProfile";
 import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Star } from "lucide-react";
@@ -15,7 +16,7 @@ import { ChartContainer } from "../components/ui/line-charts-2";
 import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatCurrency } from "../lib/formatCurrency";
-import { normalizeSymbol, getHoldingsArray, getHoldingSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot, calculateMinInvestment, calculateMinInvestmentSync, getAdjustedShares } from "../lib/strategyUtils";
+import { normalizeSymbol, getHoldingsArray, getHoldingSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot, calculateMinInvestment, calculateMinInvestmentSync, getAdjustedShares, enrichSecuritiesWithIntradayPrices } from "../lib/strategyUtils";
 
 const sortOptions = ["Market Cap", "Dividend Yield", "P/E Ratio", "1M Performance", "YTD Performance"];
 
@@ -342,11 +343,15 @@ const SecuritySparklineCard = ({ security, onClick, onToggleWatchlist, isWatched
 };
 
 let _mkSecurities = null;
+let _mkSecuritiesTs = 0;
+const MK_SECURITIES_TTL = 60_000;
 let _mkStrategies = null;
 let _mkPublicStrategies = null;
 let _mkHoldingsSecurities = null;
 
 registerCacheResetCallback(() => {
+  _mkSecurities = null;
+  _mkSecuritiesTs = 0;
   _mkStrategies = null;
   _mkHoldingsSecurities = null;
 });
@@ -354,6 +359,7 @@ registerCacheResetCallback(() => {
 const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNewsArticle, onOpenFactsheet, initialViewMode, onViewModeChange }) => {
   const { profile, loading: profileLoading } = useProfile();
   const [portalTarget, setPortalTarget] = useState(null);
+  const { lastUpdated: pricesLastUpdated } = useRealtimePrices();
   const [securities, setSecurities] = useState(() => _mkSecurities || []);
   const [strategies, setStrategies] = useState(() => _mkStrategies || []);
   const [publicStrategies, setPublicStrategies] = useState(() => _mkPublicStrategies || []);
@@ -616,23 +622,39 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
     .join("")
     .toUpperCase();
 
-  useEffect(() => {
-    const fetchSecurities = async () => {
-      if (_mkSecurities) { setLoading(false); return; }
-      setLoading(true);
-      try {
-        const data = await getMarketsSecuritiesWithMetrics();
-        _mkSecurities = data;
-        setSecurities(data);
-      } catch (error) {
-        console.error("Error fetching securities:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchSecurities = async (force = false) => {
+    const now = Date.now();
+    const cacheValid = _mkSecurities && (now - _mkSecuritiesTs) < MK_SECURITIES_TTL;
+    if (!force && cacheValid) { setLoading(false); return; }
+    if (!force && _mkSecurities && !cacheValid) {
+      _mkSecurities = null;
+      _mkSecuritiesTs = 0;
+      clearMarketDataCache();
+    }
+    setLoading(true);
+    try {
+      const data = await getMarketsSecuritiesWithMetrics();
+      _mkSecurities = data;
+      _mkSecuritiesTs = Date.now();
+      setSecurities(data);
+    } catch (error) {
+      console.error("Error fetching securities:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchSecurities();
   }, []);
+
+  useEffect(() => {
+    if (!pricesLastUpdated) return;
+    _mkSecurities = null;
+    _mkSecuritiesTs = 0;
+    clearMarketDataCache();
+    fetchSecurities(true);
+  }, [pricesLastUpdated]);
 
   // Fetch strategies with metrics
   useEffect(() => {
@@ -760,7 +782,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
         });
 
         if (merged.length) {
-          setHoldingsSecurities(merged);
+          const enriched = await enrichSecuritiesWithIntradayPrices(merged);
+          setHoldingsSecurities(enriched);
         }
       } catch (error) {
         console.error("Error fetching holdings securities:", error);

@@ -1,4 +1,4 @@
-(function initAutoRefresh() {
+2(function initAutoRefresh() {
   // Disable auto-refresh in development environments to prevent spurious reloads
   // caused by hot-module replacement changing bundle hashes
   const host = window.location.hostname;
