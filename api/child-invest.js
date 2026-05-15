@@ -142,7 +142,7 @@ export default async function handler(req, res) {
     // 6. Record transaction
     const ref = `CHILD-INV-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     try {
-      await db.from("transactions").insert({
+      const txInsertResult = await db.from("transactions").insert({
         user_id: parentUserId,
         family_member_id: family_member_id,
         name: `Strategy Investment: ${strategy.name}`,
@@ -150,10 +150,16 @@ export default async function handler(req, res) {
         amount: amount,
         description: `${strategy.name} investment for ${child.first_name}`,
         store_reference: ref,
-        status: "completed",
+        currency: "ZAR",
+        status: "posted",
         transaction_date: new Date().toISOString(),
       });
-    } catch (e) { console.error("[child-invest] tx insert failed:", e.message); }
+      if (txInsertResult.error) {
+        console.error("[child-invest] tx insert returned error:", txInsertResult.error);
+      } else {
+        console.log("[child-invest] tx inserted for child:", family_member_id, "ref:", ref);
+      }
+    } catch (e) { console.error("[child-invest] tx insert threw:", e.message); }
 
     return res.json({
       success: true,
