@@ -85,45 +85,23 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
 
   const manualOverrideRef = useRef(false);
 
-  const activateTimerRef = useRef(null);
-
   useEffect(() => {
-    const sections = [
-      { ref: sec1HeaderRef, index: 0 },
-      { ref: sec2HeaderRef, index: 1 },
-      { ref: sec3HeaderRef, index: 2 },
-    ];
+    const TRIGGER = window.innerHeight * 0.38;
 
-    const setters = [
-      (v) => setSec1Open(v),
-      (v) => setSec2Open(v),
-      (v) => setSec3Open(v),
-    ];
-
-    const activate = (index) => {
+    const handleScroll = () => {
       if (manualOverrideRef.current) return;
-      if (activateTimerRef.current) clearTimeout(activateTimerRef.current);
-      activateTimerRef.current = setTimeout(() => {
-        setters[index](true);
-        if (index === 2) setShowErrors(true);
-      }, 120);
+      if (sec2HeaderRef.current) {
+        const { top } = sec2HeaderRef.current.getBoundingClientRect();
+        if (top < TRIGGER) setSec2Open(true);
+      }
+      if (sec3HeaderRef.current) {
+        const { top } = sec3HeaderRef.current.getBoundingClientRect();
+        if (top < TRIGGER) { setSec3Open(true); setShowErrors(true); }
+      }
     };
 
-    const observers = sections.map(({ ref, index }) => {
-      const observer = new IntersectionObserver(
-        ([entry]) => {
-          if (entry.isIntersecting) activate(index);
-        },
-        { rootMargin: '0px 0px -10% 0px', threshold: 0 }
-      );
-      if (ref.current) observer.observe(ref.current);
-      return observer;
-    });
-
-    return () => {
-      observers.forEach((obs) => obs.disconnect());
-      if (activateTimerRef.current) clearTimeout(activateTimerRef.current);
-    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   const [checkedBoxes, setCheckedBoxes] = useState(savedData?.checkedBoxes || {});
