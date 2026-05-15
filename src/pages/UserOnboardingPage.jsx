@@ -576,7 +576,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
             setBankDone(true);
             setBankLetterDone(true);
             setSofDone(true);
-            setAddressDone(true);
+            // Respect explicit admin reset: address_saved === false overrides fullyComplete
+            if (raw?.address_saved !== false) setAddressDone(true);
             setMandateDone(true);
             setRiskDone(true);
             setTermsDone(true);
