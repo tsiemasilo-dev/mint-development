@@ -82,6 +82,42 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
       else if (requestTab === 2) { setSec3Open(true); setShowErrors(true); setTimeout(() => sec3HeaderRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }
     }
   }, [requestTab]);
+
+  const manualOverrideRef = useRef(false);
+
+  useEffect(() => {
+    const sections = [
+      { ref: sec1HeaderRef, index: 0 },
+      { ref: sec2HeaderRef, index: 1 },
+      { ref: sec3HeaderRef, index: 2 },
+    ];
+
+    const setters = [
+      (v) => setSec1Open(v),
+      (v) => setSec2Open(v),
+      (v) => setSec3Open(v),
+    ];
+
+    const activate = (index) => {
+      if (manualOverrideRef.current) return;
+      setters.forEach((set, i) => set(i === index));
+      if (index === 2) setShowErrors(true);
+    };
+
+    const observers = sections.map(({ ref, index }) => {
+      const observer = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting) activate(index);
+        },
+        { rootMargin: '-15% 0px -75% 0px', threshold: 0 }
+      );
+      if (ref.current) observer.observe(ref.current);
+      return observer;
+    });
+
+    return () => observers.forEach((obs) => obs.disconnect());
+  }, []);
+
   const [checkedBoxes, setCheckedBoxes] = useState(savedData?.checkedBoxes || {});
   const [showErrors, setShowErrors] = useState(false);
   const [discretionType, setDiscretionType] = useState(savedData?.discretionType || null);
@@ -1045,7 +1081,7 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
 
       {/* ── Section 1: Cover Page & Client Details ── */}
       <div ref={sec1HeaderRef} style={{ background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', boxShadow: '0 2px 12px rgba(100,60,140,0.06)', overflow: 'hidden' }}>
-        <button type="button" onClick={() => setSec1Open(o => !o)} style={accordionHeaderStyle}>
+        <button type="button" onClick={() => { manualOverrideRef.current = true; setSec1Open(o => !o); setTimeout(() => { manualOverrideRef.current = false; }, 1200); }} style={accordionHeaderStyle}>
           <div style={accordionCircleStyle(requiredFieldsFilled && initials.trim().length > 0)}>
             {requiredFieldsFilled && initials.trim().length > 0
               ? <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
@@ -1066,7 +1102,7 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
 
       {/* ── Section 2: Introduction & Terms ── */}
       <div ref={sec2HeaderRef} style={{ background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', boxShadow: '0 2px 12px rgba(100,60,140,0.06)', overflow: 'hidden' }}>
-        <button type="button" onClick={() => setSec2Open(o => !o)} style={accordionHeaderStyle}>
+        <button type="button" onClick={() => { manualOverrideRef.current = true; setSec2Open(o => !o); setTimeout(() => { manualOverrideRef.current = false; }, 1200); }} style={accordionHeaderStyle}>
           <div style={accordionCircleStyle(false)}>
             <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>2</span>
           </div>
@@ -1085,7 +1121,7 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
 
       {/* ── Section 3: Schedules & Annexures ── */}
       <div ref={sec3HeaderRef} style={{ background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', boxShadow: '0 2px 12px rgba(100,60,140,0.06)', overflow: 'hidden' }}>
-        <button type="button" onClick={() => { setSec3Open(o => !o); if (!sec3Open) setShowErrors(true); }} style={accordionHeaderStyle}>
+        <button type="button" onClick={() => { manualOverrideRef.current = true; setSec3Open(o => !o); if (!sec3Open) setShowErrors(true); setTimeout(() => { manualOverrideRef.current = false; }, 1200); }} style={accordionHeaderStyle}>
           <div style={accordionCircleStyle(allGroupsValid() && discretionType !== null)}>
             {allGroupsValid() && discretionType !== null
               ? <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
