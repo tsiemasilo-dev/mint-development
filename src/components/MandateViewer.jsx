@@ -106,7 +106,7 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
       activateTimerRef.current = setTimeout(() => {
         setters[index](true);
         if (index === 2) setShowErrors(true);
-      }, 300);
+      }, 120);
     };
 
     const observers = sections.map(({ ref, index }) => {
@@ -114,7 +114,7 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
         ([entry]) => {
           if (entry.isIntersecting) activate(index);
         },
-        { rootMargin: '0px 0px -88% 0px', threshold: 0 }
+        { rootMargin: '0px 0px -10% 0px', threshold: 0 }
       );
       if (ref.current) observer.observe(ref.current);
       return observer;
