@@ -522,30 +522,37 @@ export default async function handler(req, res) {
 
           const refundRef = `CHILD-REFUND-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
           try {
-            await db.from("transactions").insert([
+            const refundInsertResult = await db.from("transactions").insert([
               {
                 user_id: primary_user_id,
                 family_member_id: member_id,
-                type: "transfer_out",
+                name: `Refund from ${member.first_name || "child"}`,
                 direction: "debit",
                 amount: childBalanceCents,
                 description: `Refund from ${member.first_name || "child"}'s account on removal`,
                 store_reference: refundRef,
-                status: "completed",
+                currency: "ZAR",
+                status: "posted",
+                transaction_date: new Date().toISOString(),
               },
               {
                 user_id: primary_user_id,
                 family_member_id: null,
-                type: "transfer_in",
+                name: `Refund received from ${member.first_name || "child"}`,
                 direction: "credit",
                 amount: childBalanceCents,
                 description: `Refund received from ${member.first_name || "child"}'s account on removal`,
                 store_reference: refundRef,
-                status: "completed",
+                currency: "ZAR",
+                status: "posted",
+                transaction_date: new Date().toISOString(),
               },
             ]);
+            if (refundInsertResult.error) {
+              console.error("[family] Refund transaction log returned error:", refundInsertResult.error);
+            }
           } catch (txErr) {
-            console.error("[family] Refund transaction log failed (funds still moved):", txErr.message);
+            console.error("[family] Refund transaction log threw (funds still moved):", txErr.message);
           }
 
           refundedCents = childBalanceCents;
