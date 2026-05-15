@@ -1584,6 +1584,7 @@ const App = () => {
           security={selectedSecurity}
           paymentMethod={pendingPaymentMethod}
           onBack={goBack}
+          onGiftDone={() => navigateTo("home")}
           onContinue={(amount, security, baseAmount, shareCount) => {
             setStockCheckout({ security, amount, baseAmount: baseAmount || amount, shareCount });
             setPendingGoalFlow({
@@ -1813,6 +1814,7 @@ const App = () => {
           onBack={goBack}
           strategy={selectedStrategy}
           paymentMethod={pendingPaymentMethod}
+          onGiftDone={() => navigateTo("home")}
           onContinue={(amount, baseAmount, shareCount, fees) => {
             setInvestmentAmount(amount);
             setBaseInvestmentAmount(baseAmount || amount);
@@ -2335,7 +2337,7 @@ const App = () => {
     return <UserOnboardingPage onComplete={() => setCurrentPage("home")} />;
   }
 
-  if (currentPage === "giftClaim") {
+  if (currentPage === "giftClaim" || currentPage === "giftCodeEntry") {
     return (
       <Suspense fallback={<div className="min-h-screen bg-[#f8f6fa]" />}>
         <GiftCodeEntryPage
@@ -2417,6 +2419,7 @@ const App = () => {
             strategy={strategy}
             onBack={goBack}
             onContinue={() => navigateTo("home")}
+            onGiftDone={() => navigateTo("home")}
             startWithGiftOpen
           />
         </Suspense>

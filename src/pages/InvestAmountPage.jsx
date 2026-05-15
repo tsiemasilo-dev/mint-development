@@ -20,7 +20,7 @@ function firstBillingDate() {
   return d.toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" });
 }
 
-const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWithGiftOpen = false }) => {
+const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWithGiftOpen = false, onGiftDone }) => {
   const currentStrategy = strategy || {
     name: "",
     tickers: [],
@@ -394,6 +394,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWi
         <GiftToggleV2
           enabled={giftEnabled}
           onToggle={setGiftEnabled}
+          onDone={onGiftDone}
           security={{ id: currentStrategy.id, symbol: currentStrategy.name, name: currentStrategy.name }}
           assetType="strategy"
           totalCostCents={Math.round(fees.totalCost * 100)}

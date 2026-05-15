@@ -36,6 +36,19 @@ const { Resend } = require("resend");
 const { runFuneralCoverMigration } = require("./funeralCoverMigration.cjs");
 const { runStrategySubscriptionMigration } = require("./strategySubscriptionMigration.cjs");
 const cron = require("node-cron");
+const multer = require("multer");
+const Anthropic = require("@anthropic-ai/sdk");
+
+const uploadPdf = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 }, fileFilter: (_, file, cb) => {
+  cb(null, file.mimetype === "application/pdf" || file.mimetype.startsWith("image/"));
+}});
+
+let _anthropicClient = null;
+function getAnthropicClient() {
+  const key = process.env.ANTHROPIC_API_KEY || process.env.VITE_ANTHROPIC_API_KEY;
+  if (!_anthropicClient && key) _anthropicClient = new Anthropic({ apiKey: key });
+  return _anthropicClient;
+}
 
 // Helper to check both standard and VITE_ prefixed env vars
 const readEnv = (key) => process.env[key] || process.env[`VITE_${key}`];
@@ -638,13 +651,57 @@ runStrategySubscriptionMigration(pgPool, supabaseAdmin, supabase);
 cron.schedule("*/15 * * * *", async () => {
   const db = supabaseAdmin || supabase;
   if (!db) return;
+
+  // Find expired gifts before updating
+  const { data: expiredGifts } = await db
+    .from("gift_claims")
+    .select("id, sender_user_id, amount, asset_name")
+    .eq("status", "pending_claim")
+    .lt("expires_at", new Date().toISOString());
+
+  if (!expiredGifts?.length) {
+    console.log("[gift-expire-cron] no expired gifts at", new Date().toISOString());
+    return;
+  }
+
+  // Mark as expired
+  const ids = expiredGifts.map(g => g.id);
   const { error } = await db
     .from("gift_claims")
     .update({ status: "expired" })
-    .eq("status", "pending_claim")
-    .lt("expires_at", new Date().toISOString());
-  if (error) console.error("[gift-expire-cron] error:", error.message);
-  else console.log("[gift-expire-cron] ran at", new Date().toISOString());
+    .in("id", ids);
+  if (error) { console.error("[gift-expire-cron] update error:", error.message); return; }
+
+  // Refund each sender + notify
+  const now = new Date().toISOString();
+  for (const gift of expiredGifts) {
+    const amountRands = gift.amount / 100;
+    try {
+      // Refund wallet
+      const { data: wallet } = await db.from("wallets").select("balance").eq("user_id", gift.sender_user_id).maybeSingle();
+      if (wallet) {
+        await db.from("wallets").update({ balance: (wallet.balance || 0) + amountRands }).eq("user_id", gift.sender_user_id);
+      }
+      // Refund transaction
+      await db.from("transactions").insert({
+        user_id: gift.sender_user_id, direction: "credit",
+        name: `Gift Refund — ${gift.asset_name}`,
+        description: "Gift expired unclaimed — funds returned to wallet",
+        amount: gift.amount, store_reference: `GIFT2-REFUND-${gift.id}`,
+        currency: "ZAR", status: "posted", transaction_date: now, created_at: now,
+      });
+      // Notify sender
+      await db.from("notifications").insert({
+        user_id: gift.sender_user_id,
+        title: "Gift expired — funds returned",
+        body: `Your gift of ${gift.asset_name} was not claimed. R${amountRands.toFixed(2)} has been returned to your wallet.`,
+        type: "investment",
+        payload: { action: "gift_expired_refund", gift_id: gift.id, asset_name: gift.asset_name },
+      });
+      console.log(`[gift-expire-cron] Refunded R${amountRands.toFixed(2)} to user ${gift.sender_user_id} for gift ${gift.id}`);
+    } catch (e) { console.error(`[gift-expire-cron] refund error for gift ${gift.id}:`, e.message); }
+  }
+  console.log(`[gift-expire-cron] Processed ${expiredGifts.length} expired gifts at`, now);
 });
 
 // ── Monthly strategy subscription billing cron ─────────────────────────────
@@ -2409,6 +2466,169 @@ app.post("/api/banking/unlink", async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
+// ── Bank Confirmation Letter Verification (disabled — set ENABLE_BANK_LETTER_VERIFY=true to activate) ──
+if (readEnv("ENABLE_BANK_LETTER_VERIFY") === "true") {
+app.post("/api/banking/verify-letter", uploadPdf.single("file"), async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (!token) return res.status(401).json({ success: false, error: "Missing token" });
+
+    const db = supabaseAdmin || supabase;
+    const authClient = supabaseAdmin || supabase;
+    if (!authClient) return res.status(500).json({ success: false, error: "Database not configured" });
+
+    const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
+    if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
+
+    const claude = getAnthropicClient();
+    if (!claude) return res.status(500).json({ success: false, error: "Document verification service not configured" });
+
+    if (!req.file) return res.status(400).json({ success: false, error: "No file uploaded" });
+
+    // 1. Fetch the user's profile and bank details
+    const [profileResult, onboardingResult] = await Promise.all([
+      db.from("profiles").select("first_name, last_name, id_number").eq("id", user.id).maybeSingle(),
+      db.from("user_onboarding").select("bank_name, bank_account_number")
+        .eq("user_id", user.id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    ]);
+
+    const profile = profileResult.data;
+    const onboarding = onboardingResult.data;
+
+    if (!profile) return res.status(400).json({ success: false, error: "User profile not found. Please complete your profile first." });
+
+    const userName = `${profile.first_name || ""} ${profile.last_name || ""}`.trim();
+    const userIdNumber = profile.id_number || "";
+    const userBankAccount = onboarding?.bank_account_number || "";
+    const userBankName = onboarding?.bank_name || "";
+
+    // 2. Send the document to Claude Vision for extraction
+    const fileBase64 = req.file.buffer.toString("base64");
+    const isPdf = req.file.mimetype === "application/pdf";
+    const mediaType = isPdf ? "application/pdf" : req.file.mimetype;
+
+    const content = isPdf
+      ? [{ type: "document", source: { type: "base64", media_type: "application/pdf", data: fileBase64 } },
+         { type: "text", text: `Extract the following fields from this bank confirmation letter. Return ONLY valid JSON, no other text.
+{
+  "account_holder_name": "full name on the letter",
+  "id_number": "ID/passport number if present, or null",
+  "bank_name": "name of the bank",
+  "account_number": "bank account number",
+  "branch_code": "branch code if present, or null",
+  "account_type": "account type if present, or null",
+  "letter_date": "date on the letter if present, or null",
+  "is_valid_bank_letter": true/false
+}` }]
+      : [{ type: "image", source: { type: "base64", media_type: mediaType, data: fileBase64 } },
+         { type: "text", text: `Extract the following fields from this bank confirmation letter image. Return ONLY valid JSON, no other text.
+{
+  "account_holder_name": "full name on the letter",
+  "id_number": "ID/passport number if present, or null",
+  "bank_name": "name of the bank",
+  "account_number": "bank account number",
+  "branch_code": "branch code if present, or null",
+  "account_type": "account type if present, or null",
+  "letter_date": "date on the letter if present, or null",
+  "is_valid_bank_letter": true/false
+}` }];
+
+    const response = await claude.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1024,
+      messages: [{ role: "user", content }],
+    });
+
+    const raw = response.content?.[0]?.text || "";
+    let extracted;
+    try {
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      extracted = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
+    } catch {
+      console.error("[BankVerify] Failed to parse Claude response:", raw);
+      return res.status(422).json({ success: false, error: "Could not read the document. Please upload a clearer image or PDF." });
+    }
+
+    if (!extracted.is_valid_bank_letter) {
+      return res.json({
+        success: false,
+        match: false,
+        reason: "The uploaded document does not appear to be a valid bank confirmation letter.",
+        extracted,
+      });
+    }
+
+    // 3. Compare extracted fields against user data
+    const normalize = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const checks = [];
+    const issues = [];
+
+    // Name match — fuzzy: check if each part of the user's name appears in the extracted name
+    const extractedName = normalize(extracted.account_holder_name);
+    const nameParts = userName.toLowerCase().split(/\s+/).filter(Boolean);
+    const nameMatched = nameParts.length > 0 && nameParts.every(part => extractedName.includes(normalize(part)));
+    checks.push({ field: "name", expected: userName, found: extracted.account_holder_name || "", match: nameMatched });
+    if (!nameMatched) issues.push("Account holder name does not match your profile name.");
+
+    // ID number match
+    if (userIdNumber && extracted.id_number) {
+      const idMatch = normalize(userIdNumber) === normalize(extracted.id_number);
+      checks.push({ field: "id_number", expected: userIdNumber, found: extracted.id_number, match: idMatch });
+      if (!idMatch) issues.push("ID number on the letter does not match your profile.");
+    } else if (userIdNumber && !extracted.id_number) {
+      checks.push({ field: "id_number", expected: userIdNumber, found: null, match: false });
+      issues.push("No ID number found on the letter.");
+    }
+
+    // Account number match
+    if (userBankAccount && extracted.account_number) {
+      const accMatch = normalize(userBankAccount) === normalize(extracted.account_number);
+      checks.push({ field: "account_number", expected: userBankAccount, found: extracted.account_number, match: accMatch });
+      if (!accMatch) issues.push("Account number does not match the one on file.");
+    }
+
+    // Bank name match
+    if (userBankName && extracted.bank_name) {
+      const bankMatch = normalize(userBankName).includes(normalize(extracted.bank_name)) ||
+                         normalize(extracted.bank_name).includes(normalize(userBankName));
+      checks.push({ field: "bank_name", expected: userBankName, found: extracted.bank_name, match: bankMatch });
+      if (!bankMatch) issues.push("Bank name does not match.");
+    }
+
+    const allMatch = issues.length === 0;
+
+    // 4. Log the verification result
+    console.log(`[BankVerify] User ${user.id}: match=${allMatch}, checks=${JSON.stringify(checks)}`);
+
+    // 5. If all match, mark bank as verified
+    if (allMatch) {
+      try {
+        await db.from("required_actions").update({ bank_linked: true, bank_in_review: false }).eq("user_id", user.id);
+      } catch (e) {
+        console.warn("[BankVerify] Could not update required_actions:", e.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      match: allMatch,
+      checks,
+      issues,
+      extracted: {
+        account_holder_name: extracted.account_holder_name,
+        bank_name: extracted.bank_name,
+        account_number: extracted.account_number ? `****${extracted.account_number.slice(-4)}` : null,
+        letter_date: extracted.letter_date,
+      },
+    });
+  } catch (error) {
+    console.error("[BankVerify] Error:", error);
+    res.status(500).json({ success: false, error: "Verification failed. Please try again." });
+  }
+});
+} // end ENABLE_BANK_LETTER_VERIFY
 
 app.post("/api/account/reset", async (req, res) => {
   try {
@@ -8157,7 +8377,8 @@ async function giftAllocateStrategyHoldings(db, userId, strategyId, strategyHold
           await db.from("stock_holdings_c").update({
             quantity: Number(existing.quantity || 0) + qty,
             avg_fill: null, market_value: 0, unrealized_pnl: 0,
-            as_of_date: null, updated_at: new Date().toISOString(),
+            as_of_date: null, settlement_status: "pending",
+            updated_at: new Date().toISOString(),
           }).eq("id", existing.id);
         } else {
           await db.from("stock_holdings_c").insert({
@@ -8165,6 +8386,7 @@ async function giftAllocateStrategyHoldings(db, userId, strategyId, strategyHold
             avg_fill: null, market_value: 0,
             unrealized_pnl: 0, as_of_date: null,
             strategy_id: strategyId, Status: "active",
+            settlement_status: "pending",
           });
         }
         holdingsCreated++;
@@ -8182,6 +8404,7 @@ async function giftAllocateStrategyHoldings(db, userId, strategyId, strategyHold
           user_id: userId, security_id: fallback.id, quantity: qty,
           avg_fill: null, market_value: 0, unrealized_pnl: 0,
           as_of_date: null, strategy_id: strategyId, Status: "active",
+          settlement_status: "pending",
         });
         holdingsCreated = 1;
       } catch (e) { console.warn("[gift] strategy fallback holding:", e.message); }
@@ -8201,13 +8424,15 @@ async function giftAllocateStockHolding(db, userId, securityId, amountCents) {
       await db.from("stock_holdings_c").update({
         quantity: Number(existing.quantity || 0) + qty,
         avg_fill: null, market_value: 0, unrealized_pnl: 0,
-        as_of_date: null, updated_at: new Date().toISOString(),
+        as_of_date: null, settlement_status: "pending",
+        updated_at: new Date().toISOString(),
       }).eq("id", existing.id);
     } else {
       await db.from("stock_holdings_c").insert({
         user_id: userId, security_id: sec.id, quantity: qty,
         avg_fill: null, market_value: 0,
         unrealized_pnl: 0, as_of_date: null, Status: "active",
+        settlement_status: "pending",
       });
     }
     return qty;
@@ -8484,6 +8709,40 @@ app.post("/api/gift/cancel", async (req, res) => {
   return res.json({ success: true, refunded_amount: gift.amount });
 });
 
+app.get("/api/gift/sent", async (req, res) => {
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.replace("Bearer ", "");
+  const db = supabaseAdmin || supabase;
+  if (!db) return res.status(500).json({ error: "Database not available" });
+
+  const { data: { user }, error: authErr } = await db.auth.getUser(token);
+  if (authErr || !user) return res.status(401).json({ error: "Unauthorized" });
+
+  const { data: gifts, error } = await db.from("gift_claims")
+    .select("id, amount, asset_type, asset_name, token, status, message, expires_at, created_at, claimed_at, cancelled_at")
+    .eq("sender_user_id", user.id).order("created_at", { ascending: false }).limit(100);
+
+  if (error) return res.status(500).json({ error: "Failed to load gifts." });
+
+  const parseRecipientName = (msg) => {
+    try { const p = JSON.parse(msg || "{}"); return [p.fn, p.ln].filter(Boolean).join(" ") || null; } catch { return null; }
+  };
+  const parseMsg = (msg) => {
+    try { return JSON.parse(msg || "{}").msg || null; } catch { return null; }
+  };
+
+  const formatted = (gifts || []).map(g => ({
+    ...g,
+    recipient_name: parseRecipientName(g.message),
+    personal_message: parseMsg(g.message),
+  }));
+
+  return res.json({
+    active: formatted.filter(g => g.status === "pending_claim"),
+    history: formatted.filter(g => g.status !== "pending_claim"),
+  });
+});
+
 app.get("/api/gift/:token", async (req, res) => {
   const db = supabaseAdmin || supabase;
   if (!db) return res.status(500).json({ error: "Database not available" });
@@ -8612,13 +8871,15 @@ app.post("/api/gift/create-v2", async (req, res) => {
   const { data: senderProfile } = await db.from("profiles").select("first_name, last_name").eq("id", user.id).maybeSingle();
   const senderName = [senderProfile?.first_name, senderProfile?.last_name].filter(Boolean).join(" ") || "Someone";
 
-  // In-app notification — only for fully KYC'd Mint users
+  // Check recipient status: on app? KYC'd?
+  let recipientStatus = "not_registered"; // not_registered | needs_kyc | ready
   if (recipientEmail) {
     try {
       const { data: recipientProfile } = await db.from("profiles").select("id").eq("email", recipientEmail).maybeSingle();
       if (recipientProfile?.id) {
         const { data: onboarding } = await db.from("user_onboarding").select("kyc_status").eq("user_id", recipientProfile.id).maybeSingle();
         const kycDone = onboarding?.kyc_status === "verified" || onboarding?.kyc_status === "onboarding_complete";
+        recipientStatus = kycDone ? "ready" : "needs_kyc";
         if (kycDone) {
           await db.from("notifications").insert({
             user_id: recipientProfile.id,
@@ -8629,7 +8890,7 @@ app.post("/api/gift/create-v2", async (req, res) => {
           });
         }
       }
-    } catch (e) { console.warn("[gift/create-v2] in-app notification:", e.message); }
+    } catch (e) { console.warn("[gift/create-v2] recipient status check:", e.message); }
   }
 
   const resend = getResendClient();
@@ -8642,40 +8903,175 @@ app.post("/api/gift/create-v2", async (req, res) => {
           to: [senderAuthEmail],
           subject: `Your gift of ${asset_name} has been sent 🎁`,
           html: `
-<div style="font-family:Inter,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#ffffff">
-  <h2 style="font-size:22px;font-weight:700;color:#0f172a;margin:0 0 8px">Gift sent! 🎁</h2>
-  <p style="font-size:15px;color:#475569;margin:0 0 24px">Hi ${senderProfile?.first_name || "there"}, your gift of <strong>R${amountRands.toFixed(2)}</strong> in <strong>${asset_name}</strong> to ${recipient_first_name} ${recipient_last_name} has been sent successfully.</p>
-  <div style="background:#f8f7ff;border:1px solid #e2d9ff;border-radius:16px;padding:20px;margin-bottom:24px">
-    <p style="font-size:12px;font-weight:600;color:#7c3aed;text-transform:uppercase;letter-spacing:0.08em;margin:0 0 6px">What happens next?</p>
-    <p style="font-size:13px;color:#475569;margin:0">Share the 6-digit claim code with ${recipient_first_name}. They'll need it along with their SA ID number to claim the gift on Mint. The gift expires in 4 hours.</p>
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f1eef6;font-family:'Inter','Helvetica Neue',Arial,sans-serif">
+<div style="max-width:480px;margin:0 auto;background:#ffffff;border-radius:0 0 16px 16px;overflow:hidden">
+  <!-- Header -->
+  <div style="background:linear-gradient(135deg,#c4b5fd 0%,#a78bfa 30%,#8b5cf6 60%,#7c3aed 100%);padding:40px 32px 48px;text-align:center">
+    <div style="margin-bottom:24px">
+      <img src="${APP_URL}/assets/LOGO 2 WHITE MINT.svg" alt="Mint" width="56" height="56" style="display:inline-block" />
+    </div>
+    <div style="font-size:56px;line-height:1;margin-bottom:16px">🎁</div>
+    <h1 style="font-family:'Inter','Helvetica Neue',Arial,sans-serif;font-size:28px;font-weight:800;color:#ffffff;margin:0 0 6px;letter-spacing:-0.5px">gift sent!</h1>
+    <p style="font-family:'Inter','Helvetica Neue',Arial,sans-serif;font-size:13px;font-weight:600;color:rgba(255,255,255,0.75);margin:0;text-transform:uppercase;letter-spacing:2px">doing gifting differently</p>
   </div>
-  <a href="${APP_URL}" style="display:block;background:#6d28d9;color:#ffffff;text-decoration:none;text-align:center;padding:14px 24px;border-radius:12px;font-size:15px;font-weight:700;margin-bottom:24px">Open Mint App</a>
-  <p style="font-size:12px;color:#94a3b8;text-align:center;margin:0">Mint (Pty) Ltd is a registered FSP (55118).</p>
-</div>`,
+
+  <!-- Body -->
+  <div style="padding:32px 28px 24px">
+    <p style="font-size:15px;color:#475569;line-height:1.6;margin:0 0 24px">Hi ${senderProfile?.first_name || "there"}, your gift of <strong>R${amountRands.toFixed(2)}</strong> in <strong>${asset_name}</strong> to ${recipient_first_name} ${recipient_last_name} has been sent successfully.</p>
+
+    <div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);border:1px solid #e2d9ff;border-radius:16px;padding:24px;margin-bottom:24px">
+      <p style="font-size:12px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px">What happens next?</p>
+      <table style="width:100%;border-collapse:collapse">
+        <tr>
+          <td style="padding:6px 12px 6px 0;vertical-align:top;width:24px">
+            <div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">1</div>
+          </td>
+          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5"><strong>Share the 6-digit claim code</strong> with ${recipient_first_name} (find it in your Sent Gifts page)</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 12px 6px 0;vertical-align:top">
+            <div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">2</div>
+          </td>
+          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5">${recipient_first_name} enters the code + their <strong>SA ID number</strong> on the Mint app</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 12px 6px 0;vertical-align:top">
+            <div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">3</div>
+          </td>
+          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5">The investment is <strong>transferred to their portfolio</strong> — you'll get a notification when they claim</td>
+        </tr>
+      </table>
+    </div>
+
+    <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:12px;padding:14px 16px;margin-bottom:24px">
+      <p style="font-size:13px;color:#92400e;margin:0;line-height:1.5">⏱ This gift <strong>expires in 4 hours</strong>. You can extend or cancel it from your Sent Gifts page.</p>
+    </div>
+
+    <a href="${APP_URL}" style="display:block;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#ffffff;text-decoration:none;text-align:center;padding:16px 24px;border-radius:14px;font-size:16px;font-weight:700;margin-bottom:20px">View Sent Gifts</a>
+    <p style="font-size:12px;color:#94a3b8;text-align:center;margin:0">Mint (Pty) Ltd is a registered FSP (55118).</p>
+  </div>
+</div>
+</body>
+</html>`,
         });
         console.log(`[gift/create-v2] Sender confirmation sent to ${senderAuthEmail}`);
       } catch (e) { console.warn("[gift/create-v2] sender email:", e.message); }
     }
 
-    // Recipient notification email (no amount shown)
+    // Recipient notification email — content depends on their status
     if (recipientEmail) {
+      let emailSteps, emailCta, emailSubject;
+      if (recipientStatus === "not_registered") {
+        emailSubject = `You've been gifted an investment — sign up on Mint to claim it 🎁`;
+        emailSteps = `
+        <tr>
+          <td style="padding:6px 12px 6px 0;vertical-align:top;width:24px">
+            <div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">1</div>
+          </td>
+          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5"><strong>Sign up</strong> for a free Mint account</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 12px 6px 0;vertical-align:top">
+            <div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">2</div>
+          </td>
+          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5">Complete your <strong>FICA verification</strong> (takes ~2 min)</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 12px 6px 0;vertical-align:top">
+            <div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">3</div>
+          </td>
+          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5">Ask <strong>${senderName}</strong> for the 6-digit code, then tap <strong>Claim a Gift</strong> and enter the code + your SA ID</td>
+        </tr>`;
+        emailCta = "Sign Up on Mint";
+      } else if (recipientStatus === "needs_kyc") {
+        emailSubject = `${senderName} gifted you an investment — complete KYC to claim 🎁`;
+        emailSteps = `
+        <tr>
+          <td style="padding:6px 12px 6px 0;vertical-align:top;width:24px">
+            <div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">1</div>
+          </td>
+          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5">Open the Mint app and complete your <strong>FICA verification</strong></td>
+        </tr>
+        <tr>
+          <td style="padding:6px 12px 6px 0;vertical-align:top">
+            <div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">2</div>
+          </td>
+          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5">Ask <strong>${senderName}</strong> for the 6-digit claim code</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 12px 6px 0;vertical-align:top">
+            <div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">3</div>
+          </td>
+          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5">Tap <strong>Claim a Gift</strong> and enter the code + your SA ID number</td>
+        </tr>`;
+        emailCta = "Complete KYC on Mint";
+      } else {
+        emailSubject = `${senderName} gifted you an investment on Mint 🎁`;
+        emailSteps = `
+        <tr>
+          <td style="padding:6px 12px 6px 0;vertical-align:top;width:24px">
+            <div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">1</div>
+          </td>
+          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5">Ask <strong>${senderName}</strong> for the 6-digit claim code</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 12px 6px 0;vertical-align:top">
+            <div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">2</div>
+          </td>
+          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5">Sign in to the Mint app and tap <strong>Claim a Gift</strong></td>
+        </tr>
+        <tr>
+          <td style="padding:6px 12px 6px 0;vertical-align:top">
+            <div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">3</div>
+          </td>
+          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5">Enter the code + your SA ID number</td>
+        </tr>`;
+        emailCta = "Open Mint App";
+      }
+
       try {
         await resend.emails.send({
           from: "Mint <noreply@mymint.co.za>",
           to: [recipientEmail],
-          subject: `${senderName} gifted you an investment on Mint 🎁`,
+          subject: emailSubject,
           html: `
-<div style="font-family:Inter,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#ffffff">
-  <h2 style="font-size:22px;font-weight:700;color:#0f172a;margin:0 0 8px">${senderName} gifted you an investment 🎁</h2>
-  <p style="font-size:15px;color:#475569;margin:0 0 24px">You've received an investment in <strong>${asset_name}</strong> on Mint.</p>
-  <div style="background:#f8f7ff;border:1px solid #e2d9ff;border-radius:16px;padding:24px;text-align:center;margin-bottom:24px">
-    <p style="font-size:14px;color:#475569;margin:0">Ask ${senderName} for the 6-digit claim code, then open the Mint app, tap <strong>Claim a Gift</strong> and enter the code + your SA ID number.</p>
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f1eef6;font-family:'Inter','Helvetica Neue',Arial,sans-serif">
+<div style="max-width:480px;margin:0 auto;background:#ffffff;border-radius:0 0 16px 16px;overflow:hidden">
+  <!-- Header -->
+  <div style="background:linear-gradient(135deg,#c4b5fd 0%,#a78bfa 30%,#8b5cf6 60%,#7c3aed 100%);padding:40px 32px 48px;text-align:center">
+    <div style="margin-bottom:24px">
+      <img src="${APP_URL}/assets/LOGO 2 WHITE MINT.svg" alt="Mint" width="56" height="56" style="display:inline-block" />
+    </div>
+    <div style="font-size:56px;line-height:1;margin-bottom:16px">🎁</div>
+    <h1 style="font-family:'Inter','Helvetica Neue',Arial,sans-serif;font-size:28px;font-weight:800;color:#ffffff;margin:0 0 6px;letter-spacing:-0.5px">you received a gift</h1>
+    <p style="font-family:'Inter','Helvetica Neue',Arial,sans-serif;font-size:13px;font-weight:600;color:rgba(255,255,255,0.75);margin:0;text-transform:uppercase;letter-spacing:2px">doing gifting differently</p>
   </div>
-  <a href="${APP_URL}" style="display:block;background:#6d28d9;color:#ffffff;text-decoration:none;text-align:center;padding:14px 24px;border-radius:12px;font-size:15px;font-weight:700;margin-bottom:24px">Open Mint App</a>
-  <p style="font-size:12px;color:#94a3b8;text-align:center;margin:0">This gift expires in 4 hours. Mint (Pty) Ltd is a registered FSP (55118).</p>
-</div>`,
+
+  <!-- Body -->
+  <div style="padding:32px 28px 24px">
+    <h2 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 8px">${senderName} sent you a gift</h2>
+    <p style="font-size:15px;color:#475569;line-height:1.6;margin:0 0 24px">You've been gifted an investment in <strong>${asset_name}</strong> on Mint.</p>
+
+    <div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);border:1px solid #e2d9ff;border-radius:16px;padding:24px;margin-bottom:24px">
+      <p style="font-size:12px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px">How to claim your gift</p>
+      <table style="width:100%;border-collapse:collapse">${emailSteps}</table>
+    </div>
+
+    <a href="${APP_URL}" style="display:block;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#ffffff;text-decoration:none;text-align:center;padding:16px 24px;border-radius:14px;font-size:16px;font-weight:700;margin-bottom:20px">${emailCta}</a>
+
+    <p style="font-size:12px;color:#94a3b8;text-align:center;line-height:1.5;margin:0">This gift expires in 4 hours.<br>Mint (Pty) Ltd is a registered FSP (55118).</p>
+  </div>
+</div>
+</body>
+</html>`,
         });
-        console.log(`[gift/create-v2] Recipient email sent to ${recipientEmail}`);
+        console.log(`[gift/create-v2] Recipient email sent to ${recipientEmail} (status: ${recipientStatus})`);
       } catch (e) { console.warn("[gift/create-v2] recipient email:", e.message); }
     }
   } else {
@@ -8787,7 +9183,8 @@ app.post("/api/gift/claim-v2", async (req, res) => {
       user_id: user.id, direction: "credit",
       name: `Gift Received — ${gift.asset_name}`, description: "Investment gift claimed",
       amount: gift.amount, store_reference: `GIFT2-CLAIM-${gift.id}`,
-      currency: "ZAR", status: "posted", transaction_date: now, created_at: now,
+      currency: "ZAR", status: "posted", settlement_status: "pending",
+      transaction_date: now, created_at: now,
     });
   } catch (e) { console.warn("[gift/claim-v2] tx:", e.message); }
 
@@ -8805,6 +9202,17 @@ app.post("/api/gift/claim-v2", async (req, res) => {
       payload: { action: "gift_claimed", gift_id: gift.id, asset_name: gift.asset_name },
     });
   } catch (e) { console.warn("[gift/claim-v2] sender notification:", e.message); }
+
+  // Receiver confirmation notification
+  try {
+    await db.from("notifications").insert({
+      user_id: user.id,
+      title: "Gift claimed successfully!",
+      body: `You claimed ${gift.asset_name}. It will appear in your portfolio once the order is filled.`,
+      type: "investment",
+      payload: { action: "gift_claim_confirmed", gift_id: gift.id, asset_name: gift.asset_name },
+    });
+  } catch (e) { console.warn("[gift/claim-v2] receiver notification:", e.message); }
 
   return res.json({ success: true, asset_name: gift.asset_name, portfolio_redirect: true });
 });
@@ -8874,8 +9282,8 @@ app.post("/api/gift/expire", async (req, res) => {
   return res.json({ success: true });
 });
 
-// Updated GET /api/gift/sent — active/history split
-app.get("/api/gift/sent", async (req, res) => {
+// Claim expired/cancelled gift to sender's own portfolio
+app.post("/api/gift/claim-to-self", async (req, res) => {
   const authHeader = req.headers.authorization || "";
   const token = authHeader.replace("Bearer ", "");
   const db = supabaseAdmin || supabase;
@@ -8884,29 +9292,59 @@ app.get("/api/gift/sent", async (req, res) => {
   const { data: { user }, error: authErr } = await db.auth.getUser(token);
   if (authErr || !user) return res.status(401).json({ error: "Unauthorized" });
 
-  const { data: gifts, error } = await db.from("gift_claims")
-    .select("id, amount, asset_type, asset_name, token, status, message, expires_at, created_at, claimed_at, cancelled_at")
-    .eq("sender_user_id", user.id).order("created_at", { ascending: false }).limit(100);
+  const { gift_id } = req.body || {};
+  if (!gift_id) return res.status(400).json({ error: "gift_id is required." });
 
-  if (error) return res.status(500).json({ error: "Failed to load gifts." });
+  const { data: gift } = await db.from("gift_claims")
+    .select("*")
+    .eq("id", gift_id).eq("sender_user_id", user.id).maybeSingle();
 
-  const parseRecipientName = (msg) => {
-    try { const p = JSON.parse(msg || "{}"); return [p.fn, p.ln].filter(Boolean).join(" ") || null; } catch { return null; }
-  };
-  const parseMsg = (msg) => {
-    try { return JSON.parse(msg || "{}").msg || null; } catch { return null; }
-  };
+  if (!gift) return res.status(404).json({ error: "Gift not found." });
+  if (gift.status === "claimed") return res.status(400).json({ error: "This gift has already been claimed." });
+  if (gift.status === "pending_claim") return res.status(400).json({ error: "This gift is still active. Cancel or wait for it to expire first." });
 
-  const formatted = (gifts || []).map(g => ({
-    ...g,
-    recipient_name: parseRecipientName(g.message),
-    personal_message: parseMsg(g.message),
-  }));
+  // Only allow for expired or cancelled gifts
+  if (gift.status !== "expired" && gift.status !== "cancelled") {
+    return res.status(400).json({ error: "This gift cannot be added to your portfolio." });
+  }
 
-  return res.json({
-    active: formatted.filter(g => g.status === "pending_claim"),
-    history: formatted.filter(g => g.status !== "pending_claim"),
+  // Allocate holdings to sender
+  let holdingsCreated = 0;
+  if (gift.asset_type === "strategy" && gift.strategy_id) {
+    const { data: strategy } = await db.from("strategies_c").select("id, holdings").eq("id", gift.strategy_id).maybeSingle();
+    holdingsCreated = await giftAllocateStrategyHoldings(db, user.id, gift.strategy_id, strategy?.holdings || [], gift.amount);
+  } else if (gift.asset_type === "stock" && gift.security_id) {
+    const result = await giftAllocateStockHolding(db, user.id, gift.security_id, gift.amount);
+    holdingsCreated = result > 0 ? 1 : 0;
+  }
+
+  if (holdingsCreated === 0) return res.status(500).json({ error: "Failed to allocate holdings." });
+
+  // Deduct refunded amount from wallet (since they were already refunded on expiry)
+  const amountRands = gift.amount / 100;
+  const { data: wallet } = await db.from("wallets").select("balance").eq("user_id", user.id).maybeSingle();
+  if (!wallet || (wallet.balance || 0) < amountRands) {
+    return res.status(400).json({ error: `Insufficient wallet balance. You need R${amountRands.toFixed(2)} to add this to your portfolio.` });
+  }
+  await db.from("wallets").update({ balance: wallet.balance - amountRands }).eq("user_id", user.id);
+
+  // Create transaction
+  const now = new Date().toISOString();
+  await db.from("transactions").insert({
+    user_id: user.id, direction: "debit",
+    name: `Self-claimed Gift — ${gift.asset_name}`,
+    description: "Expired gift added to own portfolio",
+    amount: gift.amount, store_reference: `GIFT2-SELF-${gift.id}`,
+    currency: "ZAR", status: "posted", settlement_status: "pending",
+    transaction_date: now, created_at: now,
   });
+
+  // Update gift status
+  await db.from("gift_claims").update({
+    status: "claimed", recipient_user_id: user.id, claimed_at: now,
+  }).eq("id", gift.id);
+
+  return res.json({ success: true, asset_name: gift.asset_name });
 });
 
 // ─── End gift routes ─────────────────────────────────────────────────────────
