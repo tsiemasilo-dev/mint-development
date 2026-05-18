@@ -51,6 +51,53 @@ const getMinFromPrice = (price) => {
 };
 
 
+/**
+ * Enrich an array of securities with live intraday prices from stock_intraday_c.
+ * Adds `intradayPrice` (in Rands) to each security using the latest timestamp row.
+ * Requires each security to have an `id` field (the securities_c PK).
+ *
+ * @param {Array} securities - Already-fetched securities with `id` field
+ * @returns {Promise<Array>} Same array with `intradayPrice` added where available
+ */
+export const enrichSecuritiesWithIntradayPrices = async (securities) => {
+  if (!supabase || !securities?.length) return securities;
+
+  const ids = securities.map((s) => s.id).filter(Boolean);
+  if (!ids.length) return securities;
+
+  try {
+    const { data: intradayRows, error } = await supabase
+      .from("stock_intraday_c")
+      .select("security_id, current_price, timestamp")
+      .in("security_id", ids)
+      .order("timestamp", { ascending: false });
+
+    if (error) {
+      console.warn("[enrichSecuritiesWithIntradayPrices] Error fetching intraday prices:", error.message);
+      return securities;
+    }
+
+    const latestBySecurityId = new Map();
+    for (const row of intradayRows || []) {
+      if (!latestBySecurityId.has(row.security_id)) {
+        latestBySecurityId.set(row.security_id, row);
+      }
+    }
+
+    return securities.map((sec) => {
+      const intraday = latestBySecurityId.get(sec.id);
+      if (!intraday?.current_price) return sec;
+      return {
+        ...sec,
+        intradayPrice: Number(intraday.current_price) / 100,
+      };
+    });
+  } catch (err) {
+    console.warn("[enrichSecuritiesWithIntradayPrices] Exception:", err);
+    return securities;
+  }
+};
+
 export const calculateMinInvestmentSync = (strategy, holdingsBySymbol) => {
   const holdings = getHoldingsArray(strategy);
   if (!holdings.length) {
@@ -63,9 +110,9 @@ export const calculateMinInvestmentSync = (strategy, holdingsBySymbol) => {
     if (!rawSymbol) continue;
     const normalizedSym = normalizeSymbol(rawSymbol);
     const security = holdingsBySymbol.get(rawSymbol) || holdingsBySymbol.get(normalizedSym);
-    if (!security?.last_price) continue;
+    const pricePerShare = security?.intradayPrice ?? (security?.last_price ? Number(security.last_price) : null);
+    if (!pricePerShare) continue;
     foundAny = true;
-    const pricePerShare = Number(security.last_price);
     const shares = Number(holding.shares || holding.quantity || 1);
     if (shares <= 0) continue;
     total += shares * pricePerShare;
