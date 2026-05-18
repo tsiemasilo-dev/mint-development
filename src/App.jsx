@@ -10,11 +10,11 @@ import AppLayout from "./layouts/AppLayout.jsx";
 import { useProfile } from "./lib/useProfile";
 import { NotificationsProvider, createWelcomeNotification, useNotificationsContext } from "./lib/NotificationsContext.jsx";
 import HomePage from "./pages/HomePage.jsx";
-import CreditHome from "./pages/credit/CreditHome";
-import NewPortfolioPage from "./pages/NewPortfolioPage.jsx";
-import MarketsPage from "./pages/MarketsPage.jsx";
 import ChildInvestModal from "./components/ChildInvestModal.jsx";
-import MorePage from "./pages/MorePage.jsx";
+const CreditHome = lazy(() => import("./pages/credit/CreditHome"));
+const NewPortfolioPage = lazy(() => import("./pages/NewPortfolioPage.jsx"));
+const MarketsPage = lazy(() => import("./pages/MarketsPage.jsx"));
+const MorePage = lazy(() => import("./pages/MorePage.jsx"));
 
 const AuthPage = lazy(() => import("./pages/AuthPage.jsx"));
 const CreditApplyPage = lazy(() => import("./pages/CreditApplyPage.jsx"));
@@ -151,9 +151,13 @@ const recoveryTokens = isRecoveryMode ? getTokensFromHash(initialHash) : null;
 const mainTabs = ['home', 'credit', 'transact', 'investments', 'markets', 'news', 'deposit', 'more', 'welcome', 'auth'];
 
 const App = () => {
-  const [currentPage, setCurrentPage] = useState(
-    hasError ? "linkExpired" : initialGiftToken ? "giftClaim" : (isRecoveryMode ? "auth" : (storedSession ? "home" : "welcome"))
-  );
+  const initialPage = hasError ? "linkExpired" : initialGiftToken ? "giftClaim" : (isRecoveryMode ? "auth" : (storedSession ? "home" : "welcome"));
+  const [currentPage, setCurrentPage] = useState(initialPage);
+  const [mountedTabs, setMountedTabs] = useState(() => {
+    const initial = new Set(['home']);
+    if (mainTabs.includes(initialPage)) initial.add(initialPage);
+    return initial;
+  });
   const [giftToken, setGiftToken] = useState(initialGiftToken);
   const [giftPreviewData, setGiftPreviewData] = useState(null);
   const [pageParams, setPageParams] = useState(null);
@@ -339,6 +343,7 @@ const App = () => {
     } else {
       navigationHistory.current = [];
       setPreviousPageName(null);
+      setMountedTabs(prev => prev.has(page) ? prev : new Set([...prev, page]));
     }
 
     startTransition(() => setCurrentPage(page));
@@ -351,6 +356,7 @@ const App = () => {
       setMarketsChildFilter(null);
       setSelectedChildForInvest(null);
     }
+    setMountedTabs(prev => prev.has(tab) ? prev : new Set([...prev, tab]));
     startTransition(() => setCurrentPage(tab));
   }, []);
 
@@ -701,7 +707,7 @@ const App = () => {
     const schedule = window.requestIdleCallback
       ? () => window.requestIdleCallback(prefetch, { timeout: 3000 })
       : () => setTimeout(prefetch, 1500);
-    const t = setTimeout(schedule, 500);
+    const t = setTimeout(schedule, 3000);
     return () => clearTimeout(t);
   }, [isAuthenticated]);
 
@@ -1228,136 +1234,148 @@ const App = () => {
         <>
           {showOpenStrategiesMaintenance && <MaintenanceModal onClose={() => setShowOpenStrategiesMaintenance(false)} />}
           <GiftReceivedPopup onClaim={() => navigateTo("giftCodeEntry")} />
-          {/* Home tab – always mounted */}
+          {/* Home tab – mount on first visit */}
           <div style={{ display: currentPage === 'home' ? 'block' : 'none' }}>
-            <AppLayout
-              activeTab={currentPage}
-              onTabChange={handleTabChange}
-              onWithdraw={handleWithdrawRequest}
-              onShowComingSoon={handleShowComingSoon}
-              modal={modal}
-              onCloseModal={closeModal}
-            >
-              <HomePage
-                onOpenNotifications={() => { setNotificationReturnPage("home"); navigateTo("notifications"); }}
-                onOpenMintBalance={() => navigateTo("mintBalance")}
-                onOpenActivity={() => navigateTo("activity")}
-                onOpenActions={() => navigateTo("actions")}
-                onOpenInvestments={() => handleTabChange("investments")}
-                onOpenCredit={() => handleTabChange("credit")}
-                onOpenCreditApply={() => navigateTo("creditApply")}
-                onOpenCreditRepay={() => navigateTo("creditRepay")}
-                onOpenInvest={() => { setMarketsInitialView("openstrategies"); navigateTo("markets"); }}
-                onOpenWithdraw={handleWithdrawRequest}
-                onOpenSettings={() => navigateTo("settings")}
-                onOpenStrategies={() => { setMarketsInitialView("openstrategies"); navigateTo("markets"); }}
-                onOpenMarkets={() => { setMarketsInitialView("invest"); navigateTo("markets"); }}
-                onOpenDeposit={() => handleTabChange("deposit")}
-                onOpenNews={() => { handleTabChange("news"); }}
-                onOpenNewsArticle={(articleId) => { setSelectedArticleId(articleId); navigateTo("newsArticle"); }}
-                onOpenInstantLiquidity={() => navigateTo("instantLiquidity")}
-                onOpenFamily={() => navigateTo("familyDashboard")}
-                onSelectMember={(child) => { setSelectedFamilyChild(child); navigateTo("childDashboard"); }}
-                onOpenInsure={() => navigateTo("funeralCover")}
-                onNavigate={navigateTo}
-              />
-            </AppLayout>
-          </div>
-          {/* Investments tab – always mounted */}
-          <div style={{ display: currentPage === 'investments' ? 'block' : 'none' }}>
-            <AppLayout
-              activeTab={currentPage}
-              onTabChange={handleTabChange}
-              onWithdraw={handleWithdrawRequest}
-              onShowComingSoon={handleShowComingSoon}
-              modal={modal}
-              onCloseModal={closeModal}
-            >
-              <NewPortfolioPage
-                onBack={goBack}
-                onOpenNotifications={() => { setNotificationReturnPage("investments"); navigateTo("notifications"); }}
-                onOpenInvest={() => navigateTo("markets")}
-                onOpenStrategies={() => { setMarketsInitialView("openstrategies"); navigateTo("markets"); }}
-                deepLink={portfolioDeepLink}
-                onDeepLinkConsumed={() => setPortfolioDeepLink(null)}
-              />
-            </AppLayout>
-          </div>
-          {/* Markets tab – always mounted */}
-          <div style={{ display: currentPage === 'markets' ? 'block' : 'none' }}>
-            <AppLayout
-              activeTab={currentPage}
-              onTabChange={handleTabChange}
-              onWithdraw={() => {}}
-              onShowComingSoon={() => {}}
-              modal={null}
-              onCloseModal={() => {}}
-            >
-              <MarketsPage
-                onBack={undefined}
-                initialViewMode={marketsInitialView}
-                onViewModeChange={(mode) => setMarketsInitialView(mode)}
-                onOpenNotifications={() => { setNotificationReturnPage("markets"); navigateTo("notifications"); }}
-                onOpenStockDetail={(security) => { setSelectedChildForInvest(null); setMarketsChildFilter(null); setSelectedSecurity(security); navigateTo("stockDetail"); }}
-                onOpenNewsArticle={(articleId) => { setSelectedArticleId(articleId); navigateTo("newsArticle"); }}
-                onOpenFactsheet={(strategy) => { if (!marketsChildFilter) setSelectedChildForInvest(null); setSelectedStrategy(strategy); navigateTo("factsheet"); }}
-                childFilter={marketsChildFilter}
-              />
-            </AppLayout>
-          </div>
-          {/* News tab – always mounted */}
-          <div style={{ display: currentPage === 'news' ? 'block' : 'none' }}>
-            <AppLayout
-              activeTab="news"
-              onTabChange={handleTabChange}
-              onWithdraw={() => {}}
-              onShowComingSoon={() => {}}
-              modal={null}
-              onCloseModal={() => {}}
-            >
-              <MarketsPage
-                onBack={undefined}
-                initialViewMode="news"
-                onViewModeChange={() => {}}
-                onOpenNotifications={() => { setNotificationReturnPage("news"); navigateTo("notifications"); }}
-                onOpenStockDetail={(security) => { setSelectedChildForInvest(null); setSelectedSecurity(security); navigateTo("stockDetail"); }}
-                onOpenNewsArticle={(articleId) => { setSelectedArticleId(articleId); navigateTo("newsArticle"); }}
-                onOpenFactsheet={(strategy) => { setSelectedChildForInvest(null); setSelectedStrategy(strategy); navigateTo("factsheet"); }}
-              />
-            </AppLayout>
-          </div>
-          {/* Credit tab – always mounted */}
-          <div style={{ display: currentPage === 'credit' ? 'block' : 'none' }}>
-            <AppLayout
-              activeTab={currentPage}
-              onTabChange={handleTabChange}
-              onWithdraw={handleWithdrawRequest}
-              onShowComingSoon={handleShowComingSoon}
-              modal={modal}
-              onCloseModal={closeModal}
-            >
-              <CreditHome
-                profile={profile}
-                onOpenNotifications={() => {
-                  setNotificationReturnPage("credit");
-                  navigateTo("notifications");
-                }}
+            {mountedTabs.has('home') && (
+              <AppLayout
+                activeTab={currentPage}
                 onTabChange={handleTabChange}
-              />
-            </AppLayout>
+                onWithdraw={handleWithdrawRequest}
+                onShowComingSoon={handleShowComingSoon}
+                modal={modal}
+                onCloseModal={closeModal}
+              >
+                <HomePage
+                  onOpenNotifications={() => { setNotificationReturnPage("home"); navigateTo("notifications"); }}
+                  onOpenMintBalance={() => navigateTo("mintBalance")}
+                  onOpenActivity={() => navigateTo("activity")}
+                  onOpenActions={() => navigateTo("actions")}
+                  onOpenInvestments={() => handleTabChange("investments")}
+                  onOpenCredit={() => handleTabChange("credit")}
+                  onOpenCreditApply={() => navigateTo("creditApply")}
+                  onOpenCreditRepay={() => navigateTo("creditRepay")}
+                  onOpenInvest={() => { setMarketsInitialView("openstrategies"); navigateTo("markets"); }}
+                  onOpenWithdraw={handleWithdrawRequest}
+                  onOpenSettings={() => navigateTo("settings")}
+                  onOpenStrategies={() => { setMarketsInitialView("openstrategies"); navigateTo("markets"); }}
+                  onOpenMarkets={() => { setMarketsInitialView("invest"); navigateTo("markets"); }}
+                  onOpenDeposit={() => handleTabChange("deposit")}
+                  onOpenNews={() => { handleTabChange("news"); }}
+                  onOpenNewsArticle={(articleId) => { setSelectedArticleId(articleId); navigateTo("newsArticle"); }}
+                  onOpenInstantLiquidity={() => navigateTo("instantLiquidity")}
+                  onOpenFamily={() => navigateTo("familyDashboard")}
+                  onSelectMember={(child) => { setSelectedFamilyChild(child); navigateTo("childDashboard"); }}
+                  onOpenInsure={() => navigateTo("funeralCover")}
+                  onNavigate={navigateTo}
+                />
+              </AppLayout>
+            )}
           </div>
-          {/* More tab – always mounted */}
+          {/* Investments tab – mount on first visit */}
+          <div style={{ display: currentPage === 'investments' ? 'block' : 'none' }}>
+            {mountedTabs.has('investments') && (
+              <AppLayout
+                activeTab={currentPage}
+                onTabChange={handleTabChange}
+                onWithdraw={handleWithdrawRequest}
+                onShowComingSoon={handleShowComingSoon}
+                modal={modal}
+                onCloseModal={closeModal}
+              >
+                <NewPortfolioPage
+                  onBack={goBack}
+                  onOpenNotifications={() => { setNotificationReturnPage("investments"); navigateTo("notifications"); }}
+                  onOpenInvest={() => navigateTo("markets")}
+                  onOpenStrategies={() => { setMarketsInitialView("openstrategies"); navigateTo("markets"); }}
+                  deepLink={portfolioDeepLink}
+                  onDeepLinkConsumed={() => setPortfolioDeepLink(null)}
+                />
+              </AppLayout>
+            )}
+          </div>
+          {/* Markets tab – mount on first visit */}
+          <div style={{ display: currentPage === 'markets' ? 'block' : 'none' }}>
+            {mountedTabs.has('markets') && (
+              <AppLayout
+                activeTab={currentPage}
+                onTabChange={handleTabChange}
+                onWithdraw={() => {}}
+                onShowComingSoon={() => {}}
+                modal={null}
+                onCloseModal={() => {}}
+              >
+                <MarketsPage
+                  onBack={undefined}
+                  initialViewMode={marketsInitialView}
+                  onViewModeChange={(mode) => setMarketsInitialView(mode)}
+                  onOpenNotifications={() => { setNotificationReturnPage("markets"); navigateTo("notifications"); }}
+                  onOpenStockDetail={(security) => { setSelectedChildForInvest(null); setMarketsChildFilter(null); setSelectedSecurity(security); navigateTo("stockDetail"); }}
+                  onOpenNewsArticle={(articleId) => { setSelectedArticleId(articleId); navigateTo("newsArticle"); }}
+                  onOpenFactsheet={(strategy) => { if (!marketsChildFilter) setSelectedChildForInvest(null); setSelectedStrategy(strategy); navigateTo("factsheet"); }}
+                  childFilter={marketsChildFilter}
+                />
+              </AppLayout>
+            )}
+          </div>
+          {/* News tab – mount on first visit */}
+          <div style={{ display: currentPage === 'news' ? 'block' : 'none' }}>
+            {mountedTabs.has('news') && (
+              <AppLayout
+                activeTab="news"
+                onTabChange={handleTabChange}
+                onWithdraw={() => {}}
+                onShowComingSoon={() => {}}
+                modal={null}
+                onCloseModal={() => {}}
+              >
+                <MarketsPage
+                  onBack={undefined}
+                  initialViewMode="news"
+                  onViewModeChange={() => {}}
+                  onOpenNotifications={() => { setNotificationReturnPage("news"); navigateTo("notifications"); }}
+                  onOpenStockDetail={(security) => { setSelectedChildForInvest(null); setSelectedSecurity(security); navigateTo("stockDetail"); }}
+                  onOpenNewsArticle={(articleId) => { setSelectedArticleId(articleId); navigateTo("newsArticle"); }}
+                  onOpenFactsheet={(strategy) => { setSelectedChildForInvest(null); setSelectedStrategy(strategy); navigateTo("factsheet"); }}
+                />
+              </AppLayout>
+            )}
+          </div>
+          {/* Credit tab – mount on first visit */}
+          <div style={{ display: currentPage === 'credit' ? 'block' : 'none' }}>
+            {mountedTabs.has('credit') && (
+              <AppLayout
+                activeTab={currentPage}
+                onTabChange={handleTabChange}
+                onWithdraw={handleWithdrawRequest}
+                onShowComingSoon={handleShowComingSoon}
+                modal={modal}
+                onCloseModal={closeModal}
+              >
+                <CreditHome
+                  profile={profile}
+                  onOpenNotifications={() => {
+                    setNotificationReturnPage("credit");
+                    navigateTo("notifications");
+                  }}
+                  onTabChange={handleTabChange}
+                />
+              </AppLayout>
+            )}
+          </div>
+          {/* More tab – mount on first visit */}
           <div style={{ display: currentPage === 'more' ? 'block' : 'none' }}>
-            <AppLayout
-              activeTab={currentPage}
-              onTabChange={handleTabChange}
-              onWithdraw={handleWithdrawRequest}
-              onShowComingSoon={handleShowComingSoon}
-              modal={modal}
-              onCloseModal={closeModal}
-            >
-              <MorePage onNavigate={navigateTo} onBeforeLogout={handleBeforeLogout} />
-            </AppLayout>
+            {mountedTabs.has('more') && (
+              <AppLayout
+                activeTab={currentPage}
+                onTabChange={handleTabChange}
+                onWithdraw={handleWithdrawRequest}
+                onShowComingSoon={handleShowComingSoon}
+                modal={modal}
+                onCloseModal={closeModal}
+              >
+                <MorePage onNavigate={navigateTo} onBeforeLogout={handleBeforeLogout} />
+              </AppLayout>
+            )}
           </div>
         </>
       </Suspense>
