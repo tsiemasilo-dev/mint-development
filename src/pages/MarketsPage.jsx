@@ -356,7 +356,7 @@ registerCacheResetCallback(() => {
   _mkHoldingsSecurities = null;
 });
 
-const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNewsArticle, onOpenFactsheet, initialViewMode, onViewModeChange }) => {
+const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNewsArticle, onOpenFactsheet, initialViewMode, onViewModeChange, childFilter }) => {
   const { profile, loading: profileLoading } = useProfile();
   const [portalTarget, setPortalTarget] = useState(null);
   const { lastUpdated: pricesLastUpdated } = useRealtimePrices();
@@ -379,6 +379,12 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       setViewMode(initialViewMode);
     }
   }, [initialViewMode]);
+
+  useEffect(() => {
+    if (childFilter) {
+      setViewMode("openstrategies");
+    }
+  }, [childFilter]);
 
   useEffect(() => {
     onViewModeChange?.(viewMode);
@@ -916,6 +922,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const filteredStrategies = useMemo(() => {
     // Use publicStrategies for OpenStrategies view
     const results = publicStrategiesWithMetrics.filter((strategy) => {
+      if (childFilter && !strategy.is_kid_strategy) return false;
+
       const matchesName =
         strategiesSearchQuery.length === 0
           ? true
@@ -1395,8 +1403,19 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
             <NotificationBell onClick={onOpenNotifications} />
           </header>
 
+          {/* Child filter banner */}
+          {childFilter && (
+            <div className="flex items-center gap-2 rounded-2xl bg-white/15 px-4 py-2.5 ring-1 ring-white/20">
+              <span className="text-lg">👶</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-semibold tracking-[0.15em] uppercase text-white/60">Investing for</p>
+                <p className="text-sm font-semibold text-white truncate">{childFilter.name || childFilter.first_name || "Child"}</p>
+              </div>
+            </div>
+          )}
+
           {/* Toggle between Mint Basket and Markets */}
-          {viewMode !== "news" && (
+          {viewMode !== "news" && !childFilter && (
             <div className="flex gap-1.5 rounded-2xl bg-black/20 p-1 backdrop-blur-sm ring-1 ring-white/10">
               <button
                 onClick={() => {
