@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase";
 import { checkOnboardingComplete } from "../lib/checkOnboardingComplete";
 import { useOnboardingStatus } from "../lib/useOnboardingStatus";
 import { formatChangePct, getChangeColor } from "../lib/strategyData.js";
-import { buildHoldingsBySymbol, calculateMinInvestmentSync, getAdjustedShares, computeExtendedSummary } from "../lib/strategyUtils";
+import { buildHoldingsBySymbol, calculateMinInvestmentSync, getAdjustedShares, computeExtendedSummary, enrichSecuritiesWithIntradayPrices } from "../lib/strategyUtils";
 import {
   Area,
   Line,
@@ -227,12 +227,13 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
 
         const { data, error } = await supabase
           .from("securities_c")
-          .select("symbol, name, logo_url, last_price, change_percent, sector, isin")
+          .select("id, symbol, name, logo_url, last_price, change_percent, sector, isin")
           .in("symbol", tickers);
 
         if (error) throw error;
         if (isMounted && data) {
-          setHoldingsSecurities(data);
+          const enriched = await enrichSecuritiesWithIntradayPrices(data);
+          setHoldingsSecurities(enriched);
         }
       } catch (error) {
         console.error("Error fetching holdings securities:", error);
