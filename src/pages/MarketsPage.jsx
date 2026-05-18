@@ -389,6 +389,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   useEffect(() => {
     if (childFilter) {
       setViewMode("openstrategies");
+    } else {
+      setViewMode(initialViewMode || "openstrategies");
     }
   }, [childFilter]);
 
