@@ -1416,7 +1416,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
             <NotificationBell onClick={onOpenNotifications} />
           </header>
 
-          {/* Toggle between Mint Basket and Markets */}
+          {/* Toggle between Mint Baskets and Markets */}
           {viewMode !== "news" && !childFilter && (
             <div className="flex gap-1.5 rounded-2xl bg-black/20 p-1 backdrop-blur-sm ring-1 ring-white/10">
               <button
@@ -1430,7 +1430,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                     : "text-white/60 hover:text-white/85"
                 }`}
               >
-                Mint Basket
+                Mint Baskets
               </button>
               <button
                 onClick={() => {

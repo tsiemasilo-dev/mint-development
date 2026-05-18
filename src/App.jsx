@@ -1247,7 +1247,7 @@ const App = () => {
                 onOpenCredit={() => handleTabChange("credit")}
                 onOpenCreditApply={() => navigateTo("creditApply")}
                 onOpenCreditRepay={() => navigateTo("creditRepay")}
-                onOpenInvest={() => { setMarketsInitialView(null); navigateTo("markets"); }}
+                onOpenInvest={() => { setMarketsInitialView("openstrategies"); navigateTo("markets"); }}
                 onOpenWithdraw={handleWithdrawRequest}
                 onOpenSettings={() => navigateTo("settings")}
                 onOpenStrategies={() => { setMarketsInitialView("openstrategies"); navigateTo("markets"); }}
