@@ -785,6 +785,7 @@ const App = () => {
               onOpenWithdraw={noOp}
               onOpenSettings={noOp}
               onOpenFamily={() => navigateTo("familyDashboard")}
+              onSelectMember={(child) => { setSelectedFamilyChild(child); navigateTo("childDashboard"); }}
               onOpenInsure={() => navigateTo("funeralCover")}
             />
           </AppLayout>
@@ -1256,6 +1257,7 @@ const App = () => {
                 onOpenNewsArticle={(articleId) => { setSelectedArticleId(articleId); navigateTo("newsArticle"); }}
                 onOpenInstantLiquidity={() => navigateTo("instantLiquidity")}
                 onOpenFamily={() => navigateTo("familyDashboard")}
+                onSelectMember={(child) => { setSelectedFamilyChild(child); navigateTo("childDashboard"); }}
                 onOpenInsure={() => navigateTo("funeralCover")}
                 onNavigate={navigateTo}
               />
