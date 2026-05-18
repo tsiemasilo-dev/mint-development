@@ -127,9 +127,11 @@ function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onCl
     setSaving(true);
     setError("");
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
       const res = await fetch("/api/child-wallet", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           action: "transfer",
           family_member_id: child.id,
