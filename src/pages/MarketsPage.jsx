@@ -7,7 +7,8 @@ import { getMarketsSecuritiesWithMetrics, getSecurityPrices, clearMarketDataCach
 import { useRealtimePrices } from "../lib/useRealtimePrices";
 import { getStrategiesWithMetrics, getPublicStrategies, formatChangePct, formatChangeAbs, getChangeColor } from "../lib/strategyData.js";
 import { useProfile } from "../lib/useProfile";
-import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Star, Wallet, BarChart3, Check, ArrowLeft, ChevronDown, ChevronUp } from "lucide-react";
+import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Star } from "lucide-react";
+import ChildInvestModal from "../components/ChildInvestModal.jsx";
 import { saveMarketsInvestFilters, loadMarketsInvestFilters, saveMarketsStrategyFilters, loadMarketsStrategyFilters, buildInvestChips, buildChipsFromFilters } from "../lib/usePersistedFilters.js";
 import NotificationBell from "../components/NotificationBell";
 import FamilyDropdown from "../components/FamilyDropdown";
@@ -401,11 +402,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const [selectedStrategyAnalyticsLoading, setSelectedStrategyAnalyticsLoading] = useState(false);
 
   // Child invest modal state
-  const [childInvestStep, setChildInvestStep] = useState(null); // 'preview' | 'amount' | 'success'
-  const [childInvestUnits, setChildInvestUnits] = useState(1);
-  const [childInvestSaving, setChildInvestSaving] = useState(false);
-  const [childInvestError, setChildInvestError] = useState('');
-  const [childFeeExpanded, setChildFeeExpanded] = useState(false);
+  const [showChildInvestModal, setShowChildInvestModal] = useState(false);
   const [strategyYtdById, setStrategyYtdById] = useState({});
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [sheetOffset, setSheetOffset] = useState(0);
@@ -1251,67 +1248,6 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       ? "#dc2626"
       : "#94a3b8";
 
-  // ── Child invest computed values ──
-  const childBalance = childFilter?.available_balance || 0;
-  const childFirstName = childFilter?.first_name || 'Child';
-  const childStrategyMinimum = useMemo(() => {
-    if (!childFilter || !selectedStrategy) return null;
-    return calculateMinInvestmentSync(selectedStrategy, holdingsBySymbol);
-  }, [childFilter, selectedStrategy, holdingsBySymbol]);
-  const childMinInvCents = childStrategyMinimum ? childStrategyMinimum * 100 : 0;
-  const childBaseAmountCents = childInvestUnits * childMinInvCents;
-  const childBaseAmount = childBaseAmountCents / 100;
-  const childNumAssets = useMemo(() => {
-    if (!selectedStrategy) return 0;
-    const list = getHoldingsArray(selectedStrategy);
-    return Array.isArray(list) ? list.length : 0;
-  }, [selectedStrategy]);
-  const childFees = useMemo(() => {
-    const bufferedBase = childBaseAmount * (1 + CHILD_CASH_BUFFER_RATE);
-    const brokerAmount = bufferedBase * CHILD_BROKER_FEE_RATE;
-    const isinTotal = CHILD_ISIN_FEE_PER_ASSET * childNumAssets;
-    const transactionAmount = bufferedBase * CHILD_TRANSACTION_FEE_RATE;
-    const totalCost = bufferedBase + brokerAmount + isinTotal + transactionAmount;
-    return { bufferedBase, brokerAmount, isinTotal, transactionAmount, totalCost };
-  }, [childBaseAmount, childNumAssets]);
-  const childTotalCostCents = Math.round(childFees.totalCost * 100);
-  const childInsufficient = childTotalCostCents > childBalance;
-
-  function closeChildInvest() {
-    setSelectedStrategy(null);
-    setChildInvestStep(null);
-    setChildInvestUnits(1);
-    setChildInvestError('');
-    setChildFeeExpanded(false);
-    setChildInvestSaving(false);
-  }
-
-  async function handleChildInvest() {
-    if (!selectedStrategy || !childFilter) return;
-    if (childBaseAmountCents <= 0) { setChildInvestError('Select a valid investment amount.'); return; }
-    if (childInsufficient) { setChildInvestError("Insufficient funds in child's wallet."); return; }
-    setChildInvestSaving(true);
-    setChildInvestError('');
-    try {
-      const res = await fetch('/api/child-invest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          family_member_id: childFilter.id,
-          strategy_id: selectedStrategy.id,
-          amount: childTotalCostCents,
-          base_amount: childBaseAmountCents,
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) { setChildInvestError(json.error || 'Investment failed.'); return; }
-      setChildInvestStep('success');
-    } catch {
-      setChildInvestError('Something went wrong.');
-    } finally {
-      setChildInvestSaving(false);
-    }
-  }
 
   const resetSheetPosition = () => {
     setSheetOffset(0);
@@ -2012,14 +1948,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                         key={strategy.id}
                         type="button"
                         onClick={() => {
-                          const s = { ...strategy, slug: strategy.slug };
-                          setSelectedStrategy(s);
-                          if (childFilter) {
-                            setChildInvestStep('preview');
-                            setChildInvestUnits(1);
-                            setChildInvestError('');
-                            setChildFeeExpanded(false);
-                          }
+                          setSelectedStrategy({ ...strategy, slug: strategy.slug });
+                          if (childFilter) setShowChildInvestModal(true);
                         }}
                         className="flex-shrink-0 w-80 rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md hover:border-slate-200 p-4 transition-all snap-center"
                       >
@@ -2414,8 +2344,21 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
         </div>
       , portalTarget)}
 
-      {/* Child Invest Modal — preview → amount → success */}
-      {childFilter && selectedStrategy && childInvestStep && portalTarget && createPortal(
+      {childFilter && selectedStrategy && showChildInvestModal && (
+        <ChildInvestModal
+          child={childFilter}
+          strategy={selectedStrategy}
+          initialStep="preview"
+          onClose={() => { setSelectedStrategy(null); setShowChildInvestModal(false); }}
+          onOpenFactsheet={(strategy) => {
+            setShowChildInvestModal(false);
+            onOpenFactsheet(strategy);
+          }}
+        />
+      )}
+
+      {/* Child Invest Modal (legacy disabled) */}
+      {childFilter && selectedStrategy && showChildInvestModal && false && createPortal(
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 overscroll-contain"
           style={{ paddingBottom: "calc(var(--navbar-height, 64px) + 8px)" }}
