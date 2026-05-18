@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useId } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ArrowLeft, Wallet, BarChart3, Check, ChevronDown, ChevronUp, TrendingUp, Sparkles } from "lucide-react";
+import { X, ArrowLeft, Wallet, BarChart3, Check, ChevronDown, ChevronUp, TrendingUp, Sparkles, Info } from "lucide-react";
 import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { supabase } from "../lib/supabase.js";
 import { calculateMinInvestmentSync, buildHoldingsBySymbol, getHoldingsArray } from "../lib/strategyUtils";
@@ -31,6 +31,9 @@ export default function ChildInvestModal({
   const [analytics, setAnalytics] = useState(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [activeLabel, setActiveLabel] = useState(null);
+
+  const [showFeeModal, setShowFeeModal] = useState(false);
+  const [feeChecking, setFeeChecking] = useState(false);
 
   const childBalance = child?.available_balance || 0;
   const childFirstName = child?.first_name || "Child";
@@ -149,6 +152,29 @@ export default function ChildInvestModal({
       if (!res.ok) { setError(json.error || "Investment failed."); return; }
       setStep("success");
     } catch { setError("Something went wrong."); } finally { setSaving(false); }
+  }
+
+  async function handleInvestNowClick() {
+    if (!minimum || feeChecking) return;
+    setFeeChecking(true);
+    try {
+      const { data: existingHoldings } = await supabase
+        .from("stock_holdings_c")
+        .select("id, strategy_id")
+        .eq("family_member_id", child.id)
+        .eq("Status", "active")
+        .neq("strategy_id", strategy.id)
+        .limit(1);
+      if (existingHoldings && existingHoldings.length > 0) {
+        setShowFeeModal(true);
+      } else {
+        setStep("amount");
+      }
+    } catch {
+      setStep("amount");
+    } finally {
+      setFeeChecking(false);
+    }
   }
 
   const portalTarget = document.getElementById("modal-root") || document.body;
@@ -389,12 +415,17 @@ export default function ChildInvestModal({
               {/* Actions */}
               <div className="space-y-2.5 pt-1">
                 <button
-                  onClick={() => setStep("amount")}
-                  disabled={!minimum}
+                  onClick={handleInvestNowClick}
+                  disabled={!minimum || feeChecking}
                   className="w-full rounded-2xl py-4 text-sm font-bold text-white shadow-lg active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{ background: "linear-gradient(135deg,#4f46e5,#7c3aed)" }}
                 >
-                  {minimumLoading ? "Loading..." : "Invest Now"}
+                  {minimumLoading || feeChecking ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <span className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                      {feeChecking ? "Checking..." : "Loading..."}
+                    </span>
+                  ) : "Invest Now"}
                 </button>
                 {onOpenFactsheet && (
                   <button
@@ -534,6 +565,81 @@ export default function ChildInvestModal({
           )}
         </motion.div>
       </motion.div>
+
+      {/* Additional Strategy Fee bottom sheet */}
+      <AnimatePresence>
+        {showFeeModal && (
+          <motion.div
+            className="fixed inset-0 z-[10000] flex items-end justify-center"
+            style={{ background: "rgba(15,10,30,0.55)" }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowFeeModal(false)}
+          >
+            <motion.div
+              className="relative w-full max-w-md rounded-t-[28px] bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl overflow-hidden"
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 28, stiffness: 320 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Gradient accent strip */}
+              <div className="h-1 w-full" style={{ background: "linear-gradient(90deg,#7c3aed,#6366f1,#8b5cf6)" }} />
+              {/* Drag handle */}
+              <div className="flex justify-center pt-2.5 pb-1">
+                <div className="h-[3px] w-9 rounded-full bg-slate-200" />
+              </div>
+
+              <div className="px-6 pt-4 pb-6">
+                {/* Icon */}
+                <div className="relative mx-auto mb-4 flex h-16 w-16 items-center justify-center">
+                  <div className="absolute inset-0 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 opacity-20 animate-pulse" />
+                  <Info className="h-8 w-8 text-violet-600 relative z-10" />
+                </div>
+
+                <h3 className="text-center text-lg font-bold text-slate-900 mb-1">Additional Strategy Fee</h3>
+                <p className="text-center text-xs font-semibold text-violet-600 mb-3">R29/month per strategy</p>
+                <p className="text-center text-sm text-slate-600 mb-4">
+                  {childFirstName} already holds an active strategy. Investing in an additional strategy will incur a recurring fee of{" "}
+                  <span className="font-semibold text-slate-900">R29 per month</span> for this strategy.
+                </p>
+
+                <div className="mb-5 rounded-2xl bg-violet-50 border border-violet-100 p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-slate-600">Monthly strategy fee</p>
+                    <p className="text-xs font-semibold text-slate-900">R29.00 / month</p>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-slate-600">Applies to</p>
+                    <p className="text-xs font-semibold text-slate-900">{strategy?.name}</p>
+                  </div>
+                  <p className="text-[11px] text-slate-500 pt-1 border-t border-violet-100">
+                    This fee will be reflected in the fee breakdown and charged monthly while {childFirstName} holds this strategy.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => { setShowFeeModal(false); setStep("amount"); }}
+                  className="w-full rounded-2xl py-3 text-sm font-semibold text-white shadow-lg shadow-violet-200/60 mb-2"
+                  style={{ background: "linear-gradient(135deg,#4f46e5,#7c3aed)" }}
+                >
+                  I Understand, Continue
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowFeeModal(false)}
+                  className="w-full rounded-2xl border border-slate-200 bg-white py-2.5 text-xs font-semibold text-slate-600"
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </AnimatePresence>,
     portalTarget
   );
