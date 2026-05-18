@@ -378,21 +378,17 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const [strategiesSearchQuery, setStrategiesSearchQuery] = useState("");
   const [newsSearchQuery, setNewsSearchQuery] = useState("");
   const [showOpenStrategiesMaintenance, setShowOpenStrategiesMaintenance] = useState(false);
-  const [viewMode, setViewMode] = useState(initialViewMode || "invest"); // "openstrategies", "invest", "news"
-
-  useEffect(() => {
-    if (initialViewMode && initialViewMode !== viewMode) {
-      setViewMode(initialViewMode);
-    }
-  }, [initialViewMode]);
+  const [viewMode, setViewMode] = useState(
+    childFilter ? "openstrategies" : (initialViewMode || "invest")
+  ); // "openstrategies", "invest", "news"
 
   useEffect(() => {
     if (childFilter) {
       setViewMode("openstrategies");
-    } else {
-      setViewMode(initialViewMode || "openstrategies");
+    } else if (initialViewMode) {
+      setViewMode(initialViewMode);
     }
-  }, [childFilter]);
+  }, [childFilter, initialViewMode]);
 
   useEffect(() => {
     onViewModeChange?.(viewMode);
