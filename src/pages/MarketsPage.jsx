@@ -995,6 +995,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
     return sorted;
   }, [
     publicStrategiesWithMetrics,
+    childFilter,
     strategiesSearchQuery,
     selectedRisks,
     selectedMinInvestment,
