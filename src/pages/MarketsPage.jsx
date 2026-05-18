@@ -1399,7 +1399,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 }
               />
             )}
-            <h1 className={childFilter ? "text-[10px] font-semibold tracking-[0.18em] uppercase" : "text-lg font-semibold"}>{childFilter ? "Child Market" : "Markets"}</h1>
+            <h1 className={childFilter ? "text-sm font-bold tracking-[0.18em] uppercase" : "text-lg font-semibold"}>{childFilter ? "Child Market" : "Markets"}</h1>
             <NotificationBell onClick={onOpenNotifications} />
           </header>
 
