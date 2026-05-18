@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useId } from "react";
 import { createPortal } from "react-dom";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { X, ArrowLeft, Wallet, BarChart3, Check, ChevronDown, ChevronUp } from "lucide-react";
 import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { supabase } from "../lib/supabase.js";
@@ -166,26 +166,51 @@ export default function ChildInvestModal({
   }, [strategy]);
 
   return createPortal(
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 px-4 overscroll-contain"
-      style={{ paddingBottom: "calc(var(--navbar-height, 64px) + 8px)" }}
-    >
-      <button type="button" className="absolute inset-0 h-full w-full cursor-default" onClick={onClose} aria-label="Close" />
+    <AnimatePresence>
       <motion.div
-        className="relative z-10 flex w-full max-w-sm flex-col overflow-hidden rounded-[32px] bg-white shadow-2xl"
-        style={{ maxHeight: "calc(90vh - var(--navbar-height, 64px) - 16px)" }}
-        initial={{ opacity: 0, scale: 0.95, y: 16 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 16 }}
-        transition={{ type: "spring", stiffness: 380, damping: 38 }}
+        className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/50 backdrop-blur-sm"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       >
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 z-10"
-        >
-          <X className="h-4 w-4" />
-        </button>
+      <motion.div
+        className="relative flex w-full max-w-md flex-col overflow-hidden rounded-t-3xl bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl"
+        style={{ maxHeight: "90vh" }}
+        initial={{ y: "100%" }}
+        animate={{ y: 0 }}
+        exit={{ y: "100%" }}
+        transition={{ type: "spring", damping: 25, stiffness: 300 }}
+      >
+        {/* Drag handle */}
+        <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
+          <div className="h-1 w-10 rounded-full bg-slate-200" />
+        </div>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            {step === "amount" && (
+              <button
+                type="button"
+                onClick={() => setStep("preview")}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition active:scale-95"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+              </button>
+            )}
+            <h2 className="text-base font-semibold text-slate-900">
+              {step === "success" ? "Investment Placed" : step === "amount" ? "Invest Amount" : (strategy?.short_name || strategy?.name)}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
 
         {step === "success" && (
           <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6">
@@ -193,8 +218,7 @@ export default function ChildInvestModal({
               <div className="h-16 w-16 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: "linear-gradient(135deg,#e9d5ff,#d8b4fe)" }}>
                 <Check className="h-8 w-8 text-purple-600" />
               </div>
-              <p className="text-lg font-bold text-slate-900">Investment Placed!</p>
-              <p className="text-sm text-slate-500 mt-2">
+              <p className="text-sm text-slate-500 mt-4">
                 {`R${baseAmount.toFixed(2)} invested in ${strategy?.name} for ${childFirstName}.`}
               </p>
               <button onClick={onClose} className="mt-6 w-full rounded-xl py-3.5 text-sm font-bold text-white active:scale-[0.98]" style={{ background: "linear-gradient(135deg,#1e1b4b,#312e81)" }}>
@@ -212,15 +236,6 @@ export default function ChildInvestModal({
               <span className="text-xs font-bold text-purple-800 ml-auto tabular-nums">
                 R{(childBalance / 100).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
-            </div>
-
-            <div className="flex items-start gap-3 mb-5">
-              <div className="flex-1">
-                <h2 className="text-lg font-semibold text-slate-900">{strategy?.name}</h2>
-                <p className="text-sm text-slate-500">
-                  {minimumLoading ? "Calculating..." : minimum ? `Min. R${minimum.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
-                </p>
-              </div>
             </div>
 
             {minimum && (
@@ -328,22 +343,6 @@ export default function ChildInvestModal({
 
         {step === "amount" && (
           <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6" style={{ WebkitOverflowScrolling: "touch" }}>
-            <div className="flex items-center gap-3 mb-5">
-              <button
-                onClick={() => setStep("preview")}
-                className="h-8 w-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition active:scale-95"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" />
-              </button>
-              <div className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg,#ede9fe,#ddd6fe)" }}>
-                <BarChart3 className="h-5 w-5 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-base font-bold text-slate-900">Invest Amount</p>
-                <p className="text-xs text-slate-400">{strategy?.short_name || strategy?.name}</p>
-              </div>
-            </div>
-
             <div className="flex items-center gap-2 rounded-xl bg-purple-50 border border-purple-100 px-4 py-2.5 mb-4">
               <Wallet className="h-3.5 w-3.5 text-purple-500" />
               <span className="text-xs font-semibold text-purple-600">{childFirstName}'s balance:</span>
@@ -454,7 +453,8 @@ export default function ChildInvestModal({
           </div>
         )}
       </motion.div>
-    </div>,
+      </motion.div>
+    </AnimatePresence>,
     portalTarget
   );
 }
