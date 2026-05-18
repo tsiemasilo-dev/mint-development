@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useEffect, useId } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ArrowLeft, Wallet, BarChart3, Check, ChevronDown, ChevronUp } from "lucide-react";
+import { X, ArrowLeft, Wallet, BarChart3, Check, ChevronDown, ChevronUp, TrendingUp, Sparkles } from "lucide-react";
 import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { supabase } from "../lib/supabase.js";
-import { calculateMinInvestmentSync, buildHoldingsBySymbol, getHoldingsArray, normalizeSymbol, getAdjustedShares } from "../lib/strategyUtils";
+import { calculateMinInvestmentSync, buildHoldingsBySymbol, getHoldingsArray } from "../lib/strategyUtils";
 
 const BROKER_FEE_RATE = 0.0025;
 const ISIN_FEE_PER_ASSET = 69;
@@ -126,7 +126,7 @@ export default function ChildInvestModal({
   }, [analytics]);
 
   const ytdNum = strategy?.r_ytd != null ? (Math.abs(strategy.r_ytd) <= 1 ? strategy.r_ytd * 100 : strategy.r_ytd) : null;
-  const lineColor = (ytdNum ?? 0) > 0 ? "#16a34a" : (ytdNum ?? 0) < 0 ? "#dc2626" : "#94a3b8";
+  const lineColor = (ytdNum ?? 0) > 0 ? "#10b981" : (ytdNum ?? 0) < 0 ? "#ef4444" : "#94a3b8";
 
   async function handleInvest() {
     if (baseAmountCents <= 0) { setError("Select a valid investment amount."); return; }
@@ -165,294 +165,374 @@ export default function ChildInvestModal({
     });
   }, [strategy]);
 
+  const fmt = (n) => n.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   return createPortal(
     <AnimatePresence>
       <motion.div
-        className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/50 backdrop-blur-sm"
+        className="fixed inset-0 z-[9999] flex items-end justify-center"
+        style={{ background: "rgba(15,10,30,0.65)" }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       >
-      <motion.div
-        className="relative flex w-full max-w-md flex-col overflow-hidden rounded-t-3xl bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl"
-        style={{ maxHeight: "90vh" }}
-        initial={{ y: "100%" }}
-        animate={{ y: 0 }}
-        exit={{ y: "100%" }}
-        transition={{ type: "spring", damping: 25, stiffness: 300 }}
-      >
-        {/* Drag handle */}
-        <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
-          <div className="h-1 w-10 rounded-full bg-slate-200" />
-        </div>
+        <motion.div
+          className="relative flex w-full max-w-md flex-col overflow-hidden rounded-t-[28px] bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl"
+          style={{ maxHeight: "92vh" }}
+          initial={{ y: "100%" }}
+          animate={{ y: 0 }}
+          exit={{ y: "100%" }}
+          transition={{ type: "spring", damping: 28, stiffness: 320 }}
+        >
+          {/* Gradient accent strip */}
+          <div className="h-1 w-full flex-shrink-0" style={{ background: "linear-gradient(90deg,#7c3aed,#6366f1,#8b5cf6)" }} />
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 flex-shrink-0">
-          <div className="flex items-center gap-2">
-            {step === "amount" && initialStep !== "amount" && (
-              <button
-                type="button"
-                onClick={() => setStep("preview")}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition active:scale-95"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" />
-              </button>
-            )}
-            <h2 className="text-base font-semibold text-slate-900">
-              {step === "success" ? "Investment Placed" : step === "amount" ? "Invest Amount" : (strategy?.short_name || strategy?.name)}
-            </h2>
+          {/* Drag handle */}
+          <div className="flex justify-center pt-2.5 pb-1 flex-shrink-0">
+            <div className="h-[3px] w-9 rounded-full bg-slate-200" />
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
 
-        {step === "success" && (
-          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6">
-            <motion.div className="text-center py-4" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: "spring", stiffness: 300, damping: 25 }}>
-              <div className="h-16 w-16 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: "linear-gradient(135deg,#e9d5ff,#d8b4fe)" }}>
-                <Check className="h-8 w-8 text-purple-600" />
-              </div>
-              <p className="text-sm text-slate-500 mt-4">
-                {`R${baseAmount.toFixed(2)} invested in ${strategy?.name} for ${childFirstName}.`}
-              </p>
-              <button onClick={onClose} className="mt-6 w-full rounded-xl py-3.5 text-sm font-bold text-white active:scale-[0.98]" style={{ background: "linear-gradient(135deg,#1e1b4b,#312e81)" }}>
-                Done
-              </button>
-            </motion.div>
-          </div>
-        )}
-
-        {step === "preview" && (
-          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6" style={{ WebkitOverflowScrolling: "touch" }}>
-            <div className="flex items-center gap-2 rounded-xl bg-purple-50 border border-purple-100 px-4 py-2.5 mb-5">
-              <Wallet className="h-3.5 w-3.5 text-purple-500" />
-              <span className="text-xs font-semibold text-purple-600">{childFirstName}'s balance:</span>
-              <span className="text-xs font-bold text-purple-800 ml-auto tabular-nums">
-                R{(childBalance / 100).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-            </div>
-
-            {minimum && (
-              <div className="flex items-center gap-3 mb-5">
-                <p className="text-2xl font-semibold text-slate-900">R{minimum.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                <span className="rounded-full px-2.5 py-1 text-xs font-semibold bg-slate-100 text-slate-500">Min. investment</span>
-              </div>
-            )}
-
-            <div className="mb-5">
-              <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500">
-                <span>YTD return</span>
-                <div className="flex flex-col items-end gap-1">
-                  <span className={ytdNum > 0 ? "text-emerald-600" : ytdNum < 0 ? "text-rose-600" : "text-slate-500"}>
-                    {ytdNum != null ? `${ytdNum >= 0 ? "+" : ""}${ytdNum.toFixed(2)}%` : "—"}
-                  </span>
-                  {strategy?.ytd_as_of_date && (
-                    <span className="text-[10px] text-slate-400">{new Date(strategy.ytd_as_of_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
-                  )}
-                </div>
-              </div>
-              <div className="h-44 w-full">
-                {analyticsLoading ? (
-                  <div className="flex h-full items-end gap-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4">
-                    {[45, 65, 35, 80, 55, 70, 40, 90, 60, 50, 75, 85].map((h, i) => (
-                      <div key={i} className="flex-1 rounded-sm bg-slate-200 animate-pulse" style={{ height: `${h}%` }} />
-                    ))}
-                  </div>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={chartData} margin={{ top: 12, right: 16, left: 8, bottom: 28 }} onMouseMove={s => s?.activeLabel && setActiveLabel(s.activeLabel)} onMouseLeave={() => setActiveLabel(null)}>
-                      <defs>
-                        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor={lineColor} stopOpacity={0.25} />
-                          <stop offset="70%" stopColor={lineColor} stopOpacity={0.1} />
-                          <stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <ReferenceLine y={100} stroke="#e2e8f0" strokeDasharray="3 3" />
-                      {activeLabel && <ReferenceLine x={activeLabel} stroke="#CBD5E1" strokeOpacity={0.6} strokeDasharray="3 3" />}
-                      {activeLabel && (
-                        <Tooltip
-                          contentStyle={{ backgroundColor: "#ffffff", border: "none", borderRadius: "20px", padding: "3px 8px", boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }}
-                          labelStyle={{ display: "none" }}
-                          formatter={v => { if (!chartBaseValue) return [`${Number(v).toFixed(2)}`, "Index"]; const d = ((Number(v) - chartBaseValue) / chartBaseValue) * 100; return [`${d >= 0 ? "+" : ""}${d.toFixed(2)}%`, "Change"]; }}
-                          cursor={{ strokeDasharray: "3 3" }}
-                        />
-                      )}
-                      <XAxis dataKey="dateLabel" tick={{ fontSize: 11, fill: "#64748b" }} axisLine={{ stroke: "#e2e8f0" }} tickLine={false} height={24} />
-                      <YAxis hide domain={chartDomain} />
-                      <Area type="monotone" dataKey="returnPct" stroke="transparent" fill={`url(#${gradientId})`} dot={false} />
-                      <Line type="monotone" dataKey="returnPct" stroke={lineColor} strokeWidth={2} dot={false} activeDot={false} />
-                    </ComposedChart>
-                  </ResponsiveContainer>
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 py-3 flex-shrink-0">
+            <div className="flex items-center gap-2.5">
+              {step === "amount" && initialStep !== "amount" && (
+                <button
+                  type="button"
+                  onClick={() => setStep("preview")}
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition active:scale-95"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </button>
+              )}
+              <div>
+                <h2 className="text-[15px] font-bold text-slate-900 leading-tight">
+                  {step === "success" ? "Investment Placed!" : step === "amount" ? "Confirm Investment" : (strategy?.short_name || strategy?.name)}
+                </h2>
+                {step === "preview" && minimum && (
+                  <p className="text-[11px] text-slate-400 mt-0.5">Min. R{fmt(minimum)} per unit</p>
+                )}
+                {step === "amount" && (
+                  <p className="text-[11px] text-slate-400 mt-0.5">{strategy?.short_name || strategy?.name}</p>
                 )}
               </div>
             </div>
-
-            {tags.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-5">
-                {tags.map(tag => (
-                  <span key={tag} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600">{tag}</span>
-                ))}
-              </div>
-            )}
-
-            {holdings.slice(0, 5).length > 0 && (
-              <div className="mt-4 mb-4">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Top Holdings</p>
-                <div className="space-y-2">
-                  {holdings.slice(0, 5).map(h => (
-                    <div key={h.symbol} className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-slate-100 bg-white">
-                        {h.logo_url ? <img src={h.logo_url} alt={h.symbol} className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center bg-slate-100 text-xs font-bold text-slate-600">{h.symbol?.substring(0, 2)}</div>}
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-semibold text-slate-900">{h.name}</p>
-                        <p className="text-xs text-slate-500">{h.symbol}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="mt-6 space-y-3">
-              <button
-                onClick={() => setStep("amount")}
-                disabled={!minimum}
-                className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-4 font-semibold text-white shadow-lg transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Invest Now
-              </button>
-              {onOpenFactsheet && (
-                <button
-                  onClick={() => { onClose(); onOpenFactsheet(strategy); }}
-                  className="w-full rounded-2xl border border-slate-300 bg-white py-3 font-semibold text-slate-700 shadow-sm transition-all active:scale-95"
-                >
-                  View Factsheet
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {step === "amount" && (
-          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6" style={{ WebkitOverflowScrolling: "touch" }}>
-            <div className="flex items-center gap-2 rounded-xl bg-purple-50 border border-purple-100 px-4 py-2.5 mb-4">
-              <Wallet className="h-3.5 w-3.5 text-purple-500" />
-              <span className="text-xs font-semibold text-purple-600">{childFirstName}'s balance:</span>
-              <span className="text-xs font-bold text-purple-800 ml-auto tabular-nums">
-                R{(childBalance / 100).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 mb-4">
-              <div className="flex items-start gap-3 mb-3">
-                <div className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg,#ede9fe,#ddd6fe)" }}>
-                  <BarChart3 className="h-5 w-5 text-purple-600" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-slate-900">{strategy?.short_name || strategy?.name}</p>
-                  <p className="text-xs text-slate-500 mt-1">{strategy?.description?.substring(0, 60)}</p>
-                </div>
-              </div>
-              <div className="pt-3 border-t border-slate-100">
-                <p className="text-xs text-slate-500 mb-1">Minimum investment</p>
-                <p className="text-sm font-semibold text-slate-900">
-                  {minimumLoading ? "Calculating..." : minimum ? `R${minimum.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
-                </p>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 mb-4">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Investment Amount</p>
-              <div className="flex items-center justify-center gap-4">
-                <button
-                  onClick={() => setUnits(u => Math.max(1, u - 1))}
-                  disabled={units <= 1 || !minimum}
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition text-xl font-semibold leading-none"
-                >
-                  −
-                </button>
-                <div className="flex-1 text-center">
-                  <p className="text-3xl font-bold text-slate-900 tabular-nums">
-                    R{minimum && baseAmount > 0 ? baseAmount.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}
-                  </p>
-                  <p className="text-xs text-slate-500 mt-1">{units} unit{units !== 1 ? "s" : ""}</p>
-                </div>
-                <button
-                  onClick={() => setUnits(u => u + 1)}
-                  disabled={!minimum || insufficient}
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
-                >
-                  +
-                </button>
-              </div>
-            </div>
-
-            <div className="mb-4 rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
-              <button type="button" onClick={() => setFeeExpanded(v => !v)} className="w-full flex items-center justify-between p-4">
-                <h3 className="text-xs font-semibold text-slate-600">Fee Breakdown</h3>
-                {feeExpanded ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
-              </button>
-              {feeExpanded && (
-                <div className="px-4 pb-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1">
-                      <p className="text-xs text-slate-600">Investment Amount</p>
-                      <span className="text-xs text-slate-400" title="Includes 8% cash reserve">*</span>
-                    </div>
-                    <p className="text-xs font-semibold text-slate-900">R{fees.bufferedBase.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs text-slate-600">Broker Fee (0.25%)</p>
-                    <p className="text-xs font-semibold text-slate-900">R{fees.brokerAmount.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs text-slate-600">Custody Fee (R{ISIN_FEE_PER_ASSET.toFixed(2)} × {numAssets} asset{numAssets !== 1 ? "s" : ""})</p>
-                    <p className="text-xs font-semibold text-slate-900">R{fees.isinTotal.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs text-slate-600">Transaction Fee (3.8%)</p>
-                    <p className="text-xs font-semibold text-slate-900">R{fees.transactionAmount.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                  </div>
-                </div>
-              )}
-              <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-t border-slate-100">
-                <p className="text-xs font-semibold text-slate-700">Total Due Today</p>
-                <p className="text-sm font-bold text-slate-900">R{fees.totalCost.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-              </div>
-            </div>
-
-            {insufficient && (
-              <div className="rounded-lg bg-red-50 border border-red-200 p-3 mb-4">
-                <p className="text-xs font-semibold text-red-700">
-                  Insufficient funds. {childFirstName} needs R{(fees.totalCost - childBalance / 100).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} more.
-                </p>
-              </div>
-            )}
-
-            {error && (
-              <div className="rounded-lg bg-red-50 border border-red-200 p-3 mb-4">
-                <p className="text-xs font-semibold text-red-700">{error}</p>
-              </div>
-            )}
-
             <button
-              onClick={handleInvest}
-              disabled={insufficient || baseAmountCents <= 0 || saving || !minimum}
-              className="w-full rounded-2xl bg-purple-600 py-3.5 font-semibold text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              type="button"
+              onClick={onClose}
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition"
             >
-              {saving ? "Processing..." : "Confirm Investment"}
+              <X className="h-4 w-4" />
             </button>
           </div>
-        )}
-      </motion.div>
+
+          {/* ── SUCCESS ── */}
+          {step === "success" && (
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+              <motion.div
+                className="flex flex-col items-center px-6 pt-6 pb-8"
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ type: "spring", stiffness: 280, damping: 24 }}
+              >
+                {/* Icon */}
+                <div className="relative mb-5">
+                  <div className="h-20 w-20 rounded-3xl flex items-center justify-center shadow-lg" style={{ background: "linear-gradient(135deg,#7c3aed,#6366f1)" }}>
+                    <Check className="h-10 w-10 text-white" strokeWidth={2.5} />
+                  </div>
+                  <div className="absolute -top-1 -right-1 h-6 w-6 rounded-full bg-emerald-400 flex items-center justify-center shadow">
+                    <Sparkles className="h-3 w-3 text-white" />
+                  </div>
+                </div>
+
+                <p className="text-xl font-bold text-slate-900 mb-1">All done!</p>
+                <p className="text-sm text-slate-500 text-center leading-relaxed mb-6">
+                  <span className="font-semibold text-slate-700">R{fmt(baseAmount)}</span> invested in{" "}
+                  <span className="font-semibold text-slate-700">{strategy?.name}</span> for {childFirstName}.
+                </p>
+
+                {/* Summary card */}
+                <div className="w-full rounded-2xl border border-slate-100 bg-slate-50 p-4 mb-6 space-y-2.5">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-slate-500">Strategy</span>
+                    <span className="text-xs font-semibold text-slate-800">{strategy?.name}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-slate-500">Invested for</span>
+                    <span className="text-xs font-semibold text-slate-800">{childFirstName}</span>
+                  </div>
+                  <div className="h-px bg-slate-200" />
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-semibold text-slate-600">Base amount</span>
+                    <span className="text-xs font-bold text-slate-900">R{fmt(baseAmount)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-semibold text-slate-600">Total charged</span>
+                    <span className="text-xs font-bold text-slate-900">R{fmt(fees.totalCost)}</span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={onClose}
+                  className="w-full rounded-2xl py-4 text-sm font-bold text-white shadow-lg active:scale-[0.98] transition-transform"
+                  style={{ background: "linear-gradient(135deg,#4f46e5,#7c3aed)" }}
+                >
+                  Done
+                </button>
+              </motion.div>
+            </div>
+          )}
+
+          {/* ── PREVIEW ── */}
+          {step === "preview" && (
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pb-6" style={{ WebkitOverflowScrolling: "touch" }}>
+
+              {/* Balance pill */}
+              <div className="flex items-center gap-2 rounded-2xl px-4 py-3 mb-5" style={{ background: "linear-gradient(135deg,#f5f3ff,#ede9fe)" }}>
+                <div className="h-7 w-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg,#7c3aed,#6366f1)" }}>
+                  <Wallet className="h-3.5 w-3.5 text-white" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-[10px] font-semibold text-purple-500 uppercase tracking-wide">{childFirstName}'s wallet</p>
+                  <p className="text-sm font-bold text-purple-900 tabular-nums">
+                    R{(childBalance / 100).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                </div>
+                {minimum && (
+                  <div className="text-right">
+                    <p className="text-[10px] text-purple-400 uppercase tracking-wide">Min. invest</p>
+                    <p className="text-sm font-bold text-purple-800">R{fmt(minimum)}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Chart */}
+              <div className="mb-5">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <TrendingUp className="h-3.5 w-3.5 text-slate-400" />
+                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">YTD Performance</span>
+                  </div>
+                  {ytdNum != null && (
+                    <span className={`text-sm font-bold ${ytdNum > 0 ? "text-emerald-600" : ytdNum < 0 ? "text-rose-500" : "text-slate-500"}`}>
+                      {ytdNum >= 0 ? "+" : ""}{ytdNum.toFixed(2)}%
+                    </span>
+                  )}
+                </div>
+                <div className="h-40 w-full rounded-2xl overflow-hidden bg-slate-50 border border-slate-100">
+                  {analyticsLoading ? (
+                    <div className="flex h-full items-end gap-1.5 p-4">
+                      {[40, 60, 35, 75, 50, 65, 45, 85, 55, 70, 80, 90].map((h, i) => (
+                        <div key={i} className="flex-1 rounded-sm animate-pulse" style={{ height: `${h}%`, background: "linear-gradient(180deg,#ddd6fe,#ede9fe)" }} />
+                      ))}
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={chartData} margin={{ top: 12, right: 12, left: 4, bottom: 24 }} onMouseMove={s => s?.activeLabel && setActiveLabel(s.activeLabel)} onMouseLeave={() => setActiveLabel(null)}>
+                        <defs>
+                          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={lineColor} stopOpacity={0.3} />
+                            <stop offset="100%" stopColor={lineColor} stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <ReferenceLine y={100} stroke="#e2e8f0" strokeDasharray="3 3" />
+                        {activeLabel && <ReferenceLine x={activeLabel} stroke="#c4b5fd" strokeOpacity={0.7} strokeDasharray="3 3" />}
+                        {activeLabel && (
+                          <Tooltip
+                            contentStyle={{ backgroundColor: "#fff", border: "none", borderRadius: "14px", padding: "4px 10px", boxShadow: "0 4px 16px rgba(0,0,0,0.12)" }}
+                            labelStyle={{ display: "none" }}
+                            formatter={v => { if (!chartBaseValue) return [`${Number(v).toFixed(2)}`, ""]; const d = ((Number(v) - chartBaseValue) / chartBaseValue) * 100; return [`${d >= 0 ? "+" : ""}${d.toFixed(2)}%`, ""]; }}
+                          />
+                        )}
+                        <XAxis dataKey="dateLabel" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} height={20} />
+                        <YAxis hide domain={chartDomain} />
+                        <Area type="monotone" dataKey="returnPct" stroke="transparent" fill={`url(#${gradientId})`} dot={false} />
+                        <Line type="monotone" dataKey="returnPct" stroke={lineColor} strokeWidth={2.5} dot={false} activeDot={{ r: 4, fill: lineColor, strokeWidth: 0 }} />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+
+              {/* Tags */}
+              {tags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-5">
+                  {tags.map(tag => (
+                    <span key={tag} className="rounded-full px-3 py-1 text-[11px] font-semibold text-purple-700 border border-purple-100" style={{ background: "#f5f3ff" }}>{tag}</span>
+                  ))}
+                </div>
+              )}
+
+              {/* Holdings */}
+              {holdings.slice(0, 5).length > 0 && (
+                <div className="mb-5">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Top Holdings</p>
+                  <div className="space-y-2">
+                    {holdings.slice(0, 5).map((h, idx) => (
+                      <div key={h.symbol} className="flex items-center gap-3 rounded-xl px-3 py-2.5" style={{ background: idx % 2 === 0 ? "#fafafa" : "#fff" }}>
+                        <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-slate-100 bg-white shadow-sm flex-shrink-0">
+                          {h.logo_url
+                            ? <img src={h.logo_url} alt={h.symbol} className="h-full w-full object-cover" />
+                            : <div className="flex h-full w-full items-center justify-center text-[10px] font-bold text-slate-600" style={{ background: "linear-gradient(135deg,#ede9fe,#ddd6fe)" }}>{h.symbol?.substring(0, 2)}</div>
+                          }
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-slate-900 truncate">{h.name}</p>
+                          <p className="text-[11px] text-slate-400">{h.symbol}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="space-y-2.5 pt-1">
+                <button
+                  onClick={() => setStep("amount")}
+                  disabled={!minimum}
+                  className="w-full rounded-2xl py-4 text-sm font-bold text-white shadow-lg active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ background: "linear-gradient(135deg,#4f46e5,#7c3aed)" }}
+                >
+                  {minimumLoading ? "Loading..." : "Invest Now"}
+                </button>
+                {onOpenFactsheet && (
+                  <button
+                    onClick={() => { onClose(); onOpenFactsheet(strategy); }}
+                    className="w-full rounded-2xl border border-slate-200 bg-white py-3.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 active:scale-[0.98] transition-all"
+                  >
+                    View Factsheet
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── AMOUNT ── */}
+          {step === "amount" && (
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pb-6" style={{ WebkitOverflowScrolling: "touch" }}>
+
+              {/* Balance + strategy row */}
+              <div className="flex gap-3 mb-5">
+                <div className="flex-1 rounded-2xl p-3.5 border border-slate-100" style={{ background: "linear-gradient(135deg,#f5f3ff,#ede9fe)" }}>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Wallet className="h-3 w-3 text-purple-400" />
+                    <p className="text-[10px] font-bold text-purple-400 uppercase tracking-wide">{childFirstName}'s balance</p>
+                  </div>
+                  <p className="text-base font-bold text-purple-900 tabular-nums">
+                    R{(childBalance / 100).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div className="flex-1 rounded-2xl p-3.5 border border-slate-100 bg-white">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <BarChart3 className="h-3 w-3 text-indigo-400" />
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Min. per unit</p>
+                  </div>
+                  <p className="text-base font-bold text-slate-900 tabular-nums">
+                    {minimumLoading ? "…" : minimum ? `R${fmt(minimum)}` : "—"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Amount stepper */}
+              <div className="rounded-3xl border border-slate-100 bg-white shadow-sm p-5 mb-4">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center mb-4">Investment Amount</p>
+                <div className="flex items-center justify-center gap-5 mb-3">
+                  <button
+                    onClick={() => setUnits(u => Math.max(1, u - 1))}
+                    disabled={units <= 1 || !minimum}
+                    className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 text-xl font-semibold disabled:opacity-30 disabled:cursor-not-allowed active:scale-90 transition-all shadow-sm"
+                  >
+                    −
+                  </button>
+                  <div className="flex-1 text-center">
+                    <p className="text-4xl font-black text-slate-900 tabular-nums tracking-tight">
+                      {minimum && baseAmount > 0 ? `R${fmt(baseAmount)}` : "R0.00"}
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-1">{units} unit{units !== 1 ? "s" : ""} × R{minimum ? fmt(minimum) : "0.00"}</p>
+                  </div>
+                  <button
+                    onClick={() => setUnits(u => u + 1)}
+                    disabled={!minimum || insufficient}
+                    className="flex h-11 w-11 items-center justify-center rounded-2xl text-white text-xl font-semibold disabled:opacity-30 disabled:cursor-not-allowed active:scale-90 transition-all shadow-md"
+                    style={{ background: "linear-gradient(135deg,#6366f1,#7c3aed)" }}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              {/* Fee breakdown */}
+              <div className="mb-4 rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setFeeExpanded(v => !v)}
+                  className="w-full flex items-center justify-between px-4 py-3.5"
+                >
+                  <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Fee Breakdown</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-400">R{fmt(fees.totalCost - baseAmount)}</span>
+                    {feeExpanded ? <ChevronUp className="h-3.5 w-3.5 text-slate-400" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-400" />}
+                  </div>
+                </button>
+                {feeExpanded && (
+                  <div className="px-4 pb-3 space-y-2.5 border-t border-slate-50">
+                    <div className="pt-3 flex justify-between">
+                      <p className="text-xs text-slate-500">Investment + 8% reserve</p>
+                      <p className="text-xs font-semibold text-slate-800">R{fmt(fees.bufferedBase)}</p>
+                    </div>
+                    <div className="flex justify-between">
+                      <p className="text-xs text-slate-500">Broker fee (0.25%)</p>
+                      <p className="text-xs font-semibold text-slate-800">R{fmt(fees.brokerAmount)}</p>
+                    </div>
+                    <div className="flex justify-between">
+                      <p className="text-xs text-slate-500">Custody (R{ISIN_FEE_PER_ASSET} × {numAssets})</p>
+                      <p className="text-xs font-semibold text-slate-800">R{fmt(fees.isinTotal)}</p>
+                    </div>
+                    <div className="flex justify-between">
+                      <p className="text-xs text-slate-500">Transaction fee (3.8%)</p>
+                      <p className="text-xs font-semibold text-slate-800">R{fmt(fees.transactionAmount)}</p>
+                    </div>
+                  </div>
+                )}
+                <div className="flex items-center justify-between px-4 py-3.5 border-t border-slate-100" style={{ background: "linear-gradient(135deg,#f5f3ff,#ede9fe)" }}>
+                  <p className="text-xs font-bold text-purple-700">Total Due Today</p>
+                  <p className="text-base font-black text-purple-900">R{fmt(fees.totalCost)}</p>
+                </div>
+              </div>
+
+              {/* Errors */}
+              {insufficient && (
+                <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 mb-4 flex items-start gap-2">
+                  <div className="h-1.5 w-1.5 rounded-full bg-red-400 mt-1.5 flex-shrink-0" />
+                  <p className="text-xs font-semibold text-red-600">
+                    Insufficient funds — {childFirstName} needs R{fmt(fees.totalCost - childBalance / 100)} more.
+                  </p>
+                </div>
+              )}
+              {error && (
+                <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 mb-4 flex items-start gap-2">
+                  <div className="h-1.5 w-1.5 rounded-full bg-red-400 mt-1.5 flex-shrink-0" />
+                  <p className="text-xs font-semibold text-red-600">{error}</p>
+                </div>
+              )}
+
+              <button
+                onClick={handleInvest}
+                disabled={insufficient || baseAmountCents <= 0 || saving || !minimum}
+                className="w-full rounded-2xl py-4 text-sm font-bold text-white shadow-lg active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ background: "linear-gradient(135deg,#4f46e5,#7c3aed)" }}
+              >
+                {saving ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                    Processing…
+                  </span>
+                ) : "Confirm Investment"}
+              </button>
+            </div>
+          )}
+        </motion.div>
       </motion.div>
     </AnimatePresence>,
     portalTarget
