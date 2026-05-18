@@ -190,7 +190,7 @@ export default function ChildInvestModal({
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 flex-shrink-0">
           <div className="flex items-center gap-2">
-            {step === "amount" && (
+            {step === "amount" && initialStep !== "amount" && (
               <button
                 type="button"
                 onClick={() => setStep("preview")}
