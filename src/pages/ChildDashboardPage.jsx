@@ -2340,7 +2340,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
           <div className="flex items-center gap-3">
             <button
               onClick={onBack}
-              className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/90 backdrop-blur-md text-slate-700 border border-slate-200 shadow-sm transition hover:bg-white active:scale-95"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-sm transition active:scale-95"
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
