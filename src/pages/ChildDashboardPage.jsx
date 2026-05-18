@@ -2112,16 +2112,6 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     return (avgFill / 100) * quantity;
   };
 
-  // Unrealized PnL in Rands. Null when either price or avg_fill is missing.
-  const getHoldingUnrealizedPnLRands = (holding) => {
-    const livePrice = getHoldingLivePriceRands(holding);
-    const avgFill = Number(holding.avg_fill);
-    if (livePrice == null) return null;
-    if (!Number.isFinite(avgFill) || avgFill <= 0) return null;
-    const quantity = Math.abs(Number(holding.quantity || 0));
-    return quantity * (livePrice - (avgFill / 100));
-  };
-
   // Legacy cents-based helpers kept for the few callers that still use them (totals, sorting, etc.).
   const getHoldingMarketValueCents = (holding) => {
     const v = getHoldingMarketValueRands(holding);
