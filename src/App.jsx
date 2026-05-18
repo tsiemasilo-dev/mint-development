@@ -1884,6 +1884,14 @@ const App = () => {
               navigateTo("identityCheck");
               return;
             }
+
+            // Child strategy purchases always pay from the child's wallet — skip the payment method modal
+            if (selectedStrategy?.is_kid_strategy && selectedChildForInvest?.id) {
+              setPendingPaymentMethod("wallet");
+              navigateTo("payment");
+              return;
+            }
+
             setShowPaymentMethodModal(true);
           }}
           investmentAmount={pendingGoalFlow?.baseAmount || pendingGoalFlow?.amount || investmentAmount}
