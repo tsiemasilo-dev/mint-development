@@ -437,6 +437,8 @@ const App = () => {
           setMarketsChildFilter(selectedChild);
           setSelectedChildForInvest(selectedChild);
           normalizedPage = 'markets';
+        } else if (page !== 'markets') {
+          setMarketsChildFilter(null);
         }
         if (page === 'userOnboarding') {
           setNotificationReturnPage(currentPage);
