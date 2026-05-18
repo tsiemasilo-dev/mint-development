@@ -1275,6 +1275,121 @@ function TransactionRow({ tx }) {
   );
 }
 
+// --- StrategyDetailModal -----------------------------------------------------
+// Shows "Best performing assets in {Strategy}" — the holdings inside a single
+// strategy, ranked by unrealized PnL %.
+
+function StrategyDetailModal({ data, onClose }) {
+  const { strategy, holdings } = data;
+  const totalValueCents = holdings.reduce((s, h) => s + (h.marketCents || 0), 0);
+  const totalCostCents = holdings.reduce((s, h) => s + (h.costCents || 0), 0);
+  const totalPnlCents = totalValueCents - totalCostCents;
+  const totalPnlPct = totalCostCents > 0 ? (totalPnlCents / totalCostCents) * 100 : 0;
+  const stratIsUp = totalPnlCents >= 0;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-end justify-center"
+    >
+      <motion.div
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      />
+      <motion.div
+        initial={{ y: "100%" }}
+        animate={{ y: 0 }}
+        exit={{ y: "100%" }}
+        transition={{ type: "spring", damping: 30, stiffness: 280 }}
+        className="relative w-full max-w-xl bg-white rounded-t-3xl shadow-2xl max-h-[85vh] overflow-hidden flex flex-col"
+      >
+        {/* Header */}
+        <div className="px-5 pt-4 pb-4 border-b border-slate-100 bg-white">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: "linear-gradient(135deg,#ede9fe,#ddd6fe)" }}>
+                <BarChart3 className="h-5 w-5 text-purple-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Best performing in</p>
+                <p className="text-sm font-bold text-slate-900 truncate">{strategy.short_name || strategy.name || "Strategy"}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-8 w-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          {/* Strategy total */}
+          <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-3 flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Strategy value</p>
+              <p className="text-base font-bold text-slate-900 tabular-nums">{fmt(totalValueCents)}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Unrealized PnL</p>
+              <p className={`text-sm font-bold tabular-nums ${stratIsUp ? "text-emerald-600" : "text-red-500"}`}>
+                {stratIsUp ? "+" : ""}{fmt(totalPnlCents)} ({stratIsUp ? "+" : ""}{totalPnlPct.toFixed(2)}%)
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Holdings list ranked by PnL % */}
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          {holdings.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-sm text-slate-500">No filled holdings yet.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {holdings.map((h, idx) => {
+                const isUp = h.pnlR >= 0;
+                return (
+                  <div key={h.id} className="flex items-center gap-3 rounded-2xl bg-white border border-slate-100 shadow-sm p-3.5">
+                    <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-violet-100 text-[11px] font-bold text-violet-700">
+                      {idx + 1}
+                    </div>
+                    <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-100">
+                      {h.logo_url ? (
+                        <img src={h.logo_url} alt={h.name} className="h-9 w-9 object-contain" />
+                      ) : (
+                        <span className="text-[10px] font-bold text-slate-600">{h.symbol?.substring(0, 3)}</span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-slate-900 truncate">{h.symbol}</p>
+                      <p className="text-[10px] text-slate-500 truncate">{h.name}</p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className={`text-sm font-bold tabular-nums ${isUp ? "text-emerald-500" : "text-red-500"}`}>
+                        {isUp ? "+" : ""}{fmt(Math.round(h.pnlR * 100))}
+                      </p>
+                      <p className={`text-[10px] font-semibold tabular-nums ${isUp ? "text-emerald-500" : "text-red-500"}`}>
+                        ({isUp ? "+" : ""}{h.pnlP.toFixed(2)}%)
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 // --- CompleteProfileModal ----------------------------------------------------
 
 
@@ -1573,6 +1688,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   const [showTransfer, setShowTransfer] = useState(false);
   const [openingTransfer, setOpeningTransfer] = useState(false);
   const [showInvest, setShowInvest] = useState(false);
+  const [strategyDetailId, setStrategyDetailId] = useState(null);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [showGoalsModal, setShowGoalsModal] = useState(false);
   const [goals, setGoals] = useState([]);
@@ -2167,9 +2283,10 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     };
   });
 
-  // Best performing individual assets (top 5 by unrealized_pnl %)
+  // Best performing INDIVIDUAL assets — only holdings without a strategy_id.
+  // Strategy holdings get surfaced through their own strategy card / detail modal instead.
   const bestAssets = [...holdings]
-    .filter(h => h.symbol && isHoldingFilled(h) && getHoldingMarketValueCents(h) > 0)
+    .filter(h => !h.strategy_id && h.symbol && isHoldingFilled(h) && getHoldingMarketValueCents(h) > 0)
     .map(h => {
       const costCents = getHoldingCostCents(h);
       const marketCents = getHoldingMarketValueCents(h);
@@ -2180,6 +2297,25 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     })
     .sort((a, b) => b.pnlP - a.pnlP)
     .slice(0, 5);
+
+  // Holdings inside the currently-selected strategy, ranked by PnL % (for the detail modal).
+  const strategyDetailData = strategyDetailId
+    ? (() => {
+        const strat = strategyMap[strategyDetailId] || {};
+        const items = holdings
+          .filter(h => h.strategy_id === strategyDetailId && isHoldingFilled(h))
+          .map(h => {
+            const costCents = getHoldingCostCents(h);
+            const marketCents = getHoldingMarketValueCents(h);
+            const pnlCents = marketCents - costCents;
+            const pnlR = pnlCents / 100;
+            const pnlP = costCents > 0 ? (pnlCents / costCents) * 100 : 0;
+            return { ...h, marketCents, costCents, pnlCents, pnlR, pnlP };
+          })
+          .sort((a, b) => b.pnlP - a.pnlP);
+        return { strategy: strat, holdings: items };
+      })()
+    : null;
 
 
 
@@ -2455,10 +2591,16 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                   const pnlAvailable = sc.pnl != null;
                   const isUp = pnlAvailable && sc.pnl >= 0;
                   const cardClass = sc.isFilling
-                    ? "rounded-2xl border border-amber-200 bg-white shadow-md p-4 opacity-60 animate-pulse"
-                    : "rounded-2xl border border-slate-200 bg-white shadow-md p-4";
+                    ? "w-full text-left rounded-2xl border border-amber-200 bg-white shadow-md p-4 opacity-60 animate-pulse"
+                    : "w-full text-left rounded-2xl border border-slate-200 bg-white shadow-md p-4 hover:border-violet-300 hover:shadow-lg transition active:scale-[0.99]";
                   return (
-                    <div key={sc.id} className={cardClass}>
+                    <button
+                      key={sc.id}
+                      type="button"
+                      disabled={sc.isFilling}
+                      onClick={() => !sc.isFilling && setStrategyDetailId(sc.id)}
+                      className={cardClass}
+                    >
                       {/* Header */}
                       <div className="flex items-start justify-between gap-3 mb-3">
                         <div className="flex items-center gap-3 min-w-0">
@@ -2525,7 +2667,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                           <span className="text-[11px] text-slate-400">{sc.holdings.length} holding{sc.holdings.length !== 1 ? "s" : ""}</span>
                         </div>
                       )}
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -2722,6 +2864,14 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             onInvest={handleInvestDone}
             onClose={() => setShowInvest(false)}
             onOpenFactsheet={onOpenFactsheet}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {strategyDetailData && (
+          <StrategyDetailModal
+            data={strategyDetailData}
+            onClose={() => setStrategyDetailId(null)}
           />
         )}
       </AnimatePresence>
