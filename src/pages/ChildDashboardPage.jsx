@@ -1814,16 +1814,37 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
       // Enrich with security info (symbol/name/logo_url live on securities_c)
       const securityIds = [...new Set(baseRows.map(h => h.security_id).filter(Boolean))];
       let secMap = {};
+      let intradayPriceMap = {};
       if (securityIds.length > 0) {
-        const { data: secs } = await supabase
-          .from("securities_c")
-          .select("id, symbol, name, logo_url, last_price")
-          .in("id", securityIds);
-        (secs || []).forEach(s => { secMap[s.id] = s; });
+        const [secsRes, intradayRes] = await Promise.all([
+          supabase
+            .from("securities_c")
+            .select("id, symbol, name, logo_url, last_price")
+            .in("id", securityIds),
+          supabase
+            .from("stock_intraday_c")
+            .select("security_id, current_price, timestamp")
+            .in("security_id", securityIds)
+            .order("timestamp", { ascending: false }),
+        ]);
+        (secsRes.data || []).forEach(s => { secMap[s.id] = s; });
+        // Keep latest intraday row per security_id (rows are already ordered DESC)
+        (intradayRes.data || []).forEach(r => {
+          if (r.security_id != null && intradayPriceMap[r.security_id] === undefined && r.current_price != null) {
+            intradayPriceMap[r.security_id] = Number(r.current_price);
+          }
+        });
       }
       const rows = baseRows.map(h => {
         const sec = secMap[h.security_id] || {};
-        return { ...h, symbol: sec.symbol || null, name: sec.name || null, logo_url: sec.logo_url || null, last_price: sec.last_price ?? null };
+        return {
+          ...h,
+          symbol: sec.symbol || null,
+          name: sec.name || null,
+          logo_url: sec.logo_url || null,
+          last_price: sec.last_price ?? null,
+          intraday_price_cents: intradayPriceMap[h.security_id] ?? null,
+        };
       });
       if (isMounted.current) setHoldings(rows);
 
@@ -2059,20 +2080,56 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   }
 
   const isHoldingFilled = (holding) => Number(holding.avg_fill || 0) > 0 && !!holding.Fill_date;
-  const getHoldingMarketValueCents = (holding) => {
-    if (!isHoldingFilled(holding)) return 0;
-    const quantity = Number(holding.quantity || 0);
-    const livePriceCents = Number(holding.last_price || 0) > 0
-      ? Math.round(Number(holding.last_price) * 100)
-      : 0;
-    if (livePriceCents > 0 && quantity > 0) {
-      return Math.round(livePriceCents * quantity);
+
+  // Live price per share in Rands: intraday first (cents / 100), then securities_c.last_price (already Rands).
+  // Returns null when neither source has a value.
+  const getHoldingLivePriceRands = (holding) => {
+    const intradayCents = Number(holding.intraday_price_cents);
+    if (Number.isFinite(intradayCents) && intradayCents > 0) {
+      return intradayCents / 100;
     }
-    return Math.round(Number(holding.market_value || 0));
+    const lastPrice = Number(holding.last_price);
+    if (Number.isFinite(lastPrice) && lastPrice > 0) {
+      return lastPrice;
+    }
+    return null;
+  };
+
+  // Market value in Rands. Null when the holding isn't filled or no live price is available.
+  const getHoldingMarketValueRands = (holding) => {
+    if (!isHoldingFilled(holding)) return null;
+    const livePrice = getHoldingLivePriceRands(holding);
+    if (livePrice == null) return null;
+    const quantity = Math.abs(Number(holding.quantity || 0));
+    return livePrice * quantity;
+  };
+
+  // Cost basis in Rands. Null if avg_fill is missing.
+  const getHoldingCostRands = (holding) => {
+    const avgFill = Number(holding.avg_fill);
+    if (!Number.isFinite(avgFill) || avgFill <= 0) return null;
+    const quantity = Math.abs(Number(holding.quantity || 0));
+    return (avgFill / 100) * quantity;
+  };
+
+  // Unrealized PnL in Rands. Null when either price or avg_fill is missing.
+  const getHoldingUnrealizedPnLRands = (holding) => {
+    const livePrice = getHoldingLivePriceRands(holding);
+    const avgFill = Number(holding.avg_fill);
+    if (livePrice == null) return null;
+    if (!Number.isFinite(avgFill) || avgFill <= 0) return null;
+    const quantity = Math.abs(Number(holding.quantity || 0));
+    return quantity * (livePrice - (avgFill / 100));
+  };
+
+  // Legacy cents-based helpers kept for the few callers that still use them (totals, sorting, etc.).
+  const getHoldingMarketValueCents = (holding) => {
+    const v = getHoldingMarketValueRands(holding);
+    return v == null ? 0 : Math.round(v * 100);
   };
   const getHoldingCostCents = (holding) => {
-    if (!isHoldingFilled(holding)) return 0;
-    return Math.round(Number(holding.avg_fill || 0) * Number(holding.quantity || 0));
+    const v = getHoldingCostRands(holding);
+    return v == null ? 0 : Math.round(v * 100);
   };
 
   const totalPortfolioCents = holdings.reduce((s, h) => s + getHoldingMarketValueCents(h), 0);
@@ -2089,11 +2146,35 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   const strategyCards = Object.entries(strategyGroups).map(([sid, hs]) => {
     const strat = strategyMap[sid] || {};
     const isFilling = hs.some((h) => !isHoldingFilled(h));
-    const totalValueCents = isFilling ? 0 : hs.reduce((s, h) => s + getHoldingMarketValueCents(h), 0);
-    const totalCostCents = isFilling ? 0 : hs.reduce((s, h) => s + getHoldingCostCents(h), 0);
-    const pnlCents = totalValueCents - totalCostCents;
-    const pnlP = totalCostCents > 0 ? (pnlCents / totalCostCents) * 100 : 0;
-    return { id: sid, name: strat.name || "Strategy", short_name: strat.short_name, risk_level: strat.risk_level, is_featured: strat.is_featured, totalValue: totalValueCents, pnl: pnlCents, pnlPct: pnlP, holdings: hs, isFilling };
+    let totalValueRands = 0;
+    let totalCostRands = 0;
+    let anyPriceMissing = false;
+    let anyCostMissing = false;
+    if (!isFilling) {
+      for (const h of hs) {
+        const mv = getHoldingMarketValueRands(h);
+        const cv = getHoldingCostRands(h);
+        if (mv == null) anyPriceMissing = true; else totalValueRands += mv;
+        if (cv == null) anyCostMissing = true; else totalCostRands += cv;
+      }
+    }
+    const pnlAvailable = !isFilling && !anyPriceMissing && !anyCostMissing;
+    const pnlRands = pnlAvailable ? (totalValueRands - totalCostRands) : null;
+    const pnlPct = pnlAvailable && totalCostRands > 0
+      ? ((totalValueRands - totalCostRands) / totalCostRands) * 100
+      : null;
+    return {
+      id: sid,
+      name: strat.name || "Strategy",
+      short_name: strat.short_name,
+      risk_level: strat.risk_level,
+      is_featured: strat.is_featured,
+      totalValue: isFilling ? 0 : Math.round(totalValueRands * 100),
+      pnl: pnlRands == null ? null : Math.round(pnlRands * 100),
+      pnlPct,
+      holdings: hs,
+      isFilling,
+    };
   });
 
   // Best performing individual assets (top 5 by unrealized_pnl %)
@@ -2381,7 +2462,8 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             ) : strategyCards.length > 0 ? (
               <div className="space-y-3">
                 {strategyCards.map((sc) => {
-                  const isUp = sc.pnl >= 0;
+                  const pnlAvailable = sc.pnl != null;
+                  const isUp = pnlAvailable && sc.pnl >= 0;
                   const cardClass = sc.isFilling
                     ? "rounded-2xl border border-amber-200 bg-white shadow-md p-4 opacity-60 animate-pulse"
                     : "rounded-2xl border border-slate-200 bg-white shadow-md p-4";
@@ -2418,9 +2500,13 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                           ) : (
                             <>
                               <p className="text-sm font-bold text-slate-900 tabular-nums">{fmt(sc.totalValue)}</p>
-                              <p className={`text-xs font-semibold tabular-nums ${isUp ? "text-emerald-600" : "text-red-500"}`}>
-                                {isUp ? "+" : ""}{fmt(sc.pnl)} ({isUp ? "+" : ""}{sc.pnlPct.toFixed(2)}%)
-                              </p>
+                              {pnlAvailable ? (
+                                <p className={`text-xs font-semibold tabular-nums ${isUp ? "text-emerald-600" : "text-red-500"}`}>
+                                  {isUp ? "+" : ""}{fmt(sc.pnl)} ({isUp ? "+" : ""}{sc.pnlPct.toFixed(2)}%)
+                                </p>
+                              ) : (
+                                <p className="text-xs font-semibold tabular-nums text-slate-400">−</p>
+                              )}
                             </>
                           )}
                         </div>
