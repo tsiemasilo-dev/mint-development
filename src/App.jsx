@@ -176,6 +176,7 @@ const App = () => {
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [showChildPickerModal, setShowChildPickerModal] = useState(false);
   const [selectedChildForInvest, setSelectedChildForInvest] = useState(null);
+  const [marketsChildFilter, setMarketsChildFilter] = useState(null);
   const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
   const [pendingPaymentMethod, setPendingPaymentMethod] = useState(null);
   const [pendingPaymentInfo, setPendingPaymentInfo] = useState(null);
@@ -344,6 +345,10 @@ const App = () => {
   const handleTabChange = useCallback((tab) => {
     navigationHistory.current = [];
     setPreviousPageName(null);
+    if (tab !== 'markets') {
+      setMarketsChildFilter(null);
+      setSelectedChildForInvest(null);
+    }
     startTransition(() => setCurrentPage(tab));
   }, []);
 
@@ -427,6 +432,11 @@ const App = () => {
         if (selectedChild && (page === 'childDashboard' || page === 'memberPortfolio')) {
           setSelectedFamilyChild(selectedChild);
           normalizedPage = 'childDashboard';
+        }
+        if (page === 'marketsChildInvest' && selectedChild) {
+          setMarketsChildFilter(selectedChild);
+          setSelectedChildForInvest(selectedChild);
+          normalizedPage = 'markets';
         }
         if (page === 'userOnboarding') {
           setNotificationReturnPage(currentPage);
@@ -1282,9 +1292,10 @@ const App = () => {
                 initialViewMode={marketsInitialView}
                 onViewModeChange={(mode) => setMarketsInitialView(mode)}
                 onOpenNotifications={() => { setNotificationReturnPage("markets"); navigateTo("notifications"); }}
-                onOpenStockDetail={(security) => { setSelectedChildForInvest(null); setSelectedSecurity(security); navigateTo("stockDetail"); }}
+                onOpenStockDetail={(security) => { setSelectedChildForInvest(null); setMarketsChildFilter(null); setSelectedSecurity(security); navigateTo("stockDetail"); }}
                 onOpenNewsArticle={(articleId) => { setSelectedArticleId(articleId); navigateTo("newsArticle"); }}
-                onOpenFactsheet={(strategy) => { setSelectedChildForInvest(null); setSelectedStrategy(strategy); navigateTo("factsheet"); }}
+                onOpenFactsheet={(strategy) => { if (!marketsChildFilter) setSelectedChildForInvest(null); setSelectedStrategy(strategy); navigateTo("factsheet"); }}
+                childFilter={marketsChildFilter}
               />
             </AppLayout>
           </div>

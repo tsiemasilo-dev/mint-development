@@ -2021,7 +2021,9 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
       return;
     }
     setKycNotice("");
-    setShowInvest(true);
+    window.dispatchEvent(new CustomEvent("navigate-within-app", {
+      detail: { page: "marketsChildInvest", child: latestChild }
+    }));
   }
 
   async function fetchTransactions() {
