@@ -13,6 +13,7 @@ import HomePage from "./pages/HomePage.jsx";
 import CreditHome from "./pages/credit/CreditHome";
 import NewPortfolioPage from "./pages/NewPortfolioPage.jsx";
 import MarketsPage from "./pages/MarketsPage.jsx";
+import ChildInvestModal from "./components/ChildInvestModal.jsx";
 import MorePage from "./pages/MorePage.jsx";
 
 const AuthPage = lazy(() => import("./pages/AuthPage.jsx"));
@@ -175,6 +176,7 @@ const App = () => {
   const [stockCheckout, setStockCheckout] = useState({ security: null, amount: 0, baseAmount: 0 });
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [showChildPickerModal, setShowChildPickerModal] = useState(false);
+  const [showChildInvestModal, setShowChildInvestModal] = useState(false);
   const [selectedChildForInvest, setSelectedChildForInvest] = useState(null);
   const [marketsChildFilter, setMarketsChildFilter] = useState(null);
   const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
@@ -1804,17 +1806,31 @@ const App = () => {
 
   if (currentPage === "factsheet") {
     return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
-        <FactsheetPage
-          onBack={goBack}
-          strategy={selectedStrategy}
-          onOpenInvest={(strategy) => {
-            setSelectedStrategy(strategy);
-            navigateTo("investAmount");
-          }}
-          onNavigateToOnboarding={() => navigateTo("identityCheck")}
-        />
-      </SwipeBackWrapper>
+      <>
+        <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+          <FactsheetPage
+            onBack={goBack}
+            strategy={selectedStrategy}
+            onOpenInvest={(strategy) => {
+              setSelectedStrategy(strategy);
+              if (marketsChildFilter) {
+                setShowChildInvestModal(true);
+              } else {
+                navigateTo("investAmount");
+              }
+            }}
+            onNavigateToOnboarding={() => navigateTo("identityCheck")}
+          />
+        </SwipeBackWrapper>
+        {showChildInvestModal && marketsChildFilter && selectedStrategy && (
+          <ChildInvestModal
+            child={marketsChildFilter}
+            strategy={selectedStrategy}
+            initialStep="amount"
+            onClose={() => setShowChildInvestModal(false)}
+          />
+        )}
+      </>
     );
   }
 
