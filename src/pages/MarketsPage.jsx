@@ -1399,20 +1399,9 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 }
               />
             )}
-            <h1 className="text-lg font-semibold">Markets</h1>
+            <h1 className="text-lg font-semibold">{childFilter ? "Child Market" : "Markets"}</h1>
             <NotificationBell onClick={onOpenNotifications} />
           </header>
-
-          {/* Child filter banner */}
-          {childFilter && (
-            <div className="flex items-center gap-2 rounded-2xl bg-white/15 px-4 py-2.5 ring-1 ring-white/20">
-              <span className="text-lg">👶</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-semibold tracking-[0.15em] uppercase text-white/60">Investing for</p>
-                <p className="text-sm font-semibold text-white truncate">{childFilter.name || childFilter.first_name || "Child"}</p>
-              </div>
-            </div>
-          )}
 
           {/* Toggle between Mint Basket and Markets */}
           {viewMode !== "news" && !childFilter && (
