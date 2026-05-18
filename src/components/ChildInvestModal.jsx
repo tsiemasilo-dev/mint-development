@@ -158,16 +158,21 @@ export default function ChildInvestModal({
     if (!minimum || feeChecking) return;
     setFeeChecking(true);
     try {
-      const { data: existingHoldings } = await supabase
-        .from("stock_holdings_c")
-        .select("id, strategy_id")
-        .eq("family_member_id", child.id)
-        .eq("Status", "active");
-      const allHoldings = existingHoldings || [];
-      const allBelongToCurrentStrategy = allHoldings.length > 0 &&
-        allHoldings.every((h) => h.strategy_id === strategy.id);
-      const hasOtherStrategy = allHoldings.length > 0 && !allBelongToCurrentStrategy;
-      if (hasOtherStrategy) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) { setStep("amount"); return; }
+
+      const { data: strategyTxns } = await supabase
+        .from("transactions")
+        .select("name")
+        .eq("user_id", session.user.id)
+        .like("name", "Strategy Investment:%");
+
+      const investedStrategies = new Set(
+        (strategyTxns || []).map(t => t.name.replace("Strategy Investment: ", "").trim())
+      );
+      const alreadyInvested = strategy?.name && investedStrategies.has(strategy.name);
+
+      if (!alreadyInvested && investedStrategies.size >= 1) {
         setShowFeeModal(true);
       } else {
         setStep("amount");
