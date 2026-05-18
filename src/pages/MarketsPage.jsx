@@ -7,7 +7,7 @@ import { getMarketsSecuritiesWithMetrics, getSecurityPrices, clearMarketDataCach
 import { useRealtimePrices } from "../lib/useRealtimePrices";
 import { getStrategiesWithMetrics, getPublicStrategies, formatChangePct, formatChangeAbs, getChangeColor } from "../lib/strategyData.js";
 import { useProfile } from "../lib/useProfile";
-import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Star } from "lucide-react";
+import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Star, Wallet, BarChart3, Check, ArrowLeft, ChevronDown, ChevronUp } from "lucide-react";
 import { saveMarketsInvestFilters, loadMarketsInvestFilters, saveMarketsStrategyFilters, loadMarketsStrategyFilters, buildInvestChips, buildChipsFromFilters } from "../lib/usePersistedFilters.js";
 import NotificationBell from "../components/NotificationBell";
 import FamilyDropdown from "../components/FamilyDropdown";
@@ -21,6 +21,11 @@ import { normalizeSymbol, getHoldingsArray, getHoldingSymbol, buildHoldingsBySym
 const sortOptions = ["Market Cap", "Dividend Yield", "P/E Ratio", "1M Performance", "YTD Performance"];
 
 const MIN_ASSET_VALUE_DISPLAY = 1000;
+
+const CHILD_BROKER_FEE_RATE = 0.0025;
+const CHILD_ISIN_FEE_PER_ASSET = 69;
+const CHILD_TRANSACTION_FEE_RATE = 0.038;
+const CHILD_CASH_BUFFER_RATE = 0.08;
 
 const strategySortOptions = [
   "Recommended",
@@ -394,6 +399,13 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const [selectedStrategyActiveLabel, setSelectedStrategyActiveLabel] = useState(null);
   const [selectedStrategyAnalytics, setSelectedStrategyAnalytics] = useState(null);
   const [selectedStrategyAnalyticsLoading, setSelectedStrategyAnalyticsLoading] = useState(false);
+
+  // Child invest modal state
+  const [childInvestStep, setChildInvestStep] = useState(null); // 'preview' | 'amount' | 'success'
+  const [childInvestUnits, setChildInvestUnits] = useState(1);
+  const [childInvestSaving, setChildInvestSaving] = useState(false);
+  const [childInvestError, setChildInvestError] = useState('');
+  const [childFeeExpanded, setChildFeeExpanded] = useState(false);
   const [strategyYtdById, setStrategyYtdById] = useState({});
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [sheetOffset, setSheetOffset] = useState(0);
@@ -1239,6 +1251,68 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       ? "#dc2626"
       : "#94a3b8";
 
+  // ── Child invest computed values ──
+  const childBalance = childFilter?.available_balance || 0;
+  const childFirstName = childFilter?.first_name || 'Child';
+  const childStrategyMinimum = useMemo(() => {
+    if (!childFilter || !selectedStrategy) return null;
+    return calculateMinInvestmentSync(selectedStrategy, holdingsBySymbol);
+  }, [childFilter, selectedStrategy, holdingsBySymbol]);
+  const childMinInvCents = childStrategyMinimum ? childStrategyMinimum * 100 : 0;
+  const childBaseAmountCents = childInvestUnits * childMinInvCents;
+  const childBaseAmount = childBaseAmountCents / 100;
+  const childNumAssets = useMemo(() => {
+    if (!selectedStrategy) return 0;
+    const list = getHoldingsArray(selectedStrategy);
+    return Array.isArray(list) ? list.length : 0;
+  }, [selectedStrategy]);
+  const childFees = useMemo(() => {
+    const bufferedBase = childBaseAmount * (1 + CHILD_CASH_BUFFER_RATE);
+    const brokerAmount = bufferedBase * CHILD_BROKER_FEE_RATE;
+    const isinTotal = CHILD_ISIN_FEE_PER_ASSET * childNumAssets;
+    const transactionAmount = bufferedBase * CHILD_TRANSACTION_FEE_RATE;
+    const totalCost = bufferedBase + brokerAmount + isinTotal + transactionAmount;
+    return { bufferedBase, brokerAmount, isinTotal, transactionAmount, totalCost };
+  }, [childBaseAmount, childNumAssets]);
+  const childTotalCostCents = Math.round(childFees.totalCost * 100);
+  const childInsufficient = childTotalCostCents > childBalance;
+
+  function closeChildInvest() {
+    setSelectedStrategy(null);
+    setChildInvestStep(null);
+    setChildInvestUnits(1);
+    setChildInvestError('');
+    setChildFeeExpanded(false);
+    setChildInvestSaving(false);
+  }
+
+  async function handleChildInvest() {
+    if (!selectedStrategy || !childFilter) return;
+    if (childBaseAmountCents <= 0) { setChildInvestError('Select a valid investment amount.'); return; }
+    if (childInsufficient) { setChildInvestError("Insufficient funds in child's wallet."); return; }
+    setChildInvestSaving(true);
+    setChildInvestError('');
+    try {
+      const res = await fetch('/api/child-invest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          family_member_id: childFilter.id,
+          strategy_id: selectedStrategy.id,
+          amount: childTotalCostCents,
+          base_amount: childBaseAmountCents,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setChildInvestError(json.error || 'Investment failed.'); return; }
+      setChildInvestStep('success');
+    } catch {
+      setChildInvestError('Something went wrong.');
+    } finally {
+      setChildInvestSaving(false);
+    }
+  }
+
   const resetSheetPosition = () => {
     setSheetOffset(0);
     dragStartY.current = null;
@@ -1938,9 +2012,14 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                         key={strategy.id}
                         type="button"
                         onClick={() => {
-                          // Navigate using slug and id
-                          console.log('Opening strategy:', { slug: strategy.slug, id: strategy.id, strategy });
-                          setSelectedStrategy({ ...strategy, slug: strategy.slug });
+                          const s = { ...strategy, slug: strategy.slug };
+                          setSelectedStrategy(s);
+                          if (childFilter) {
+                            setChildInvestStep('preview');
+                            setChildInvestUnits(1);
+                            setChildInvestError('');
+                            setChildFeeExpanded(false);
+                          }
                         }}
                         className="flex-shrink-0 w-80 rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md hover:border-slate-200 p-4 transition-all snap-center"
                       >
@@ -2117,8 +2196,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
         )}
       </div>
 
-      {/* Strategy Preview Modal */}
-      {selectedStrategy && portalTarget && createPortal(
+      {/* Strategy Preview Modal — hidden in child mode (child uses its own modal below) */}
+      {selectedStrategy && portalTarget && !childFilter && createPortal(
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 overscroll-contain"
           style={{ paddingBottom: "calc(var(--navbar-height, 64px) + 8px)" }}
@@ -2332,6 +2411,362 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
               </button>
             </div>
           </div>
+        </div>
+      , portalTarget)}
+
+      {/* Child Invest Modal — preview → amount → success */}
+      {childFilter && selectedStrategy && childInvestStep && portalTarget && createPortal(
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 overscroll-contain"
+          style={{ paddingBottom: "calc(var(--navbar-height, 64px) + 8px)" }}
+        >
+          <button
+            type="button"
+            className="absolute inset-0 h-full w-full cursor-default"
+            aria-label="Close"
+            onClick={closeChildInvest}
+          />
+          <motion.div
+            className="relative z-10 flex w-full max-w-sm flex-col overflow-hidden rounded-[32px] bg-white shadow-2xl"
+            style={{ maxHeight: "calc(90vh - var(--navbar-height, 64px) - 16px)" }}
+            initial={{ opacity: 0, scale: 0.95, y: 16 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 16 }}
+            transition={{ type: "spring", stiffness: 380, damping: 38 }}
+          >
+            {/* Close button */}
+            <button
+              type="button"
+              onClick={closeChildInvest}
+              className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 z-10"
+              aria-label="Close"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            {childInvestStep === 'success' ? (
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6">
+                <motion.div
+                  className="text-center py-4"
+                  initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                >
+                  <div className="h-16 w-16 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: "linear-gradient(135deg,#e9d5ff,#d8b4fe)" }}>
+                    <Check className="h-8 w-8 text-purple-600" />
+                  </div>
+                  <p className="text-lg font-bold text-slate-900">Investment Placed!</p>
+                  <p className="text-sm text-slate-500 mt-2">
+                    {`R${childBaseAmount.toFixed(2)} invested in ${selectedStrategy?.name} for ${childFirstName}.`}
+                  </p>
+                  <button
+                    onClick={closeChildInvest}
+                    className="mt-6 w-full rounded-xl py-3.5 text-sm font-bold text-white active:scale-[0.98]"
+                    style={{ background: "linear-gradient(135deg,#1e1b4b,#312e81)" }}
+                  >
+                    Done
+                  </button>
+                </motion.div>
+              </div>
+            ) : childInvestStep === 'preview' ? (
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6" style={{ WebkitOverflowScrolling: "touch" }}>
+                {/* Child wallet balance pill */}
+                <div className="flex items-center gap-2 rounded-xl bg-purple-50 border border-purple-100 px-4 py-2.5 mb-5">
+                  <Wallet className="h-3.5 w-3.5 text-purple-500" />
+                  <span className="text-xs font-semibold text-purple-600">{childFirstName}'s balance:</span>
+                  <span className="text-xs font-bold text-purple-800 ml-auto tabular-nums">
+                    R{(childBalance / 100).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+
+                <div className="flex items-start gap-3 mb-5">
+                  <div className="flex-1">
+                    <h2 className="text-lg font-semibold text-slate-900">{selectedStrategy.name}</h2>
+                    <p className="text-sm text-slate-500">
+                      {childStrategyMinimum
+                        ? `Min. R${childStrategyMinimum.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                        : 'Calculating...'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 mb-5">
+                  {childStrategyMinimum ? (
+                    <>
+                      <p className="text-2xl font-semibold text-slate-900">
+                        R{childStrategyMinimum.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                      <span className="rounded-full px-2.5 py-1 text-xs font-semibold bg-slate-100 text-slate-500">Min. investment</span>
+                    </>
+                  ) : null}
+                </div>
+
+                {/* YTD return + chart */}
+                <div className="mb-5">
+                  <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500">
+                    <span>YTD return</span>
+                    <div className="flex flex-col items-end gap-1">
+                      <span className={selectedStrategy?.r_ytd > 0 ? "text-emerald-600" : selectedStrategy?.r_ytd < 0 ? "text-rose-600" : "text-slate-500"}>
+                        {selectedStrategy?.r_ytd != null
+                          ? `${selectedStrategy.r_ytd >= 0 ? '+' : ''}${(typeof selectedStrategy.r_ytd === 'number' && Math.abs(selectedStrategy.r_ytd) <= 1 ? selectedStrategy.r_ytd * 100 : selectedStrategy.r_ytd).toFixed(2)}%`
+                          : '—'}
+                      </span>
+                      {selectedStrategy?.ytd_as_of_date && (
+                        <span className="text-[10px] text-slate-400">
+                          {new Date(selectedStrategy.ytd_as_of_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="h-44 w-full">
+                    {selectedStrategyAnalyticsLoading ? (
+                      <div className="flex h-full items-end gap-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4">
+                        {[45, 65, 35, 80, 55, 70, 40, 90, 60, 50, 75, 85].map((h, i) => (
+                          <div key={i} className="flex-1 rounded-sm bg-slate-200 animate-pulse" style={{ height: `${h}%` }} />
+                        ))}
+                      </div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={previewChartData} margin={{ top: 12, right: 16, left: 8, bottom: 28 }}>
+                          <defs>
+                            <linearGradient id="child-preview-gradient" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor={previewChartLineColor} stopOpacity={0.25} />
+                              <stop offset="70%" stopColor={previewChartLineColor} stopOpacity={0.1} />
+                              <stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <ReferenceLine y={100} stroke="#e2e8f0" strokeDasharray="3 3" />
+                          <XAxis dataKey="dateLabel" tick={{ fontSize: 11, fill: "#64748b" }} axisLine={{ stroke: "#e2e8f0" }} tickLine={false} height={24} />
+                          <YAxis hide domain={previewChartDomain} />
+                          <Area type="monotone" dataKey="returnPct" stroke="transparent" fill="url(#child-preview-gradient)" dot={false} />
+                          <Line type="monotone" dataKey="returnPct" stroke={previewChartLineColor} strokeWidth={2} dot={false} activeDot={false} />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    )}
+                  </div>
+                </div>
+
+                {/* Tags */}
+                <div className="flex flex-wrap gap-2 mb-5">
+                  {(Array.isArray(selectedStrategy.tags) && selectedStrategy.tags.length > 0
+                    ? selectedStrategy.tags
+                    : [selectedStrategy.risk_level || 'Balanced', selectedStrategy.sector].filter(Boolean)
+                  ).map((tag) => (
+                    <span key={tag} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+
+                {/* Top Holdings */}
+                {(() => {
+                  const hArr = getHoldingsArray(selectedStrategy);
+                  const enriched = hArr.map(h => {
+                    const sym = h.ticker || h.symbol || h;
+                    const sec = holdingsBySymbol.get(sym) || holdingsBySymbol.get(normalizeSymbol(sym));
+                    return { ...h, symbol: sym, name: sec?.name || h.name || sym, logo_url: sec?.logo_url || null };
+                  });
+                  if (!enriched.length) return null;
+                  return (
+                    <div className="mt-4 mb-4">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Top Holdings</p>
+                      <div className="space-y-2">
+                        {enriched.slice(0, 5).map((h) => (
+                          <div key={h.symbol} className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-slate-100 bg-white">
+                              {h.logo_url
+                                ? <img src={h.logo_url} alt={h.symbol} className="h-full w-full object-cover" />
+                                : <div className="flex h-full w-full items-center justify-center bg-slate-100 text-xs font-bold text-slate-600">{h.symbol?.substring(0, 2)}</div>}
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm font-semibold text-slate-900">{h.name}</p>
+                              <p className="text-xs text-slate-500">{h.symbol}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Action buttons */}
+                <div className="mt-6 space-y-3">
+                  <button
+                    onClick={() => setChildInvestStep('amount')}
+                    disabled={!childStrategyMinimum}
+                    className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-4 font-semibold text-white shadow-lg transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Invest Now
+                  </button>
+                  <button
+                    onClick={() => {
+                      const hArr = getHoldingsArray(selectedStrategy);
+                      const enrichedHoldings = hArr.map(h => {
+                        const sym = h.ticker || h.symbol || h;
+                        const sec = holdingsBySymbol.get(sym) || holdingsBySymbol.get(normalizeSymbol(sym));
+                        return { ...h, logo_url: sec?.logo_url || null, shares: getAdjustedShares(h, holdingsBySymbol) };
+                      });
+                      closeChildInvest();
+                      onOpenFactsheet({ ...selectedStrategy, calculatedMinInvestment: childStrategyMinimum, holdingsWithLogos: enrichedHoldings });
+                    }}
+                    className="w-full rounded-2xl border border-slate-300 bg-white py-3 font-semibold text-slate-700 shadow-sm transition-all active:scale-95"
+                  >
+                    View Factsheet
+                  </button>
+                </div>
+              </div>
+            ) : childInvestStep === 'amount' ? (
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6" style={{ WebkitOverflowScrolling: "touch" }}>
+                {/* Header with back button */}
+                <div className="flex items-center gap-3 mb-5">
+                  <button
+                    onClick={() => setChildInvestStep('preview')}
+                    className="h-8 w-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition active:scale-95"
+                  >
+                    <ArrowLeft className="h-3.5 w-3.5" />
+                  </button>
+                  <div className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg,#ede9fe,#ddd6fe)" }}>
+                    <BarChart3 className="h-5 w-5 text-purple-600" />
+                  </div>
+                  <div>
+                    <p className="text-base font-bold text-slate-900">Invest Amount</p>
+                    <p className="text-xs text-slate-400">{selectedStrategy.short_name || selectedStrategy.name}</p>
+                  </div>
+                </div>
+
+                {/* Child balance pill */}
+                <div className="flex items-center gap-2 rounded-xl bg-purple-50 border border-purple-100 px-4 py-2.5 mb-4">
+                  <Wallet className="h-3.5 w-3.5 text-purple-500" />
+                  <span className="text-xs font-semibold text-purple-600">{childFirstName}'s balance:</span>
+                  <span className="text-xs font-bold text-purple-800 ml-auto tabular-nums">
+                    R{(childBalance / 100).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+
+                {/* Strategy info card */}
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 mb-4">
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg,#ede9fe,#ddd6fe)" }}>
+                      <BarChart3 className="h-5 w-5 text-purple-600" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-slate-900">{selectedStrategy.short_name || selectedStrategy.name}</p>
+                      <p className="text-xs text-slate-500 mt-1">{selectedStrategy.description?.substring(0, 60)}</p>
+                    </div>
+                  </div>
+                  <div className="pt-3 border-t border-slate-100">
+                    <p className="text-xs text-slate-500 mb-1">Minimum investment</p>
+                    <p className="text-sm font-semibold text-slate-900">
+                      {childStrategyMinimum
+                        ? `R${childStrategyMinimum.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                        : 'Calculating...'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Units / amount selector */}
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 mb-4">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Investment Amount</p>
+                  <div className="flex items-center justify-center gap-4">
+                    <button
+                      onClick={() => setChildInvestUnits(u => Math.max(1, u - 1))}
+                      disabled={childInvestUnits <= 1 || !childStrategyMinimum}
+                      className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition text-xl font-semibold leading-none"
+                    >
+                      −
+                    </button>
+                    <div className="flex-1 text-center">
+                      <p className="text-3xl font-bold text-slate-900 tabular-nums">
+                        R{childStrategyMinimum && childBaseAmount > 0
+                          ? childBaseAmount.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                          : '0.00'}
+                      </p>
+                      <p className="text-xs text-slate-500 mt-1">{childInvestUnits} unit{childInvestUnits !== 1 ? 's' : ''}</p>
+                    </div>
+                    <button
+                      onClick={() => setChildInvestUnits(u => u + 1)}
+                      disabled={!childStrategyMinimum || childInsufficient}
+                      className="flex h-10 w-10 items-center justify-center rounded-full bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                {/* Fee breakdown */}
+                <div className="mb-4 rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setChildFeeExpanded(v => !v)}
+                    className="w-full flex items-center justify-between p-4"
+                  >
+                    <h3 className="text-xs font-semibold text-slate-600">Fee Breakdown</h3>
+                    {childFeeExpanded ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+                  </button>
+                  {childFeeExpanded && (
+                    <div className="px-4 pb-4 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1">
+                          <p className="text-xs text-slate-600">Investment Amount</p>
+                          <span className="text-xs text-slate-400" title="Includes 8% cash reserve">*</span>
+                        </div>
+                        <p className="text-xs font-semibold text-slate-900">
+                          R{childFees.bufferedBase.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-slate-600">Broker Fee (0.25%)</p>
+                        <p className="text-xs font-semibold text-slate-900">
+                          R{childFees.brokerAmount.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-slate-600">
+                          Custody Fee (R{CHILD_ISIN_FEE_PER_ASSET.toFixed(2)} × {childNumAssets} asset{childNumAssets !== 1 ? 's' : ''})
+                        </p>
+                        <p className="text-xs font-semibold text-slate-900">
+                          R{childFees.isinTotal.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-slate-600">Transaction Fee (3.8%)</p>
+                        <p className="text-xs font-semibold text-slate-900">
+                          R{childFees.transactionAmount.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-t border-slate-100">
+                    <p className="text-xs font-semibold text-slate-700">Total Due Today</p>
+                    <p className="text-sm font-bold text-slate-900">
+                      R{childFees.totalCost.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                </div>
+
+                {childInsufficient && (
+                  <div className="rounded-lg bg-red-50 border border-red-200 p-3 mb-4">
+                    <p className="text-xs font-semibold text-red-700">
+                      Insufficient funds. {childFirstName} needs R{(childFees.totalCost - childBalance / 100).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} more.
+                    </p>
+                  </div>
+                )}
+
+                {childInvestError && (
+                  <div className="rounded-lg bg-red-50 border border-red-200 p-3 mb-4">
+                    <p className="text-xs font-semibold text-red-700">{childInvestError}</p>
+                  </div>
+                )}
+
+                <button
+                  onClick={handleChildInvest}
+                  disabled={childInsufficient || childBaseAmountCents <= 0 || childInvestSaving || !childStrategyMinimum}
+                  className="w-full rounded-2xl bg-purple-600 py-3.5 font-semibold text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                >
+                  {childInvestSaving ? 'Processing...' : 'Confirm Investment'}
+                </button>
+              </div>
+            ) : null}
+          </motion.div>
         </div>
       , portalTarget)}
 
