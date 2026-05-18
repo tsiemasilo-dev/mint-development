@@ -1371,20 +1371,23 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
     <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)] text-slate-900">
       {showOpenStrategiesMaintenance && <MaintenanceModal onClose={() => setShowOpenStrategiesMaintenance(false)} />}
       {/* Header */}
-      <div className="rounded-b-[36px] bg-gradient-to-b from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-4 pb-6 pt-12 text-white md:px-8">
+      <div className="relative rounded-b-[36px] bg-gradient-to-b from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-4 pb-6 pt-12 text-white md:px-8">
+        {(onBack || childFilter) && (
+          <button
+            type="button"
+            onClick={onBack || (() => window.dispatchEvent(new CustomEvent("navigate-within-app", { detail: { page: "childDashboard" } })))}
+            aria-label="Back"
+            className="absolute left-4 top-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-white shadow-md text-slate-800"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+        )}
         <div className="mx-auto flex w-full max-w-sm flex-col gap-6 md:max-w-md">
           <header className="flex items-center justify-between text-white">
             {(onBack || childFilter) ? (
-              <button
-                type="button"
-                onClick={onBack || (() => window.dispatchEvent(new CustomEvent("navigate-within-app", { detail: { page: "childDashboard" } })))}
-                aria-label="Back"
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-sm"
-              >
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
+              <div className="h-10 w-10" />
             ) : (
               <FamilyDropdown
                 profile={profile}
