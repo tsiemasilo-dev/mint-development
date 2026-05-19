@@ -421,9 +421,11 @@ let supabaseAdmin = null;
 try {
   if (SUPABASE_URL && SUPABASE_ANON_KEY) {
     const { createClient } = require('@supabase/supabase-js');
-    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const ws = require('ws');
+    const wsOptions = { global: { fetch: global.fetch }, realtime: { transport: ws } };
+    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, wsOptions);
     if (SUPABASE_SERVICE_ROLE_KEY) {
-      supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+      supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, wsOptions);
       console.log('Supabase admin client initialized (service role)');
     }
   }
