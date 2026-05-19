@@ -315,6 +315,7 @@ async function generateSumsubAccessToken(userId, levelName = SUMSUB_LEVEL_NAME) 
       "X-App-Token": SUMSUB_APP_TOKEN,
       "X-App-Access-Ts": ts,
       "X-App-Access-Sig": signature,
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     },
   });
 
