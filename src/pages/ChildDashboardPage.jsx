@@ -1276,160 +1276,259 @@ function TransactionRow({ tx }) {
 }
 
 // --- AllTransactionsModal ----------------------------------------------------
-// Full transaction history for a child, with stacked cards for duplicate names.
+
+function TxIcon({ isIn }) {
+  return (
+    <div
+      className="h-[42px] w-[42px] rounded-2xl flex items-center justify-center flex-shrink-0"
+      style={{
+        background: isIn ? "rgba(34,197,94,0.10)" : "rgba(124,58,237,0.08)",
+        color: isIn ? "#16a34a" : "#7c3aed",
+      }}
+    >
+      {isIn
+        ? <ArrowDownLeft className="h-[18px] w-[18px]" />
+        : <ArrowUpRight className="h-[18px] w-[18px]" />}
+    </div>
+  );
+}
+
+function TxAmount({ amount, isIn }) {
+  const rands = Math.abs(Number(amount || 0));
+  const display = "R " + (rands > 10000 ? rands / 100 : rands).toLocaleString("en-ZA", {
+    minimumFractionDigits: 2, maximumFractionDigits: 2,
+  });
+  return (
+    <p className="text-[13px] font-bold tabular-nums whitespace-nowrap flex-shrink-0"
+      style={{ color: isIn ? "#16a34a" : "#181820" }}>
+      {isIn ? "+" : "−"}{display}
+    </p>
+  );
+}
+
+function txDate(tx, long = false) {
+  const d = new Date(tx.created_at || tx.transaction_date || 0);
+  if (isNaN(d)) return "";
+  return d.toLocaleDateString("en-ZA", {
+    day: "numeric", month: "short", ...(long ? { year: "numeric" } : {}),
+  });
+}
+
+function txDateGroup(tx) {
+  const d = new Date(tx.created_at || tx.transaction_date || 0);
+  if (isNaN(d)) return "Earlier";
+  const today = new Date(); today.setHours(0,0,0,0);
+  const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+  const txDay = new Date(d); txDay.setHours(0,0,0,0);
+  if (txDay.getTime() === today.getTime()) return "Today";
+  if (txDay.getTime() === yesterday.getTime()) return "Yesterday";
+  return d.toLocaleDateString("en-ZA", { month: "long", year: "numeric" });
+}
 
 function AllTransactionsModal({ transactions, childName, onClose }) {
+  const [filter, setFilter] = useState("all");
   const [expandedGroup, setExpandedGroup] = useState(null);
 
-  // Group consecutive/same-named transactions into stacks.
-  // Two entries with the same `name` form a stack; the most recent is on top.
+  const filtered = useMemo(() => {
+    if (filter === "in")  return transactions.filter(t => t.direction === "credit");
+    if (filter === "out") return transactions.filter(t => t.direction !== "credit");
+    return transactions;
+  }, [transactions, filter]);
+
+  // Group by name — same name = stack
   const groups = useMemo(() => {
     const map = new Map();
-    for (const tx of transactions) {
+    for (const tx of filtered) {
       const key = (tx.name || tx.description || "Transaction").trim();
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(tx);
     }
-    // Flatten back to ordered array preserving first-seen order, newest tx first inside each group
     const seen = new Set();
     const result = [];
-    for (const tx of transactions) {
+    for (const tx of filtered) {
       const key = (tx.name || tx.description || "Transaction").trim();
       if (!seen.has(key)) {
         seen.add(key);
-        const entries = map.get(key).sort((a, b) =>
-          new Date(b.created_at || b.transaction_date || 0) - new Date(a.created_at || a.transaction_date || 0)
+        const entries = [...map.get(key)].sort((a, b) =>
+          new Date(b.created_at || b.transaction_date || 0) -
+          new Date(a.created_at || a.transaction_date || 0)
         );
-        result.push({ key, entries });
+        result.push({ key, entries, dateGroup: txDateGroup(entries[0]) });
       }
     }
     return result;
-  }, [transactions]);
+  }, [filtered]);
+
+  // Group by date label for section headers
+  const sections = useMemo(() => {
+    const order = [];
+    const map = new Map();
+    for (const g of groups) {
+      if (!map.has(g.dateGroup)) { map.set(g.dateGroup, []); order.push(g.dateGroup); }
+      map.get(g.dateGroup).push(g);
+    }
+    return order.map(label => ({ label, items: map.get(label) }));
+  }, [groups]);
+
+  const tabs = [
+    { id: "all", label: "All" },
+    { id: "in",  label: "Money In" },
+    { id: "out", label: "Money Out" },
+  ];
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex flex-col bg-[#f8f6fa]"
+      initial={{ x: "100%" }}
+      animate={{ x: 0 }}
+      exit={{ x: "100%" }}
+      transition={{ type: "spring", damping: 30, stiffness: 280 }}
+      className="fixed inset-0 z-50 flex flex-col"
+      style={{ background: "#f4f4f6" }}
     >
       {/* Header */}
-      <div className="flex items-center gap-3 px-5 pt-12 pb-4 bg-white border-b border-slate-100 shadow-sm">
-        <button
-          type="button"
-          onClick={onClose}
-          className="h-8 w-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 transition"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </button>
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{childName}</p>
-          <p className="text-sm font-bold text-slate-900">All Activity</p>
+      <div className="bg-white px-5 pt-12 pb-3 border-b border-slate-100"
+        style={{ boxShadow: "0 1px 6px rgba(0,0,0,0.06)" }}>
+        <div className="flex items-center gap-3 mb-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-9 w-9 flex items-center justify-center rounded-2xl bg-slate-100 text-slate-600 active:bg-slate-200 transition"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">{childName}</p>
+            <p className="text-[15px] font-bold text-slate-900 leading-tight">Activity</p>
+          </div>
+        </div>
+
+        {/* Filter tabs */}
+        <div className="flex gap-2">
+          {tabs.map(t => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setFilter(t.id)}
+              className="rounded-full px-4 py-1.5 text-[12px] font-semibold transition"
+              style={filter === t.id
+                ? { background: "linear-gradient(135deg,#3b1d72,#7c3aed)", color: "#fff" }
+                : { background: "#f1f0f5", color: "#6b7280" }}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
       </div>
 
       {/* List */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-        {groups.length === 0 && (
-          <div className="rounded-2xl border border-slate-200 p-8 text-center bg-white">
-            <p className="text-sm text-slate-500">No activity yet.</p>
+      <div className="flex-1 overflow-y-auto px-4 py-4">
+        {sections.length === 0 && (
+          <div className="rounded-2xl bg-white border border-slate-200 p-10 text-center mt-4">
+            <p className="text-[13px] text-slate-400">No transactions here yet.</p>
           </div>
         )}
-        {groups.map(({ key, entries }) => {
-          const isStack = entries.length > 1;
-          const isExpanded = expandedGroup === key;
-          const top = entries[0];
+        {sections.map(({ label, items }) => (
+          <div key={label} className="mb-5">
+            {/* Date section header */}
+            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 px-1 mb-2">{label}</p>
+            <div className="rounded-2xl bg-white border border-slate-200 overflow-hidden"
+              style={{ boxShadow: "0 2px 10px rgba(0,0,0,0.05)" }}>
+              {items.map(({ key, entries }, gi) => {
+                const isStack = entries.length > 1;
+                const isExpanded = expandedGroup === key;
+                const top = entries[0];
+                const isIn = top.direction === "credit";
 
-          if (isStack && !isExpanded) {
-            // Stacked card — shows top card with shadow layers underneath
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setExpandedGroup(key)}
-                className="relative w-full text-left"
-              >
-                {/* Shadow cards underneath */}
-                <div className="absolute inset-x-3 bottom-0 h-full rounded-2xl bg-white border border-slate-200 shadow-sm translate-y-[-6px] scale-[0.97]" />
-                {entries.length > 2 && (
-                  <div className="absolute inset-x-5 bottom-0 h-full rounded-2xl bg-white border border-slate-100 translate-y-[-11px] scale-[0.94]" />
-                )}
-                {/* Top card */}
-                <div className="relative rounded-2xl border border-slate-200 bg-white shadow-md px-4 py-3.5 flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-purple-100 flex-shrink-0">
-                    {top.direction === "credit"
-                      ? <ArrowDownLeft className="h-4.5 w-4.5 text-purple-600" />
-                      : <ArrowUpRight className="h-4.5 w-4.5 text-purple-600" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-900 truncate">{top.description || top.name || "Transaction"}</p>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      {new Date(top.created_at || top.transaction_date).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })}
-                      <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-bold text-purple-600 bg-purple-50 rounded-full px-2 py-0.5">
-                        ×{entries.length}
-                      </span>
-                    </p>
-                  </div>
-                  <p className="text-sm font-bold tabular-nums text-purple-600 flex-shrink-0">
-                    {top.direction === "credit" ? "+" : "-"}{fmt(Math.round(Math.abs(top.amount || 0)))}
-                  </p>
-                </div>
-              </button>
-            );
-          }
-
-          if (isStack && isExpanded) {
-            return (
-              <div key={key} className="space-y-2">
-                <button
-                  type="button"
-                  onClick={() => setExpandedGroup(null)}
-                  className="flex items-center gap-2 text-[11px] font-bold text-slate-400 hover:text-slate-600 transition px-1 mb-1"
-                >
-                  <ArrowLeft className="h-3 w-3" /> Collapse
-                </button>
-                {entries.map((tx) => (
-                  <div key={tx.id} className="rounded-2xl border border-violet-100 bg-white shadow-sm px-4 py-3.5 flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-purple-100 flex-shrink-0">
-                      {tx.direction === "credit"
-                        ? <ArrowDownLeft className="h-4.5 w-4.5 text-purple-600" />
-                        : <ArrowUpRight className="h-4.5 w-4.5 text-purple-600" />}
+                if (isStack && !isExpanded) {
+                  return (
+                    <div key={key}>
+                      {gi > 0 && <div className="h-px bg-slate-100 mx-4" />}
+                      <button
+                        type="button"
+                        onClick={() => setExpandedGroup(key)}
+                        className="w-full text-left px-4 py-3.5 active:bg-slate-50 transition relative"
+                      >
+                        {/* Stack shadow layers */}
+                        <div className="absolute left-6 right-6 bottom-1 h-[6px] rounded-b-xl bg-slate-100" />
+                        <div className="absolute left-4 right-4 bottom-0.5 h-[4px] rounded-b-xl bg-slate-200/60" />
+                        <div className="relative flex items-center gap-3">
+                          <TxIcon isIn={isIn} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[13px] font-semibold text-slate-900 truncate">
+                              {top.description || top.name || "Transaction"}
+                            </p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <p className="text-[11px] text-slate-400">{txDate(top)}</p>
+                              <span className="text-[10px] font-bold text-violet-600 bg-violet-50 rounded-full px-2 py-0.5">
+                                {entries.length}×
+                              </span>
+                            </div>
+                          </div>
+                          <TxAmount amount={top.amount} isIn={isIn} />
+                        </div>
+                      </button>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-slate-900 truncate">{tx.description || tx.name || "Transaction"}</p>
-                      <p className="text-[11px] text-slate-500 mt-0.5">
-                        {new Date(tx.created_at || tx.transaction_date).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
-                      </p>
-                    </div>
-                    <p className="text-sm font-bold tabular-nums text-purple-600 flex-shrink-0">
-                      {tx.direction === "credit" ? "+" : "-"}{fmt(Math.round(Math.abs(tx.amount || 0)))}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            );
-          }
+                  );
+                }
 
-          // Single transaction
-          return (
-            <div key={key} className="rounded-2xl border border-slate-200 bg-white shadow-sm px-4 py-3.5 flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-purple-100 flex-shrink-0">
-                {top.direction === "credit"
-                  ? <ArrowDownLeft className="h-4.5 w-4.5 text-purple-600" />
-                  : <ArrowUpRight className="h-4.5 w-4.5 text-purple-600" />}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-slate-900 truncate">{top.description || top.name || "Transaction"}</p>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  {new Date(top.created_at || top.transaction_date).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
-                </p>
-              </div>
-              <p className="text-sm font-bold tabular-nums text-purple-600 flex-shrink-0">
-                {top.direction === "credit" ? "+" : "-"}{fmt(Math.round(Math.abs(top.amount || 0)))}
-              </p>
+                if (isStack && isExpanded) {
+                  return (
+                    <div key={key}>
+                      {gi > 0 && <div className="h-px bg-slate-100 mx-4" />}
+                      {/* Collapse header */}
+                      <button
+                        type="button"
+                        onClick={() => setExpandedGroup(null)}
+                        className="w-full flex items-center gap-2 px-4 py-2.5 bg-violet-50 active:bg-violet-100 transition"
+                      >
+                        <ChevronUp className="h-3.5 w-3.5 text-violet-500" />
+                        <p className="text-[11px] font-bold text-violet-600">
+                          {top.description || top.name} · {entries.length} purchases
+                        </p>
+                      </button>
+                      {entries.map((tx, ei) => {
+                        const txIn = tx.direction === "credit";
+                        return (
+                          <div key={tx.id}>
+                            <div className="h-px bg-slate-100 mx-4" />
+                            <div className="flex items-center gap-3 px-4 py-3.5 bg-violet-50/30">
+                              <TxIcon isIn={txIn} />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[13px] font-semibold text-slate-900 truncate">
+                                  {tx.description || tx.name || "Transaction"}
+                                </p>
+                                <p className="text-[11px] text-slate-400 mt-0.5">{txDate(tx, true)}</p>
+                              </div>
+                              <TxAmount amount={tx.amount} isIn={txIn} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                }
+
+                // Single row
+                return (
+                  <div key={key}>
+                    {gi > 0 && <div className="h-px bg-slate-100 mx-4" />}
+                    <div className="flex items-center gap-3 px-4 py-3.5">
+                      <TxIcon isIn={isIn} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-semibold text-slate-900 truncate">
+                          {top.description || top.name || "Transaction"}
+                        </p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">{txDate(top)}</p>
+                      </div>
+                      <TxAmount amount={top.amount} isIn={isIn} />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
+          </div>
+        ))}
+        <div className="h-8" />
       </div>
     </motion.div>
   );
