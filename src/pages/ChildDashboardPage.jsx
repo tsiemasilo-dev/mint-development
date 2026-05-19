@@ -1275,6 +1275,166 @@ function TransactionRow({ tx }) {
   );
 }
 
+// --- AllTransactionsModal ----------------------------------------------------
+// Full transaction history for a child, with stacked cards for duplicate names.
+
+function AllTransactionsModal({ transactions, childName, onClose }) {
+  const [expandedGroup, setExpandedGroup] = useState(null);
+
+  // Group consecutive/same-named transactions into stacks.
+  // Two entries with the same `name` form a stack; the most recent is on top.
+  const groups = useMemo(() => {
+    const map = new Map();
+    for (const tx of transactions) {
+      const key = (tx.name || tx.description || "Transaction").trim();
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(tx);
+    }
+    // Flatten back to ordered array preserving first-seen order, newest tx first inside each group
+    const seen = new Set();
+    const result = [];
+    for (const tx of transactions) {
+      const key = (tx.name || tx.description || "Transaction").trim();
+      if (!seen.has(key)) {
+        seen.add(key);
+        const entries = map.get(key).sort((a, b) =>
+          new Date(b.created_at || b.transaction_date || 0) - new Date(a.created_at || a.transaction_date || 0)
+        );
+        result.push({ key, entries });
+      }
+    }
+    return result;
+  }, [transactions]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex flex-col bg-[#f8f6fa]"
+    >
+      {/* Header */}
+      <div className="flex items-center gap-3 px-5 pt-12 pb-4 bg-white border-b border-slate-100 shadow-sm">
+        <button
+          type="button"
+          onClick={onClose}
+          className="h-8 w-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 transition"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </button>
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{childName}</p>
+          <p className="text-sm font-bold text-slate-900">All Activity</p>
+        </div>
+      </div>
+
+      {/* List */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+        {groups.length === 0 && (
+          <div className="rounded-2xl border border-slate-200 p-8 text-center bg-white">
+            <p className="text-sm text-slate-500">No activity yet.</p>
+          </div>
+        )}
+        {groups.map(({ key, entries }) => {
+          const isStack = entries.length > 1;
+          const isExpanded = expandedGroup === key;
+          const top = entries[0];
+
+          if (isStack && !isExpanded) {
+            // Stacked card — shows top card with shadow layers underneath
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setExpandedGroup(key)}
+                className="relative w-full text-left"
+              >
+                {/* Shadow cards underneath */}
+                <div className="absolute inset-x-3 bottom-0 h-full rounded-2xl bg-white border border-slate-200 shadow-sm translate-y-[-6px] scale-[0.97]" />
+                {entries.length > 2 && (
+                  <div className="absolute inset-x-5 bottom-0 h-full rounded-2xl bg-white border border-slate-100 translate-y-[-11px] scale-[0.94]" />
+                )}
+                {/* Top card */}
+                <div className="relative rounded-2xl border border-slate-200 bg-white shadow-md px-4 py-3.5 flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-purple-100 flex-shrink-0">
+                    {top.direction === "credit"
+                      ? <ArrowDownLeft className="h-4.5 w-4.5 text-purple-600" />
+                      : <ArrowUpRight className="h-4.5 w-4.5 text-purple-600" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-900 truncate">{top.description || top.name || "Transaction"}</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      {new Date(top.created_at || top.transaction_date).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })}
+                      <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-bold text-purple-600 bg-purple-50 rounded-full px-2 py-0.5">
+                        ×{entries.length}
+                      </span>
+                    </p>
+                  </div>
+                  <p className="text-sm font-bold tabular-nums text-purple-600 flex-shrink-0">
+                    {top.direction === "credit" ? "+" : "-"}{fmt(Math.round(Math.abs(top.amount || 0)))}
+                  </p>
+                </div>
+              </button>
+            );
+          }
+
+          if (isStack && isExpanded) {
+            return (
+              <div key={key} className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setExpandedGroup(null)}
+                  className="flex items-center gap-2 text-[11px] font-bold text-slate-400 hover:text-slate-600 transition px-1 mb-1"
+                >
+                  <ArrowLeft className="h-3 w-3" /> Collapse
+                </button>
+                {entries.map((tx) => (
+                  <div key={tx.id} className="rounded-2xl border border-violet-100 bg-white shadow-sm px-4 py-3.5 flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-purple-100 flex-shrink-0">
+                      {tx.direction === "credit"
+                        ? <ArrowDownLeft className="h-4.5 w-4.5 text-purple-600" />
+                        : <ArrowUpRight className="h-4.5 w-4.5 text-purple-600" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-slate-900 truncate">{tx.description || tx.name || "Transaction"}</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        {new Date(tx.created_at || tx.transaction_date).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
+                      </p>
+                    </div>
+                    <p className="text-sm font-bold tabular-nums text-purple-600 flex-shrink-0">
+                      {tx.direction === "credit" ? "+" : "-"}{fmt(Math.round(Math.abs(tx.amount || 0)))}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            );
+          }
+
+          // Single transaction
+          return (
+            <div key={key} className="rounded-2xl border border-slate-200 bg-white shadow-sm px-4 py-3.5 flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-purple-100 flex-shrink-0">
+                {top.direction === "credit"
+                  ? <ArrowDownLeft className="h-4.5 w-4.5 text-purple-600" />
+                  : <ArrowUpRight className="h-4.5 w-4.5 text-purple-600" />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-slate-900 truncate">{top.description || top.name || "Transaction"}</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  {new Date(top.created_at || top.transaction_date).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
+                </p>
+              </div>
+              <p className="text-sm font-bold tabular-nums text-purple-600 flex-shrink-0">
+                {top.direction === "credit" ? "+" : "-"}{fmt(Math.round(Math.abs(top.amount || 0)))}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+    </motion.div>
+  );
+}
+
 // --- StrategyDetailModal -----------------------------------------------------
 // Shows "Best performing assets in {Strategy}" — the holdings inside a single
 // strategy, ranked by unrealized PnL %.
@@ -1689,6 +1849,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   const [openingTransfer, setOpeningTransfer] = useState(false);
   const [showInvest, setShowInvest] = useState(false);
   const [strategyDetailId, setStrategyDetailId] = useState(null);
+  const [showAllTransactions, setShowAllTransactions] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [showGoalsModal, setShowGoalsModal] = useState(false);
   const [goals, setGoals] = useState([]);
@@ -2775,10 +2936,19 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             ) : transactions.length > 0 ? (
               <div className="rounded-2xl overflow-hidden shadow-lg border border-slate-200 bg-white">
                 <div className="divide-y divide-slate-100 px-5">
-                  {transactions.map((tx) => (
+                  {transactions.slice(0, 4).map((tx) => (
                     <TransactionRow key={tx.id} tx={tx} />
                   ))}
                 </div>
+                {transactions.length > 4 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllTransactions(true)}
+                    className="w-full py-3 text-[12px] font-bold text-purple-600 hover:bg-purple-50 transition border-t border-slate-100"
+                  >
+                    See all activity
+                  </button>
+                )}
               </div>
             ) : (
               <div className="rounded-2xl border border-slate-200 p-6 text-center shadow-lg bg-white">
@@ -2872,6 +3042,15 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
           <StrategyDetailModal
             data={strategyDetailData}
             onClose={() => setStrategyDetailId(null)}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showAllTransactions && (
+          <AllTransactionsModal
+            transactions={transactions}
+            childName={child?.first_name || "Child"}
+            onClose={() => setShowAllTransactions(false)}
           />
         )}
       </AnimatePresence>
