@@ -50,6 +50,7 @@ const generateAccessToken = async (externalUserId, levelName) => {
       "X-App-Access-Ts": ts,
       "X-App-Access-Sig": signature,
       "X-App-Token": SUMSUB_APP_TOKEN,
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     },
   });
 
