@@ -94,6 +94,8 @@ const HomePage = ({
   const [bestStrategies, setBestStrategies] = useState(() => _cachedBestStrategies);
   const [holdingsSecurities, setHoldingsSecurities] = useState([]);
   const [failedLogos, setFailedLogos] = useState({});
+  const [expandedPendingKey, setExpandedPendingKey] = useState(null);
+  const [expandedStratStack, setExpandedStratStack] = useState(null);
   const [showPayModal, setShowPayModal] = useState(false);
   const [showReceiveModal, setShowReceiveModal] = useState(false);
   const [news, setNews] = useState([]);
@@ -696,6 +698,7 @@ const HomePage = ({
   const hasStrategies = bestStrategies && bestStrategies.length > 0;
 
   return (
+    <>
     <div
       className="min-h-screen pb-[env(safe-area-inset-bottom)] text-slate-900 relative overflow-x-hidden"
       style={{
@@ -977,36 +980,96 @@ const HomePage = ({
           const safeStrategies = Array.isArray(bestStrategies) ? bestStrategies : [];
           const pendingAssets = safeAssets.filter(a => a && a.isPending);
           const pendingStrategies = safeStrategies.filter(s => s && s.isPending);
-          const items = [
-            ...pendingStrategies.map(s => ({
-              kind: "strategy",
-              key: `pending-strat-${s.id || s.name || Math.random()}`,
-              title: s.name || "Strategy",
-              subtitle: `Strategy • ${s.risk_level || "Balanced"}`,
-              image: s.image_url || s.icon_url || null,
-              amountLabel: Number(s.investedAmount) > 0
-                ? `R${Number(s.investedAmount).toFixed(2)} placed`
-                : "Awaiting fill",
-              symbolFallback: null,
-            })),
-            ...pendingAssets.map(a => ({
-              kind: "asset",
-              key: `pending-asset-${a.symbol || a.name || Math.random()}`,
-              title: a.symbol || a.name || "Asset",
-              subtitle: a.name || "Awaiting fill",
-              image: a.logo || null,
-              amountLabel: "Awaiting fill",
-              symbolFallback: a.symbol || "•",
-            })),
-          ];
-          if (items.length === 0) return null;
+
+          // Build one entry per TRANSACTION for strategies so duplicate purchases show separately.
+          // Each transaction "Strategy Investment: X" = one purchase event.
+          const stratTxMap = {};
+          (Array.isArray(transactions) ? transactions : []).forEach(tx => {
+            const name = (tx.name || "").trim();
+            let stratName = null;
+            if (name.startsWith("Strategy Investment: ")) stratName = name.replace("Strategy Investment: ", "").trim();
+            else if (name.startsWith("Purchased ")) stratName = name.replace("Purchased ", "").trim();
+            if (!stratName) return;
+            const strat = pendingStrategies.find(s =>
+              (s.name || "").toLowerCase() === stratName.toLowerCase() ||
+              (s.shortName || "").toLowerCase() === stratName.toLowerCase()
+            );
+            if (!strat) return;
+            const key = strat.id || strat.name;
+            if (!stratTxMap[key]) stratTxMap[key] = { strat, txs: [] };
+            stratTxMap[key].txs.push(tx);
+          });
+
+          // If no tx match found, fall back to one entry per pending strategy
+          pendingStrategies.forEach(s => {
+            const key = s.id || s.name;
+            if (!stratTxMap[key]) stratTxMap[key] = { strat: s, txs: [null] };
+          });
+
+          // Groups: [{key, strat, txs}]
+          const stratGroups = Object.entries(stratTxMap).map(([key, { strat, txs }]) => ({
+            key,
+            strat,
+            txs: txs.sort((a, b) =>
+              new Date(b?.transaction_date || b?.created_at || 0) -
+              new Date(a?.transaction_date || a?.created_at || 0)
+            ),
+          }));
+
+          const pendingAssetItems = pendingAssets.map(a => ({
+            kind: "asset",
+            key: `pending-asset-${a.symbol || a.name}`,
+            title: a.symbol || a.name || "Asset",
+            subtitle: a.name || "Awaiting fill",
+            image: a.logo || null,
+            symbolFallback: a.symbol || "•",
+            txs: [null],
+          }));
+
+          const totalGroups = stratGroups.length + pendingAssetItems.length;
+          if (totalGroups === 0) return null;
+
+          const fmtDate = (tx) => {
+            const d = new Date(tx?.transaction_date || tx?.created_at || 0);
+            if (isNaN(d)) return null;
+            return d.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
+          };
+
+          const PendingRow = ({ image, title, subtitle, symbolFallback, amountLabel, dateLabel, kind }) => (
+            <div className="flex items-center gap-3 px-4 py-3.5">
+              <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-white/15 ring-1 ring-white/25 flex-shrink-0">
+                {image && !failedLogos[title] ? (
+                  <img src={image} alt={title} className="h-full w-full object-cover"
+                    referrerPolicy="no-referrer" crossOrigin="anonymous"
+                    onError={() => kind === "asset" && setFailedLogos(p => ({ ...p, [title]: true }))} />
+                ) : symbolFallback ? (
+                  <span className="text-[11px] font-bold text-white">{symbolFallback}</span>
+                ) : (
+                  <LayoutGrid className="h-5 w-5 text-white" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="truncate text-sm font-bold text-white">{title}</p>
+                <p className="text-[11px] font-medium text-white/70 line-clamp-1">{subtitle}</p>
+              </div>
+              <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                {dateLabel && (
+                  <p className="text-[10px] font-semibold text-white/50 whitespace-nowrap">{dateLabel}</p>
+                )}
+                <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white ring-1 ring-white/25">
+                  <Clock3 className="h-2.5 w-2.5" />
+                  Pending
+                </span>
+                <p className="text-[11px] font-semibold text-white/80 whitespace-nowrap">{amountLabel}</p>
+              </div>
+            </div>
+          );
+
           return (
             <section>
               <div className="flex items-end justify-between px-5 mb-3">
                 <div className="space-y-1">
-                  <p className="text-sm font-semibold text-slate-900">
-                    Pending orders
-                  </p>
+                  <p className="text-sm font-semibold text-slate-900">Pending orders</p>
                   <div className="flex items-center gap-2 text-xs text-slate-500">
                     <span className="flex h-5 w-5 items-center justify-center rounded-full border border-violet-200 bg-violet-50 text-violet-600">
                       <Clock3 className="h-3 w-3" />
@@ -1016,51 +1079,93 @@ const HomePage = ({
                 </div>
               </div>
 
-              <div
-                className="mx-4 rounded-3xl p-1 shadow-[0_10px_32px_-10px_rgba(76,29,149,0.45)] relative overflow-hidden"
-                style={{ background: "linear-gradient(135deg,#5b21b6 0%,#7c3aed 55%,#a855f7 100%)" }}
-              >
-                <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
-                <div className="relative rounded-[22px] bg-white/5 backdrop-blur-sm divide-y divide-white/15">
-                  {items.map((item) => {
-                    const failed = item.kind === "asset" && failedLogos[item.title];
+              <div className="mx-4 space-y-3">
+                {/* Strategy groups */}
+                {stratGroups.map(({ key, strat, txs }) => {
+                  const isStack = txs.length > 1;
+                  const isExpanded = expandedPendingKey === key;
+                  const image = strat.image_url || strat.icon_url || null;
+                  const amountFor = (tx) => {
+                    const amt = tx ? Number(tx.amount || 0) / 100 : Number(strat.investedAmount || 0);
+                    return amt > 0 ? `R${amt.toFixed(2)} placed` : "Awaiting fill";
+                  };
+
+                  if (!isStack) {
                     return (
-                      <div key={item.key} className="flex items-center gap-3 px-4 py-3.5">
-                        <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-white/15 ring-1 ring-white/25 flex-shrink-0">
-                          {item.image && !failed ? (
-                            <img
-                              src={item.image}
-                              alt={item.title}
-                              className="h-full w-full object-cover"
-                              referrerPolicy="no-referrer"
-                              crossOrigin="anonymous"
-                              onError={() => {
-                                if (item.kind === "asset") {
-                                  setFailedLogos((prev) => ({ ...prev, [item.title]: true }));
-                                }
-                              }}
-                            />
-                          ) : item.symbolFallback ? (
-                            <span className="text-[11px] font-bold text-white">{item.symbolFallback}</span>
-                          ) : (
-                            <LayoutGrid className="h-5 w-5 text-white" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="truncate text-sm font-bold text-white">{item.title}</p>
-                          <p className="text-[11px] font-medium text-white/70 line-clamp-1">{item.subtitle}</p>
-                        </div>
-                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                          <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white ring-1 ring-white/25">
-                            <Clock3 className="h-2.5 w-2.5" />
-                            Pending
-                          </span>
-                          <p className="text-[11px] font-semibold text-white/80 whitespace-nowrap">{item.amountLabel}</p>
-                        </div>
+                      <div key={key}
+                        className="rounded-3xl shadow-[0_10px_32px_-10px_rgba(76,29,149,0.45)] relative overflow-hidden"
+                        style={{ background: "linear-gradient(135deg,#5b21b6 0%,#7c3aed 55%,#a855f7 100%)" }}>
+                        <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+                        <PendingRow image={image} title={strat.name || "Strategy"}
+                          subtitle={`Strategy • ${strat.risk_level || "Balanced"}`}
+                          symbolFallback={null} amountLabel={amountFor(txs[0])}
+                          dateLabel={fmtDate(txs[0])} kind="strategy" />
                       </div>
                     );
-                  })}
-                </div>
+                  }
+
+                  // Stack
+                  return (
+                    <div key={key}>
+                      {!isExpanded ? (
+                        <button type="button" onClick={() => setExpandedPendingKey(key)}
+                          className="relative w-full text-left">
+                          {/* Shadow cards */}
+                          <div className="absolute inset-x-3 bottom-0 h-full rounded-3xl opacity-60"
+                            style={{ background: "linear-gradient(135deg,#5b21b6,#7c3aed)", transform: "translateY(-5px) scaleX(0.96)" }} />
+                          {txs.length > 2 && (
+                            <div className="absolute inset-x-5 bottom-0 h-full rounded-3xl opacity-40"
+                              style={{ background: "linear-gradient(135deg,#5b21b6,#7c3aed)", transform: "translateY(-9px) scaleX(0.92)" }} />
+                          )}
+                          {/* Top card */}
+                          <div className="relative rounded-3xl shadow-[0_10px_32px_-10px_rgba(76,29,149,0.45)] overflow-hidden"
+                            style={{ background: "linear-gradient(135deg,#5b21b6 0%,#7c3aed 55%,#a855f7 100%)" }}>
+                            <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+                            <PendingRow image={image} title={strat.name || "Strategy"}
+                              subtitle={`${txs.length} purchases • tap to see each`}
+                              symbolFallback={null} amountLabel={amountFor(txs[0])}
+                              dateLabel={fmtDate(txs[0])} kind="strategy" />
+                          </div>
+                          {/* Count badge */}
+                          <div className="absolute top-3 left-3 flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-bold text-violet-700 shadow">
+                            {txs.length}
+                          </div>
+                        </button>
+                      ) : (
+                        <div className="space-y-2">
+                          {/* Collapse header */}
+                          <button type="button" onClick={() => setExpandedPendingKey(null)}
+                            className="flex items-center gap-2 px-1 text-[11px] font-bold text-slate-500 hover:text-slate-700 transition">
+                            <Clock3 className="h-3 w-3" /> {strat.name} · {txs.length} purchases · tap to collapse
+                          </button>
+                          {txs.map((tx, i) => (
+                            <div key={i}
+                              className="rounded-3xl overflow-hidden shadow-[0_6px_20px_-6px_rgba(76,29,149,0.4)]"
+                              style={{ background: "linear-gradient(135deg,#5b21b6 0%,#7c3aed 55%,#a855f7 100%)" }}>
+                              <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+                              <PendingRow image={image} title={strat.name || "Strategy"}
+                                subtitle={`Purchase ${i + 1} of ${txs.length}`}
+                                symbolFallback={null} amountLabel={amountFor(tx)}
+                                dateLabel={fmtDate(tx)} kind="strategy" />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Single-security pending items */}
+                {pendingAssetItems.map(item => (
+                  <div key={item.key}
+                    className="rounded-3xl shadow-[0_10px_32px_-10px_rgba(76,29,149,0.45)] relative overflow-hidden"
+                    style={{ background: "linear-gradient(135deg,#5b21b6 0%,#7c3aed 55%,#a855f7 100%)" }}>
+                    <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+                    <PendingRow image={item.image} title={item.title} subtitle={item.subtitle}
+                      symbolFallback={item.symbolFallback} amountLabel="Awaiting fill"
+                      dateLabel={null} kind="asset" />
+                  </div>
+                ))}
               </div>
             </section>
           );
@@ -1236,39 +1341,60 @@ const HomePage = ({
               {bestStrategies.filter(s => !s.isPending).slice(0, 5).map((strategy) => {
                 const holdingsSnapshot = getStrategyHoldingsSnapshot(strategy, holdingsBySymbol);
                 const pct = strategy.change_pct || 0;
-                return (
-                  <button
-                    key={strategy.id}
-                    type="button"
-                    onClick={() => onOpenStrategyInPortfolio ? onOpenStrategyInPortfolio(strategy.id) : onOpenStrategies && onOpenStrategies(strategy)}
-                    className="flex-shrink-0 w-[280px] snap-start rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all active:scale-[0.97]"
-                  >
+
+                // Count how many times this strategy was purchased (by transaction name)
+                const stratTxs = (Array.isArray(transactions) ? transactions : [])
+                  .filter(tx => {
+                    const n = (tx.name || "").trim();
+                    const sName = (strategy.name || "").toLowerCase();
+                    const sShort = (strategy.short_name || "").toLowerCase();
+                    return (
+                      (n.startsWith("Strategy Investment: ") && (
+                        n.replace("Strategy Investment: ", "").trim().toLowerCase() === sName ||
+                        n.replace("Strategy Investment: ", "").trim().toLowerCase() === sShort
+                      )) ||
+                      (n.startsWith("Purchased ") && (
+                        n.replace("Purchased ", "").trim().toLowerCase() === sName
+                      ))
+                    );
+                  })
+                  .sort((a, b) =>
+                    new Date(b.transaction_date || b.created_at || 0) -
+                    new Date(a.transaction_date || a.created_at || 0)
+                  );
+
+                const isStack = stratTxs.length > 1;
+                const fmtTxDate = (tx) => {
+                  const d = new Date(tx?.transaction_date || tx?.created_at || 0);
+                  if (isNaN(d)) return null;
+                  return d.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
+                };
+
+                // Inner card content (shared between single and stack)
+                const cardInner = (
+                  <>
                     <div className="flex items-start gap-3">
                       <div className="flex-1 flex items-start justify-between gap-4">
                         <div className="text-left space-y-1 min-w-0">
                           <p className="truncate text-sm font-semibold text-slate-900">{strategy.name}</p>
                           <p className="text-xs text-slate-600 line-clamp-1">
-                            {strategy.risk_level || 'Balanced'}{strategy.objective ? ` • ${strategy.objective}` : ''}
+                            {isStack
+                              ? `${stratTxs.length} purchases · tap to see each`
+                              : `${strategy.risk_level || 'Balanced'}${strategy.objective ? ` • ${strategy.objective}` : ''}`}
                           </p>
                         </div>
                         <div className="text-right flex-shrink-0">
-                          {strategy.isPending ? (
-                            <SettlementBadge status="pending" size="sm" />
+                          <p className="text-sm font-semibold text-slate-900">
+                            {strategy.currentValue ? `R${Number(strategy.currentValue).toFixed(2)}` : strategy.investedAmount ? `R${Number(strategy.investedAmount).toFixed(2)}` : '—'}
+                          </p>
+                          {strategy.pnlRands != null && strategy.investedAmount > 0 ? (
+                            <p className={`text-xs font-semibold ${strategy.pnlRands >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                              {strategy.pnlRands >= 0 ? '+' : ''}R{Math.abs(strategy.pnlRands).toFixed(2)} ({strategy.pnlPct >= 0 ? '+' : ''}{strategy.pnlPct.toFixed(2)}%)
+                            </p>
                           ) : (
-                            <>
-                              <p className="text-sm font-semibold text-slate-900">
-                                {strategy.currentValue ? `R${strategy.currentValue.toFixed(2)}` : strategy.investedAmount ? `R${strategy.investedAmount.toFixed(2)}` : '—'}
-                              </p>
-                              {strategy.pnlRands != null && strategy.investedAmount > 0 ? (
-                                <p className={`text-xs font-semibold ${strategy.pnlRands >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                                  {strategy.pnlRands >= 0 ? '+' : ''}R{Math.abs(strategy.pnlRands).toFixed(2)} ({strategy.pnlPct >= 0 ? '+' : ''}{strategy.pnlPct.toFixed(2)}%)
-                                </p>
-                              ) : (
-                                <p className={`text-xs font-semibold ${pct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                                  {pct >= 0 ? '+' : ''}{pct.toFixed(2)}%
-                                </p>
-                              )}
-                            </>
+                            <p className={`text-xs font-semibold ${pct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                              {pct >= 0 ? '+' : ''}{pct.toFixed(2)}%
+                            </p>
                           )}
                         </div>
                       </div>
@@ -1281,17 +1407,11 @@ const HomePage = ({
                         <div className="flex items-center gap-2">
                           <div className="flex -space-x-2">
                             {holdingsSnapshot.slice(0, 3).map((h) => (
-                              <div
-                                key={`${strategy.id}-${h.id || h.symbol}-snap`}
-                                className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-sm"
-                              >
-                                {h.logo_url ? (
-                                  <img src={h.logo_url} alt={h.name} className="h-full w-full object-cover" />
-                                ) : (
-                                  <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">
-                                    {h.symbol?.substring(0, 2)}
-                                  </div>
-                                )}
+                              <div key={`${strategy.id}-${h.id || h.symbol}-snap`}
+                                className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-sm">
+                                {h.logo_url
+                                  ? <img src={h.logo_url} alt={h.name} className="h-full w-full object-cover" />
+                                  : <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">{h.symbol?.substring(0, 2)}</div>}
                               </div>
                             ))}
                             {holdingsSnapshot.length > 3 && (
@@ -1304,6 +1424,41 @@ const HomePage = ({
                         </div>
                       )}
                     </div>
+                  </>
+                );
+
+                if (isStack) {
+                  return (
+                    <div key={strategy.id} className="flex-shrink-0 w-[280px] snap-start relative">
+                      {/* Stack shadow layers */}
+                      <div className="absolute inset-x-3 top-2 bottom-0 rounded-3xl border border-slate-100/80 bg-white/70 shadow-sm" />
+                      {stratTxs.length > 2 && (
+                        <div className="absolute inset-x-5 top-4 bottom-0 rounded-3xl border border-slate-100/60 bg-white/50 shadow-sm" />
+                      )}
+                      {/* Top card */}
+                      <button
+                        type="button"
+                        onClick={() => setExpandedStratStack({ strategy, stratTxs, fmtTxDate })}
+                        className="relative w-full rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all active:scale-[0.97]"
+                      >
+                        {cardInner}
+                      </button>
+                      {/* Purchase count badge */}
+                      <div className="absolute top-2 right-2 h-5 min-w-[20px] px-1.5 flex items-center justify-center rounded-full bg-violet-600 text-[10px] font-bold text-white shadow">
+                        {stratTxs.length}×
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <button
+                    key={strategy.id}
+                    type="button"
+                    onClick={() => onOpenStrategyInPortfolio ? onOpenStrategyInPortfolio(strategy.id) : onOpenStrategies && onOpenStrategies(strategy)}
+                    className="flex-shrink-0 w-[280px] snap-start rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all active:scale-[0.97]"
+                  >
+                    {cardInner}
                   </button>
                 );
               })}
@@ -1616,6 +1771,43 @@ const HomePage = ({
         </div>
       )}
     </div>
+
+    {/* Strategy stack purchases modal */}
+    {expandedStratStack && (
+      <div className="fixed inset-0 z-50 flex items-end justify-center">
+        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setExpandedStratStack(null)} />
+        <div className="relative w-full max-w-xl rounded-t-3xl bg-white shadow-2xl max-h-[75vh] overflow-hidden flex flex-col">
+          <div className="flex justify-center pt-3 pb-1">
+            <div className="h-1 w-10 rounded-full bg-slate-200" />
+          </div>
+          <div className="px-5 pt-2 pb-4 border-b border-slate-100">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-0.5">Your purchases</p>
+            <p className="text-[15px] font-bold text-slate-900">{expandedStratStack.strategy.name}</p>
+          </div>
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+            {expandedStratStack.stratTxs.map((tx, i) => {
+              const amt = tx ? Number(tx.amount || 0) / 100 : 0;
+              const dateStr = expandedStratStack.fmtTxDate(tx);
+              return (
+                <div key={i} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3.5 flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-100 text-violet-700 font-bold text-sm flex-shrink-0">
+                    {i + 1}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-semibold text-slate-900">Purchase {i + 1}</p>
+                    {dateStr && <p className="text-[11px] text-slate-400 mt-0.5">{dateStr}</p>}
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    {amt > 0 && <p className="text-[13px] font-bold text-slate-900">R{amt.toFixed(2)}</p>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };
 
