@@ -127,9 +127,11 @@ function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onCl
     setSaving(true);
     setError("");
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
       const res = await fetch("/api/child-wallet", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           action: "transfer",
           family_member_id: child.id,
@@ -2021,7 +2023,9 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
       return;
     }
     setKycNotice("");
-    setShowInvest(true);
+    window.dispatchEvent(new CustomEvent("navigate-within-app", {
+      detail: { page: "marketsChildInvest", child: latestChild }
+    }));
   }
 
   async function fetchTransactions() {
@@ -2338,7 +2342,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
           <div className="flex items-center gap-3">
             <button
               onClick={onBack}
-              className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/90 backdrop-blur-md text-slate-700 border border-slate-200 shadow-sm transition hover:bg-white active:scale-95"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-sm transition active:scale-95"
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
