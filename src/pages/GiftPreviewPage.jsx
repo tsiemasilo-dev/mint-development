@@ -133,6 +133,7 @@ export default function GiftPreviewPage({ code, idNumber, giftPreview, onBack, o
   const [claiming, setClaiming] = useState(false);
   const [error, setError] = useState(null);
   const [showAnimation, setShowAnimation] = useState(false);
+  const [onboardingRequired, setOnboardingRequired] = useState(false);
 
   const { asset_name, sender_name, message, expires_at } = giftPreview || {};
 
@@ -162,8 +163,9 @@ export default function GiftPreviewPage({ code, idNumber, giftPreview, onBack, o
       });
       const data = await res.json();
       if (!res.ok || data.error) {
-        if (data.kyc_required || data.mint_number_required) {
-          setError("You must complete FICA verification and Mint account setup before claiming a gift. Please finish onboarding first.");
+        if (data.kyc_required || data.mint_number_required || data.onboarding_incomplete) {
+          setError(data.error || "Please complete all onboarding steps before claiming a gift.");
+          setOnboardingRequired(true);
           return;
         }
         setError(data.error || "Failed to claim gift.");
@@ -235,35 +237,42 @@ export default function GiftPreviewPage({ code, idNumber, giftPreview, onBack, o
           </div>
         </div>
 
-        {error && (
-          <div className="bg-red-50 rounded-2xl px-4 py-3">
-            <p className="text-red-600 text-sm">{error}</p>
-            {(error.includes("FICA") || error.includes("onboarding")) && (
-              <button
-                type="button"
-                onClick={() => onNavigate?.("userOnboarding")}
-                className="mt-2 text-xs font-semibold text-red-700 underline"
-              >
-                Complete FICA verification
-              </button>
-            )}
+        {onboardingRequired && (
+          <div className="bg-amber-50 rounded-2xl p-5">
+            <p className="text-amber-800 font-semibold text-sm mb-1">Complete onboarding to claim</p>
+            <p className="text-amber-700 text-xs leading-relaxed mb-3">{error}</p>
+            <button
+              type="button"
+              onClick={() => onNavigate?.("userOnboarding")}
+              className="w-full py-3 rounded-2xl bg-gradient-to-r from-[#1a1a2e] to-[#44296b] text-white font-semibold text-sm"
+            >
+              Complete Onboarding
+            </button>
           </div>
         )}
 
-        <div className="pt-2 space-y-3">
-          <button
-            type="button"
-            onClick={handleClaim}
-            disabled={claiming}
-            className="w-full py-4 rounded-2xl bg-gradient-to-r from-[#1a1a2e] to-[#44296b] text-white font-bold text-sm disabled:opacity-60 active:scale-[0.98] transition-all shadow-lg"
-          >
-            {claiming ? "Claiming…" : "Claim My Gift"}
-          </button>
+        {error && !onboardingRequired && (
+          <div className="bg-red-50 rounded-2xl px-4 py-3">
+            <p className="text-red-600 text-sm">{error}</p>
+          </div>
+        )}
 
-          <p className="text-[11px] text-slate-400 text-center leading-relaxed">
-            Your investment will appear as pending in your portfolio after claiming.
-          </p>
-        </div>
+        {!onboardingRequired && (
+          <div className="pt-2 space-y-3">
+            <button
+              type="button"
+              onClick={handleClaim}
+              disabled={claiming}
+              className="w-full py-4 rounded-2xl bg-gradient-to-r from-[#1a1a2e] to-[#44296b] text-white font-bold text-sm disabled:opacity-60 active:scale-[0.98] transition-all shadow-lg"
+            >
+              {claiming ? "Claiming…" : "Claim My Gift"}
+            </button>
+
+            <p className="text-[11px] text-slate-400 text-center leading-relaxed">
+              Your investment will appear as pending in your portfolio after claiming.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -29,6 +29,7 @@ export default function GiftClaimPage({ token, onBack, onNavigate }) {
   const [user, setUser] = useState(null);
   const [kycRequired, setKycRequired] = useState(false);
   const [mintRequired, setMintRequired] = useState(false);
+  const [onboardingIncomplete, setOnboardingIncomplete] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data?.user || null));
@@ -52,6 +53,7 @@ export default function GiftClaimPage({ token, onBack, onNavigate }) {
     setError(null);
     setKycRequired(false);
     setMintRequired(false);
+    setOnboardingIncomplete(false);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
@@ -64,6 +66,7 @@ export default function GiftClaimPage({ token, onBack, onNavigate }) {
       if (!res.ok || data.error) {
         if (data.kyc_required) { setKycRequired(true); return; }
         if (data.mint_required) { setMintRequired(true); return; }
+        if (data.onboarding_incomplete) { setOnboardingIncomplete(true); setError(data.error); return; }
         setError(data.error || "Failed to claim gift.");
         return;
       }
@@ -154,7 +157,15 @@ export default function GiftClaimPage({ token, onBack, onNavigate }) {
           </div>
         )}
 
-        {canClaim && !success && !kycRequired && !mintRequired && (
+        {onboardingIncomplete && (
+          <div className="bg-amber-50 rounded-2xl p-5 mb-4">
+            <p className="text-amber-800 font-semibold text-sm mb-1">Complete onboarding to claim</p>
+            <p className="text-amber-700 text-xs leading-relaxed mb-4">{error || "Please complete all onboarding steps before claiming a gift."}</p>
+            <button onClick={() => onNavigate?.("userOnboarding")} className="w-full py-3 rounded-2xl bg-gradient-to-br from-[#1e1b4b] to-[#312e81] text-white font-semibold text-sm">Complete Onboarding</button>
+          </div>
+        )}
+
+        {canClaim && !success && !kycRequired && !mintRequired && !onboardingIncomplete && (
           <>
             {!user && <p className="text-slate-500 text-xs mb-4 text-center">You need to be logged in and FICA-verified to claim this gift.</p>}
             {error && <div className="bg-red-50 rounded-xl px-4 py-3 mb-4"><p className="text-red-600 text-xs">{error}</p></div>}

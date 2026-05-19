@@ -970,6 +970,52 @@ async function populateMintNumbers() {
 
 populateMintNumbers();
 
+async function checkFullOnboarding(db, userId) {
+  const { data: onboarding } = await db
+    .from("user_onboarding")
+    .select("kyc_status, sumsub_raw")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!onboarding) return { complete: false, reason: "No onboarding record found." };
+
+  const kycStatus = onboarding.kyc_status;
+  const kycDone = kycStatus === "approved" || kycStatus === "onboarding_complete" || kycStatus === "verified";
+  if (!kycDone) return { complete: false, reason: "FICA verification required.", kyc_required: true };
+
+  let raw = {};
+  if (onboarding.sumsub_raw) {
+    try { raw = typeof onboarding.sumsub_raw === "string" ? JSON.parse(onboarding.sumsub_raw) : onboarding.sumsub_raw; } catch {}
+  }
+
+  const hasCompletedOldFlow = kycStatus === "onboarding_complete" || (kycDone && (!!raw?.signed_at || !!raw?.account_agreement_signed));
+  if (hasCompletedOldFlow) return { complete: true };
+
+  const bankDone = !!raw?.bank_details_saved;
+  const taxDone = !!raw?.tax_details_saved;
+  const mandateDone = !!raw?.mandate_data?.agreedMandate || !!raw?.mandate_accepted;
+  const riskDone = !!raw?.risk_disclosure_accepted;
+  const sofDone = !!raw?.source_of_funds_accepted;
+  const termsDone = !!raw?.terms_accepted;
+  const agreementSigned = !!raw?.signed_at || !!raw?.account_agreement_signed;
+
+  const missing = [];
+  if (!bankDone) missing.push("bank details");
+  if (!taxDone) missing.push("tax details");
+  if (!mandateDone) missing.push("mandate agreement");
+  if (!riskDone) missing.push("risk disclosure");
+  if (!sofDone) missing.push("source of funds");
+  if (!termsDone) missing.push("terms & conditions");
+  if (!agreementSigned) missing.push("account agreement");
+
+  if (missing.length > 0) {
+    return { complete: false, reason: `Please complete onboarding: ${missing.join(", ")}.`, onboarding_incomplete: true };
+  }
+  return { complete: true };
+}
+
 function deriveSettlementStatus(record) {
   if (record.settlement_status) {
     return record.settlement_status;
@@ -8661,10 +8707,13 @@ app.post("/api/gift/claim", async (req, res) => {
   if (gift.sender_user_id === user.id) return res.status(400).json({ error: "You cannot claim your own gift." });
   if (gift.recipient_user_id && gift.recipient_user_id !== user.id) return res.status(403).json({ error: "This gift was sent to a different account." });
 
-  const { data: onboarding } = await db.from("user_onboarding").select("kyc_status").eq("user_id", user.id).maybeSingle();
-  const kycStatus = onboarding?.kyc_status;
-  if (kycStatus !== "verified" && kycStatus !== "onboarding_complete") {
-    return res.status(403).json({ error: "FICA verification required to claim this gift.", kyc_required: true });
+  const onboardingCheck = await checkFullOnboarding(db, user.id);
+  if (!onboardingCheck.complete) {
+    return res.status(403).json({
+      error: onboardingCheck.reason,
+      kyc_required: !!onboardingCheck.kyc_required,
+      onboarding_incomplete: !!onboardingCheck.onboarding_incomplete,
+    });
   }
 
   let holdingsAllocated = 0;
@@ -8755,13 +8804,14 @@ app.get("/api/gift/sent", async (req, res) => {
   if (authErr || !user) return res.status(401).json({ error: "Unauthorized" });
 
   const { data: gifts, error } = await db.from("gift_claims")
-    .select("id, amount, asset_type, asset_name, token, status, message, expires_at, created_at, claimed_at, cancelled_at")
+    .select("id, amount, asset_type, asset_name, token, status, message, expires_at, created_at, claimed_at, cancelled_at, recipient_first_name, recipient_last_name")
     .eq("sender_user_id", user.id).order("created_at", { ascending: false }).limit(100);
 
   if (error) return res.status(500).json({ error: "Failed to load gifts." });
 
-  const parseRecipientName = (msg) => {
-    try { const p = JSON.parse(msg || "{}"); return [p.fn, p.ln].filter(Boolean).join(" ") || null; } catch { return null; }
+  const parseRecipientName = (g) => {
+    if (g.recipient_first_name) return [g.recipient_first_name, g.recipient_last_name].filter(Boolean).join(" ");
+    try { const p = JSON.parse(g.message || "{}"); return [p.fn, p.ln].filter(Boolean).join(" ") || null; } catch { return null; }
   };
   const parseMsg = (msg) => {
     try { return JSON.parse(msg || "{}").msg || null; } catch { return null; }
@@ -8769,7 +8819,7 @@ app.get("/api/gift/sent", async (req, res) => {
 
   const formatted = (gifts || []).map(g => ({
     ...g,
-    recipient_name: parseRecipientName(g.message),
+    recipient_name: parseRecipientName(g),
     personal_message: parseMsg(g.message),
   }));
 
@@ -9186,10 +9236,13 @@ app.post("/api/gift/claim-v2", async (req, res) => {
   if (claimantProfile.id_number !== cleanId) return res.status(403).json({ error: "SA ID number does not match your account." });
   if (!claimantProfile.mint_number) return res.status(403).json({ error: "Please complete your Mint account setup before claiming.", mint_number_required: true });
 
-  const { data: onboarding } = await db.from("user_onboarding").select("kyc_status").eq("user_id", user.id).maybeSingle();
-  const kycStatus = onboarding?.kyc_status;
-  if (kycStatus !== "verified" && kycStatus !== "onboarding_complete") {
-    return res.status(403).json({ error: "FICA verification required to claim this gift.", kyc_required: true });
+  const onboardingCheck = await checkFullOnboarding(db, user.id);
+  if (!onboardingCheck.complete) {
+    return res.status(403).json({
+      error: onboardingCheck.reason,
+      kyc_required: !!onboardingCheck.kyc_required,
+      onboarding_incomplete: !!onboardingCheck.onboarding_incomplete,
+    });
   }
 
   const { data: gift } = await db.from("gift_claims").select("*").eq("token", cleanCode).eq("status", "pending_claim").maybeSingle();
@@ -9314,7 +9367,6 @@ app.post("/api/gift/extend", async (req, res) => {
   const base = new Date(gift.expires_at) > new Date() ? new Date(gift.expires_at) : new Date();
   const newExpiresAt = new Date(base.getTime() + hours * 3600000).toISOString();
 
-  // Track total extension fees on the gift for final settlement on claim
   const currentExtFees = Number(gift.extension_fees || 0);
   const { error: updateErr } = await db.from("gift_claims")
     .update({ expires_at: newExpiresAt, extension_fees: currentExtFees + feeCents })
@@ -9360,6 +9412,15 @@ app.post("/api/gift/claim-to-self", async (req, res) => {
   const { gift_id } = req.body || {};
   if (!gift_id) return res.status(400).json({ error: "gift_id is required." });
 
+  const onboardingCheck = await checkFullOnboarding(db, user.id);
+  if (!onboardingCheck.complete) {
+    return res.status(403).json({
+      error: onboardingCheck.reason,
+      kyc_required: !!onboardingCheck.kyc_required,
+      onboarding_incomplete: !!onboardingCheck.onboarding_incomplete,
+    });
+  }
+
   const { data: gift } = await db.from("gift_claims")
     .select("*")
     .eq("id", gift_id).eq("sender_user_id", user.id).maybeSingle();
@@ -9373,6 +9434,16 @@ app.post("/api/gift/claim-to-self", async (req, res) => {
     return res.status(400).json({ error: "This gift cannot be added to your portfolio." });
   }
 
+  // Check wallet balance before allocating holdings
+  const amountRands = gift.amount / 100;
+  const { data: wallet } = await db.from("wallets").select("balance").eq("user_id", user.id).maybeSingle();
+  if (!wallet || (wallet.balance || 0) < amountRands) {
+    return res.status(400).json({ error: `Insufficient wallet balance. You need R${amountRands.toFixed(2)} to add this to your portfolio.` });
+  }
+
+  // Deduct from wallet first
+  await db.from("wallets").update({ balance: wallet.balance - amountRands }).eq("user_id", user.id);
+
   // Allocate holdings to sender
   let holdingsCreated = 0;
   if (gift.asset_type === "strategy" && gift.strategy_id) {
@@ -9383,15 +9454,10 @@ app.post("/api/gift/claim-to-self", async (req, res) => {
     holdingsCreated = result > 0 ? 1 : 0;
   }
 
-  if (holdingsCreated === 0) return res.status(500).json({ error: "Failed to allocate holdings." });
-
-  // Deduct refunded amount from wallet (since they were already refunded on expiry)
-  const amountRands = gift.amount / 100;
-  const { data: wallet } = await db.from("wallets").select("balance").eq("user_id", user.id).maybeSingle();
-  if (!wallet || (wallet.balance || 0) < amountRands) {
-    return res.status(400).json({ error: `Insufficient wallet balance. You need R${amountRands.toFixed(2)} to add this to your portfolio.` });
+  if (holdingsCreated === 0) {
+    await db.from("wallets").update({ balance: wallet.balance }).eq("user_id", user.id);
+    return res.status(500).json({ error: "Failed to allocate holdings." });
   }
-  await db.from("wallets").update({ balance: wallet.balance - amountRands }).eq("user_id", user.id);
 
   // Create transaction
   const now = new Date().toISOString();
