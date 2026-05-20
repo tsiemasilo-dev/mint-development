@@ -1948,6 +1948,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   const [openingTransfer, setOpeningTransfer] = useState(false);
   const [showInvest, setShowInvest] = useState(false);
   const [strategyDetailId, setStrategyDetailId] = useState(null);
+  const [expandedStrategyStack, setExpandedStrategyStack] = useState(null);
   const [showAllTransactions, setShowAllTransactions] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [showGoalsModal, setShowGoalsModal] = useState(false);
@@ -2156,7 +2157,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     try {
       if (!supabase) return;
       const linkedUserId = child?.linked_user_id || null;
-      const holdingsSelect = "id, user_id, family_member_id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id, Fill_date, Status";
+      const holdingsSelect = "id, user_id, family_member_id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id, Fill_date, Status, created_at";
       const familyHoldingsQuery = supabase
         .from("stock_holdings_c")
         .select(holdingsSelect)
@@ -2501,16 +2502,34 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   const totalPortfolioCents = holdings.reduce((s, h) => s + getHoldingMarketValueCents(h), 0);
 
 
-  // Group holdings by strategy
-  const strategyGroups = holdings.reduce((acc, h) => {
+  // Group holdings by strategy_id + purchase minute (same minute = same order batch).
+  // This means buying the same strategy 5 min apart creates two separate purchase groups.
+  const purchaseGroups = holdings.reduce((acc, h) => {
     if (!h.strategy_id) return acc;
-    if (!acc[h.strategy_id]) acc[h.strategy_id] = [];
-    acc[h.strategy_id].push(h);
+    const minute = h.created_at
+      ? new Date(h.created_at).toISOString().slice(0, 16) // "2026-05-19T14:32"
+      : "unknown";
+    const key = `${h.strategy_id}__${minute}`;
+    if (!acc[key]) acc[key] = { strategyId: h.strategy_id, minute, holdings: [] };
+    acc[key].holdings.push(h);
     return acc;
   }, {});
 
-  const strategyCards = Object.entries(strategyGroups).map(([sid, hs]) => {
+  // For each strategy, list its purchase batches sorted oldest→newest
+  const strategyBatches = Object.values(purchaseGroups).reduce((acc, pg) => {
+    const sid = pg.strategyId;
+    if (!acc[sid]) acc[sid] = [];
+    acc[sid].push(pg);
+    return acc;
+  }, {});
+  Object.values(strategyBatches).forEach(batches =>
+    batches.sort((a, b) => (a.minute < b.minute ? -1 : 1))
+  );
+
+  // Build one card entry per purchase batch
+  const buildBatchCard = (sid, pg, batchIndex, totalBatches) => {
     const strat = strategyMap[sid] || {};
+    const hs = pg.holdings;
     const isFilling = hs.some((h) => !isHoldingFilled(h));
     let totalValueRands = 0;
     let totalCostRands = 0;
@@ -2527,10 +2546,16 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     const pnlAvailable = !isFilling && !anyPriceMissing && !anyCostMissing;
     const pnlRands = pnlAvailable ? (totalValueRands - totalCostRands) : null;
     const pnlPct = pnlAvailable && totalCostRands > 0
-      ? ((totalValueRands - totalCostRands) / totalCostRands) * 100
+      ? ((totalValueRands - totalCostRands) / totalCostRands) * 100 : null;
+    const purchaseDate = pg.minute !== "unknown"
+      ? new Date(pg.minute).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
       : null;
     return {
       id: sid,
+      batchKey: `${sid}__${pg.minute}`,
+      batchIndex,
+      totalBatches,
+      purchaseDate,
       name: strat.name || "Strategy",
       short_name: strat.short_name,
       risk_level: strat.risk_level,
@@ -2541,7 +2566,21 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
       holdings: hs,
       isFilling,
     };
-  });
+  };
+
+  // Flat list of batch cards (one per purchase order) for rendering
+  const strategyCards = Object.entries(strategyBatches).flatMap(([sid, batches]) =>
+    batches.map((pg, i) => buildBatchCard(sid, pg, i, batches.length))
+  );
+
+  // Group cards by strategy ID so we can render stacks
+  const strategyCardStacks = Object.entries(
+    strategyCards.reduce((acc, card) => {
+      if (!acc[card.id]) acc[card.id] = [];
+      acc[card.id].push(card);
+      return acc;
+    }, {})
+  ); // [[strategyId, [card, card?]], ...]
 
   // Best performing INDIVIDUAL assets — only holdings without a strategy_id.
   // Strategy holdings get surfaced through their own strategy card / detail modal instead.
@@ -2845,89 +2884,131 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                   </div>
                 ))}
               </div>
-            ) : strategyCards.length > 0 ? (
+            ) : strategyCardStacks.length > 0 ? (
               <div className="space-y-3">
-                {strategyCards.map((sc) => {
-                  const pnlAvailable = sc.pnl != null;
-                  const isUp = pnlAvailable && sc.pnl >= 0;
-                  const cardClass = sc.isFilling
-                    ? "w-full text-left rounded-2xl border border-amber-200 bg-white shadow-md p-4 opacity-60 animate-pulse"
-                    : "w-full text-left rounded-2xl border border-slate-200 bg-white shadow-md p-4 hover:border-violet-300 hover:shadow-lg transition active:scale-[0.99]";
-                  return (
-                    <button
-                      key={sc.id}
-                      type="button"
-                      disabled={sc.isFilling}
-                      onClick={() => !sc.isFilling && setStrategyDetailId(sc.id)}
-                      className={cardClass}
-                    >
-                      {/* Header */}
-                      <div className="flex items-start justify-between gap-3 mb-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                            style={{ background: "linear-gradient(135deg,#ede9fe,#ddd6fe)" }}>
-                            <BarChart3 className="h-5 w-5 text-purple-600" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-bold text-slate-900 truncate">{sc.short_name || sc.name}</p>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              {sc.risk_level && (
-                                <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-violet-50 text-violet-600 border border-violet-100">{sc.risk_level}</span>
-                              )}
-                              {sc.is_featured && (
-                                <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-violet-100 text-violet-700">Featured</span>
-                              )}
-                              {sc.isFilling && (
-                                <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-amber-100 text-amber-700 border border-amber-200">Filling strategy</span>
-                              )}
+                {strategyCardStacks.map(([sid, cards]) => {
+                  const isStack = cards.length > 1;
+                  const isExpanded = expandedStrategyStack === sid;
+
+                  // Single card renderer (reused for both single and expanded stack items)
+                  const renderCard = (sc, opts = {}) => {
+                    const pnlAvailable = sc.pnl != null;
+                    const isUp = pnlAvailable && sc.pnl >= 0;
+                    const isFilling = sc.isFilling;
+                    const cardCls = isFilling
+                      ? "w-full text-left rounded-2xl border border-amber-200 bg-white shadow-md p-4 opacity-70"
+                      : "w-full text-left rounded-2xl border border-slate-200 bg-white shadow-md p-4 hover:border-violet-300 hover:shadow-lg transition active:scale-[0.99]";
+                    return (
+                      <button
+                        key={sc.batchKey}
+                        type="button"
+                        disabled={isFilling}
+                        onClick={opts.onClick || (() => !isFilling && setStrategyDetailId(sc.id))}
+                        className={cardCls}
+                      >
+                        {/* Purchase date top-right when in expanded stack */}
+                        {sc.purchaseDate && opts.showDate && (
+                          <p className="text-[10px] font-semibold text-slate-400 text-right mb-1.5">{sc.purchaseDate}</p>
+                        )}
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                              style={{ background: "linear-gradient(135deg,#ede9fe,#ddd6fe)" }}>
+                              <BarChart3 className="h-5 w-5 text-purple-600" />
                             </div>
-                          </div>
-                        </div>
-                        <div className="text-right flex-shrink-0">
-                          {sc.isFilling ? (
-                            <>
-                              <p className="text-sm font-bold text-amber-700">Pending</p>
-                              <p className="text-xs font-semibold text-amber-600">Filling strategy</p>
-                            </>
-                          ) : (
-                            <>
-                              <p className="text-sm font-bold text-slate-900 tabular-nums">{fmt(sc.totalValue)}</p>
-                              {pnlAvailable ? (
-                                <p className={`text-xs font-semibold tabular-nums ${isUp ? "text-emerald-600" : "text-red-500"}`}>
-                                  {isUp ? "+" : ""}{fmt(sc.pnl)} ({isUp ? "+" : ""}{sc.pnlPct.toFixed(2)}%)
-                                </p>
-                              ) : (
-                                <p className="text-xs font-semibold tabular-nums text-slate-400">−</p>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      </div>
-                      {/* Holdings avatar row */}
-                      {sc.holdings.length > 0 && (
-                        <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
-                          <div className="flex -space-x-2">
-                            {sc.holdings.slice(0, 4).map(h => (
-                              <div key={h.id} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white shadow-sm">
-                                {h.logo_url ? (
-                                  <img src={h.logo_url} alt={h.symbol} className="h-full w-full object-cover" />
-                                ) : (
-                                  <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">
-                                    {h.symbol?.substring(0, 2)}
-                                  </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-bold text-slate-900 truncate">{sc.short_name || sc.name}</p>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                {sc.risk_level && (
+                                  <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-violet-50 text-violet-600 border border-violet-100">{sc.risk_level}</span>
+                                )}
+                                {isFilling && (
+                                  <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-amber-100 text-amber-700 border border-amber-200">Filling</span>
                                 )}
                               </div>
-                            ))}
-                            {sc.holdings.length > 4 && (
-                              <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-slate-100 text-[10px] font-semibold text-slate-500">
-                                +{sc.holdings.length - 4}
-                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            {isFilling ? (
+                              <>
+                                <p className="text-sm font-bold text-amber-700">Pending</p>
+                                <p className="text-xs font-semibold text-amber-600">Awaiting fill</p>
+                              </>
+                            ) : (
+                              <>
+                                <p className="text-sm font-bold text-slate-900 tabular-nums">{fmt(sc.totalValue)}</p>
+                                {pnlAvailable ? (
+                                  <p className={`text-xs font-semibold tabular-nums ${isUp ? "text-emerald-600" : "text-red-500"}`}>
+                                    {isUp ? "+" : ""}{fmt(sc.pnl)} ({isUp ? "+" : ""}{sc.pnlPct.toFixed(2)}%)
+                                  </p>
+                                ) : (
+                                  <p className="text-xs font-semibold tabular-nums text-slate-400">−</p>
+                                )}
+                              </>
                             )}
                           </div>
-                          <span className="text-[11px] text-slate-400">{sc.holdings.length} holding{sc.holdings.length !== 1 ? "s" : ""}</span>
                         </div>
+                        {sc.holdings.length > 0 && (
+                          <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
+                            <div className="flex -space-x-2">
+                              {sc.holdings.slice(0, 4).map(h => (
+                                <div key={h.id} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white shadow-sm">
+                                  {h.logo_url
+                                    ? <img src={h.logo_url} alt={h.symbol} className="h-full w-full object-cover" />
+                                    : <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">{h.symbol?.substring(0, 2)}</div>}
+                                </div>
+                              ))}
+                              {sc.holdings.length > 4 && (
+                                <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-slate-100 text-[10px] font-semibold text-slate-500">
+                                  +{sc.holdings.length - 4}
+                                </div>
+                              )}
+                            </div>
+                            <span className="text-[11px] text-slate-400">{sc.holdings.length} holding{sc.holdings.length !== 1 ? "s" : ""}</span>
+                          </div>
+                        )}
+                      </button>
+                    );
+                  };
+
+                  if (!isStack) {
+                    return <div key={sid}>{renderCard(cards[0])}</div>;
+                  }
+
+                  if (isExpanded) {
+                    return (
+                      <div key={sid} className="space-y-2">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedStrategyStack(null)}
+                          className="flex items-center gap-2 px-1 text-[11px] font-bold text-slate-400 hover:text-slate-600 transition"
+                        >
+                          <ChevronUp className="h-3.5 w-3.5" />
+                          {cards[0].name} · {cards.length} purchases · tap to collapse
+                        </button>
+                        {cards.map(sc => renderCard(sc, { showDate: true }))}
+                      </div>
+                    );
+                  }
+
+                  // Collapsed stack
+                  const topCard = cards[0];
+                  return (
+                    <div key={sid} className="relative">
+                      {/* Shadow layers */}
+                      <div className="absolute inset-x-2 top-2 bottom-0 rounded-2xl border border-slate-200 bg-white shadow-sm" />
+                      {cards.length > 2 && (
+                        <div className="absolute inset-x-4 top-4 bottom-0 rounded-2xl border border-slate-100 bg-slate-50" />
                       )}
-                    </button>
+                      {/* Purchase count badge */}
+                      <div className="absolute top-2 right-2 z-10 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-violet-600 px-1.5 text-[10px] font-bold text-white shadow">
+                        {cards.length}×
+                      </div>
+                      {/* Top card */}
+                      {renderCard(topCard, {
+                        onClick: () => setExpandedStrategyStack(sid),
+                      })}
+                    </div>
                   );
                 })}
               </div>
