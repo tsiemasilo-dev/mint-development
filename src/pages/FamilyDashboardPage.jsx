@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, Plus, X, TrendingUp, TrendingDown, Heart, Users,
   ShieldCheck, Shield, Crown, Baby, UserPlus, Mail, Upload, Check, FileText,
-  ChevronDown, Clock, AlertCircle, Trash2, Loader2
+  ChevronDown, Clock, AlertCircle, Trash2, Loader2, Settings, Eye, Pencil, Link as LinkIcon
 } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
 import { supabase } from "../lib/supabase";
@@ -107,7 +107,7 @@ const slideVariants = {
   exit: (dir) => ({ x: dir * -200, opacity: 0 }),
 };
 
-function AddMemberModal({ type, userId, profile, coGuardians = [], onSave, onClose }) {
+function AddMemberModal({ type, userId, profile, coGuardians = [], onSave, onClose, onDuplicate }) {
   /* ── Spouse state ── */
   const [spouseMode, setSpouseMode] = useState(null); // null | 'link' | 'invite'
   // Link mode
@@ -458,8 +458,16 @@ function AddMemberModal({ type, userId, profile, coGuardians = [], onSave, onClo
         }),
       });
       const json = await res.json();
-      if (!res.ok) { setError(json.error || "Could not add child."); return; }
-      
+      if (!res.ok) {
+        if (json.code === "child_already_added" && typeof onDuplicate === "function") {
+          onDuplicate({ message: json.error });
+          onClose?.();
+          return;
+        }
+        setError(json.error || "Could not add child.");
+        return;
+      }
+
       // Merge form id_number in case API fallback path didn't persist it
       const idCleanFinal = childForm.id_number.replace(/\D/g, "");
       setNewChildMember({
@@ -1107,6 +1115,32 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
   const [removePassword, setRemovePassword] = useState("");
   const [removeError, setRemoveError] = useState("");
   const [strategyBlock, setStrategyBlock] = useState(null);
+  const [childSettingsFor, setChildSettingsFor] = useState(null);
+  const [duplicateBanner, setDuplicateBanner] = useState(null);
+
+  async function updateChildPermission(child, field, value) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch(`/api/family-members/${child.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ [field]: value }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        console.error("[family] permission update failed:", json.error);
+        return;
+      }
+      // Optimistically update local state
+      setMembers(prev => prev.map(m => m.id === child.id ? { ...m, [field]: value } : m));
+    } catch (e) {
+      console.error("[family] permission update error:", e);
+    }
+  }
 
   const displayName = [profile?.firstName, profile?.lastName].filter(Boolean).join(" ") || "My Account";
   const familyLastName = profile?.lastName || "";
@@ -1477,10 +1511,15 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
                   const certIdMatched = certStatus === "id_matched_pending_review";
                   const certPending = !certVerified && !!child.certificate_url;
                   const childKyc = getChildKycState(child);
+                  const isOwner = !child.is_shared;
+                  const isSharedReadOnly = child.is_shared && !child.can_manage;
                   return (
                     <motion.div key={child.id} variants={item} className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 8px rgba(91,33,182,0.07)" }}>
                       <div className="flex items-center gap-4 px-5 py-4">
-                        <button className="flex items-center gap-4 flex-1 min-w-0 text-left" onClick={() => onOpenChildDashboard?.(child)}>
+                        <button
+                          className="flex items-center gap-4 flex-1 min-w-0 text-left"
+                          onClick={() => isSharedReadOnly ? null : onOpenChildDashboard?.(child)}
+                        >
                           <Avatar name={childName} gradient={childAvatarGradients[i % childAvatarGradients.length]} size="h-12 w-12" text="text-lg" />
                           <div className="flex-1 min-w-0">
                             <p className="text-[15px] font-bold text-slate-900 leading-tight truncate">{childName}</p>
@@ -1488,6 +1527,12 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
                               <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold tracking-widest uppercase" style={{ background: P_CARD, color: P }}>
                                 <Baby className="h-3 w-3" />Child
                               </span>
+                              {child.is_shared && (
+                                <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold bg-violet-50 text-violet-600 border border-violet-100">
+                                  <LinkIcon className="h-2.5 w-2.5" />
+                                  {child.can_manage ? "Co-managed" : "Shared"}
+                                </span>
+                              )}
                               {age !== null && <span className="text-[11px] text-slate-400">{age} yr{age !== 1 ? "s" : ""}</span>}
                               <span
                                 className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold tracking-wide border ${childKyc.className}`}
@@ -1509,13 +1554,24 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
                           </div>
                           <p className="text-[14px] font-bold text-slate-800 tabular-nums flex-shrink-0">{fmt(memberBalances[child.id] || 0)}</p>
                         </button>
-                        <button onClick={() => {
-                          setConfirmRemove(confirmRemove?.id === child.id ? null : child);
-                          setRemovePassword("");
-                          setRemoveError("");
-                        }} className="flex h-8 w-8 items-center justify-center rounded-full text-slate-300 hover:bg-red-50 hover:text-red-400 transition flex-shrink-0">
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {isOwner && spouse && (
+                          <button
+                            onClick={() => setChildSettingsFor(child)}
+                            title="Permissions"
+                            className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-violet-50 hover:text-violet-600 transition flex-shrink-0"
+                          >
+                            <Settings className="h-4 w-4" />
+                          </button>
+                        )}
+                        {isOwner && (
+                          <button onClick={() => {
+                            setConfirmRemove(confirmRemove?.id === child.id ? null : child);
+                            setRemovePassword("");
+                            setRemoveError("");
+                          }} className="flex h-8 w-8 items-center justify-center rounded-full text-slate-300 hover:bg-red-50 hover:text-red-400 transition flex-shrink-0">
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                       <AnimatePresence>
                         {confirmRemove?.id === child.id && (
@@ -1619,7 +1675,107 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
             coGuardians={members.filter(m => m.relationship === "spouse")}
             onSave={handleMemberSaved}
             onClose={() => setAddingType(null)}
+            onDuplicate={(info) => setDuplicateBanner(info)}
           />
+        )}
+      </AnimatePresence>
+
+      {/* ── Child permissions modal ── */}
+      <AnimatePresence>
+        {childSettingsFor && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center px-4"
+          >
+            <motion.div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setChildSettingsFor(null)} />
+            <motion.div
+              initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }}
+              transition={{ type: "spring", damping: 28, stiffness: 280 }}
+              className="relative w-full max-w-md rounded-3xl bg-white shadow-2xl p-6"
+            >
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Permissions</p>
+                <button onClick={() => setChildSettingsFor(null)} className="h-7 w-7 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <p className="text-[15px] font-bold text-slate-900 mb-1">
+                {[childSettingsFor.first_name, childSettingsFor.last_name].filter(Boolean).join(" ")}
+              </p>
+              <p className="text-[12px] text-slate-500 mb-5">Control what your spouse can do with this child's account.</p>
+
+              {/* Toggle: view */}
+              <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-xl flex items-center justify-center bg-violet-100 text-violet-600">
+                    <Eye className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-[13px] font-bold text-slate-900">Allow spouse to view</p>
+                    <p className="text-[11px] text-slate-500">They'll see {childSettingsFor.first_name || "this child"} on their family dashboard.</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !childSettingsFor.spouse_can_view;
+                    updateChildPermission(childSettingsFor, "spouse_can_view", next);
+                    setChildSettingsFor({ ...childSettingsFor, spouse_can_view: next, ...(next ? {} : { spouse_can_manage: false }) });
+                    if (!next) updateChildPermission(childSettingsFor, "spouse_can_manage", false);
+                  }}
+                  className={`relative h-6 w-11 rounded-full transition ${childSettingsFor.spouse_can_view ? "bg-violet-500" : "bg-slate-300"}`}
+                >
+                  <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition ${childSettingsFor.spouse_can_view ? "left-[22px]" : "left-0.5"}`} />
+                </button>
+              </div>
+
+              {/* Toggle: manage */}
+              <div className={`flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 ${!childSettingsFor.spouse_can_view ? "opacity-50 pointer-events-none" : ""}`}>
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-xl flex items-center justify-center bg-violet-100 text-violet-600">
+                    <Pencil className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-[13px] font-bold text-slate-900">Allow spouse to manage</p>
+                    <p className="text-[11px] text-slate-500">They can edit details and invest on behalf.</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !childSettingsFor.spouse_can_manage;
+                    updateChildPermission(childSettingsFor, "spouse_can_manage", next);
+                    setChildSettingsFor({ ...childSettingsFor, spouse_can_manage: next });
+                  }}
+                  className={`relative h-6 w-11 rounded-full transition ${childSettingsFor.spouse_can_manage ? "bg-violet-500" : "bg-slate-300"}`}
+                >
+                  <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition ${childSettingsFor.spouse_can_manage ? "left-[22px]" : "left-0.5"}`} />
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Duplicate-child banner ── */}
+      <AnimatePresence>
+        {duplicateBanner && (
+          <motion.div
+            initial={{ y: -60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -60, opacity: 0 }}
+            transition={{ type: "spring", damping: 26, stiffness: 280 }}
+            className="fixed top-4 inset-x-4 z-[60] rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3 shadow-lg flex items-start gap-3"
+          >
+            <div className="h-8 w-8 rounded-xl flex items-center justify-center bg-amber-100 text-amber-700 flex-shrink-0">
+              <AlertCircle className="h-4 w-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-bold text-amber-900">Child already added</p>
+              <p className="text-[12px] text-amber-700 mt-0.5">{duplicateBanner.message || "This child has already been added by the main guardian."}</p>
+            </div>
+            <button onClick={() => setDuplicateBanner(null)} className="h-7 w-7 flex items-center justify-center rounded-full text-amber-600 hover:bg-amber-100 transition flex-shrink-0">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </motion.div>
         )}
       </AnimatePresence>
 
