@@ -2975,39 +2975,130 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                     return <div key={sid}>{renderCard(cards[0])}</div>;
                   }
 
-                  if (isExpanded) {
-                    return (
-                      <div key={sid} className="space-y-2">
-                        <button
-                          type="button"
-                          onClick={() => setExpandedStrategyStack(null)}
-                          className="flex items-center gap-2 px-1 text-[11px] font-bold text-slate-400 hover:text-slate-600 transition"
-                        >
-                          <ChevronUp className="h-3.5 w-3.5" />
-                          {cards[0].name} · {cards.length} purchases · tap to collapse
-                        </button>
-                        {cards.map(sc => renderCard(sc, { showDate: true }))}
-                      </div>
-                    );
-                  }
+                  // Stacked card with absolute-positioned layers + spring transition
+                  const n = cards.length;
+                  const COLLAPSED_H = 112; // header + holdings row
+                  const STACK_OFFSET = 13; // each card peeks this many px below the one above
+                  const STACK_SCALE  = 0.038; // scale reduction per layer
 
-                  // Collapsed stack
-                  const topCard = cards[0];
+                  // Container height: collapsed = top card + peeking layers; expanded = cards flow naturally
+                  const collapsedContainerH = COLLAPSED_H + (n - 1) * STACK_OFFSET + 4;
+
                   return (
-                    <div key={sid} className="relative">
-                      {/* Shadow layers */}
-                      <div className="absolute inset-x-2 top-2 bottom-0 rounded-2xl border border-slate-200 bg-white shadow-sm" />
-                      {cards.length > 2 && (
-                        <div className="absolute inset-x-4 top-4 bottom-0 rounded-2xl border border-slate-100 bg-slate-50" />
-                      )}
-                      {/* Purchase count badge */}
-                      <div className="absolute top-2 right-2 z-10 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-violet-600 px-1.5 text-[10px] font-bold text-white shadow">
-                        {cards.length}×
+                    <div key={sid} style={{
+                      position: 'relative',
+                      height: isExpanded ? 'auto' : collapsedContainerH,
+                      transition: 'height 0.45s cubic-bezier(0.25,0.46,0.45,0.94)',
+                    }}>
+                      {/* 2× badge */}
+                      <div style={{
+                        position: isExpanded ? 'static' : 'absolute',
+                        top: 8, right: 8, zIndex: n + 2,
+                        display: isExpanded ? 'none' : 'flex',
+                      }}
+                        className="absolute h-5 min-w-[20px] items-center justify-center rounded-full bg-violet-600 px-1.5 text-[10px] font-bold text-white shadow pointer-events-none">
+                        {n}×
                       </div>
-                      {/* Top card */}
-                      {renderCard(topCard, {
-                        onClick: () => setExpandedStrategyStack(sid),
-                      })}
+
+                      {isExpanded ? (
+                        /* Expanded: normal flow, each card shows full content + date */
+                        <div className="space-y-2">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedStrategyStack(null)}
+                            className="flex items-center gap-1.5 px-1 text-[11px] font-semibold text-violet-500 hover:text-violet-700 transition"
+                          >
+                            <ChevronUp className="h-3 w-3" />
+                            {cards[0].name} · {n} purchases · collapse
+                          </button>
+                          {cards.map(sc => renderCard(sc, { showDate: true }))}
+                        </div>
+                      ) : (
+                        /* Collapsed: absolute-positioned layers */
+                        cards.map((sc, i) => {
+                          const scale  = 1 - i * STACK_SCALE;
+                          const topPos = i * STACK_OFFSET;
+                          const zIdx   = n - i;
+                          return (
+                            <div
+                              key={sc.batchKey}
+                              onClick={i === 0 ? () => setExpandedStrategyStack(sid) : undefined}
+                              style={{
+                                position: 'absolute',
+                                left: 0, right: 0,
+                                top: topPos,
+                                transform: `scale(${scale})`,
+                                transformOrigin: 'top center',
+                                zIndex: zIdx,
+                                overflow: 'hidden',
+                                height: COLLAPSED_H,
+                                borderRadius: 16,
+                                cursor: i === 0 ? 'pointer' : 'default',
+                                transition: 'all 0.45s cubic-bezier(0.34,1.56,0.64,1)',
+                                boxShadow: i === 0
+                                  ? '0 4px 16px rgba(0,0,0,0.08)'
+                                  : '0 2px 6px rgba(0,0,0,0.04)',
+                              }}
+                            >
+                              <div className="bg-white border border-slate-200 rounded-2xl p-4 h-full pointer-events-none">
+                                {/* Header row always visible */}
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    <div className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                                      style={{ background: "linear-gradient(135deg,#ede9fe,#ddd6fe)" }}>
+                                      <BarChart3 className="h-5 w-5 text-purple-600" />
+                                    </div>
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-bold text-slate-900 truncate">{sc.short_name || sc.name}</p>
+                                      <div className="flex items-center gap-1.5 mt-0.5">
+                                        {sc.risk_level && (
+                                          <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-violet-50 text-violet-600 border border-violet-100">{sc.risk_level}</span>
+                                        )}
+                                        {sc.isFilling && (
+                                          <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-amber-100 text-amber-700 border border-amber-200">Filling</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="text-right flex-shrink-0">
+                                    {sc.isFilling ? (
+                                      <p className="text-sm font-bold text-amber-700">Pending</p>
+                                    ) : (
+                                      <>
+                                        <p className="text-sm font-bold text-slate-900 tabular-nums">{fmt(sc.totalValue)}</p>
+                                        {sc.pnl != null ? (
+                                          <p className={`text-xs font-semibold tabular-nums ${sc.pnl >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                                            {sc.pnl >= 0 ? "+" : ""}{fmt(sc.pnl)} ({sc.pnlPct?.toFixed(2)}%)
+                                          </p>
+                                        ) : <p className="text-xs text-slate-400">−</p>}
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                                {/* Holdings avatars */}
+                                {sc.holdings.length > 0 && (
+                                  <div className="flex items-center gap-2 pt-3 mt-3 border-t border-slate-100">
+                                    <div className="flex -space-x-2">
+                                      {sc.holdings.slice(0, 4).map(h => (
+                                        <div key={h.id} className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white shadow-sm">
+                                          {h.logo_url
+                                            ? <img src={h.logo_url} alt={h.symbol} className="h-full w-full object-cover" />
+                                            : <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[7px] font-bold text-slate-600">{h.symbol?.substring(0,2)}</div>}
+                                        </div>
+                                      ))}
+                                      {sc.holdings.length > 4 && (
+                                        <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-slate-100 text-[9px] font-semibold text-slate-500">+{sc.holdings.length - 4}</div>
+                                      )}
+                                    </div>
+                                    <span className="text-[10px] text-slate-400">{sc.holdings.length} holding{sc.holdings.length !== 1 ? "s" : ""}</span>
+                                    {i === 0 && <span className="ml-auto text-[10px] font-semibold text-violet-500">Tap to see {n} purchases</span>}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
                     </div>
                   );
                 })}
