@@ -3040,7 +3040,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                                   : '0 2px 6px rgba(0,0,0,0.04)',
                               }}
                             >
-                              <div className="bg-white border border-slate-200 rounded-2xl p-4 h-full pointer-events-none">
+                              <div className="bg-white border border-amber-200 rounded-2xl p-4 h-full pointer-events-none" style={{ boxShadow: i === 0 ? '0 0 0 1px rgba(251,191,36,0.15)' : 'none' }}>
                                 {/* Header row always visible */}
                                 <div className="flex items-start justify-between gap-3">
                                   <div className="flex items-center gap-3 min-w-0">
