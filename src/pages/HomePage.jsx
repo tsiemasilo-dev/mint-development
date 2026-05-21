@@ -282,6 +282,15 @@ const HomePage = ({
   const [bestStrategies, setBestStrategies] = useState(() => _cachedBestStrategies);
   const [holdingsSecurities, setHoldingsSecurities] = useState([]);
   const [rawStrategyHoldings, setRawStrategyHoldings] = useState([]);
+  const [hasDirectAssets, setHasDirectAssets] = useState(false);
+  const [strategySkeletonHold, setStrategySkeletonHold] = useState(true);
+
+  // Show the strategies skeleton for at least the first 5 seconds on page open,
+  // so users always get a smooth loading state even on slow renders.
+  useEffect(() => {
+    const t = setTimeout(() => setStrategySkeletonHold(false), 5000);
+    return () => clearTimeout(t);
+  }, []);
   const [failedLogos, setFailedLogos] = useState({});
   const [expandedPendingKey, setExpandedPendingKey] = useState(null);
   const [expandedStratStack, setExpandedStratStack] = useState(null);
@@ -339,6 +348,7 @@ const HomePage = ({
       const directHoldings = (holdings || []).filter(h => !h.strategy_id && h.security_id);
       const strategyHoldings = (holdings || []).filter(h => h.strategy_id);
       setRawStrategyHoldings(strategyHoldings);
+      setHasDirectAssets(directHoldings.length > 0);
 
       if (holdings && holdings.length > 0) { _cachedHasAnyHoldings = true; setHasAnyHoldings(true); }
 
@@ -1387,7 +1397,9 @@ const HomePage = ({
           );
         })()}
 
-        {/* Best Performing Assets */}
+        {/* Best Performing Assets — only shown when user has individual stock holdings
+            (i.e. not part of a strategy). Strategies have their own section. */}
+        {(loadingBestAssets || hasDirectAssets) && (
         <section>
           <div className="flex items-end justify-between px-5 mb-3">
             <div className="space-y-1">
@@ -1506,6 +1518,7 @@ const HomePage = ({
             </div>
           )}
         </section>
+        )}
 
         {/* Best Performing Strategies */}
         <section>
@@ -1521,7 +1534,7 @@ const HomePage = ({
                 <span>Top performing curated portfolios</span>
               </div>
             </div>
-            {hasStrategies && !loadingBestStrategies && (
+            {hasStrategies && !loadingBestStrategies && !strategySkeletonHold && (
               <button
                 onClick={onOpenStrategies}
                 className="mb-1 text-xs font-semibold text-violet-600 active:opacity-70 transition-colors"
@@ -1531,7 +1544,7 @@ const HomePage = ({
             )}
           </div>
 
-          {loadingBestStrategies ? (
+          {(loadingBestStrategies || strategySkeletonHold) ? (
             <div className="flex gap-3 overflow-hidden pb-1">
               {[0, 1].map((i) => (
                 <div key={i} className="flex min-w-[280px] flex-shrink-0 flex-col gap-3 rounded-3xl bg-white p-4 shadow-md">
