@@ -2983,6 +2983,9 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
 
                   // Stacked card with absolute-positioned layers + spring transition
                   const n = cards.length;
+                  const pendingCount = cards.filter(c => c.isFilling).length;
+                  const filledCount = n - pendingCount;
+                  const hasMixed = pendingCount > 0 && filledCount > 0;
                   const COLLAPSED_H = 112; // header + holdings row
                   const STACK_OFFSET = 13; // each card peeks this many px below the one above
                   const STACK_SCALE  = 0.038; // scale reduction per layer
@@ -3005,6 +3008,14 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                         className="absolute h-5 min-w-[20px] items-center justify-center rounded-full bg-violet-600 px-1.5 text-[10px] font-bold text-white shadow pointer-events-none">
                         {n}×
                       </div>
+
+                      {/* Mixed-state "N pending" ribbon — top-left, only when stack contains both filled & pending */}
+                      {hasMixed && !isExpanded && (
+                        <div style={{ position: 'absolute', top: -4, left: -4, zIndex: n + 3 }}
+                          className="flex items-center gap-1 rounded-full bg-violet-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow ring-2 ring-white pointer-events-none">
+                          <Clock className="h-2.5 w-2.5" /> {pendingCount} pending
+                        </div>
+                      )}
 
                       {isExpanded ? (
                         /* Expanded: normal flow, each card shows full content + date */
@@ -3097,7 +3108,13 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                                       )}
                                     </div>
                                     <span className="text-[10px] text-slate-400">{sc.holdings.length} holding{sc.holdings.length !== 1 ? "s" : ""}</span>
-                                    {i === 0 && <span className="ml-auto text-[10px] font-semibold text-violet-500">Tap to see {n} purchases</span>}
+                                    {i === 0 && (
+                                      <span className="ml-auto text-[10px] font-semibold text-violet-500">
+                                        {hasMixed
+                                          ? `${filledCount} filled · ${pendingCount} pending · tap to see`
+                                          : `Tap to see ${n} purchases`}
+                                      </span>
+                                    )}
                                   </div>
                                 )}
                               </div>
