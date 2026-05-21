@@ -139,39 +139,69 @@ export default async function handler(req, res) {
     const userId = req.query.user_id;
     if (!userId) return res.status(400).json({ error: "user_id required" });
     try {
+      // 1. Fetch this user's own family members
       const { data, error } = await db
         .from("family_members")
         .select("*")
         .eq("primary_user_id", userId)
         .order("created_at", { ascending: true });
       if (error) throw error;
+      let members = (data || []).map(m => ({ ...m, is_shared: false, can_manage: true }));
 
-      const members = data || [];
+      // 2. Reverse spouse lookup — is this user listed as someone else's spouse?
+      const { data: spouseRows, error: spouseRowsErr } = await db
+        .from("family_members")
+        .select("primary_user_id")
+        .eq("linked_user_id", userId)
+        .eq("relationship", "spouse");
+
+      if (!spouseRowsErr && spouseRows?.length > 0) {
+        const primaryGuardianIds = [...new Set(spouseRows.map(r => r.primary_user_id).filter(Boolean))];
+
+        // 3. Fetch shared children from each primary guardian — only those flagged as visible
+        const { data: sharedChildren } = await db
+          .from("family_members")
+          .select("*")
+          .in("primary_user_id", primaryGuardianIds)
+          .eq("relationship", "child")
+          .eq("spouse_can_view", true);
+
+        // 4. Tag shared children — read-only unless can_manage is true
+        const sharedTagged = (sharedChildren || []).map(c => ({
+          ...c,
+          is_shared: true,
+          can_manage: !!c.spouse_can_manage,
+        }));
+
+        // 5. Merge — dedupe by id (shouldn't overlap, but safety)
+        const byId = new Map();
+        for (const m of members)        byId.set(m.id, m);
+        for (const m of sharedTagged)   if (!byId.has(m.id)) byId.set(m.id, m);
+        members = Array.from(byId.values()).sort((a, b) =>
+          (a.created_at || "").localeCompare(b.created_at || "")
+        );
+      }
+
+      // 6. Enrich spouse rows with actual wallet mint numbers
       const spouseLinkedUserIds = members
         .filter((m) => m.relationship === "spouse" && isValidUuid(m.linked_user_id))
         .map((m) => m.linked_user_id);
 
       if (spouseLinkedUserIds.length > 0) {
-        const { data: spouseWallets, error: spouseWalletErr } = await db
+        const { data: spouseWallets } = await db
           .from("wallets")
           .select("user_id, mint_number")
           .in("user_id", spouseLinkedUserIds);
 
-        if (!spouseWalletErr && spouseWallets?.length) {
+        if (spouseWallets?.length) {
           const spouseMintByUserId = new Map(
-            spouseWallets
-              .filter((w) => w?.user_id && w?.mint_number)
-              .map((w) => [w.user_id, w.mint_number])
+            spouseWallets.filter((w) => w?.user_id && w?.mint_number).map((w) => [w.user_id, w.mint_number])
           );
-
-          const enrichedMembers = members.map((member) => {
+          members = members.map((member) => {
             if (member.relationship !== "spouse" || !member.linked_user_id) return member;
             const actualMint = spouseMintByUserId.get(member.linked_user_id);
-            if (!actualMint) return member;
-            return { ...member, mint_number: actualMint };
+            return actualMint ? { ...member, mint_number: actualMint } : member;
           });
-
-          return res.json({ members: enrichedMembers });
         }
       }
 
@@ -357,6 +387,47 @@ export default async function handler(req, res) {
         }
 
         const cleanChildId = id_number ? String(id_number).replace(/\D/g, "") : null;
+
+        // Duplicate detection — if the caller is a spouse, check whether the primary
+        // guardian has already added this child (by id_number, or by name+DOB as a fallback).
+        const { data: spouseLink } = await db
+          .from("family_members")
+          .select("primary_user_id")
+          .eq("linked_user_id", primary_user_id)
+          .eq("relationship", "spouse")
+          .maybeSingle();
+
+        if (spouseLink?.primary_user_id) {
+          let existing = null;
+          if (cleanChildId) {
+            const { data: byId } = await db
+              .from("family_members")
+              .select("id, first_name, last_name")
+              .eq("primary_user_id", spouseLink.primary_user_id)
+              .eq("relationship", "child")
+              .eq("id_number", cleanChildId)
+              .maybeSingle();
+            existing = byId || null;
+          }
+          if (!existing) {
+            const { data: byNameDob } = await db
+              .from("family_members")
+              .select("id, first_name, last_name")
+              .eq("primary_user_id", spouseLink.primary_user_id)
+              .eq("relationship", "child")
+              .ilike("first_name", first_name.trim())
+              .eq("date_of_birth", date_of_birth)
+              .maybeSingle();
+            existing = byNameDob || null;
+          }
+          if (existing) {
+            return res.status(409).json({
+              error: `${existing.first_name || "This child"} has already been added by the main guardian.`,
+              code: "child_already_added",
+            });
+          }
+        }
+
         const mint_number = generateChildMintNumber(first_name.trim(), cleanChildId, date_of_birth);
         const verificationStatus = certificate_verification_status || "pending_review";
         const { user: authUser } = await authenticateUser(req);
@@ -429,7 +500,7 @@ export default async function handler(req, res) {
     try {
       const { data: member, error: fetchErr } = await db
         .from("family_members")
-        .select("primary_user_id")
+        .select("primary_user_id, relationship, spouse_can_manage")
         .eq("id", memberId)
         .maybeSingle();
 
@@ -437,13 +508,36 @@ export default async function handler(req, res) {
         return res.status(404).json({ error: "Family member not found" });
       }
 
-      if (member.primary_user_id !== authUser.id) {
+      const isOwner = member.primary_user_id === authUser.id;
+      let isCoGuardianWithRights = false;
+      if (!isOwner && member.relationship === "child" && member.spouse_can_manage) {
+        const { data: spouseLink } = await db
+          .from("family_members")
+          .select("id")
+          .eq("primary_user_id", member.primary_user_id)
+          .eq("linked_user_id", authUser.id)
+          .eq("relationship", "spouse")
+          .maybeSingle();
+        isCoGuardianWithRights = !!spouseLink;
+      }
+
+      if (!isOwner && !isCoGuardianWithRights) {
         return res.status(403).json({ error: "Not authorized to update this member" });
+      }
+
+      // Co-guardians (spouses with manage rights) can't flip the permission toggles
+      // or change ownership of the row.
+      const safePayload = { ...updatePayload };
+      if (!isOwner) {
+        delete safePayload.spouse_can_view;
+        delete safePayload.spouse_can_manage;
+        delete safePayload.primary_user_id;
+        delete safePayload.parent_id;
       }
 
       const { data: updated, error: updateErr } = await db
         .from("family_members")
-        .update(updatePayload)
+        .update(safePayload)
         .eq("id", memberId)
         .select()
         .single();
