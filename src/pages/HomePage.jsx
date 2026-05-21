@@ -68,8 +68,34 @@ registerCacheResetCallback(() => {
 // batches use the white card style with PnL.
 
 const StrategyStackedModal = ({ data, onClose }) => {
-  const { strategy, batches, fmtBatchDate, holdingsSnapshot = [], pct = 0 } = data;
+  const { strategy, batches, fmtBatchDate, holdingsSnapshot = [], pct = 0, livePriceMap = {} } = data;
   const [openIndex, setOpenIndex] = useState(null);
+
+  // Per-batch cost / value / PnL — computed from each batch's actual holdings.
+  // Cost basis  = Σ (avg_fill × quantity) / 100    (rands)
+  // Value       = Σ (last_price × quantity)        (rands; falls back to stored market_value)
+  const computeBatchStats = (batch) => {
+    let costCents = 0;
+    let valueRands = 0;
+    let anyValueMissing = false;
+    for (const h of batch.holdings) {
+      const qty = Number(h.quantity || 0);
+      const avgFillCents = Number(h.avg_fill || 0);
+      costCents += avgFillCents * qty;
+      const livePrice = livePriceMap[h.security_id];
+      if (livePrice != null && livePrice > 0) {
+        valueRands += livePrice * qty;
+      } else if (h.market_value != null) {
+        valueRands += Number(h.market_value) / 100;
+      } else {
+        anyValueMissing = true;
+      }
+    }
+    const costRands = costCents / 100;
+    const pnlRands = valueRands - costRands;
+    const pnlPct = costRands > 0 ? (pnlRands / costRands) * 100 : null;
+    return { costRands, valueRands, pnlRands, pnlPct, anyValueMissing };
+  };
 
   // Display newest-first
   const ordered = [...batches].reverse();
@@ -134,6 +160,7 @@ const StrategyStackedModal = ({ data, onClose }) => {
 
               const isPending = !batch.filled;
               const dateStr = fmtBatchDate(batch);
+              const stats = computeBatchStats(batch);
 
               return (
                 <div
@@ -194,16 +221,15 @@ const StrategyStackedModal = ({ data, onClose }) => {
                           <div className="text-right flex-shrink-0">
                             {dateStr && <p className="text-[10px] text-slate-400 mb-0.5">{dateStr}</p>}
                             <p className="text-sm font-semibold text-slate-900">
-                              {strategy.currentValue ? `R${Number(strategy.currentValue / batches.length).toFixed(2)}` : "—"}
+                              {stats.anyValueMissing && stats.valueRands === 0 ? "—" : `R${stats.valueRands.toFixed(2)}`}
                             </p>
-                            {strategy.pnlRands != null && strategy.investedAmount > 0 ? (
-                              <p className={`text-xs font-semibold ${strategy.pnlRands >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                                {strategy.pnlRands >= 0 ? "+" : ""}{strategy.pnlPct?.toFixed(2)}%
+                            <p className="text-[10px] text-slate-400">Invested R{stats.costRands.toFixed(2)}</p>
+                            {stats.pnlPct != null ? (
+                              <p className={`text-xs font-semibold ${stats.pnlRands >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                                {stats.pnlRands >= 0 ? "+" : ""}R{Math.abs(stats.pnlRands).toFixed(2)} ({stats.pnlRands >= 0 ? "+" : ""}{stats.pnlPct.toFixed(2)}%)
                               </p>
                             ) : (
-                              <p className={`text-xs font-semibold ${pct >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                                {pct >= 0 ? "+" : ""}{pct.toFixed(2)}%
-                              </p>
+                              <p className="text-xs font-semibold text-slate-400">—</p>
                             )}
                           </div>
                         </div>
@@ -669,6 +695,17 @@ const HomePage = ({
   }, [profile?.id, pricesLastUpdated]);
 
   const holdingsBySymbol = useMemo(() => buildHoldingsBySymbol(holdingsSecurities), [holdingsSecurities]);
+
+  // Live price map (security_id → last_price in Rands) for per-batch value calculations.
+  const livePriceMap = useMemo(() => {
+    const map = {};
+    for (const sec of (holdingsSecurities || [])) {
+      if (sec?.id && sec?.last_price != null) {
+        map[sec.id] = Number(sec.last_price);
+      }
+    }
+    return map;
+  }, [holdingsSecurities]);
 
   // Group strategy holdings into purchase batches (same strategy + same minute = same order).
   // Each batch is fully filled (all have avg_fill) or fully pending (none have avg_fill).
@@ -1658,7 +1695,7 @@ const HomePage = ({
                       {/* Top card */}
                       <button
                         type="button"
-                        onClick={() => setExpandedStratStack({ strategy, batches, fmtBatchDate, holdingsSnapshot, pct })}
+                        onClick={() => setExpandedStratStack({ strategy, batches, fmtBatchDate, holdingsSnapshot, pct, livePriceMap })}
                         className="relative w-full rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all active:scale-[0.97]"
                       >
                         {cardInner}
