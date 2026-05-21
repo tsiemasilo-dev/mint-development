@@ -323,52 +323,26 @@ export default async function handler(req, res) {
 
         const holdingQty = Math.floor(rawHoldingQty);
 
-        const holdingsLookupQuery = withFamilyMemberFilter(
-          db
-            .from("stock_holdings_c")
-            .select("id, quantity")
-            .eq("user_id", targetUserId)
-            .eq("security_id", sec.id)
-            .eq("strategy_id", strategyId)
-        );
-        const { data: existing, error: lookupErr } = await holdingsLookupQuery.maybeSingle();
+        // Always insert a NEW row for each strategy purchase — never update an
+        // existing row. Each purchase is a discrete order and must remain
+        // distinguishable in stock_holdings_c (grouped by created_at minute in
+        // the UI so duplicate purchases show as separate stacked cards).
+        const { error: insertErr } = await db.from("stock_holdings_c").insert({
+          user_id: targetUserId,
+          family_member_id: targetFamilyMemberId,
+          security_id: sec.id,
+          strategy_id: strategyId,
+          quantity: holdingQty,
+          avg_fill: null,
+          market_value: 0,
+          unrealized_pnl: 0,
+          as_of_date: null,
+          Status: "active",
+        });
 
-        if (lookupErr) {
-          console.error("[record-investment] Error looking up holding for", holding.symbol, lookupErr.message);
-          return res.status(500).json({ success: false, error: `Failed to look up holding for ${holding.symbol}` });
-        }
-
-        if (existing) {
-          const oldQty = Number(existing.quantity || 0);
-          const newQty = Math.floor(oldQty + holdingQty);
-
-          const { error: updateErr } = await db.from("stock_holdings_c").update({
-            quantity: newQty,
-            updated_at: now,
-          }).eq("id", existing.id);
-
-          if (updateErr) {
-            console.error("[record-investment] Failed to update holding for", holding.symbol, updateErr.message);
-            return res.status(500).json({ success: false, error: `Failed to update holding for ${holding.symbol}` });
-          }
-        } else {
-          const { error: insertErr } = await db.from("stock_holdings_c").insert({
-            user_id: targetUserId,
-            family_member_id: targetFamilyMemberId,
-            security_id: sec.id,
-            strategy_id: strategyId,
-            quantity: holdingQty,
-            avg_fill: null,
-            market_value: 0,
-            unrealized_pnl: 0,
-            as_of_date: null,
-            Status: "active",
-          });
-
-          if (insertErr) {
-            console.error("[record-investment] Failed to insert holding for", holding.symbol, insertErr.message);
-            return res.status(500).json({ success: false, error: `Failed to record holding for ${holding.symbol}` });
-          }
+        if (insertErr) {
+          console.error("[record-investment] Failed to insert holding for", holding.symbol, insertErr.message);
+          return res.status(500).json({ success: false, error: `Failed to record holding for ${holding.symbol}` });
         }
 
         insertedHoldings.push({ symbol: holding.symbol, quantity: holdingQty, priceCents: null, pendingFill: true });
