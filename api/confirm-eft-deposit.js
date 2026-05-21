@@ -153,41 +153,19 @@ export default async function handler(req, res) {
           const priceCentsVal = Number(sec.last_price || 0);
           if (priceCentsVal <= 0) continue;
 
-          const { data: existing } = await db
-            .from("stock_holdings_c")
-            .select("id, quantity, avg_fill")
-            .eq("user_id", userId)
-            .eq("security_id", sec.id)
-            .eq("strategy_id", strategyId)
-            .maybeSingle();
-
-          if (existing) {
-            const oldQty = Number(existing.quantity || 0);
-            const oldAvgFill = Number(existing.avg_fill || 0);
-            const newQty = oldQty + holdingQty;
-            const newAvgFill = newQty > 0
-              ? ((oldAvgFill * oldQty) + (priceCentsVal * holdingQty)) / newQty
-              : priceCentsVal;
-            await db.from("stock_holdings_c").update({
-              quantity: newQty,
-              avg_fill: Math.round(newAvgFill),
-              market_value: Math.round(newQty * priceCentsVal),
-              as_of_date: today,
-              updated_at: now,
-            }).eq("id", existing.id);
-          } else {
-            await db.from("stock_holdings_c").insert({
-              user_id: userId,
-              security_id: sec.id,
-              strategy_id: strategyId,
-              quantity: holdingQty,
-              avg_fill: priceCentsVal,
-              market_value: Math.round(holdingQty * priceCentsVal),
-              unrealized_pnl: 0,
-              as_of_date: today,
-              Status: "active",
-            });
-          }
+          // Always insert a NEW row per strategy purchase so duplicate buys remain
+          // distinguishable in stock_holdings_c (grouped by created_at in the UI).
+          await db.from("stock_holdings_c").insert({
+            user_id: userId,
+            security_id: sec.id,
+            strategy_id: strategyId,
+            quantity: holdingQty,
+            avg_fill: priceCentsVal,
+            market_value: Math.round(holdingQty * priceCentsVal),
+            unrealized_pnl: 0,
+            as_of_date: today,
+            Status: "active",
+          });
         }
       }
     } else if (securityId && !isStrategyInvestment) {
