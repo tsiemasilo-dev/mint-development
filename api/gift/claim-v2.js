@@ -23,28 +23,14 @@ async function allocateStrategyHoldings(db, userId, strategyId, strategyHoldings
       if (!sec?.last_price) continue;
       const qty = Math.max(1, Math.round((h.weight || 1) * scale));
       try {
-        const { data: existing } = await db.from("stock_holdings_c")
-          .select("id, quantity")
-          .eq("user_id", userId).eq("security_id", sec.id)
-          .eq("strategy_id", strategyId).is("family_member_id", null).maybeSingle();
-        if (existing) {
-          // Add quantity and mark pending — broker fill will set avg_fill
-          await db.from("stock_holdings_c").update({
-            quantity: Number(existing.quantity || 0) + qty,
-            avg_fill: null,
-            market_value: 0,
-            unrealized_pnl: 0,
-            as_of_date: null,
-            updated_at: new Date().toISOString(),
-          }).eq("id", existing.id);
-        } else {
-          await db.from("stock_holdings_c").insert({
-            user_id: userId, security_id: sec.id, quantity: qty,
-            avg_fill: null, market_value: 0,
-            unrealized_pnl: 0, as_of_date: null,
-            strategy_id: strategyId, Status: "active",
-          });
-        }
+        // Always insert a NEW row per gift-claimed strategy — keeps each
+        // purchase event distinguishable for the stacked-card UI.
+        await db.from("stock_holdings_c").insert({
+          user_id: userId, security_id: sec.id, quantity: qty,
+          avg_fill: null, market_value: 0,
+          unrealized_pnl: 0, as_of_date: null,
+          strategy_id: strategyId, Status: "active",
+        });
         created++;
       } catch (e) { console.warn(`[gift/claim-v2] holding upsert ${h.symbol}:`, e.message); }
     }
