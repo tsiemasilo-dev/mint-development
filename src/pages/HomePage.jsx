@@ -61,6 +61,194 @@ registerCacheResetCallback(() => {
   _cachedHasAnyHoldings = false;
 });
 
+// ── StrategyStackedModal ─────────────────────────────────────────────────────
+// Bottom-sheet modal showing each purchase batch as a stacked card.
+// Click a card → it expands (height grows), other cards slide below.
+// Click again → collapses. Pending batches use the purple gradient; filled
+// batches use the white card style with PnL.
+
+const StrategyStackedModal = ({ data, onClose }) => {
+  const { strategy, batches, fmtBatchDate, holdingsSnapshot = [], pct = 0 } = data;
+  const [openIndex, setOpenIndex] = useState(null);
+
+  // Display newest-first
+  const ordered = [...batches].reverse();
+
+  const COLLAPSED_H = 88;
+  const EXPANDED_H = 280;
+  const STACK_OFFSET = 14;
+  const STACK_SCALE = 0.045;
+
+  const containerH = openIndex == null
+    ? COLLAPSED_H + (ordered.length - 1) * STACK_OFFSET + 24
+    : EXPANDED_H + (ordered.length - 1) * STACK_OFFSET + COLLAPSED_H + 24;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-xl rounded-t-3xl bg-white shadow-2xl max-h-[85vh] overflow-hidden flex flex-col">
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="h-1 w-10 rounded-full bg-slate-200" />
+        </div>
+        <div className="px-5 pt-2 pb-4 border-b border-slate-100">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-0.5">Your purchases</p>
+          <p className="text-[15px] font-bold text-slate-900">{strategy.name}</p>
+          <p className="text-[11px] text-slate-500 mt-0.5">Tap a card to expand</p>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          <div className="relative" style={{ height: containerH, transition: "height 0.45s cubic-bezier(0.25,0.46,0.45,0.94)" }}>
+            {ordered.map((batch, i) => {
+              const isOpen = openIndex === i;
+              const anyOpen = openIndex != null;
+              const behindOpen = anyOpen && !isOpen && i > openIndex;
+              const aboveOpen = anyOpen && !isOpen && i < openIndex;
+
+              // Calculate top + scale
+              let top, scale, zIndex, height;
+              if (isOpen) {
+                top = i * STACK_OFFSET;
+                scale = 1;
+                zIndex = 30;
+                height = EXPANDED_H;
+              } else if (anyOpen) {
+                if (aboveOpen) {
+                  // Above the expanded card — push to the top
+                  top = i * STACK_OFFSET;
+                  scale = 1 - (openIndex - i) * STACK_SCALE * 0.5;
+                  zIndex = 20 - (openIndex - i);
+                } else {
+                  // Below the expanded card — slide down
+                  const belowIndex = i - openIndex;
+                  top = openIndex * STACK_OFFSET + EXPANDED_H + (belowIndex - 1) * STACK_OFFSET;
+                  scale = 1 - (belowIndex - 1) * STACK_SCALE * 0.5;
+                  zIndex = 20 - belowIndex;
+                }
+                height = COLLAPSED_H;
+              } else {
+                // All collapsed (stacked)
+                top = i * STACK_OFFSET;
+                scale = 1 - i * STACK_SCALE * 0.7;
+                zIndex = ordered.length - i;
+                height = COLLAPSED_H;
+              }
+
+              const isPending = !batch.filled;
+              const dateStr = fmtBatchDate(batch);
+
+              return (
+                <div
+                  key={batch.minute + "_" + i}
+                  onClick={() => setOpenIndex(isOpen ? null : i)}
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    right: 0,
+                    top,
+                    height,
+                    transform: `scale(${scale})`,
+                    transformOrigin: "top center",
+                    zIndex,
+                    cursor: "pointer",
+                    overflow: "hidden",
+                    borderRadius: 20,
+                    transition: "all 0.45s cubic-bezier(0.34,1.56,0.64,1)",
+                    boxShadow: isOpen ? "0 8px 32px rgba(0,0,0,0.12)" : "0 2px 8px rgba(0,0,0,0.05)",
+                  }}
+                >
+                  {isPending ? (
+                    <div className="w-full h-full p-4 text-white relative overflow-hidden"
+                      style={{ background: "linear-gradient(135deg,#5b21b6 0%,#7c3aed 55%,#a855f7 100%)" }}>
+                      <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+                      <div className="relative flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25 flex-shrink-0">
+                            <Clock3 className="h-5 w-5 text-white" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold truncate">{strategy.name}</p>
+                            <p className="text-[11px] text-white/70 mt-0.5">Purchase {ordered.length - i} · pending</p>
+                          </div>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          {dateStr && <p className="text-[10px] text-white/60 mb-1">{dateStr}</p>}
+                          <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ring-1 ring-white/25">
+                            <Clock3 className="h-2.5 w-2.5" /> Pending
+                          </span>
+                        </div>
+                      </div>
+                      {isOpen && (
+                        <div className="relative mt-4 pt-4 border-t border-white/15 space-y-2">
+                          <p className="text-[12px] text-white/80">Waiting for broker fills. Your portfolio total updates once each holding settles.</p>
+                          <p className="text-[11px] text-white/60">{batch.holdings.length} holding{batch.holdings.length !== 1 ? "s" : ""} in this batch</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="w-full h-full p-4 bg-white border border-slate-200">
+                      <div className="flex items-start gap-3">
+                        <div className="flex-1 flex items-start justify-between gap-3">
+                          <div className="text-left space-y-1 min-w-0">
+                            <p className="truncate text-sm font-semibold text-slate-900">{strategy.name}</p>
+                            <p className="text-xs text-slate-600 line-clamp-1">Purchase {ordered.length - i} · filled</p>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            {dateStr && <p className="text-[10px] text-slate-400 mb-0.5">{dateStr}</p>}
+                            <p className="text-sm font-semibold text-slate-900">
+                              {strategy.currentValue ? `R${Number(strategy.currentValue / batches.length).toFixed(2)}` : "—"}
+                            </p>
+                            {strategy.pnlRands != null && strategy.investedAmount > 0 ? (
+                              <p className={`text-xs font-semibold ${strategy.pnlRands >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                                {strategy.pnlRands >= 0 ? "+" : ""}{strategy.pnlPct?.toFixed(2)}%
+                              </p>
+                            ) : (
+                              <p className={`text-xs font-semibold ${pct >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                                {pct >= 0 ? "+" : ""}{pct.toFixed(2)}%
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      {isOpen && (
+                        <div className="mt-4 pt-3 border-t border-slate-100">
+                          {holdingsSnapshot.length > 0 && (
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="flex -space-x-2">
+                                {holdingsSnapshot.slice(0, 4).map((h) => (
+                                  <div key={`${strategy.id}-${h.id || h.symbol}-mod`}
+                                    className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-sm">
+                                    {h.logo_url
+                                      ? <img src={h.logo_url} alt={h.name} className="h-full w-full object-cover" />
+                                      : <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">{h.symbol?.substring(0, 2)}</div>}
+                                  </div>
+                                ))}
+                                {holdingsSnapshot.length > 4 && (
+                                  <div className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500">
+                                    +{holdingsSnapshot.length - 4}
+                                  </div>
+                                )}
+                              </div>
+                              <span className="text-[11px] text-slate-400">{batch.holdings.length} holding{batch.holdings.length !== 1 ? "s" : ""}</span>
+                            </div>
+                          )}
+                          {strategy.risk_level && (
+                            <span className="inline-block rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+                              {strategy.risk_level}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const HomePage = ({
   onOpenNotifications,
   onOpenMintBalance,
@@ -93,6 +281,7 @@ const HomePage = ({
   const { lastUpdated: pricesLastUpdated } = useRealtimePrices();
   const [bestStrategies, setBestStrategies] = useState(() => _cachedBestStrategies);
   const [holdingsSecurities, setHoldingsSecurities] = useState([]);
+  const [rawStrategyHoldings, setRawStrategyHoldings] = useState([]);
   const [failedLogos, setFailedLogos] = useState({});
   const [expandedPendingKey, setExpandedPendingKey] = useState(null);
   const [expandedStratStack, setExpandedStratStack] = useState(null);
@@ -140,7 +329,7 @@ const HomePage = ({
     try {
       const { data: holdings, error: holdingsError } = await supabase
         .from('stock_holdings_c')
-        .select('id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, Status')
+        .select('id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, Status, created_at')
         .eq('user_id', profile.id)
         .is('family_member_id', null)
         .eq('Status', 'active');
@@ -149,6 +338,7 @@ const HomePage = ({
 
       const directHoldings = (holdings || []).filter(h => !h.strategy_id && h.security_id);
       const strategyHoldings = (holdings || []).filter(h => h.strategy_id);
+      setRawStrategyHoldings(strategyHoldings);
 
       if (holdings && holdings.length > 0) { _cachedHasAnyHoldings = true; setHasAnyHoldings(true); }
 
@@ -469,6 +659,30 @@ const HomePage = ({
   }, [profile?.id, pricesLastUpdated]);
 
   const holdingsBySymbol = useMemo(() => buildHoldingsBySymbol(holdingsSecurities), [holdingsSecurities]);
+
+  // Group strategy holdings into purchase batches (same strategy + same minute = same order).
+  // Each batch is fully filled (all have avg_fill) or fully pending (none have avg_fill).
+  const purchaseBatchesByStrategy = useMemo(() => {
+    const out = {};
+    for (const h of (rawStrategyHoldings || [])) {
+      if (!h.strategy_id) continue;
+      const minute = h.created_at ? new Date(h.created_at).toISOString().slice(0, 16) : "unknown";
+      const key = `${h.strategy_id}__${minute}`;
+      if (!out[h.strategy_id]) out[h.strategy_id] = {};
+      if (!out[h.strategy_id][key]) {
+        out[h.strategy_id][key] = { strategyId: h.strategy_id, minute, holdings: [], filled: true };
+      }
+      out[h.strategy_id][key].holdings.push(h);
+      // If any holding in batch is unfilled, mark batch as not filled
+      if (!h.avg_fill || Number(h.avg_fill) === 0) out[h.strategy_id][key].filled = false;
+    }
+    // Convert to array of batches per strategy, sorted oldest→newest
+    const result = {};
+    for (const [stratId, batchMap] of Object.entries(out)) {
+      result[stratId] = Object.values(batchMap).sort((a, b) => (a.minute < b.minute ? -1 : 1));
+    }
+    return result;
+  }, [rawStrategyHoldings]);
 
   useEffect(() => {
     const fetchHoldingsSecurities = async () => {
@@ -979,6 +1193,8 @@ const HomePage = ({
           const safeAssets = Array.isArray(assetsToDisplay) ? assetsToDisplay : [];
           const safeStrategies = Array.isArray(bestStrategies) ? bestStrategies : [];
           const pendingAssets = safeAssets.filter(a => a && a.isPending);
+          // Strategies where ALL batches are pending — those with mixed state show up
+          // inside the filled-strategies carousel as a stack instead.
           const pendingStrategies = safeStrategies.filter(s => s && s.isPending);
 
           // Build one entry per TRANSACTION for strategies so duplicate purchases show separately.
@@ -1342,32 +1558,16 @@ const HomePage = ({
                 const holdingsSnapshot = getStrategyHoldingsSnapshot(strategy, holdingsBySymbol);
                 const pct = strategy.change_pct || 0;
 
-                // Count how many times this strategy was purchased (by transaction name)
-                const stratTxs = (Array.isArray(transactions) ? transactions : [])
-                  .filter(tx => {
-                    const n = (tx.name || "").trim();
-                    const sName = (strategy.name || "").toLowerCase();
-                    const sShort = (strategy.short_name || "").toLowerCase();
-                    return (
-                      (n.startsWith("Strategy Investment: ") && (
-                        n.replace("Strategy Investment: ", "").trim().toLowerCase() === sName ||
-                        n.replace("Strategy Investment: ", "").trim().toLowerCase() === sShort
-                      )) ||
-                      (n.startsWith("Purchased ") && (
-                        n.replace("Purchased ", "").trim().toLowerCase() === sName
-                      ))
-                    );
-                  })
-                  .sort((a, b) =>
-                    new Date(b.transaction_date || b.created_at || 0) -
-                    new Date(a.transaction_date || a.created_at || 0)
-                  );
+                // Use purchase batches (one per minute) instead of transactions for accuracy
+                const batches = purchaseBatchesByStrategy[strategy.id] || [];
+                const pendingCount = batches.filter(b => !b.filled).length;
+                const filledCount = batches.filter(b => b.filled).length;
+                const isStack = batches.length > 1;
+                const hasMixed = pendingCount > 0 && filledCount > 0;
 
-                const isStack = stratTxs.length > 1;
-                const fmtTxDate = (tx) => {
-                  const d = new Date(tx?.transaction_date || tx?.created_at || 0);
-                  if (isNaN(d)) return null;
-                  return d.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
+                const fmtBatchDate = (b) => {
+                  if (b.minute === "unknown") return null;
+                  return new Date(b.minute).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
                 };
 
                 // Inner card content (shared between single and stack)
@@ -1379,7 +1579,9 @@ const HomePage = ({
                           <p className="truncate text-sm font-semibold text-slate-900">{strategy.name}</p>
                           <p className="text-xs text-slate-600 line-clamp-1">
                             {isStack
-                              ? `${stratTxs.length} purchases · tap to see each`
+                              ? hasMixed
+                                ? `${filledCount} filled · ${pendingCount} pending · tap to see`
+                                : `${batches.length} purchases · tap to see each`
                               : `${strategy.risk_level || 'Balanced'}${strategy.objective ? ` • ${strategy.objective}` : ''}`}
                           </p>
                         </div>
@@ -1430,23 +1632,34 @@ const HomePage = ({
                 if (isStack) {
                   return (
                     <div key={strategy.id} className="flex-shrink-0 w-[280px] snap-start relative">
-                      {/* Stack shadow layers */}
-                      <div className="absolute inset-x-3 top-2 bottom-0 rounded-3xl border border-slate-100/80 bg-white/70 shadow-sm" />
-                      {stratTxs.length > 2 && (
+                      {/* Stack shadow layers — purple if pending batch exists, white otherwise */}
+                      {pendingCount > 0 ? (
+                        <div className="absolute inset-x-3 top-2 bottom-0 rounded-3xl shadow-sm"
+                          style={{ background: "linear-gradient(135deg,#7c3aed,#a855f7)" }} />
+                      ) : (
+                        <div className="absolute inset-x-3 top-2 bottom-0 rounded-3xl border border-slate-100/80 bg-white/70 shadow-sm" />
+                      )}
+                      {batches.length > 2 && (
                         <div className="absolute inset-x-5 top-4 bottom-0 rounded-3xl border border-slate-100/60 bg-white/50 shadow-sm" />
                       )}
                       {/* Top card */}
                       <button
                         type="button"
-                        onClick={() => setExpandedStratStack({ strategy, stratTxs, fmtTxDate })}
+                        onClick={() => setExpandedStratStack({ strategy, batches, fmtBatchDate, holdingsSnapshot, pct })}
                         className="relative w-full rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all active:scale-[0.97]"
                       >
                         {cardInner}
                       </button>
                       {/* Purchase count badge */}
                       <div className="absolute top-2 right-2 h-5 min-w-[20px] px-1.5 flex items-center justify-center rounded-full bg-violet-600 text-[10px] font-bold text-white shadow">
-                        {stratTxs.length}×
+                        {batches.length}×
                       </div>
+                      {/* Pending indicator if mixed */}
+                      {hasMixed && (
+                        <div className="absolute -top-1 -left-1 flex items-center gap-1 rounded-full bg-violet-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow ring-2 ring-white">
+                          <Clock3 className="h-2.5 w-2.5" /> {pendingCount} pending
+                        </div>
+                      )}
                     </div>
                   );
                 }
@@ -1772,40 +1985,12 @@ const HomePage = ({
       )}
     </div>
 
-    {/* Strategy stack purchases modal */}
+    {/* Strategy stack purchases modal — animated stacked cards */}
     {expandedStratStack && (
-      <div className="fixed inset-0 z-50 flex items-end justify-center">
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setExpandedStratStack(null)} />
-        <div className="relative w-full max-w-xl rounded-t-3xl bg-white shadow-2xl max-h-[75vh] overflow-hidden flex flex-col">
-          <div className="flex justify-center pt-3 pb-1">
-            <div className="h-1 w-10 rounded-full bg-slate-200" />
-          </div>
-          <div className="px-5 pt-2 pb-4 border-b border-slate-100">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-0.5">Your purchases</p>
-            <p className="text-[15px] font-bold text-slate-900">{expandedStratStack.strategy.name}</p>
-          </div>
-          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-            {expandedStratStack.stratTxs.map((tx, i) => {
-              const amt = tx ? Number(tx.amount || 0) / 100 : 0;
-              const dateStr = expandedStratStack.fmtTxDate(tx);
-              return (
-                <div key={i} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3.5 flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-100 text-violet-700 font-bold text-sm flex-shrink-0">
-                    {i + 1}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-semibold text-slate-900">Purchase {i + 1}</p>
-                    {dateStr && <p className="text-[11px] text-slate-400 mt-0.5">{dateStr}</p>}
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    {amt > 0 && <p className="text-[13px] font-bold text-slate-900">R{amt.toFixed(2)}</p>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+      <StrategyStackedModal
+        data={expandedStratStack}
+        onClose={() => setExpandedStratStack(null)}
+      />
     )}
     </>
   );
