@@ -60,44 +60,22 @@ async function allocateStrategyHoldings(db, userId, strategyId, strategyHoldings
       const marketValueCents = Math.round(qty * sec.last_price * 100);
 
       try {
-        const { data: existing } = await db
-          .from("stock_holdings_c")
-          .select("id, quantity, avg_fill")
-          .eq("user_id", userId)
-          .eq("security_id", sec.id)
-          .eq("strategy_id", strategyId)
-          .is("family_member_id", null)
-          .maybeSingle();
-
-        if (existing) {
-          const oldQty = Number(existing.quantity || 0);
-          const oldAvg = Number(existing.avg_fill || 0);
-          const newQty = oldQty + qty;
-          const newAvg = newQty > 0 ? Math.round((oldAvg * oldQty + avgFillCents * qty) / newQty) : avgFillCents;
-          await db.from("stock_holdings_c").update({
-            quantity: newQty,
-            avg_fill: newAvg,
-            market_value: Math.round(newQty * sec.last_price * 100),
-            unrealized_pnl: 0,
-            as_of_date: new Date().toISOString().split("T")[0],
-            updated_at: new Date().toISOString(),
-          }).eq("id", existing.id);
-        } else {
-          await db.from("stock_holdings_c").insert({
-            user_id: userId,
-            security_id: sec.id,
-            quantity: qty,
-            avg_fill: avgFillCents,
-            market_value: marketValueCents,
-            unrealized_pnl: 0,
-            as_of_date: new Date().toISOString().split("T")[0],
-            strategy_id: strategyId,
-            Status: "active",
-          });
-        }
+        // Always insert a NEW row per gift-claimed strategy purchase so duplicate
+        // buys remain distinguishable in stock_holdings_c.
+        await db.from("stock_holdings_c").insert({
+          user_id: userId,
+          security_id: sec.id,
+          quantity: qty,
+          avg_fill: avgFillCents,
+          market_value: marketValueCents,
+          unrealized_pnl: 0,
+          as_of_date: new Date().toISOString().split("T")[0],
+          strategy_id: strategyId,
+          Status: "active",
+        });
         holdingsCreated++;
       } catch (e) {
-        console.warn(`[gift/claim] holding upsert for ${h.symbol}:`, e.message);
+        console.warn(`[gift/claim] holding insert for ${h.symbol}:`, e.message);
       }
     }
   }
