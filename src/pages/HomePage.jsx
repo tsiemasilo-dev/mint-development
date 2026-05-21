@@ -71,30 +71,27 @@ const StrategyStackedModal = ({ data, onClose }) => {
   const { strategy, batches, fmtBatchDate, holdingsSnapshot = [], pct = 0, livePriceMap = {} } = data;
   const [openIndex, setOpenIndex] = useState(null);
 
-  // Per-batch cost / value / PnL — computed from each batch's actual holdings.
-  // Cost basis  = Σ (avg_fill × quantity) / 100    (rands)
-  // Value       = Σ (last_price × quantity)        (rands; falls back to stored market_value)
+  // Per-batch cost from each batch's own holdings (this part is always reliable).
+  // Per-batch value: apportion the strategy's total currentValue (the same trusted
+  // number the collapsed card shows) by this batch's share of the total invested.
+  // → batchValue = totalCurrentValue × (batchInvested / totalInvested)
+  // PnL = batchValue − batchInvested (matches what the user expects).
+  const totalInvestedRands = Number(strategy.investedAmount || 0);
+  const totalCurrentValueRands = Number(strategy.currentValue || 0);
+
   const computeBatchStats = (batch) => {
     let costCents = 0;
-    let valueRands = 0;
-    let anyValueMissing = false;
     for (const h of batch.holdings) {
       const qty = Number(h.quantity || 0);
       const avgFillCents = Number(h.avg_fill || 0);
       costCents += avgFillCents * qty;
-      const livePrice = livePriceMap[h.security_id];
-      if (livePrice != null && livePrice > 0) {
-        valueRands += livePrice * qty;
-      } else if (h.market_value != null) {
-        valueRands += Number(h.market_value) / 100;
-      } else {
-        anyValueMissing = true;
-      }
     }
     const costRands = costCents / 100;
+    const share = totalInvestedRands > 0 ? costRands / totalInvestedRands : 0;
+    const valueRands = totalCurrentValueRands * share;
     const pnlRands = valueRands - costRands;
     const pnlPct = costRands > 0 ? (pnlRands / costRands) * 100 : null;
-    return { costRands, valueRands, pnlRands, pnlPct, anyValueMissing };
+    return { costRands, valueRands, pnlRands, pnlPct };
   };
 
   // Display newest-first
@@ -221,7 +218,7 @@ const StrategyStackedModal = ({ data, onClose }) => {
                           <div className="text-right flex-shrink-0">
                             {dateStr && <p className="text-[10px] text-slate-400 mb-0.5">{dateStr}</p>}
                             <p className="text-sm font-semibold text-slate-900">
-                              {stats.anyValueMissing && stats.valueRands === 0 ? "—" : `R${stats.valueRands.toFixed(2)}`}
+                              R{stats.valueRands.toFixed(2)}
                             </p>
                             <p className="text-[10px] text-slate-400">Invested R{stats.costRands.toFixed(2)}</p>
                             {stats.pnlPct != null ? (
