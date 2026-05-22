@@ -193,38 +193,21 @@ export default async function handler(req, res) {
       const avgFillCents = currentPriceCents || Math.round(investAmount * 100);
       const marketValueCents = Math.round(quantity * (currentPriceCents || investAmount * 100));
 
-      const { data: existing } = await db
-        .from("stock_holdings_c")
-        .select("id, quantity, avg_fill, market_value")
-        .eq("user_id", userId)
-        .eq("security_id", securityId)
-        .maybeSingle();
-
-      if (existing) {
-        const oldQty = Number(existing.quantity || 0);
-        const oldAvgFill = Number(existing.avg_fill || 0);
-        const newQty = oldQty + quantity;
-        const newAvgFill = newQty > 0 ? ((oldAvgFill * oldQty) + (avgFillCents * quantity)) / newQty : avgFillCents;
-        await db.from("stock_holdings_c").update({
-          quantity: newQty,
-          avg_fill: Math.round(newAvgFill),
-          market_value: Math.round(newQty * (currentPriceCents || Math.round(newAvgFill))),
-          as_of_date: today,
-          updated_at: now,
-        }).eq("id", existing.id);
-      } else {
-        await db.from("stock_holdings_c").insert({
-          user_id: userId,
-          security_id: securityId,
-          quantity,
-          avg_fill: avgFillCents,
-          market_value: marketValueCents,
-          unrealized_pnl: 0,
-          as_of_date: today,
-          Status: "active",
-          strategy_id: strategyId || null,
-        });
-      }
+      // Always insert a NEW row per EFT-confirmed direct-stock purchase so
+      // each buy keeps its own avg_fill (the price at confirmation time) and
+      // remains distinguishable in the UI's stacked-card view. Matches the
+      // strategy holdings pattern.
+      await db.from("stock_holdings_c").insert({
+        user_id: userId,
+        security_id: securityId,
+        quantity,
+        avg_fill: avgFillCents,
+        market_value: marketValueCents,
+        unrealized_pnl: 0,
+        as_of_date: today,
+        Status: "active",
+        strategy_id: strategyId || null,
+      });
     }
 
     await db.from("transactions").insert({

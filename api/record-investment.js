@@ -421,63 +421,29 @@ export default async function handler(req, res) {
       }
       if (quantity <= 0) quantity = 1; 
 
-      const avgFillCents = currentPriceCents || Math.round((investAmount / quantity) * 100);
-      const marketValueCents = Math.round(quantity * (currentPriceCents || (avgFillCents)));
-
-
-      const securityLookupQuery = withFamilyMemberFilter(
-        db
-          .from("stock_holdings_c")
-          .select("id, quantity, avg_fill, market_value")
-          .eq("user_id", targetUserId)
-          .eq("security_id", securityId)
-      );
-      const { data: existing, error: fetchError } = await securityLookupQuery.maybeSingle();
-
-      if (fetchError) {
-        return res.status(500).json({ success: false, error: fetchError.message });
-      }
-
-      if (existing) {
-        const oldQty = Number(existing.quantity || 0);
-        const oldAvgFill = Number(existing.avg_fill || 0);
-        const newQty = Math.floor(oldQty + quantity);
-        const newAvgFill = newQty > 0 ? ((oldAvgFill * oldQty) + (avgFillCents * quantity)) / newQty : avgFillCents;
-        const newMarketValue = Math.round(newQty * (currentPriceCents || newAvgFill));
-        const { data, error } = await db
-          .from("stock_holdings_c")
-          .update({
-            quantity: newQty,
-            avg_fill: Math.round(newAvgFill),
-            market_value: newMarketValue,
-            as_of_date: new Date().toISOString().split("T")[0],
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", existing.id)
-          .select();
-        holdingResult = { data, error };
-      } else {
-        // New position: insert as a pending order. avg_fill / market_value stay
-        // empty until the broker fill comes back, so the position does not show
-        // up in the portfolio total. Quantity is the parent's estimated size
-        // (based on amount / current price) which we record for display only.
-        const { data, error } = await db
-          .from("stock_holdings_c")
-          .insert({
-            user_id: targetUserId,
-            family_member_id: targetFamilyMemberId,
-            security_id: securityId,
-            quantity: quantity,
-            avg_fill: null,
-            market_value: 0,
-            unrealized_pnl: 0,
-            as_of_date: null,
-            Status: "active",
-            strategy_id: strategyId || null,
-          })
-          .select();
-        holdingResult = { data, error };
-      }
+      // Always insert a NEW row for each direct-stock purchase — never update
+      // an existing row. Each purchase is a discrete order and must remain
+      // distinguishable in stock_holdings_c (grouped by created_at minute in
+      // the UI so duplicate purchases show as separate stacked cards, the
+      // same pattern strategies use). avg_fill stays null until the broker
+      // fill comes back, so the pending position is not counted in the
+      // portfolio total.
+      const { data, error } = await db
+        .from("stock_holdings_c")
+        .insert({
+          user_id: targetUserId,
+          family_member_id: targetFamilyMemberId,
+          security_id: securityId,
+          quantity: quantity,
+          avg_fill: null,
+          market_value: 0,
+          unrealized_pnl: 0,
+          as_of_date: null,
+          Status: "active",
+          strategy_id: strategyId || null,
+        })
+        .select();
+      holdingResult = { data, error };
 
       if (holdingResult.error) {
         return res.status(500).json({ success: false, error: holdingResult.error.message });

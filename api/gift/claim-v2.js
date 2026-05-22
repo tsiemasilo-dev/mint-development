@@ -46,31 +46,16 @@ async function allocateStockHolding(db, userId, securityId, amountCents) {
   const qty = Math.max(1, Math.floor((amountCents / 100) / sec.last_price));
 
   try {
-    const { data: existing } = await db.from("stock_holdings_c")
-      .select("id, quantity")
-      .eq("user_id", userId).eq("security_id", sec.id)
-      .is("strategy_id", null).is("family_member_id", null).maybeSingle();
-
-    if (existing) {
-      // Add quantity and mark pending — broker fill will set avg_fill
-      await db.from("stock_holdings_c").update({
-        quantity: Number(existing.quantity || 0) + qty,
-        avg_fill: null,
-        market_value: 0,
-        unrealized_pnl: 0,
-        as_of_date: null,
-        updated_at: new Date().toISOString(),
-      }).eq("id", existing.id);
-      return { qty, holdingId: existing.id };
-    } else {
-      const { data: inserted } = await db.from("stock_holdings_c").insert({
-        user_id: userId, security_id: sec.id, quantity: qty,
-        avg_fill: null, market_value: 0,
-        unrealized_pnl: 0, as_of_date: null,
-        Status: "active",
-      }).select("id").single();
-      return { qty, holdingId: inserted?.id || null };
-    }
+    // Always insert a NEW row per gift-claimed stock so each claim is a
+    // discrete pending position with its own broker-fill lifecycle. Matches
+    // the strategy-claim pattern; the stacked-card UI groups by created_at.
+    const { data: inserted } = await db.from("stock_holdings_c").insert({
+      user_id: userId, security_id: sec.id, quantity: qty,
+      avg_fill: null, market_value: 0,
+      unrealized_pnl: 0, as_of_date: null,
+      Status: "active",
+    }).select("id").single();
+    return { qty, holdingId: inserted?.id || null };
   } catch (e) {
     console.warn("[gift/claim-v2] stock holding insert:", e.message);
     return { qty: 0, holdingId: null };
