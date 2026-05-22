@@ -123,40 +123,19 @@ async function allocateStockHolding(db, userId, securityId, amountCents) {
   const marketValueCents = Math.round(finalQty * sec.last_price * 100);
 
   try {
-    const { data: existing } = await db
-      .from("stock_holdings_c")
-      .select("id, quantity, avg_fill")
-      .eq("user_id", userId)
-      .eq("security_id", sec.id)
-      .is("strategy_id", null)
-      .is("family_member_id", null)
-      .maybeSingle();
-
-    if (existing) {
-      const oldQty = Number(existing.quantity || 0);
-      const oldAvg = Number(existing.avg_fill || 0);
-      const newQty = oldQty + finalQty;
-      const newAvg = Math.round((oldAvg * oldQty + avgFillCents * finalQty) / newQty);
-      await db.from("stock_holdings_c").update({
-        quantity: newQty,
-        avg_fill: newAvg,
-        market_value: Math.round(newQty * sec.last_price * 100),
-        unrealized_pnl: 0,
-        as_of_date: new Date().toISOString().split("T")[0],
-        updated_at: new Date().toISOString(),
-      }).eq("id", existing.id);
-    } else {
-      await db.from("stock_holdings_c").insert({
-        user_id: userId,
-        security_id: sec.id,
-        quantity: finalQty,
-        avg_fill: avgFillCents,
-        market_value: marketValueCents,
-        unrealized_pnl: 0,
-        as_of_date: new Date().toISOString().split("T")[0],
-        Status: "active",
-      });
-    }
+    // Always insert a NEW row per gift-claimed stock so duplicate stock buys
+    // remain distinguishable in stock_holdings_c (mirrors the strategy-claim
+    // pattern; the stacked-card UI groups them by created_at minute).
+    await db.from("stock_holdings_c").insert({
+      user_id: userId,
+      security_id: sec.id,
+      quantity: finalQty,
+      avg_fill: avgFillCents,
+      market_value: marketValueCents,
+      unrealized_pnl: 0,
+      as_of_date: new Date().toISOString().split("T")[0],
+      Status: "active",
+    });
     return finalQty;
   } catch (e) {
     console.warn("[gift/claim] stock holding insert:", e.message);

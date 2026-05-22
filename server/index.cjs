@@ -4001,15 +4001,10 @@ app.post("/api/confirm-eft-deposit", async (req, res) => {
       const priceRands = currentPriceCents ? currentPriceCents / 100 : investAmount;
       quantity = priceRands > 0 ? investAmount / priceRands : 1;
       const avgFill = currentPriceCents || Math.round(investAmount * 100);
-      const { data: existing } = await db.from("stock_holdings_c").select("id, quantity, avg_fill").eq("user_id", userId).eq("security_id", securityId).maybeSingle();
-      if (existing) {
-        const oldQty = Number(existing.quantity || 0);
-        const newQty = oldQty + quantity;
-        const newAvg = newQty > 0 ? ((Number(existing.avg_fill || 0) * oldQty) + (avgFill * quantity)) / newQty : avgFill;
-        await db.from("stock_holdings_c").update({ quantity: newQty, avg_fill: Math.round(newAvg), market_value: Math.round(newQty * (currentPriceCents || Math.round(newAvg))), as_of_date: today, updated_at: now }).eq("id", existing.id);
-      } else {
-        await db.from("stock_holdings_c").insert({ user_id: userId, security_id: securityId, quantity, avg_fill: avgFill, market_value: Math.round(quantity * (currentPriceCents || avgFill)), unrealized_pnl: 0, as_of_date: today, Status: "active", strategy_id: strategyId || null });
-      }
+      // Always insert a NEW row per EFT-confirmed direct-stock purchase so
+      // each buy retains its own avg_fill and remains distinguishable in
+      // the UI's stacked-card view (mirrors the strategy holdings pattern).
+      await db.from("stock_holdings_c").insert({ user_id: userId, security_id: securityId, quantity, avg_fill: avgFill, market_value: Math.round(quantity * (currentPriceCents || avgFill)), unrealized_pnl: 0, as_of_date: today, Status: "active", strategy_id: strategyId || null });
     }
 
     await db.from("transactions").insert({
@@ -8442,23 +8437,14 @@ async function giftAllocateStockHolding(db, userId, securityId, amountCents) {
   if (!sec?.last_price) return 0;
   const qty = Math.max(1, Math.floor((amountCents / 100) / sec.last_price));
   try {
-    const { data: existing } = await db.from("stock_holdings_c").select("id, quantity")
-      .eq("user_id", userId).eq("security_id", sec.id).is("strategy_id", null).is("family_member_id", null).maybeSingle();
-    if (existing) {
-      await db.from("stock_holdings_c").update({
-        quantity: Number(existing.quantity || 0) + qty,
-        avg_fill: null, market_value: 0, unrealized_pnl: 0,
-        as_of_date: null, settlement_status: "pending",
-        updated_at: new Date().toISOString(),
-      }).eq("id", existing.id);
-    } else {
-      await db.from("stock_holdings_c").insert({
-        user_id: userId, security_id: sec.id, quantity: qty,
-        avg_fill: null, market_value: 0,
-        unrealized_pnl: 0, as_of_date: null, Status: "active",
-        settlement_status: "pending",
-      });
-    }
+    // Always insert a NEW row per gift-claimed stock so each claim is a
+    // discrete pending position. Mirrors the strategy-gift pattern.
+    await db.from("stock_holdings_c").insert({
+      user_id: userId, security_id: sec.id, quantity: qty,
+      avg_fill: null, market_value: 0,
+      unrealized_pnl: 0, as_of_date: null, Status: "active",
+      settlement_status: "pending",
+    });
     return qty;
   } catch (e) { console.warn("[gift] stock holding insert:", e.message); return 0; }
 }
