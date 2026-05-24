@@ -4715,10 +4715,12 @@ app.get("/api/user/transactions", async (req, res) => {
     const limit = parseInt(req.query.limit) || 50;
 
     let transactions, txError;
+    // Exclude child-scoped transactions — see api/user/transactions.js for context.
     const txResult = await db
       .from("transactions")
       .select("id, user_id, direction, name, description, amount, store_reference, currency, status, settlement_status, transaction_date, created_at")
       .eq("user_id", userId)
+      .is("family_member_id", null)
       .order("transaction_date", { ascending: false })
       .limit(limit);
 
@@ -4727,6 +4729,7 @@ app.get("/api/user/transactions", async (req, res) => {
         .from("transactions")
         .select("id, user_id, direction, name, description, amount, store_reference, currency, status, transaction_date, created_at")
         .eq("user_id", userId)
+        .is("family_member_id", null)
         .order("transaction_date", { ascending: false })
         .limit(limit);
       transactions = fallback.data;

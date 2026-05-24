@@ -27,10 +27,14 @@ export default async function handler(req, res) {
     const userId = user.id;
     const limit = parseInt(req.query.limit) || 50;
 
+    // Exclude child-scoped transactions — those belong on the child dashboard.
+    // Without this filter the parent's activity feed leaks rows like
+    // "Strategy Investment: X" that were placed for a child account.
     const { data: transactions, error: txError } = await db
       .from("transactions")
       .select("id, user_id, direction, name, description, amount, store_reference, currency, status, transaction_date, created_at")
       .eq("user_id", userId)
+      .is("family_member_id", null)
       .order("transaction_date", { ascending: false })
       .limit(limit);
 
