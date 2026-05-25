@@ -4352,13 +4352,13 @@ app.get("/api/user/holdings", async (req, res) => {
         }
       });
 
-      // Patch securitiesMap: prefer intraday current_price over EOD last_price
+      // Overwrite securitiesMap prices with intraday current_price (already in cents)
       for (const secId of securityIds) {
         const intraday = intradayMap[secId];
-        if (intraday?.current_price > 0 && securitiesMap[secId]) {
-          securitiesMap[secId].last_price = intraday.current_price;
-          if (intraday.change_price != null) securitiesMap[secId].change_price = intraday.change_price;
-          if (intraday.change_percent != null) securitiesMap[secId].change_percent = intraday.change_percent;
+        if (securitiesMap[secId]) {
+          securitiesMap[secId].last_price = intraday?.current_price > 0 ? intraday.current_price : 0;
+          securitiesMap[secId].change_price = intraday?.change_price ?? 0;
+          securitiesMap[secId].change_percent = intraday?.change_percent ?? 0;
         }
       }
 
