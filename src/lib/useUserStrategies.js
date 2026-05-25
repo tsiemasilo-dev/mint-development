@@ -3,6 +3,17 @@ import { supabase } from "./supabase";
 import { getStrategyPriceHistory } from "./strategyData";
 import { registerCacheResetCallback } from "./userCacheReset.js";
 
+// Cost basis per share in Rands for a snapshot/holding row.
+// Prefers Expected_fill (the price the client saw at click time, in rands) over
+// avg_fill (broker fill in cents). Once admin updates the returns job to write
+// Expected_fill into the snapshot, this picks it up automatically.
+const costBasisRandsPerShare = (h) => {
+  const expected = Number(h?.Expected_fill ?? h?.expected_fill ?? 0);
+  if (expected > 0) return expected;
+  const avgFillCents = Number(h?.avg_fill || 0);
+  return avgFillCents > 0 ? avgFillCents / 100 : 0;
+};
+
 // Module-level cache — survives unmount/remount when navigating between tabs,
 // so the Portfolio page shows last known strategies instead of an empty skeleton.
 let _cachedStrategiesData = null;
@@ -99,7 +110,7 @@ export const useUserStrategies = (familyMemberId = null) => {
         })();
 
         const currentVal = Number((returnsRow.basket_value / 100).toFixed(2));
-        const invested = snapshot.reduce((sum, h) => sum + (h.avg_fill || 0) * (h.qty || h.quantity || 0) / 100, 0);
+        const invested = snapshot.reduce((sum, h) => sum + costBasisRandsPerShare(h) * (h.qty || h.quantity || 0), 0);
         const changePct = invested > 0 ? ((currentVal - invested) / invested) * 100 : 0;
         const ytdPctDecimal = returnsRow.ytd_pct != null ? returnsRow.ytd_pct / 100 : null;
 
@@ -114,7 +125,7 @@ export const useUserStrategies = (familyMemberId = null) => {
           if (snap) {
             const qty = snap.qty || snap.quantity || 0;
             const stockCurrentVal = (snap.current_price * qty) / 100;
-            const stockCostBasis = (snap.avg_fill * qty) / 100;
+            const stockCostBasis = costBasisRandsPerShare(snap) * qty;
             const pnlRands = stockCurrentVal - stockCostBasis;
             const pnlPct = stockCostBasis > 0 ? (pnlRands / stockCostBasis) * 100 : 0;
             return { ...h, pnlRands: Number(pnlRands.toFixed(2)), pnlPct: Number(pnlPct.toFixed(2)) };
