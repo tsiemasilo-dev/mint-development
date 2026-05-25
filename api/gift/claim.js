@@ -21,7 +21,8 @@ async function fetchLatestIntradayPrices(db, securityIds) {
       .limit(1)
       .maybeSingle();
     if (data?.current_price != null) {
-      out[id] = Number(data.current_price);
+      // stock_intraday_c.current_price is stored in cents; return rands.
+      out[id] = Number(data.current_price) / 100;
     }
   }));
   return out;

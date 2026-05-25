@@ -16,10 +16,12 @@ async function fetchLatestIntradayData(db, securityIds) {
       .limit(1)
       .maybeSingle();
     if (data) {
+      // stock_intraday_c.current_price and 1d_abs are stored in cents (JSE convention).
+      // Divide by 100 here so callers can treat priceRands/dayAbsRands as rands.
       out[id] = {
-        priceRands: data.current_price != null ? Number(data.current_price) : null,
+        priceRands: data.current_price != null ? Number(data.current_price) / 100 : null,
         dayPct: data.day_pct != null ? Number(data.day_pct) : null,
-        dayAbsRands: data.day_abs != null ? Number(data.day_abs) : null,
+        dayAbsRands: data.day_abs != null ? Number(data.day_abs) / 100 : null,
       };
     }
   }));
