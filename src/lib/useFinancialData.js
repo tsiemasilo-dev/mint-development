@@ -310,12 +310,15 @@ export const useFinancialData = () => {
       const bestAssets = sortedHoldings.slice(0, 5).map((h) => {
         const currentValue = liveVal(h);
         const costBasis = costBasisRandsPerShare(h) * Number(h.quantity || 0);
-        const changePercent = costBasis > 0 ? ((currentValue - costBasis) / costBasis) * 100 : 0;
+        const pnlRands = currentValue - costBasis;
+        const pnlPct = costBasis > 0 ? (pnlRands / costBasis) * 100 : 0;
         return {
           symbol: h.symbol,
           name: h.name,
           value: currentValue,
-          change: changePercent,
+          change: pnlPct,
+          pnlRands,
+          pnlPct,
           logo: h.logo_url,
           batches: h.batches,
           isPending: h.isPending,
