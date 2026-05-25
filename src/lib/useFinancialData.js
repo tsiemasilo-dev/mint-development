@@ -159,11 +159,6 @@ export const useFinancialData = () => {
       const safeHoldings = getHoldingsList(holdings);
       const safeTxns = Array.isArray(allServerTransactions) ? allServerTransactions : [];
 
-      if (silent && safeHoldings.length === 0 && financialDataCache?.holdings?.length > 0) {
-        console.warn("[useFinancialData] Background refresh returned empty holdings — keeping cached data");
-        setData((prev) => ({ ...prev, loading: false }));
-        return;
-      }
 
       const transactions = safeTxns.slice(0, 20);
       const allTransactions = safeTxns;
