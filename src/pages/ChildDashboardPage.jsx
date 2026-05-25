@@ -2161,7 +2161,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     try {
       if (!supabase) return;
       const linkedUserId = child?.linked_user_id || null;
-      const holdingsSelect = "id, user_id, family_member_id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id, Fill_date, Status, created_at, store_reference";
+      const holdingsSelect = "id, user_id, family_member_id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id, Fill_date, Status, created_at, transaction_id";
       const familyHoldingsQuery = supabase
         .from("stock_holdings_c")
         .select(holdingsSelect)
@@ -2517,9 +2517,9 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     const minute = h.created_at
       ? new Date(h.created_at).toISOString().slice(0, 16) // "2026-05-19T14:32"
       : "unknown";
-    const batchId = h.store_reference || `legacy:${minute}`;
+    const batchId = h.transaction_id || `legacy:${minute}`;
     const key = `${h.strategy_id}__${batchId}`;
-    if (!acc[key]) acc[key] = { strategyId: h.strategy_id, storeReference: h.store_reference || null, minute, holdings: [] };
+    if (!acc[key]) acc[key] = { strategyId: h.strategy_id, transactionId: h.transaction_id || null, minute, holdings: [] };
     acc[key].holdings.push(h);
     return acc;
   }, {});

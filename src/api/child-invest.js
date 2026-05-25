@@ -97,9 +97,22 @@ export default async function handler(req, res) {
     const holdings = strategy.holdings || [];
     let holdingsCreated = 0;
 
-    // Generate the order ref up-front so it can be stamped on every holdings
-    // row and on the transactions row — gives us a real JOIN key per order.
+    // Insert transaction first so we can stamp its UUID on every holdings row.
     const ref = `CHILD-INV-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    let childTxId = null;
+    try {
+      const txInsert = await db.from("transactions").insert({
+        user_id: parentUserId,
+        family_member_id: family_member_id,
+        type: "investment",
+        direction: "debit",
+        amount: amount,
+        description: `${strategy.name} investment for ${child.first_name}`,
+        store_reference: ref,
+        status: "completed",
+      }).select("id").single();
+      childTxId = txInsert.data?.id || null;
+    } catch (e) { console.warn("[child-invest] tx insert:", e.message); }
 
     if (holdings.length > 0) {
       // Fetch security prices
@@ -159,7 +172,7 @@ export default async function handler(req, res) {
                 as_of_date: null,
                 strategy_id: strategy_id,
                 Status: "active",
-                store_reference: ref,
+                transaction_id: childTxId,
               });
           }
           holdingsCreated++;
@@ -168,20 +181,6 @@ export default async function handler(req, res) {
         }
       }
     }
-
-    // 6. Record transaction
-    try {
-      await db.from("transactions").insert({
-        user_id: parentUserId,
-        family_member_id: family_member_id,
-        type: "investment",
-        direction: "debit",
-        amount: amount,
-        description: `${strategy.name} investment for ${child.first_name}`,
-        store_reference: ref,
-        status: "completed",
-      });
-    } catch (e) { console.warn("[child-invest] tx insert:", e.message); }
 
     return res.json({
       success: true,

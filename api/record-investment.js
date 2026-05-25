@@ -273,6 +273,36 @@ export default async function handler(req, res) {
     let currentPriceCents = null;
     let quantity = null;
 
+    // Insert transaction first so we can stamp its UUID on every holdings row.
+    const orderDate = new Date().toISOString();
+    const descriptionText = isStrategyInvestment
+      ? `Invested in strategy ${name || "Strategy"}`
+      : `Purchased shares of ${name || symbol || "Unknown"}`;
+
+    const { data: txData, error: txError } = await db
+      .from("transactions")
+      .insert({
+        user_id: targetUserId,
+        family_member_id: targetFamilyMemberId,
+        direction: "debit",
+        name: isStrategyInvestment ? `Strategy Investment: ${name || symbol || "Strategy"}` : `Purchased ${name || symbol || "Stock"}`,
+        description: descriptionText,
+        amount: Math.round(amount * 100),
+        store_reference: paymentReference || null,
+        currency: "ZAR",
+        status: "posted",
+        transaction_date: orderDate,
+        created_at: orderDate,
+      })
+      .select("id")
+      .single();
+
+    if (txError) {
+      console.error("[record-investment] Transaction insert error:", txError);
+      return res.status(500).json({ success: false, error: "Failed to record transaction" });
+    }
+    const txId = txData.id;
+
     if (isStrategyInvestment) {
       const { data: strategyData, error: stratError } = await db
         .from("strategies_c")
@@ -300,10 +330,6 @@ export default async function handler(req, res) {
       const secBySymbol = {};
       (securitiesData || []).forEach(s => { secBySymbol[s.symbol] = s; });
 
-      // Strategy component quantities come directly from strategies_c.holdings.
-      // Do not scale component shares by investment amount.
-
-      const now = new Date().toISOString();
       const insertedHoldings = [];
       const skippedSymbols = [];
 
@@ -323,10 +349,6 @@ export default async function handler(req, res) {
 
         const holdingQty = Math.floor(rawHoldingQty);
 
-        // Always insert a NEW row for each strategy purchase — never update an
-        // existing row. Each purchase is a discrete order and must remain
-        // distinguishable in stock_holdings_c (grouped by created_at minute in
-        // the UI so duplicate purchases show as separate stacked cards).
         const { error: insertErr } = await db.from("stock_holdings_c").insert({
           user_id: targetUserId,
           family_member_id: targetFamilyMemberId,
@@ -338,7 +360,7 @@ export default async function handler(req, res) {
           unrealized_pnl: 0,
           as_of_date: null,
           Status: "active",
-          store_reference: paymentReference || null,
+          transaction_id: txId,
         });
 
         if (insertErr) {
@@ -353,7 +375,6 @@ export default async function handler(req, res) {
         console.warn("[record-investment] Skipped symbols (no security/price):", skippedSymbols.join(", "));
       }
 
-      // --- ADDED: user_strategies update for investment ---
       console.log(`[record-investment] Updating user_strategies for strategy: ${strategyId}`);
       const { data: existingUS } = await db
         .from("user_strategies")
@@ -413,22 +434,14 @@ export default async function handler(req, res) {
       }
 
       const currentPriceRands = currentPriceCents ? currentPriceCents / 100 : (shareCount > 0 ? investAmount / shareCount : 0);
-      
-      // Prioritize shareCount from frontend if available, otherwise calculate from price
+
       if (shareCount && Number(shareCount) > 0) {
         quantity = Math.floor(Number(shareCount));
       } else {
         quantity = currentPriceRands > 0 ? Math.floor(investAmount / currentPriceRands) : 1;
       }
-      if (quantity <= 0) quantity = 1; 
+      if (quantity <= 0) quantity = 1;
 
-      // Always insert a NEW row for each direct-stock purchase — never update
-      // an existing row. Each purchase is a discrete order and must remain
-      // distinguishable in stock_holdings_c (grouped by created_at minute in
-      // the UI so duplicate purchases show as separate stacked cards, the
-      // same pattern strategies use). avg_fill stays null until the broker
-      // fill comes back, so the pending position is not counted in the
-      // portfolio total.
       const { data, error } = await db
         .from("stock_holdings_c")
         .insert({
@@ -442,7 +455,7 @@ export default async function handler(req, res) {
           as_of_date: null,
           Status: "active",
           strategy_id: strategyId || null,
-          store_reference: paymentReference || null,
+          transaction_id: txId,
         })
         .select();
       holdingResult = { data, error };
@@ -450,34 +463,6 @@ export default async function handler(req, res) {
       if (holdingResult.error) {
         return res.status(500).json({ success: false, error: holdingResult.error.message });
       }
-    }
-
-    const descriptionText = isStrategyInvestment
-      ? `Invested in strategy ${name || "Strategy"}`
-      : `Purchased ${(holdingResult.data ? "shares" : "units")} of ${name || symbol || "Unknown"}`;
-
-    const orderDate = new Date().toISOString();
-
-    const { error: txError } = await db
-      .from("transactions")
-      .insert({
-        user_id: targetUserId,
-        family_member_id: targetFamilyMemberId,
-        direction: "debit",
-        name: isStrategyInvestment ? `Strategy Investment: ${name || symbol || "Strategy"}` : `Purchased ${name || symbol || "Stock"}`,
-        description: descriptionText,
-        amount: Math.round(amount * 100),
-        store_reference: paymentReference || null,
-        currency: "ZAR",
-        status: "posted",
-        transaction_date: orderDate,
-        created_at: orderDate,
-      })
-      .select();
-
-    if (txError) {
-      console.error("[record-investment] Transaction insert error:", txError);
-      return res.status(500).json({ success: false, error: "Failed to record transaction" });
     }
 
     sendOrderConfirmationEmail(db, {

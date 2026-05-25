@@ -28,7 +28,7 @@ function buildClaimedHtml({ recipientName, senderName, assetName, amountRands })
 </div></body></html>`;
 }
 
-async function allocateStrategyHoldings(db, userId, strategyId, strategyHoldings, amountCents, storeReference) {
+async function allocateStrategyHoldings(db, userId, strategyId, strategyHoldings, amountCents, transactionId) {
   const investAmountRands = amountCents / 100;
   let holdingsCreated = 0;
   if (!strategyHoldings.length) return 0;
@@ -72,7 +72,7 @@ async function allocateStrategyHoldings(db, userId, strategyId, strategyHoldings
           as_of_date: new Date().toISOString().split("T")[0],
           strategy_id: strategyId,
           Status: "active",
-          store_reference: storeReference || null,
+          transaction_id: transactionId || null,
         });
         holdingsCreated++;
       } catch (e) {
@@ -97,7 +97,7 @@ async function allocateStrategyHoldings(db, userId, strategyId, strategyHoldings
           as_of_date: new Date().toISOString().split("T")[0],
           strategy_id: strategyId,
           Status: "active",
-          store_reference: storeReference || null,
+          transaction_id: transactionId || null,
         });
         holdingsCreated = 1;
       } catch (e) {
@@ -109,7 +109,7 @@ async function allocateStrategyHoldings(db, userId, strategyId, strategyHoldings
   return holdingsCreated;
 }
 
-async function allocateStockHolding(db, userId, securityId, amountCents, storeReference) {
+async function allocateStockHolding(db, userId, securityId, amountCents, transactionId) {
   const { data: sec } = await db
     .from("securities_c")
     .select("id, symbol, last_price")
@@ -137,7 +137,7 @@ async function allocateStockHolding(db, userId, securityId, amountCents, storeRe
       unrealized_pnl: 0,
       as_of_date: new Date().toISOString().split("T")[0],
       Status: "active",
-      store_reference: storeReference || null,
+      transaction_id: transactionId || null,
     });
     return finalQty;
   } catch (e) {
@@ -199,7 +199,20 @@ export default async function handler(req, res) {
 
   let holdingsAllocated = 0;
 
-  const giftStoreRef = `GIFT-CLAIM-${gift.id}`;
+  // Insert transaction first so we can stamp its UUID on every holdings row.
+  let giftTxId = null;
+  try {
+    const txInsert = await db.from("transactions").insert({
+      user_id: user.id,
+      direction: "credit",
+      name: `Gift Received — ${gift.asset_name}`,
+      description: `Investment gift from sender`,
+      amount: gift.amount,
+      store_reference: `GIFT-CLAIM-${gift.id}`,
+      status: "posted",
+    }).select("id").single();
+    giftTxId = txInsert.data?.id || null;
+  } catch (e) { console.warn("[gift/claim] tx insert:", e.message); }
 
   if (gift.asset_type === "strategy" && gift.strategy_id) {
     const { data: strategy } = await db
@@ -209,27 +222,15 @@ export default async function handler(req, res) {
       .maybeSingle();
 
     const strategyHoldings = strategy?.holdings || [];
-    holdingsAllocated = await allocateStrategyHoldings(db, user.id, gift.strategy_id, strategyHoldings, gift.amount, giftStoreRef);
+    holdingsAllocated = await allocateStrategyHoldings(db, user.id, gift.strategy_id, strategyHoldings, gift.amount, giftTxId);
   } else if (gift.asset_type === "stock" && gift.security_id) {
-    holdingsAllocated = await allocateStockHolding(db, user.id, gift.security_id, gift.amount, giftStoreRef);
+    holdingsAllocated = await allocateStockHolding(db, user.id, gift.security_id, gift.amount, giftTxId);
   }
 
   if (holdingsAllocated === 0) {
     console.error(`[gift/claim] failed to allocate any holdings for gift ${gift.id}`);
     return res.status(500).json({ error: "Failed to allocate holdings. Please try again." });
   }
-
-  try {
-    await db.from("transactions").insert({
-      user_id: user.id,
-      direction: "credit",
-      name: `Gift Received — ${gift.asset_name}`,
-      description: `Investment gift from sender`,
-      amount: gift.amount,
-      store_reference: `GIFT-CLAIM-${gift.id}`,
-      status: "posted",
-    });
-  } catch (e) { console.warn("[gift/claim] tx insert:", e.message); }
 
   const { error: updateErr } = await db
     .from("gift_claims")

@@ -546,7 +546,7 @@ const HomePage = ({
     try {
       const { data: holdings, error: holdingsError } = await supabase
         .from('stock_holdings_c')
-        .select('id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, Status, created_at, store_reference')
+        .select('id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, Status, created_at, transaction_id')
         .eq('user_id', profile.id)
         .is('family_member_id', null)
         .eq('Status', 'active');
@@ -918,13 +918,13 @@ const HomePage = ({
     for (const h of (rawStrategyHoldings || [])) {
       if (!h.strategy_id) continue;
       const minute = h.created_at ? new Date(h.created_at).toISOString().slice(0, 16) : "unknown";
-      const batchId = h.store_reference || `legacy:${minute}`;
+      const batchId = h.transaction_id || `legacy:${minute}`;
       const key = `${h.strategy_id}__${batchId}`;
       if (!out[h.strategy_id]) out[h.strategy_id] = {};
       if (!out[h.strategy_id][key]) {
         out[h.strategy_id][key] = {
           strategyId: h.strategy_id,
-          storeReference: h.store_reference || null,
+          transactionId: h.transaction_id || null,
           minute,
           holdings: [],
           filled: true,
