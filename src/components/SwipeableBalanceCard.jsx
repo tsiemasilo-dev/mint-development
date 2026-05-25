@@ -526,6 +526,10 @@ const SwipeableBalanceCard = ({
         if (mValue > 0 || enrichedHoldings.length > 0) {
           _cardDataCache[_cacheKey] = nextDbData;
           _lsSave(_cacheKey, nextDbData);
+        } else {
+          // Fresh data returned empty — clear stale cache so old values don't reappear
+          delete _cardDataCache[_cacheKey];
+          try { localStorage.removeItem("mintcard:" + _cacheKey); } catch {}
         }
         setDbData(nextDbData);
         setDataSettled(true);
