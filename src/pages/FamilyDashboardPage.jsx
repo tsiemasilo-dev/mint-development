@@ -1162,18 +1162,25 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
       );
       const totalChildWalletCents = childWallets.reduce((s, c) => s + Number(c.available_balance || 0), 0);
 
-      // Fetch live prices (stored in rands) for all security_ids and normalize to cents
+      // Fetch live prices for all security_ids — prefer intraday current_price (cents), fall back to EOD last_price (rands→cents)
       const securityIds = Array.from(new Set(
         [...holdings, ...childHoldings].map(h => h.security_id).filter(Boolean)
       ));
       const livePriceCentsMap = {};
       if (securityIds.length > 0) {
-        const { data: secs } = await supabase
-          .from("securities_c")
-          .select("id, last_price")
-          .in("id", securityIds);
-        (secs || []).forEach(s => {
+        const [{ data: intradayData }, { data: eodData }] = await Promise.all([
+          supabase.from("stock_intraday_c").select("security_id, current_price, timestamp").in("security_id", securityIds).order("timestamp", { ascending: false }),
+          supabase.from("securities_c").select("id, last_price").in("id", securityIds),
+        ]);
+        // Build EOD fallback map (rands → cents)
+        (eodData || []).forEach(s => {
           livePriceCentsMap[s.id] = Math.round(Number(s.last_price || 0) * 100);
+        });
+        // Override with intraday price where available (already in cents)
+        const intradayMap = {};
+        (intradayData || []).forEach(p => { if (!intradayMap[p.security_id]) intradayMap[p.security_id] = p; });
+        Object.entries(intradayMap).forEach(([secId, p]) => {
+          if (Number(p.current_price) > 0) livePriceCentsMap[secId] = Number(p.current_price);
         });
       }
 

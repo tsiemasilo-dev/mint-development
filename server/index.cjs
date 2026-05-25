@@ -4313,10 +4313,14 @@ app.get("/api/user/holdings", async (req, res) => {
     }
 
     if (securityIds.length > 0) {
-      const [secResult, pricesResult] = await Promise.all([
+      const [secResult, intradayResult, pricesResult] = await Promise.all([
         db.from("securities_c")
           .select("id, symbol, name, logo_url, last_price, change_price, change_percent, sector, exchange")
           .in("id", securityIds),
+        db.from("stock_intraday_c")
+          .select("security_id, current_price, 1d_abs, 1d_pct, timestamp")
+          .in("security_id", securityIds)
+          .order("timestamp", { ascending: false }),
         db.from("stock_returns_c")
           .select("security_id, current_price, as_of_date")
           .in("security_id", securityIds)
@@ -4329,7 +4333,6 @@ app.get("/api/user/holdings", async (req, res) => {
       }
       if (secResult.data) {
         secResult.data.forEach(s => { 
-          // Normalize to cents
           const normalizedSec = { ...s };
           if (s.last_price != null) normalizedSec.last_price = s.last_price * 100;
           if (s.change_price != null) normalizedSec.change_price = s.change_price * 100;
@@ -4337,11 +4340,32 @@ app.get("/api/user/holdings", async (req, res) => {
         });
       }
 
+      // Build intraday map — latest row per security (already in cents)
+      const intradayMap = {};
+      (intradayResult.data || []).forEach(p => {
+        if (!intradayMap[p.security_id]) {
+          intradayMap[p.security_id] = {
+            current_price: Number(p.current_price),
+            change_price: p['1d_abs'] != null ? Number(p['1d_abs']) : null,
+            change_percent: p['1d_pct'] != null ? Number(p['1d_pct']) : null,
+          };
+        }
+      });
+
+      // Patch securitiesMap: prefer intraday current_price over EOD last_price
+      for (const secId of securityIds) {
+        const intraday = intradayMap[secId];
+        if (intraday?.current_price > 0 && securitiesMap[secId]) {
+          securitiesMap[secId].last_price = intraday.current_price;
+          if (intraday.change_price != null) securitiesMap[secId].change_price = intraday.change_price;
+          if (intraday.change_percent != null) securitiesMap[secId].change_percent = intraday.change_percent;
+        }
+      }
+
       const pricesBySecId = {};
       (pricesResult.data || []).forEach(p => {
         if (!pricesBySecId[p.security_id]) pricesBySecId[p.security_id] = [];
         if (pricesBySecId[p.security_id].length < 2) {
-          // Already in cents in stock_returns_c
           pricesBySecId[p.security_id].push(p.current_price);
         }
       });
