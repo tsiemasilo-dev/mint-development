@@ -6,6 +6,27 @@ function getResend() {
   return new Resend(process.env.RESEND_API_KEY);
 }
 
+// Latest stock_intraday_c.current_price per security_id — stamped as
+// Expected_fill so claimed-gift PnL is anchored to the live price at claim time.
+async function fetchLatestIntradayPrices(db, securityIds) {
+  if (!securityIds || !securityIds.length) return {};
+  const ids = [...new Set(securityIds.filter(Boolean))];
+  const out = {};
+  await Promise.all(ids.map(async (id) => {
+    const { data } = await db
+      .from("stock_intraday_c")
+      .select("current_price")
+      .eq("security_id", id)
+      .order("timestamp", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data?.current_price != null) {
+      out[id] = Number(data.current_price);
+    }
+  }));
+  return out;
+}
+
 function buildClaimedHtml({ recipientName, senderName, assetName, amountRands }) {
   const fmt = (v) => `R${Number(v).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   return `<!DOCTYPE html>
@@ -42,6 +63,8 @@ async function allocateStrategyHoldings(db, userId, strategyId, strategyHoldings
   const secMap = {};
   (securities || []).forEach(s => { secMap[s.symbol] = s; });
 
+  const intradayPrices = await fetchLatestIntradayPrices(db, (securities || []).map(s => s.id));
+
   let totalBasketCostRands = 0;
   for (const h of strategyHoldings) {
     const sec = secMap[h.symbol];
@@ -73,6 +96,7 @@ async function allocateStrategyHoldings(db, userId, strategyId, strategyHoldings
           strategy_id: strategyId,
           Status: "active",
           transaction_id: transactionId || null,
+          Expected_fill: intradayPrices[sec.id] ?? null,
         });
         holdingsCreated++;
       } catch (e) {
@@ -98,6 +122,7 @@ async function allocateStrategyHoldings(db, userId, strategyId, strategyHoldings
           strategy_id: strategyId,
           Status: "active",
           transaction_id: transactionId || null,
+          Expected_fill: intradayPrices[fallbackSec.id] ?? null,
         });
         holdingsCreated = 1;
       } catch (e) {
@@ -124,6 +149,8 @@ async function allocateStockHolding(db, userId, securityId, amountCents, transac
   const avgFillCents = Math.round(sec.last_price * 100);
   const marketValueCents = Math.round(finalQty * sec.last_price * 100);
 
+  const intradayPrices = await fetchLatestIntradayPrices(db, [sec.id]);
+
   try {
     // Always insert a NEW row per gift-claimed stock so duplicate stock buys
     // remain distinguishable in stock_holdings_c (mirrors the strategy-claim
@@ -138,6 +165,7 @@ async function allocateStockHolding(db, userId, securityId, amountCents, transac
       as_of_date: new Date().toISOString().split("T")[0],
       Status: "active",
       transaction_id: transactionId || null,
+      Expected_fill: intradayPrices[sec.id] ?? null,
     });
     return finalQty;
   } catch (e) {

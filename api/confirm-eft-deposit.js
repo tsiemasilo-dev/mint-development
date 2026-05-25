@@ -7,6 +7,27 @@ function getResend() {
   return new Resend(process.env.RESEND_API_KEY);
 }
 
+// Latest stock_intraday_c.current_price per security_id — used as Expected_fill
+// so client PnL is anchored to the price the user saw, not the broker fill.
+async function fetchLatestIntradayPrices(db, securityIds) {
+  if (!securityIds || !securityIds.length) return {};
+  const ids = [...new Set(securityIds.filter(Boolean))];
+  const out = {};
+  await Promise.all(ids.map(async (id) => {
+    const { data } = await db
+      .from("stock_intraday_c")
+      .select("current_price")
+      .eq("security_id", id)
+      .order("timestamp", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data?.current_price != null) {
+      out[id] = Number(data.current_price);
+    }
+  }));
+  return out;
+}
+
 async function sendOrderConfirmationEmail(db, { userId, userEmail, assetName, assetSymbol, strategyName, amountCents, quantity, priceCents, reference, orderDate }) {
   try {
     const resend = getResend();
@@ -149,6 +170,8 @@ export default async function handler(req, res) {
         const secBySymbol = {};
         (securitiesData || []).forEach(s => { secBySymbol[s.symbol] = s; });
 
+        const intradayPrices = await fetchLatestIntradayPrices(db, (securitiesData || []).map(s => s.id));
+
         let totalBasketCostRands = 0;
         for (const holding of strategyHoldings) {
           const sec = secBySymbol[holding.symbol];
@@ -179,6 +202,7 @@ export default async function handler(req, res) {
             as_of_date: today,
             Status: "active",
             transaction_id: investTxId,
+            Expected_fill: intradayPrices[sec.id] ?? null,
           });
         }
       }
@@ -207,6 +231,8 @@ export default async function handler(req, res) {
       const avgFillCents = currentPriceCents || Math.round(investAmount * 100);
       const marketValueCents = Math.round(quantity * (currentPriceCents || investAmount * 100));
 
+      const intradayStockPrices = await fetchLatestIntradayPrices(db, [securityId]);
+
       await db.from("stock_holdings_c").insert({
         user_id: userId,
         security_id: securityId,
@@ -218,6 +244,7 @@ export default async function handler(req, res) {
         Status: "active",
         strategy_id: strategyId || null,
         transaction_id: investTxId,
+        Expected_fill: intradayStockPrices[securityId] ?? null,
       });
     }
 

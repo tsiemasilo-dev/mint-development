@@ -4,6 +4,29 @@ import { Resend } from "resend";
 
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
 
+// Fetch the latest stock_intraday_c.current_price for each given security_id.
+// Used to stamp Expected_fill on holdings at buy time — the price the client
+// saw when they tapped Buy — so PnL is computed against that, not avg_fill
+// (which captures the company's spread).
+async function fetchLatestIntradayPrices(db, securityIds) {
+  if (!securityIds || !securityIds.length) return {};
+  const ids = [...new Set(securityIds.filter(Boolean))];
+  const out = {};
+  await Promise.all(ids.map(async (id) => {
+    const { data } = await db
+      .from("stock_intraday_c")
+      .select("current_price")
+      .eq("security_id", id)
+      .order("timestamp", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data?.current_price != null) {
+      out[id] = Number(data.current_price);
+    }
+  }));
+  return out;
+}
+
 function getResend() {
   if (!process.env.RESEND_API_KEY) return null;
   return new Resend(process.env.RESEND_API_KEY);
@@ -330,6 +353,8 @@ export default async function handler(req, res) {
       const secBySymbol = {};
       (securitiesData || []).forEach(s => { secBySymbol[s.symbol] = s; });
 
+      const intradayPrices = await fetchLatestIntradayPrices(db, (securitiesData || []).map(s => s.id));
+
       const insertedHoldings = [];
       const skippedSymbols = [];
 
@@ -361,6 +386,7 @@ export default async function handler(req, res) {
           as_of_date: null,
           Status: "active",
           transaction_id: txId,
+          Expected_fill: intradayPrices[sec.id] ?? null,
         });
 
         if (insertErr) {
@@ -442,6 +468,8 @@ export default async function handler(req, res) {
       }
       if (quantity <= 0) quantity = 1;
 
+      const intradayStockPrices = await fetchLatestIntradayPrices(db, [securityId]);
+
       const { data, error } = await db
         .from("stock_holdings_c")
         .insert({
@@ -456,6 +484,7 @@ export default async function handler(req, res) {
           Status: "active",
           strategy_id: strategyId || null,
           transaction_id: txId,
+          Expected_fill: intradayStockPrices[securityId] ?? null,
         })
         .select();
       holdingResult = { data, error };
