@@ -116,6 +116,21 @@ export default async function handler(req, res) {
     let quantity = null;
     let currentPriceCents = null;
 
+    // Insert the investment transaction first to get its UUID for holdings rows.
+    const { data: investTxData } = await db.from("transactions").insert({
+      user_id: userId,
+      direction: "debit",
+      name: isStrategyInvestment ? `Strategy Investment: ${name || symbol || "Strategy"}` : `Purchased ${name || symbol || "Stock"}`,
+      description: isStrategyInvestment ? `Invested in strategy ${name || "Strategy"}` : `Purchased shares of ${name || symbol || "Unknown"}`,
+      amount: amountCents,
+      store_reference: `${reference}-INVEST`,
+      currency: "ZAR",
+      status: "posted",
+      transaction_date: now,
+      created_at: now,
+    }).select("id").single().catch(() => ({ data: null }));
+    const investTxId = investTxData?.id || null;
+
     if (isStrategyInvestment && securityId) {
       const { data: strategyData } = await db
         .from("strategies_c")
@@ -153,8 +168,6 @@ export default async function handler(req, res) {
           const priceCentsVal = Number(sec.last_price || 0);
           if (priceCentsVal <= 0) continue;
 
-          // Always insert a NEW row per strategy purchase so duplicate buys remain
-          // distinguishable in stock_holdings_c (grouped by created_at in the UI).
           await db.from("stock_holdings_c").insert({
             user_id: userId,
             security_id: sec.id,
@@ -165,7 +178,7 @@ export default async function handler(req, res) {
             unrealized_pnl: 0,
             as_of_date: today,
             Status: "active",
-            store_reference: `${reference}-INVEST`,
+            transaction_id: investTxId,
           });
         }
       }
@@ -194,10 +207,6 @@ export default async function handler(req, res) {
       const avgFillCents = currentPriceCents || Math.round(investAmount * 100);
       const marketValueCents = Math.round(quantity * (currentPriceCents || investAmount * 100));
 
-      // Always insert a NEW row per EFT-confirmed direct-stock purchase so
-      // each buy keeps its own avg_fill (the price at confirmation time) and
-      // remains distinguishable in the UI's stacked-card view. Matches the
-      // strategy holdings pattern.
       await db.from("stock_holdings_c").insert({
         user_id: userId,
         security_id: securityId,
@@ -208,22 +217,9 @@ export default async function handler(req, res) {
         as_of_date: today,
         Status: "active",
         strategy_id: strategyId || null,
-        store_reference: `${reference}-INVEST`,
+        transaction_id: investTxId,
       });
     }
-
-    await db.from("transactions").insert({
-      user_id: userId,
-      direction: "debit",
-      name: isStrategyInvestment ? `Strategy Investment: ${name || symbol || "Strategy"}` : `Purchased ${name || symbol || "Stock"}`,
-      description: isStrategyInvestment ? `Invested in strategy ${name || "Strategy"}` : `Purchased shares of ${name || symbol || "Unknown"}`,
-      amount: amountCents,
-      store_reference: `${reference}-INVEST`,
-      currency: "ZAR",
-      status: "posted",
-      transaction_date: now,
-      created_at: now,
-    }).then(() => {}).catch(() => {});
 
     await db
       .from("transactions")
