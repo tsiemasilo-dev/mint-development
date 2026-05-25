@@ -1,5 +1,26 @@
 import { supabase, supabaseAdmin, authenticateUser } from "./_lib/supabase.js";
 
+// Latest stock_intraday_c.current_price per security_id — stamped as
+// Expected_fill so child PnL is anchored to the price at click time.
+async function fetchLatestIntradayPrices(db, securityIds) {
+  if (!securityIds || !securityIds.length) return {};
+  const ids = [...new Set(securityIds.filter(Boolean))];
+  const out = {};
+  await Promise.all(ids.map(async (id) => {
+    const { data } = await db
+      .from("stock_intraday_c")
+      .select("current_price")
+      .eq("security_id", id)
+      .order("timestamp", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data?.current_price != null) {
+      out[id] = Number(data.current_price);
+    }
+  }));
+  return out;
+}
+
 /**
  * Child Investment API
  *
@@ -125,6 +146,8 @@ export default async function handler(req, res) {
       const secMap = {};
       (securities || []).forEach(s => { secMap[s.symbol] = s; });
 
+      const intradayPrices = await fetchLatestIntradayPrices(db, (securities || []).map(s => s.id));
+
       for (const h of holdings) {
         const sec = secMap[h.symbol];
         if (!sec?.last_price) continue;
@@ -173,6 +196,7 @@ export default async function handler(req, res) {
                 strategy_id: strategy_id,
                 Status: "active",
                 transaction_id: childTxId,
+                Expected_fill: intradayPrices[sec.id] ?? null,
               });
           }
           holdingsCreated++;

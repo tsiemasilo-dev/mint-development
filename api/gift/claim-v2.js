@@ -1,5 +1,26 @@
 import { supabase, supabaseAdmin, authenticateUser } from "../_lib/supabase.js";
 
+// Latest stock_intraday_c.current_price per security_id — stamped as
+// Expected_fill so claimed-gift PnL is anchored to the live price at claim time.
+async function fetchLatestIntradayPrices(db, securityIds) {
+  if (!securityIds || !securityIds.length) return {};
+  const ids = [...new Set(securityIds.filter(Boolean))];
+  const out = {};
+  await Promise.all(ids.map(async (id) => {
+    const { data } = await db
+      .from("stock_intraday_c")
+      .select("current_price")
+      .eq("security_id", id)
+      .order("timestamp", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data?.current_price != null) {
+      out[id] = Number(data.current_price);
+    }
+  }));
+  return out;
+}
+
 async function allocateStrategyHoldings(db, userId, strategyId, strategyHoldings, amountCents, transactionId) {
   const investAmountRands = amountCents / 100;
   if (!strategyHoldings.length) return 0;
@@ -9,6 +30,8 @@ async function allocateStrategyHoldings(db, userId, strategyId, strategyHoldings
     .from("securities_c").select("id, symbol, last_price").in("symbol", symbols);
   const secMap = {};
   (securities || []).forEach(s => { secMap[s.symbol] = s; });
+
+  const intradayPrices = await fetchLatestIntradayPrices(db, (securities || []).map(s => s.id));
 
   let totalBasketCost = 0;
   for (const h of strategyHoldings) {
@@ -31,6 +54,7 @@ async function allocateStrategyHoldings(db, userId, strategyId, strategyHoldings
           unrealized_pnl: 0, as_of_date: null,
           strategy_id: strategyId, Status: "active",
           transaction_id: transactionId || null,
+          Expected_fill: intradayPrices[sec.id] ?? null,
         });
         created++;
       } catch (e) { console.warn(`[gift/claim-v2] holding upsert ${h.symbol}:`, e.message); }
@@ -46,6 +70,8 @@ async function allocateStockHolding(db, userId, securityId, amountCents, transac
 
   const qty = Math.max(1, Math.floor((amountCents / 100) / sec.last_price));
 
+  const intradayPrices = await fetchLatestIntradayPrices(db, [sec.id]);
+
   try {
     // Always insert a NEW row per gift-claimed stock so each claim is a
     // discrete pending position with its own broker-fill lifecycle. Matches
@@ -56,6 +82,7 @@ async function allocateStockHolding(db, userId, securityId, amountCents, transac
       unrealized_pnl: 0, as_of_date: null,
       Status: "active",
       transaction_id: transactionId || null,
+      Expected_fill: intradayPrices[sec.id] ?? null,
     }).select("id").single();
     return { qty, holdingId: inserted?.id || null };
   } catch (e) {
