@@ -421,9 +421,11 @@ let supabaseAdmin = null;
 try {
   if (SUPABASE_URL && SUPABASE_ANON_KEY) {
     const { createClient } = require('@supabase/supabase-js');
-    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const ws = require('ws');
+    const wsOptions = { global: { fetch: global.fetch }, realtime: { transport: ws } };
+    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, wsOptions);
     if (SUPABASE_SERVICE_ROLE_KEY) {
-      supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+      supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, wsOptions);
       console.log('Supabase admin client initialized (service role)');
     }
   }
@@ -4311,11 +4313,18 @@ app.get("/api/user/holdings", async (req, res) => {
     }
 
     if (securityIds.length > 0) {
-      const [secResult, pricesResult] = await Promise.all([
-        db.from("securities_c")
+      // Use supabaseAdmin for market data tables (securities_c, stock_intraday_c, stock_returns_c)
+      // because those tables have RLS policies that may block user-JWT queries.
+      const adminDb = supabaseAdmin || db;
+      const [secResult, intradayResult, pricesResult] = await Promise.all([
+        adminDb.from("securities_c")
           .select("id, symbol, name, logo_url, last_price, change_price, change_percent, sector, exchange")
           .in("id", securityIds),
-        db.from("stock_returns_c")
+        adminDb.from("stock_intraday_c")
+          .select("security_id, current_price, 1d_abs, 1d_pct, timestamp")
+          .in("security_id", securityIds)
+          .order("timestamp", { ascending: false }),
+        adminDb.from("stock_returns_c")
           .select("security_id, current_price, as_of_date")
           .in("security_id", securityIds)
           .order("as_of_date", { ascending: false })
@@ -4327,7 +4336,6 @@ app.get("/api/user/holdings", async (req, res) => {
       }
       if (secResult.data) {
         secResult.data.forEach(s => { 
-          // Normalize to cents
           const normalizedSec = { ...s };
           if (s.last_price != null) normalizedSec.last_price = s.last_price * 100;
           if (s.change_price != null) normalizedSec.change_price = s.change_price * 100;
@@ -4335,11 +4343,32 @@ app.get("/api/user/holdings", async (req, res) => {
         });
       }
 
+      // Build intraday map — latest row per security (already in cents)
+      const intradayMap = {};
+      (intradayResult.data || []).forEach(p => {
+        if (!intradayMap[p.security_id]) {
+          intradayMap[p.security_id] = {
+            current_price: Number(p.current_price),
+            change_price: p['1d_abs'] != null ? Number(p['1d_abs']) : null,
+            change_percent: p['1d_pct'] != null ? Number(p['1d_pct']) : null,
+          };
+        }
+      });
+
+      // Overwrite securitiesMap prices with intraday current_price (already in cents)
+      for (const secId of securityIds) {
+        const intraday = intradayMap[secId];
+        if (securitiesMap[secId]) {
+          securitiesMap[secId].last_price = intraday?.current_price > 0 ? intraday.current_price : 0;
+          securitiesMap[secId].change_price = intraday?.change_price ?? 0;
+          securitiesMap[secId].change_percent = intraday?.change_percent ?? 0;
+        }
+      }
+
       const pricesBySecId = {};
       (pricesResult.data || []).forEach(p => {
         if (!pricesBySecId[p.security_id]) pricesBySecId[p.security_id] = [];
         if (pricesBySecId[p.security_id].length < 2) {
-          // Already in cents in stock_returns_c
           pricesBySecId[p.security_id].push(p.current_price);
         }
       });
