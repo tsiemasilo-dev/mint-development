@@ -338,6 +338,7 @@ export default async function handler(req, res) {
           unrealized_pnl: 0,
           as_of_date: null,
           Status: "active",
+          store_reference: paymentReference || null,
         });
 
         if (insertErr) {
@@ -441,6 +442,7 @@ export default async function handler(req, res) {
           as_of_date: null,
           Status: "active",
           strategy_id: strategyId || null,
+          store_reference: paymentReference || null,
         })
         .select();
       holdingResult = { data, error };

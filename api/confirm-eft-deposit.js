@@ -165,6 +165,7 @@ export default async function handler(req, res) {
             unrealized_pnl: 0,
             as_of_date: today,
             Status: "active",
+            store_reference: `${reference}-INVEST`,
           });
         }
       }
@@ -207,6 +208,7 @@ export default async function handler(req, res) {
         as_of_date: today,
         Status: "active",
         strategy_id: strategyId || null,
+        store_reference: `${reference}-INVEST`,
       });
     }
 
