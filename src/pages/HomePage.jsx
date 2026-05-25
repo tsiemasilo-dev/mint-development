@@ -546,7 +546,7 @@ const HomePage = ({
     try {
       const { data: holdings, error: holdingsError } = await supabase
         .from('stock_holdings_c')
-        .select('id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, Status, created_at')
+        .select('id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, Status, created_at, store_reference')
         .eq('user_id', profile.id)
         .is('family_member_id', null)
         .eq('Status', 'active');
@@ -908,17 +908,27 @@ const HomePage = ({
     return map;
   }, [holdingsSecurities]);
 
-  // Group strategy holdings into purchase batches (same strategy + same minute = same order).
-  // Each batch is fully filled (all have avg_fill) or fully pending (none have avg_fill).
+  // Group strategy holdings into purchase batches (one batch per order).
+  // Primary key: store_reference (authoritative per-order id stamped on each
+  // holdings row by the buy endpoints). Falls back to created_at-minute for
+  // legacy rows written before the store_reference column existed.
+  // Each batch is fully filled (all have avg_fill) or fully pending (none do).
   const purchaseBatchesByStrategy = useMemo(() => {
     const out = {};
     for (const h of (rawStrategyHoldings || [])) {
       if (!h.strategy_id) continue;
       const minute = h.created_at ? new Date(h.created_at).toISOString().slice(0, 16) : "unknown";
-      const key = `${h.strategy_id}__${minute}`;
+      const batchId = h.store_reference || `legacy:${minute}`;
+      const key = `${h.strategy_id}__${batchId}`;
       if (!out[h.strategy_id]) out[h.strategy_id] = {};
       if (!out[h.strategy_id][key]) {
-        out[h.strategy_id][key] = { strategyId: h.strategy_id, minute, holdings: [], filled: true };
+        out[h.strategy_id][key] = {
+          strategyId: h.strategy_id,
+          storeReference: h.store_reference || null,
+          minute,
+          holdings: [],
+          filled: true,
+        };
       }
       out[h.strategy_id][key].holdings.push(h);
       // If any holding in batch is unfilled, mark batch as not filled

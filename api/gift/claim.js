@@ -28,7 +28,7 @@ function buildClaimedHtml({ recipientName, senderName, assetName, amountRands })
 </div></body></html>`;
 }
 
-async function allocateStrategyHoldings(db, userId, strategyId, strategyHoldings, amountCents) {
+async function allocateStrategyHoldings(db, userId, strategyId, strategyHoldings, amountCents, storeReference) {
   const investAmountRands = amountCents / 100;
   let holdingsCreated = 0;
   if (!strategyHoldings.length) return 0;
@@ -72,6 +72,7 @@ async function allocateStrategyHoldings(db, userId, strategyId, strategyHoldings
           as_of_date: new Date().toISOString().split("T")[0],
           strategy_id: strategyId,
           Status: "active",
+          store_reference: storeReference || null,
         });
         holdingsCreated++;
       } catch (e) {
@@ -96,6 +97,7 @@ async function allocateStrategyHoldings(db, userId, strategyId, strategyHoldings
           as_of_date: new Date().toISOString().split("T")[0],
           strategy_id: strategyId,
           Status: "active",
+          store_reference: storeReference || null,
         });
         holdingsCreated = 1;
       } catch (e) {
@@ -107,7 +109,7 @@ async function allocateStrategyHoldings(db, userId, strategyId, strategyHoldings
   return holdingsCreated;
 }
 
-async function allocateStockHolding(db, userId, securityId, amountCents) {
+async function allocateStockHolding(db, userId, securityId, amountCents, storeReference) {
   const { data: sec } = await db
     .from("securities_c")
     .select("id, symbol, last_price")
@@ -135,6 +137,7 @@ async function allocateStockHolding(db, userId, securityId, amountCents) {
       unrealized_pnl: 0,
       as_of_date: new Date().toISOString().split("T")[0],
       Status: "active",
+      store_reference: storeReference || null,
     });
     return finalQty;
   } catch (e) {
@@ -196,6 +199,8 @@ export default async function handler(req, res) {
 
   let holdingsAllocated = 0;
 
+  const giftStoreRef = `GIFT-CLAIM-${gift.id}`;
+
   if (gift.asset_type === "strategy" && gift.strategy_id) {
     const { data: strategy } = await db
       .from("strategies_c")
@@ -204,9 +209,9 @@ export default async function handler(req, res) {
       .maybeSingle();
 
     const strategyHoldings = strategy?.holdings || [];
-    holdingsAllocated = await allocateStrategyHoldings(db, user.id, gift.strategy_id, strategyHoldings, gift.amount);
+    holdingsAllocated = await allocateStrategyHoldings(db, user.id, gift.strategy_id, strategyHoldings, gift.amount, giftStoreRef);
   } else if (gift.asset_type === "stock" && gift.security_id) {
-    holdingsAllocated = await allocateStockHolding(db, user.id, gift.security_id, gift.amount);
+    holdingsAllocated = await allocateStockHolding(db, user.id, gift.security_id, gift.amount, giftStoreRef);
   }
 
   if (holdingsAllocated === 0) {

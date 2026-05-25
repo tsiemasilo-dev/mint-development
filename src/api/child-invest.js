@@ -97,6 +97,10 @@ export default async function handler(req, res) {
     const holdings = strategy.holdings || [];
     let holdingsCreated = 0;
 
+    // Generate the order ref up-front so it can be stamped on every holdings
+    // row and on the transactions row — gives us a real JOIN key per order.
+    const ref = `CHILD-INV-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
     if (holdings.length > 0) {
       // Fetch security prices
       const symbols = holdings.map(h => h.symbol).filter(Boolean);
@@ -155,6 +159,7 @@ export default async function handler(req, res) {
                 as_of_date: null,
                 strategy_id: strategy_id,
                 Status: "active",
+                store_reference: ref,
               });
           }
           holdingsCreated++;
@@ -165,7 +170,6 @@ export default async function handler(req, res) {
     }
 
     // 6. Record transaction
-    const ref = `CHILD-INV-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     try {
       await db.from("transactions").insert({
         user_id: parentUserId,

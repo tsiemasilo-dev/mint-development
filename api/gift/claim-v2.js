@@ -1,6 +1,6 @@
 import { supabase, supabaseAdmin, authenticateUser } from "../_lib/supabase.js";
 
-async function allocateStrategyHoldings(db, userId, strategyId, strategyHoldings, amountCents) {
+async function allocateStrategyHoldings(db, userId, strategyId, strategyHoldings, amountCents, storeReference) {
   const investAmountRands = amountCents / 100;
   if (!strategyHoldings.length) return 0;
 
@@ -30,6 +30,7 @@ async function allocateStrategyHoldings(db, userId, strategyId, strategyHoldings
           avg_fill: null, market_value: 0,
           unrealized_pnl: 0, as_of_date: null,
           strategy_id: strategyId, Status: "active",
+          store_reference: storeReference || null,
         });
         created++;
       } catch (e) { console.warn(`[gift/claim-v2] holding upsert ${h.symbol}:`, e.message); }
@@ -38,7 +39,7 @@ async function allocateStrategyHoldings(db, userId, strategyId, strategyHoldings
   return created;
 }
 
-async function allocateStockHolding(db, userId, securityId, amountCents) {
+async function allocateStockHolding(db, userId, securityId, amountCents, storeReference) {
   const { data: sec } = await db
     .from("securities_c").select("id, symbol, last_price").eq("id", securityId).maybeSingle();
   if (!sec?.last_price) return { qty: 0, holdingId: null };
@@ -54,6 +55,7 @@ async function allocateStockHolding(db, userId, securityId, amountCents) {
       avg_fill: null, market_value: 0,
       unrealized_pnl: 0, as_of_date: null,
       Status: "active",
+      store_reference: storeReference || null,
     }).select("id").single();
     return { qty, holdingId: inserted?.id || null };
   } catch (e) {
@@ -115,14 +117,16 @@ export default async function handler(req, res) {
   let holdingsCreated = 0;
   let holdingId = null;
 
+  const giftStoreRef = `GIFT2-CLAIM-${gift.id}`;
+
   if (gift.asset_type === "strategy" && gift.strategy_id) {
     const { data: strategy } = await db
       .from("strategies_c").select("id, holdings").eq("id", gift.strategy_id).maybeSingle();
     holdingsCreated = await allocateStrategyHoldings(
-      db, user.id, gift.strategy_id, strategy?.holdings || [], gift.amount
+      db, user.id, gift.strategy_id, strategy?.holdings || [], gift.amount, giftStoreRef
     );
   } else if (gift.asset_type === "stock" && gift.security_id) {
-    const result = await allocateStockHolding(db, user.id, gift.security_id, gift.amount);
+    const result = await allocateStockHolding(db, user.id, gift.security_id, gift.amount, giftStoreRef);
     holdingsCreated = result.qty > 0 ? 1 : 0;
     holdingId = result.holdingId;
   }
