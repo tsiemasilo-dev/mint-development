@@ -2161,7 +2161,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     try {
       if (!supabase) return;
       const linkedUserId = child?.linked_user_id || null;
-      const holdingsSelect = "id, user_id, family_member_id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id, Fill_date, Status, created_at, transaction_id";
+      const holdingsSelect = "id, user_id, family_member_id, security_id, quantity, avg_fill, Expected_fill, market_value, unrealized_pnl, strategy_id, Fill_date, Status, created_at, transaction_id";
       const familyHoldingsQuery = supabase
         .from("stock_holdings_c")
         .select(holdingsSelect)
@@ -2487,11 +2487,17 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     return livePrice * quantity;
   };
 
-  // Cost basis in Rands. Null if avg_fill is missing.
+  // Cost basis in Rands. Prefers Expected_fill (the price the child saw at
+  // click time, in rands) over avg_fill (broker fill in cents — captures the
+  // company spread). Returns null when neither is set.
   const getHoldingCostRands = (holding) => {
+    const expected = Number(holding.Expected_fill);
+    const quantity = Math.abs(Number(holding.quantity || 0));
+    if (Number.isFinite(expected) && expected > 0) {
+      return expected * quantity;
+    }
     const avgFill = Number(holding.avg_fill);
     if (!Number.isFinite(avgFill) || avgFill <= 0) return null;
-    const quantity = Math.abs(Number(holding.quantity || 0));
     return (avgFill / 100) * quantity;
   };
 

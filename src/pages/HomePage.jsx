@@ -50,6 +50,16 @@ const INSURE_ENABLED = import.meta.env.VITE_ENABLE_INSURE === "true";
 
 const CARD_VISIBILITY_KEY = "mintBalanceVisible";
 
+// Cost basis per share in Rands. Prefers Expected_fill (the price the client
+// saw at click time, in rands) over avg_fill (broker fill, in cents — captures
+// the company spread which should not leak into client PnL).
+const costBasisRandsPerShare = (holding) => {
+  const expected = Number(holding?.Expected_fill || 0);
+  if (expected > 0) return expected;
+  const avgFillCents = Number(holding?.avg_fill || 0);
+  return avgFillCents > 0 ? avgFillCents / 100 : 0;
+};
+
 // Module-level caches to prevent section skeletons on remount
 let _cachedBestAssets = [];
 let _cachedBestStrategies = [];
@@ -80,13 +90,11 @@ const StrategyStackedModal = ({ data, onClose }) => {
   const totalCurrentValueRands = Number(strategy.currentValue || 0);
 
   const computeBatchStats = (batch) => {
-    let costCents = 0;
+    let costRands = 0;
     for (const h of batch.holdings) {
       const qty = Number(h.quantity || 0);
-      const avgFillCents = Number(h.avg_fill || 0);
-      costCents += avgFillCents * qty;
+      costRands += costBasisRandsPerShare(h) * qty;
     }
-    const costRands = costCents / 100;
     const share = totalInvestedRands > 0 ? costRands / totalInvestedRands : 0;
     const valueRands = totalCurrentValueRands * share;
     const pnlRands = valueRands - costRands;
@@ -293,8 +301,7 @@ const StockStackedModal = ({ data, onClose }) => {
 
   const computeBatchStats = (batch) => {
     const qty = Number(batch.quantity || 0);
-    const avgFillCents = Number(batch.avg_fill || 0);
-    const costRands = (avgFillCents * qty) / 100;
+    const costRands = costBasisRandsPerShare(batch) * qty;
     const valueRands = livePriceRands * qty;
     const pnlRands = valueRands - costRands;
     const pnlPct = costRands > 0 ? (pnlRands / costRands) * 100 : null;
@@ -546,7 +553,7 @@ const HomePage = ({
     try {
       const { data: holdings, error: holdingsError } = await supabase
         .from('stock_holdings_c')
-        .select('id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, Status, created_at, transaction_id')
+        .select('id, family_member_id, security_id, strategy_id, quantity, avg_fill, Expected_fill, market_value, unrealized_pnl, Status, created_at, transaction_id')
         .eq('user_id', profile.id)
         .is('family_member_id', null)
         .eq('Status', 'active');
@@ -590,22 +597,23 @@ const HomePage = ({
 
           // Aggregate across batches: filled-only quantity drives liveValue/PnL,
           // while pending batches contribute to hasPendingBatch (badge).
+          // Cost basis prefers Expected_fill (client's quoted price) over
+          // avg_fill (broker fill) — keeps the company spread out of client PnL.
           let filledQty = 0;
           let pendingQty = 0;
-          let weightedFillSum = 0;
+          let weightedCostRandsSum = 0;
           for (const b of batches) {
             const qty = Number(b.quantity || 0);
             const avgFill = Number(b.avg_fill || 0);
             if (avgFill > 0) {
               filledQty += qty;
-              weightedFillSum += avgFill * qty;
+              weightedCostRandsSum += costBasisRandsPerShare(b) * qty;
             } else {
               pendingQty += qty;
             }
           }
-          const avgFillCents = filledQty > 0 ? weightedFillSum / filledQty : 0;
           const marketVal = (livePriceCents * filledQty) / 100;
-          const costBasis = (avgFillCents * filledQty) / 100;
+          const costBasis = weightedCostRandsSum;
           const pnlRands = marketVal - costBasis;
           const pnlPct = costBasis > 0 ? (pnlRands / costBasis) * 100 : 0;
           const isPending = filledQty === 0;
@@ -656,11 +664,12 @@ const HomePage = ({
               const sec = secMap[h.security_id];
               const qty = Number(h.quantity || 0);
               const avgFill = Number(h.avg_fill || 0);
+              const costBasisPerShareRands = costBasisRandsPerShare(h);
               const livePriceCents = sec.last_price != null
                 ? Math.round(Number(sec.last_price) * 100)
-                : avgFill;
+                : Math.round(costBasisPerShareRands * 100);
               const marketVal = (livePriceCents * qty) / 100;
-              const costBasis = (avgFill * qty) / 100;
+              const costBasis = costBasisPerShareRands * qty;
               const pnlRands = marketVal - costBasis;
               const pnlPct = costBasis > 0 ? ((pnlRands / costBasis) * 100) : 0;
               return {

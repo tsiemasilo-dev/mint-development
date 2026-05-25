@@ -21,6 +21,16 @@ function getHoldingsList(result) {
   return [];
 }
 
+// Cost basis per share in Rands. Prefers Expected_fill (the price the client
+// saw at click time, in rands) over avg_fill (broker fill, in cents — captures
+// the company spread).
+const costBasisRandsPerShare = (h) => {
+  const expected = Number(h?.Expected_fill || 0);
+  if (expected > 0) return expected;
+  const avgFillCents = Number(h?.avg_fill || 0);
+  return avgFillCents > 0 ? avgFillCents / 100 : 0;
+};
+
 function getClosedHoldingsList(result) {
   if (Array.isArray(result?.closedHoldings)) return result.closedHoldings;
   return [];
@@ -93,6 +103,15 @@ function aggregateHoldings(rows) {
     );
     const aggAvgFill = filledQty > 0 ? Math.round(weightedFillSum / filledQty) : null;
 
+    // Aggregate Expected_fill (rands) the same quantity-weighted way as avg_fill.
+    // Falls back to avg_fill/100 for legacy batches with no Expected_fill so the
+    // aggregate stays meaningful during the rollout.
+    const weightedExpectedSum = filledBatches.reduce(
+      (s, b) => s + costBasisRandsPerShare(b) * Number(b.quantity || 0),
+      0
+    );
+    const aggExpectedFill = filledQty > 0 ? weightedExpectedSum / filledQty : null;
+
     const aggMarketValue = batches.reduce((s, b) => s + Number(b.market_value || 0), 0);
     const aggPnl = batches.reduce((s, b) => s + Number(b.unrealized_pnl || 0), 0);
 
@@ -119,6 +138,7 @@ function aggregateHoldings(rows) {
       ...template,
       quantity: filledQty, // see header comment — filled-only for liveValue correctness
       avg_fill: aggAvgFill,
+      Expected_fill: aggExpectedFill,
       market_value: aggMarketValue,
       unrealized_pnl: aggPnl,
       last_price: livePriceCents,
@@ -294,7 +314,7 @@ export const useFinancialData = () => {
       const liveVal = (h) => h.last_price != null && h.quantity != null ? (h.last_price * h.quantity) / 100 : (h.market_value || 0) / 100;
       const bestAssets = sortedHoldings.slice(0, 5).map((h) => {
         const currentValue = liveVal(h);
-        const costBasis = ((h.avg_fill || 0) * (h.quantity || 0)) / 100;
+        const costBasis = costBasisRandsPerShare(h) * Number(h.quantity || 0);
         const changePercent = costBasis > 0 ? ((currentValue - costBasis) / costBasis) * 100 : 0;
         return {
           symbol: h.symbol,
@@ -446,7 +466,7 @@ export const useMintBalance = () => {
         
         const liveV = (h) => h.last_price != null && h.quantity != null ? (h.last_price * h.quantity) / 100 : (h.market_value || 0) / 100;
         const totalInvestments = holdings.reduce((sum, h) => sum + liveV(h), 0);
-        const costBasisTotal = holdings.reduce((sum, h) => sum + ((h.avg_fill || 0) * (h.quantity || 0)) / 100, 0);
+        const costBasisTotal = holdings.reduce((sum, h) => sum + costBasisRandsPerShare(h) * Number(h.quantity || 0), 0);
         const dailyChange = totalInvestments - costBasisTotal;
         
         const incomeTypes = ["credit"];
@@ -669,7 +689,7 @@ export const useInvestments = () => {
 
       const liveHV = (h) => h.last_price != null && h.quantity != null ? (h.last_price * h.quantity) / 100 : (h.market_value || 0) / 100;
       const totalInvestments = holdings.reduce((sum, h) => sum + liveHV(h), 0);
-      const costBasisAll = holdings.reduce((sum, h) => sum + ((h.avg_fill || 0) * (h.quantity || 0)) / 100, 0);
+      const costBasisAll = holdings.reduce((sum, h) => sum + costBasisRandsPerShare(h) * Number(h.quantity || 0), 0);
       const monthlyChange = totalInvestments - costBasisAll;
       const monthlyChangePercent = costBasisAll > 0 ? (monthlyChange / costBasisAll) * 100 : 0;
 
@@ -695,7 +715,7 @@ export const useInvestments = () => {
           );
           if (linkedHolding) {
             const marketVal = linkedHolding.last_price != null && linkedHolding.quantity != null ? (linkedHolding.last_price * linkedHolding.quantity) / 100 : (linkedHolding.market_value || 0) / 100;
-            const costBasis = ((linkedHolding.avg_fill || 0) * (linkedHolding.quantity || 0)) / 100;
+            const costBasis = costBasisRandsPerShare(linkedHolding) * Number(linkedHolding.quantity || 0);
             const gainLoss = marketVal - costBasis;
             currentValue = invested + (costBasis > 0 ? (gainLoss / costBasis) * invested : 0);
           }

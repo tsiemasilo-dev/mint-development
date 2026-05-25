@@ -1007,7 +1007,12 @@ export const getOverallPortfolioMonthlyReturns = async (strategyIds, stockSecuri
 
     for (const secId of stockSecurityIds) {
       const holding = rawHoldings.find(h => h.security_id === secId);
-      const investedVal = holding ? (holding.avg_fill * holding.quantity) / 100 : 0;
+      // Cost basis prefers Expected_fill (rands) over avg_fill (cents).
+      const expectedFillRands = Number(holding?.Expected_fill || 0);
+      const costBasisRandsPerShare = expectedFillRands > 0
+        ? expectedFillRands
+        : (Number(holding?.avg_fill || 0) / 100);
+      const investedVal = holding ? costBasisRandsPerShare * Number(holding.quantity || 0) : 0;
       const livePrice = holding?.last_price ? Number(holding.last_price) / 100 : null;
       const liveMarketVal = livePrice && holding?.quantity ? livePrice * holding.quantity : holding ? (holding.market_value || 0) / 100 : 0;
       const actualPnlPct = investedVal > 0 ? (liveMarketVal - investedVal) / investedVal : null;

@@ -347,14 +347,19 @@ const SwipeableBalanceCard = ({
         if (familyMemberId) {
           const { data: childHoldings, error } = await supabase
             .from("stock_holdings_c")
-            .select("id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id, Fill_date, securities(symbol, name, logo_url, last_price)")
+            .select("id, security_id, quantity, avg_fill, Expected_fill, market_value, unrealized_pnl, strategy_id, Fill_date, securities(symbol, name, logo_url, last_price)")
             .eq("family_member_id", familyMemberId);
 
           if (!error && childHoldings) {
             enrichedHoldings = childHoldings.map((h) => {
               const quantity = Number(h.quantity || 0);
               const avgFillCents = Number(h.avg_fill || 0);
+              const expectedFillRands = Number(h.Expected_fill || 0);
               const isFilled = avgFillCents > 0 && !!h.Fill_date;
+              // Cost basis per share in cents: Expected_fill (rands→cents) > avg_fill (cents)
+              const costBasisCentsPerShare = expectedFillRands > 0
+                ? Math.round(expectedFillRands * 100)
+                : avgFillCents;
               const livePriceCents = Number(h.securities?.last_price || 0) > 0
                 ? Math.round(Number(h.securities.last_price) * 100)
                 : 0;
@@ -363,7 +368,7 @@ const SwipeableBalanceCard = ({
                   ? Math.round(livePriceCents * quantity)
                   : Math.round(Number(h.market_value || 0)))
                 : 0;
-              const investedCents = isFilled ? Math.round(avgFillCents * quantity) : 0;
+              const investedCents = isFilled ? Math.round(costBasisCentsPerShare * quantity) : 0;
               return {
                 id: h.id,
                 symbol: h.securities?.symbol || `SEC-${String(h.security_id || "").slice(0, 6)}`,
@@ -371,6 +376,7 @@ const SwipeableBalanceCard = ({
                 market_value: marketValueCents,
                 invested_amount: investedCents,
                 avg_fill: isFilled ? avgFillCents : 0,
+                Expected_fill: isFilled ? expectedFillRands : 0,
                 quantity,
                 logo_url: h.securities?.logo_url || null,
                 security_id: h.security_id,
@@ -445,8 +451,15 @@ const SwipeableBalanceCard = ({
               } catch { return []; }
             })();
 
+            // Cost basis prefers Expected_fill (rands) over avg_fill (cents).
+            // Once admin updates the returns job to write Expected_fill into the
+            // snapshot, this picks it up automatically.
             const investedCents = snapshot.reduce(
-              (sum, h) => sum + Math.round((h.avg_fill || 0) * (h.qty || 0)),
+              (sum, h) => {
+                const expected = Number(h.Expected_fill ?? h.expected_fill ?? 0);
+                if (expected > 0) return sum + Math.round(expected * 100 * (h.qty || 0));
+                return sum + Math.round((h.avg_fill || 0) * (h.qty || 0));
+              },
               0
             );
             const changePct = investedCents > 0
@@ -490,15 +503,17 @@ const SwipeableBalanceCard = ({
         };
 
         const mValue = enrichedHoldings.reduce((acc, h) => acc + liveMarketValue(h) / 100, 0);
-        const invested = enrichedHoldings.reduce(
-          (acc, h) =>
-            acc + (Number(h.avg_fill || 0) * Number(h.quantity || 0)) / 100,
-          0,
-        );
+        // Cost basis per share in Rands: Expected_fill (rands) > avg_fill (cents)
+        const costBasisRands = (h) => {
+          const expected = Number(h.Expected_fill || 0);
+          if (expected > 0) return expected * Number(h.quantity || 0);
+          return (Number(h.avg_fill || 0) * Number(h.quantity || 0)) / 100;
+        };
+        const invested = enrichedHoldings.reduce((acc, h) => acc + costBasisRands(h), 0);
         const investedAmount = enrichedHoldings.reduce(
           (acc, h) => {
             if (h.invested_amount !== undefined) return acc + Number(h.invested_amount) / 100;
-            return acc + (Number(h.avg_fill || 0) * Number(h.quantity || 0)) / 100;
+            return acc + costBasisRands(h);
           },
           0,
         );
@@ -682,7 +697,11 @@ const SwipeableBalanceCard = ({
             }
 
             const pDateStr = (h.created_at || h.as_of_date || "").split("T")[0];
-            const avgFillPrice = Number(h.avg_fill || 0) / 100;
+            // Chart's "purchase price" anchor prefers Expected_fill (rands) over avg_fill (cents).
+            const expectedFillRands = Number(h.Expected_fill || 0);
+            const avgFillPrice = expectedFillRands > 0
+              ? expectedFillRands
+              : Number(h.avg_fill || 0) / 100;
             const livePrice = Number(h.last_price || 0) / 100;
             
             const allMapped = data.map((p) => ({
@@ -719,8 +738,14 @@ const SwipeableBalanceCard = ({
         if (allPriceData.length === 0 && !hasStrategyData) {
           // No price history in DB — synthesize a 2-point chart from cost basis → current market value
           const activeHoldings = holdingsToChart.filter(h => !h.isStrategy && Number(h.avg_fill || 0) > 0);
+          // Cost basis prefers Expected_fill (rands → cents) over avg_fill (cents)
+          const costBasisCents = (h) => {
+            const expected = Number(h.Expected_fill || 0);
+            if (expected > 0) return Math.round(expected * 100 * Number(h.quantity || 0));
+            return Number(h.avg_fill || 0) * Number(h.quantity || 0);
+          };
           if (activeHoldings.length > 0) {
-            const totalCostCents = activeHoldings.reduce((s, h) => s + Number(h.avg_fill || 0) * Number(h.quantity || 0), 0);
+            const totalCostCents = activeHoldings.reduce((s, h) => s + costBasisCents(h), 0);
             const totalMarketCents = activeHoldings.reduce((s, h) => s + Number(h.market_value || 0), 0);
             const totalPnl = (totalMarketCents - totalCostCents) / 100;
             const earliest = activeHoldings
