@@ -396,6 +396,7 @@ const SwipeableBalanceCard = ({
             .from("client_strategy_returns_c")
             .select("strategy_id, basket_value, holdings_snapshot, as_of_date")
             .eq("user_id", userId)
+            .is("family_member", null) // parent rows only — child strategies live on their own rows
             .order("as_of_date", { ascending: false });
 
           const strategiesPromise = supabase
@@ -623,6 +624,7 @@ const SwipeableBalanceCard = ({
                 .select("*")
                 .eq("user_id", userId)
                 .eq("strategy_id", sh.strategyId)
+                .is("family_member", null) // parent chart only
                 .order("as_of_date", { ascending: true });
 
               if (activeTab !== "all") {
@@ -832,6 +834,7 @@ const SwipeableBalanceCard = ({
               .select("*")
               .eq("user_id", userId)
               .eq("strategy_id", asset.strategyId)
+              .is("family_member", null) // parent-only period returns
               .order("as_of_date", { ascending: false })
               .limit(1)
               .maybeSingle();
@@ -895,6 +898,7 @@ const SwipeableBalanceCard = ({
                 .select("*")
                 .eq("user_id", userId)
                 .eq("strategy_id", strategyId)
+                .is("family_member", null) // parent-only aggregate
                 .order("as_of_date", { ascending: false })
                 .limit(1)
                 .maybeSingle();
