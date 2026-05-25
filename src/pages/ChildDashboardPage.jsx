@@ -2161,7 +2161,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     try {
       if (!supabase) return;
       const linkedUserId = child?.linked_user_id || null;
-      const holdingsSelect = "id, user_id, family_member_id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id, Fill_date, Status, created_at";
+      const holdingsSelect = "id, user_id, family_member_id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id, Fill_date, Status, created_at, store_reference";
       const familyHoldingsQuery = supabase
         .from("stock_holdings_c")
         .select(holdingsSelect)
@@ -2508,15 +2508,18 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   const totalPortfolioCents = holdings.reduce((s, h) => s + getHoldingMarketValueCents(h), 0);
 
 
-  // Group holdings by strategy_id + purchase minute (same minute = same order batch).
-  // This means buying the same strategy 5 min apart creates two separate purchase groups.
+  // Group holdings by strategy_id + order batch.
+  // Primary key: store_reference (authoritative per-order id stamped on each
+  // holdings row by the buy endpoints). Falls back to created_at-minute for
+  // legacy rows written before the store_reference column existed.
   const purchaseGroups = holdings.reduce((acc, h) => {
     if (!h.strategy_id) return acc;
     const minute = h.created_at
       ? new Date(h.created_at).toISOString().slice(0, 16) // "2026-05-19T14:32"
       : "unknown";
-    const key = `${h.strategy_id}__${minute}`;
-    if (!acc[key]) acc[key] = { strategyId: h.strategy_id, minute, holdings: [] };
+    const batchId = h.store_reference || `legacy:${minute}`;
+    const key = `${h.strategy_id}__${batchId}`;
+    if (!acc[key]) acc[key] = { strategyId: h.strategy_id, storeReference: h.store_reference || null, minute, holdings: [] };
     acc[key].holdings.push(h);
     return acc;
   }, {});
