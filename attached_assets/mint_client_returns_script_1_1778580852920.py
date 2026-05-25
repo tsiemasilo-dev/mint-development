@@ -49,7 +49,7 @@ def fetch_all_holdings():
     while True:
         batch = supabase_request(
             "GET",
-            f"stock_holdings_c?select=id,user_id,strategy_id,family_member_id,quantity,avg_fill,avg_exit,"
+            f"stock_holdings_c?select=id,user_id,strategy_id,quantity,avg_fill,avg_exit,"
             f"Fill_date,Exit_date,is_active,Status,security_id,"
             f"securities_c(symbol)"
             f"&limit={limit}&offset={offset}"
@@ -168,14 +168,10 @@ def get_period_base(symbol, as_of_date, fill_date, avg_fill, period, stock_index
         return price
 
 
-def fetch_existing_dates(user_id, strategy_id, family_member_id=None):
+def fetch_existing_dates(user_id, strategy_id):
     existing = set()
     offset   = 0
     limit    = 1000
-    family_filter = (
-        f"&family_member=eq.{family_member_id}" if family_member_id
-        else "&family_member=is.null"
-    )
 
     while True:
         batch = supabase_request(
@@ -183,7 +179,6 @@ def fetch_existing_dates(user_id, strategy_id, family_member_id=None):
             f"client_strategy_returns_c?select=as_of_date"
             f"&user_id=eq.{user_id}"
             f"&strategy_id=eq.{strategy_id}"
-            f"{family_filter}"
             f"&limit={limit}&offset={offset}"
         )
         if not batch:
@@ -212,7 +207,7 @@ def get_active_holdings_for_date(holdings, as_of_date):
     return relevant
 
 
-def process_client_strategy(user_id, strategy_id, holdings, family_member_id=None, debug=False):
+def process_client_strategy(user_id, strategy_id, holdings, debug=False):
     symbols = set()
     for h in holdings:
         sym = h.get("securities_c", {}).get("symbol")
@@ -239,7 +234,7 @@ def process_client_strategy(user_id, strategy_id, holdings, family_member_id=Non
         print(f"    No trading dates found.")
         return
 
-    existing_dates = fetch_existing_dates(user_id, strategy_id, family_member_id)
+    existing_dates = fetch_existing_dates(user_id, strategy_id)
     fetched_at     = datetime.now(timezone.utc).isoformat()
     rows_to_insert = []
 
@@ -366,7 +361,6 @@ def process_client_strategy(user_id, strategy_id, holdings, family_member_id=Non
         result = {
             "user_id"          : user_id,
             "strategy_id"      : strategy_id,
-            "family_member"    : family_member_id,
             "as_of_date"       : as_of_date,
             "basket_value"     : basket_value,
             "fetched_at"       : fetched_at,
@@ -429,23 +423,21 @@ def main():
 
     groups = {}
     for h in holdings:
-        user_id          = h.get("user_id")
-        strategy_id      = h.get("strategy_id")
-        family_member_id = h.get("family_member_id")  # NULL for parent rows, child UUID for child rows
+        user_id     = h.get("user_id")
+        strategy_id = h.get("strategy_id")
         if not user_id or not strategy_id:
             continue
-        key = (user_id, strategy_id, family_member_id)
+        key = (user_id, strategy_id)
         if key not in groups:
             groups[key] = []
         groups[key].append(h)
 
-    print(f"Found {len(groups)} client+strategy+member combinations.\n")
+    print(f"Found {len(groups)} client+strategy combinations.\n")
 
-    for (user_id, strategy_id, family_member_id), group_holdings in groups.items():
+    for (user_id, strategy_id), group_holdings in groups.items():
         debug = (user_id == DEBUG_USER)
-        who   = f"child {family_member_id[:8]}" if family_member_id else "parent"
-        print(f"  Processing {who} {user_id[:8]}... strategy {strategy_id[:8]}...")
-        process_client_strategy(user_id, strategy_id, group_holdings, family_member_id=family_member_id, debug=debug)
+        print(f"  Processing client {user_id[:8]}... strategy {strategy_id[:8]}...")
+        process_client_strategy(user_id, strategy_id, group_holdings, debug=debug)
 
     print("\nClient strategy returns backfill complete.")
 
