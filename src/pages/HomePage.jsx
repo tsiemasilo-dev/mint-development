@@ -155,11 +155,24 @@ const HomePage = ({
         const securityIds = holdings.map(h => h.security_id).filter(Boolean);
         let securitiesMap = {};
         if (securityIds.length > 0) {
-          const { data: secData } = await supabase
-            .from('securities_c')
-            .select('id, symbol, name, logo_url, last_price, change_percent')
-            .in('id', securityIds);
-          (secData || []).forEach(s => { securitiesMap[s.id] = s; });
+          const [{ data: secData }, { data: intradayData }] = await Promise.all([
+            supabase.from('securities_c').select('id, symbol, name, logo_url, last_price, change_percent').in('id', securityIds),
+            supabase.from('stock_intraday_c').select('security_id, current_price, 1d_pct, timestamp').in('security_id', securityIds).order('timestamp', { ascending: false }),
+          ]);
+          // Build intraday map — latest row per security (current_price in cents)
+          const intradayMap = {};
+          (intradayData || []).forEach(p => { if (!intradayMap[p.security_id]) intradayMap[p.security_id] = p; });
+          (secData || []).forEach(s => {
+            const intraday = intradayMap[s.id];
+            securitiesMap[s.id] = {
+              ...s,
+              // Prefer live intraday price (cents); fall back to EOD last_price (rands→cents)
+              live_price_cents: intraday?.current_price > 0
+                ? Number(intraday.current_price)
+                : (s.last_price != null ? Math.round(Number(s.last_price) * 100) : null),
+              change_percent: intraday?.['1d_pct'] != null ? Number(intraday['1d_pct']) : Number(s.change_percent || 0),
+            };
+          });
         }
 
         const formatted = holdings
@@ -181,10 +194,7 @@ const HomePage = ({
                 isPending: true,
               };
             }
-            // last_price is in rands; avg_fill is in cents — normalize live price to cents.
-            const livePriceCents = sec.last_price != null
-              ? Math.round(Number(sec.last_price) * 100)
-              : avgFill;
+            const livePriceCents = sec.live_price_cents ?? avgFill;
             const marketVal = (livePriceCents * qty) / 100;
             const costBasis = (avgFill * qty) / 100;
             const pnlRands = marketVal - costBasis;
@@ -215,11 +225,22 @@ const HomePage = ({
       if (strategyHoldings.length > 0) {
         const securityIds = [...new Set(strategyHoldings.map(h => h.security_id).filter(Boolean))];
         if (securityIds.length > 0) {
-          const { data: secData } = await supabase
-            .from('securities_c')
-            .select('id, symbol, name, logo_url, last_price, change_percent')
-            .in('id', securityIds);
-          const secMap = Object.fromEntries((secData || []).map(s => [s.id, s]));
+          const [{ data: secData }, { data: intradayData }] = await Promise.all([
+            supabase.from('securities_c').select('id, symbol, name, logo_url, last_price, change_percent').in('id', securityIds),
+            supabase.from('stock_intraday_c').select('security_id, current_price, 1d_pct, timestamp').in('security_id', securityIds).order('timestamp', { ascending: false }),
+          ]);
+          const intradayMap = {};
+          (intradayData || []).forEach(p => { if (!intradayMap[p.security_id]) intradayMap[p.security_id] = p; });
+          const secMap = Object.fromEntries((secData || []).map(s => {
+            const intraday = intradayMap[s.id];
+            return [s.id, {
+              ...s,
+              live_price_cents: intraday?.current_price > 0
+                ? Number(intraday.current_price)
+                : (s.last_price != null ? Math.round(Number(s.last_price) * 100) : null),
+              change_percent: intraday?.['1d_pct'] != null ? Number(intraday['1d_pct']) : Number(s.change_percent || 0),
+            }];
+          }));
 
           const formatted = strategyHoldings
             .filter(h => secMap[h.security_id])
@@ -227,9 +248,7 @@ const HomePage = ({
               const sec = secMap[h.security_id];
               const qty = Number(h.quantity || 0);
               const avgFill = Number(h.avg_fill || 0);
-              const livePriceCents = sec.last_price != null
-                ? Math.round(Number(sec.last_price) * 100)
-                : avgFill;
+              const livePriceCents = sec.live_price_cents ?? avgFill;
               const marketVal = (livePriceCents * qty) / 100;
               const costBasis = (avgFill * qty) / 100;
               const pnlRands = marketVal - costBasis;
