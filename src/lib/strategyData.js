@@ -522,6 +522,7 @@ export const getClientStrategyReturns = async (userId, strategyId, startDate, en
       .select("as_of_date, inception_pct")
       .eq("user_id", userId)
       .eq("strategy_id", strategyId)
+      .is("family_member", null) // parent-only series
       .gte("as_of_date", startDate)
       .lte("as_of_date", endDate)
       .order("as_of_date", { ascending: true });
@@ -914,6 +915,7 @@ export const getStrategyMonthlyReturnsFromDB = async (userId, strategyId, startD
       .select("as_of_date, basket_value")
       .eq("user_id", userId)
       .eq("strategy_id", strategyId)
+      .is("family_member", null) // parent-only monthly returns
       .order("as_of_date", { ascending: true });
 
     if (error || !rows || rows.length < 2) return {};

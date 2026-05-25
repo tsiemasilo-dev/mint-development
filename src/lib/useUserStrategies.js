@@ -43,6 +43,7 @@ export const useUserStrategies = () => {
           .from("client_strategy_returns_c")
           .select("strategy_id, basket_value, holdings_snapshot, as_of_date, ytd_pct")
           .eq("user_id", userId)
+          .is("family_member", null) // parent-only rows; child rows carry the child's family_members.id
           .order("as_of_date", { ascending: false }),
         supabase
           .from("strategies_c")
@@ -206,6 +207,7 @@ export const useStrategyChartData = (strategyId, timeFilter = "W", purchaseDate 
             .select("as_of_date, basket_value")
             .eq("user_id", resolvedUserId)
             .eq("strategy_id", strategyId)
+            .is("family_member", null) // parent-only chart points
             .order("as_of_date", { ascending: false });
 
           if (timeFilter === "D") {
@@ -331,6 +333,7 @@ export const useStrategyPeriodReturns = (userId, strategyId, activeTab = "m") =>
           .select("*")
           .eq("user_id", userId)
           .eq("strategy_id", strategyId)
+          .is("family_member", null) // parent-only period returns
           .order("as_of_date", { ascending: false })
           .limit(1)
           .maybeSingle();
