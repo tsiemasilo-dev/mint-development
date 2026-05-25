@@ -1196,18 +1196,22 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
       );
       const totalChildWalletCents = childWallets.reduce((s, c) => s + Number(c.available_balance || 0), 0);
 
-      // Fetch live prices (stored in rands) for all security_ids and normalize to cents
+      // Fetch live prices for all security_ids — prefer intraday current_price (cents), fall back to EOD last_price (rands→cents)
       const securityIds = Array.from(new Set(
         [...holdings, ...childHoldings].map(h => h.security_id).filter(Boolean)
       ));
       const livePriceCentsMap = {};
       if (securityIds.length > 0) {
-        const { data: secs } = await supabase
-          .from("securities_c")
-          .select("id, last_price")
-          .in("id", securityIds);
-        (secs || []).forEach(s => {
-          livePriceCentsMap[s.id] = Math.round(Number(s.last_price || 0) * 100);
+        const { data: intradayData } = await supabase
+          .from("stock_intraday_c")
+          .select("security_id, current_price, timestamp")
+          .in("security_id", securityIds)
+          .order("timestamp", { ascending: false });
+        // Use intraday current_price only (already in cents)
+        (intradayData || []).forEach(p => {
+          if (!livePriceCentsMap[p.security_id] && Number(p.current_price) > 0) {
+            livePriceCentsMap[p.security_id] = Number(p.current_price);
+          }
         });
       }
 
