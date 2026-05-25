@@ -914,25 +914,15 @@ const SwipeableBalanceCard = ({
             }
           }
 
-          // Fetch latest return data for each stock
+          // For stock holdings, compute personal unrealized P&L from cost basis vs live market value.
+          // This is always correct regardless of the selected time tab because the user's fill
+          // price is fixed — stock_returns_c period columns reflect the stock's own period return,
+          // not the user's personal gain/loss from their entry price.
           if (securityIds.length > 0) {
-            for (const securityId of securityIds) {
-              const { data: row, error: err } = await supabase
-                .from("stock_returns_c")
-                .select("*")
-                .eq("security_id", securityId)
-                .order("as_of_date", { ascending: false })
-                .limit(1)
-                .single();
-
-              if (!err && row) {
-                const pnlValue = row[columns.pnl] || 0;
-                const pctValue = row[columns.pct] || 0;
-                const basketValue = (Number(row.basket_value || 0)) / 100;
-                const weight = dbData.totalMarketValue > 0 ? basketValue / dbData.totalMarketValue : 0;
-                totalPnl += (Number(pnlValue)) / 100;
-                weightedPct += Number(pctValue) * weight;
-              }
+            for (const holding of dbData.holdings.filter(h => h.security_id && !h.isStrategy)) {
+              const costCents = Number(holding.avg_fill || 0) * Number(holding.quantity || 0);
+              const marketCents = Number(holding.market_value || 0);
+              totalPnl += (marketCents - costCents) / 100;
             }
           }
 
