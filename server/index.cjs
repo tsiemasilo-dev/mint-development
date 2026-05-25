@@ -4313,15 +4313,18 @@ app.get("/api/user/holdings", async (req, res) => {
     }
 
     if (securityIds.length > 0) {
+      // Use supabaseAdmin for market data tables (securities_c, stock_intraday_c, stock_returns_c)
+      // because those tables have RLS policies that may block user-JWT queries.
+      const adminDb = supabaseAdmin || db;
       const [secResult, intradayResult, pricesResult] = await Promise.all([
-        db.from("securities_c")
+        adminDb.from("securities_c")
           .select("id, symbol, name, logo_url, last_price, change_price, change_percent, sector, exchange")
           .in("id", securityIds),
-        db.from("stock_intraday_c")
+        adminDb.from("stock_intraday_c")
           .select("security_id, current_price, 1d_abs, 1d_pct, timestamp")
           .in("security_id", securityIds)
           .order("timestamp", { ascending: false }),
-        db.from("stock_returns_c")
+        adminDb.from("stock_returns_c")
           .select("security_id, current_price, as_of_date")
           .in("security_id", securityIds)
           .order("as_of_date", { ascending: false })
