@@ -166,11 +166,8 @@ const HomePage = ({
             const intraday = intradayMap[s.id];
             securitiesMap[s.id] = {
               ...s,
-              // Prefer live intraday price (cents); fall back to EOD last_price (rands→cents)
-              live_price_cents: intraday?.current_price > 0
-                ? Number(intraday.current_price)
-                : (s.last_price != null ? Math.round(Number(s.last_price) * 100) : null),
-              change_percent: intraday?.['1d_pct'] != null ? Number(intraday['1d_pct']) : Number(s.change_percent || 0),
+              live_price_cents: intraday?.current_price > 0 ? Number(intraday.current_price) : 0,
+              change_percent: intraday?.['1d_pct'] != null ? Number(intraday['1d_pct']) : 0,
             };
           });
         }
@@ -235,10 +232,8 @@ const HomePage = ({
             const intraday = intradayMap[s.id];
             return [s.id, {
               ...s,
-              live_price_cents: intraday?.current_price > 0
-                ? Number(intraday.current_price)
-                : (s.last_price != null ? Math.round(Number(s.last_price) * 100) : null),
-              change_percent: intraday?.['1d_pct'] != null ? Number(intraday['1d_pct']) : Number(s.change_percent || 0),
+              live_price_cents: intraday?.current_price > 0 ? Number(intraday.current_price) : 0,
+              change_percent: intraday?.['1d_pct'] != null ? Number(intraday['1d_pct']) : 0,
             }];
           }));
 
