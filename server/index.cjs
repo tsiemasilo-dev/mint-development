@@ -408,6 +408,64 @@ async function getSumsubRequiredDocsStatus(applicantId) {
   return response.json();
 }
 
+// Submit a bank confirmation letter document to Sumsub for verification
+async function submitBankLetterToSumsub(applicantId, fileBuffer, mimeType, fileName) {
+  const FormData = require("form-data");
+  const form = new FormData();
+
+  // metadata tells Sumsub what kind of document this is
+  const metadata = JSON.stringify({
+    idDocType: "BANK_CARD",
+    idDocSubType: "FRONT_SIDE",
+    country: "ZAF",
+  });
+  form.append("metadata", metadata, { contentType: "application/json" });
+  form.append("content", fileBuffer, { filename: fileName, contentType: mimeType });
+
+  const ts = Math.floor(Date.now() / 1000).toString();
+  const path = `/resources/applicants/${applicantId}/info/idDoc`;
+  const method = "POST";
+  const formHeaders = form.getHeaders();
+  const signature = createSumsubSignature(ts, method, path);
+
+  const response = await fetch(`${SUMSUB_BASE_URL}${path}`, {
+    method,
+    headers: {
+      ...formHeaders,
+      "X-App-Token": SUMSUB_APP_TOKEN,
+      "X-App-Access-Ts": ts,
+      "X-App-Access-Sig": signature,
+    },
+    body: form.getBuffer(),
+  });
+
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`Sumsub document upload error ${response.status}: ${text}`);
+  }
+  try { return JSON.parse(text); } catch { return { raw: text }; }
+}
+
+// Check the latest review status of a bank letter document for an applicant
+async function checkBankLetterSumsubStatus(applicantId) {
+  try {
+    const docsStatus = await getSumsubRequiredDocsStatus(applicantId);
+    if (!docsStatus) return "pending";
+
+    // Look for a BANK_CARD step (our bank letter document type)
+    const bankStep = docsStatus["BANK_CARD"] || docsStatus["BANK_STATEMENT"] || null;
+    if (!bankStep) return "pending";
+
+    const reviewAnswer = bankStep?.reviewResult?.reviewAnswer;
+    if (reviewAnswer === "GREEN") return "approved";
+    if (reviewAnswer === "RED") return "rejected";
+    return "pending";
+  } catch (e) {
+    console.error("[checkBankLetterSumsubStatus] Error:", e.message);
+    return "pending";
+  }
+}
+
 const SUPABASE_URL = readEnv('SUPABASE_URL') || readEnv('VITE_SUPABASE_URL');
 const SUPABASE_ANON_KEY = readEnv('SUPABASE_ANON_KEY') || readEnv('VITE_SUPABASE_ANON_KEY');
 const SUPABASE_SERVICE_ROLE_KEY = readEnv('SUPABASE_SERVICE_ROLE_KEY');
@@ -6200,10 +6258,10 @@ app.post("/api/onboarding/upload-bank-letter", async (req, res) => {
     const { data: urlData } = db.storage.from("signed-agreements").getPublicUrl(filePath);
     const publicUrl = urlData?.publicUrl || "";
 
-    // Update onboarding record
+    // Update onboarding record — mark as pending verification
     const { data: onboardingRecord } = await db
       .from("user_onboarding")
-      .select("id, sumsub_raw")
+      .select("id, sumsub_raw, sumsub_applicant_id")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -6212,17 +6270,100 @@ app.post("/api/onboarding/upload-bank-letter", async (req, res) => {
     if (onboardingRecord) {
       let raw = {};
       try { raw = typeof onboardingRecord.sumsub_raw === "string" ? JSON.parse(onboardingRecord.sumsub_raw) : (onboardingRecord.sumsub_raw || {}); } catch {}
-      raw.bank_letter_uploaded = true;
+      raw.bank_letter_uploaded = false;
+      raw.bank_letter_verification_status = "pending";
       raw.bank_letter_url = publicUrl;
       raw.bank_letter_uploaded_at = new Date().toISOString();
       await db.from("user_onboarding").update({ sumsub_raw: JSON.stringify(raw) }).eq("id", onboardingRecord.id);
+
+      // Submit to Sumsub for verification if credentials available
+      if (SUMSUB_APP_TOKEN && SUMSUB_SECRET_KEY && onboardingRecord.sumsub_applicant_id) {
+        try {
+          const sumsubResult = await submitBankLetterToSumsub(
+            onboardingRecord.sumsub_applicant_id,
+            fileBuffer,
+            fileType || "application/octet-stream",
+            `bank-letter.${extension}`
+          );
+          console.log(`[upload-bank-letter] Submitted to Sumsub for applicant ${onboardingRecord.sumsub_applicant_id}:`, JSON.stringify(sumsubResult));
+        } catch (sumsubErr) {
+          console.error("[upload-bank-letter] Sumsub submission error:", sumsubErr.message);
+          // Don't fail the upload — the letter is stored, verification is async
+        }
+      } else if (SUMSUB_APP_TOKEN && SUMSUB_SECRET_KEY && !onboardingRecord.sumsub_applicant_id) {
+        // Try to find applicant by external user ID
+        try {
+          const applicant = await getSumsubApplicantByExternalId(user.id);
+          if (applicant?.id) {
+            await submitBankLetterToSumsub(applicant.id, fileBuffer, fileType || "application/octet-stream", `bank-letter.${extension}`);
+            console.log(`[upload-bank-letter] Submitted to Sumsub for externalUserId ${user.id}`);
+          }
+        } catch (sumsubErr) {
+          console.error("[upload-bank-letter] Sumsub lookup/submit error:", sumsubErr.message);
+        }
+      }
     }
 
     console.log(`[upload-bank-letter] Uploaded for user ${user.id}: ${publicUrl}`);
-    return res.json({ success: true, publicUrl });
+    return res.json({ success: true, publicUrl, verificationStatus: "pending" });
   } catch (error) {
     console.error("[upload-bank-letter] Unexpected error:", error);
     return res.status(500).json({ success: false, error: error.message || "Unexpected server error" });
+  }
+});
+
+// Poll endpoint: check bank letter verification status
+app.get("/api/onboarding/bank-letter-status", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (!token) return res.status(401).json({ success: false, error: "Missing token" });
+
+    const db = supabaseAdmin || supabase;
+    const { data: { user }, error: authErr } = await db.auth.getUser(token);
+    if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
+
+    const { data: onboarding } = await db
+      .from("user_onboarding")
+      .select("id, sumsub_raw, sumsub_applicant_id")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!onboarding) return res.json({ success: true, status: "not_uploaded" });
+
+    let raw = {};
+    try { raw = typeof onboarding.sumsub_raw === "string" ? JSON.parse(onboarding.sumsub_raw) : (onboarding.sumsub_raw || {}); } catch {}
+
+    const storedStatus = raw.bank_letter_verification_status;
+
+    // If we have Sumsub credentials and an applicant ID, check live status
+    if (SUMSUB_APP_TOKEN && SUMSUB_SECRET_KEY && onboarding.sumsub_applicant_id && storedStatus === "pending") {
+      try {
+        const liveStatus = await checkBankLetterSumsubStatus(onboarding.sumsub_applicant_id);
+        if (liveStatus && liveStatus !== "pending") {
+          // Update DB with result
+          raw.bank_letter_verification_status = liveStatus;
+          if (liveStatus === "approved") {
+            raw.bank_letter_uploaded = true;
+            raw.bank_letter_verified_at = new Date().toISOString();
+          }
+          await db.from("user_onboarding").update({ sumsub_raw: JSON.stringify(raw) }).eq("id", onboarding.id);
+          return res.json({ success: true, status: liveStatus });
+        }
+      } catch (e) {
+        console.error("[bank-letter-status] Live check error:", e.message);
+      }
+    }
+
+    return res.json({
+      success: true,
+      status: storedStatus || (raw.bank_letter_uploaded ? "approved" : "not_uploaded")
+    });
+  } catch (error) {
+    console.error("[bank-letter-status] Error:", error);
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 

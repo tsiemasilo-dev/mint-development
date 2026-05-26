@@ -185,6 +185,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const [identityCheckConfirmed, setIdentityCheckConfirmed] = useState(false);
   const [bankDone, setBankDone] = useState(false);
   const [bankLetterDone, setBankLetterDone] = useState(false);
+  const [bankLetterVerificationStatus, setBankLetterVerificationStatus] = useState(null); // null | 'pending' | 'approved' | 'rejected'
+  const bankLetterPollRef = useRef(null);
   const [mandateDone, setMandateDone] = useState(false);
   const [riskDone, setRiskDone] = useState(false);
   const [sofDone, setSofDone] = useState(false);
@@ -257,6 +259,38 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
     } catch (err) {
       console.error("[Onboarding] Failed to ensure onboarding record:", err);
     }
+  };
+
+  const startBankLetterPolling = (token) => {
+    if (bankLetterPollRef.current) clearInterval(bankLetterPollRef.current);
+    let attempts = 0;
+    const maxAttempts = 24; // poll for up to ~2 minutes
+    bankLetterPollRef.current = setInterval(async () => {
+      attempts++;
+      try {
+        const authToken = token || (await supabase.auth.getSession())?.data?.session?.access_token;
+        if (!authToken) return;
+        const res = await fetch("/api/onboarding/bank-letter-status", {
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.status === "approved") {
+          clearInterval(bankLetterPollRef.current);
+          bankLetterPollRef.current = null;
+          setBankLetterVerificationStatus("approved");
+          setBankLetterDone(true);
+          await saveProgressFlag("bank_letter_uploaded", { bank_letter_verified_at: new Date().toISOString() });
+        } else if (data.status === "rejected") {
+          clearInterval(bankLetterPollRef.current);
+          bankLetterPollRef.current = null;
+          setBankLetterVerificationStatus("rejected");
+        } else if (attempts >= maxAttempts) {
+          clearInterval(bankLetterPollRef.current);
+          bankLetterPollRef.current = null;
+        }
+      } catch { /* ignore poll errors */ }
+    }, 5000);
   };
 
   const saveProgressFlag = async (flagKey, extraFields) => {
@@ -610,6 +644,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
             if (raw.source_of_funds_accepted === true) setSofDone(true);
             if (raw.bank_details_saved === true) setBankDone(true);
             if (raw.bank_letter_uploaded === true) setBankLetterDone(true);
+          if (raw.bank_letter_verification_status) setBankLetterVerificationStatus(raw.bank_letter_verification_status);
             if (raw.address_saved === true) setAddressDone(true);
             if (raw.terms_accepted === true) setTermsDone(true);
             if (raw.account_agreement_signed === true || raw.signed_at) setAgreementSignedDone(true);
@@ -1182,21 +1217,71 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               </div>
 
               {/* ── Section 3: Bank Confirmation Letter ── */}
-              <div className="animate-fade-in delay-3" style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', padding: '18px 20px', boxShadow: '0 2px 12px rgba(100,60,140,0.06)' }}>
+              <div className="animate-fade-in delay-3" style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: `1px solid ${bankLetterVerificationStatus === 'rejected' ? '#fca5a5' : 'hsl(270 20% 90%)'}`, padding: '18px 20px', boxShadow: '0 2px 12px rgba(100,60,140,0.06)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
-                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: bankLetterDone ? '#22c55e' : 'hsl(270 30% 25%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: bankLetterDone ? '#22c55e' : bankLetterVerificationStatus === 'rejected' ? '#ef4444' : bankLetterVerificationStatus === 'pending' ? '#f59e0b' : 'hsl(270 30% 25%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     {bankLetterDone
                       ? <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
-                      : <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>3</span>}
+                      : bankLetterVerificationStatus === 'rejected'
+                        ? <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                        : bankLetterVerificationStatus === 'pending'
+                          ? <div style={{ width: '12px', height: '12px', border: '2px solid white', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                          : <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>3</span>}
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Bank Confirmation Letter</div>
                     <div style={{ fontSize: '12px', color: 'hsl(270 15% 60%)' }}>PDF or image, not older than 3 months</div>
                   </div>
-                  {bankLetterDone && <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '20px', background: '#dcfce7', color: '#16a34a', fontWeight: '600' }}>Uploaded</span>}
+                  {bankLetterDone && <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '20px', background: '#dcfce7', color: '#16a34a', fontWeight: '600' }}>Verified</span>}
+                  {bankLetterVerificationStatus === 'pending' && !bankLetterDone && <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '20px', background: '#fef9c3', color: '#b45309', fontWeight: '600' }}>Verifying…</span>}
+                  {bankLetterVerificationStatus === 'rejected' && <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '20px', background: '#fee2e2', color: '#dc2626', fontWeight: '600' }}>Rejected</span>}
                 </div>
+
                 {bankLetterDone ? (
-                  <p style={{ fontSize: '13px', color: 'hsl(270 15% 55%)' }}>Your letter has been uploaded successfully.</p>
+                  <p style={{ fontSize: '13px', color: 'hsl(270 15% 55%)' }}>Your letter has been verified successfully.</p>
+                ) : bankLetterVerificationStatus === 'pending' ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '16px 0' }}>
+                    <div style={{ width: '32px', height: '32px', border: '3px solid hsl(270 20% 90%)', borderTopColor: 'hsl(270 60% 50%)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                    <p style={{ fontSize: '13px', color: 'hsl(270 30% 40%)', fontWeight: '500' }}>Verifying your document with Sumsub…</p>
+                    <p style={{ fontSize: '11px', color: 'hsl(270 15% 60%)' }}>This usually takes a few seconds. Please wait.</p>
+                  </div>
+                ) : bankLetterVerificationStatus === 'rejected' ? (
+                  <div style={{ marginBottom: '12px' }}>
+                    <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '10px', padding: '12px 14px', marginBottom: '12px' }}>
+                      <p style={{ fontSize: '13px', color: '#dc2626', fontWeight: '500', marginBottom: '4px' }}>Document could not be verified</p>
+                      <p style={{ fontSize: '12px', color: '#b91c1c' }}>Please upload a clear, unedited bank confirmation letter not older than 3 months. Make sure your name and account number are visible.</p>
+                    </div>
+                    <div
+                      className="glass-field py-5 flex flex-col items-center justify-center border-2 border-dashed border-red-300 rounded-xl cursor-pointer hover:border-red-400 transition-colors"
+                      onClick={() => document.getElementById('bank-letter-upload-v2').click()}
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="28" height="28" style={{ color: '#ef4444', marginBottom: '6px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /></svg>
+                      <p className="text-sm font-medium" style={{ color: '#dc2626' }}>Upload a new letter</p>
+                      <input type="file" id="bank-letter-upload-v2" className="hidden" accept=".pdf,image/*" onChange={async (e) => {
+                        const file = e.target.files[0];
+                        if (!file) return;
+                        setIsSubmitting(true); setSubmitError(""); setBankLetterVerificationStatus(null);
+                        try {
+                          const reader = new FileReader();
+                          reader.onload = async (evt) => {
+                            const base64 = evt.target.result;
+                            const { data: { session } } = await supabase.auth.getSession();
+                            const token = session?.access_token;
+                            const res = await fetch("/api/onboarding/upload-bank-letter", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }, body: JSON.stringify({ fileBase64: base64, fileType: file.type }) });
+                            const result = await res.json();
+                            if (result.success) {
+                              setBankLetterVerificationStatus("pending");
+                              startBankLetterPolling(token);
+                            } else { setSubmitError(result.error || "Failed to upload file"); }
+                            setIsSubmitting(false);
+                          };
+                          reader.readAsDataURL(file);
+                        } catch { setSubmitError("An error occurred during upload"); setIsSubmitting(false); }
+                      }} />
+                    </div>
+                    {isSubmitting && <div className="mt-3 flex items-center justify-center gap-2"><div className="w-4 h-4 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin"></div><span className="text-xs text-slate-500">Uploading…</span></div>}
+                    {submitError && <p className="text-center mt-2 text-red-500 text-xs">{submitError}</p>}
+                  </div>
                 ) : (
                   <>
                     <div
@@ -1226,8 +1311,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                               });
                               const result = await res.json();
                               if (result.success) {
-                                setBankLetterDone(true);
-                                await saveProgressFlag("bank_letter_uploaded", { bank_letter_url: result.publicUrl, bank_letter_uploaded_at: new Date().toISOString() });
+                                setBankLetterVerificationStatus("pending");
+                                startBankLetterPolling(token);
                               } else {
                                 setSubmitError(result.error || "Failed to upload file");
                               }
@@ -1244,7 +1329,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                     {isSubmitting && (
                       <div className="mt-3 flex items-center justify-center gap-2">
                         <div className="w-4 h-4 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin"></div>
-                        <span className="text-xs text-slate-500">Uploading...</span>
+                        <span className="text-xs text-slate-500">Uploading…</span>
                       </div>
                     )}
                     {submitError && <p className="text-center mt-2 text-red-500 text-xs">{submitError}</p>}
