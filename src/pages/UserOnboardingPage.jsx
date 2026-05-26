@@ -1242,6 +1242,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                                   fileType: file.type,
                                   accountNumber: bankAccountNumber,
                                   accountHolderName: bankAccountName,
+                                  bankName: bankName,
                                 }),
                               });
                               const result = await res.json();

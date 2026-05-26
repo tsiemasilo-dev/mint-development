@@ -410,7 +410,7 @@ async function getSumsubRequiredDocsStatus(applicantId) {
 }
 
 // Verify a bank confirmation letter using Google Cloud Vision OCR
-async function verifyBankLetterWithVision(base64Content, mimeType, accountNumber, accountHolderName) {
+async function verifyBankLetterWithVision(base64Content, mimeType, accountNumber, accountHolderName, bankName) {
   if (!GOOGLE_CLOUD_VISION_API_KEY) {
     return { verified: true, reason: "Vision API not configured — accepted without OCR check" };
   }
@@ -452,19 +452,65 @@ async function verifyBankLetterWithVision(base64Content, mimeType, accountNumber
     }
 
     console.log("[vision] Extracted text length:", extractedText.length);
+    console.log("[vision] Extracted text preview:", extractedText.slice(0, 800));
 
     // Normalize: remove spaces, dashes, newlines → lowercase
     const normalize = (str) => str.replace(/[\s\-_]/g, "").toLowerCase();
     const normalizedText = normalize(extractedText);
+    const lowerText = extractedText.toLowerCase();
 
-    // 1. Check account number (digits only, must appear in text)
+    // ── CHECK 1: Must contain banking keywords — confirms this is a bank document ──
+    const bankingKeywords = ["account", "branch", "bank", "holder", "confirm", "balance", "statement", "certificate"];
+    const keywordsFound = bankingKeywords.filter(k => lowerText.includes(k));
+    if (keywordsFound.length < 3) {
+      return { verified: false, reason: "This document doesn't appear to be a bank confirmation letter. Please upload an official letter from your bank." };
+    }
+
+    // ── CHECK 2: Date must be present and within the last 3 months ──
+    const now = new Date();
+    const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
+    // Match common SA date formats: 2026-01-15 | 15 January 2026 | 15/01/2026 | Jan 15, 2026
+    const datePatterns = [
+      /(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/g,                        // 2026-01-15
+      /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/g,                        // 15/01/2026
+      /(\d{1,2})\s+(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{4})/gi,
+      /(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2}),?\s+(\d{4})/gi,
+    ];
+    const monthNames = { january:1, february:2, march:3, april:4, may:5, june:6, july:7, august:8, september:9, october:10, november:11, december:12 };
+    let latestDocDate = null;
+    for (const pattern of datePatterns) {
+      let m;
+      while ((m = pattern.exec(extractedText)) !== null) {
+        let d;
+        if (/^\d{4}/.test(m[0])) {
+          d = new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
+        } else if (/\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}/.test(m[0])) {
+          d = new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]));
+        } else if (/^\d{1,2}\s/.test(m[0])) {
+          d = new Date(parseInt(m[3]), (monthNames[m[2].toLowerCase()] || 1) - 1, parseInt(m[1]));
+        } else {
+          d = new Date(parseInt(m[3]), (monthNames[m[1].toLowerCase()] || 1) - 1, parseInt(m[2]));
+        }
+        if (!isNaN(d.getTime()) && d <= now && (!latestDocDate || d > latestDocDate)) latestDocDate = d;
+      }
+    }
+    if (latestDocDate) {
+      console.log("[vision] Document date found:", latestDocDate.toISOString());
+      if (latestDocDate < threeMonthsAgo) {
+        return { verified: false, reason: `This letter is dated ${latestDocDate.toLocaleDateString("en-ZA")} which is older than 3 months. Please obtain a recent bank confirmation letter.` };
+      }
+    } else {
+      console.log("[vision] No clear date found in document");
+    }
+
+    // ── CHECK 3: Account number (digits only, must appear in text) ──
     const digitsOnly = (str) => str.replace(/\D/g, "");
     const accountDigits = digitsOnly(accountNumber || "");
     if (accountDigits.length >= 6 && !normalizedText.includes(accountDigits)) {
       return { verified: false, reason: "Your account number was not found on this document. Please make sure you're uploading the correct bank confirmation letter." };
     }
 
-    // 2. Check account holder name — at least one name word (≥3 chars) must appear
+    // ── CHECK 4: Account holder name — at least one name word (≥3 chars) must appear ──
     if (accountHolderName && accountHolderName.trim()) {
       const nameParts = accountHolderName.trim().split(/\s+/).filter(p => p.length >= 3);
       const normalizedName = normalize(accountHolderName);
@@ -474,7 +520,17 @@ async function verifyBankLetterWithVision(base64Content, mimeType, accountNumber
       }
     }
 
-    return { verified: true, reason: "Account number and name verified successfully." };
+    // ── CHECK 5: Bank name must appear in the document ──
+    if (bankName && bankName.trim()) {
+      // Match first word of bank name (e.g. "ABSA", "FNB", "Standard", "Nedbank", "Capitec")
+      const bankWords = bankName.trim().split(/\s+/).filter(w => w.length >= 3);
+      const bankFound = bankWords.some(w => lowerText.includes(w.toLowerCase()));
+      if (!bankFound) {
+        return { verified: false, reason: `This document doesn't appear to be from ${bankName}. Please upload a letter from the bank you entered.` };
+      }
+    }
+
+    return { verified: true, reason: "Document verified: banking keywords, date, account number, name, and bank all confirmed." };
   } catch (err) {
     console.error("[vision] OCR error:", err.message);
     // Don't block the user if Vision fails — log it and accept
@@ -6248,7 +6304,7 @@ app.post("/api/onboarding/upload-bank-letter", async (req, res) => {
     const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
     if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
 
-    const { fileBase64, fileType, accountNumber, accountHolderName } = req.body || {};
+    const { fileBase64, fileType, accountNumber, accountHolderName, bankName } = req.body || {};
     if (!fileBase64 || typeof fileBase64 !== "string") {
       return res.status(400).json({ success: false, error: "Missing fileBase64 in request body" });
     }
@@ -6276,7 +6332,7 @@ app.post("/api/onboarding/upload-bank-letter", async (req, res) => {
 
     // Run OCR verification via Google Cloud Vision
     console.log(`[upload-bank-letter] Running Vision OCR for user ${user.id}...`);
-    const visionResult = await verifyBankLetterWithVision(normalizedBase64, fileType, accountNumber, accountHolderName);
+    const visionResult = await verifyBankLetterWithVision(normalizedBase64, fileType, accountNumber, accountHolderName, bankName);
     console.log(`[upload-bank-letter] Vision result:`, visionResult);
 
     // Update onboarding record
