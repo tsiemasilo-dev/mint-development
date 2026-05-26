@@ -129,7 +129,14 @@ export default async function handler(req, res) {
         const dailyChangeCents = Math.round(dailyChangeAbsRands * 100);
         const quantity = Number(h.quantity || 0);
         const avgFillCents = Number(h.avg_fill || 0);
-        const expectedFillRands = Number(h.Expected_fill || 0);
+        // Defensive: rows written before commit a732c49 stored Expected_fill in
+        // cents (~100x inflated). If Expected_fill > 5x avg_fill/100, treat it as
+        // legacy cents and divide by 100.
+        const expectedFillRaw = Number(h.Expected_fill || 0);
+        const avgFillRandsForCheck = avgFillCents / 100;
+        const expectedFillRands = expectedFillRaw > 0
+          ? (expectedFillRaw > avgFillRandsForCheck * 5 ? expectedFillRaw / 100 : expectedFillRaw)
+          : 0;
         const isPending = !avgFillCents || avgFillCents === 0;
 
         if (isPending) {
@@ -161,6 +168,7 @@ export default async function handler(req, res) {
 
         return {
           ...h,
+          Expected_fill: expectedFillRands,
           market_value: liveMarketValueCents,
           unrealized_pnl: pnlCents,
           symbol: sec?.symbol || "N/A",
