@@ -1026,9 +1026,9 @@ const SwipeableBalanceCard = ({
         </div>
 
         {/* Inline sparkline — flex item, never overlaps content below */}
-        <div className="opacity-90 shrink-0 self-end pointer-events-none" style={{ width: 140, height: 60 }}>
+        <div className="opacity-90 shrink-0 self-end pointer-events-none" style={{ width: 190, height: 80 }}>
           {chartData.length > 1 ? (
-            <ResponsiveContainer width={140} height={60}>
+            <ResponsiveContainer width={190} height={80}>
               <ComposedChart data={chartData} margin={{ top: 2, right: 0, left: 0, bottom: 2 }}>
                 <Tooltip
                   content={({ active, payload }) => {
@@ -1057,6 +1057,7 @@ const SwipeableBalanceCard = ({
       </div>
 
       {/* Asset selector — hidden in child mode */}
+
       <div ref={dropdownRef} className={`relative mt-2${childMode ? " hidden" : ""}`}>
         {!dataSettled ? (
           <Skeleton className="h-7 w-28 bg-white/10 rounded-full animate-pulse" />
