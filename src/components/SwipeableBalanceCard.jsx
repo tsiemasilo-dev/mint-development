@@ -947,9 +947,15 @@ const SwipeableBalanceCard = ({
           // This is always correct regardless of the selected time tab because the user's fill
           // price is fixed — stock_returns_c period columns reflect the stock's own period return,
           // not the user's personal gain/loss from their entry price.
+          // Cost basis prefers Expected_fill (rands, what the client saw at click time) over
+          // avg_fill/100 (broker fill in cents) so the company spread stays out of client PnL.
           if (securityIds.length > 0) {
             for (const holding of dbData.holdings.filter(h => h.security_id && !h.isStrategy)) {
-              const costCents = Number(holding.avg_fill || 0) * Number(holding.quantity || 0);
+              const expectedFillRands = Number(holding.Expected_fill || 0);
+              const qty = Number(holding.quantity || 0);
+              const costCents = expectedFillRands > 0
+                ? Math.round(expectedFillRands * 100 * qty)
+                : Number(holding.avg_fill || 0) * qty;
               const marketCents = Number(holding.market_value || 0);
               totalPnl += (marketCents - costCents) / 100;
             }
@@ -974,15 +980,23 @@ const SwipeableBalanceCard = ({
   const displayMarketValue = selectedAsset
     ? Number(selectedAsset.market_value || 0) / 100
     : dbData.totalMarketValue;
+  // Selected-asset cost basis prefers Expected_fill (rands, client's quoted price)
+  // over avg_fill (broker fill, in cents). For strategies — which set
+  // avg_fill: investedCents at construction time — both paths yield the same value.
+  const selectedAssetInvestedRands = (() => {
+    if (!selectedAsset) return 0;
+    const expectedRands = Number(selectedAsset.Expected_fill || 0);
+    const qty = Number(selectedAsset.quantity || 0);
+    if (expectedRands > 0) return expectedRands * qty;
+    return (Number(selectedAsset.avg_fill || 0) * qty) / 100;
+  })();
   const displayInvested = selectedAsset
-    ? (Number(selectedAsset.avg_fill || 0) *
-      Number(selectedAsset.quantity || 0)) /
-    100
+    ? selectedAssetInvestedRands
     : dbData.totalInvested;
   const displayInvestedAmount = selectedAsset
     ? (selectedAsset.invested_amount !== undefined
         ? Number(selectedAsset.invested_amount) / 100
-        : (Number(selectedAsset.avg_fill || 0) * Number(selectedAsset.quantity || 0)) / 100)
+        : selectedAssetInvestedRands)
     : dbData.totalInvestedAmount;
   const isPeriodTab = ["5d", "m", "ytd", "all"].includes(activeTab);
   const displayReturn = isPeriodTab
