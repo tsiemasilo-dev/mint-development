@@ -2974,8 +2974,8 @@ app.get("/api/stocks/chart", async (req, res) => {
 });
 
 // ── Live price update endpoint — called by Vercel Cron every 5 min (market hours) ──
-// Fetches latest prices from Yahoo Finance for all symbols in securities_c,
-// then writes to mkt_prices, mkt_price_history (once/day), and mkt_holdings_value.
+// Fully self-contained — reads only from mkt_prices and mkt_holdings_value.
+// No existing tables (securities_c, client_strategy_returns_c) are read or written.
 app.post("/api/update-prices", async (req, res) => {
   const db = supabaseAdmin || supabase;
   if (!db) return res.status(503).json({ error: "DB not ready" });
@@ -2985,13 +2985,13 @@ app.post("/api/update-prices", async (req, res) => {
   const results = { updated: 0, skipped: 0, errors: [] };
 
   try {
-    // 1. Fetch all symbols from securities_c
+    // 1. Fetch all symbols from mkt_prices (populated on first run from securities_c)
     const { data: securities, error: secErr } = await db
-      .from("securities_c")
-      .select("id, symbol, last_price");
+      .from("mkt_prices")
+      .select("security_id, symbol");
 
     if (secErr || !securities?.length) {
-      return res.status(500).json({ error: "Failed to fetch securities", detail: secErr?.message });
+      return res.status(500).json({ error: "Failed to fetch symbols from mkt_prices", detail: secErr?.message });
     }
 
     const YAHOO_HEADERS = {
@@ -3054,23 +3054,23 @@ app.post("/api/update-prices", async (req, res) => {
       }
     }));
 
-    // ── Step 3: Populate mkt_holdings_value from client_strategy_returns_c ──────
-    // Reads client_strategy_returns_c as a READ-ONLY source for holdings snapshots.
-    // Updates current_price from fresh mkt_prices, recalculates all P&L fields,
-    // and writes results to mkt_holdings_value. client_strategy_returns_c is NEVER written to.
+    // ── Step 3: Refresh mkt_holdings_value with live Yahoo prices ──────────────
+    // Fully self-contained: reads holdings snapshots from mkt_holdings_value,
+    // updates current_price, recalculates P&L, and writes today's row back.
+    // No existing tables are read or written.
 
-    // Build price lookup from the mkt_prices we just upserted
+    // Price lookup is already in mkt_prices (just updated above)
     const { data: freshPrices } = await db.from("mkt_prices").select("symbol, last_price_cents");
     const priceMap = {};
     (freshPrices || []).forEach(p => { priceMap[p.symbol] = Number(p.last_price_cents); });
 
-    // Read all rows from client_strategy_returns_c — source of truth for holdings
+    // Read all rows from mkt_holdings_value — most recent row per user/strategy combo
     const { data: allReturns } = await db
-      .from("client_strategy_returns_c")
+      .from("mkt_holdings_value")
       .select("user_id, strategy_id, family_member, as_of_date, basket_value, holdings_snapshot, inception_pnl")
       .order("as_of_date", { ascending: false });
 
-    // Deduplicate: keep only the most recent row per combo (read-only)
+    // Deduplicate: keep only the most recent row per combo
     const comboMap = {};
     (allReturns || []).forEach(row => {
       const key = `${row.user_id}|${row.strategy_id}|${row.family_member ?? "null"}`;
@@ -3082,7 +3082,7 @@ app.post("/api/update-prices", async (req, res) => {
       try {
         const { user_id, strategy_id, family_member } = latestRow;
 
-        // Parse holdings_snapshot from client_strategy_returns_c
+        // Parse holdings_snapshot from mkt_holdings_value
         let holdings;
         try {
           holdings = typeof latestRow.holdings_snapshot === "string"
@@ -3107,8 +3107,8 @@ app.post("/api/update-prices", async (req, res) => {
           updatedHoldings.reduce((sum, h) => sum + (Number(h.qty || 0) * Number(h.avg_fill || 0)), 0)
         );
 
-        // 1d P&L: compare today's basket to the most recent previous row in client_strategy_returns_c
-        let prevQ = db.from("client_strategy_returns_c")
+        // 1d P&L: compare today's basket to the most recent previous row in mkt_holdings_value
+        let prevQ = db.from("mkt_holdings_value")
           .select("basket_value")
           .eq("user_id", user_id)
           .eq("strategy_id", strategy_id)
@@ -3124,12 +3124,12 @@ app.post("/api/update-prices", async (req, res) => {
         const inceptionPnl = newBasketValue - costBasis;
         const inceptionPct = costBasis > 0 ? (inceptionPnl / costBasis) * 100 : 0;
 
-        // Period P&L: look up basket value N days ago from client_strategy_returns_c
+        // Period P&L: look up basket value N days ago from mkt_holdings_value
         const lookupBasket = async (daysAgo) => {
           const target = new Date();
           target.setDate(target.getDate() - daysAgo);
           const targetStr = target.toISOString().split("T")[0];
-          let q = db.from("client_strategy_returns_c")
+          let q = db.from("mkt_holdings_value")
             .select("basket_value")
             .eq("user_id", user_id)
             .eq("strategy_id", strategy_id)
@@ -3140,7 +3140,7 @@ app.post("/api/update-prices", async (req, res) => {
         };
 
         const yearStart = `${new Date().getFullYear()}-01-01`;
-        let ytdQ = db.from("client_strategy_returns_c")
+        let ytdQ = db.from("mkt_holdings_value")
           .select("basket_value")
           .eq("user_id", user_id)
           .eq("strategy_id", strategy_id)
