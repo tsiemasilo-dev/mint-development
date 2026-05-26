@@ -1324,7 +1324,7 @@ const HomePage = ({
             </div>
             {hasStrategies && !loadingBestStrategies && (
               <button
-                onClick={onOpenStrategies}
+                onClick={() => onOpenInvestments && onOpenInvestments("strategy")}
                 className="mb-1 text-xs font-semibold text-violet-600 active:opacity-70 transition-colors"
               >
                 View all

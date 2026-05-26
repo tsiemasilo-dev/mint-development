@@ -1,7 +1,51 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import OriginButton from "../components/OriginButton";
+import { supabase } from "../lib/supabase.js";
 
 const OnboardingPage = ({ onCreateAccount, onLogin }) => {
+  const [imageUrl, setImageUrl] = useState(null);
+  const [imageLoading, setImageLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchLandingImage = async () => {
+      try {
+        if (!supabase) throw new Error("Supabase client not initialized");
+        const { data, error } = await supabase.storage
+          .from('MintAuthImages')
+          .list('', {
+            limit: 20,
+            sortBy: { column: 'name', order: 'asc' }
+          });
+        
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          const imageFiles = data.filter(file => 
+            /\.(png|jpe?g|webp|avif)$/i.test(file.name)
+          );
+          if (imageFiles.length > 0) {
+            const randomIndex = Math.floor(Math.random() * imageFiles.length);
+            const selectedFile = imageFiles[randomIndex];
+            
+            const { data: { publicUrl } } = supabase.storage
+              .from('MintAuthImages')
+              .getPublicUrl(selectedFile.name);
+            
+            setImageUrl(publicUrl);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to load dynamic auth image:", err.message);
+      }
+      
+      // Fallback to default image
+      setImageUrl("/assets/images/onboarding-hero.png");
+    };
+
+    fetchLandingImage();
+  }, []);
+
   return (
     <div className="h-screen overflow-hidden bg-white">
       <div className="grid h-full grid-rows-2 lg:grid-cols-[1.05fr_1fr] lg:grid-rows-none">
@@ -44,12 +88,21 @@ const OnboardingPage = ({ onCreateAccount, onLogin }) => {
         </div>
 
         <div className="order-1 h-full lg:order-2">
-          <div className="relative h-full w-full overflow-hidden rounded-b-[3.5rem] [clip-path:ellipse(140%_90%_at_50%_0%)] lg:rounded-none lg:[clip-path:none]">
-            <img
-              src="/assets/images/onboarding-hero.png"
-              alt="Person using a phone"
-              className="h-full w-full object-cover"
-            />
+          <div className="relative h-full w-full overflow-hidden bg-slate-50 rounded-b-[3.5rem] [clip-path:ellipse(140%_90%_at_50%_0%)] lg:rounded-none lg:[clip-path:none]">
+            {imageUrl && (
+              <img
+                src={imageUrl}
+                alt="Person using a phone"
+                className="h-full w-full object-cover transition-opacity duration-700 ease-out"
+                style={{ opacity: imageLoading ? 0 : 1 }}
+                onLoad={() => setImageLoading(false)}
+              />
+            )}
+            {imageLoading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-slate-50">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-violet-600" />
+              </div>
+            )}
           </div>
         </div>
       </div>
