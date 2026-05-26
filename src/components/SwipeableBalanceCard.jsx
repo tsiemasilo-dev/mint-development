@@ -986,7 +986,7 @@ const SwipeableBalanceCard = ({
       </div>
 
       {/* Value + inline sparkline */}
-      <div className="flex items-end justify-between mt-2 relative">
+      <div className="flex items-end justify-between mt-2 relative min-h-[88px] overflow-hidden">
         <div className="flex-1 min-w-0 pr-3">
           {!dataSettled ? (
             <Skeleton className="h-8 w-36 bg-white/15 rounded mb-2 animate-pulse" />
@@ -1025,8 +1025,8 @@ const SwipeableBalanceCard = ({
           </div>
         </div>
 
-        {/* Inline sparkline — absolute so it doesn't expand card height */}
-        <div className="opacity-90 absolute right-4 -bottom-10">
+        {/* Inline sparkline — absolute, clipped within value row */}
+        <div className="opacity-90 absolute right-4 bottom-0 pointer-events-none">
           {chartData.length > 1 ? (
             <ResponsiveContainer width={185} height={85}>
               <ComposedChart data={chartData} margin={{ top: 2, right: 0, left: 0, bottom: 2 }}>
