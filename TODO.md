@@ -5,7 +5,7 @@
 2. API endpoints return 500 errors due to authentication failures
 3. Session management issues ("No active session found")
 4. WebSocket/Realtime connection failures (secondary issue)
-
+...
 ## Fixes Implemented:
 
 ### 1. Fix `/api/user/strategies` endpoint in server/index.cjs ✅

@@ -7,6 +7,28 @@ function getResend() {
   return new Resend(process.env.RESEND_API_KEY);
 }
 
+// Latest stock_intraday_c.current_price per security_id — used as Expected_fill
+// so client PnL is anchored to the price the user saw, not the broker fill.
+async function fetchLatestIntradayPrices(db, securityIds) {
+  if (!securityIds || !securityIds.length) return {};
+  const ids = [...new Set(securityIds.filter(Boolean))];
+  const out = {};
+  await Promise.all(ids.map(async (id) => {
+    const { data } = await db
+      .from("stock_intraday_c")
+      .select("current_price")
+      .eq("security_id", id)
+      .order("timestamp", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data?.current_price != null) {
+      // stock_intraday_c.current_price is stored in cents; return rands.
+      out[id] = Number(data.current_price) / 100;
+    }
+  }));
+  return out;
+}
+
 async function sendOrderConfirmationEmail(db, { userId, userEmail, assetName, assetSymbol, strategyName, amountCents, quantity, priceCents, reference, orderDate }) {
   try {
     const resend = getResend();
@@ -116,6 +138,21 @@ export default async function handler(req, res) {
     let quantity = null;
     let currentPriceCents = null;
 
+    // Insert the investment transaction first to get its UUID for holdings rows.
+    const { data: investTxData } = await db.from("transactions").insert({
+      user_id: userId,
+      direction: "debit",
+      name: isStrategyInvestment ? `Strategy Investment: ${name || symbol || "Strategy"}` : `Purchased ${name || symbol || "Stock"}`,
+      description: isStrategyInvestment ? `Invested in strategy ${name || "Strategy"}` : `Purchased shares of ${name || symbol || "Unknown"}`,
+      amount: amountCents,
+      store_reference: `${reference}-INVEST`,
+      currency: "ZAR",
+      status: "posted",
+      transaction_date: now,
+      created_at: now,
+    }).select("id").single().catch(() => ({ data: null }));
+    const investTxId = investTxData?.id || null;
+
     if (isStrategyInvestment && securityId) {
       const { data: strategyData } = await db
         .from("strategies_c")
@@ -133,6 +170,8 @@ export default async function handler(req, res) {
 
         const secBySymbol = {};
         (securitiesData || []).forEach(s => { secBySymbol[s.symbol] = s; });
+
+        const intradayPrices = await fetchLatestIntradayPrices(db, (securitiesData || []).map(s => s.id));
 
         let totalBasketCostRands = 0;
         for (const holding of strategyHoldings) {
@@ -153,41 +192,19 @@ export default async function handler(req, res) {
           const priceCentsVal = Number(sec.last_price || 0);
           if (priceCentsVal <= 0) continue;
 
-          const { data: existing } = await db
-            .from("stock_holdings_c")
-            .select("id, quantity, avg_fill")
-            .eq("user_id", userId)
-            .eq("security_id", sec.id)
-            .eq("strategy_id", strategyId)
-            .maybeSingle();
-
-          if (existing) {
-            const oldQty = Number(existing.quantity || 0);
-            const oldAvgFill = Number(existing.avg_fill || 0);
-            const newQty = oldQty + holdingQty;
-            const newAvgFill = newQty > 0
-              ? ((oldAvgFill * oldQty) + (priceCentsVal * holdingQty)) / newQty
-              : priceCentsVal;
-            await db.from("stock_holdings_c").update({
-              quantity: newQty,
-              avg_fill: Math.round(newAvgFill),
-              market_value: Math.round(newQty * priceCentsVal),
-              as_of_date: today,
-              updated_at: now,
-            }).eq("id", existing.id);
-          } else {
-            await db.from("stock_holdings_c").insert({
-              user_id: userId,
-              security_id: sec.id,
-              strategy_id: strategyId,
-              quantity: holdingQty,
-              avg_fill: priceCentsVal,
-              market_value: Math.round(holdingQty * priceCentsVal),
-              unrealized_pnl: 0,
-              as_of_date: today,
-              Status: "active",
-            });
-          }
+          await db.from("stock_holdings_c").insert({
+            user_id: userId,
+            security_id: sec.id,
+            strategy_id: strategyId,
+            quantity: holdingQty,
+            avg_fill: priceCentsVal,
+            market_value: Math.round(holdingQty * priceCentsVal),
+            unrealized_pnl: 0,
+            as_of_date: today,
+            Status: "active",
+            transaction_id: investTxId,
+            Expected_fill: intradayPrices[sec.id] ?? null,
+          });
         }
       }
     } else if (securityId && !isStrategyInvestment) {
@@ -215,52 +232,22 @@ export default async function handler(req, res) {
       const avgFillCents = currentPriceCents || Math.round(investAmount * 100);
       const marketValueCents = Math.round(quantity * (currentPriceCents || investAmount * 100));
 
-      const { data: existing } = await db
-        .from("stock_holdings_c")
-        .select("id, quantity, avg_fill, market_value")
-        .eq("user_id", userId)
-        .eq("security_id", securityId)
-        .maybeSingle();
+      const intradayStockPrices = await fetchLatestIntradayPrices(db, [securityId]);
 
-      if (existing) {
-        const oldQty = Number(existing.quantity || 0);
-        const oldAvgFill = Number(existing.avg_fill || 0);
-        const newQty = oldQty + quantity;
-        const newAvgFill = newQty > 0 ? ((oldAvgFill * oldQty) + (avgFillCents * quantity)) / newQty : avgFillCents;
-        await db.from("stock_holdings_c").update({
-          quantity: newQty,
-          avg_fill: Math.round(newAvgFill),
-          market_value: Math.round(newQty * (currentPriceCents || Math.round(newAvgFill))),
-          as_of_date: today,
-          updated_at: now,
-        }).eq("id", existing.id);
-      } else {
-        await db.from("stock_holdings_c").insert({
-          user_id: userId,
-          security_id: securityId,
-          quantity,
-          avg_fill: avgFillCents,
-          market_value: marketValueCents,
-          unrealized_pnl: 0,
-          as_of_date: today,
-          Status: "active",
-          strategy_id: strategyId || null,
-        });
-      }
+      await db.from("stock_holdings_c").insert({
+        user_id: userId,
+        security_id: securityId,
+        quantity,
+        avg_fill: avgFillCents,
+        market_value: marketValueCents,
+        unrealized_pnl: 0,
+        as_of_date: today,
+        Status: "active",
+        strategy_id: strategyId || null,
+        transaction_id: investTxId,
+        Expected_fill: intradayStockPrices[securityId] ?? null,
+      });
     }
-
-    await db.from("transactions").insert({
-      user_id: userId,
-      direction: "debit",
-      name: isStrategyInvestment ? `Strategy Investment: ${name || symbol || "Strategy"}` : `Purchased ${name || symbol || "Stock"}`,
-      description: isStrategyInvestment ? `Invested in strategy ${name || "Strategy"}` : `Purchased shares of ${name || symbol || "Unknown"}`,
-      amount: amountCents,
-      store_reference: `${reference}-INVEST`,
-      currency: "ZAR",
-      status: "posted",
-      transaction_date: now,
-      created_at: now,
-    }).then(() => {}).catch(() => {});
 
     await db
       .from("transactions")
