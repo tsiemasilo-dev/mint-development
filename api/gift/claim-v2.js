@@ -1,6 +1,28 @@
 import { supabase, supabaseAdmin, authenticateUser } from "../_lib/supabase.js";
 
-async function allocateStrategyHoldings(db, userId, strategyId, strategyHoldings, amountCents) {
+// Latest stock_intraday_c.current_price per security_id — stamped as
+// Expected_fill so claimed-gift PnL is anchored to the live price at claim time.
+async function fetchLatestIntradayPrices(db, securityIds) {
+  if (!securityIds || !securityIds.length) return {};
+  const ids = [...new Set(securityIds.filter(Boolean))];
+  const out = {};
+  await Promise.all(ids.map(async (id) => {
+    const { data } = await db
+      .from("stock_intraday_c")
+      .select("current_price")
+      .eq("security_id", id)
+      .order("timestamp", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data?.current_price != null) {
+      // stock_intraday_c.current_price is stored in cents; return rands.
+      out[id] = Number(data.current_price) / 100;
+    }
+  }));
+  return out;
+}
+
+async function allocateStrategyHoldings(db, userId, strategyId, strategyHoldings, amountCents, transactionId) {
   const investAmountRands = amountCents / 100;
   if (!strategyHoldings.length) return 0;
 
@@ -9,6 +31,8 @@ async function allocateStrategyHoldings(db, userId, strategyId, strategyHoldings
     .from("securities_c").select("id, symbol, last_price").in("symbol", symbols);
   const secMap = {};
   (securities || []).forEach(s => { secMap[s.symbol] = s; });
+
+  const intradayPrices = await fetchLatestIntradayPrices(db, (securities || []).map(s => s.id));
 
   let totalBasketCost = 0;
   for (const h of strategyHoldings) {
@@ -23,28 +47,16 @@ async function allocateStrategyHoldings(db, userId, strategyId, strategyHoldings
       if (!sec?.last_price) continue;
       const qty = Math.max(1, Math.round((h.weight || 1) * scale));
       try {
-        const { data: existing } = await db.from("stock_holdings_c")
-          .select("id, quantity")
-          .eq("user_id", userId).eq("security_id", sec.id)
-          .eq("strategy_id", strategyId).is("family_member_id", null).maybeSingle();
-        if (existing) {
-          // Add quantity and mark pending — broker fill will set avg_fill
-          await db.from("stock_holdings_c").update({
-            quantity: Number(existing.quantity || 0) + qty,
-            avg_fill: null,
-            market_value: 0,
-            unrealized_pnl: 0,
-            as_of_date: null,
-            updated_at: new Date().toISOString(),
-          }).eq("id", existing.id);
-        } else {
-          await db.from("stock_holdings_c").insert({
-            user_id: userId, security_id: sec.id, quantity: qty,
-            avg_fill: null, market_value: 0,
-            unrealized_pnl: 0, as_of_date: null,
-            strategy_id: strategyId, Status: "active",
-          });
-        }
+        // Always insert a NEW row per gift-claimed strategy — keeps each
+        // purchase event distinguishable for the stacked-card UI.
+        await db.from("stock_holdings_c").insert({
+          user_id: userId, security_id: sec.id, quantity: qty,
+          avg_fill: null, market_value: 0,
+          unrealized_pnl: 0, as_of_date: null,
+          strategy_id: strategyId, Status: "active",
+          transaction_id: transactionId || null,
+          Expected_fill: intradayPrices[sec.id] ?? null,
+        });
         created++;
       } catch (e) { console.warn(`[gift/claim-v2] holding upsert ${h.symbol}:`, e.message); }
     }
@@ -52,39 +64,28 @@ async function allocateStrategyHoldings(db, userId, strategyId, strategyHoldings
   return created;
 }
 
-async function allocateStockHolding(db, userId, securityId, amountCents) {
+async function allocateStockHolding(db, userId, securityId, amountCents, transactionId) {
   const { data: sec } = await db
     .from("securities_c").select("id, symbol, last_price").eq("id", securityId).maybeSingle();
   if (!sec?.last_price) return { qty: 0, holdingId: null };
 
   const qty = Math.max(1, Math.floor((amountCents / 100) / sec.last_price));
 
-  try {
-    const { data: existing } = await db.from("stock_holdings_c")
-      .select("id, quantity")
-      .eq("user_id", userId).eq("security_id", sec.id)
-      .is("strategy_id", null).is("family_member_id", null).maybeSingle();
+  const intradayPrices = await fetchLatestIntradayPrices(db, [sec.id]);
 
-    if (existing) {
-      // Add quantity and mark pending — broker fill will set avg_fill
-      await db.from("stock_holdings_c").update({
-        quantity: Number(existing.quantity || 0) + qty,
-        avg_fill: null,
-        market_value: 0,
-        unrealized_pnl: 0,
-        as_of_date: null,
-        updated_at: new Date().toISOString(),
-      }).eq("id", existing.id);
-      return { qty, holdingId: existing.id };
-    } else {
-      const { data: inserted } = await db.from("stock_holdings_c").insert({
-        user_id: userId, security_id: sec.id, quantity: qty,
-        avg_fill: null, market_value: 0,
-        unrealized_pnl: 0, as_of_date: null,
-        Status: "active",
-      }).select("id").single();
-      return { qty, holdingId: inserted?.id || null };
-    }
+  try {
+    // Always insert a NEW row per gift-claimed stock so each claim is a
+    // discrete pending position with its own broker-fill lifecycle. Matches
+    // the strategy-claim pattern; the stacked-card UI groups by created_at.
+    const { data: inserted } = await db.from("stock_holdings_c").insert({
+      user_id: userId, security_id: sec.id, quantity: qty,
+      avg_fill: null, market_value: 0,
+      unrealized_pnl: 0, as_of_date: null,
+      Status: "active",
+      transaction_id: transactionId || null,
+      Expected_fill: intradayPrices[sec.id] ?? null,
+    }).select("id").single();
+    return { qty, holdingId: inserted?.id || null };
   } catch (e) {
     console.warn("[gift/claim-v2] stock holding insert:", e.message);
     return { qty: 0, holdingId: null };
@@ -144,27 +145,12 @@ export default async function handler(req, res) {
   let holdingsCreated = 0;
   let holdingId = null;
 
-  if (gift.asset_type === "strategy" && gift.strategy_id) {
-    const { data: strategy } = await db
-      .from("strategies_c").select("id, holdings").eq("id", gift.strategy_id).maybeSingle();
-    holdingsCreated = await allocateStrategyHoldings(
-      db, user.id, gift.strategy_id, strategy?.holdings || [], gift.amount
-    );
-  } else if (gift.asset_type === "stock" && gift.security_id) {
-    const result = await allocateStockHolding(db, user.id, gift.security_id, gift.amount);
-    holdingsCreated = result.qty > 0 ? 1 : 0;
-    holdingId = result.holdingId;
-  }
-
-  if (holdingsCreated === 0) {
-    return res.status(500).json({ error: "Failed to allocate holdings. Please try again." });
-  }
-
   const now = new Date().toISOString();
 
-  // Record credit transaction for recipient
+  // Insert transaction first so we can stamp its UUID on every holdings row.
+  let giftTxId = null;
   try {
-    await db.from("transactions").insert({
+    const txInsert = await db.from("transactions").insert({
       user_id: user.id,
       direction: "credit",
       name: `Gift Received — ${gift.asset_name}`,
@@ -175,8 +161,25 @@ export default async function handler(req, res) {
       status: "posted",
       transaction_date: now,
       created_at: now,
-    });
+    }).select("id").single();
+    giftTxId = txInsert.data?.id || null;
   } catch (e) { console.warn("[gift/claim-v2] tx insert:", e.message); }
+
+  if (gift.asset_type === "strategy" && gift.strategy_id) {
+    const { data: strategy } = await db
+      .from("strategies_c").select("id, holdings").eq("id", gift.strategy_id).maybeSingle();
+    holdingsCreated = await allocateStrategyHoldings(
+      db, user.id, gift.strategy_id, strategy?.holdings || [], gift.amount, giftTxId
+    );
+  } else if (gift.asset_type === "stock" && gift.security_id) {
+    const result = await allocateStockHolding(db, user.id, gift.security_id, gift.amount, giftTxId);
+    holdingsCreated = result.qty > 0 ? 1 : 0;
+    holdingId = result.holdingId;
+  }
+
+  if (holdingsCreated === 0) {
+    return res.status(500).json({ error: "Failed to allocate holdings. Please try again." });
+  }
 
   // Mark gift claimed — store the ID number so it can be verified
   await db.from("gift_claims").update({

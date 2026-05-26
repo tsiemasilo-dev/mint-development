@@ -21,9 +21,151 @@ function getHoldingsList(result) {
   return [];
 }
 
+// Cost basis per share in Rands. Prefers Expected_fill (the price the client
+// saw at click time, in rands) over avg_fill (broker fill, in cents — captures
+// the company spread).
+//
+// Defensive: rows written before commit a732c49 stored Expected_fill in cents
+// (~100x inflated). Detect that by comparing against avg_fill/100; if Expected_fill
+// is more than 5x avg_fill/100 it's almost certainly the legacy cents value, so
+// divide by 100 to recover rands.
+const costBasisRandsPerShare = (h) => {
+  const expectedRaw = Number(h?.Expected_fill || 0);
+  const avgFillCents = Number(h?.avg_fill || 0);
+  const avgFillRands = avgFillCents > 0 ? avgFillCents / 100 : 0;
+  if (expectedRaw > 0) {
+    const expectedRands = (avgFillRands > 0 && expectedRaw > avgFillRands * 5)
+      ? expectedRaw / 100
+      : expectedRaw;
+    return expectedRands;
+  }
+  return avgFillRands;
+};
+
 function getClosedHoldingsList(result) {
   if (Array.isArray(result?.closedHoldings)) return result.closedHoldings;
   return [];
+}
+
+// Group raw stock_holdings_c rows into one aggregated row per
+// (security_id, strategy_id, family_member_id). Each new buy now inserts a
+// new row so the same stock bought twice produces two rows; downstream code
+// (.find by security_id, portfolio totals) expects one logical row per
+// position, so we collapse here and expose the raw rows as `batches` for
+// the stacked-card UI.
+//
+// Aggregation rules:
+//   quantity     = sum of FILLED batches' quantity (so live_price × quantity
+//                  remains the correct filled-portion market value; pending
+//                  quantities live on individual batch rows and on
+//                  pendingQuantity for any UI that wants to show them).
+//   avg_fill     = quantity-weighted avg over filled batches (null if none).
+//   market_value = sum of every batch's market_value (the API already sets
+//                  this to 0 for pending rows).
+//   unrealized_pnl = sum across batches.
+//   last_price   = taken from a filled batch (the API sets last_price=0 on
+//                  pending rows so we can't trust the first row).
+//   created_at   = earliest batch's created_at (oldest purchase).
+//   isPending    = true ONLY when every batch is pending.
+function aggregateHoldings(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return [];
+  const groups = new Map();
+  const orphans = [];
+  for (const row of rows) {
+    if (!row || !row.security_id) {
+      // No security_id (e.g. corrupt row) — preserve as-is so we never silently drop data.
+      orphans.push(row);
+      continue;
+    }
+    const key = [
+      row.security_id,
+      row.strategy_id || "",
+      row.family_member_id || "",
+    ].join("|");
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(row);
+  }
+
+  const aggregated = Array.from(groups.values()).map((batches) => {
+    if (batches.length === 1) {
+      // Single-row position: still expose batches so UI can branch uniformly.
+      const only = batches[0];
+      const isPending = !only.avg_fill || Number(only.avg_fill) === 0;
+      return {
+        ...only,
+        batches,
+        filledQuantity: isPending ? 0 : Number(only.quantity || 0),
+        pendingQuantity: isPending ? Number(only.quantity || 0) : 0,
+        isPending,
+        hasPendingBatch: isPending,
+      };
+    }
+
+    const filledBatches = batches.filter(b => b.avg_fill && Number(b.avg_fill) > 0);
+    const pendingBatches = batches.filter(b => !b.avg_fill || Number(b.avg_fill) === 0);
+    const isAllPending = filledBatches.length === 0;
+
+    const filledQty = filledBatches.reduce((s, b) => s + Number(b.quantity || 0), 0);
+    const pendingQty = pendingBatches.reduce((s, b) => s + Number(b.quantity || 0), 0);
+
+    const weightedFillSum = filledBatches.reduce(
+      (s, b) => s + Number(b.avg_fill || 0) * Number(b.quantity || 0),
+      0
+    );
+    const aggAvgFill = filledQty > 0 ? Math.round(weightedFillSum / filledQty) : null;
+
+    // Aggregate Expected_fill (rands) the same quantity-weighted way as avg_fill.
+    // Falls back to avg_fill/100 for legacy batches with no Expected_fill so the
+    // aggregate stays meaningful during the rollout.
+    const weightedExpectedSum = filledBatches.reduce(
+      (s, b) => s + costBasisRandsPerShare(b) * Number(b.quantity || 0),
+      0
+    );
+    const aggExpectedFill = filledQty > 0 ? weightedExpectedSum / filledQty : null;
+
+    const aggMarketValue = batches.reduce((s, b) => s + Number(b.market_value || 0), 0);
+    const aggPnl = batches.reduce((s, b) => s + Number(b.unrealized_pnl || 0), 0);
+
+    const livePriceCents = Number(filledBatches[0]?.last_price ?? 0);
+    const dailyChangeCents = Number(filledBatches[0]?.change_price ?? 0);
+    const dailyChangePct = Number(filledBatches[0]?.change_percent ?? 0);
+
+    const earliestCreatedAt = batches.reduce((earliest, b) => {
+      if (!b.created_at) return earliest;
+      if (!earliest) return b.created_at;
+      return b.created_at < earliest ? b.created_at : earliest;
+    }, null);
+    const latestCreatedAt = batches.reduce((latest, b) => {
+      if (!b.created_at) return latest;
+      if (!latest) return b.created_at;
+      return b.created_at > latest ? b.created_at : latest;
+    }, null);
+
+    // Prefer a filled batch as the template so enriched security fields (last_price,
+    // change_*, etc.) come from a non-zeroed row. Falls back to first batch otherwise.
+    const template = filledBatches[0] || batches[0];
+
+    return {
+      ...template,
+      quantity: filledQty, // see header comment — filled-only for liveValue correctness
+      avg_fill: aggAvgFill,
+      Expected_fill: aggExpectedFill,
+      market_value: aggMarketValue,
+      unrealized_pnl: aggPnl,
+      last_price: livePriceCents,
+      change_price: dailyChangeCents,
+      change_percent: dailyChangePct,
+      created_at: earliestCreatedAt,
+      latestBatchAt: latestCreatedAt,
+      batches,
+      filledQuantity: filledQty,
+      pendingQuantity: pendingQty,
+      isPending: isAllPending,
+      hasPendingBatch: pendingQty > 0,
+    };
+  });
+
+  return orphans.length > 0 ? [...aggregated, ...orphans] : aggregated;
 }
 
 async function fetchServerHoldings(token) {
@@ -156,14 +298,14 @@ export const useFinancialData = () => {
         supabase.from("wallets").select("balance").eq("user_id", userId).maybeSingle(),
       ]);
 
-      const safeHoldings = getHoldingsList(holdings);
+      const rawHoldings = getHoldingsList(holdings);
+      // Each direct-stock buy now inserts a new row, so we collapse rows by
+      // (security_id, strategy_id, family_member_id) for downstream code that
+      // expects one row per logical position. Per-purchase rows live on
+      // `batches`, which the HomePage stacked-card UI reads.
+      const safeHoldings = aggregateHoldings(rawHoldings);
       const safeTxns = Array.isArray(allServerTransactions) ? allServerTransactions : [];
 
-      if (silent && safeHoldings.length === 0 && financialDataCache?.holdings?.length > 0) {
-        console.warn("[useFinancialData] Background refresh returned empty holdings — keeping cached data");
-        setData((prev) => ({ ...prev, loading: false }));
-        return;
-      }
 
       const transactions = safeTxns.slice(0, 20);
       const allTransactions = safeTxns;
@@ -178,14 +320,20 @@ export const useFinancialData = () => {
       const liveVal = (h) => h.last_price != null && h.quantity != null ? (h.last_price * h.quantity) / 100 : (h.market_value || 0) / 100;
       const bestAssets = sortedHoldings.slice(0, 5).map((h) => {
         const currentValue = liveVal(h);
-        const costBasis = ((h.avg_fill || 0) * (h.quantity || 0)) / 100;
-        const changePercent = costBasis > 0 ? ((currentValue - costBasis) / costBasis) * 100 : 0;
+        const costBasis = costBasisRandsPerShare(h) * Number(h.quantity || 0);
+        const pnlRands = currentValue - costBasis;
+        const pnlPct = costBasis > 0 ? (pnlRands / costBasis) * 100 : 0;
         return {
           symbol: h.symbol,
           name: h.name,
           value: currentValue,
-          change: changePercent,
+          change: pnlPct,
+          pnlRands,
+          pnlPct,
           logo: h.logo_url,
+          batches: h.batches,
+          isPending: h.isPending,
+          hasPendingBatch: h.hasPendingBatch,
         };
       });
 
@@ -320,14 +468,14 @@ export const useMintBalance = () => {
           fetchServerTransactions(token, 100),
         ]);
 
-        const holdings = getHoldingsList(holdingsRaw);
+        const holdings = aggregateHoldings(getHoldingsList(holdingsRaw));
         const allServerTransactions = Array.isArray(allServerTransactionsRaw) ? allServerTransactionsRaw : [];
         const recentTransactions = allServerTransactions.slice(0, 10);
         const allTransactions = allServerTransactions;
         
         const liveV = (h) => h.last_price != null && h.quantity != null ? (h.last_price * h.quantity) / 100 : (h.market_value || 0) / 100;
         const totalInvestments = holdings.reduce((sum, h) => sum + liveV(h), 0);
-        const costBasisTotal = holdings.reduce((sum, h) => sum + ((h.avg_fill || 0) * (h.quantity || 0)) / 100, 0);
+        const costBasisTotal = holdings.reduce((sum, h) => sum + costBasisRandsPerShare(h) * Number(h.quantity || 0), 0);
         const dailyChange = totalInvestments - costBasisTotal;
         
         const incomeTypes = ["credit"];
@@ -535,7 +683,10 @@ export const useInvestments = () => {
         supabase.from("investment_goals").select("*").eq("user_id", userId),
       ]);
 
-      const holdings = getHoldingsList(holdingsResult);
+      // Aggregate so each (security_id, strategy_id, family_member_id) returns
+      // a single logical row. Always-insert buys produce multiple raw rows per
+      // position; downstream code (.find/.reduce) expects one row per position.
+      const holdings = aggregateHoldings(getHoldingsList(holdingsResult));
       const closedHoldings = getClosedHoldingsList(holdingsResult);
       const goals = goalsResult.data || [];
 
@@ -547,7 +698,7 @@ export const useInvestments = () => {
 
       const liveHV = (h) => h.last_price != null && h.quantity != null ? (h.last_price * h.quantity) / 100 : (h.market_value || 0) / 100;
       const totalInvestments = holdings.reduce((sum, h) => sum + liveHV(h), 0);
-      const costBasisAll = holdings.reduce((sum, h) => sum + ((h.avg_fill || 0) * (h.quantity || 0)) / 100, 0);
+      const costBasisAll = holdings.reduce((sum, h) => sum + costBasisRandsPerShare(h) * Number(h.quantity || 0), 0);
       const monthlyChange = totalInvestments - costBasisAll;
       const monthlyChangePercent = costBasisAll > 0 ? (monthlyChange / costBasisAll) * 100 : 0;
 
@@ -573,7 +724,7 @@ export const useInvestments = () => {
           );
           if (linkedHolding) {
             const marketVal = linkedHolding.last_price != null && linkedHolding.quantity != null ? (linkedHolding.last_price * linkedHolding.quantity) / 100 : (linkedHolding.market_value || 0) / 100;
-            const costBasis = ((linkedHolding.avg_fill || 0) * (linkedHolding.quantity || 0)) / 100;
+            const costBasis = costBasisRandsPerShare(linkedHolding) * Number(linkedHolding.quantity || 0);
             const gainLoss = marketVal - costBasis;
             currentValue = invested + (costBasis > 0 ? (gainLoss / costBasis) * invested : 0);
           }

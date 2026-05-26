@@ -508,7 +508,8 @@ export const getStrategyPriceHistory = async (strategyId, timeframe = "6M") => {
  * @param {string} endDate - End date (YYYY-MM-DD)
  * @returns {Promise<Array>} Array of {d: date, v: inception_pct}
  */
-export const getClientStrategyReturns = async (userId, strategyId, startDate, endDate) => {
+// familyMemberId: pass a child's id to fetch that child's series; omit for parent's series.
+export const getClientStrategyReturns = async (userId, strategyId, startDate, endDate, familyMemberId = null) => {
   if (!supabase || !userId || !strategyId) {
     console.error("❌ Invalid parameters for getClientStrategyReturns");
     return [];
@@ -517,11 +518,16 @@ export const getClientStrategyReturns = async (userId, strategyId, startDate, en
   try {
     console.log(`🔍 Fetching client strategy returns for user ${userId}, strategy ${strategyId} from ${startDate} to ${endDate}`);
 
-    const { data, error } = await supabase
+    let query = supabase
       .from("client_strategy_returns_c")
       .select("as_of_date, inception_pct")
       .eq("user_id", userId)
-      .eq("strategy_id", strategyId)
+      .eq("strategy_id", strategyId);
+    query = familyMemberId
+      ? query.eq("family_member", familyMemberId)
+      : query.is("family_member", null);
+
+    const { data, error } = await query
       .gte("as_of_date", startDate)
       .lte("as_of_date", endDate)
       .order("as_of_date", { ascending: true });
@@ -905,16 +911,21 @@ export const getStockMonthlyReturns = async (securityId, startDate = null, actua
  * and computes MoM % return from basket_value changes.
  * Returns {} if no rows found (caller should fall back to price-history path).
  */
-export const getStrategyMonthlyReturnsFromDB = async (userId, strategyId, startDate = null) => {
+// familyMemberId: pass a child's id for that child's monthly returns; omit for parent's.
+export const getStrategyMonthlyReturnsFromDB = async (userId, strategyId, startDate = null, familyMemberId = null) => {
   if (!supabase || !userId || !strategyId) return {};
 
   try {
-    const { data: rows, error } = await supabase
+    let query = supabase
       .from("client_strategy_returns_c")
       .select("as_of_date, basket_value")
       .eq("user_id", userId)
-      .eq("strategy_id", strategyId)
-      .order("as_of_date", { ascending: true });
+      .eq("strategy_id", strategyId);
+    query = familyMemberId
+      ? query.eq("family_member", familyMemberId)
+      : query.is("family_member", null);
+
+    const { data: rows, error } = await query.order("as_of_date", { ascending: true });
 
     if (error || !rows || rows.length < 2) return {};
 
@@ -996,7 +1007,12 @@ export const getOverallPortfolioMonthlyReturns = async (strategyIds, stockSecuri
 
     for (const secId of stockSecurityIds) {
       const holding = rawHoldings.find(h => h.security_id === secId);
-      const investedVal = holding ? (holding.avg_fill * holding.quantity) / 100 : 0;
+      // Cost basis prefers Expected_fill (rands) over avg_fill (cents).
+      const expectedFillRands = Number(holding?.Expected_fill || 0);
+      const costBasisRandsPerShare = expectedFillRands > 0
+        ? expectedFillRands
+        : (Number(holding?.avg_fill || 0) / 100);
+      const investedVal = holding ? costBasisRandsPerShare * Number(holding.quantity || 0) : 0;
       const livePrice = holding?.last_price ? Number(holding.last_price) / 100 : null;
       const liveMarketVal = livePrice && holding?.quantity ? livePrice * holding.quantity : holding ? (holding.market_value || 0) / 100 : 0;
       const actualPnlPct = investedVal > 0 ? (liveMarketVal - investedVal) / investedVal : null;

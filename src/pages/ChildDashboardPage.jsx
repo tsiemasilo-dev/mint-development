@@ -1278,6 +1278,265 @@ function TransactionRow({ tx }) {
   );
 }
 
+// --- AllTransactionsModal ----------------------------------------------------
+
+function TxIcon({ isIn }) {
+  return (
+    <div
+      className="h-[42px] w-[42px] rounded-2xl flex items-center justify-center flex-shrink-0"
+      style={{
+        background: isIn ? "rgba(34,197,94,0.10)" : "rgba(124,58,237,0.08)",
+        color: isIn ? "#16a34a" : "#7c3aed",
+      }}
+    >
+      {isIn
+        ? <ArrowDownLeft className="h-[18px] w-[18px]" />
+        : <ArrowUpRight className="h-[18px] w-[18px]" />}
+    </div>
+  );
+}
+
+function TxAmount({ amount, isIn }) {
+  const rands = Math.abs(Number(amount || 0));
+  const display = "R " + (rands > 10000 ? rands / 100 : rands).toLocaleString("en-ZA", {
+    minimumFractionDigits: 2, maximumFractionDigits: 2,
+  });
+  return (
+    <p className="text-[13px] font-bold tabular-nums whitespace-nowrap flex-shrink-0"
+      style={{ color: isIn ? "#16a34a" : "#181820" }}>
+      {isIn ? "+" : "−"}{display}
+    </p>
+  );
+}
+
+function txDate(tx, long = false) {
+  const d = new Date(tx.created_at || tx.transaction_date || 0);
+  if (isNaN(d)) return "";
+  return d.toLocaleDateString("en-ZA", {
+    day: "numeric", month: "short", ...(long ? { year: "numeric" } : {}),
+  });
+}
+
+function txDateGroup(tx) {
+  const d = new Date(tx.created_at || tx.transaction_date || 0);
+  if (isNaN(d)) return "Earlier";
+  const today = new Date(); today.setHours(0,0,0,0);
+  const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+  const txDay = new Date(d); txDay.setHours(0,0,0,0);
+  if (txDay.getTime() === today.getTime()) return "Today";
+  if (txDay.getTime() === yesterday.getTime()) return "Yesterday";
+  return d.toLocaleDateString("en-ZA", { month: "long", year: "numeric" });
+}
+
+function AllTransactionsModal({ transactions, childName, onClose }) {
+  const [filter, setFilter] = useState("all");
+  const [expandedGroup, setExpandedGroup] = useState(null);
+
+  const filtered = useMemo(() => {
+    if (filter === "in")  return transactions.filter(t => t.direction === "credit");
+    if (filter === "out") return transactions.filter(t => t.direction !== "credit");
+    return transactions;
+  }, [transactions, filter]);
+
+  // Group by name — same name = stack
+  const groups = useMemo(() => {
+    const map = new Map();
+    for (const tx of filtered) {
+      const key = (tx.name || tx.description || "Transaction").trim();
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(tx);
+    }
+    const seen = new Set();
+    const result = [];
+    for (const tx of filtered) {
+      const key = (tx.name || tx.description || "Transaction").trim();
+      if (!seen.has(key)) {
+        seen.add(key);
+        const entries = [...map.get(key)].sort((a, b) =>
+          new Date(b.created_at || b.transaction_date || 0) -
+          new Date(a.created_at || a.transaction_date || 0)
+        );
+        result.push({ key, entries, dateGroup: txDateGroup(entries[0]) });
+      }
+    }
+    return result;
+  }, [filtered]);
+
+  // Group by date label for section headers
+  const sections = useMemo(() => {
+    const order = [];
+    const map = new Map();
+    for (const g of groups) {
+      if (!map.has(g.dateGroup)) { map.set(g.dateGroup, []); order.push(g.dateGroup); }
+      map.get(g.dateGroup).push(g);
+    }
+    return order.map(label => ({ label, items: map.get(label) }));
+  }, [groups]);
+
+  const tabs = [
+    { id: "all", label: "All" },
+    { id: "in",  label: "Money In" },
+    { id: "out", label: "Money Out" },
+  ];
+
+  return (
+    <motion.div
+      initial={{ x: "100%" }}
+      animate={{ x: 0 }}
+      exit={{ x: "100%" }}
+      transition={{ type: "spring", damping: 30, stiffness: 280 }}
+      className="fixed inset-0 z-50 flex flex-col"
+      style={{ background: "#f4f4f6" }}
+    >
+      {/* Header */}
+      <div className="bg-white px-5 pt-12 pb-3 border-b border-slate-100"
+        style={{ boxShadow: "0 1px 6px rgba(0,0,0,0.06)" }}>
+        <div className="flex items-center gap-3 mb-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-9 w-9 flex items-center justify-center rounded-2xl bg-slate-100 text-slate-600 active:bg-slate-200 transition"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">{childName}</p>
+            <p className="text-[15px] font-bold text-slate-900 leading-tight">Activity</p>
+          </div>
+        </div>
+
+        {/* Filter tabs */}
+        <div className="flex gap-2">
+          {tabs.map(t => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setFilter(t.id)}
+              className="rounded-full px-4 py-1.5 text-[12px] font-semibold transition"
+              style={filter === t.id
+                ? { background: "linear-gradient(135deg,#3b1d72,#7c3aed)", color: "#fff" }
+                : { background: "#f1f0f5", color: "#6b7280" }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* List */}
+      <div className="flex-1 overflow-y-auto px-4 py-4">
+        {sections.length === 0 && (
+          <div className="rounded-2xl bg-white border border-slate-200 p-10 text-center mt-4">
+            <p className="text-[13px] text-slate-400">No transactions here yet.</p>
+          </div>
+        )}
+        {sections.map(({ label, items }) => (
+          <div key={label} className="mb-5">
+            {/* Date section header */}
+            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 px-1 mb-2">{label}</p>
+            <div className="rounded-2xl bg-white border border-slate-200 overflow-hidden"
+              style={{ boxShadow: "0 2px 10px rgba(0,0,0,0.05)" }}>
+              {items.map(({ key, entries }, gi) => {
+                const isStack = entries.length > 1;
+                const isExpanded = expandedGroup === key;
+                const top = entries[0];
+                const isIn = top.direction === "credit";
+
+                if (isStack && !isExpanded) {
+                  return (
+                    <div key={key}>
+                      {gi > 0 && <div className="h-px bg-slate-100 mx-4" />}
+                      <button
+                        type="button"
+                        onClick={() => setExpandedGroup(key)}
+                        className="w-full text-left px-4 py-3.5 active:bg-slate-50 transition relative"
+                      >
+                        {/* Stack shadow layers */}
+                        <div className="absolute left-6 right-6 bottom-1 h-[6px] rounded-b-xl bg-slate-100" />
+                        <div className="absolute left-4 right-4 bottom-0.5 h-[4px] rounded-b-xl bg-slate-200/60" />
+                        <div className="relative flex items-center gap-3">
+                          <TxIcon isIn={isIn} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[13px] font-semibold text-slate-900 truncate">
+                              {top.description || top.name || "Transaction"}
+                            </p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <p className="text-[11px] text-slate-400">{txDate(top)}</p>
+                              <span className="text-[10px] font-bold text-violet-600 bg-violet-50 rounded-full px-2 py-0.5">
+                                {entries.length}×
+                              </span>
+                            </div>
+                          </div>
+                          <TxAmount amount={top.amount} isIn={isIn} />
+                        </div>
+                      </button>
+                    </div>
+                  );
+                }
+
+                if (isStack && isExpanded) {
+                  return (
+                    <div key={key}>
+                      {gi > 0 && <div className="h-px bg-slate-100 mx-4" />}
+                      {/* Collapse header */}
+                      <button
+                        type="button"
+                        onClick={() => setExpandedGroup(null)}
+                        className="w-full flex items-center gap-2 px-4 py-2.5 bg-violet-50 active:bg-violet-100 transition"
+                      >
+                        <ChevronUp className="h-3.5 w-3.5 text-violet-500" />
+                        <p className="text-[11px] font-bold text-violet-600">
+                          {top.description || top.name} · {entries.length} purchases
+                        </p>
+                      </button>
+                      {entries.map((tx, ei) => {
+                        const txIn = tx.direction === "credit";
+                        return (
+                          <div key={tx.id}>
+                            <div className="h-px bg-slate-100 mx-4" />
+                            <div className="flex items-center gap-3 px-4 py-3.5 bg-violet-50/30">
+                              <TxIcon isIn={txIn} />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[13px] font-semibold text-slate-900 truncate">
+                                  {tx.description || tx.name || "Transaction"}
+                                </p>
+                                <p className="text-[11px] text-slate-400 mt-0.5">{txDate(tx, true)}</p>
+                              </div>
+                              <TxAmount amount={tx.amount} isIn={txIn} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                }
+
+                // Single row
+                return (
+                  <div key={key}>
+                    {gi > 0 && <div className="h-px bg-slate-100 mx-4" />}
+                    <div className="flex items-center gap-3 px-4 py-3.5">
+                      <TxIcon isIn={isIn} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-semibold text-slate-900 truncate">
+                          {top.description || top.name || "Transaction"}
+                        </p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">{txDate(top)}</p>
+                      </div>
+                      <TxAmount amount={top.amount} isIn={isIn} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+        <div className="h-8" />
+      </div>
+    </motion.div>
+  );
+}
+
 // --- StrategyDetailModal -----------------------------------------------------
 // Shows "Best performing assets in {Strategy}" — the holdings inside a single
 // strategy, ranked by unrealized PnL %.
@@ -1692,6 +1951,8 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   const [openingTransfer, setOpeningTransfer] = useState(false);
   const [showInvest, setShowInvest] = useState(false);
   const [strategyDetailId, setStrategyDetailId] = useState(null);
+  const [expandedStrategyStack, setExpandedStrategyStack] = useState(null);
+  const [showAllTransactions, setShowAllTransactions] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [showGoalsModal, setShowGoalsModal] = useState(false);
   const [goals, setGoals] = useState([]);
@@ -1900,7 +2161,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     try {
       if (!supabase) return;
       const linkedUserId = child?.linked_user_id || null;
-      const holdingsSelect = "id, user_id, family_member_id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id, Fill_date, Status";
+      const holdingsSelect = "id, user_id, family_member_id, security_id, quantity, avg_fill, Expected_fill, market_value, unrealized_pnl, strategy_id, Fill_date, Status, created_at, transaction_id";
       const familyHoldingsQuery = supabase
         .from("stock_holdings_c")
         .select(holdingsSelect)
@@ -2226,11 +2487,17 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     return livePrice * quantity;
   };
 
-  // Cost basis in Rands. Null if avg_fill is missing.
+  // Cost basis in Rands. Prefers Expected_fill (the price the child saw at
+  // click time, in rands) over avg_fill (broker fill in cents — captures the
+  // company spread). Returns null when neither is set.
   const getHoldingCostRands = (holding) => {
+    const expected = Number(holding.Expected_fill);
+    const quantity = Math.abs(Number(holding.quantity || 0));
+    if (Number.isFinite(expected) && expected > 0) {
+      return expected * quantity;
+    }
     const avgFill = Number(holding.avg_fill);
     if (!Number.isFinite(avgFill) || avgFill <= 0) return null;
-    const quantity = Math.abs(Number(holding.quantity || 0));
     return (avgFill / 100) * quantity;
   };
 
@@ -2247,16 +2514,37 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   const totalPortfolioCents = holdings.reduce((s, h) => s + getHoldingMarketValueCents(h), 0);
 
 
-  // Group holdings by strategy
-  const strategyGroups = holdings.reduce((acc, h) => {
+  // Group holdings by strategy_id + order batch.
+  // Primary key: store_reference (authoritative per-order id stamped on each
+  // holdings row by the buy endpoints). Falls back to created_at-minute for
+  // legacy rows written before the store_reference column existed.
+  const purchaseGroups = holdings.reduce((acc, h) => {
     if (!h.strategy_id) return acc;
-    if (!acc[h.strategy_id]) acc[h.strategy_id] = [];
-    acc[h.strategy_id].push(h);
+    const minute = h.created_at
+      ? new Date(h.created_at).toISOString().slice(0, 16) // "2026-05-19T14:32"
+      : "unknown";
+    const batchId = h.transaction_id || `legacy:${minute}`;
+    const key = `${h.strategy_id}__${batchId}`;
+    if (!acc[key]) acc[key] = { strategyId: h.strategy_id, transactionId: h.transaction_id || null, minute, holdings: [] };
+    acc[key].holdings.push(h);
     return acc;
   }, {});
 
-  const strategyCards = Object.entries(strategyGroups).map(([sid, hs]) => {
+  // For each strategy, list its purchase batches sorted oldest→newest
+  const strategyBatches = Object.values(purchaseGroups).reduce((acc, pg) => {
+    const sid = pg.strategyId;
+    if (!acc[sid]) acc[sid] = [];
+    acc[sid].push(pg);
+    return acc;
+  }, {});
+  Object.values(strategyBatches).forEach(batches =>
+    batches.sort((a, b) => (a.minute < b.minute ? -1 : 1))
+  );
+
+  // Build one card entry per purchase batch
+  const buildBatchCard = (sid, pg, batchIndex, totalBatches) => {
     const strat = strategyMap[sid] || {};
+    const hs = pg.holdings;
     const isFilling = hs.some((h) => !isHoldingFilled(h));
     let totalValueRands = 0;
     let totalCostRands = 0;
@@ -2273,10 +2561,16 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     const pnlAvailable = !isFilling && !anyPriceMissing && !anyCostMissing;
     const pnlRands = pnlAvailable ? (totalValueRands - totalCostRands) : null;
     const pnlPct = pnlAvailable && totalCostRands > 0
-      ? ((totalValueRands - totalCostRands) / totalCostRands) * 100
+      ? ((totalValueRands - totalCostRands) / totalCostRands) * 100 : null;
+    const purchaseDate = pg.minute !== "unknown"
+      ? new Date(pg.minute).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
       : null;
     return {
       id: sid,
+      batchKey: `${sid}__${pg.minute}`,
+      batchIndex,
+      totalBatches,
+      purchaseDate,
       name: strat.name || "Strategy",
       short_name: strat.short_name,
       risk_level: strat.risk_level,
@@ -2287,7 +2581,21 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
       holdings: hs,
       isFilling,
     };
-  });
+  };
+
+  // Flat list of batch cards (one per purchase order) for rendering
+  const strategyCards = Object.entries(strategyBatches).flatMap(([sid, batches]) =>
+    batches.map((pg, i) => buildBatchCard(sid, pg, i, batches.length))
+  );
+
+  // Group cards by strategy ID so we can render stacks
+  const strategyCardStacks = Object.entries(
+    strategyCards.reduce((acc, card) => {
+      if (!acc[card.id]) acc[card.id] = [];
+      acc[card.id].push(card);
+      return acc;
+    }, {})
+  ); // [[strategyId, [card, card?]], ...]
 
   // Best performing INDIVIDUAL assets — only holdings without a strategy_id.
   // Strategy holdings get surfaced through their own strategy card / detail modal instead.
@@ -2591,89 +2899,239 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                   </div>
                 ))}
               </div>
-            ) : strategyCards.length > 0 ? (
+            ) : strategyCardStacks.length > 0 ? (
               <div className="space-y-3">
-                {strategyCards.map((sc) => {
-                  const pnlAvailable = sc.pnl != null;
-                  const isUp = pnlAvailable && sc.pnl >= 0;
-                  const cardClass = sc.isFilling
-                    ? "w-full text-left rounded-2xl border border-amber-200 bg-white shadow-md p-4 opacity-60 animate-pulse"
-                    : "w-full text-left rounded-2xl border border-slate-200 bg-white shadow-md p-4 hover:border-violet-300 hover:shadow-lg transition active:scale-[0.99]";
-                  return (
-                    <button
-                      key={sc.id}
-                      type="button"
-                      disabled={sc.isFilling}
-                      onClick={() => !sc.isFilling && setStrategyDetailId(sc.id)}
-                      className={cardClass}
-                    >
-                      {/* Header */}
-                      <div className="flex items-start justify-between gap-3 mb-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                            style={{ background: "linear-gradient(135deg,#ede9fe,#ddd6fe)" }}>
-                            <BarChart3 className="h-5 w-5 text-purple-600" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-bold text-slate-900 truncate">{sc.short_name || sc.name}</p>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              {sc.risk_level && (
-                                <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-violet-50 text-violet-600 border border-violet-100">{sc.risk_level}</span>
-                              )}
-                              {sc.is_featured && (
-                                <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-violet-100 text-violet-700">Featured</span>
-                              )}
-                              {sc.isFilling && (
-                                <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-amber-100 text-amber-700 border border-amber-200">Filling strategy</span>
-                              )}
+                {strategyCardStacks.map(([sid, cards]) => {
+                  const isStack = cards.length > 1;
+                  const isExpanded = expandedStrategyStack === sid;
+
+                  // Single card renderer (reused for both single and expanded stack items)
+                  const renderCard = (sc, opts = {}) => {
+                    const pnlAvailable = sc.pnl != null;
+                    const isUp = pnlAvailable && sc.pnl >= 0;
+                    const isFilling = sc.isFilling;
+                    const cardCls = isFilling
+                      ? "w-full text-left rounded-2xl border border-amber-200 bg-white shadow-md p-4 opacity-70"
+                      : "w-full text-left rounded-2xl border border-slate-200 bg-white shadow-md p-4 hover:border-violet-300 hover:shadow-lg transition active:scale-[0.99]";
+                    return (
+                      <button
+                        key={sc.batchKey}
+                        type="button"
+                        disabled={isFilling}
+                        onClick={opts.onClick || (() => !isFilling && setStrategyDetailId(sc.id))}
+                        className={cardCls}
+                      >
+                        {/* Purchase date top-right when in expanded stack */}
+                        {sc.purchaseDate && opts.showDate && (
+                          <p className="text-[10px] font-semibold text-slate-400 text-right mb-1.5">{sc.purchaseDate}</p>
+                        )}
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                              style={{ background: "linear-gradient(135deg,#ede9fe,#ddd6fe)" }}>
+                              <BarChart3 className="h-5 w-5 text-purple-600" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-bold text-slate-900 truncate">{sc.short_name || sc.name}</p>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                {sc.risk_level && (
+                                  <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-violet-50 text-violet-600 border border-violet-100">{sc.risk_level}</span>
+                                )}
+                                {isFilling && (
+                                  <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-amber-100 text-amber-700 border border-amber-200">Filling</span>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        <div className="text-right flex-shrink-0">
-                          {sc.isFilling ? (
-                            <>
-                              <p className="text-sm font-bold text-amber-700">Pending</p>
-                              <p className="text-xs font-semibold text-amber-600">Filling strategy</p>
-                            </>
-                          ) : (
-                            <>
-                              <p className="text-sm font-bold text-slate-900 tabular-nums">{fmt(sc.totalValue)}</p>
-                              {pnlAvailable ? (
-                                <p className={`text-xs font-semibold tabular-nums ${isUp ? "text-emerald-600" : "text-red-500"}`}>
-                                  {isUp ? "+" : ""}{fmt(sc.pnl)} ({isUp ? "+" : ""}{sc.pnlPct.toFixed(2)}%)
-                                </p>
-                              ) : (
-                                <p className="text-xs font-semibold tabular-nums text-slate-400">−</p>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      </div>
-                      {/* Holdings avatar row */}
-                      {sc.holdings.length > 0 && (
-                        <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
-                          <div className="flex -space-x-2">
-                            {sc.holdings.slice(0, 4).map(h => (
-                              <div key={h.id} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white shadow-sm">
-                                {h.logo_url ? (
-                                  <img src={h.logo_url} alt={h.symbol} className="h-full w-full object-cover" />
+                          <div className="text-right flex-shrink-0">
+                            {isFilling ? (
+                              <>
+                                <p className="text-sm font-bold text-amber-700">Pending</p>
+                                <p className="text-xs font-semibold text-amber-600">Awaiting fill</p>
+                              </>
+                            ) : (
+                              <>
+                                <p className="text-sm font-bold text-slate-900 tabular-nums">{fmt(sc.totalValue)}</p>
+                                {pnlAvailable ? (
+                                  <p className={`text-xs font-semibold tabular-nums ${isUp ? "text-emerald-600" : "text-red-500"}`}>
+                                    {isUp ? "+" : ""}{fmt(sc.pnl)} ({isUp ? "+" : ""}{sc.pnlPct.toFixed(2)}%)
+                                  </p>
                                 ) : (
-                                  <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">
-                                    {h.symbol?.substring(0, 2)}
+                                  <p className="text-xs font-semibold tabular-nums text-slate-400">−</p>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        {sc.holdings.length > 0 && (
+                          <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
+                            <div className="flex -space-x-2">
+                              {sc.holdings.slice(0, 4).map(h => (
+                                <div key={h.id} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white shadow-sm">
+                                  {h.logo_url
+                                    ? <img src={h.logo_url} alt={h.symbol} className="h-full w-full object-cover" />
+                                    : <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">{h.symbol?.substring(0, 2)}</div>}
+                                </div>
+                              ))}
+                              {sc.holdings.length > 4 && (
+                                <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-slate-100 text-[10px] font-semibold text-slate-500">
+                                  +{sc.holdings.length - 4}
+                                </div>
+                              )}
+                            </div>
+                            <span className="text-[11px] text-slate-400">{sc.holdings.length} holding{sc.holdings.length !== 1 ? "s" : ""}</span>
+                          </div>
+                        )}
+                      </button>
+                    );
+                  };
+
+                  if (!isStack) {
+                    return <div key={sid}>{renderCard(cards[0])}</div>;
+                  }
+
+                  // Stacked card with absolute-positioned layers + spring transition
+                  const n = cards.length;
+                  const pendingCount = cards.filter(c => c.isFilling).length;
+                  const filledCount = n - pendingCount;
+                  const hasMixed = pendingCount > 0 && filledCount > 0;
+                  const COLLAPSED_H = 112; // header + holdings row
+                  const STACK_OFFSET = 13; // each card peeks this many px below the one above
+                  const STACK_SCALE  = 0.038; // scale reduction per layer
+
+                  // Container height: collapsed = top card + peeking layers; expanded = cards flow naturally
+                  const collapsedContainerH = COLLAPSED_H + (n - 1) * STACK_OFFSET + 4;
+
+                  return (
+                    <div key={sid} style={{
+                      position: 'relative',
+                      height: isExpanded ? 'auto' : collapsedContainerH,
+                      transition: 'height 0.45s cubic-bezier(0.25,0.46,0.45,0.94)',
+                    }}>
+                      {/* 2× badge */}
+                      <div style={{
+                        position: isExpanded ? 'static' : 'absolute',
+                        top: 8, right: 8, zIndex: n + 2,
+                        display: isExpanded ? 'none' : 'flex',
+                      }}
+                        className="absolute h-5 min-w-[20px] items-center justify-center rounded-full bg-violet-600 px-1.5 text-[10px] font-bold text-white shadow pointer-events-none">
+                        {n}×
+                      </div>
+
+                      {/* Mixed-state "N pending" ribbon — top-left, only when stack contains both filled & pending */}
+                      {hasMixed && !isExpanded && (
+                        <div style={{ position: 'absolute', top: -4, left: -4, zIndex: n + 3 }}
+                          className="flex items-center gap-1 rounded-full bg-violet-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow ring-2 ring-white pointer-events-none">
+                          <Clock className="h-2.5 w-2.5" /> {pendingCount} pending
+                        </div>
+                      )}
+
+                      {isExpanded ? (
+                        /* Expanded: normal flow, each card shows full content + date */
+                        <div className="space-y-2">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedStrategyStack(null)}
+                            className="flex items-center gap-1.5 px-1 text-[11px] font-semibold text-violet-500 hover:text-violet-700 transition"
+                          >
+                            <ChevronUp className="h-3 w-3" />
+                            {cards[0].name} · {n} purchases · collapse
+                          </button>
+                          {cards.map(sc => renderCard(sc, { showDate: true }))}
+                        </div>
+                      ) : (
+                        /* Collapsed: absolute-positioned layers */
+                        cards.map((sc, i) => {
+                          const scale  = 1 - i * STACK_SCALE;
+                          const topPos = i * STACK_OFFSET;
+                          const zIdx   = n - i;
+                          return (
+                            <div
+                              key={sc.batchKey}
+                              onClick={i === 0 ? () => setExpandedStrategyStack(sid) : undefined}
+                              style={{
+                                position: 'absolute',
+                                left: 0, right: 0,
+                                top: topPos,
+                                transform: `scale(${scale})`,
+                                transformOrigin: 'top center',
+                                zIndex: zIdx,
+                                overflow: 'hidden',
+                                height: COLLAPSED_H,
+                                borderRadius: 16,
+                                cursor: i === 0 ? 'pointer' : 'default',
+                                transition: 'all 0.45s cubic-bezier(0.34,1.56,0.64,1)',
+                                boxShadow: i === 0
+                                  ? '0 4px 16px rgba(0,0,0,0.08)'
+                                  : '0 2px 6px rgba(0,0,0,0.04)',
+                              }}
+                            >
+                              <div className="bg-white border border-amber-200 rounded-2xl p-4 h-full pointer-events-none" style={{ boxShadow: i === 0 ? '0 0 0 1px rgba(251,191,36,0.15)' : 'none' }}>
+                                {/* Header row always visible */}
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    <div className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                                      style={{ background: "linear-gradient(135deg,#ede9fe,#ddd6fe)" }}>
+                                      <BarChart3 className="h-5 w-5 text-purple-600" />
+                                    </div>
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-bold text-slate-900 truncate">{sc.short_name || sc.name}</p>
+                                      <div className="flex items-center gap-1.5 mt-0.5">
+                                        {sc.risk_level && (
+                                          <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-violet-50 text-violet-600 border border-violet-100">{sc.risk_level}</span>
+                                        )}
+                                        {sc.isFilling && (
+                                          <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-amber-100 text-amber-700 border border-amber-200">Filling</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="text-right flex-shrink-0">
+                                    {sc.isFilling ? (
+                                      <p className="text-sm font-bold text-amber-700">Pending</p>
+                                    ) : (
+                                      <>
+                                        <p className="text-sm font-bold text-slate-900 tabular-nums">{fmt(sc.totalValue)}</p>
+                                        {sc.pnl != null ? (
+                                          <p className={`text-xs font-semibold tabular-nums ${sc.pnl >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                                            {sc.pnl >= 0 ? "+" : ""}{fmt(sc.pnl)} ({sc.pnlPct?.toFixed(2)}%)
+                                          </p>
+                                        ) : <p className="text-xs text-slate-400">−</p>}
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                                {/* Holdings avatars */}
+                                {sc.holdings.length > 0 && (
+                                  <div className="flex items-center gap-2 pt-3 mt-3 border-t border-slate-100">
+                                    <div className="flex -space-x-2">
+                                      {sc.holdings.slice(0, 4).map(h => (
+                                        <div key={h.id} className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white shadow-sm">
+                                          {h.logo_url
+                                            ? <img src={h.logo_url} alt={h.symbol} className="h-full w-full object-cover" />
+                                            : <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[7px] font-bold text-slate-600">{h.symbol?.substring(0,2)}</div>}
+                                        </div>
+                                      ))}
+                                      {sc.holdings.length > 4 && (
+                                        <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-slate-100 text-[9px] font-semibold text-slate-500">+{sc.holdings.length - 4}</div>
+                                      )}
+                                    </div>
+                                    <span className="text-[10px] text-slate-400">{sc.holdings.length} holding{sc.holdings.length !== 1 ? "s" : ""}</span>
+                                    {i === 0 && (
+                                      <span className="ml-auto text-[10px] font-semibold text-violet-500">
+                                        {hasMixed
+                                          ? `${filledCount} filled · ${pendingCount} pending · tap to see`
+                                          : `Tap to see ${n} purchases`}
+                                      </span>
+                                    )}
                                   </div>
                                 )}
                               </div>
-                            ))}
-                            {sc.holdings.length > 4 && (
-                              <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-slate-100 text-[10px] font-semibold text-slate-500">
-                                +{sc.holdings.length - 4}
-                              </div>
-                            )}
-                          </div>
-                          <span className="text-[11px] text-slate-400">{sc.holdings.length} holding{sc.holdings.length !== 1 ? "s" : ""}</span>
-                        </div>
+                            </div>
+                          );
+                        })
                       )}
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -2781,10 +3239,19 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             ) : transactions.length > 0 ? (
               <div className="rounded-2xl overflow-hidden shadow-lg border border-slate-200 bg-white">
                 <div className="divide-y divide-slate-100 px-5">
-                  {transactions.map((tx) => (
+                  {transactions.slice(0, 4).map((tx) => (
                     <TransactionRow key={tx.id} tx={tx} />
                   ))}
                 </div>
+                {transactions.length > 4 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllTransactions(true)}
+                    className="w-full py-3 text-[12px] font-bold text-purple-600 hover:bg-purple-50 transition border-t border-slate-100"
+                  >
+                    See all activity
+                  </button>
+                )}
               </div>
             ) : (
               <div className="rounded-2xl border border-slate-200 p-6 text-center shadow-lg bg-white">
@@ -2878,6 +3345,15 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
           <StrategyDetailModal
             data={strategyDetailData}
             onClose={() => setStrategyDetailId(null)}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showAllTransactions && (
+          <AllTransactionsModal
+            transactions={transactions}
+            childName={child?.first_name || "Child"}
+            onClose={() => setShowAllTransactions(false)}
           />
         )}
       </AnimatePresence>
