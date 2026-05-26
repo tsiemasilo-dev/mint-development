@@ -37,7 +37,7 @@ export const getStrategiesWithMetrics = async () => {
         .eq("status", "active")
         .order("name", { ascending: true }),
       supabase
-        .from("strategies_returns_c")
+        .from("mkt_strategy_returns")
         .select("strategy_id, as_of_date, ytd_pct, \"5d_pct\", \"1m_pct\", \"6m_pct\"")
         .order("as_of_date", { ascending: false }),
     ]);
@@ -124,7 +124,7 @@ export const getPublicStrategies = async () => {
         .order("is_featured", { ascending: false })
         .order("name", { ascending: true }),
       supabase
-        .from("strategies_returns_c")
+        .from("mkt_strategy_returns")
         .select("strategy_id, as_of_date, ytd_pct")
         .order("as_of_date", { ascending: false }),
     ]);
@@ -190,7 +190,7 @@ export const getStrategyById = async (strategyId) => {
         .eq("id", strategyId)
         .single(),
       supabase
-        .from("strategies_returns_c")
+        .from("mkt_strategy_returns")
         .select("strategy_id, as_of_date, ytd_pct, \"5d_pct\", \"1m_pct\", \"6m_pct\"")
         .eq("strategy_id", strategyId)
         .order("as_of_date", { ascending: false })
@@ -369,7 +369,7 @@ export const getStrategyPriceHistory = async (strategyId, timeframe = "6M") => {
     if (!Array.isArray(holdings) || holdings.length === 0) {
       console.warn(`⚠️ Strategy ${strategyId} has no holdings, generating from returns...`);
       const { data: ret } = await supabase
-        .from("strategies_returns_c")
+        .from("mkt_strategy_returns")
         .select("ytd_pct, \"5d_pct\", \"1m_pct\", \"6m_pct\"")
         .eq("strategy_id", strategyId)
         .order("as_of_date", { ascending: false })
@@ -519,7 +519,7 @@ export const getClientStrategyReturns = async (userId, strategyId, startDate, en
     console.log(`🔍 Fetching client strategy returns for user ${userId}, strategy ${strategyId} from ${startDate} to ${endDate}`);
 
     let query = supabase
-      .from("client_strategy_returns_c")
+      .from("mkt_holdings_value")
       .select("as_of_date, inception_pct")
       .eq("user_id", userId)
       .eq("strategy_id", strategyId);
@@ -917,7 +917,7 @@ export const getStrategyMonthlyReturnsFromDB = async (userId, strategyId, startD
 
   try {
     let query = supabase
-      .from("client_strategy_returns_c")
+      .from("mkt_holdings_value")
       .select("as_of_date, basket_value")
       .eq("user_id", userId)
       .eq("strategy_id", strategyId);

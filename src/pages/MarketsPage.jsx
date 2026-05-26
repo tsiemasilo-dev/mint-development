@@ -720,9 +720,9 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       try {
         const strategyIds = publicStrategies.map(s => s.id);
 
-        // Fetch latest returns for each strategy from strategies_returns_c
+        // Fetch latest returns for each strategy from mkt_strategy_returns
         const { data: returns, error } = await supabase
-          .from("strategies_returns_c")
+          .from("mkt_strategy_returns")
           .select("strategy_id, ytd_pct, as_of_date")
           .in("strategy_id", strategyIds)
           .order("as_of_date", { ascending: false });
@@ -1068,12 +1068,12 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
           return;
         }
 
-        // Fetch daily returns from strategies_returns_c for YTD cumulative calculation
+        // Fetch daily returns from mkt_strategy_returns for YTD cumulative calculation
         const currentYear = new Date().getFullYear();
         const yearStart = `${currentYear}-01-01`;
 
         const { data: dailyReturns, error } = await supabase
-          .from("strategies_returns_c")
+          .from("mkt_strategy_returns")
           .select("strategy_id, as_of_date, \"1d_pct\"")
           .eq("strategy_id", strategyId)
           .gte("as_of_date", yearStart)

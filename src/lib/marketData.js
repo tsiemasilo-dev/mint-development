@@ -72,31 +72,26 @@ export const getMarketsSecuritiesWithMetrics = async () => {
   }
 
   try {
-    console.log("🔍 Fetching latest intraday data from stock_intraday_c...");
+    console.log("🔍 Fetching latest prices from mkt_prices...");
 
-    // Fetch latest intraday data for each security (grouped by security_id, latest timestamp)
-    const { data: intradayData, error: intradayError } = await supabase
-      .from("stock_intraday_c")
-      .select("security_id, current_price, 1d_pct, 1d_abs, timestamp")
-      .order("timestamp", { ascending: false });
+    // mkt_prices has one row per security (upserted) — no dedup needed
+    const { data: mktPricesData, error: intradayError } = await supabase
+      .from("mkt_prices")
+      .select("security_id, last_price_cents, change_percent, change_cents");
 
     if (intradayError) {
-      console.error("❌ Error fetching from stock_intraday_c:", intradayError);
+      console.error("❌ Error fetching from mkt_prices:", intradayError);
       throw intradayError;
     }
 
-    // Group by security_id and get the latest timestamp for each
-    const latestBySecurityId = new Map();
-    for (const row of intradayData || []) {
-      if (!latestBySecurityId.has(row.security_id)) {
-        latestBySecurityId.set(row.security_id, row);
-      }
+    const priceBySecurityId = new Map();
+    for (const row of mktPricesData || []) {
+      if (row.security_id) priceBySecurityId.set(row.security_id, row);
     }
 
-    // Now fetch the security details
-    const securityIds = Array.from(latestBySecurityId.keys());
+    const securityIds = Array.from(priceBySecurityId.keys());
     if (securityIds.length === 0) {
-      console.warn("⚠️ No intraday data found");
+      console.warn("⚠️ No price data found in mkt_prices");
       return [];
     }
 
@@ -111,22 +106,20 @@ export const getMarketsSecuritiesWithMetrics = async () => {
       throw securitiesError;
     }
 
-    // Merge intraday data with security details
     const processedSecurities = (securities || []).map(security => {
-      const intraday = latestBySecurityId.get(security.id);
+      const price = priceBySecurityId.get(security.id);
       return {
         ...security,
         id: security.id,
-        currentPrice: intraday?.current_price ? Number(intraday.current_price) / 100 : null,
-        changePct: intraday?.["1d_pct"] != null ? Number(intraday["1d_pct"]) : null,
-        changeAbs: intraday?.["1d_abs"] != null ? Number(intraday["1d_abs"]) / 100 : null,
-        // Legacy aliases for backward compatibility - use Rands
-        last_price: intraday?.current_price ? Number(intraday.current_price) / 100 : null,
-        change_percentage: intraday?.["1d_pct"],
+        currentPrice: price?.last_price_cents ? Number(price.last_price_cents) / 100 : null,
+        changePct: price?.change_percent != null ? Number(price.change_percent) : null,
+        changeAbs: price?.change_cents != null ? Number(price.change_cents) / 100 : null,
+        last_price: price?.last_price_cents ? Number(price.last_price_cents) / 100 : null,
+        change_percentage: price?.change_percent,
       };
     });
 
-    console.log(`✅ Fetched ${processedSecurities.length} securities with intraday metrics`);
+    console.log(`✅ Fetched ${processedSecurities.length} securities with live prices from mkt_prices`);
 
     cache.markets.data = processedSecurities;
     cache.markets.timestamp = now;
@@ -169,28 +162,25 @@ export const getSecurityBySymbol = async (symbol) => {
       return null;
     }
 
-    // Get the latest intraday data for this security
-    const { data: intradayData, error: intradayError } = await supabase
-      .from("stock_intraday_c")
-      .select("current_price, 1d_pct, 1d_abs, timestamp")
+    // Get the live price from mkt_prices (one row per security)
+    const { data: priceData, error: intradayError } = await supabase
+      .from("mkt_prices")
+      .select("last_price_cents, change_percent, change_cents")
       .eq("security_id", security.id)
-      .order("timestamp", { ascending: false })
-      .limit(1)
-      .single();
+      .maybeSingle();
 
     if (intradayError && intradayError.code !== 'PGRST116') {
-      // PGRST116 is "no rows found" which is acceptable
-      console.error(`❌ Error fetching intraday data for ${symbol}:`, intradayError);
+      console.error(`❌ Error fetching price data for ${symbol}:`, intradayError);
     }
 
     const processedSecurity = {
       ...security,
       id: security.id,
-      currentPrice: intradayData?.current_price ? Number(intradayData.current_price) / 100 : null,
-      changePct: intradayData?.["1d_pct"] != null ? Number(intradayData["1d_pct"]) : null,
-      changeAbs: intradayData?.["1d_abs"] != null ? Number(intradayData["1d_abs"]) / 100 : null,
-      last_price: intradayData?.current_price ? Number(intradayData.current_price) / 100 : null,
-      change_percentage: intradayData?.["1d_pct"],
+      currentPrice: priceData?.last_price_cents ? Number(priceData.last_price_cents) / 100 : null,
+      changePct: priceData?.change_percent != null ? Number(priceData.change_percent) : null,
+      changeAbs: priceData?.change_cents != null ? Number(priceData.change_cents) / 100 : null,
+      last_price: priceData?.last_price_cents ? Number(priceData.last_price_cents) / 100 : null,
+      change_percentage: priceData?.change_percent,
     };
 
     console.log(`✅ Processed ${symbol} — price: ${processedSecurity.currentPrice}, changePct: ${processedSecurity.changePct}`);
@@ -240,10 +230,10 @@ export const getSecurityPrices = async (securityId, timeframe = "1M") => {
       cutoffDate = d.toISOString().split("T")[0];
     }
 
-    // Fetch price history from stock_returns_c using current_price
+    // Fetch price history from mkt_price_history
     const { data: returnsRows, error } = await supabase
-      .from("stock_returns_c")
-      .select("as_of_date, current_price")
+      .from("mkt_price_history")
+      .select("as_of_date, close_price_cents")
       .eq("security_id", securityId)
       .gte("as_of_date", cutoffDate)
       .order("as_of_date", { ascending: true });
@@ -256,27 +246,25 @@ export const getSecurityPrices = async (securityId, timeframe = "1M") => {
     let prices = [];
 
     if (returnsRows && returnsRows.length >= 2) {
-      // ── Use stock returns data adjusted by timeframe ───────────────────
       prices = returnsRows.map(row => ({
         ts: row.as_of_date,
-        close: row.current_price != null ? Number(row.current_price) / 100 : null,
+        close: row.close_price_cents != null ? Number(row.close_price_cents) / 100 : null,
       }));
-      console.log(`✅ Fetched ${prices.length} price points from stock_returns_c for ${timeframe}`);
+      console.log(`✅ Fetched ${prices.length} price points from mkt_price_history for ${timeframe}`);
     } else {
-      // ── Fallback: Get latest price from stock_returns_c ─
       console.log(`⚠️ Insufficient history (${returnsRows?.length ?? 0} rows) — using latest price`);
 
       const { data: latestReturns, error: latestError } = await supabase
-        .from("stock_returns_c")
-        .select("as_of_date, current_price")
+        .from("mkt_price_history")
+        .select("as_of_date, close_price_cents")
         .eq("security_id", securityId)
         .order("as_of_date", { ascending: false })
         .limit(1)
         .single();
 
-      if (!latestError && latestReturns && latestReturns.current_price) {
+      if (!latestError && latestReturns && latestReturns.close_price_cents) {
         prices = [
-          { ts: latestReturns.as_of_date, close: Number(latestReturns.current_price) / 100 },
+          { ts: latestReturns.as_of_date, close: Number(latestReturns.close_price_cents) / 100 },
         ];
         console.log(`✅ Using latest price: ${latestReturns.as_of_date}`);
       } else {

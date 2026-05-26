@@ -50,10 +50,8 @@ export const useUserStrategies = (familyMemberId = null) => {
 
       const userId = session.user.id;
 
-      // Query client_strategy_returns_c and strategies_c directly —
-      // avoids /api/user/strategies which joins the deleted strategy_metrics table.
       let returnsQuery = supabase
-        .from("client_strategy_returns_c")
+        .from("mkt_holdings_value")
         .select("strategy_id, basket_value, holdings_snapshot, as_of_date, ytd_pct")
         .eq("user_id", userId);
       returnsQuery = familyMemberId
@@ -221,7 +219,7 @@ export const useStrategyChartData = (strategyId, timeFilter = "W", purchaseDate 
         try {
           const now = new Date();
           let query = supabase
-            .from("client_strategy_returns_c")
+            .from("mkt_holdings_value")
             .select("as_of_date, basket_value")
             .eq("user_id", resolvedUserId)
             .eq("strategy_id", strategyId)
@@ -350,7 +348,7 @@ export const useStrategyPeriodReturns = (userId, strategyId, activeTab = "m", fa
         const columns = columnMap[activeTab];
 
         let query = supabase
-          .from("client_strategy_returns_c")
+          .from("mkt_holdings_value")
           .select("*")
           .eq("user_id", userId)
           .eq("strategy_id", strategyId);

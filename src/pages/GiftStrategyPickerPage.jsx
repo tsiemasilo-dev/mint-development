@@ -200,7 +200,7 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate }) {
 
         const ids = data.map(s => s.id);
         const { data: returns } = await supabase
-          .from("strategies_returns_c")
+          .from("mkt_strategy_returns")
           .select("strategy_id, ytd_pct, as_of_date")
           .in("strategy_id", ids)
           .order("as_of_date", { ascending: false });

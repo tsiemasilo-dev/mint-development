@@ -379,12 +379,12 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
         enrichedSecs.forEach(s => { secMap[s.symbol] = s; });
       }
 
-      // Fetch latest YTD returns from strategies_returns_c, newest row per strategy.
+      // Fetch latest YTD returns from mkt_strategy_returns, newest row per strategy.
       const strategyIds = rows.map(s => s.id).filter(Boolean);
       const ytdById = {};
       if (strategyIds.length > 0) {
         const { data: returns } = await supabase
-          .from("strategies_returns_c")
+          .from("mkt_strategy_returns")
           .select("strategy_id, ytd_pct, as_of_date")
           .in("strategy_id", strategyIds)
           .order("as_of_date", { ascending: false });
@@ -521,7 +521,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
         const currentYear = new Date().getFullYear();
         const yearStart = `${currentYear}-01-01`;
         const { data: dailyReturns, error } = await supabase
-          .from("strategies_returns_c")
+          .from("mkt_strategy_returns")
           .select("strategy_id, as_of_date, \"1d_pct\"")
           .eq("strategy_id", strategyId)
           .gte("as_of_date", yearStart)
@@ -2012,12 +2012,12 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
         .order("name");
 
       const rows = data || [];
-      // Fetch latest YTD returns from strategies_returns_c, newest row per strategy.
+      // Fetch latest YTD returns from mkt_strategy_returns, newest row per strategy.
       const strategyIds = rows.map(s => s.id).filter(Boolean);
       const ytdById = {};
       if (strategyIds.length > 0) {
         const { data: returns } = await supabase
-          .from("strategies_returns_c")
+          .from("mkt_strategy_returns")
           .select("strategy_id, ytd_pct, as_of_date")
           .in("strategy_id", strategyIds)
           .order("as_of_date", { ascending: false });
@@ -2031,7 +2031,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
         });
       }
 
-      // Fetch logos AND intraday price so calculateMinInvestmentSync uses live prices
+      // Fetch logos AND live price so calculateMinInvestmentSync uses live prices
       const allSymbols = [...new Set(
         rows.flatMap(s => (Array.isArray(s.holdings) ? s.holdings : []).map(h => h.symbol || h.ticker).filter(Boolean))
       )];
@@ -2203,16 +2203,14 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             .select("id, symbol, name, logo_url, last_price")
             .in("id", securityIds),
           supabase
-            .from("stock_intraday_c")
-            .select("security_id, current_price, timestamp")
-            .in("security_id", securityIds)
-            .order("timestamp", { ascending: false }),
+            .from("mkt_prices")
+            .select("security_id, last_price_cents")
+            .in("security_id", securityIds),
         ]);
         (secsRes.data || []).forEach(s => { secMap[s.id] = s; });
-        // Keep latest intraday row per security_id (rows are already ordered DESC)
         (intradayRes.data || []).forEach(r => {
-          if (r.security_id != null && intradayPriceMap[r.security_id] === undefined && r.current_price != null) {
-            intradayPriceMap[r.security_id] = Number(r.current_price);
+          if (r.security_id != null && intradayPriceMap[r.security_id] === undefined && r.last_price_cents != null) {
+            intradayPriceMap[r.security_id] = Number(r.last_price_cents);
           }
         });
       }

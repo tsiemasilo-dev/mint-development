@@ -1,24 +1,21 @@
 import { supabase, supabaseAdmin, authenticateUser } from "./_lib/supabase.js";
 
-// Latest stock_intraday_c.current_price per security_id — stamped as
+// Latest mkt_prices.last_price_cents per security_id — stamped as
 // Expected_fill so child PnL is anchored to the price at click time.
 async function fetchLatestIntradayPrices(db, securityIds) {
   if (!securityIds || !securityIds.length) return {};
   const ids = [...new Set(securityIds.filter(Boolean))];
   const out = {};
-  await Promise.all(ids.map(async (id) => {
-    const { data } = await db
-      .from("stock_intraday_c")
-      .select("current_price")
-      .eq("security_id", id)
-      .order("timestamp", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (data?.current_price != null) {
-      // stock_intraday_c.current_price is stored in cents; return rands.
-      out[id] = Number(data.current_price) / 100;
+  const { data } = await db
+    .from("mkt_prices")
+    .select("security_id, last_price_cents")
+    .in("security_id", ids);
+  for (const row of data || []) {
+    if (row.last_price_cents != null) {
+      // mkt_prices.last_price_cents is stored in cents; return rands.
+      out[row.security_id] = Number(row.last_price_cents) / 100;
     }
-  }));
+  }
   return out;
 }
 

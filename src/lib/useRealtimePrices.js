@@ -78,9 +78,9 @@ export function setupRealtimePrices() {
     )
     .on(
       "postgres_changes",
-      { event: "INSERT", schema: "public", table: "stock_returns_c" },
+      { event: "UPDATE", schema: "public", table: "mkt_prices" },
       (payload) => {
-        console.log("[realtime-prices] New price record inserted for security:", payload.new?.security_id);
+        console.log("[realtime-prices] mkt_prices updated for security:", payload.new?.security_id);
         globalState.lastUpdated = Date.now();
         notifyListeners();
       }

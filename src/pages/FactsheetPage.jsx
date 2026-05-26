@@ -141,9 +141,9 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
             setStrategyData(data);
           }
 
-          // Fetch latest returns data from strategies_returns_c
+          // Fetch latest returns data from mkt_strategy_returns
           const { data: returnsData, error: returnsError } = await supabase
-            .from("strategies_returns_c")
+            .from("mkt_strategy_returns")
             .select("strategy_id, as_of_date, \"5d_pct\", \"1m_pct\", \"6m_pct\", ytd_pct")
             .eq("strategy_id", resolvedId)
             .order("as_of_date", { ascending: false })
@@ -278,7 +278,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
         const startDateStr = startDate.toISOString().split("T")[0];
 
         const { data: dailyReturns, error } = await supabase
-          .from("strategies_returns_c")
+          .from("mkt_strategy_returns")
           .select("strategy_id, as_of_date, \"1d_pct\"")
           .eq("strategy_id", strategyId)
           .gte("as_of_date", startDateStr)
@@ -346,7 +346,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
 
         // Fetch all daily returns for the year
         const { data: dailyReturns, error: dailyError } = await supabase
-          .from("strategies_returns_c")
+          .from("mkt_strategy_returns")
           .select("strategy_id, as_of_date, \"1d_pct\", ytd_pct, \"1m_pct\"")
           .eq("strategy_id", strategyId)
           .gte("as_of_date", yearStart)

@@ -413,23 +413,12 @@ const SwipeableBalanceCard = ({
             });
           }
         } else {
-          // Parent mode: pull strategy values directly from client_strategy_returns_c
-          // (avoids dependency on /api/user/strategies which joins the deleted strategy_metrics table)
-          //
-          // ── PARALLELISE everything ───────────────────────────────────────────
-          // The Supabase JS client manages its own auth — it does NOT need us to
-          // resolve the session before firing queries.  Start all three fetches
-          // simultaneously:
-          //   • getSessionWithRetry()          – needed only for the Express API
-          //   • client_strategy_returns_c      – Supabase direct (no token needed)
-          //   • strategies_c                   – Supabase direct (no token needed)
-          // Then, the moment the session resolves, fire /api/user/holdings in
-          // parallel with the still-in-flight Supabase queries.
+          // Parent mode: pull strategy values from mkt_holdings_value (live pipeline table)
           const returnsPromise = supabase
-            .from("client_strategy_returns_c")
+            .from("mkt_holdings_value")
             .select("strategy_id, basket_value, holdings_snapshot, as_of_date")
             .eq("user_id", userId)
-            .is("family_member", null) // parent rows only — child strategies live on their own rows
+            .is("family_member", null)
             .order("as_of_date", { ascending: false });
 
           const strategiesPromise = supabase
@@ -686,24 +675,22 @@ const SwipeableBalanceCard = ({
         const startDateStr = cutoff.toISOString().split("T")[0];
         console.log(`[SwipeableBalanceCard] Fetching history for tab: ${activeTab}, days: ${days}, startDate: ${startDateStr}`);
 
-        // Process strategies: cumulative sum of 1d_pnl from client_strategy_returns_c
-        // Only for parent mode (userId); child mode has limited strategy returns tracking
+        // Process strategies: cumulative sum of 1d_pnl from mkt_holdings_value
         const strategyBasketByDate = {};
         const endDateStr = new Date().toISOString().split("T")[0];
         const limitValue = activeTab === "5d" ? 5 : undefined;
 
         if (userId) {
           const strategyHoldings = holdingsToChart.filter(h => h.isStrategy && h.strategyId);
-          // Collect daily 1d_pnl per date (summed across all strategies)
           const strategyDailyPnl = {};
           await Promise.all(strategyHoldings.map(async (sh) => {
             try {
               let query = supabase
-                .from("client_strategy_returns_c")
+                .from("mkt_holdings_value")
                 .select("*")
                 .eq("user_id", userId)
                 .eq("strategy_id", sh.strategyId)
-                .is("family_member", null) // parent chart only
+                .is("family_member", null)
                 .order("as_of_date", { ascending: true });
 
               if (activeTab !== "all") {
@@ -742,16 +729,16 @@ const SwipeableBalanceCard = ({
         const pricePromises = stockHoldings.map(async (h) => {
           try {
             let { data, error } = await supabase
-              .from("stock_returns_c")
-              .select("as_of_date, current_price")
+              .from("mkt_price_history")
+              .select("as_of_date, close_price_cents")
               .eq("security_id", h.security_id)
               .gte("as_of_date", startDateStr)
               .order("as_of_date", { ascending: true });
 
             if (error || !data || data.length < 2) {
               const fallback = await supabase
-                .from("stock_returns_c")
-                .select("as_of_date, current_price")
+                .from("mkt_price_history")
+                .select("as_of_date, close_price_cents")
                 .eq("security_id", h.security_id)
                 .order("as_of_date", { ascending: false })
                 .limit(30);
@@ -773,7 +760,7 @@ const SwipeableBalanceCard = ({
             
             const allMapped = data.map((p) => ({
               ts: p.as_of_date.split("T")[0],
-              close: Number(p.current_price) / 100,
+              close: Number(p.close_price_cents) / 100,
             }));
             
             let filteredPrices = allMapped.filter((p) => p.ts >= pDateStr);

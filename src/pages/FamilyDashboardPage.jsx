@@ -1203,14 +1203,13 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
       const livePriceCentsMap = {};
       if (securityIds.length > 0) {
         const { data: intradayData } = await supabase
-          .from("stock_intraday_c")
-          .select("security_id, current_price, timestamp")
-          .in("security_id", securityIds)
-          .order("timestamp", { ascending: false });
-        // Use intraday current_price only (already in cents)
+          .from("mkt_prices")
+          .select("security_id, last_price_cents")
+          .in("security_id", securityIds);
+        // mkt_prices.last_price_cents is already in cents
         (intradayData || []).forEach(p => {
-          if (!livePriceCentsMap[p.security_id] && Number(p.current_price) > 0) {
-            livePriceCentsMap[p.security_id] = Number(p.current_price);
+          if (!livePriceCentsMap[p.security_id] && Number(p.last_price_cents) > 0) {
+            livePriceCentsMap[p.security_id] = Number(p.last_price_cents);
           }
         });
       }

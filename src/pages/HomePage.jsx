@@ -574,17 +574,16 @@ const HomePage = ({
         if (securityIds.length > 0) {
           const [{ data: secData }, { data: intradayData }] = await Promise.all([
             supabase.from('securities_c').select('id, symbol, name, logo_url, last_price, change_percent').in('id', securityIds),
-            supabase.from('stock_intraday_c').select('security_id, current_price, 1d_pct, timestamp').in('security_id', securityIds).order('timestamp', { ascending: false }),
+            supabase.from('mkt_prices').select('security_id, last_price_cents, change_percent').in('security_id', securityIds),
           ]);
-          // Build intraday map — latest row per security (current_price in cents)
           const intradayMap = {};
           (intradayData || []).forEach(p => { if (!intradayMap[p.security_id]) intradayMap[p.security_id] = p; });
           (secData || []).forEach(s => {
             const intraday = intradayMap[s.id];
             securitiesMap[s.id] = {
               ...s,
-              live_price_cents: intraday?.current_price > 0 ? Number(intraday.current_price) : 0,
-              change_percent: intraday?.['1d_pct'] != null ? Number(intraday['1d_pct']) : 0,
+              live_price_cents: intraday?.last_price_cents > 0 ? Number(intraday.last_price_cents) : 0,
+              change_percent: intraday?.change_percent != null ? Number(intraday.change_percent) : 0,
             };
           });
         }
@@ -664,7 +663,7 @@ const HomePage = ({
         if (securityIds.length > 0) {
           const [{ data: secData }, { data: intradayData }] = await Promise.all([
             supabase.from('securities_c').select('id, symbol, name, logo_url, last_price, change_percent').in('id', securityIds),
-            supabase.from('stock_intraday_c').select('security_id, current_price, 1d_pct, timestamp').in('security_id', securityIds).order('timestamp', { ascending: false }),
+            supabase.from('mkt_prices').select('security_id, last_price_cents, change_percent').in('security_id', securityIds),
           ]);
           const intradayMap = {};
           (intradayData || []).forEach(p => { if (!intradayMap[p.security_id]) intradayMap[p.security_id] = p; });
@@ -672,8 +671,8 @@ const HomePage = ({
             const intraday = intradayMap[s.id];
             return [s.id, {
               ...s,
-              live_price_cents: intraday?.current_price > 0 ? Number(intraday.current_price) : 0,
-              change_percent: intraday?.['1d_pct'] != null ? Number(intraday['1d_pct']) : 0,
+              live_price_cents: intraday?.last_price_cents > 0 ? Number(intraday.last_price_cents) : 0,
+              change_percent: intraday?.change_percent != null ? Number(intraday.change_percent) : 0,
             }];
           }));
 

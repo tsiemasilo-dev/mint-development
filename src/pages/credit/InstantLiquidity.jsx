@@ -179,12 +179,12 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange, onLinkBan
           setPledgeAmount(activeLoan.principal_amount || 0);
         }
 
-        // 4. Fetch true total portfolio value from client_strategy_returns_c
+        // 4. Fetch true total portfolio value from mkt_holdings_value
         //    Parent-only — credit eligibility uses the parent's own holdings.
         //    Child rows (family_member != null) are excluded so children's strategy
         //    values don't inflate the parent's pledgeable portfolio.
         const { data: returnsData } = await supabase
-          .from('client_strategy_returns_c')
+          .from('mkt_holdings_value')
           .select('strategy_id, basket_value, as_of_date')
           .eq('user_id', profile.id)
           .is('family_member', null)

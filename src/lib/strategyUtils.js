@@ -66,30 +66,27 @@ export const enrichSecuritiesWithIntradayPrices = async (securities) => {
   if (!ids.length) return securities;
 
   try {
-    const { data: intradayRows, error } = await supabase
-      .from("stock_intraday_c")
-      .select("security_id, current_price, timestamp")
-      .in("security_id", ids)
-      .order("timestamp", { ascending: false });
+    const { data: priceRows, error } = await supabase
+      .from("mkt_prices")
+      .select("security_id, last_price_cents")
+      .in("security_id", ids);
 
     if (error) {
-      console.warn("[enrichSecuritiesWithIntradayPrices] Error fetching intraday prices:", error.message);
+      console.warn("[enrichSecuritiesWithIntradayPrices] Error fetching prices:", error.message);
       return securities;
     }
 
-    const latestBySecurityId = new Map();
-    for (const row of intradayRows || []) {
-      if (!latestBySecurityId.has(row.security_id)) {
-        latestBySecurityId.set(row.security_id, row);
-      }
+    const priceBySecurityId = new Map();
+    for (const row of priceRows || []) {
+      if (row.security_id) priceBySecurityId.set(row.security_id, row);
     }
 
     return securities.map((sec) => {
-      const intraday = latestBySecurityId.get(sec.id);
-      if (!intraday?.current_price) return sec;
+      const price = priceBySecurityId.get(sec.id);
+      if (!price?.last_price_cents) return sec;
       return {
         ...sec,
-        intradayPrice: Number(intraday.current_price) / 100,
+        intradayPrice: Number(price.last_price_cents) / 100,
       };
     });
   } catch (err) {
@@ -152,13 +149,11 @@ export const calculateMinInvestment = async (strategy, holdingsBySymbol) => {
         continue;
       }
 
-      console.log(`  🔎 Querying stock_intraday_c for ${symbol}...`);
+      console.log(`  🔎 Querying mkt_prices for ${symbol}...`);
       const { data, error } = await supabase
-        .from("stock_intraday_c")
-        .select("current_price")
+        .from("mkt_prices")
+        .select("last_price_cents")
         .eq("symbol", symbol)
-        .order("timestamp", { ascending: false })
-        .limit(1)
         .maybeSingle();
 
       if (error) {
@@ -166,13 +161,13 @@ export const calculateMinInvestment = async (strategy, holdingsBySymbol) => {
         continue;
       }
 
-      if (!data?.current_price) {
+      if (!data?.last_price_cents) {
         console.warn(`  ❌ No price data found for ${symbol}:`, data);
         continue;
       }
 
-      const contribution = shares * data.current_price;
-      console.log(`  ✓ ${symbol}: ${shares} × ${data.current_price} = ${contribution} cents`);
+      const contribution = shares * data.last_price_cents;
+      console.log(`  ✓ ${symbol}: ${shares} × ${data.last_price_cents} = ${contribution} cents`);
       total += contribution;
     }
 
