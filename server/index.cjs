@@ -3087,9 +3087,159 @@ app.post("/api/update-prices", async (req, res) => {
       }
     }));
 
+    // ── Step 3: Update client_strategy_returns_c with fresh Yahoo prices ──────
+    // Build price lookup from the mkt_prices we just upserted
+    const { data: freshPrices } = await db.from("mkt_prices").select("symbol, last_price_cents");
+    const priceMap = {};
+    (freshPrices || []).forEach(p => { priceMap[p.symbol] = Number(p.last_price_cents); });
+
+    // Get all distinct user/strategy/family_member combos (latest row per combo)
+    const { data: allReturns } = await db
+      .from("client_strategy_returns_c")
+      .select("user_id, strategy_id, family_member, as_of_date, basket_value, holdings_snapshot, inception_pnl")
+      .order("as_of_date", { ascending: false });
+
+    // Deduplicate: keep only the most recent row per combo
+    const comboMap = {};
+    (allReturns || []).forEach(row => {
+      const key = `${row.user_id}|${row.strategy_id}|${row.family_member ?? "null"}`;
+      if (!comboMap[key]) comboMap[key] = row;
+    });
+
+    let strategyRowsUpdated = 0;
+    await Promise.all(Object.entries(comboMap).map(async ([key, latestRow]) => {
+      try {
+        const { user_id, strategy_id, family_member } = latestRow;
+
+        // Parse holdings_snapshot
+        let holdings;
+        try {
+          holdings = typeof latestRow.holdings_snapshot === "string"
+            ? JSON.parse(latestRow.holdings_snapshot)
+            : latestRow.holdings_snapshot;
+        } catch { return; }
+        if (!Array.isArray(holdings) || !holdings.length) return;
+
+        // Update current_price for each holding where we have a fresh price
+        const updatedHoldings = holdings.map(h => ({
+          ...h,
+          current_price: priceMap[h.symbol] !== undefined ? priceMap[h.symbol] : h.current_price,
+        }));
+
+        // Recalculate basket_value (sum of qty × current_price, all in cents)
+        const newBasketValue = Math.round(
+          updatedHoldings.reduce((sum, h) => sum + (Number(h.qty || 0) * Number(h.current_price || 0)), 0)
+        );
+
+        // Cost basis (sum of qty × avg_fill, all in cents)
+        const costBasis = Math.round(
+          updatedHoldings.reduce((sum, h) => sum + (Number(h.qty || 0) * Number(h.avg_fill || 0)), 0)
+        );
+
+        // 1d: compare to the most recent previous row (the one before latestRow)
+        let baseQuery = db.from("client_strategy_returns_c")
+          .select("basket_value, as_of_date")
+          .eq("user_id", user_id)
+          .eq("strategy_id", strategy_id);
+        baseQuery = family_member ? baseQuery.eq("family_member", family_member) : baseQuery.is("family_member", null);
+
+        // Previous row = most recent row that isn't today
+        const { data: prevRows } = await baseQuery
+          .neq("as_of_date", today)
+          .order("as_of_date", { ascending: false })
+          .limit(1);
+        const prevBasket = prevRows?.[0]?.basket_value ?? costBasis;
+
+        const oneDayPnl = newBasketValue - prevBasket;
+        const oneDayPct = prevBasket > 0 ? (oneDayPnl / prevBasket) * 100 : 0;
+        const inceptionPnl = newBasketValue - costBasis;
+        const inceptionPct = costBasis > 0 ? (inceptionPnl / costBasis) * 100 : 0;
+
+        // Period lookups (5d, 1m, 6m, ytd) — get basket value from N days ago
+        const lookupBasket = async (daysAgo) => {
+          const target = new Date();
+          target.setDate(target.getDate() - daysAgo);
+          const targetStr = target.toISOString().split("T")[0];
+          let q = db.from("client_strategy_returns_c")
+            .select("basket_value")
+            .eq("user_id", user_id)
+            .eq("strategy_id", strategy_id)
+            .lte("as_of_date", targetStr);
+          q = family_member ? q.eq("family_member", family_member) : q.is("family_member", null);
+          const { data } = await q.order("as_of_date", { ascending: false }).limit(1);
+          return data?.[0]?.basket_value ?? null;
+        };
+
+        const yearStart = `${new Date().getFullYear()}-01-01`;
+        let ytdQ = db.from("client_strategy_returns_c")
+          .select("basket_value")
+          .eq("user_id", user_id)
+          .eq("strategy_id", strategy_id)
+          .gte("as_of_date", yearStart);
+        ytdQ = family_member ? ytdQ.eq("family_member", family_member) : ytdQ.is("family_member", null);
+
+        const [bv5d, bv1m, bv6m, ytdRows] = await Promise.all([
+          lookupBasket(5),
+          lookupBasket(30),
+          lookupBasket(180),
+          ytdQ.order("as_of_date", { ascending: true }).limit(1),
+        ]);
+        const bvYtd = ytdRows?.data?.[0]?.basket_value ?? null;
+
+        const pnlPct = (bv, cur) => bv ? ((cur - bv) / bv) * 100 : null;
+
+        const newRow = {
+          user_id,
+          strategy_id,
+          family_member: family_member || null,
+          as_of_date: today,
+          basket_value: newBasketValue,
+          holdings_snapshot: JSON.stringify(updatedHoldings),
+          "1d_pnl": oneDayPnl,
+          "1d_pct": oneDayPct,
+          "5d_pnl":  bv5d  ? newBasketValue - bv5d  : null,
+          "5d_pct":  pnlPct(bv5d, newBasketValue),
+          "1m_pnl":  bv1m  ? newBasketValue - bv1m  : null,
+          "1m_pct":  pnlPct(bv1m, newBasketValue),
+          "6m_pnl":  bv6m  ? newBasketValue - bv6m  : null,
+          "6m_pct":  pnlPct(bv6m, newBasketValue),
+          "ytd_pnl": bvYtd ? newBasketValue - bvYtd : null,
+          "ytd_pct": pnlPct(bvYtd, newBasketValue),
+          "1y_pnl":  null,
+          "1y_pct":  null,
+          "5y_pnl":  null,
+          "5y_pct":  null,
+          inception_pnl: inceptionPnl,
+          inception_pct: inceptionPct,
+          fetched_at: new Date().toISOString(),
+        };
+
+        // Check if today's row exists
+        let existQ = db.from("client_strategy_returns_c")
+          .select("id")
+          .eq("user_id", user_id)
+          .eq("strategy_id", strategy_id)
+          .eq("as_of_date", today);
+        existQ = family_member ? existQ.eq("family_member", family_member) : existQ.is("family_member", null);
+        const { data: existingToday } = await existQ.maybeSingle();
+
+        if (existingToday) {
+          await db.from("client_strategy_returns_c").update(newRow).eq("id", existingToday.id);
+        } else {
+          await db.from("client_strategy_returns_c").insert(newRow);
+        }
+        strategyRowsUpdated++;
+        console.log(`[update-prices] strategy row updated: ${user_id.slice(0,8)} basket=${newBasketValue} inception=${inceptionPct.toFixed(2)}%`);
+      } catch (err) {
+        console.error(`[update-prices] strategy update error for ${key}:`, err.message);
+      }
+    }));
+
+    console.log(`[update-prices] client_strategy_returns_c: ${strategyRowsUpdated} combos updated`);
+
     const elapsed = Date.now() - started;
-    console.log(`[update-prices] Done in ${elapsed}ms — updated: ${results.updated}, skipped: ${results.skipped}, errors: ${results.errors.length}`);
-    res.json({ ok: true, elapsed, ...results });
+    console.log(`[update-prices] Done in ${elapsed}ms — updated: ${results.updated}, skipped: ${results.skipped}, errors: ${results.errors.length}, strategyRows: ${strategyRowsUpdated}`);
+    res.json({ ok: true, elapsed, ...results, strategyRowsUpdated });
   } catch (err) {
     console.error("[update-prices] Fatal error:", err.message);
     res.status(500).json({ error: err.message });
