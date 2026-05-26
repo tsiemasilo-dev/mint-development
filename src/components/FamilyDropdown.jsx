@@ -88,6 +88,8 @@ export default function FamilyDropdown({ profile, userId, initials, avatarUrl, o
     );
   }
 
+  // Spouse section is hidden for now — flip this to true to surface it again.
+  const SHOW_SPOUSE_SECTION = false;
   const spouse = members.find((m) => m.relationship === "spouse");
   const children = members.filter((m) => m.relationship === "child");
 
@@ -165,41 +167,43 @@ export default function FamilyDropdown({ profile, userId, initials, avatarUrl, o
               </div>
             ) : (
               <>
-                {/* Spouse section */}
-                <div style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-                  <p className="px-4 pt-3 pb-1 text-[10px] font-bold tracking-widest text-white/35 uppercase flex items-center gap-1.5">
-                    <Heart className="h-3 w-3" /> Spouse Account
-                  </p>
-                  {spouse ? (
-                    <button
-                      onClick={goToFamily}
-                      className="flex items-center gap-3 px-4 py-2.5 w-full text-left hover:bg-white/5 transition-colors"
-                    >
-                      <MemberAvatar firstName={spouse.first_name} avatarUrl={spouse.avatar_url} isSpouse />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-white truncate">
-                          {[spouse.first_name, spouse.last_name].filter(Boolean).join(" ")}
-                        </p>
-                        {spouse.mint_number && (
-                          <p className="text-[11px] text-white/40 font-mono">{spouse.mint_number}</p>
-                        )}
-                      </div>
-                      <span className="text-white/30 text-xs">›</span>
-                    </button>
-                  ) : (
-                    <button onClick={goToFamily} className="flex items-center gap-2.5 px-4 py-2.5 w-full text-left group">
-                      <div
-                        className="h-9 w-9 rounded-full border-2 border-dashed flex items-center justify-center flex-shrink-0 transition-colors group-hover:border-violet-400"
-                        style={{ borderColor: "rgba(139,92,246,0.4)" }}
+                {/* Spouse section — hidden via SHOW_SPOUSE_SECTION flag */}
+                {SHOW_SPOUSE_SECTION && (
+                  <div style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+                    <p className="px-4 pt-3 pb-1 text-[10px] font-bold tracking-widest text-white/35 uppercase flex items-center gap-1.5">
+                      <Heart className="h-3 w-3" /> Spouse Account
+                    </p>
+                    {spouse ? (
+                      <button
+                        onClick={goToFamily}
+                        className="flex items-center gap-3 px-4 py-2.5 w-full text-left hover:bg-white/5 transition-colors"
                       >
-                        <Plus className="h-3.5 w-3.5 text-violet-400" />
-                      </div>
-                      <span className="text-sm font-medium text-violet-400 group-hover:text-violet-300 transition-colors">
-                        Add Spouse Account
-                      </span>
-                    </button>
-                  )}
-                </div>
+                        <MemberAvatar firstName={spouse.first_name} avatarUrl={spouse.avatar_url} isSpouse />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-white truncate">
+                            {[spouse.first_name, spouse.last_name].filter(Boolean).join(" ")}
+                          </p>
+                          {spouse.mint_number && (
+                            <p className="text-[11px] text-white/40 font-mono">{spouse.mint_number}</p>
+                          )}
+                        </div>
+                        <span className="text-white/30 text-xs">›</span>
+                      </button>
+                    ) : (
+                      <button onClick={goToFamily} className="flex items-center gap-2.5 px-4 py-2.5 w-full text-left group">
+                        <div
+                          className="h-9 w-9 rounded-full border-2 border-dashed flex items-center justify-center flex-shrink-0 transition-colors group-hover:border-violet-400"
+                          style={{ borderColor: "rgba(139,92,246,0.4)" }}
+                        >
+                          <Plus className="h-3.5 w-3.5 text-violet-400" />
+                        </div>
+                        <span className="text-sm font-medium text-violet-400 group-hover:text-violet-300 transition-colors">
+                          Add Spouse Account
+                        </span>
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 {/* Children section */}
                 <div>
