@@ -451,6 +451,7 @@ const HomePage = ({
             id: s.id,
             purchaseKey: s.purchaseKey || s.id,
             purchaseRef: s.purchaseRef || null,
+            firstInvestedDate: s.firstInvestedDate || null,
             name: s.name,
             short_name: s.shortName,
             description: s.description,
@@ -1415,11 +1416,15 @@ const HomePage = ({
                     </div>
                     <div className="mt-3 flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        {strategy.purchaseRef && (
+                        {strategy.firstInvestedDate ? (
+                          <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-400">
+                            {formatDate(strategy.firstInvestedDate)}
+                          </span>
+                        ) : strategy.purchaseRef ? (
                           <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-400">
                             {strategy.purchaseRef}
                           </span>
-                        )}
+                        ) : null}
                       </div>
                       {holdingsSnapshot.length > 0 && (
                         <div className="flex items-center gap-2">
