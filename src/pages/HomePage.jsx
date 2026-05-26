@@ -1787,6 +1787,16 @@ const HomePage = ({
                 const pendingCount = batches.filter(b => !b.avg_fill || Number(b.avg_fill) === 0).length;
                 const filledCount = batches.length - pendingCount;
                 const hasMixed = pendingCount > 0 && filledCount > 0;
+                // Purchase date hint for single-purchase cards. Stack cards already
+                // show the "Nx" badge; the per-batch dates appear in the stacked modal.
+                const latestBatchDate = batches
+                  .map(b => b?.created_at)
+                  .filter(Boolean)
+                  .map(d => new Date(d))
+                  .filter(d => !isNaN(d))
+                  .sort((a, b) => b - a)[0] || null;
+                const fmtShortDate = (d) => d ? d.toLocaleDateString("en-ZA", { day: "numeric", month: "short" }) : null;
+                const dateLabel = !isStack ? fmtShortDate(latestBatchDate) : null;
 
                 const cardInner = (
                   <div className="flex items-center gap-4">
@@ -1822,6 +1832,9 @@ const HomePage = ({
                       </p>
                     </div>
                     <div className="text-right flex-shrink-0">
+                      {dateLabel && (
+                        <p className="text-[10px] text-slate-400 mb-0.5">{dateLabel}</p>
+                      )}
                       {asset.isPending ? (
                         <p className="text-xs text-slate-400">Awaiting fill</p>
                       ) : asset.pnlRands != null ? (
