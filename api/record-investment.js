@@ -4,6 +4,30 @@ import { Resend } from "resend";
 
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
 
+// Fetch the latest stock_intraday_c.current_price for each given security_id.
+// Used to stamp Expected_fill on holdings at buy time — the price the client
+// saw when they tapped Buy — so PnL is computed against that, not avg_fill
+// (which captures the company's spread).
+async function fetchLatestIntradayPrices(db, securityIds) {
+  if (!securityIds || !securityIds.length) return {};
+  const ids = [...new Set(securityIds.filter(Boolean))];
+  const out = {};
+  await Promise.all(ids.map(async (id) => {
+    const { data } = await db
+      .from("stock_intraday_c")
+      .select("current_price")
+      .eq("security_id", id)
+      .order("timestamp", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data?.current_price != null) {
+      // stock_intraday_c.current_price is stored in cents; return rands.
+      out[id] = Number(data.current_price) / 100;
+    }
+  }));
+  return out;
+}
+
 function getResend() {
   if (!process.env.RESEND_API_KEY) return null;
   return new Resend(process.env.RESEND_API_KEY);
@@ -273,6 +297,36 @@ export default async function handler(req, res) {
     let currentPriceCents = null;
     let quantity = null;
 
+    // Insert transaction first so we can stamp its UUID on every holdings row.
+    const orderDate = new Date().toISOString();
+    const descriptionText = isStrategyInvestment
+      ? `Invested in strategy ${name || "Strategy"}`
+      : `Purchased shares of ${name || symbol || "Unknown"}`;
+
+    const { data: txData, error: txError } = await db
+      .from("transactions")
+      .insert({
+        user_id: targetUserId,
+        family_member_id: targetFamilyMemberId,
+        direction: "debit",
+        name: isStrategyInvestment ? `Strategy Investment: ${name || symbol || "Strategy"}` : `Purchased ${name || symbol || "Stock"}`,
+        description: descriptionText,
+        amount: Math.round(amount * 100),
+        store_reference: paymentReference || null,
+        currency: "ZAR",
+        status: "posted",
+        transaction_date: orderDate,
+        created_at: orderDate,
+      })
+      .select("id")
+      .single();
+
+    if (txError) {
+      console.error("[record-investment] Transaction insert error:", txError);
+      return res.status(500).json({ success: false, error: "Failed to record transaction" });
+    }
+    const txId = txData.id;
+
     if (isStrategyInvestment) {
       const { data: strategyData, error: stratError } = await db
         .from("strategies_c")
@@ -300,10 +354,8 @@ export default async function handler(req, res) {
       const secBySymbol = {};
       (securitiesData || []).forEach(s => { secBySymbol[s.symbol] = s; });
 
-      // Strategy component quantities come directly from strategies_c.holdings.
-      // Do not scale component shares by investment amount.
+      const intradayPrices = await fetchLatestIntradayPrices(db, (securitiesData || []).map(s => s.id));
 
-      const now = new Date().toISOString();
       const insertedHoldings = [];
       const skippedSymbols = [];
 
@@ -323,52 +375,24 @@ export default async function handler(req, res) {
 
         const holdingQty = Math.floor(rawHoldingQty);
 
-        const holdingsLookupQuery = withFamilyMemberFilter(
-          db
-            .from("stock_holdings_c")
-            .select("id, quantity")
-            .eq("user_id", targetUserId)
-            .eq("security_id", sec.id)
-            .eq("strategy_id", strategyId)
-        );
-        const { data: existing, error: lookupErr } = await holdingsLookupQuery.maybeSingle();
+        const { error: insertErr } = await db.from("stock_holdings_c").insert({
+          user_id: targetUserId,
+          family_member_id: targetFamilyMemberId,
+          security_id: sec.id,
+          strategy_id: strategyId,
+          quantity: holdingQty,
+          avg_fill: null,
+          market_value: 0,
+          unrealized_pnl: 0,
+          as_of_date: null,
+          Status: "active",
+          transaction_id: txId,
+          Expected_fill: intradayPrices[sec.id] ?? null,
+        });
 
-        if (lookupErr) {
-          console.error("[record-investment] Error looking up holding for", holding.symbol, lookupErr.message);
-          return res.status(500).json({ success: false, error: `Failed to look up holding for ${holding.symbol}` });
-        }
-
-        if (existing) {
-          const oldQty = Number(existing.quantity || 0);
-          const newQty = Math.floor(oldQty + holdingQty);
-
-          const { error: updateErr } = await db.from("stock_holdings_c").update({
-            quantity: newQty,
-            updated_at: now,
-          }).eq("id", existing.id);
-
-          if (updateErr) {
-            console.error("[record-investment] Failed to update holding for", holding.symbol, updateErr.message);
-            return res.status(500).json({ success: false, error: `Failed to update holding for ${holding.symbol}` });
-          }
-        } else {
-          const { error: insertErr } = await db.from("stock_holdings_c").insert({
-            user_id: targetUserId,
-            family_member_id: targetFamilyMemberId,
-            security_id: sec.id,
-            strategy_id: strategyId,
-            quantity: holdingQty,
-            avg_fill: null,
-            market_value: 0,
-            unrealized_pnl: 0,
-            as_of_date: null,
-            Status: "active",
-          });
-
-          if (insertErr) {
-            console.error("[record-investment] Failed to insert holding for", holding.symbol, insertErr.message);
-            return res.status(500).json({ success: false, error: `Failed to record holding for ${holding.symbol}` });
-          }
+        if (insertErr) {
+          console.error("[record-investment] Failed to insert holding for", holding.symbol, insertErr.message);
+          return res.status(500).json({ success: false, error: `Failed to record holding for ${holding.symbol}` });
         }
 
         insertedHoldings.push({ symbol: holding.symbol, quantity: holdingQty, priceCents: null, pendingFill: true });
@@ -378,7 +402,6 @@ export default async function handler(req, res) {
         console.warn("[record-investment] Skipped symbols (no security/price):", skippedSymbols.join(", "));
       }
 
-      // --- ADDED: user_strategies update for investment ---
       console.log(`[record-investment] Updating user_strategies for strategy: ${strategyId}`);
       const { data: existingUS } = await db
         .from("user_strategies")
@@ -438,104 +461,38 @@ export default async function handler(req, res) {
       }
 
       const currentPriceRands = currentPriceCents ? currentPriceCents / 100 : (shareCount > 0 ? investAmount / shareCount : 0);
-      
-      // Prioritize shareCount from frontend if available, otherwise calculate from price
+
       if (shareCount && Number(shareCount) > 0) {
         quantity = Math.floor(Number(shareCount));
       } else {
         quantity = currentPriceRands > 0 ? Math.floor(investAmount / currentPriceRands) : 1;
       }
-      if (quantity <= 0) quantity = 1; 
+      if (quantity <= 0) quantity = 1;
 
-      const avgFillCents = currentPriceCents || Math.round((investAmount / quantity) * 100);
-      const marketValueCents = Math.round(quantity * (currentPriceCents || (avgFillCents)));
+      const intradayStockPrices = await fetchLatestIntradayPrices(db, [securityId]);
 
-
-      const securityLookupQuery = withFamilyMemberFilter(
-        db
-          .from("stock_holdings_c")
-          .select("id, quantity, avg_fill, market_value")
-          .eq("user_id", targetUserId)
-          .eq("security_id", securityId)
-      );
-      const { data: existing, error: fetchError } = await securityLookupQuery.maybeSingle();
-
-      if (fetchError) {
-        return res.status(500).json({ success: false, error: fetchError.message });
-      }
-
-      if (existing) {
-        const oldQty = Number(existing.quantity || 0);
-        const oldAvgFill = Number(existing.avg_fill || 0);
-        const newQty = Math.floor(oldQty + quantity);
-        const newAvgFill = newQty > 0 ? ((oldAvgFill * oldQty) + (avgFillCents * quantity)) / newQty : avgFillCents;
-        const newMarketValue = Math.round(newQty * (currentPriceCents || newAvgFill));
-        const { data, error } = await db
-          .from("stock_holdings_c")
-          .update({
-            quantity: newQty,
-            avg_fill: Math.round(newAvgFill),
-            market_value: newMarketValue,
-            as_of_date: new Date().toISOString().split("T")[0],
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", existing.id)
-          .select();
-        holdingResult = { data, error };
-      } else {
-        // New position: insert as a pending order. avg_fill / market_value stay
-        // empty until the broker fill comes back, so the position does not show
-        // up in the portfolio total. Quantity is the parent's estimated size
-        // (based on amount / current price) which we record for display only.
-        const { data, error } = await db
-          .from("stock_holdings_c")
-          .insert({
-            user_id: targetUserId,
-            family_member_id: targetFamilyMemberId,
-            security_id: securityId,
-            quantity: quantity,
-            avg_fill: null,
-            market_value: 0,
-            unrealized_pnl: 0,
-            as_of_date: null,
-            Status: "active",
-            strategy_id: strategyId || null,
-          })
-          .select();
-        holdingResult = { data, error };
-      }
+      const { data, error } = await db
+        .from("stock_holdings_c")
+        .insert({
+          user_id: targetUserId,
+          family_member_id: targetFamilyMemberId,
+          security_id: securityId,
+          quantity: quantity,
+          avg_fill: null,
+          market_value: 0,
+          unrealized_pnl: 0,
+          as_of_date: null,
+          Status: "active",
+          strategy_id: strategyId || null,
+          transaction_id: txId,
+          Expected_fill: intradayStockPrices[securityId] ?? null,
+        })
+        .select();
+      holdingResult = { data, error };
 
       if (holdingResult.error) {
         return res.status(500).json({ success: false, error: holdingResult.error.message });
       }
-    }
-
-    const descriptionText = isStrategyInvestment
-      ? `Invested in strategy ${name || "Strategy"}`
-      : `Purchased ${(holdingResult.data ? "shares" : "units")} of ${name || symbol || "Unknown"}`;
-
-    const orderDate = new Date().toISOString();
-
-    const { error: txError } = await db
-      .from("transactions")
-      .insert({
-        user_id: targetUserId,
-        family_member_id: targetFamilyMemberId,
-        direction: "debit",
-        name: isStrategyInvestment ? `Strategy Investment: ${name || symbol || "Strategy"}` : `Purchased ${name || symbol || "Stock"}`,
-        description: descriptionText,
-        amount: Math.round(amount * 100),
-        store_reference: paymentReference || null,
-        currency: "ZAR",
-        status: "posted",
-        transaction_date: orderDate,
-        created_at: orderDate,
-      })
-      .select();
-
-    if (txError) {
-      console.error("[record-investment] Transaction insert error:", txError);
-      return res.status(500).json({ success: false, error: "Failed to record transaction" });
     }
 
     sendOrderConfirmationEmail(db, {

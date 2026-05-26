@@ -1178,8 +1178,8 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
     
     try {
       const [holdingsRes, childHoldingsRes, walletRes, childWalletRes] = await Promise.all([
-        supabase.from("stock_holdings_c").select("user_id, family_member_id, security_id, quantity, avg_fill").in("user_id", holdingsUserIds).is("family_member_id", null).eq("Status", "active"),
-        supabase.from("stock_holdings_c").select("family_member_id, security_id, quantity, avg_fill").in("family_member_id", childMemberIds).eq("Status", "active"),
+        supabase.from("stock_holdings_c").select("user_id, family_member_id, security_id, quantity, avg_fill, Expected_fill").in("user_id", holdingsUserIds).is("family_member_id", null).eq("Status", "active"),
+        supabase.from("stock_holdings_c").select("family_member_id, security_id, quantity, avg_fill, Expected_fill").in("family_member_id", childMemberIds).eq("Status", "active"),
         supabase.from("wallets").select("user_id, balance").in("user_id", walletUserIds),
         childMemberIds.length
           ? supabase.from("family_members").select("id, available_balance").in("id", childMemberIds)
@@ -1215,18 +1215,24 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
         });
       }
 
-      // avg_fill is in cents; livePriceCentsMap is in cents — everything stays in cents
+      // Cost basis per share in cents: prefers Expected_fill (rands → cents)
+      // over avg_fill (already cents) so client PnL ignores the company spread.
+      const costBasisCentsPerShare = (h) => {
+        const expected = Number(h.Expected_fill || 0);
+        if (expected > 0) return Math.round(expected * 100);
+        const avg = Number(h.avg_fill || 0);
+        return avg > 0 ? avg : 0;
+      };
       const marketValueCents = (h) => {
         const qty = Number(h.quantity || 0);
-        const avgFill = Number(h.avg_fill || 0);
-        const livePrice = livePriceCentsMap[h.security_id] ?? avgFill;
+        const livePrice = livePriceCentsMap[h.security_id] ?? costBasisCentsPerShare(h);
         return Math.round(livePrice * qty);
       };
       const pnlCents = (h) => {
         const qty = Number(h.quantity || 0);
-        const avgFill = Number(h.avg_fill || 0);
-        const livePrice = livePriceCentsMap[h.security_id] ?? avgFill;
-        return Math.round((livePrice - avgFill) * qty);
+        const cost = costBasisCentsPerShare(h);
+        const livePrice = livePriceCentsMap[h.security_id] ?? cost;
+        return Math.round((livePrice - cost) * qty);
       };
 
       const totalHoldingsValue = holdings.reduce((s, h) => s + marketValueCents(h), 0)
