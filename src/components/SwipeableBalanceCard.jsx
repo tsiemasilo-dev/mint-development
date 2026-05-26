@@ -931,9 +931,7 @@ const SwipeableBalanceCard = ({
         ? Number(selectedAsset.invested_amount) / 100
         : selectedAssetInvestedRands)
     : dbData.totalInvestedAmount;
-  // Headline (the big number) is the higher-of cost basis sum — what the client
-  // paid, conservatively. For selectedAsset use the per-row maxOfCostBasis we
-  // stamped at load time.
+  // Headline (the big number) is the live market value — cost basis + unrealised profit.
   const displayBigValue = selectedAsset
     ? Number(selectedAsset.maxOfCostBasis || 0)
     : Number(dbData.totalMaxOfCostBasis || 0);
@@ -943,7 +941,7 @@ const SwipeableBalanceCard = ({
   const displayReturn = displayMarketValue - displayBigValue;
   const displayBalance = overrideBalance !== undefined
     ? overrideBalance
-    : displayBigValue;
+    : displayMarketValue;
 
   const isLoss = displayReturn < 0;
   const returnPct = displayBigValue > 0
