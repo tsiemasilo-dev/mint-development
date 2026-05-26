@@ -3200,11 +3200,117 @@ app.post("/api/update-prices", async (req, res) => {
       }
     }));
 
-    console.log(`[update-prices] mkt_holdings_value: ${strategyRowsUpdated} combos written (client_strategy_returns_c untouched)`);
+    console.log(`[update-prices] mkt_holdings_value: ${strategyRowsUpdated} combos written`);
+
+    // ── Step 4: Update mkt_strategy_returns with live strategy basket values ──
+    // Reads strategy constituent stocks from strategies_c (config only — no price data),
+    // prices from mkt_prices, historical baselines from mkt_strategy_returns.
+    const { data: strategies } = await db
+      .from("strategies_c")
+      .select("id, holdings")
+      .eq("status", "active");
+
+    let strategyReturnsUpdated = 0;
+    await Promise.all((strategies || []).map(async (strat) => {
+      try {
+        const holdings = Array.isArray(strat.holdings) ? strat.holdings : [];
+        if (!holdings.length) return;
+
+        // basket_value = sum(quantity × live_price_cents)
+        const newBasket = Math.round(
+          holdings.reduce((sum, h) => {
+            const price = priceMap[h.symbol] ?? priceMap[h.ticker] ?? 0;
+            return sum + ((Number(h.quantity || h.shares || 0)) * price);
+          }, 0)
+        );
+        if (!newBasket) return;
+
+        const pnlPct = (bv, cur) => bv ? ((cur - bv) / bv) * 100 : null;
+
+        // Lookups from mkt_strategy_returns
+        const histQ = async (lte, gte) => {
+          let q = db.from("mkt_strategy_returns")
+            .select("basket_value")
+            .eq("strategy_id", strat.id)
+            .neq("as_of_date", today);
+          if (lte) q = q.lte("as_of_date", lte);
+          if (gte) q = q.gte("as_of_date", gte);
+          const { data } = await q.order("as_of_date", { ascending: false }).limit(1);
+          return data?.[0]?.basket_value ?? null;
+        };
+
+        const yearStart = `${new Date().getFullYear()}-01-01`;
+        const daysAgoStr = (n) => {
+          const d = new Date(); d.setDate(d.getDate() - n);
+          return d.toISOString().split("T")[0];
+        };
+
+        const [prevBv, bv5d, bv1m, bv6m, bv1y, bvYtd, firstRow] = await Promise.all([
+          histQ(null, null),
+          histQ(daysAgoStr(5), null),
+          histQ(daysAgoStr(30), null),
+          histQ(daysAgoStr(180), null),
+          histQ(daysAgoStr(365), null),
+          histQ(null, yearStart),
+          db.from("mkt_strategy_returns").select("basket_value, as_of_date")
+            .eq("strategy_id", strat.id).order("as_of_date", { ascending: true }).limit(1)
+            .then(r => r.data?.[0] ?? null),
+        ]);
+
+        const oneDayPnl  = prevBv ? newBasket - prevBv : 0;
+        const allPnl     = firstRow ? newBasket - firstRow.basket_value : 0;
+        const allPct     = firstRow?.basket_value > 0 ? (allPnl / firstRow.basket_value) * 100 : 0;
+
+        // cumulative_1d_pct: compound the existing value with today's 1d move
+        const { data: prevRow } = await db.from("mkt_strategy_returns")
+          .select("cumulative_1d_pct, basket_value")
+          .eq("strategy_id", strat.id)
+          .neq("as_of_date", today)
+          .order("as_of_date", { ascending: false }).limit(1);
+        const prevCumulative = prevRow?.[0]?.cumulative_1d_pct ?? 0;
+        const oneDayPct = prevBv > 0 ? (oneDayPnl / prevBv) * 100 : 0;
+        const newCumulative = prevCumulative + oneDayPct;
+
+        // Delete today's row if exists, then insert fresh
+        await db.from("mkt_strategy_returns").delete()
+          .eq("strategy_id", strat.id).eq("as_of_date", today);
+
+        await db.from("mkt_strategy_returns").insert({
+          strategy_id:       strat.id,
+          as_of_date:        today,
+          basket_value:      newBasket,
+          "1d_pnl":          oneDayPnl,
+          "1d_pct":          oneDayPct,
+          "5d_pnl":          bv5d  ? newBasket - bv5d  : null,
+          "5d_pct":          pnlPct(bv5d,  newBasket),
+          "1m_pnl":          bv1m  ? newBasket - bv1m  : null,
+          "1m_pct":          pnlPct(bv1m,  newBasket),
+          "6m_pnl":          bv6m  ? newBasket - bv6m  : null,
+          "6m_pct":          pnlPct(bv6m,  newBasket),
+          "ytd_pnl":         bvYtd ? newBasket - bvYtd : null,
+          "ytd_pct":         pnlPct(bvYtd, newBasket),
+          "1y_pnl":          bv1y  ? newBasket - bv1y  : null,
+          "1y_pct":          pnlPct(bv1y,  newBasket),
+          "5y_pnl":          null,
+          "5y_pct":          null,
+          cumulative_1d_pct: newCumulative,
+          all_pnl:           allPnl,
+          all_pct:           allPct,
+          fetched_at:        new Date().toISOString(),
+        });
+
+        strategyReturnsUpdated++;
+        console.log(`[update-prices] mkt_strategy_returns: ${strat.id.slice(0,8)} basket=${newBasket}`);
+      } catch (err) {
+        console.error(`[update-prices] mkt_strategy_returns error for ${strat.id}:`, err.message);
+      }
+    }));
+
+    console.log(`[update-prices] mkt_strategy_returns: ${strategyReturnsUpdated} strategies written`);
 
     const elapsed = Date.now() - started;
-    console.log(`[update-prices] Done in ${elapsed}ms — updated: ${results.updated}, skipped: ${results.skipped}, errors: ${results.errors.length}, strategyRows: ${strategyRowsUpdated}`);
-    res.json({ ok: true, elapsed, ...results, strategyRowsUpdated });
+    console.log(`[update-prices] Done in ${elapsed}ms — updated: ${results.updated}, skipped: ${results.skipped}, errors: ${results.errors.length}, strategyRows: ${strategyRowsUpdated}, strategyReturns: ${strategyReturnsUpdated}`);
+    res.json({ ok: true, elapsed, ...results, strategyRowsUpdated, strategyReturnsUpdated });
   } catch (err) {
     console.error("[update-prices] Fatal error:", err.message);
     res.status(500).json({ error: err.message });
