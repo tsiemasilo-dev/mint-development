@@ -3047,39 +3047,6 @@ app.post("/api/update-prices", async (req, res) => {
           close_price_cents: lastPriceCents,
         }, { onConflict: "symbol,as_of_date", ignoreDuplicates: true });
 
-        // 5. Update mkt_holdings_value for every active holding with this security
-        const { data: holdings } = await db
-          .from("stock_holdings_c")
-          .select("id, user_id, family_member_id, security_id, strategy_id, quantity, avg_fill")
-          .eq("security_id", sec.id)
-          .eq("Status", "active");
-
-        if (holdings?.length) {
-          await Promise.all(holdings.map(async (h) => {
-            const qty = Number(h.quantity || 0);
-            const avgFillCents = Number(h.avg_fill || 0);
-            const marketValueCents = Math.round(qty * lastPriceCents);
-            const costBasisCents = Math.round(qty * avgFillCents);
-            const unrealizedPnlCents = marketValueCents - costBasisCents;
-
-            await db.from("mkt_holdings_value").upsert({
-              user_id: h.user_id,
-              family_member_id: h.family_member_id || null,
-              security_id: h.security_id,
-              strategy_id: h.strategy_id || null,
-              symbol: sec.symbol,
-              quantity: qty,
-              avg_fill_cents: avgFillCents,
-              market_price_cents: lastPriceCents,
-              market_value_cents: marketValueCents,
-              cost_basis_cents: costBasisCents,
-              unrealized_pnl_cents: unrealizedPnlCents,
-              as_of_date: today,
-              updated_at: new Date().toISOString(),
-            }, { onConflict: "id" });
-          }));
-        }
-
         results.updated++;
       } catch (err) {
         console.error(`[update-prices] Error for ${sec.symbol}:`, err.message);
@@ -3087,19 +3054,23 @@ app.post("/api/update-prices", async (req, res) => {
       }
     }));
 
-    // ── Step 3: Update client_strategy_returns_c with fresh Yahoo prices ──────
+    // ── Step 3: Populate mkt_holdings_value from client_strategy_returns_c ──────
+    // Reads client_strategy_returns_c as a READ-ONLY source for holdings snapshots.
+    // Updates current_price from fresh mkt_prices, recalculates all P&L fields,
+    // and writes results to mkt_holdings_value. client_strategy_returns_c is NEVER written to.
+
     // Build price lookup from the mkt_prices we just upserted
     const { data: freshPrices } = await db.from("mkt_prices").select("symbol, last_price_cents");
     const priceMap = {};
     (freshPrices || []).forEach(p => { priceMap[p.symbol] = Number(p.last_price_cents); });
 
-    // Get all distinct user/strategy/family_member combos (latest row per combo)
+    // Read all rows from client_strategy_returns_c — source of truth for holdings
     const { data: allReturns } = await db
       .from("client_strategy_returns_c")
       .select("user_id, strategy_id, family_member, as_of_date, basket_value, holdings_snapshot, inception_pnl")
       .order("as_of_date", { ascending: false });
 
-    // Deduplicate: keep only the most recent row per combo
+    // Deduplicate: keep only the most recent row per combo (read-only)
     const comboMap = {};
     (allReturns || []).forEach(row => {
       const key = `${row.user_id}|${row.strategy_id}|${row.family_member ?? "null"}`;
@@ -3111,7 +3082,7 @@ app.post("/api/update-prices", async (req, res) => {
       try {
         const { user_id, strategy_id, family_member } = latestRow;
 
-        // Parse holdings_snapshot
+        // Parse holdings_snapshot from client_strategy_returns_c
         let holdings;
         try {
           holdings = typeof latestRow.holdings_snapshot === "string"
@@ -3120,34 +3091,32 @@ app.post("/api/update-prices", async (req, res) => {
         } catch { return; }
         if (!Array.isArray(holdings) || !holdings.length) return;
 
-        // Update current_price for each holding where we have a fresh price
+        // Update current_price for each holding using fresh Yahoo prices
         const updatedHoldings = holdings.map(h => ({
           ...h,
           current_price: priceMap[h.symbol] !== undefined ? priceMap[h.symbol] : h.current_price,
         }));
 
-        // Recalculate basket_value (sum of qty × current_price, all in cents)
+        // basket_value = sum(qty × current_price) in cents
         const newBasketValue = Math.round(
           updatedHoldings.reduce((sum, h) => sum + (Number(h.qty || 0) * Number(h.current_price || 0)), 0)
         );
 
-        // Cost basis (sum of qty × avg_fill, all in cents)
+        // Cost basis = sum(qty × avg_fill) in cents
         const costBasis = Math.round(
           updatedHoldings.reduce((sum, h) => sum + (Number(h.qty || 0) * Number(h.avg_fill || 0)), 0)
         );
 
-        // 1d: compare to the most recent previous row (the one before latestRow)
-        let baseQuery = db.from("client_strategy_returns_c")
-          .select("basket_value, as_of_date")
+        // 1d P&L: compare today's basket to the most recent previous row in client_strategy_returns_c
+        let prevQ = db.from("client_strategy_returns_c")
+          .select("basket_value")
           .eq("user_id", user_id)
-          .eq("strategy_id", strategy_id);
-        baseQuery = family_member ? baseQuery.eq("family_member", family_member) : baseQuery.is("family_member", null);
-
-        // Previous row = most recent row that isn't today
-        const { data: prevRows } = await baseQuery
+          .eq("strategy_id", strategy_id)
           .neq("as_of_date", today)
           .order("as_of_date", { ascending: false })
           .limit(1);
+        prevQ = family_member ? prevQ.eq("family_member", family_member) : prevQ.is("family_member", null);
+        const { data: prevRows } = await prevQ;
         const prevBasket = prevRows?.[0]?.basket_value ?? costBasis;
 
         const oneDayPnl = newBasketValue - prevBasket;
@@ -3155,7 +3124,7 @@ app.post("/api/update-prices", async (req, res) => {
         const inceptionPnl = newBasketValue - costBasis;
         const inceptionPct = costBasis > 0 ? (inceptionPnl / costBasis) * 100 : 0;
 
-        // Period lookups (5d, 1m, 6m, ytd) — get basket value from N days ago
+        // Period P&L: look up basket value N days ago from client_strategy_returns_c
         const lookupBasket = async (daysAgo) => {
           const target = new Date();
           target.setDate(target.getDate() - daysAgo);
@@ -3188,13 +3157,22 @@ app.post("/api/update-prices", async (req, res) => {
 
         const pnlPct = (bv, cur) => bv ? ((cur - bv) / bv) * 100 : null;
 
-        const newRow = {
+        // Delete any existing row for this combo + today, then insert fresh
+        let delQ = db.from("mkt_holdings_value")
+          .delete()
+          .eq("user_id", user_id)
+          .eq("as_of_date", today);
+        if (strategy_id) delQ = delQ.eq("strategy_id", strategy_id); else delQ = delQ.is("strategy_id", null);
+        if (family_member) delQ = delQ.eq("family_member", family_member); else delQ = delQ.is("family_member", null);
+        await delQ;
+
+        await db.from("mkt_holdings_value").insert({
           user_id,
-          strategy_id,
+          strategy_id: strategy_id || null,
           family_member: family_member || null,
           as_of_date: today,
           basket_value: newBasketValue,
-          holdings_snapshot: JSON.stringify(updatedHoldings),
+          holdings_snapshot: updatedHoldings,
           "1d_pnl": oneDayPnl,
           "1d_pct": oneDayPct,
           "5d_pnl":  bv5d  ? newBasketValue - bv5d  : null,
@@ -3212,30 +3190,17 @@ app.post("/api/update-prices", async (req, res) => {
           inception_pnl: inceptionPnl,
           inception_pct: inceptionPct,
           fetched_at: new Date().toISOString(),
-        };
+          updated_at: new Date().toISOString(),
+        });
 
-        // Check if today's row exists
-        let existQ = db.from("client_strategy_returns_c")
-          .select("id")
-          .eq("user_id", user_id)
-          .eq("strategy_id", strategy_id)
-          .eq("as_of_date", today);
-        existQ = family_member ? existQ.eq("family_member", family_member) : existQ.is("family_member", null);
-        const { data: existingToday } = await existQ.maybeSingle();
-
-        if (existingToday) {
-          await db.from("client_strategy_returns_c").update(newRow).eq("id", existingToday.id);
-        } else {
-          await db.from("client_strategy_returns_c").insert(newRow);
-        }
         strategyRowsUpdated++;
-        console.log(`[update-prices] strategy row updated: ${user_id.slice(0,8)} basket=${newBasketValue} inception=${inceptionPct.toFixed(2)}%`);
+        console.log(`[update-prices] mkt_holdings_value: ${user_id.slice(0,8)} basket=${newBasketValue} inception=${inceptionPct.toFixed(2)}%`);
       } catch (err) {
-        console.error(`[update-prices] strategy update error for ${key}:`, err.message);
+        console.error(`[update-prices] mkt_holdings_value error for ${key}:`, err.message);
       }
     }));
 
-    console.log(`[update-prices] client_strategy_returns_c: ${strategyRowsUpdated} combos updated`);
+    console.log(`[update-prices] mkt_holdings_value: ${strategyRowsUpdated} combos written (client_strategy_returns_c untouched)`);
 
     const elapsed = Date.now() - started;
     console.log(`[update-prices] Done in ${elapsed}ms — updated: ${results.updated}, skipped: ${results.skipped}, errors: ${results.errors.length}, strategyRows: ${strategyRowsUpdated}`);

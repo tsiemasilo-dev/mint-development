@@ -30,26 +30,43 @@ CREATE TABLE IF NOT EXISTS mkt_price_history (
   UNIQUE(symbol, as_of_date)
 );
 
-CREATE TABLE IF NOT EXISTS mkt_holdings_value (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL,
-  family_member_id UUID,
-  security_id UUID,
-  strategy_id UUID,
-  symbol TEXT NOT NULL,
-  quantity NUMERIC(18,6) DEFAULT 0,
-  avg_fill_cents BIGINT DEFAULT 0,
-  market_price_cents BIGINT DEFAULT 0,
-  market_value_cents BIGINT DEFAULT 0,
-  cost_basis_cents BIGINT DEFAULT 0,
-  unrealized_pnl_cents BIGINT DEFAULT 0,
-  as_of_date DATE DEFAULT CURRENT_DATE,
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+-- mkt_holdings_value: mirrors client_strategy_returns_c structure.
+-- Populated by /api/update-prices — reads client_strategy_returns_c as source,
+-- updates current_price from Yahoo Finance, writes live P&L here.
+-- client_strategy_returns_c is NEVER written to by this pipeline.
+DROP TABLE IF EXISTS mkt_holdings_value;
+CREATE TABLE mkt_holdings_value (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id           UUID NOT NULL,
+  strategy_id       UUID,
+  family_member     TEXT,
+  as_of_date        DATE NOT NULL,
+  basket_value      BIGINT,
+  holdings_snapshot JSONB,
+  "1d_pnl"          BIGINT,
+  "1d_pct"          DOUBLE PRECISION,
+  "5d_pnl"          BIGINT,
+  "5d_pct"          DOUBLE PRECISION,
+  "1m_pnl"          BIGINT,
+  "1m_pct"          DOUBLE PRECISION,
+  "6m_pnl"          BIGINT,
+  "6m_pct"          DOUBLE PRECISION,
+  "ytd_pnl"         BIGINT,
+  "ytd_pct"         DOUBLE PRECISION,
+  "1y_pnl"          BIGINT,
+  "1y_pct"          DOUBLE PRECISION,
+  "5y_pnl"          BIGINT,
+  "5y_pct"          DOUBLE PRECISION,
+  inception_pnl     BIGINT,
+  inception_pct     DOUBLE PRECISION,
+  fetched_at        TIMESTAMPTZ DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS mkt_holdings_value_unique
+CREATE UNIQUE INDEX mkt_holdings_value_unique
   ON mkt_holdings_value (
     user_id,
-    security_id,
-    COALESCE(strategy_id, '00000000-0000-0000-0000-000000000000'::uuid)
+    COALESCE(strategy_id, '00000000-0000-0000-0000-000000000000'::uuid),
+    as_of_date,
+    COALESCE(family_member, '')
   );
