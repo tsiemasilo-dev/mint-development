@@ -97,6 +97,22 @@ const formatPrecise = (value) => {
 
 const TIMEFRAME_DAYS = { d: 7, "5d": 5, m: 30, ytd: 365, all: 1825 };
 
+// Higher-of cost basis per holding in rands: max(Expected_fill, avg_fill/100) × qty.
+// Drives the "Portfolio Value" headline — the conservative view of what the
+// client paid, taking the larger of the two prices the system recorded.
+// Pending holdings (no avg_fill yet) contribute 0; legacy rows with no
+// Expected_fill fall back to avg_fill/100 only.
+function maxOfCostBasisRands(h) {
+  const qty = Number(h?.quantity || 0);
+  if (qty <= 0) return 0;
+  const avgFillCents = Number(h?.avg_fill || 0);
+  if (avgFillCents <= 0) return 0;
+  const expectedRands = Number(h?.Expected_fill || 0);
+  const avgFillRands = avgFillCents / 100;
+  const perShareRands = expectedRands > 0 ? Math.max(expectedRands, avgFillRands) : avgFillRands;
+  return perShareRands * qty;
+}
+
 async function getSessionWithRetry() {
   const session = await getCachedSession();
   if (session?.access_token) return session;
@@ -287,6 +303,7 @@ const SwipeableBalanceCard = ({
   const [dbData, setDbData] = useState(() => _warmCache || {
     holdings: [],
     totalMarketValue: 0,
+    totalMaxOfCostBasis: 0,
     totalInvested: 0,
     totalInvestedAmount: 0,
     holdingsCount: 0,
@@ -451,14 +468,21 @@ const SwipeableBalanceCard = ({
               } catch { return []; }
             })();
 
-            // Cost basis prefers Expected_fill (rands) over avg_fill (cents).
-            // Once admin updates the returns job to write Expected_fill into the
-            // snapshot, this picks it up automatically.
+            // Higher-of cost basis per underlying security: max(Expected_fill rands,
+            // avg_fill/100) × qty. Skip pending (no avg_fill). Falls back to whichever
+            // exists for legacy snapshot rows.
             const investedCents = snapshot.reduce(
               (sum, h) => {
-                const expected = Number(h.Expected_fill ?? h.expected_fill ?? 0);
-                if (expected > 0) return sum + Math.round(expected * 100 * (h.qty || 0));
-                return sum + Math.round((h.avg_fill || 0) * (h.qty || 0));
+                const qty = Number(h.qty || 0);
+                if (qty <= 0) return sum;
+                const avgFillCents = Number(h.avg_fill || 0);
+                if (avgFillCents <= 0) return sum;
+                const expectedRands = Number(h.Expected_fill ?? h.expected_fill ?? 0);
+                const avgFillRands = avgFillCents / 100;
+                const perShareRands = expectedRands > 0
+                  ? Math.max(expectedRands, avgFillRands)
+                  : avgFillRands;
+                return sum + Math.round(perShareRands * 100 * qty);
               },
               0
             );
@@ -518,6 +542,19 @@ const SwipeableBalanceCard = ({
           0,
         );
 
+        // Higher-of cost basis — drives the "Portfolio Value" headline.
+        // Strategies already aggregated max-of into invested_amount during
+        // construction; for stocks we compute max-of per row here.
+        enrichedHoldings.forEach((h) => {
+          h.maxOfCostBasis = h.isStrategy
+            ? Number(h.invested_amount || 0) / 100
+            : maxOfCostBasisRands(h);
+        });
+        const totalMaxOfCostBasis = enrichedHoldings.reduce(
+          (acc, h) => acc + Number(h.maxOfCostBasis || 0),
+          0,
+        );
+
         console.log("[SwipeableBalanceCard] Loaded holdings:", {
           count: enrichedHoldings.length,
           totalMarketValue: mValue,
@@ -534,6 +571,7 @@ const SwipeableBalanceCard = ({
         const nextDbData = {
           holdings: enrichedHoldings,
           totalMarketValue: mValue,
+          totalMaxOfCostBasis,
           totalInvested: invested,
           totalInvestedAmount: investedAmount,
           holdingsCount: enrichedHoldings.length,
@@ -998,23 +1036,25 @@ const SwipeableBalanceCard = ({
         ? Number(selectedAsset.invested_amount) / 100
         : selectedAssetInvestedRands)
     : dbData.totalInvestedAmount;
+  // Headline (the big number) is the higher-of cost basis sum — what the client
+  // paid, conservatively. For selectedAsset use the per-row maxOfCostBasis we
+  // stamped at load time.
+  const displayBigValue = selectedAsset
+    ? Number(selectedAsset.maxOfCostBasis || 0)
+    : Number(dbData.totalMaxOfCostBasis || 0);
   const isPeriodTab = ["5d", "m", "ytd", "all"].includes(activeTab);
-  const displayReturn = isPeriodTab
-    ? returnData5d.pnl
-    : (displayMarketValue - displayInvested);
-  // Show latest basket_value for period views, otherwise use market value
+  // PnL pill is current live market value minus the headline cost basis —
+  // shows how much above/below the invested amount the portfolio is right now.
+  // Period tabs only drive the chart, not the pill.
+  const displayReturn = displayMarketValue - displayBigValue;
   const displayBalance = overrideBalance !== undefined
     ? overrideBalance
-    : (isPeriodTab && latestBasketValue > 0
-      ? latestBasketValue
-      : displayMarketValue);
+    : displayBigValue;
 
   const isLoss = displayReturn != null && displayReturn < 0;
-  const returnPct = isPeriodTab
-    ? (returnData5d.pct == null ? null : truncateDecimal(returnData5d.pct, 2).toFixed(2))
-    : (displayInvested > 0
-      ? truncateDecimal((displayReturn / displayInvested) * 100, 2).toFixed(2)
-      : "0.00");
+  const returnPct = displayBigValue > 0
+    ? truncateDecimal((displayReturn / displayBigValue) * 100, 2).toFixed(2)
+    : "0.00";
   const chartColor = isLoss ? "hsl(0,84%,60%)" : "hsl(160,70%,45%)";
 
   const masked = "••••";
@@ -1068,18 +1108,9 @@ const SwipeableBalanceCard = ({
               <>
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${isLoss ? "bg-destructive/20 text-destructive" : "bg-success/20 text-success"}`}>
                   <TrendIcon size={11} strokeWidth={2.5} />
-                  {isVisible ? (
-                    <>
-                      {isPeriodTab && (
-                        <span className="text-[10px] opacity-75">
-                          {activeTab === "5d" && "5D:"}{activeTab === "m" && "1M:"}{activeTab === "ytd" && "YTD:"}{activeTab === "all" && "Inc:"}
-                        </span>
-                      )}
-                      {displayReturn == null ? "N/A" : formatKMB(Math.abs(displayReturn))}
-                    </>
-                  ) : (
-                    masked
-                  )}
+                  {isVisible
+                    ? (displayReturn == null ? "N/A" : formatKMB(Math.abs(displayReturn)))
+                    : masked}
                 </span>
                 <span className={`text-[11px] font-medium ${isLoss ? "text-destructive" : "text-success"}`}>
                   {isVisible
