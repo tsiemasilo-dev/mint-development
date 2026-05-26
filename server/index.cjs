@@ -3009,11 +3009,18 @@ app.post("/api/update-prices", async (req, res) => {
         const meta = json?.chart?.result?.[0]?.meta;
         if (!meta) { results.skipped++; return; }
 
-        const lastPriceCents = Math.round((meta.regularMarketPrice || 0) * 100);
-        const prevCloseCents = Math.round((meta.chartPreviousClose || meta.previousClose || 0) * 100);
+        const currency = meta.currency || "ZAR";
+        // Yahoo Finance returns JSE (.JO) prices in ZAR cents (e.g. 20922 = R209.22).
+        // The currency label may say "ZAR" or "ZAc" — use the symbol suffix as the
+        // reliable indicator instead. All other symbols are in major currency units.
+        const alreadyInCents = sec.symbol.endsWith(".JO") || currency === "ZAc";
+        const toCents = (v) => alreadyInCents
+          ? Math.round(v || 0)
+          : Math.round((v || 0) * 100);
+        const lastPriceCents = toCents(meta.regularMarketPrice);
+        const prevCloseCents = toCents(meta.chartPreviousClose || meta.previousClose);
         const changeCents = lastPriceCents - prevCloseCents;
         const changePct = prevCloseCents > 0 ? ((changeCents / prevCloseCents) * 100) : 0;
-        const currency = meta.currency || "ZAR";
         const exchange = meta.exchangeName || "";
         const marketStatus = meta.marketState || "closed";
 
@@ -3085,6 +3092,73 @@ app.post("/api/update-prices", async (req, res) => {
     res.json({ ok: true, elapsed, ...results });
   } catch (err) {
     console.error("[update-prices] Fatal error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Test endpoint: portfolio summary from new mkt_ tables (no existing tables touched) ──
+// Compare this against what the app currently shows to validate Yahoo price accuracy.
+app.get("/api/mkt/portfolio/:userId", async (req, res) => {
+  const db = supabaseAdmin || supabase;
+  if (!db) return res.status(503).json({ error: "DB not ready" });
+
+  const { userId } = req.params;
+  if (!userId) return res.status(400).json({ error: "userId required" });
+
+  try {
+    // 1. Read from new mkt_holdings_value (Yahoo-priced, never touches old tables)
+    const { data: mktHoldings, error: mktErr } = await db
+      .from("mkt_holdings_value")
+      .select("symbol, quantity, avg_fill_cents, market_price_cents, market_value_cents, cost_basis_cents, unrealized_pnl_cents, as_of_date, updated_at")
+      .eq("user_id", userId)
+      .order("market_value_cents", { ascending: false });
+
+    if (mktErr) return res.status(500).json({ error: mktErr.message });
+
+    // 2. Read from old stock_holdings_c for comparison (read-only — not modified)
+    const { data: oldHoldings } = await db
+      .from("stock_holdings_c")
+      .select("security_id, quantity, avg_fill, market_value")
+      .eq("user_id", userId)
+      .eq("Status", "active");
+
+    // 3. Aggregate mkt_ totals
+    const totalMarketValueCents = (mktHoldings || []).reduce((s, h) => s + Number(h.market_value_cents || 0), 0);
+    const totalCostBasisCents   = (mktHoldings || []).reduce((s, h) => s + Number(h.cost_basis_cents || 0), 0);
+    const totalPnlCents         = (mktHoldings || []).reduce((s, h) => s + Number(h.unrealized_pnl_cents || 0), 0);
+    const totalPnlPct = totalCostBasisCents > 0 ? ((totalPnlCents / totalCostBasisCents) * 100).toFixed(2) : "0.00";
+
+    // 4. Aggregate old totals for comparison
+    const oldMarketValueCents = (oldHoldings || []).reduce((s, h) => s + Number(h.market_value || 0), 0);
+
+    res.json({
+      source: "mkt_holdings_value (Yahoo Finance — existing tables not modified)",
+      lastFetched: mktHoldings?.[0]?.updated_at ?? null,
+      summary: {
+        totalMarketValue:  `R${(totalMarketValueCents / 100).toFixed(2)}`,
+        totalCostBasis:    `R${(totalCostBasisCents / 100).toFixed(2)}`,
+        totalUnrealizedPnl:`R${(totalPnlCents / 100).toFixed(2)}`,
+        totalPnlPct:       `${totalPnlPct}%`,
+      },
+      comparison: {
+        mktTablesTotal: `R${(totalMarketValueCents / 100).toFixed(2)}`,
+        existingTablesTotal: `R${(oldMarketValueCents / 100).toFixed(2)}`,
+        difference: `R${((totalMarketValueCents - oldMarketValueCents) / 100).toFixed(2)}`,
+      },
+      holdings: (mktHoldings || []).map(h => ({
+        symbol: h.symbol,
+        quantity: h.quantity,
+        avgFill:       `R${(Number(h.avg_fill_cents) / 100).toFixed(2)}`,
+        marketPrice:   `R${(Number(h.market_price_cents) / 100).toFixed(2)}`,
+        marketValue:   `R${(Number(h.market_value_cents) / 100).toFixed(2)}`,
+        unrealizedPnl: `R${(Number(h.unrealized_pnl_cents) / 100).toFixed(2)}`,
+        pnlPct: Number(h.cost_basis_cents) > 0
+          ? `${((Number(h.unrealized_pnl_cents) / Number(h.cost_basis_cents)) * 100).toFixed(2)}%`
+          : "N/A",
+      })),
+    });
+  } catch (err) {
+    console.error("[mkt/portfolio] Error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
