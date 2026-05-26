@@ -8233,6 +8233,96 @@ app.post('/api/admin/set-ytd-prices', async (req, res) => {
   }
 });
 
+// ── Admin: repair child strategy returns that were stored with family_member = NULL ──
+// This fixes the bug where a child's strategy appears on the parent's balance card.
+// It finds all stock_holdings_c rows with a family_member_id, looks up matching
+// client_strategy_returns_c rows where family_member IS NULL, and re-stamps them.
+app.post('/api/admin/repair-child-strategy-returns', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace('Bearer ', '');
+    if (!token) return res.status(401).json({ error: 'Unauthorised' });
+    const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
+    if (authErr || !user) return res.status(401).json({ error: 'Unauthorised' });
+
+    const adminDb = supabaseAdmin || supabase;
+    if (!adminDb) return res.status(503).json({ error: 'Database not available' });
+
+    const targetUserId = req.body?.user_id || user.id;
+
+    // 1. Find all child holdings with a strategy for this user
+    const { data: childHoldings, error: hErr } = await adminDb
+      .from('stock_holdings_c')
+      .select('family_member_id, strategy_id')
+      .eq('user_id', targetUserId)
+      .not('family_member_id', 'is', null)
+      .not('strategy_id', 'is', null)
+      .eq('Status', 'active');
+
+    if (hErr) throw hErr;
+    if (!childHoldings || childHoldings.length === 0) {
+      return res.json({ success: true, message: 'No child holdings with strategies found.', fixed: 0 });
+    }
+
+    // Build unique (family_member_id, strategy_id) pairs
+    const pairs = [];
+    const seen = new Set();
+    for (const h of childHoldings) {
+      const key = `${h.family_member_id}:${h.strategy_id}`;
+      if (!seen.has(key)) { seen.add(key); pairs.push({ familyMemberId: h.family_member_id, strategyId: h.strategy_id }); }
+    }
+
+    console.log(`[admin/repair-child-strategy-returns] Found ${pairs.length} child strategy pair(s) for user ${targetUserId}`);
+
+    let fixed = 0;
+    for (const { familyMemberId, strategyId } of pairs) {
+      // 2. Find rows for this (user, strategy) with family_member = NULL
+      const { data: badRows, error: fetchErr } = await adminDb
+        .from('client_strategy_returns_c')
+        .select('id, as_of_date, basket_value, holdings_snapshot, ytd_pct')
+        .eq('user_id', targetUserId)
+        .eq('strategy_id', strategyId)
+        .is('family_member', null);
+
+      if (fetchErr) { console.error('[repair] fetch error:', fetchErr.message); continue; }
+      if (!badRows || badRows.length === 0) continue;
+
+      console.log(`[admin/repair] Found ${badRows.length} bad row(s) for strategy ${strategyId}, child ${familyMemberId}`);
+
+      for (const row of badRows) {
+        // 3. Try to upsert the row with family_member set, then delete the bad one
+        const { error: upsertErr } = await adminDb
+          .from('client_strategy_returns_c')
+          .upsert({
+            user_id: targetUserId,
+            family_member: familyMemberId,
+            strategy_id: strategyId,
+            as_of_date: row.as_of_date,
+            basket_value: row.basket_value,
+            holdings_snapshot: row.holdings_snapshot,
+            ytd_pct: row.ytd_pct,
+          }, { onConflict: 'user_id,strategy_id,as_of_date,family_member', ignoreDuplicates: false });
+
+        if (upsertErr) { console.error('[repair] upsert error:', upsertErr.message); continue; }
+
+        const { error: delErr } = await adminDb
+          .from('client_strategy_returns_c')
+          .delete()
+          .eq('id', row.id);
+
+        if (delErr) { console.error('[repair] delete error:', delErr.message); }
+        else { fixed++; }
+      }
+    }
+
+    console.log(`[admin/repair-child-strategy-returns] Repaired ${fixed} row(s) for user ${targetUserId}`);
+    return res.json({ success: true, fixed, pairs: pairs.length });
+  } catch (err) {
+    console.error('[admin/repair-child-strategy-returns] Error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Child: wallet & investment endpoints ──
 app.get('/api/child-wallet', async (req, res) => {
   const { family_member_id } = req.query;
@@ -8514,6 +8604,23 @@ app.post('/api/child-invest', async (req, res) => {
         created_at: now,
       });
     } catch (e) { console.warn('[child-invest] tx insert:', e.message); }
+
+    // Seed an initial client_strategy_returns_c row so the child's balance card
+    // shows the strategy immediately and, critically, so the returns job can
+    // distinguish child rows (family_member set) from parent rows (family_member null).
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      await db.from('client_strategy_returns_c').upsert({
+        user_id: parentUserId,
+        family_member: family_member_id,
+        strategy_id: strategy_id,
+        as_of_date: today,
+        basket_value: amount,
+        holdings_snapshot: JSON.stringify([]),
+        ytd_pct: 0,
+      }, { onConflict: 'user_id,strategy_id,as_of_date,family_member', ignoreDuplicates: false });
+      console.log(`[child-invest] Seeded client_strategy_returns_c for child ${family_member_id}, strategy ${strategy_id}`);
+    } catch (e) { console.warn('[child-invest] client_strategy_returns_c seed:', e.message); }
 
     return res.json({
       success: true,

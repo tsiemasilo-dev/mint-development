@@ -16,10 +16,12 @@ const costBasisRandsPerShare = (h) => {
 
 // Module-level cache — survives unmount/remount when navigating between tabs,
 // so the Portfolio page shows last known strategies instead of an empty skeleton.
-let _cachedStrategiesData = null;
+// Keyed by familyMemberId (or 'parent' for the main account) so child and parent
+// caches NEVER bleed into each other when the user switches accounts.
+const _cachedStrategiesDataMap = {};
 
 export function clearUserStrategiesCache() {
-  _cachedStrategiesData = null;
+  Object.keys(_cachedStrategiesDataMap).forEach(k => delete _cachedStrategiesDataMap[k]);
 }
 
 registerCacheResetCallback(clearUserStrategiesCache);
@@ -28,7 +30,8 @@ registerCacheResetCallback(clearUserStrategiesCache);
 // omit (or pass null) for the parent's own strategies. Either way the leak is
 // closed — parent and child rows in client_strategy_returns_c stay separate.
 export const useUserStrategies = (familyMemberId = null) => {
-  const [data, setData] = useState(_cachedStrategiesData || {
+  const cacheKey = familyMemberId || 'parent';
+  const [data, setData] = useState(_cachedStrategiesDataMap[cacheKey] || {
     strategies: [],
     selectedStrategy: null,
     loading: true,
@@ -163,8 +166,9 @@ export const useUserStrategies = (familyMemberId = null) => {
         loading: false,
         error: null,
       };
-      // Persist so re-mounts (e.g. navigating back) skip the skeleton
-      _cachedStrategiesData = nextData;
+      // Persist so re-mounts (e.g. navigating back) skip the skeleton.
+      // Keyed by cacheKey so parent and child caches stay isolated.
+      _cachedStrategiesDataMap[cacheKey] = nextData;
       setData(nextData);
 
     } catch (err) {
