@@ -185,6 +185,9 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const [identityCheckConfirmed, setIdentityCheckConfirmed] = useState(false);
   const [bankDone, setBankDone] = useState(false);
   const [bankLetterDone, setBankLetterDone] = useState(false);
+  const [bankLetterRejected, setBankLetterRejected] = useState(false);
+  const [bankLetterRejectReason, setBankLetterRejectReason] = useState("");
+  const [bankLetterUploading, setBankLetterUploading] = useState(false);
   const [mandateDone, setMandateDone] = useState(false);
   const [riskDone, setRiskDone] = useState(false);
   const [sofDone, setSofDone] = useState(false);
@@ -1182,37 +1185,59 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               </div>
 
               {/* ── Section 3: Bank Confirmation Letter ── */}
-              <div className="animate-fade-in delay-3" style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', padding: '18px 20px', boxShadow: '0 2px 12px rgba(100,60,140,0.06)' }}>
+              <div className="animate-fade-in delay-3" style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: `1px solid ${bankLetterRejected ? '#fca5a5' : 'hsl(270 20% 90%)'}`, padding: '18px 20px', boxShadow: '0 2px 12px rgba(100,60,140,0.06)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
-                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: bankLetterDone ? '#22c55e' : 'hsl(270 30% 25%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: bankLetterDone ? '#22c55e' : bankLetterRejected ? '#ef4444' : 'hsl(270 30% 25%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     {bankLetterDone
                       ? <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
-                      : <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>3</span>}
+                      : bankLetterRejected
+                        ? <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                        : <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>3</span>}
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Bank Confirmation Letter</div>
                     <div style={{ fontSize: '12px', color: 'hsl(270 15% 60%)' }}>PDF or image, not older than 3 months</div>
                   </div>
-                  {bankLetterDone && <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '20px', background: '#dcfce7', color: '#16a34a', fontWeight: '600' }}>Uploaded</span>}
+                  {bankLetterDone && <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '20px', background: '#dcfce7', color: '#16a34a', fontWeight: '600' }}>Verified</span>}
+                  {bankLetterRejected && !bankLetterDone && <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '20px', background: '#fee2e2', color: '#dc2626', fontWeight: '600' }}>Not matched</span>}
                 </div>
+
                 {bankLetterDone ? (
-                  <p style={{ fontSize: '13px', color: 'hsl(270 15% 55%)' }}>Your letter has been uploaded successfully.</p>
+                  <div>
+                    <p style={{ fontSize: '13px', color: 'hsl(270 15% 55%)', marginBottom: '10px' }}>Your letter has been verified successfully.</p>
+                    <button
+                      onClick={() => { setBankLetterDone(false); setBankLetterRejected(false); setBankLetterRejectReason(""); }}
+                      style={{ fontSize: '12px', color: 'hsl(270 30% 45%)', background: 'none', border: '1px solid hsl(270 20% 85%)', borderRadius: '8px', padding: '5px 12px', cursor: 'pointer' }}
+                    >
+                      Re-upload
+                    </button>
+                  </div>
                 ) : (
                   <>
+                    {bankLetterRejected && (
+                      <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '10px', padding: '12px 14px', marginBottom: '12px' }}>
+                        <p style={{ fontSize: '13px', color: '#dc2626', fontWeight: '500', marginBottom: '4px' }}>Document could not be verified</p>
+                        <p style={{ fontSize: '12px', color: '#b91c1c' }}>{bankLetterRejectReason || "Please upload a clear bank confirmation letter showing your name and account number."}</p>
+                      </div>
+                    )}
                     <div
-                      className="glass-field py-6 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-xl cursor-pointer hover:border-slate-400 transition-colors"
+                      className="glass-field py-6 flex flex-col items-center justify-center border-2 border-dashed rounded-xl cursor-pointer transition-colors"
+                      style={{ borderColor: bankLetterRejected ? '#fca5a5' : '#cbd5e1' }}
                       onClick={() => document.getElementById('bank-letter-upload-v2').click()}
                     >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="32" height="32" className="text-slate-400 mb-2"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /></svg>
-                      <p className="text-sm font-medium" style={{ color: 'hsl(270 30% 25%)' }}>Click to upload your letter</p>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="32" height="32" style={{ color: bankLetterRejected ? '#ef4444' : '#94a3b8', marginBottom: '8px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /></svg>
+                      <p className="text-sm font-medium" style={{ color: bankLetterRejected ? '#dc2626' : 'hsl(270 30% 25%)' }}>{bankLetterRejected ? 'Upload a new letter' : 'Click to upload your letter'}</p>
                       <p className="text-xs mt-1" style={{ color: 'hsl(270 15% 60%)' }}>PDF, JPG or PNG (max 5MB)</p>
                       <input
                         type="file" id="bank-letter-upload-v2" className="hidden" accept=".pdf,image/*"
                         onChange={async (e) => {
                           const file = e.target.files[0];
                           if (!file) return;
-                          setIsSubmitting(true);
+                          e.target.value = "";
+                          setBankLetterUploading(true);
                           setSubmitError("");
+                          setBankLetterRejected(false);
+                          setBankLetterRejectReason("");
                           try {
                             const reader = new FileReader();
                             reader.onload = async (evt) => {
@@ -1222,29 +1247,38 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                               const res = await fetch("/api/onboarding/upload-bank-letter", {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-                                body: JSON.stringify({ fileBase64: base64, fileType: file.type }),
+                                body: JSON.stringify({
+                                  fileBase64: base64,
+                                  fileType: file.type,
+                                  accountNumber: bankAccountNumber,
+                                  accountHolderName: bankAccountName,
+                                  bankName: bankName,
+                                }),
                               });
                               const result = await res.json();
-                              if (result.success) {
+                              if (result.success && result.verified) {
                                 setBankLetterDone(true);
                                 await saveProgressFlag("bank_letter_uploaded", { bank_letter_url: result.publicUrl, bank_letter_uploaded_at: new Date().toISOString() });
+                              } else if (result.success && result.verified === false) {
+                                setBankLetterRejected(true);
+                                setBankLetterRejectReason(result.reason || "Document could not be verified.");
                               } else {
                                 setSubmitError(result.error || "Failed to upload file");
                               }
-                              setIsSubmitting(false);
+                              setBankLetterUploading(false);
                             };
                             reader.readAsDataURL(file);
                           } catch {
                             setSubmitError("An error occurred during upload");
-                            setIsSubmitting(false);
+                            setBankLetterUploading(false);
                           }
                         }}
                       />
                     </div>
-                    {isSubmitting && (
+                    {bankLetterUploading && (
                       <div className="mt-3 flex items-center justify-center gap-2">
                         <div className="w-4 h-4 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin"></div>
-                        <span className="text-xs text-slate-500">Uploading...</span>
+                        <span className="text-xs text-slate-500">Uploading and verifying…</span>
                       </div>
                     )}
                     {submitError && <p className="text-center mt-2 text-red-500 text-xs">{submitError}</p>}
