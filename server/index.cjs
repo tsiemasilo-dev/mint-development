@@ -2973,6 +2973,122 @@ app.get("/api/stocks/chart", async (req, res) => {
   }
 });
 
+// ── Live price update endpoint — called by Vercel Cron every 5 min (market hours) ──
+// Fetches latest prices from Yahoo Finance for all symbols in securities_c,
+// then writes to mkt_prices, mkt_price_history (once/day), and mkt_holdings_value.
+app.post("/api/update-prices", async (req, res) => {
+  const db = supabaseAdmin || supabase;
+  if (!db) return res.status(503).json({ error: "DB not ready" });
+
+  const started = Date.now();
+  const today = new Date().toISOString().split("T")[0];
+  const results = { updated: 0, skipped: 0, errors: [] };
+
+  try {
+    // 1. Fetch all symbols from securities_c
+    const { data: securities, error: secErr } = await db
+      .from("securities_c")
+      .select("id, symbol, last_price");
+
+    if (secErr || !securities?.length) {
+      return res.status(500).json({ error: "Failed to fetch securities", detail: secErr?.message });
+    }
+
+    const YAHOO_HEADERS = {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    };
+
+    // 2. Fetch prices from Yahoo Finance for each symbol
+    await Promise.all(securities.map(async (sec) => {
+      try {
+        const response = await fetch(
+          `https://query1.finance.yahoo.com/v8/finance/chart/${sec.symbol}?interval=1d&range=2d`,
+          { headers: YAHOO_HEADERS }
+        );
+        const json = await response.json();
+        const meta = json?.chart?.result?.[0]?.meta;
+        if (!meta) { results.skipped++; return; }
+
+        const lastPriceCents = Math.round((meta.regularMarketPrice || 0) * 100);
+        const prevCloseCents = Math.round((meta.chartPreviousClose || meta.previousClose || 0) * 100);
+        const changeCents = lastPriceCents - prevCloseCents;
+        const changePct = prevCloseCents > 0 ? ((changeCents / prevCloseCents) * 100) : 0;
+        const currency = meta.currency || "ZAR";
+        const exchange = meta.exchangeName || "";
+        const marketStatus = meta.marketState || "closed";
+
+        // 3. Upsert into mkt_prices (updates every cron run)
+        await db.from("mkt_prices").upsert({
+          security_id: sec.id,
+          symbol: sec.symbol,
+          last_price_cents: lastPriceCents,
+          previous_close_cents: prevCloseCents,
+          change_cents: changeCents,
+          change_percent: Number(changePct.toFixed(4)),
+          currency,
+          exchange,
+          market_status: marketStatus,
+          fetched_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "symbol" });
+
+        // 4. Insert into mkt_price_history (once per day — skips duplicates)
+        await db.from("mkt_price_history").upsert({
+          security_id: sec.id,
+          symbol: sec.symbol,
+          as_of_date: today,
+          close_price_cents: lastPriceCents,
+        }, { onConflict: "symbol,as_of_date", ignoreDuplicates: true });
+
+        // 5. Update mkt_holdings_value for every active holding with this security
+        const { data: holdings } = await db
+          .from("stock_holdings_c")
+          .select("id, user_id, family_member_id, security_id, strategy_id, quantity, avg_fill")
+          .eq("security_id", sec.id)
+          .eq("Status", "active");
+
+        if (holdings?.length) {
+          await Promise.all(holdings.map(async (h) => {
+            const qty = Number(h.quantity || 0);
+            const avgFillCents = Number(h.avg_fill || 0);
+            const marketValueCents = Math.round(qty * lastPriceCents);
+            const costBasisCents = Math.round(qty * avgFillCents);
+            const unrealizedPnlCents = marketValueCents - costBasisCents;
+
+            await db.from("mkt_holdings_value").upsert({
+              user_id: h.user_id,
+              family_member_id: h.family_member_id || null,
+              security_id: h.security_id,
+              strategy_id: h.strategy_id || null,
+              symbol: sec.symbol,
+              quantity: qty,
+              avg_fill_cents: avgFillCents,
+              market_price_cents: lastPriceCents,
+              market_value_cents: marketValueCents,
+              cost_basis_cents: costBasisCents,
+              unrealized_pnl_cents: unrealizedPnlCents,
+              as_of_date: today,
+              updated_at: new Date().toISOString(),
+            }, { onConflict: "id" });
+          }));
+        }
+
+        results.updated++;
+      } catch (err) {
+        console.error(`[update-prices] Error for ${sec.symbol}:`, err.message);
+        results.errors.push({ symbol: sec.symbol, error: err.message });
+      }
+    }));
+
+    const elapsed = Date.now() - started;
+    console.log(`[update-prices] Done in ${elapsed}ms — updated: ${results.updated}, skipped: ${results.skipped}, errors: ${results.errors.length}`);
+    res.json({ ok: true, elapsed, ...results });
+  } catch (err) {
+    console.error("[update-prices] Fatal error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 async function authenticateUser(req) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
