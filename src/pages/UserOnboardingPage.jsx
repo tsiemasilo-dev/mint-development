@@ -1202,7 +1202,15 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 </div>
 
                 {bankLetterDone ? (
-                  <p style={{ fontSize: '13px', color: 'hsl(270 15% 55%)' }}>Your letter has been verified successfully.</p>
+                  <div>
+                    <p style={{ fontSize: '13px', color: 'hsl(270 15% 55%)', marginBottom: '10px' }}>Your letter has been verified successfully.</p>
+                    <button
+                      onClick={() => { setBankLetterDone(false); setBankLetterRejected(false); setBankLetterRejectReason(""); }}
+                      style={{ fontSize: '12px', color: 'hsl(270 30% 45%)', background: 'none', border: '1px solid hsl(270 20% 85%)', borderRadius: '8px', padding: '5px 12px', cursor: 'pointer' }}
+                    >
+                      Re-upload
+                    </button>
+                  </div>
                 ) : (
                   <>
                     {bankLetterRejected && (
