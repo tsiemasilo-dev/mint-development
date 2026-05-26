@@ -415,8 +415,7 @@ async function submitBankLetterToSumsub(applicantId, fileBuffer, mimeType, fileN
 
   // metadata tells Sumsub what kind of document this is
   const metadata = JSON.stringify({
-    idDocType: "BANK_CARD",
-    idDocSubType: "FRONT_SIDE",
+    idDocType: "BANK_STATEMENT",
     country: "ZAF",
   });
   form.append("metadata", metadata, { contentType: "application/json" });
@@ -452,8 +451,8 @@ async function checkBankLetterSumsubStatus(applicantId) {
     const docsStatus = await getSumsubRequiredDocsStatus(applicantId);
     if (!docsStatus) return "pending";
 
-    // Look for a BANK_CARD step (our bank letter document type)
-    const bankStep = docsStatus["BANK_CARD"] || docsStatus["BANK_STATEMENT"] || null;
+    // Look for a BANK_STATEMENT step (proof of address — bank confirmation letter)
+    const bankStep = docsStatus["BANK_STATEMENT"] || docsStatus["BANK_CARD"] || null;
     if (!bankStep) return "pending";
 
     const reviewAnswer = bankStep?.reviewResult?.reviewAnswer;
