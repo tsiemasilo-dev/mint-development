@@ -4480,7 +4480,7 @@ app.get("/api/user/strategies", async (req, res) => {
     // First, get user's strategy investments from transactions
     const { data: transactions, error: txError } = await db
       .from("transactions")
-      .select("id, name, amount, direction, transaction_date, family_member_id")
+      .select("id, name, amount, direction, transaction_date, created_at, family_member_id")
       .eq("user_id", userId)
       .is("family_member_id", null)
       .eq("direction", "debit");
@@ -4519,7 +4519,7 @@ app.get("/api/user/strategies", async (req, res) => {
     // Parent view only includes direct parent investments; child-linked holdings stay on the child dashboard.
     const { data: userStratHoldings } = await db
       .from("stock_holdings_c")
-      .select("id, family_member_id, security_id, strategy_id, quantity, avg_fill")
+      .select("id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, created_at")
       .eq("user_id", userId)
       .is("family_member_id", null)
       .not("strategy_id", "is", null);
@@ -4641,15 +4641,40 @@ app.get("/api/user/strategies", async (req, res) => {
     // Match user's strategies (by transaction name OR by holdings strategy_id)
     const matchedStrategies = [];
     for (const strategy of (allStrategies || [])) {
-      const matchKey = strategyNames.find(sn =>
-        sn.toLowerCase() === (strategy.name || "").toLowerCase() ||
-        sn.toLowerCase() === (strategy.short_name || "").toLowerCase()
-      );
-      const matchedByHoldings = holdingStrategyIds.includes(strategy.id);
+      const matchingTxs = (transactions || []).filter(tx => {
+        const txName = (tx.name || "").trim();
+        let txStratName = null;
+        if (txName.startsWith("Strategy Investment: ")) {
+          txStratName = txName.replace("Strategy Investment: ", "").trim();
+        } else if (txName.startsWith("Purchased ")) {
+          txStratName = txName.replace("Purchased ", "").trim();
+        }
+        return txStratName && (
+          txStratName.toLowerCase() === (strategy.name || "").toLowerCase() ||
+          txStratName.toLowerCase() === (strategy.short_name || "").toLowerCase()
+        );
+      });
 
-      if (matchKey || matchedByHoldings) {
+      if (matchingTxs.length > 0) {
+        const stratHoldings = stratHoldingsByStratId[strategy.id] || [];
+        
+        // Calculate performanceFactor = totalHoldingsMarket / totalHoldingsInvested from the holdings
+        const totalHoldingsMarket = stratHoldings.reduce((sum, h) => sum + Number(h.market_value || 0), 0);
+        const totalHoldingsInvested = stratHoldings.reduce((sum, h) => sum + (Number(h.avg_fill || 0) * Number(h.quantity || 0)), 0);
+        const performanceFactor = totalHoldingsInvested > 0 ? (totalHoldingsMarket / totalHoldingsInvested) : 1.0;
+
+        // Fetch metrics / dynamic YTD just like before
         const metrics = strategy.strategy_metrics;
         const latestMetric = Array.isArray(metrics) ? metrics[0] : metrics;
+        let rytd = latestMetric?.r_ytd_pct ?? latestMetric?.r_ytd ?? 0;
+        if (calculateYtdReturn) {
+          const matchedHoldingsMap = new Map();
+          Object.entries(securitiesMap).forEach(([sym, sec]) => matchedHoldingsMap.set(sym, sec));
+          const dynamicYtd = calculateYtdReturn(strategy, matchedHoldingsMap);
+          if (dynamicYtd !== null) rytd = dynamicYtd;
+        }
+
+        // Enrich holdings (same as before)
         const enrichedHoldings = (strategy.holdings || []).map(h => {
           const pnlData = symbolPnlMap[h.symbol] || null;
           return {
@@ -4662,65 +4687,36 @@ app.get("/api/user/strategies", async (req, res) => {
             costBasis: pnlData ? pnlData.costBasis : null,
           };
         });
-        const stratHoldings = stratHoldingsByStratId[strategy.id] || [];
-        let investedAmount = 0;
-        let currentMarketValue = 0;
-        const allPending = stratHoldings.length > 0 && stratHoldings.every(h => !h.avg_fill);
-        if (stratHoldings.length === 0) {
-          // No holdings allocated yet — compute invested amount from transactions
-          for (const tx of (transactions || [])) {
-            const txName = (tx.name || "").trim();
-            let txStratName = null;
-            if (txName.startsWith("Strategy Investment: ")) txStratName = txName.replace("Strategy Investment: ", "").trim();
-            else if (txName.startsWith("Purchased ")) txStratName = txName.replace("Purchased ", "").trim();
-            if (txStratName && (
-              txStratName.toLowerCase() === (strategy.name || "").toLowerCase() ||
-              txStratName.toLowerCase() === (strategy.short_name || "").toLowerCase()
-            )) {
-              investedAmount += Number(tx.amount || 0) / 100;
-            }
-          }
-          currentMarketValue = investedAmount;
-        } else if (!allPending) {
-          for (const h of stratHoldings) {
-            const qty = Number(h.quantity || 0);
-            const avgFill = Number(h.avg_fill || 0);
-            if (!avgFill) continue;
-            const livePrice = stratLivePriceMap[h.security_id] || (avgFill / 100);
-            const marketVal = (livePrice * qty); // In Rands
-            console.log(`[user/strategies] Holding: ${h.security_id}, Price: ${livePrice}, Qty: ${qty}, Value: R${marketVal}`);
-            investedAmount += (avgFill * qty) / 100;
-            currentMarketValue += marketVal;
-          }
-        }
 
-        // Calculate dynamic YTD if utility is available
-        let rytd = latestMetric?.r_ytd_pct ?? latestMetric?.r_ytd ?? 0;
-        if (calculateYtdReturn) {
-          const matchedHoldingsMap = new Map();
-          Object.entries(securitiesMap).forEach(([sym, sec]) => matchedHoldingsMap.set(sym, sec));
-          const dynamicYtd = calculateYtdReturn(strategy, matchedHoldingsMap);
-          if (dynamicYtd !== null) rytd = dynamicYtd;
-        }
+        // Emits one card per transaction
+        for (const tx of matchingTxs) {
+          const txInvested = Number(tx.amount || 0) / 100; // in Rands
+          const currentValue = txInvested * performanceFactor; // in Rands
 
-        console.log(`[user/strategies] Strategy: ${strategy.name}, Invested: R${investedAmount}, Market: R${currentMarketValue}, YTD: ${rytd}%`);
-        matchedStrategies.push({
-          id: strategy.id,
-          name: strategy.name,
-          shortName: strategy.short_name || strategy.name,
-          description: strategy.description || "",
-          riskLevel: strategy.risk_level || "Moderate",
-          sector: strategy.sector || "",
-          iconUrl: strategy.icon_url,
-          imageUrl: strategy.image_url,
-          isKidStrategy: !!strategy.is_kid_strategy,
-          holdings: enrichedHoldings,
-          investedAmount: investedAmount, // Return as Rands
-          currentMarketValue: currentMarketValue, // Return as Rands
-          currentValue: currentMarketValue, // Return as Rands
-          metrics: latestMetric ? { ...latestMetric, r_ytd: rytd } : { r_ytd: rytd },
-          firstInvestedDate: strategyFirstDate[matchKey] || null,
-        });
+          const date = new Date(tx.created_at);
+          const pad = (num) => String(num).padStart(2, '0');
+          const purchaseRef = isNaN(date.getTime()) ? null : `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+
+          matchedStrategies.push({
+            id: strategy.id,
+            purchaseKey: strategy.id + "::" + tx.id,
+            purchaseRef: purchaseRef,
+            name: strategy.name,
+            shortName: strategy.short_name || strategy.name,
+            description: strategy.description || "",
+            riskLevel: strategy.risk_level || "Moderate",
+            sector: strategy.sector || "",
+            iconUrl: strategy.icon_url,
+            imageUrl: strategy.image_url,
+            isKidStrategy: !!strategy.is_kid_strategy,
+            holdings: enrichedHoldings,
+            investedAmount: txInvested, // Return as Rands
+            currentMarketValue: currentValue, // Return as Rands
+            currentValue: currentValue, // Return as Rands
+            metrics: latestMetric ? { ...latestMetric, r_ytd: rytd } : { r_ytd: rytd },
+            firstInvestedDate: tx.transaction_date || null,
+          });
+        }
       }
     }
 
