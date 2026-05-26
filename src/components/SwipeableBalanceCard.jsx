@@ -1043,18 +1043,22 @@ const SwipeableBalanceCard = ({
     ? Number(selectedAsset.maxOfCostBasis || 0)
     : Number(dbData.totalMaxOfCostBasis || 0);
   const isPeriodTab = ["5d", "m", "ytd", "all"].includes(activeTab);
-  // PnL pill is current live market value minus the headline cost basis —
-  // shows how much above/below the invested amount the portfolio is right now.
-  // Period tabs only drive the chart, not the pill.
-  const displayReturn = displayMarketValue - displayBigValue;
+  // Period pill values come from the server-computed period returns
+  // (client_strategy_returns_c / stock_returns_c) so 5D/M/YTD/All all show
+  // tab-specific numbers. To be rewired later against the new headline.
+  const displayReturn = isPeriodTab
+    ? returnData5d.pnl
+    : (displayMarketValue - displayBigValue);
   const displayBalance = overrideBalance !== undefined
     ? overrideBalance
     : displayBigValue;
 
   const isLoss = displayReturn != null && displayReturn < 0;
-  const returnPct = displayBigValue > 0
-    ? truncateDecimal((displayReturn / displayBigValue) * 100, 2).toFixed(2)
-    : "0.00";
+  const returnPct = isPeriodTab
+    ? (returnData5d.pct == null ? null : truncateDecimal(returnData5d.pct, 2).toFixed(2))
+    : (displayBigValue > 0
+      ? truncateDecimal((displayReturn / displayBigValue) * 100, 2).toFixed(2)
+      : "0.00");
   const chartColor = isLoss ? "hsl(0,84%,60%)" : "hsl(160,70%,45%)";
 
   const masked = "••••";
@@ -1108,9 +1112,18 @@ const SwipeableBalanceCard = ({
               <>
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${isLoss ? "bg-destructive/20 text-destructive" : "bg-success/20 text-success"}`}>
                   <TrendIcon size={11} strokeWidth={2.5} />
-                  {isVisible
-                    ? (displayReturn == null ? "N/A" : formatKMB(Math.abs(displayReturn)))
-                    : masked}
+                  {isVisible ? (
+                    <>
+                      {isPeriodTab && (
+                        <span className="text-[10px] opacity-75">
+                          {activeTab === "5d" && "5D:"}{activeTab === "m" && "1M:"}{activeTab === "ytd" && "YTD:"}{activeTab === "all" && "Inc:"}
+                        </span>
+                      )}
+                      {displayReturn == null ? "N/A" : formatKMB(Math.abs(displayReturn))}
+                    </>
+                  ) : (
+                    masked
+                  )}
                 </span>
                 <span className={`text-[11px] font-medium ${isLoss ? "text-destructive" : "text-success"}`}>
                   {isVisible
