@@ -1,5 +1,27 @@
 import { supabase, supabaseAdmin, authenticateUser } from "../_lib/supabase.js";
 
+// Latest stock_intraday_c.current_price per security_id (rands).
+// Live price source for strategy PnL — replaces stale securities_c.last_price.
+async function fetchLatestIntradayPrices(db, securityIds) {
+  if (!securityIds || !securityIds.length) return {};
+  const ids = [...new Set(securityIds.filter(Boolean))];
+  const out = {};
+  await Promise.all(ids.map(async (id) => {
+    const { data } = await db
+      .from("stock_intraday_c")
+      .select("current_price")
+      .eq("security_id", id)
+      .order("timestamp", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data?.current_price != null) {
+      // stock_intraday_c.current_price is stored in cents; return rands.
+      out[id] = Number(data.current_price) / 100;
+    }
+  }));
+  return out;
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -27,9 +49,10 @@ export default async function handler(req, res) {
     const userId = user.id;
 
     // 1. Fetch user holdings with strategy_id (primary signal for which strategies user owns)
+    // Includes Expected_fill (price client saw at click time) — preferred cost basis.
     const { data: userHoldings, error: holdingsError } = await db
       .from("stock_holdings_c")
-      .select("id, family_member_id, security_id, strategy_id, quantity, avg_fill")
+      .select("id, family_member_id, security_id, strategy_id, quantity, avg_fill, Expected_fill")
       .eq("user_id", userId)
       .is("family_member_id", null)
       .not("strategy_id", "is", null);
@@ -88,27 +111,38 @@ export default async function handler(req, res) {
     const symbolPnlMap = {};
 
     if (allSecurityIds.length > 0) {
-      const { data: secs } = await db
-        .from("securities_c")
-        .select("id, symbol, last_price")
-        .in("id", allSecurityIds);
+      const [secsResult, intradayPrices] = await Promise.all([
+        db.from("securities_c").select("id, symbol, last_price").in("id", allSecurityIds),
+        fetchLatestIntradayPrices(db, allSecurityIds),
+      ]);
+      const secs = secsResult.data || [];
 
-      (secs || []).forEach(s => {
-        livePriceMap[s.id] = Number(s.last_price || 0);
+      // Live price: intraday (rands, ~1min fresh) > securities_c.last_price (rands, stale fallback)
+      secs.forEach(s => {
+        livePriceMap[s.id] = intradayPrices[s.id] != null
+          ? intradayPrices[s.id]
+          : Number(s.last_price || 0);
       });
 
       for (const h of (userHoldings || [])) {
-        const sec = (secs || []).find(s => s.id === h.security_id);
+        const sec = secs.find(s => s.id === h.security_id);
         if (!sec) continue;
         const qty = Number(h.quantity || 0);
         const avgFill = Number(h.avg_fill || 0);
-        if (!avgFill) continue;
-        const livePrice = Number(sec.last_price || 0);
+        const expectedFillRands = Number(h.Expected_fill || 0);
+        if (!avgFill && !expectedFillRands) continue;
+
+        // Cost basis per share: Expected_fill (rands) > avg_fill/100 (legacy)
+        const costBasisRandsPerShare = expectedFillRands > 0
+          ? expectedFillRands
+          : (avgFill / 100);
+
+        const livePrice = livePriceMap[h.security_id] ?? costBasisRandsPerShare;
         symbolPnlMap[sec.symbol] = {
-          pnlRands: (livePrice - (avgFill / 100)) * qty,
-          pnlPct: avgFill > 0 ? ((livePrice - (avgFill / 100)) / (avgFill / 100)) * 100 : 0,
+          pnlRands: (livePrice - costBasisRandsPerShare) * qty,
+          pnlPct: costBasisRandsPerShare > 0 ? ((livePrice - costBasisRandsPerShare) / costBasisRandsPerShare) * 100 : 0,
           currentValue: livePrice * qty,
-          costBasis: (avgFill * qty) / 100,
+          costBasis: costBasisRandsPerShare * qty,
         };
       }
     }
@@ -215,9 +249,16 @@ export default async function handler(req, res) {
         for (const h of stratHoldings) {
           const qty = Number(h.quantity || 0);
           const avgFill = Number(h.avg_fill || 0);
-          if (!avgFill) continue;
-          const livePrice = livePriceMap[h.security_id] || (avgFill / 100);
-          investedAmount += (avgFill * qty) / 100;
+          const expectedFillRands = Number(h.Expected_fill || 0);
+          if (!avgFill && !expectedFillRands) continue;
+
+          // Cost basis per share: Expected_fill (rands) > avg_fill/100 (legacy)
+          const costBasisRandsPerShare = expectedFillRands > 0
+            ? expectedFillRands
+            : (avgFill / 100);
+
+          const livePrice = livePriceMap[h.security_id] || costBasisRandsPerShare;
+          investedAmount += costBasisRandsPerShare * qty;
           currentMarketValue += livePrice * qty;
         }
       }

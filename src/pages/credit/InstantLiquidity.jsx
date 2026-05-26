@@ -180,10 +180,14 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange, onLinkBan
         }
 
         // 4. Fetch true total portfolio value from client_strategy_returns_c
+        //    Parent-only — credit eligibility uses the parent's own holdings.
+        //    Child rows (family_member != null) are excluded so children's strategy
+        //    values don't inflate the parent's pledgeable portfolio.
         const { data: returnsData } = await supabase
           .from('client_strategy_returns_c')
           .select('strategy_id, basket_value, as_of_date')
           .eq('user_id', profile.id)
+          .is('family_member', null)
           .order('as_of_date', { ascending: false });
 
         const latestByStrategy = {};
