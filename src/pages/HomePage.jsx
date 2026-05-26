@@ -1237,7 +1237,7 @@ const HomePage = ({
 
 
           {homeTab === "balance" || homeTab === "invest" ? (
-            <div className="relative select-none">
+            <div className="relative select-none -mx-2 md:mx-0">
               <div className="relative w-full touch-pan-y h-auto">
                 <div className="relative h-auto rounded-[28px] border border-white/10">
                   <SwipeableBalanceCard
@@ -1250,7 +1250,9 @@ const HomePage = ({
               </div>
             </div>
           ) : (
-            <SwipeableBalanceCard userId={userId} mintNumber={profile?.mintNumber} />
+            <div className="-mx-2 md:mx-0">
+              <SwipeableBalanceCard userId={userId} mintNumber={profile?.mintNumber} />
+            </div>
           )}
         </div>
       </div>
