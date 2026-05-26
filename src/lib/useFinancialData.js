@@ -24,11 +24,22 @@ function getHoldingsList(result) {
 // Cost basis per share in Rands. Prefers Expected_fill (the price the client
 // saw at click time, in rands) over avg_fill (broker fill, in cents — captures
 // the company spread).
+//
+// Defensive: rows written before commit a732c49 stored Expected_fill in cents
+// (~100x inflated). Detect that by comparing against avg_fill/100; if Expected_fill
+// is more than 5x avg_fill/100 it's almost certainly the legacy cents value, so
+// divide by 100 to recover rands.
 const costBasisRandsPerShare = (h) => {
-  const expected = Number(h?.Expected_fill || 0);
-  if (expected > 0) return expected;
+  const expectedRaw = Number(h?.Expected_fill || 0);
   const avgFillCents = Number(h?.avg_fill || 0);
-  return avgFillCents > 0 ? avgFillCents / 100 : 0;
+  const avgFillRands = avgFillCents > 0 ? avgFillCents / 100 : 0;
+  if (expectedRaw > 0) {
+    const expectedRands = (avgFillRands > 0 && expectedRaw > avgFillRands * 5)
+      ? expectedRaw / 100
+      : expectedRaw;
+    return expectedRands;
+  }
+  return avgFillRands;
 };
 
 function getClosedHoldingsList(result) {

@@ -102,13 +102,20 @@ const TIMEFRAME_DAYS = { d: 7, "5d": 5, m: 30, ytd: 365, all: 1825 };
 // client paid, taking the larger of the two prices the system recorded.
 // Pending holdings (no avg_fill yet) contribute 0; legacy rows with no
 // Expected_fill fall back to avg_fill/100 only.
+//
+// Defensive: rows written before commit a732c49 stored Expected_fill in cents
+// (~100x inflated). If Expected_fill is more than 5x avg_fill/100, treat it as
+// legacy cents and divide by 100.
 function maxOfCostBasisRands(h) {
   const qty = Number(h?.quantity || 0);
   if (qty <= 0) return 0;
   const avgFillCents = Number(h?.avg_fill || 0);
   if (avgFillCents <= 0) return 0;
-  const expectedRands = Number(h?.Expected_fill || 0);
+  const expectedRaw = Number(h?.Expected_fill || 0);
   const avgFillRands = avgFillCents / 100;
+  const expectedRands = expectedRaw > 0
+    ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw)
+    : 0;
   const perShareRands = expectedRands > 0 ? Math.max(expectedRands, avgFillRands) : avgFillRands;
   return perShareRands * qty;
 }
@@ -368,8 +375,13 @@ const SwipeableBalanceCard = ({
             enrichedHoldings = childHoldings.map((h) => {
               const quantity = Number(h.quantity || 0);
               const avgFillCents = Number(h.avg_fill || 0);
-              const expectedFillRands = Number(h.Expected_fill || 0);
+              const expectedFillRaw = Number(h.Expected_fill || 0);
               const isFilled = avgFillCents > 0 && !!h.Fill_date;
+              // Defensive: Expected_fill > 5x avg_fill/100 is legacy cents.
+              const avgFillRandsForCheck = avgFillCents / 100;
+              const expectedFillRands = expectedFillRaw > 0
+                ? (expectedFillRaw > avgFillRandsForCheck * 5 ? expectedFillRaw / 100 : expectedFillRaw)
+                : 0;
               // Cost basis per share in cents: Expected_fill (rands→cents) > avg_fill (cents)
               const costBasisCentsPerShare = expectedFillRands > 0
                 ? Math.round(expectedFillRands * 100)
@@ -468,14 +480,18 @@ const SwipeableBalanceCard = ({
             // Higher-of cost basis per underlying security: max(Expected_fill rands,
             // avg_fill/100) × qty. Skip pending (no avg_fill). Falls back to whichever
             // exists for legacy snapshot rows.
+            // Defensive: Expected_fill > 5x avg_fill/100 is legacy cents — divide by 100.
             const investedCents = snapshot.reduce(
               (sum, h) => {
                 const qty = Number(h.qty || 0);
                 if (qty <= 0) return sum;
                 const avgFillCents = Number(h.avg_fill || 0);
                 if (avgFillCents <= 0) return sum;
-                const expectedRands = Number(h.Expected_fill ?? h.expected_fill ?? 0);
+                const expectedRaw = Number(h.Expected_fill ?? h.expected_fill ?? 0);
                 const avgFillRands = avgFillCents / 100;
+                const expectedRands = expectedRaw > 0
+                  ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw)
+                  : 0;
                 const perShareRands = expectedRands > 0
                   ? Math.max(expectedRands, avgFillRands)
                   : avgFillRands;
@@ -524,11 +540,18 @@ const SwipeableBalanceCard = ({
         };
 
         const mValue = enrichedHoldings.reduce((acc, h) => acc + liveMarketValue(h) / 100, 0);
-        // Cost basis per share in Rands: Expected_fill (rands) > avg_fill (cents)
+        // Cost basis per share in Rands: Expected_fill (rands) > avg_fill (cents).
+        // Defensive: Expected_fill > 5x avg_fill/100 is legacy cents — divide by 100.
         const costBasisRands = (h) => {
-          const expected = Number(h.Expected_fill || 0);
-          if (expected > 0) return expected * Number(h.quantity || 0);
-          return (Number(h.avg_fill || 0) * Number(h.quantity || 0)) / 100;
+          const expectedRaw = Number(h.Expected_fill || 0);
+          const qty = Number(h.quantity || 0);
+          const avgFillCents = Number(h.avg_fill || 0);
+          const avgFillRands = avgFillCents / 100;
+          const expectedRands = expectedRaw > 0
+            ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw)
+            : 0;
+          if (expectedRands > 0) return expectedRands * qty;
+          return avgFillRands * qty;
         };
         const invested = enrichedHoldings.reduce((acc, h) => acc + costBasisRands(h), 0);
         const investedAmount = enrichedHoldings.reduce(
@@ -737,10 +760,13 @@ const SwipeableBalanceCard = ({
 
             const pDateStr = (h.created_at || h.as_of_date || "").split("T")[0];
             // Chart's "purchase price" anchor prefers Expected_fill (rands) over avg_fill (cents).
-            const expectedFillRands = Number(h.Expected_fill || 0);
-            const avgFillPrice = expectedFillRands > 0
-              ? expectedFillRands
-              : Number(h.avg_fill || 0) / 100;
+            // Defensive: Expected_fill > 5x avg_fill/100 is legacy cents — divide by 100.
+            const expectedFillRaw = Number(h.Expected_fill || 0);
+            const avgFillRandsAnchor = Number(h.avg_fill || 0) / 100;
+            const expectedFillRands = expectedFillRaw > 0
+              ? (expectedFillRaw > avgFillRandsAnchor * 5 ? expectedFillRaw / 100 : expectedFillRaw)
+              : 0;
+            const avgFillPrice = expectedFillRands > 0 ? expectedFillRands : avgFillRandsAnchor;
             const livePrice = Number(h.last_price || 0) / 100;
             
             const allMapped = data.map((p) => ({
@@ -777,11 +803,18 @@ const SwipeableBalanceCard = ({
         if (allPriceData.length === 0 && !hasStrategyData) {
           // No price history in DB — synthesize a 2-point chart from cost basis → current market value
           const activeHoldings = holdingsToChart.filter(h => !h.isStrategy && Number(h.avg_fill || 0) > 0);
-          // Cost basis prefers Expected_fill (rands → cents) over avg_fill (cents)
+          // Cost basis prefers Expected_fill (rands → cents) over avg_fill (cents).
+          // Defensive: Expected_fill > 5x avg_fill/100 is legacy cents — divide by 100.
           const costBasisCents = (h) => {
-            const expected = Number(h.Expected_fill || 0);
-            if (expected > 0) return Math.round(expected * 100 * Number(h.quantity || 0));
-            return Number(h.avg_fill || 0) * Number(h.quantity || 0);
+            const expectedRaw = Number(h.Expected_fill || 0);
+            const qty = Number(h.quantity || 0);
+            const avgFillCents = Number(h.avg_fill || 0);
+            const avgFillRands = avgFillCents / 100;
+            const expectedRands = expectedRaw > 0
+              ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw)
+              : 0;
+            if (expectedRands > 0) return Math.round(expectedRands * 100 * qty);
+            return avgFillCents * qty;
           };
           if (activeHoldings.length > 0) {
             const totalCostCents = activeHoldings.reduce((s, h) => s + costBasisCents(h), 0);
@@ -879,10 +912,16 @@ const SwipeableBalanceCard = ({
   // avg_fill: investedCents at construction time — both paths yield the same value.
   const selectedAssetInvestedRands = (() => {
     if (!selectedAsset) return 0;
-    const expectedRands = Number(selectedAsset.Expected_fill || 0);
+    const expectedRaw = Number(selectedAsset.Expected_fill || 0);
+    const avgFillCents = Number(selectedAsset.avg_fill || 0);
     const qty = Number(selectedAsset.quantity || 0);
+    const avgFillRands = avgFillCents / 100;
+    // Defensive: Expected_fill > 5x avg_fill/100 is legacy cents.
+    const expectedRands = expectedRaw > 0
+      ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw)
+      : 0;
     if (expectedRands > 0) return expectedRands * qty;
-    return (Number(selectedAsset.avg_fill || 0) * qty) / 100;
+    return avgFillRands * qty;
   })();
   const displayInvested = selectedAsset
     ? selectedAssetInvestedRands
