@@ -1026,9 +1026,9 @@ const SwipeableBalanceCard = ({
         </div>
 
         {/* Inline sparkline — flex item, never overlaps content below */}
-        <div className="opacity-90 shrink-0 self-end pointer-events-none w-[44%]" style={{ height: 72 }}>
+        <div className="opacity-90 shrink-0 self-end pointer-events-none w-[44%] translate-y-4" style={{ height: 90 }}>
           {chartData.length > 1 ? (
-            <ResponsiveContainer width="100%" height={72}>
+            <ResponsiveContainer width="100%" height={90}>
               <ComposedChart data={chartData} margin={{ top: 2, right: 0, left: 0, bottom: 2 }}>
                 <Tooltip
                   content={({ active, payload }) => {
@@ -1047,7 +1047,7 @@ const SwipeableBalanceCard = ({
               </ComposedChart>
             </ResponsiveContainer>
           ) : (!dataSettled || chartLoading) ? (
-            <div className="flex items-end gap-0.5 w-full" style={{ height: 72 }}>
+            <div className="flex items-end gap-0.5 w-full" style={{ height: 90 }}>
               {[40, 55, 35, 65, 50, 70, 45, 60].map((h, i) => (
                 <Skeleton key={i} className="flex-1 rounded-sm bg-white/10 animate-pulse" style={{ height: `${h}%` }} />
               ))}
