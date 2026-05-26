@@ -187,6 +187,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const [bankLetterDone, setBankLetterDone] = useState(false);
   const [bankLetterRejected, setBankLetterRejected] = useState(false);
   const [bankLetterRejectReason, setBankLetterRejectReason] = useState("");
+  const [bankLetterUploading, setBankLetterUploading] = useState(false);
   const [mandateDone, setMandateDone] = useState(false);
   const [riskDone, setRiskDone] = useState(false);
   const [sofDone, setSofDone] = useState(false);
@@ -1232,7 +1233,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                         onChange={async (e) => {
                           const file = e.target.files[0];
                           if (!file) return;
-                          setIsSubmitting(true);
+                          e.target.value = "";
+                          setBankLetterUploading(true);
                           setSubmitError("");
                           setBankLetterRejected(false);
                           setBankLetterRejectReason("");
@@ -1263,17 +1265,17 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                               } else {
                                 setSubmitError(result.error || "Failed to upload file");
                               }
-                              setIsSubmitting(false);
+                              setBankLetterUploading(false);
                             };
                             reader.readAsDataURL(file);
                           } catch {
                             setSubmitError("An error occurred during upload");
-                            setIsSubmitting(false);
+                            setBankLetterUploading(false);
                           }
                         }}
                       />
                     </div>
-                    {isSubmitting && (
+                    {bankLetterUploading && (
                       <div className="mt-3 flex items-center justify-center gap-2">
                         <div className="w-4 h-4 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin"></div>
                         <span className="text-xs text-slate-500">Uploading and verifying…</span>
