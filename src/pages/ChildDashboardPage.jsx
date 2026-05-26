@@ -2161,7 +2161,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     try {
       if (!supabase) return;
       const linkedUserId = child?.linked_user_id || null;
-      const holdingsSelect = "id, user_id, family_member_id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id, Fill_date, Status, created_at";
+      const holdingsSelect = "id, user_id, family_member_id, security_id, quantity, avg_fill, Expected_fill, market_value, unrealized_pnl, strategy_id, Fill_date, Status, created_at, transaction_id";
       const familyHoldingsQuery = supabase
         .from("stock_holdings_c")
         .select(holdingsSelect)
@@ -2487,11 +2487,17 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     return livePrice * quantity;
   };
 
-  // Cost basis in Rands. Null if avg_fill is missing.
+  // Cost basis in Rands. Prefers Expected_fill (the price the child saw at
+  // click time, in rands) over avg_fill (broker fill in cents — captures the
+  // company spread). Returns null when neither is set.
   const getHoldingCostRands = (holding) => {
+    const expected = Number(holding.Expected_fill);
+    const quantity = Math.abs(Number(holding.quantity || 0));
+    if (Number.isFinite(expected) && expected > 0) {
+      return expected * quantity;
+    }
     const avgFill = Number(holding.avg_fill);
     if (!Number.isFinite(avgFill) || avgFill <= 0) return null;
-    const quantity = Math.abs(Number(holding.quantity || 0));
     return (avgFill / 100) * quantity;
   };
 
@@ -2508,15 +2514,18 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   const totalPortfolioCents = holdings.reduce((s, h) => s + getHoldingMarketValueCents(h), 0);
 
 
-  // Group holdings by strategy_id + purchase minute (same minute = same order batch).
-  // This means buying the same strategy 5 min apart creates two separate purchase groups.
+  // Group holdings by strategy_id + order batch.
+  // Primary key: store_reference (authoritative per-order id stamped on each
+  // holdings row by the buy endpoints). Falls back to created_at-minute for
+  // legacy rows written before the store_reference column existed.
   const purchaseGroups = holdings.reduce((acc, h) => {
     if (!h.strategy_id) return acc;
     const minute = h.created_at
       ? new Date(h.created_at).toISOString().slice(0, 16) // "2026-05-19T14:32"
       : "unknown";
-    const key = `${h.strategy_id}__${minute}`;
-    if (!acc[key]) acc[key] = { strategyId: h.strategy_id, minute, holdings: [] };
+    const batchId = h.transaction_id || `legacy:${minute}`;
+    const key = `${h.strategy_id}__${batchId}`;
+    if (!acc[key]) acc[key] = { strategyId: h.strategy_id, transactionId: h.transaction_id || null, minute, holdings: [] };
     acc[key].holdings.push(h);
     return acc;
   }, {});
@@ -2983,6 +2992,9 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
 
                   // Stacked card with absolute-positioned layers + spring transition
                   const n = cards.length;
+                  const pendingCount = cards.filter(c => c.isFilling).length;
+                  const filledCount = n - pendingCount;
+                  const hasMixed = pendingCount > 0 && filledCount > 0;
                   const COLLAPSED_H = 112; // header + holdings row
                   const STACK_OFFSET = 13; // each card peeks this many px below the one above
                   const STACK_SCALE  = 0.038; // scale reduction per layer
@@ -3005,6 +3017,14 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                         className="absolute h-5 min-w-[20px] items-center justify-center rounded-full bg-violet-600 px-1.5 text-[10px] font-bold text-white shadow pointer-events-none">
                         {n}×
                       </div>
+
+                      {/* Mixed-state "N pending" ribbon — top-left, only when stack contains both filled & pending */}
+                      {hasMixed && !isExpanded && (
+                        <div style={{ position: 'absolute', top: -4, left: -4, zIndex: n + 3 }}
+                          className="flex items-center gap-1 rounded-full bg-violet-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow ring-2 ring-white pointer-events-none">
+                          <Clock className="h-2.5 w-2.5" /> {pendingCount} pending
+                        </div>
+                      )}
 
                       {isExpanded ? (
                         /* Expanded: normal flow, each card shows full content + date */
@@ -3097,7 +3117,13 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                                       )}
                                     </div>
                                     <span className="text-[10px] text-slate-400">{sc.holdings.length} holding{sc.holdings.length !== 1 ? "s" : ""}</span>
-                                    {i === 0 && <span className="ml-auto text-[10px] font-semibold text-violet-500">Tap to see {n} purchases</span>}
+                                    {i === 0 && (
+                                      <span className="ml-auto text-[10px] font-semibold text-violet-500">
+                                        {hasMixed
+                                          ? `${filledCount} filled · ${pendingCount} pending · tap to see`
+                                          : `Tap to see ${n} purchases`}
+                                      </span>
+                                    )}
                                   </div>
                                 )}
                               </div>

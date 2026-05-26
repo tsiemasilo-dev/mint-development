@@ -3,6 +3,17 @@ import { supabase } from "./supabase";
 import { getStrategyPriceHistory } from "./strategyData";
 import { registerCacheResetCallback } from "./userCacheReset.js";
 
+// Cost basis per share in Rands for a snapshot/holding row.
+// Prefers Expected_fill (the price the client saw at click time, in rands) over
+// avg_fill (broker fill in cents). Once admin updates the returns job to write
+// Expected_fill into the snapshot, this picks it up automatically.
+const costBasisRandsPerShare = (h) => {
+  const expected = Number(h?.Expected_fill ?? h?.expected_fill ?? 0);
+  if (expected > 0) return expected;
+  const avgFillCents = Number(h?.avg_fill || 0);
+  return avgFillCents > 0 ? avgFillCents / 100 : 0;
+};
+
 // Module-level cache — survives unmount/remount when navigating between tabs,
 // so the Portfolio page shows last known strategies instead of an empty skeleton.
 let _cachedStrategiesData = null;
@@ -13,7 +24,10 @@ export function clearUserStrategiesCache() {
 
 registerCacheResetCallback(clearUserStrategiesCache);
 
-export const useUserStrategies = () => {
+// familyMemberId: pass a child's family_members.id to see THAT child's strategies;
+// omit (or pass null) for the parent's own strategies. Either way the leak is
+// closed — parent and child rows in client_strategy_returns_c stay separate.
+export const useUserStrategies = (familyMemberId = null) => {
   const [data, setData] = useState(_cachedStrategiesData || {
     strategies: [],
     selectedStrategy: null,
@@ -38,12 +52,16 @@ export const useUserStrategies = () => {
 
       // Query client_strategy_returns_c and strategies_c directly —
       // avoids /api/user/strategies which joins the deleted strategy_metrics table.
+      let returnsQuery = supabase
+        .from("client_strategy_returns_c")
+        .select("strategy_id, basket_value, holdings_snapshot, as_of_date, ytd_pct")
+        .eq("user_id", userId);
+      returnsQuery = familyMemberId
+        ? returnsQuery.eq("family_member", familyMemberId)
+        : returnsQuery.is("family_member", null);
+
       const [allReturnsResult, strategiesResult] = await Promise.all([
-        supabase
-          .from("client_strategy_returns_c")
-          .select("strategy_id, basket_value, holdings_snapshot, as_of_date, ytd_pct")
-          .eq("user_id", userId)
-          .order("as_of_date", { ascending: false }),
+        returnsQuery.order("as_of_date", { ascending: false }),
         supabase
           .from("strategies_c")
           .select("id, name, short_name, description, risk_level, sector, icon_url, image_url, holdings")
@@ -92,7 +110,7 @@ export const useUserStrategies = () => {
         })();
 
         const currentVal = Number((returnsRow.basket_value / 100).toFixed(2));
-        const invested = snapshot.reduce((sum, h) => sum + (h.avg_fill || 0) * (h.qty || h.quantity || 0) / 100, 0);
+        const invested = snapshot.reduce((sum, h) => sum + costBasisRandsPerShare(h) * (h.qty || h.quantity || 0), 0);
         const changePct = invested > 0 ? ((currentVal - invested) / invested) * 100 : 0;
         const ytdPctDecimal = returnsRow.ytd_pct != null ? returnsRow.ytd_pct / 100 : null;
 
@@ -107,7 +125,7 @@ export const useUserStrategies = () => {
           if (snap) {
             const qty = snap.qty || snap.quantity || 0;
             const stockCurrentVal = (snap.current_price * qty) / 100;
-            const stockCostBasis = (snap.avg_fill * qty) / 100;
+            const stockCostBasis = costBasisRandsPerShare(snap) * qty;
             const pnlRands = stockCurrentVal - stockCostBasis;
             const pnlPct = stockCostBasis > 0 ? (pnlRands / stockCostBasis) * 100 : 0;
             return { ...h, pnlRands: Number(pnlRands.toFixed(2)), pnlPct: Number(pnlPct.toFixed(2)) };
@@ -157,7 +175,7 @@ export const useUserStrategies = () => {
         error: err.message,
       }));
     }
-  }, []);
+  }, [familyMemberId]);
 
   const selectStrategy = useCallback((strategy) => {
     setData((prev) => ({ ...prev, selectedStrategy: strategy }));
@@ -177,7 +195,8 @@ export const useUserStrategies = () => {
   return { ...data, selectStrategy, refetch: fetchUserStrategies };
 };
 
-export const useStrategyChartData = (strategyId, timeFilter = "W", purchaseDate = null, userId = null) => {
+// familyMemberId: pass a child's id for that child's chart; omit for parent's chart.
+export const useStrategyChartData = (strategyId, timeFilter = "W", purchaseDate = null, userId = null, familyMemberId = null) => {
   const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -207,6 +226,9 @@ export const useStrategyChartData = (strategyId, timeFilter = "W", purchaseDate 
             .eq("user_id", resolvedUserId)
             .eq("strategy_id", strategyId)
             .order("as_of_date", { ascending: false });
+          query = familyMemberId
+            ? query.eq("family_member", familyMemberId)
+            : query.is("family_member", null);
 
           if (timeFilter === "D") {
             query = query.limit(2);
@@ -299,12 +321,13 @@ export const useStrategyChartData = (strategyId, timeFilter = "W", purchaseDate 
     };
 
     fetchChartData();
-  }, [strategyId, timeFilter, purchaseDate, userId]);
+  }, [strategyId, timeFilter, purchaseDate, userId, familyMemberId]);
 
   return { chartData, loading };
 };
 
-export const useStrategyPeriodReturns = (userId, strategyId, activeTab = "m") => {
+// familyMemberId: pass a child's id for that child's period returns; omit for parent's.
+export const useStrategyPeriodReturns = (userId, strategyId, activeTab = "m", familyMemberId = null) => {
   const [returnData, setReturnData] = useState({ pnl: 0, pct: 0, basketValue: 0 });
   const [loading, setLoading] = useState(false);
 
@@ -326,11 +349,16 @@ export const useStrategyPeriodReturns = (userId, strategyId, activeTab = "m") =>
 
         const columns = columnMap[activeTab];
 
-        const { data, error } = await supabase
+        let query = supabase
           .from("client_strategy_returns_c")
           .select("*")
           .eq("user_id", userId)
-          .eq("strategy_id", strategyId)
+          .eq("strategy_id", strategyId);
+        query = familyMemberId
+          ? query.eq("family_member", familyMemberId)
+          : query.is("family_member", null);
+
+        const { data, error } = await query
           .order("as_of_date", { ascending: false })
           .limit(1)
           .maybeSingle();
@@ -356,7 +384,7 @@ export const useStrategyPeriodReturns = (userId, strategyId, activeTab = "m") =>
     };
 
     fetchPeriodReturns();
-  }, [userId, strategyId, activeTab]);
+  }, [userId, strategyId, activeTab, familyMemberId]);
 
   return { returnData, loading };
 };

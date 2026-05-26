@@ -50,6 +50,16 @@ const INSURE_ENABLED = import.meta.env.VITE_ENABLE_INSURE === "true";
 
 const CARD_VISIBILITY_KEY = "mintBalanceVisible";
 
+// Cost basis per share in Rands. Prefers Expected_fill (the price the client
+// saw at click time, in rands) over avg_fill (broker fill, in cents — captures
+// the company spread which should not leak into client PnL).
+const costBasisRandsPerShare = (holding) => {
+  const expected = Number(holding?.Expected_fill || 0);
+  if (expected > 0) return expected;
+  const avgFillCents = Number(holding?.avg_fill || 0);
+  return avgFillCents > 0 ? avgFillCents / 100 : 0;
+};
+
 // Module-level caches to prevent section skeletons on remount
 let _cachedBestAssets = [];
 let _cachedBestStrategies = [];
@@ -60,6 +70,398 @@ registerCacheResetCallback(() => {
   _cachedBestStrategies = [];
   _cachedHasAnyHoldings = false;
 });
+
+// ── StrategyStackedModal ─────────────────────────────────────────────────────
+// Bottom-sheet modal showing each purchase batch as a stacked card.
+// Click a card → it expands (height grows), other cards slide below.
+// Click again → collapses. Pending batches use the purple gradient; filled
+// batches use the white card style with PnL.
+
+const StrategyStackedModal = ({ data, onClose }) => {
+  const { strategy, batches, fmtBatchDate, holdingsSnapshot = [], pct = 0, livePriceMap = {} } = data;
+  const [openIndex, setOpenIndex] = useState(null);
+
+  // Per-batch cost from each batch's own holdings (this part is always reliable).
+  // Per-batch value: apportion the strategy's total currentValue (the same trusted
+  // number the collapsed card shows) by this batch's share of the total invested.
+  // → batchValue = totalCurrentValue × (batchInvested / totalInvested)
+  // PnL = batchValue − batchInvested (matches what the user expects).
+  const totalInvestedRands = Number(strategy.investedAmount || 0);
+  const totalCurrentValueRands = Number(strategy.currentValue || 0);
+
+  const computeBatchStats = (batch) => {
+    let costRands = 0;
+    for (const h of batch.holdings) {
+      const qty = Number(h.quantity || 0);
+      costRands += costBasisRandsPerShare(h) * qty;
+    }
+    const share = totalInvestedRands > 0 ? costRands / totalInvestedRands : 0;
+    const valueRands = totalCurrentValueRands * share;
+    const pnlRands = valueRands - costRands;
+    const pnlPct = costRands > 0 ? (pnlRands / costRands) * 100 : null;
+    return { costRands, valueRands, pnlRands, pnlPct };
+  };
+
+  // Display newest-first
+  const ordered = [...batches].reverse();
+
+  const COLLAPSED_H = 88;
+  const EXPANDED_H = 280;
+  const STACK_OFFSET = 14;
+  const STACK_SCALE = 0.045;
+
+  const containerH = openIndex == null
+    ? COLLAPSED_H + (ordered.length - 1) * STACK_OFFSET + 24
+    : EXPANDED_H + (ordered.length - 1) * STACK_OFFSET + COLLAPSED_H + 24;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-xl rounded-t-3xl bg-white shadow-2xl max-h-[85vh] overflow-hidden flex flex-col">
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="h-1 w-10 rounded-full bg-slate-200" />
+        </div>
+        <div className="px-5 pt-2 pb-4 border-b border-slate-100">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-0.5">Your purchases</p>
+          <p className="text-[15px] font-bold text-slate-900">{strategy.name}</p>
+          <p className="text-[11px] text-slate-500 mt-0.5">Tap a card to expand</p>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          <div className="relative" style={{ height: containerH, transition: "height 0.45s cubic-bezier(0.25,0.46,0.45,0.94)" }}>
+            {ordered.map((batch, i) => {
+              const isOpen = openIndex === i;
+              const anyOpen = openIndex != null;
+              const behindOpen = anyOpen && !isOpen && i > openIndex;
+              const aboveOpen = anyOpen && !isOpen && i < openIndex;
+
+              // Calculate top + scale
+              let top, scale, zIndex, height;
+              if (isOpen) {
+                top = i * STACK_OFFSET;
+                scale = 1;
+                zIndex = 30;
+                height = EXPANDED_H;
+              } else if (anyOpen) {
+                if (aboveOpen) {
+                  // Above the expanded card — push to the top
+                  top = i * STACK_OFFSET;
+                  scale = 1 - (openIndex - i) * STACK_SCALE * 0.5;
+                  zIndex = 20 - (openIndex - i);
+                } else {
+                  // Below the expanded card — slide down
+                  const belowIndex = i - openIndex;
+                  top = openIndex * STACK_OFFSET + EXPANDED_H + (belowIndex - 1) * STACK_OFFSET;
+                  scale = 1 - (belowIndex - 1) * STACK_SCALE * 0.5;
+                  zIndex = 20 - belowIndex;
+                }
+                height = COLLAPSED_H;
+              } else {
+                // All collapsed (stacked)
+                top = i * STACK_OFFSET;
+                scale = 1 - i * STACK_SCALE * 0.7;
+                zIndex = ordered.length - i;
+                height = COLLAPSED_H;
+              }
+
+              const isPending = !batch.filled;
+              const dateStr = fmtBatchDate(batch);
+              const stats = computeBatchStats(batch);
+
+              return (
+                <div
+                  key={batch.minute + "_" + i}
+                  onClick={() => setOpenIndex(isOpen ? null : i)}
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    right: 0,
+                    top,
+                    height,
+                    transform: `scale(${scale})`,
+                    transformOrigin: "top center",
+                    zIndex,
+                    cursor: "pointer",
+                    overflow: "hidden",
+                    borderRadius: 20,
+                    transition: "all 0.45s cubic-bezier(0.34,1.56,0.64,1)",
+                    boxShadow: isOpen ? "0 8px 32px rgba(0,0,0,0.12)" : "0 2px 8px rgba(0,0,0,0.05)",
+                  }}
+                >
+                  {isPending ? (
+                    <div className="w-full h-full p-4 text-white relative overflow-hidden"
+                      style={{ background: "linear-gradient(135deg,#5b21b6 0%,#7c3aed 55%,#a855f7 100%)" }}>
+                      <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+                      <div className="relative flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25 flex-shrink-0">
+                            <Clock3 className="h-5 w-5 text-white" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold truncate">{strategy.name}</p>
+                            <p className="text-[11px] text-white/70 mt-0.5">Purchase {ordered.length - i} · pending</p>
+                          </div>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          {dateStr && <p className="text-[10px] text-white/60 mb-1">{dateStr}</p>}
+                          <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ring-1 ring-white/25">
+                            <Clock3 className="h-2.5 w-2.5" /> Pending
+                          </span>
+                        </div>
+                      </div>
+                      {isOpen && (
+                        <div className="relative mt-4 pt-4 border-t border-white/15 space-y-2">
+                          <p className="text-[12px] text-white/80">Waiting for broker fills. Your portfolio total updates once each holding settles.</p>
+                          <p className="text-[11px] text-white/60">{batch.holdings.length} holding{batch.holdings.length !== 1 ? "s" : ""} in this batch</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="w-full h-full p-4 bg-white border border-slate-200">
+                      <div className="flex items-start gap-3">
+                        <div className="flex-1 flex items-start justify-between gap-3">
+                          <div className="text-left space-y-1 min-w-0">
+                            <p className="truncate text-sm font-semibold text-slate-900">{strategy.name}</p>
+                            <p className="text-xs text-slate-600 line-clamp-1">Purchase {ordered.length - i} · filled</p>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            {dateStr && <p className="text-[10px] text-slate-400 mb-0.5">{dateStr}</p>}
+                            <p className="text-sm font-semibold text-slate-900">
+                              R{stats.valueRands.toFixed(2)}
+                            </p>
+                            <p className="text-[10px] text-slate-400">Invested R{stats.costRands.toFixed(2)}</p>
+                            {stats.pnlPct != null ? (
+                              <p className={`text-xs font-semibold ${stats.pnlRands >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                                {stats.pnlRands >= 0 ? "+" : ""}R{Math.abs(stats.pnlRands).toFixed(2)} ({stats.pnlRands >= 0 ? "+" : ""}{stats.pnlPct.toFixed(2)}%)
+                              </p>
+                            ) : (
+                              <p className="text-xs font-semibold text-slate-400">—</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      {isOpen && (
+                        <div className="mt-4 pt-3 border-t border-slate-100">
+                          {holdingsSnapshot.length > 0 && (
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="flex -space-x-2">
+                                {holdingsSnapshot.slice(0, 4).map((h) => (
+                                  <div key={`${strategy.id}-${h.id || h.symbol}-mod`}
+                                    className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-sm">
+                                    {h.logo_url
+                                      ? <img src={h.logo_url} alt={h.name} className="h-full w-full object-cover" />
+                                      : <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">{h.symbol?.substring(0, 2)}</div>}
+                                  </div>
+                                ))}
+                                {holdingsSnapshot.length > 4 && (
+                                  <div className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500">
+                                    +{holdingsSnapshot.length - 4}
+                                  </div>
+                                )}
+                              </div>
+                              <span className="text-[11px] text-slate-400">{batch.holdings.length} holding{batch.holdings.length !== 1 ? "s" : ""}</span>
+                            </div>
+                          )}
+                          {strategy.risk_level && (
+                            <span className="inline-block rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+                              {strategy.risk_level}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── StockStackedModal ────────────────────────────────────────────────────────
+// Same shape/animation as StrategyStackedModal, but for direct-stock purchases.
+// Each raw stock_holdings_c row is a batch — multiple buys of the same security
+// appear as separate cards so the user can see each purchase's avg_fill, value,
+// and PnL independently.
+const StockStackedModal = ({ data, onClose }) => {
+  const { asset } = data;
+  const [openIndex, setOpenIndex] = useState(null);
+
+  const batches = Array.isArray(asset?.batches) ? asset.batches : [];
+  const livePriceRands = Number(asset?.livePriceRands || 0);
+
+  const fmtBatchDate = (b) => {
+    if (!b?.created_at) return null;
+    return new Date(b.created_at).toLocaleDateString("en-ZA", {
+      day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+    });
+  };
+
+  const computeBatchStats = (batch) => {
+    const qty = Number(batch.quantity || 0);
+    const costRands = costBasisRandsPerShare(batch) * qty;
+    const valueRands = livePriceRands * qty;
+    const pnlRands = valueRands - costRands;
+    const pnlPct = costRands > 0 ? (pnlRands / costRands) * 100 : null;
+    return { qty, costRands, valueRands, pnlRands, pnlPct };
+  };
+
+  // Newest-first display
+  const ordered = [...batches].sort((a, b) => {
+    const da = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const db = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return db - da;
+  });
+
+  const COLLAPSED_H = 88;
+  const EXPANDED_H = 220;
+  const STACK_OFFSET = 14;
+  const STACK_SCALE = 0.045;
+
+  const containerH = openIndex == null
+    ? COLLAPSED_H + (ordered.length - 1) * STACK_OFFSET + 24
+    : EXPANDED_H + (ordered.length - 1) * STACK_OFFSET + COLLAPSED_H + 24;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-xl rounded-t-3xl bg-white shadow-2xl max-h-[85vh] overflow-hidden flex flex-col">
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="h-1 w-10 rounded-full bg-slate-200" />
+        </div>
+        <div className="px-5 pt-2 pb-4 border-b border-slate-100">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-0.5">Your purchases</p>
+          <p className="text-[15px] font-bold text-slate-900">{asset?.name || asset?.symbol}</p>
+          <p className="text-[11px] text-slate-500 mt-0.5">Tap a card to expand</p>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          <div className="relative" style={{ height: containerH, transition: "height 0.45s cubic-bezier(0.25,0.46,0.45,0.94)" }}>
+            {ordered.map((batch, i) => {
+              const isOpen = openIndex === i;
+              const anyOpen = openIndex != null;
+              const aboveOpen = anyOpen && !isOpen && i < openIndex;
+
+              let top, scale, zIndex, height;
+              if (isOpen) {
+                top = i * STACK_OFFSET;
+                scale = 1;
+                zIndex = 30;
+                height = EXPANDED_H;
+              } else if (anyOpen) {
+                if (aboveOpen) {
+                  top = i * STACK_OFFSET;
+                  scale = 1 - (openIndex - i) * STACK_SCALE * 0.5;
+                  zIndex = 20 - (openIndex - i);
+                } else {
+                  const belowIndex = i - openIndex;
+                  top = openIndex * STACK_OFFSET + EXPANDED_H + (belowIndex - 1) * STACK_OFFSET;
+                  scale = 1 - (belowIndex - 1) * STACK_SCALE * 0.5;
+                  zIndex = 20 - belowIndex;
+                }
+                height = COLLAPSED_H;
+              } else {
+                top = i * STACK_OFFSET;
+                scale = 1 - i * STACK_SCALE * 0.7;
+                zIndex = ordered.length - i;
+                height = COLLAPSED_H;
+              }
+
+              const avgFillCents = Number(batch.avg_fill || 0);
+              const isPending = !avgFillCents;
+              const dateStr = fmtBatchDate(batch);
+              const stats = computeBatchStats(batch);
+
+              return (
+                <div
+                  key={batch.id || `${batch.created_at}_${i}`}
+                  onClick={() => setOpenIndex(isOpen ? null : i)}
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    right: 0,
+                    top,
+                    height,
+                    transform: `scale(${scale})`,
+                    transformOrigin: "top center",
+                    zIndex,
+                    cursor: "pointer",
+                    overflow: "hidden",
+                    borderRadius: 20,
+                    transition: "all 0.45s cubic-bezier(0.34,1.56,0.64,1)",
+                    boxShadow: isOpen ? "0 8px 32px rgba(0,0,0,0.12)" : "0 2px 8px rgba(0,0,0,0.05)",
+                  }}
+                >
+                  {isPending ? (
+                    <div className="w-full h-full p-4 text-white relative overflow-hidden"
+                      style={{ background: "linear-gradient(135deg,#5b21b6 0%,#7c3aed 55%,#a855f7 100%)" }}>
+                      <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+                      <div className="relative flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25 flex-shrink-0">
+                            <Clock3 className="h-5 w-5 text-white" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold truncate">{asset?.symbol}</p>
+                            <p className="text-[11px] text-white/70 mt-0.5">Purchase {ordered.length - i} · pending</p>
+                          </div>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          {dateStr && <p className="text-[10px] text-white/60 mb-1">{dateStr}</p>}
+                          <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ring-1 ring-white/25">
+                            <Clock3 className="h-2.5 w-2.5" /> Pending
+                          </span>
+                        </div>
+                      </div>
+                      {isOpen && (
+                        <div className="relative mt-4 pt-4 border-t border-white/15 space-y-1">
+                          <p className="text-[12px] text-white/80">Waiting for broker fill — avg fill price will be set on settlement.</p>
+                          <p className="text-[11px] text-white/60">Ordered {stats.qty} share{stats.qty !== 1 ? "s" : ""}</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="w-full h-full p-4 bg-white border border-slate-200">
+                      <div className="flex items-start gap-3">
+                        <div className="flex-1 flex items-start justify-between gap-3">
+                          <div className="text-left space-y-1 min-w-0">
+                            <p className="truncate text-sm font-semibold text-slate-900">{asset?.symbol}</p>
+                            <p className="text-xs text-slate-600 line-clamp-1">Purchase {ordered.length - i} · filled</p>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            {dateStr && <p className="text-[10px] text-slate-400 mb-0.5">{dateStr}</p>}
+                            <p className="text-sm font-semibold text-slate-900">R{stats.valueRands.toFixed(2)}</p>
+                            <p className="text-[10px] text-slate-400">Invested R{stats.costRands.toFixed(2)}</p>
+                            {stats.pnlPct != null ? (
+                              <p className={`text-xs font-semibold ${stats.pnlRands >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                                {stats.pnlRands >= 0 ? "+" : ""}R{Math.abs(stats.pnlRands).toFixed(2)} ({stats.pnlRands >= 0 ? "+" : ""}{stats.pnlPct.toFixed(2)}%)
+                              </p>
+                            ) : (
+                              <p className="text-xs font-semibold text-slate-400">—</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      {isOpen && (
+                        <div className="mt-4 pt-3 border-t border-slate-100 space-y-1">
+                          <p className="text-[11px] text-slate-500">
+                            {stats.qty} share{stats.qty !== 1 ? "s" : ""} @ R{(avgFillCents / 100).toFixed(2)} avg fill
+                          </p>
+                          <p className="text-[11px] text-slate-400">Live price R{livePriceRands.toFixed(2)}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const HomePage = ({
   onOpenNotifications,
@@ -93,9 +495,20 @@ const HomePage = ({
   const { lastUpdated: pricesLastUpdated } = useRealtimePrices();
   const [bestStrategies, setBestStrategies] = useState(() => _cachedBestStrategies);
   const [holdingsSecurities, setHoldingsSecurities] = useState([]);
+  const [rawStrategyHoldings, setRawStrategyHoldings] = useState([]);
+  const [hasDirectAssets, setHasDirectAssets] = useState(false);
+  const [strategySkeletonHold, setStrategySkeletonHold] = useState(true);
+
+  // Show the strategies skeleton for at least the first 5 seconds on page open,
+  // so users always get a smooth loading state even on slow renders.
+  useEffect(() => {
+    const t = setTimeout(() => setStrategySkeletonHold(false), 5000);
+    return () => clearTimeout(t);
+  }, []);
   const [failedLogos, setFailedLogos] = useState({});
   const [expandedPendingKey, setExpandedPendingKey] = useState(null);
   const [expandedStratStack, setExpandedStratStack] = useState(null);
+  const [expandedStockStack, setExpandedStockStack] = useState(null);
   const [showPayModal, setShowPayModal] = useState(false);
   const [showReceiveModal, setShowReceiveModal] = useState(false);
   const [news, setNews] = useState([]);
@@ -140,7 +553,7 @@ const HomePage = ({
     try {
       const { data: holdings, error: holdingsError } = await supabase
         .from('stock_holdings_c')
-        .select('id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, Status')
+        .select('id, family_member_id, security_id, strategy_id, quantity, avg_fill, Expected_fill, market_value, unrealized_pnl, Status, created_at, transaction_id')
         .eq('user_id', profile.id)
         .is('family_member_id', null)
         .eq('Status', 'active');
@@ -149,12 +562,14 @@ const HomePage = ({
 
       const directHoldings = (holdings || []).filter(h => !h.strategy_id && h.security_id);
       const strategyHoldings = (holdings || []).filter(h => h.strategy_id);
+      setRawStrategyHoldings(strategyHoldings);
+      setHasDirectAssets(directHoldings.length > 0);
 
       if (holdings && holdings.length > 0) { _cachedHasAnyHoldings = true; setHasAnyHoldings(true); }
 
       if (directHoldings.length > 0) {
         const holdings = directHoldings;
-        const securityIds = holdings.map(h => h.security_id).filter(Boolean);
+        const securityIds = [...new Set(holdings.map(h => h.security_id).filter(Boolean))];
         let securitiesMap = {};
         if (securityIds.length > 0) {
           const [{ data: secData }, { data: intradayData }] = await Promise.all([
@@ -174,40 +589,63 @@ const HomePage = ({
           });
         }
 
-        const formatted = holdings
-          .filter(h => securitiesMap[h.security_id])
-          .map(h => {
-            const sec = securitiesMap[h.security_id];
-            const qty = Number(h.quantity || 0);
-            const avgFill = Number(h.avg_fill || 0);
-            const isPending = !avgFill || avgFill === 0;
-            if (isPending) {
-              return {
-                symbol: sec.symbol,
-                name: sec.name,
-                logo: sec.logo_url,
-                value: 0,
-                change: 0,
-                pnlRands: 0,
-                pnlPct: 0,
-                isPending: true,
-              };
+        // Group raw rows by security_id — each entry below represents one
+        // logical position (= one card in the carousel). Multiple raw rows
+        // become the entry's `batches` so the stacked-card UI can render
+        // them as separate purchase events, mirroring strategies.
+        const rowsBySecurity = new Map();
+        for (const h of holdings) {
+          if (!securitiesMap[h.security_id]) continue;
+          if (!rowsBySecurity.has(h.security_id)) rowsBySecurity.set(h.security_id, []);
+          rowsBySecurity.get(h.security_id).push(h);
+        }
+
+        const formatted = Array.from(rowsBySecurity.entries()).map(([secId, batches]) => {
+          const sec = securitiesMap[secId];
+          const livePriceCents = sec.last_price != null ? Math.round(Number(sec.last_price) * 100) : 0;
+          const livePriceRands = livePriceCents / 100;
+
+          // Aggregate across batches: filled-only quantity drives liveValue/PnL,
+          // while pending batches contribute to hasPendingBatch (badge).
+          // Cost basis prefers Expected_fill (client's quoted price) over
+          // avg_fill (broker fill) — keeps the company spread out of client PnL.
+          let filledQty = 0;
+          let pendingQty = 0;
+          let weightedCostRandsSum = 0;
+          for (const b of batches) {
+            const qty = Number(b.quantity || 0);
+            const avgFill = Number(b.avg_fill || 0);
+            if (avgFill > 0) {
+              filledQty += qty;
+              weightedCostRandsSum += costBasisRandsPerShare(b) * qty;
+            } else {
+              pendingQty += qty;
             }
-            const livePriceCents = sec.live_price_cents ?? avgFill;
-            const marketVal = (livePriceCents * qty) / 100;
-            const costBasis = (avgFill * qty) / 100;
-            const pnlRands = marketVal - costBasis;
-            const pnlPct = costBasis > 0 ? ((pnlRands / costBasis) * 100) : 0;
-            return {
-              symbol: sec.symbol,
-              name: sec.name,
-              logo: sec.logo_url,
-              value: marketVal,
-              change: Number(sec.change_percent) || 0,
-              pnlRands,
-              pnlPct,
-            };
-          });
+          }
+          const marketVal = (livePriceCents * filledQty) / 100;
+          const costBasis = weightedCostRandsSum;
+          const pnlRands = marketVal - costBasis;
+          const pnlPct = costBasis > 0 ? (pnlRands / costBasis) * 100 : 0;
+          const isPending = filledQty === 0;
+          const hasPendingBatch = pendingQty > 0;
+
+          return {
+            securityId: secId,
+            symbol: sec.symbol,
+            name: sec.name,
+            logo: sec.logo_url,
+            livePriceRands,
+            value: marketVal,
+            change: Number(sec.change_percent) || 0,
+            pnlRands: isPending ? 0 : pnlRands,
+            pnlPct: isPending ? 0 : pnlPct,
+            isPending,
+            hasPendingBatch,
+            filledQty,
+            pendingQty,
+            batches,
+          };
+        });
 
         const profitable = formatted.filter(a => !a.isPending && a.pnlPct > 0).sort((a, b) => b.pnlPct - a.pnlPct);
         const pending = formatted.filter(a => a.isPending);
@@ -245,9 +683,12 @@ const HomePage = ({
               const sec = secMap[h.security_id];
               const qty = Number(h.quantity || 0);
               const avgFill = Number(h.avg_fill || 0);
-              const livePriceCents = sec.live_price_cents ?? avgFill;
+              const costBasisPerShareRands = costBasisRandsPerShare(h);
+              const livePriceCents = sec.last_price != null
+                ? Math.round(Number(sec.last_price) * 100)
+                : Math.round(costBasisPerShareRands * 100);
               const marketVal = (livePriceCents * qty) / 100;
-              const costBasis = (avgFill * qty) / 100;
+              const costBasis = costBasisPerShareRands * qty;
               const pnlRands = marketVal - costBasis;
               const pnlPct = costBasis > 0 ? ((pnlRands / costBasis) * 100) : 0;
               return {
@@ -486,6 +927,51 @@ const HomePage = ({
   }, [profile?.id, pricesLastUpdated]);
 
   const holdingsBySymbol = useMemo(() => buildHoldingsBySymbol(holdingsSecurities), [holdingsSecurities]);
+
+  // Live price map (security_id → last_price in Rands) for per-batch value calculations.
+  const livePriceMap = useMemo(() => {
+    const map = {};
+    for (const sec of (holdingsSecurities || [])) {
+      if (sec?.id && sec?.last_price != null) {
+        map[sec.id] = Number(sec.last_price);
+      }
+    }
+    return map;
+  }, [holdingsSecurities]);
+
+  // Group strategy holdings into purchase batches (one batch per order).
+  // Primary key: store_reference (authoritative per-order id stamped on each
+  // holdings row by the buy endpoints). Falls back to created_at-minute for
+  // legacy rows written before the store_reference column existed.
+  // Each batch is fully filled (all have avg_fill) or fully pending (none do).
+  const purchaseBatchesByStrategy = useMemo(() => {
+    const out = {};
+    for (const h of (rawStrategyHoldings || [])) {
+      if (!h.strategy_id) continue;
+      const minute = h.created_at ? new Date(h.created_at).toISOString().slice(0, 16) : "unknown";
+      const batchId = h.transaction_id || `legacy:${minute}`;
+      const key = `${h.strategy_id}__${batchId}`;
+      if (!out[h.strategy_id]) out[h.strategy_id] = {};
+      if (!out[h.strategy_id][key]) {
+        out[h.strategy_id][key] = {
+          strategyId: h.strategy_id,
+          transactionId: h.transaction_id || null,
+          minute,
+          holdings: [],
+          filled: true,
+        };
+      }
+      out[h.strategy_id][key].holdings.push(h);
+      // If any holding in batch is unfilled, mark batch as not filled
+      if (!h.avg_fill || Number(h.avg_fill) === 0) out[h.strategy_id][key].filled = false;
+    }
+    // Convert to array of batches per strategy, sorted oldest→newest
+    const result = {};
+    for (const [stratId, batchMap] of Object.entries(out)) {
+      result[stratId] = Object.values(batchMap).sort((a, b) => (a.minute < b.minute ? -1 : 1));
+    }
+    return result;
+  }, [rawStrategyHoldings]);
 
   useEffect(() => {
     const fetchHoldingsSecurities = async () => {
@@ -754,7 +1240,7 @@ const HomePage = ({
 
 
           {homeTab === "balance" || homeTab === "invest" ? (
-            <div className="relative select-none">
+            <div className="relative select-none -mx-2 md:mx-0">
               <div className="relative w-full touch-pan-y h-auto">
                 <div className="relative h-auto rounded-[28px] border border-white/10">
                   <SwipeableBalanceCard
@@ -767,7 +1253,9 @@ const HomePage = ({
               </div>
             </div>
           ) : (
-            <SwipeableBalanceCard userId={userId} mintNumber={profile?.mintNumber} />
+            <div className="-mx-2 md:mx-0">
+              <SwipeableBalanceCard userId={userId} mintNumber={profile?.mintNumber} />
+            </div>
           )}
         </div>
       </div>
@@ -996,6 +1484,8 @@ const HomePage = ({
           const safeAssets = Array.isArray(assetsToDisplay) ? assetsToDisplay : [];
           const safeStrategies = Array.isArray(bestStrategies) ? bestStrategies : [];
           const pendingAssets = safeAssets.filter(a => a && a.isPending);
+          // Strategies where ALL batches are pending — those with mixed state show up
+          // inside the filled-strategies carousel as a stack instead.
           const pendingStrategies = safeStrategies.filter(s => s && s.isPending);
 
           // Build one entry per TRANSACTION for strategies so duplicate purchases show separately.
@@ -1033,15 +1523,25 @@ const HomePage = ({
             ),
           }));
 
-          const pendingAssetItems = pendingAssets.map(a => ({
-            kind: "asset",
-            key: `pending-asset-${a.symbol || a.name}`,
-            title: a.symbol || a.name || "Asset",
-            subtitle: a.name || "Awaiting fill",
-            image: a.logo || null,
-            symbolFallback: a.symbol || "•",
-            txs: [null],
-          }));
+          const pendingAssetItems = pendingAssets.map(a => {
+            const batches = Array.isArray(a.batches) ? a.batches : [];
+            // Sort newest-first so the top of the stack is the most recent buy.
+            const sortedBatches = [...batches].sort((b1, b2) => {
+              const t1 = b1?.created_at ? new Date(b1.created_at).getTime() : 0;
+              const t2 = b2?.created_at ? new Date(b2.created_at).getTime() : 0;
+              return t2 - t1;
+            });
+            return {
+              kind: "asset",
+              key: `pending-asset-${a.symbol || a.name}`,
+              title: a.symbol || a.name || "Asset",
+              subtitle: a.name || "Awaiting fill",
+              image: a.logo || null,
+              symbolFallback: a.symbol || "•",
+              asset: a,
+              batches: sortedBatches.length > 0 ? sortedBatches : [null],
+            };
+          });
 
           const totalGroups = stratGroups.length + pendingAssetItems.length;
           if (totalGroups === 0) return null;
@@ -1173,22 +1673,78 @@ const HomePage = ({
                 })}
 
                 {/* Single-security pending items */}
-                {pendingAssetItems.map(item => (
-                  <div key={item.key}
-                    className="rounded-3xl shadow-[0_10px_32px_-10px_rgba(76,29,149,0.45)] relative overflow-hidden"
-                    style={{ background: "linear-gradient(135deg,#5b21b6 0%,#7c3aed 55%,#a855f7 100%)" }}>
-                    <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
-                    <PendingRow image={item.image} title={item.title} subtitle={item.subtitle}
-                      symbolFallback={item.symbolFallback} amountLabel="Awaiting fill"
-                      dateLabel={null} kind="asset" />
-                  </div>
-                ))}
+                {pendingAssetItems.map(item => {
+                  const isStack = item.batches.length > 1;
+                  const isExpanded = expandedPendingKey === item.key;
+
+                  if (!isStack) {
+                    const onlyBatch = item.batches[0];
+                    return (
+                      <div key={item.key}
+                        className="rounded-3xl shadow-[0_10px_32px_-10px_rgba(76,29,149,0.45)] relative overflow-hidden"
+                        style={{ background: "linear-gradient(135deg,#5b21b6 0%,#7c3aed 55%,#a855f7 100%)" }}>
+                        <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+                        <PendingRow image={item.image} title={item.title} subtitle={item.subtitle}
+                          symbolFallback={item.symbolFallback} amountLabel="Awaiting fill"
+                          dateLabel={onlyBatch ? fmtDate(onlyBatch) : null} kind="asset" />
+                      </div>
+                    );
+                  }
+
+                  // Multi-batch pending stock — same expand-collapse pattern as multi-purchase pending strategies
+                  return (
+                    <div key={item.key}>
+                      {!isExpanded ? (
+                        <button type="button" onClick={() => setExpandedPendingKey(item.key)}
+                          className="relative w-full text-left">
+                          <div className="absolute inset-x-3 bottom-0 h-full rounded-3xl opacity-60"
+                            style={{ background: "linear-gradient(135deg,#5b21b6,#7c3aed)", transform: "translateY(-5px) scaleX(0.96)" }} />
+                          {item.batches.length > 2 && (
+                            <div className="absolute inset-x-5 bottom-0 h-full rounded-3xl opacity-40"
+                              style={{ background: "linear-gradient(135deg,#5b21b6,#7c3aed)", transform: "translateY(-9px) scaleX(0.92)" }} />
+                          )}
+                          <div className="relative rounded-3xl shadow-[0_10px_32px_-10px_rgba(76,29,149,0.45)] overflow-hidden"
+                            style={{ background: "linear-gradient(135deg,#5b21b6 0%,#7c3aed 55%,#a855f7 100%)" }}>
+                            <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+                            <PendingRow image={item.image} title={item.title}
+                              subtitle={`${item.batches.length} purchases • tap to see each`}
+                              symbolFallback={item.symbolFallback} amountLabel="Awaiting fill"
+                              dateLabel={fmtDate(item.batches[0])} kind="asset" />
+                          </div>
+                          <div className="absolute top-3 left-3 flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-bold text-violet-700 shadow">
+                            {item.batches.length}
+                          </div>
+                        </button>
+                      ) : (
+                        <div className="space-y-2">
+                          <button type="button" onClick={() => setExpandedPendingKey(null)}
+                            className="flex items-center gap-2 px-1 text-[11px] font-bold text-slate-500 hover:text-slate-700 transition">
+                            <Clock3 className="h-3 w-3" /> {item.title} · {item.batches.length} purchases · tap to collapse
+                          </button>
+                          {item.batches.map((batch, i) => (
+                            <div key={batch?.id || i}
+                              className="rounded-3xl overflow-hidden shadow-[0_6px_20px_-6px_rgba(76,29,149,0.4)] relative"
+                              style={{ background: "linear-gradient(135deg,#5b21b6 0%,#7c3aed 55%,#a855f7 100%)" }}>
+                              <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+                              <PendingRow image={item.image} title={item.title}
+                                subtitle={`Purchase ${item.batches.length - i} of ${item.batches.length}`}
+                                symbolFallback={item.symbolFallback} amountLabel="Awaiting fill"
+                                dateLabel={fmtDate(batch)} kind="asset" />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </section>
           );
         })()}
 
-        {/* Best Performing Assets */}
+        {/* Best Performing Assets — only shown when user has individual stock holdings
+            (i.e. not part of a strategy). Strategies have their own section. */}
+        {(loadingBestAssets || hasDirectAssets) && (
         <section>
           <div className="flex items-end justify-between px-5 mb-3">
             <div className="space-y-1">
@@ -1229,57 +1785,124 @@ const HomePage = ({
               ))}
             </div>
           ) : hasAssets ? (
-            <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {assetsToDisplay.filter(a => !a.isPending).slice(0, 5).map((asset) => (
-                <div
-                  key={asset.symbol}
-                  className="flex min-w-[260px] flex-1 snap-start items-center gap-4 rounded-3xl bg-white p-4 shadow-md"
-                >
-                  <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">
-                    {failedLogos[asset.symbol] || !asset.logo ? (
-                      <span className="text-sm font-semibold text-slate-600">
-                        {asset.symbol}
-                      </span>
-                    ) : (
-                      <img
-                        src={asset.logo}
-                        alt={asset.name}
-                        className="h-10 w-10 object-contain"
-                        referrerPolicy="no-referrer"
-                        crossOrigin="anonymous"
-                        onError={() =>
-                          setFailedLogos((prev) => ({ ...prev, [asset.symbol]: true }))
-                        }
-                      />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <p className="text-sm font-semibold text-slate-900">{asset.symbol}</p>
-                      {asset.isPending && <SettlementBadge status="pending" size="xs" />}
+            <div className="-mx-4 flex gap-3 overflow-x-auto overflow-y-visible px-4 pb-1 pt-2 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {assetsToDisplay.filter(a => !a.isPending).slice(0, 5).map((asset) => {
+                const batches = Array.isArray(asset.batches) ? asset.batches : [];
+                const isStack = batches.length > 1;
+                const pendingCount = batches.filter(b => !b.avg_fill || Number(b.avg_fill) === 0).length;
+                const filledCount = batches.length - pendingCount;
+                const hasMixed = pendingCount > 0 && filledCount > 0;
+                // Purchase date hint for single-purchase cards. Stack cards already
+                // show the "Nx" badge; the per-batch dates appear in the stacked modal.
+                const latestBatchDate = batches
+                  .map(b => b?.created_at)
+                  .filter(Boolean)
+                  .map(d => new Date(d))
+                  .filter(d => !isNaN(d))
+                  .sort((a, b) => b - a)[0] || null;
+                const fmtShortDate = (d) => d ? d.toLocaleDateString("en-ZA", { day: "numeric", month: "short" }) : null;
+                const dateLabel = !isStack ? fmtShortDate(latestBatchDate) : null;
+
+                const cardInner = (
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100 flex-shrink-0">
+                      {failedLogos[asset.symbol] || !asset.logo ? (
+                        <span className="text-sm font-semibold text-slate-600">
+                          {asset.symbol}
+                        </span>
+                      ) : (
+                        <img
+                          src={asset.logo}
+                          alt={asset.name}
+                          className="h-10 w-10 object-contain"
+                          referrerPolicy="no-referrer"
+                          crossOrigin="anonymous"
+                          onError={() =>
+                            setFailedLogos((prev) => ({ ...prev, [asset.symbol]: true }))
+                          }
+                        />
+                      )}
                     </div>
-                    <p className="text-xs text-slate-500 line-clamp-1">{asset.name}</p>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    {asset.isPending ? (
-                      <p className="text-xs text-slate-400">Awaiting fill</p>
-                    ) : asset.pnlRands != null ? (
-                      <>
-                        <p className={`text-sm font-semibold ${asset.pnlRands >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                          {asset.pnlRands >= 0 ? '+' : ''}R{Math.abs(asset.pnlRands).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </p>
-                        <p className={`text-xs font-semibold ${asset.pnlPct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                          ({asset.pnlPct >= 0 ? '+' : ''}{asset.pnlPct.toFixed(2)}%)
-                        </p>
-                      </>
-                    ) : (
-                      <p className={`text-sm font-semibold ${asset.change >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                        {asset.change >= 0 ? '+' : ''}{typeof asset.change === 'number' ? asset.change.toFixed(2) : (asset.change || '0.00')}%
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-semibold text-slate-900">{asset.symbol}</p>
+                        {asset.isPending && <SettlementBadge status="pending" size="xs" />}
+                      </div>
+                      <p className="text-xs text-slate-500 line-clamp-1">
+                        {isStack
+                          ? (hasMixed
+                              ? `${filledCount} filled · ${pendingCount} pending · tap to see`
+                              : `${batches.length} purchases · tap to see each`)
+                          : asset.name}
                       </p>
-                    )}
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      {dateLabel && (
+                        <p className="text-[10px] text-slate-400 mb-0.5">{dateLabel}</p>
+                      )}
+                      {asset.isPending ? (
+                        <p className="text-xs text-slate-400">Awaiting fill</p>
+                      ) : asset.pnlRands != null ? (
+                        <>
+                          <p className={`text-sm font-semibold ${asset.pnlRands >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                            {asset.pnlRands >= 0 ? '+' : ''}R{Math.abs(asset.pnlRands).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </p>
+                          <p className={`text-xs font-semibold ${asset.pnlPct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                            ({asset.pnlPct >= 0 ? '+' : ''}{asset.pnlPct.toFixed(2)}%)
+                          </p>
+                        </>
+                      ) : (
+                        <p className={`text-sm font-semibold ${asset.change >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                          {asset.change >= 0 ? '+' : ''}{typeof asset.change === 'number' ? asset.change.toFixed(2) : (asset.change || '0.00')}%
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+
+                if (isStack) {
+                  return (
+                    <div key={asset.symbol} className="flex-shrink-0 min-w-[260px] snap-start relative">
+                      {/* Stack shadow layers — purple if any pending batch, white otherwise */}
+                      {pendingCount > 0 ? (
+                        <div className="absolute inset-x-3 top-2 bottom-0 rounded-3xl shadow-sm"
+                          style={{ background: "linear-gradient(135deg,#7c3aed,#a855f7)" }} />
+                      ) : (
+                        <div className="absolute inset-x-3 top-2 bottom-0 rounded-3xl border border-slate-100/80 bg-white/70 shadow-sm" />
+                      )}
+                      {batches.length > 2 && (
+                        <div className="absolute inset-x-5 top-4 bottom-0 rounded-3xl border border-slate-100/60 bg-white/50 shadow-sm" />
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setExpandedStockStack({ asset })}
+                        className="relative w-full rounded-3xl bg-white p-4 text-left shadow-md transition-all active:scale-[0.97]"
+                      >
+                        {cardInner}
+                      </button>
+                      {/* Purchase count badge */}
+                      <div className="absolute top-2 right-2 h-5 min-w-[20px] px-1.5 flex items-center justify-center rounded-full bg-violet-600 text-[10px] font-bold text-white shadow">
+                        {batches.length}×
+                      </div>
+                      {/* Pending indicator if mixed */}
+                      {hasMixed && (
+                        <div className="absolute -top-1 -left-1 flex items-center gap-1 rounded-full bg-violet-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow ring-2 ring-white">
+                          <Clock3 className="h-2.5 w-2.5" /> {pendingCount} pending
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                return (
+                  <div
+                    key={asset.symbol}
+                    className="flex min-w-[260px] flex-1 snap-start items-center gap-4 rounded-3xl bg-white p-4 shadow-md"
+                  >
+                    {cardInner}
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className="rounded-3xl bg-white p-6 shadow-md text-center">
@@ -1307,6 +1930,7 @@ const HomePage = ({
             </div>
           )}
         </section>
+        )}
 
         {/* Best Performing Strategies */}
         <section>
@@ -1322,7 +1946,7 @@ const HomePage = ({
                 <span>Top performing curated portfolios</span>
               </div>
             </div>
-            {hasStrategies && !loadingBestStrategies && (
+            {hasStrategies && !loadingBestStrategies && !strategySkeletonHold && (
               <button
                 onClick={() => onOpenInvestments && onOpenInvestments("strategy")}
                 className="mb-1 text-xs font-semibold text-violet-600 active:opacity-70 transition-colors"
@@ -1332,7 +1956,7 @@ const HomePage = ({
             )}
           </div>
 
-          {loadingBestStrategies ? (
+          {(loadingBestStrategies || strategySkeletonHold) ? (
             <div className="flex gap-3 overflow-hidden pb-1">
               {[0, 1].map((i) => (
                 <div key={i} className="flex min-w-[280px] flex-shrink-0 flex-col gap-3 rounded-3xl bg-white p-4 shadow-md">
@@ -1354,37 +1978,21 @@ const HomePage = ({
               ))}
             </div>
           ) : hasStrategies ? (
-            <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="-mx-4 flex gap-3 overflow-x-auto overflow-y-visible px-4 pb-1 pt-2 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {bestStrategies.filter(s => !s.isPending).slice(0, 5).map((strategy) => {
                 const holdingsSnapshot = getStrategyHoldingsSnapshot(strategy, holdingsBySymbol);
                 const pct = strategy.change_pct || 0;
 
-                // Count how many times this strategy was purchased (by transaction name)
-                const stratTxs = (Array.isArray(transactions) ? transactions : [])
-                  .filter(tx => {
-                    const n = (tx.name || "").trim();
-                    const sName = (strategy.name || "").toLowerCase();
-                    const sShort = (strategy.short_name || "").toLowerCase();
-                    return (
-                      (n.startsWith("Strategy Investment: ") && (
-                        n.replace("Strategy Investment: ", "").trim().toLowerCase() === sName ||
-                        n.replace("Strategy Investment: ", "").trim().toLowerCase() === sShort
-                      )) ||
-                      (n.startsWith("Purchased ") && (
-                        n.replace("Purchased ", "").trim().toLowerCase() === sName
-                      ))
-                    );
-                  })
-                  .sort((a, b) =>
-                    new Date(b.transaction_date || b.created_at || 0) -
-                    new Date(a.transaction_date || a.created_at || 0)
-                  );
+                // Use purchase batches (one per minute) instead of transactions for accuracy
+                const batches = purchaseBatchesByStrategy[strategy.id] || [];
+                const pendingCount = batches.filter(b => !b.filled).length;
+                const filledCount = batches.filter(b => b.filled).length;
+                const isStack = batches.length > 1;
+                const hasMixed = pendingCount > 0 && filledCount > 0;
 
-                const isStack = false;
-                const fmtTxDate = (tx) => {
-                  const d = new Date(tx?.transaction_date || tx?.created_at || 0);
-                  if (isNaN(d)) return null;
-                  return d.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
+                const fmtBatchDate = (b) => {
+                  if (b.minute === "unknown") return null;
+                  return new Date(b.minute).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
                 };
 
                 // Inner card content (shared between single and stack)
@@ -1396,7 +2004,9 @@ const HomePage = ({
                           <p className="truncate text-sm font-semibold text-slate-900">{strategy.name}</p>
                           <p className="text-xs text-slate-600 line-clamp-1">
                             {isStack
-                              ? `${stratTxs.length} purchases · tap to see each`
+                              ? hasMixed
+                                ? `${filledCount} filled · ${pendingCount} pending · tap to see`
+                                : `${batches.length} purchases · tap to see each`
                               : `${strategy.risk_level || 'Balanced'}${strategy.objective ? ` • ${strategy.objective}` : ''}`}
                           </p>
                         </div>
@@ -1452,24 +2062,35 @@ const HomePage = ({
 
                 if (isStack) {
                   return (
-                    <div key={strategy.purchaseKey || strategy.id} className="flex-shrink-0 w-[280px] snap-start relative">
-                      {/* Stack shadow layers */}
-                      <div className="absolute inset-x-3 top-2 bottom-0 rounded-3xl border border-slate-100/80 bg-white/70 shadow-sm" />
-                      {stratTxs.length > 2 && (
+                    <div key={strategy.id} className="flex-shrink-0 w-[280px] snap-start relative">
+                      {/* Stack shadow layers — purple if pending batch exists, white otherwise */}
+                      {pendingCount > 0 ? (
+                        <div className="absolute inset-x-3 top-2 bottom-0 rounded-3xl shadow-sm"
+                          style={{ background: "linear-gradient(135deg,#7c3aed,#a855f7)" }} />
+                      ) : (
+                        <div className="absolute inset-x-3 top-2 bottom-0 rounded-3xl border border-slate-100/80 bg-white/70 shadow-sm" />
+                      )}
+                      {batches.length > 2 && (
                         <div className="absolute inset-x-5 top-4 bottom-0 rounded-3xl border border-slate-100/60 bg-white/50 shadow-sm" />
                       )}
                       {/* Top card */}
                       <button
                         type="button"
-                        onClick={() => setExpandedStratStack({ strategy, stratTxs, fmtTxDate })}
+                        onClick={() => setExpandedStratStack({ strategy, batches, fmtBatchDate, holdingsSnapshot, pct, livePriceMap })}
                         className="relative w-full rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all active:scale-[0.97]"
                       >
                         {cardInner}
                       </button>
                       {/* Purchase count badge */}
                       <div className="absolute top-2 right-2 h-5 min-w-[20px] px-1.5 flex items-center justify-center rounded-full bg-violet-600 text-[10px] font-bold text-white shadow">
-                        {stratTxs.length}×
+                        {batches.length}×
                       </div>
+                      {/* Pending indicator if mixed */}
+                      {hasMixed && (
+                        <div className="absolute -top-1 -left-1 flex items-center gap-1 rounded-full bg-violet-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow ring-2 ring-white">
+                          <Clock3 className="h-2.5 w-2.5" /> {pendingCount} pending
+                        </div>
+                      )}
                     </div>
                   );
                 }
@@ -1795,40 +2416,19 @@ const HomePage = ({
       )}
     </div>
 
-    {/* Strategy stack purchases modal */}
+    {/* Strategy stack purchases modal — animated stacked cards */}
     {expandedStratStack && (
-      <div className="fixed inset-0 z-50 flex items-end justify-center">
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setExpandedStratStack(null)} />
-        <div className="relative w-full max-w-xl rounded-t-3xl bg-white shadow-2xl max-h-[75vh] overflow-hidden flex flex-col">
-          <div className="flex justify-center pt-3 pb-1">
-            <div className="h-1 w-10 rounded-full bg-slate-200" />
-          </div>
-          <div className="px-5 pt-2 pb-4 border-b border-slate-100">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-0.5">Your purchases</p>
-            <p className="text-[15px] font-bold text-slate-900">{expandedStratStack.strategy.name}</p>
-          </div>
-          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-            {expandedStratStack.stratTxs.map((tx, i) => {
-              const amt = tx ? Number(tx.amount || 0) / 100 : 0;
-              const dateStr = expandedStratStack.fmtTxDate(tx);
-              return (
-                <div key={i} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3.5 flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-100 text-violet-700 font-bold text-sm flex-shrink-0">
-                    {i + 1}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-semibold text-slate-900">Purchase {i + 1}</p>
-                    {dateStr && <p className="text-[11px] text-slate-400 mt-0.5">{dateStr}</p>}
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    {amt > 0 && <p className="text-[13px] font-bold text-slate-900">R{amt.toFixed(2)}</p>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+      <StrategyStackedModal
+        data={expandedStratStack}
+        onClose={() => setExpandedStratStack(null)}
+      />
+    )}
+    {/* Stock stack purchases modal — same animation, per-batch fills */}
+    {expandedStockStack && (
+      <StockStackedModal
+        data={expandedStockStack}
+        onClose={() => setExpandedStockStack(null)}
+      />
     )}
     </>
   );

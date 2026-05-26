@@ -1,5 +1,27 @@
 import { supabase, supabaseAdmin, authenticateUser } from "./_lib/supabase.js";
 
+// Latest stock_intraday_c.current_price per security_id — stamped as
+// Expected_fill so child PnL is anchored to the price at click time.
+async function fetchLatestIntradayPrices(db, securityIds) {
+  if (!securityIds || !securityIds.length) return {};
+  const ids = [...new Set(securityIds.filter(Boolean))];
+  const out = {};
+  await Promise.all(ids.map(async (id) => {
+    const { data } = await db
+      .from("stock_intraday_c")
+      .select("current_price")
+      .eq("security_id", id)
+      .order("timestamp", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data?.current_price != null) {
+      // stock_intraday_c.current_price is stored in cents; return rands.
+      out[id] = Number(data.current_price) / 100;
+    }
+  }));
+  return out;
+}
+
 /**
  * Child Investment API
  *
@@ -97,6 +119,23 @@ export default async function handler(req, res) {
     const holdings = strategy.holdings || [];
     let holdingsCreated = 0;
 
+    // Insert transaction first so we can stamp its UUID on every holdings row.
+    const ref = `CHILD-INV-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    let childTxId = null;
+    try {
+      const txInsert = await db.from("transactions").insert({
+        user_id: parentUserId,
+        family_member_id: family_member_id,
+        type: "investment",
+        direction: "debit",
+        amount: amount,
+        description: `${strategy.name} investment for ${child.first_name}`,
+        store_reference: ref,
+        status: "completed",
+      }).select("id").single();
+      childTxId = txInsert.data?.id || null;
+    } catch (e) { console.warn("[child-invest] tx insert:", e.message); }
+
     if (holdings.length > 0) {
       // Fetch security prices
       const symbols = holdings.map(h => h.symbol).filter(Boolean);
@@ -107,6 +146,8 @@ export default async function handler(req, res) {
 
       const secMap = {};
       (securities || []).forEach(s => { secMap[s.symbol] = s; });
+
+      const intradayPrices = await fetchLatestIntradayPrices(db, (securities || []).map(s => s.id));
 
       for (const h of holdings) {
         const sec = secMap[h.symbol];
@@ -155,6 +196,8 @@ export default async function handler(req, res) {
                 as_of_date: null,
                 strategy_id: strategy_id,
                 Status: "active",
+                transaction_id: childTxId,
+                Expected_fill: intradayPrices[sec.id] ?? null,
               });
           }
           holdingsCreated++;
@@ -163,21 +206,6 @@ export default async function handler(req, res) {
         }
       }
     }
-
-    // 6. Record transaction
-    const ref = `CHILD-INV-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    try {
-      await db.from("transactions").insert({
-        user_id: parentUserId,
-        family_member_id: family_member_id,
-        type: "investment",
-        direction: "debit",
-        amount: amount,
-        description: `${strategy.name} investment for ${child.first_name}`,
-        store_reference: ref,
-        status: "completed",
-      });
-    } catch (e) { console.warn("[child-invest] tx insert:", e.message); }
 
     return res.json({
       success: true,

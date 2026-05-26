@@ -97,6 +97,29 @@ const formatPrecise = (value) => {
 
 const TIMEFRAME_DAYS = { d: 7, "5d": 5, m: 30, ytd: 365, all: 1825 };
 
+// Higher-of cost basis per holding in rands: max(Expected_fill, avg_fill/100) × qty.
+// Drives the "Portfolio Value" headline — the conservative view of what the
+// client paid, taking the larger of the two prices the system recorded.
+// Pending holdings (no avg_fill yet) contribute 0; legacy rows with no
+// Expected_fill fall back to avg_fill/100 only.
+//
+// Defensive: rows written before commit a732c49 stored Expected_fill in cents
+// (~100x inflated). If Expected_fill is more than 5x avg_fill/100, treat it as
+// legacy cents and divide by 100.
+function maxOfCostBasisRands(h) {
+  const qty = Number(h?.quantity || 0);
+  if (qty <= 0) return 0;
+  const avgFillCents = Number(h?.avg_fill || 0);
+  if (avgFillCents <= 0) return 0;
+  const expectedRaw = Number(h?.Expected_fill || 0);
+  const avgFillRands = avgFillCents / 100;
+  const expectedRands = expectedRaw > 0
+    ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw)
+    : 0;
+  const perShareRands = expectedRands > 0 ? Math.max(expectedRands, avgFillRands) : avgFillRands;
+  return perShareRands * qty;
+}
+
 async function getSessionWithRetry() {
   const session = await getCachedSession();
   if (session?.access_token) return session;
@@ -140,6 +163,7 @@ const SwipeableBalanceCard = ({
   const childMode = !!familyMemberId;
   const _cacheKey = `${userId || ''}:${familyMemberId || ''}`;
   const [activeTab, setActiveTab] = useState("m");
+  const [periodReturn, setPeriodReturn] = useState(null);
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
   const { lastUpdated, isConnected } = useRealtimePrices();
@@ -263,9 +287,6 @@ const SwipeableBalanceCard = ({
   const [dataSettled, setDataSettled] = useState(() => !!_warmCache?.totalMarketValue);
   const [chartData, setChartData] = useState([]);
   const [chartLoading, setChartLoading] = useState(false);
-  const [returnData5d, setReturnData5d] = useState({ pnl: 0, pct: 0 });
-  const [latestBasketValue, setLatestBasketValue] = useState(0);
-  const [defaultPortfolioBasketValue, setDefaultPortfolioBasketValue] = useState(0);
   const holdingsScrollRef = useRef(null);
 
   const scrollToHoldingIndex = (index) => {
@@ -287,6 +308,7 @@ const SwipeableBalanceCard = ({
   const [dbData, setDbData] = useState(() => _warmCache || {
     holdings: [],
     totalMarketValue: 0,
+    totalMaxOfCostBasis: 0,
     totalInvested: 0,
     totalInvestedAmount: 0,
     holdingsCount: 0,
@@ -347,14 +369,24 @@ const SwipeableBalanceCard = ({
         if (familyMemberId) {
           const { data: childHoldings, error } = await supabase
             .from("stock_holdings_c")
-            .select("id, security_id, quantity, avg_fill, market_value, unrealized_pnl, strategy_id, Fill_date, securities(symbol, name, logo_url, last_price)")
+            .select("id, security_id, quantity, avg_fill, Expected_fill, market_value, unrealized_pnl, strategy_id, Fill_date, securities(symbol, name, logo_url, last_price)")
             .eq("family_member_id", familyMemberId);
 
           if (!error && childHoldings) {
             enrichedHoldings = childHoldings.map((h) => {
               const quantity = Number(h.quantity || 0);
               const avgFillCents = Number(h.avg_fill || 0);
+              const expectedFillRaw = Number(h.Expected_fill || 0);
               const isFilled = avgFillCents > 0 && !!h.Fill_date;
+              // Defensive: Expected_fill > 5x avg_fill/100 is legacy cents.
+              const avgFillRandsForCheck = avgFillCents / 100;
+              const expectedFillRands = expectedFillRaw > 0
+                ? (expectedFillRaw > avgFillRandsForCheck * 5 ? expectedFillRaw / 100 : expectedFillRaw)
+                : 0;
+              // Cost basis per share in cents: Expected_fill (rands→cents) > avg_fill (cents)
+              const costBasisCentsPerShare = expectedFillRands > 0
+                ? Math.round(expectedFillRands * 100)
+                : avgFillCents;
               const livePriceCents = Number(h.securities?.last_price || 0) > 0
                 ? Math.round(Number(h.securities.last_price) * 100)
                 : 0;
@@ -363,7 +395,7 @@ const SwipeableBalanceCard = ({
                   ? Math.round(livePriceCents * quantity)
                   : Math.round(Number(h.market_value || 0)))
                 : 0;
-              const investedCents = isFilled ? Math.round(avgFillCents * quantity) : 0;
+              const investedCents = isFilled ? Math.round(costBasisCentsPerShare * quantity) : 0;
               return {
                 id: h.id,
                 symbol: h.securities?.symbol || `SEC-${String(h.security_id || "").slice(0, 6)}`,
@@ -371,6 +403,7 @@ const SwipeableBalanceCard = ({
                 market_value: marketValueCents,
                 invested_amount: investedCents,
                 avg_fill: isFilled ? avgFillCents : 0,
+                Expected_fill: isFilled ? expectedFillRands : 0,
                 quantity,
                 logo_url: h.securities?.logo_url || null,
                 security_id: h.security_id,
@@ -396,6 +429,7 @@ const SwipeableBalanceCard = ({
             .from("client_strategy_returns_c")
             .select("strategy_id, basket_value, holdings_snapshot, as_of_date")
             .eq("user_id", userId)
+            .is("family_member", null) // parent rows only — child strategies live on their own rows
             .order("as_of_date", { ascending: false });
 
           const strategiesPromise = supabase
@@ -444,8 +478,26 @@ const SwipeableBalanceCard = ({
               } catch { return []; }
             })();
 
+            // Higher-of cost basis per underlying security: max(Expected_fill rands,
+            // avg_fill/100) × qty. Skip pending (no avg_fill). Falls back to whichever
+            // exists for legacy snapshot rows.
+            // Defensive: Expected_fill > 5x avg_fill/100 is legacy cents — divide by 100.
             const investedCents = snapshot.reduce(
-              (sum, h) => sum + Math.round((h.avg_fill || 0) * (h.qty || 0)),
+              (sum, h) => {
+                const qty = Number(h.qty || 0);
+                if (qty <= 0) return sum;
+                const avgFillCents = Number(h.avg_fill || 0);
+                if (avgFillCents <= 0) return sum;
+                const expectedRaw = Number(h.Expected_fill ?? h.expected_fill ?? 0);
+                const avgFillRands = avgFillCents / 100;
+                const expectedRands = expectedRaw > 0
+                  ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw)
+                  : 0;
+                const perShareRands = expectedRands > 0
+                  ? Math.max(expectedRands, avgFillRands)
+                  : avgFillRands;
+                return sum + Math.round(perShareRands * 100 * qty);
+              },
               0
             );
             const changePct = investedCents > 0
@@ -489,16 +541,38 @@ const SwipeableBalanceCard = ({
         };
 
         const mValue = enrichedHoldings.reduce((acc, h) => acc + liveMarketValue(h) / 100, 0);
-        const invested = enrichedHoldings.reduce(
-          (acc, h) =>
-            acc + (Number(h.avg_fill || 0) * Number(h.quantity || 0)) / 100,
-          0,
-        );
+        // Cost basis per share in Rands: Expected_fill (rands) > avg_fill (cents).
+        // Defensive: Expected_fill > 5x avg_fill/100 is legacy cents — divide by 100.
+        const costBasisRands = (h) => {
+          const expectedRaw = Number(h.Expected_fill || 0);
+          const qty = Number(h.quantity || 0);
+          const avgFillCents = Number(h.avg_fill || 0);
+          const avgFillRands = avgFillCents / 100;
+          const expectedRands = expectedRaw > 0
+            ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw)
+            : 0;
+          if (expectedRands > 0) return expectedRands * qty;
+          return avgFillRands * qty;
+        };
+        const invested = enrichedHoldings.reduce((acc, h) => acc + costBasisRands(h), 0);
         const investedAmount = enrichedHoldings.reduce(
           (acc, h) => {
             if (h.invested_amount !== undefined) return acc + Number(h.invested_amount) / 100;
-            return acc + (Number(h.avg_fill || 0) * Number(h.quantity || 0)) / 100;
+            return acc + costBasisRands(h);
           },
+          0,
+        );
+
+        // Higher-of cost basis — drives the "Portfolio Value" headline.
+        // Strategies already aggregated max-of into invested_amount during
+        // construction; for stocks we compute max-of per row here.
+        enrichedHoldings.forEach((h) => {
+          h.maxOfCostBasis = h.isStrategy
+            ? Number(h.invested_amount || 0) / 100
+            : maxOfCostBasisRands(h);
+        });
+        const totalMaxOfCostBasis = enrichedHoldings.reduce(
+          (acc, h) => acc + Number(h.maxOfCostBasis || 0),
           0,
         );
 
@@ -518,6 +592,7 @@ const SwipeableBalanceCard = ({
         const nextDbData = {
           holdings: enrichedHoldings,
           totalMarketValue: mValue,
+          totalMaxOfCostBasis,
           totalInvested: invested,
           totalInvestedAmount: investedAmount,
           holdingsCount: enrichedHoldings.length,
@@ -586,6 +661,7 @@ const SwipeableBalanceCard = ({
       // Ensure we don't leave chart stuck in loading if no holdings
       if (dbData.holdings.length === 0) {
         setChartData([]);
+        setPeriodReturn(null);
         setChartLoading(false);
         return;
       }
@@ -627,6 +703,7 @@ const SwipeableBalanceCard = ({
                 .select("*")
                 .eq("user_id", userId)
                 .eq("strategy_id", sh.strategyId)
+                .is("family_member", null) // parent chart only
                 .order("as_of_date", { ascending: true });
 
               if (activeTab !== "all") {
@@ -684,7 +761,14 @@ const SwipeableBalanceCard = ({
             }
 
             const pDateStr = (h.created_at || h.as_of_date || "").split("T")[0];
-            const avgFillPrice = Number(h.avg_fill || 0) / 100;
+            // Chart's "purchase price" anchor prefers Expected_fill (rands) over avg_fill (cents).
+            // Defensive: Expected_fill > 5x avg_fill/100 is legacy cents — divide by 100.
+            const expectedFillRaw = Number(h.Expected_fill || 0);
+            const avgFillRandsAnchor = Number(h.avg_fill || 0) / 100;
+            const expectedFillRands = expectedFillRaw > 0
+              ? (expectedFillRaw > avgFillRandsAnchor * 5 ? expectedFillRaw / 100 : expectedFillRaw)
+              : 0;
+            const avgFillPrice = expectedFillRands > 0 ? expectedFillRands : avgFillRandsAnchor;
             const livePrice = Number(h.last_price || 0) / 100;
             
             const allMapped = data.map((p) => ({
@@ -721,8 +805,21 @@ const SwipeableBalanceCard = ({
         if (allPriceData.length === 0 && !hasStrategyData) {
           // No price history in DB — synthesize a 2-point chart from cost basis → current market value
           const activeHoldings = holdingsToChart.filter(h => !h.isStrategy && Number(h.avg_fill || 0) > 0);
+          // Cost basis prefers Expected_fill (rands → cents) over avg_fill (cents).
+          // Defensive: Expected_fill > 5x avg_fill/100 is legacy cents — divide by 100.
+          const costBasisCents = (h) => {
+            const expectedRaw = Number(h.Expected_fill || 0);
+            const qty = Number(h.quantity || 0);
+            const avgFillCents = Number(h.avg_fill || 0);
+            const avgFillRands = avgFillCents / 100;
+            const expectedRands = expectedRaw > 0
+              ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw)
+              : 0;
+            if (expectedRands > 0) return Math.round(expectedRands * 100 * qty);
+            return avgFillCents * qty;
+          };
           if (activeHoldings.length > 0) {
-            const totalCostCents = activeHoldings.reduce((s, h) => s + Number(h.avg_fill || 0) * Number(h.quantity || 0), 0);
+            const totalCostCents = activeHoldings.reduce((s, h) => s + costBasisCents(h), 0);
             const totalMarketCents = activeHoldings.reduce((s, h) => s + Number(h.market_value || 0), 0);
             const totalPnl = (totalMarketCents - totalCostCents) / 100;
             const earliest = activeHoldings
@@ -795,6 +892,12 @@ const SwipeableBalanceCard = ({
 
         console.log(`[SwipeableBalanceCard] Final chart points: ${points.length}`);
         setChartData(points);
+        // Period return = last point's v (already normalized to period start by the loop above)
+        if (points.length >= 2) {
+          setPeriodReturn(points[points.length - 1].v);
+        } else {
+          setPeriodReturn(null);
+        }
       } catch (err) {
         console.error("❌ [SwipeableBalanceCard] Chart fetch error:", err);
       } finally {
@@ -809,169 +912,53 @@ const SwipeableBalanceCard = ({
     };
   }, [userId, familyMemberId, dbData.holdings, activeTab, selectedAsset, lastUpdated]);
 
-  useEffect(() => {
-    const fetchPeriodReturnData = async () => {
-      if (!["5d", "m", "ytd", "all"].includes(activeTab) || (!userId && !familyMemberId)) return;
-
-      try {
-        // If an asset is selected, show its returns
-        // Otherwise, calculate portfolio-wide returns
-        const asset = selectedAsset;
-
-        // Map activeTab to column names
-        const columnMap = {
-          "5d": { pnl: "5d_pnl", pct: "5d_pct" },
-          "m": { pnl: "1m_pnl", pct: "1m_pct" },
-          "ytd": { pnl: "ytd_pnl", pct: "ytd_pct" },
-          "all": { pnl: "inception_pnl", pct: "inception_pct" }
-        };
-
-        const columns = columnMap[activeTab];
-
-        if (asset) {
-          // For selected asset, fetch from appropriate table
-          if (asset.isStrategy && asset.strategyId && userId) {
-            const { data, error } = await supabase
-              .from("client_strategy_returns_c")
-              .select("*")
-              .eq("user_id", userId)
-              .eq("strategy_id", asset.strategyId)
-              .order("as_of_date", { ascending: false })
-              .limit(1)
-              .maybeSingle();
-
-            if (!error && data) {
-              const pnlValue = data[columns.pnl] || 0;
-              const pctValue = data[columns.pct] || 0;
-              const basketValue = (Number(data.basket_value || 0)) / 100;
-              setReturnData5d({
-                pnl: (Number(pnlValue)) / 100,
-                pct: Number(pctValue)
-              });
-              setLatestBasketValue(basketValue);
-            } else {
-              setLatestBasketValue(0);
-              setReturnData5d({ pnl: 0, pct: 0 });
-            }
-          } else if (asset.security_id) {
-            const { data, error } = await supabase
-              .from("stock_returns_c")
-              .select("*")
-              .eq("security_id", asset.security_id)
-              .order("as_of_date", { ascending: false })
-              .limit(1)
-              .single();
-
-            if (!error && data) {
-              const pnlValue = data[columns.pnl] || 0;
-              const pctValue = data[columns.pct] || 0;
-              const basketValue = (Number(data.basket_value || 0)) / 100;
-              setReturnData5d({
-                pnl: (Number(pnlValue)) / 100,
-                pct: Number(pctValue)
-              });
-              setLatestBasketValue(basketValue);
-            } else {
-              setLatestBasketValue(0);
-              setReturnData5d({ pnl: 0, pct: 0 });
-            }
-          }
-        } else if (dbData.holdings.length > 0) {
-          // For portfolio-wide returns, sum returns from all holdings
-          let totalPnl = 0;
-          let weightedPct = 0;
-          let totalValue = dbData.totalMarketValue;
-          let totalInvested = dbData.totalInvestedAmount;
-
-          const strategyIds = dbData.holdings
-            .filter(h => h.isStrategy && h.strategyId)
-            .map(h => h.strategyId);
-
-          const securityIds = dbData.holdings
-            .filter(h => h.security_id && !h.isStrategy)
-            .map(h => h.security_id);
-
-          // Fetch latest return data for each strategy (parent mode only)
-          if (strategyIds.length > 0 && userId) {
-            for (const strategyId of strategyIds) {
-              const { data: row, error: err } = await supabase
-                .from("client_strategy_returns_c")
-                .select("*")
-                .eq("user_id", userId)
-                .eq("strategy_id", strategyId)
-                .order("as_of_date", { ascending: false })
-                .limit(1)
-                .maybeSingle();
-
-              if (!err && row) {
-                const pnlValue = row[columns.pnl] || 0;
-                const pctValue = row[columns.pct] || 0;
-                const basketValue = (Number(row.basket_value || 0)) / 100;
-                const weight = dbData.totalMarketValue > 0 ? basketValue / dbData.totalMarketValue : 0;
-                totalPnl += (Number(pnlValue)) / 100;
-                weightedPct += Number(pctValue) * weight;
-              }
-            }
-          }
-
-          // For stock holdings, compute personal unrealized P&L from cost basis vs live market value.
-          // This is always correct regardless of the selected time tab because the user's fill
-          // price is fixed — stock_returns_c period columns reflect the stock's own period return,
-          // not the user's personal gain/loss from their entry price.
-          if (securityIds.length > 0) {
-            for (const holding of dbData.holdings.filter(h => h.security_id && !h.isStrategy)) {
-              const costCents = Number(holding.avg_fill || 0) * Number(holding.quantity || 0);
-              const marketCents = Number(holding.market_value || 0);
-              totalPnl += (marketCents - costCents) / 100;
-            }
-          }
-
-          // Calculate portfolio return percentage
-          const portfolioPct = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0;
-
-          setReturnData5d({
-            pnl: totalPnl,
-            pct: portfolioPct
-          });
-        }
-      } catch (e) {
-        console.warn("[SwipeableBalanceCard] Error fetching period return data:", e);
-      }
-    };
-
-    fetchPeriodReturnData();
-  }, [activeTab, userId, familyMemberId, selectedAsset, dbData.holdings]);
-
   const displayMarketValue = selectedAsset
     ? Number(selectedAsset.market_value || 0) / 100
     : dbData.totalMarketValue;
+  // Selected-asset cost basis prefers Expected_fill (rands, client's quoted price)
+  // over avg_fill (broker fill, in cents). For strategies — which set
+  // avg_fill: investedCents at construction time — both paths yield the same value.
+  const selectedAssetInvestedRands = (() => {
+    if (!selectedAsset) return 0;
+    const expectedRaw = Number(selectedAsset.Expected_fill || 0);
+    const avgFillCents = Number(selectedAsset.avg_fill || 0);
+    const qty = Number(selectedAsset.quantity || 0);
+    const avgFillRands = avgFillCents / 100;
+    // Defensive: Expected_fill > 5x avg_fill/100 is legacy cents.
+    const expectedRands = expectedRaw > 0
+      ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw)
+      : 0;
+    if (expectedRands > 0) return expectedRands * qty;
+    return avgFillRands * qty;
+  })();
   const displayInvested = selectedAsset
-    ? (Number(selectedAsset.avg_fill || 0) *
-      Number(selectedAsset.quantity || 0)) /
-    100
+    ? selectedAssetInvestedRands
     : dbData.totalInvested;
   const displayInvestedAmount = selectedAsset
     ? (selectedAsset.invested_amount !== undefined
         ? Number(selectedAsset.invested_amount) / 100
-        : (Number(selectedAsset.avg_fill || 0) * Number(selectedAsset.quantity || 0)) / 100)
+        : selectedAssetInvestedRands)
     : dbData.totalInvestedAmount;
+  // Headline (the big number) is the live market value — cost basis + unrealised profit.
+  const displayBigValue = selectedAsset
+    ? Number(selectedAsset.maxOfCostBasis || 0)
+    : Number(dbData.totalMaxOfCostBasis || 0);
   const isPeriodTab = ["5d", "m", "ytd", "all"].includes(activeTab);
-  const displayReturn = isPeriodTab
-    ? returnData5d.pnl
-    : (displayMarketValue - displayInvested);
-  // Show latest basket_value for period views, otherwise use market value
+  // Total PnL (all-time): live market value minus higher-of cost basis.
+  const displayReturn = displayMarketValue - displayBigValue;
   const displayBalance = overrideBalance !== undefined
     ? overrideBalance
-    : (isPeriodTab && latestBasketValue > 0
-      ? latestBasketValue
-      : displayMarketValue);
+    : displayMarketValue;
 
-  const isLoss = displayReturn != null && displayReturn < 0;
-  const returnPct = isPeriodTab
-    ? (returnData5d.pct == null ? null : truncateDecimal(returnData5d.pct, 2).toFixed(2))
-    : (displayInvested > 0
-      ? truncateDecimal((displayReturn / displayInvested) * 100, 2).toFixed(2)
-      : "0.00");
+  // PnL pill: use period-specific return from client_strategy_returns_c chart data when a period tab
+  // is active and data is available; fall back to all-time return.
+  const activeReturn = (isPeriodTab && periodReturn !== null) ? periodReturn : displayReturn;
+  const activeReturnPct = displayBigValue > 0
+    ? truncateDecimal((activeReturn / displayBigValue) * 100, 2).toFixed(2)
+    : "0.00";
+
+  const isLoss = activeReturn < 0;
+  const returnPct = activeReturnPct;
   const chartColor = isLoss ? "hsl(0,84%,60%)" : "hsl(160,70%,45%)";
 
   const masked = "••••";
@@ -979,13 +966,13 @@ const SwipeableBalanceCard = ({
   const TrendIcon = isLoss ? TrendingDown : TrendingUp;
 
   return (
-    <div className="rounded-3xl gradient-hero-card shadow-hero p-5 relative overflow-hidden border border-white/5">
+    <div className="rounded-3xl gradient-hero-card shadow-hero p-4 relative overflow-hidden border border-white/5">
       {/* Ambient glows */}
       <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-accent/30 blur-3xl pointer-events-none" />
       <div className="absolute -bottom-12 -left-8 w-32 h-32 rounded-full bg-primary/15 blur-3xl pointer-events-none" />
 
       {/* Top row: label + visibility + LIVE */}
-      <div className="flex items-center justify-between relative">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-semibold tracking-[0.18em] text-white/60">
             {selectedAsset ? selectedAsset.symbol.toUpperCase() : "PORTFOLIO VALUE"}
@@ -1009,8 +996,8 @@ const SwipeableBalanceCard = ({
       </div>
 
       {/* Value + inline sparkline */}
-      <div className="flex items-end justify-between mt-2 relative">
-        <div className="flex-1 min-w-0 pr-3">
+      <div className="flex items-end justify-between mt-1">
+        <div className="flex-1 min-w-0 pr-2">
           {!dataSettled ? (
             <Skeleton className="h-8 w-36 bg-white/15 rounded mb-2 animate-pulse" />
           ) : (
@@ -1018,7 +1005,7 @@ const SwipeableBalanceCard = ({
               {isVisible ? formatFull(displayBalance) : masked}
             </h2>
           )}
-          <div className="flex items-center gap-2 mt-2">
+          <div className="flex items-center gap-2 mt-1.5">
             {!dataSettled ? (
               <Skeleton className="h-5 w-24 bg-white/15 rounded-full animate-pulse" />
             ) : (
@@ -1032,7 +1019,7 @@ const SwipeableBalanceCard = ({
                           {activeTab === "5d" && "5D:"}{activeTab === "m" && "1M:"}{activeTab === "ytd" && "YTD:"}{activeTab === "all" && "Inc:"}
                         </span>
                       )}
-                      {displayReturn == null ? "N/A" : formatKMB(Math.abs(displayReturn))}
+                      {activeReturn == null ? "N/A" : formatKMB(Math.abs(activeReturn))}
                     </>
                   ) : (
                     masked
@@ -1048,10 +1035,10 @@ const SwipeableBalanceCard = ({
           </div>
         </div>
 
-        {/* Mobile sparkline — flex item so it doesn't overflow into dropdown */}
-        <div className="sm:hidden opacity-90 self-end shrink-0 overflow-hidden" style={{ width: 150, height: 72 }}>
+        {/* Inline sparkline — flex item, never overlaps content below */}
+        <div className="opacity-90 shrink-0 self-end pointer-events-none w-[44%] translate-y-4" style={{ height: 90 }}>
           {chartData.length > 1 ? (
-            <ResponsiveContainer width={150} height={72}>
+            <ResponsiveContainer width="100%" height={90}>
               <ComposedChart data={chartData} margin={{ top: 2, right: 0, left: 0, bottom: 2 }}>
                 <Tooltip
                   content={({ active, payload }) => {
@@ -1070,37 +1057,7 @@ const SwipeableBalanceCard = ({
               </ComposedChart>
             </ResponsiveContainer>
           ) : (!dataSettled || chartLoading) ? (
-            <div className="flex items-end gap-0.5 w-full h-full">
-              {[40, 55, 35, 65, 50, 70, 45, 60].map((h, i) => (
-                <Skeleton key={i} className="flex-1 rounded-sm bg-white/10 animate-pulse" style={{ height: `${h}%` }} />
-              ))}
-            </div>
-          ) : null}
-        </div>
-
-        {/* Desktop sparkline — original absolute positioning, unchanged */}
-        <div className="hidden sm:block opacity-90 absolute right-4 -bottom-10">
-          {chartData.length > 1 ? (
-            <ResponsiveContainer width={185} height={85}>
-              <ComposedChart data={chartData} margin={{ top: 2, right: 0, left: 0, bottom: 2 }}>
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-                    return (
-                      <div className="bg-white/95 backdrop-blur-sm border border-slate-200 rounded-lg px-2 py-1 shadow-md">
-                        <p className="text-[9px] text-slate-500">{payload[0]?.payload?.d}</p>
-                        <p className="text-[10px] font-semibold text-slate-800">{formatPrecise(payload[0]?.value)}</p>
-                      </div>
-                    );
-                  }}
-                />
-                <ReferenceLine y={0} stroke="rgba(148,163,184,0.3)" strokeDasharray="3 3" strokeWidth={1} />
-                <Area type="monotone" dataKey="v" stroke="none" fill={chartColor} fillOpacity={0.15} />
-                <Line type="monotone" dataKey="v" stroke={chartColor} strokeWidth={2} dot={false} />
-              </ComposedChart>
-            </ResponsiveContainer>
-          ) : (!dataSettled || chartLoading) ? (
-            <div className="flex items-end gap-0.5 w-[185px] h-[85px]">
+            <div className="flex items-end gap-0.5 w-full" style={{ height: 90 }}>
               {[40, 55, 35, 65, 50, 70, 45, 60].map((h, i) => (
                 <Skeleton key={i} className="flex-1 rounded-sm bg-white/10 animate-pulse" style={{ height: `${h}%` }} />
               ))}
@@ -1110,7 +1067,8 @@ const SwipeableBalanceCard = ({
       </div>
 
       {/* Asset selector — hidden in child mode */}
-      <div ref={dropdownRef} className={`relative mt-3${childMode ? " hidden" : ""}`}>
+
+      <div ref={dropdownRef} className={`relative mt-2${childMode ? " hidden" : ""}`}>
         {!dataSettled ? (
           <Skeleton className="h-7 w-28 bg-white/10 rounded-full animate-pulse" />
         ) : (
@@ -1166,7 +1124,7 @@ const SwipeableBalanceCard = ({
       </div>
 
       {/* Period selector */}
-      <div className="mt-4 flex bg-black/20 backdrop-blur-sm rounded-full p-0.5 relative">
+      <div className="mt-2 flex bg-black/20 backdrop-blur-sm rounded-full p-0.5 relative">
         {[["5d","5D"],["m","M"],["ytd","YTD"],["all","All"]].map(([key, label]) => (
           <button
             key={key}
@@ -1181,7 +1139,7 @@ const SwipeableBalanceCard = ({
       </div>
 
       {/* Footer */}
-      <div className="mt-4 pt-4 border-t border-white/10 flex relative">
+      <div className="mt-3 pt-3 border-t border-white/10 flex relative">
         <div className="flex-1">
           <div className="text-[9px] tracking-[0.15em] text-white/50 font-semibold">CASH</div>
           <div className="text-sm font-bold text-white mt-0.5">
