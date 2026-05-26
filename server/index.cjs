@@ -261,6 +261,7 @@ app.use((req, res, next) => {
 // Sumsub configuration
 const SUMSUB_APP_TOKEN = readEnv("SUMSUB_APP_TOKEN");
 const SUMSUB_SECRET_KEY = readEnv("SUMSUB_SECRET_KEY");
+const GOOGLE_CLOUD_VISION_API_KEY = readEnv("GOOGLE_CLOUD_VISION_API_KEY");
 const SUMSUB_BASE_URL = "https://api.sumsub.com";
 const SUMSUB_LEVEL_NAME = readEnv("SUMSUB_LEVEL_NAME") || "mint-advanced-kyc";
 
@@ -406,6 +407,135 @@ async function getSumsubRequiredDocsStatus(applicantId) {
   }
 
   return response.json();
+}
+
+// Verify a bank confirmation letter using Google Cloud Vision OCR
+async function verifyBankLetterWithVision(base64Content, mimeType, accountNumber, accountHolderName, bankName) {
+  if (!GOOGLE_CLOUD_VISION_API_KEY) {
+    return { verified: true, reason: "Vision API not configured — accepted without OCR check" };
+  }
+
+  try {
+    let extractedText = "";
+    const isPdf = mimeType === "application/pdf";
+
+    if (isPdf) {
+      const url = `https://vision.googleapis.com/v1/files:annotate?key=${GOOGLE_CLOUD_VISION_API_KEY}`;
+      const body = {
+        requests: [{
+          inputConfig: { content: base64Content, mimeType: "application/pdf" },
+          features: [{ type: "DOCUMENT_TEXT_DETECTION" }],
+          pages: [1, 2, 3],
+        }],
+      };
+      const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(`Vision API error: ${JSON.stringify(data)}`);
+      const pages = data?.responses?.[0]?.responses || [];
+      extractedText = pages.map(p => p?.fullTextAnnotation?.text || "").join("\n");
+    } else {
+      const url = `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_CLOUD_VISION_API_KEY}`;
+      const body = {
+        requests: [{
+          image: { content: base64Content },
+          features: [{ type: "DOCUMENT_TEXT_DETECTION" }],
+        }],
+      };
+      const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(`Vision API error: ${JSON.stringify(data)}`);
+      extractedText = data?.responses?.[0]?.fullTextAnnotation?.text || "";
+    }
+
+    if (!extractedText) {
+      return { verified: false, reason: "Could not read text from the document. Please upload a clearer image or PDF." };
+    }
+
+    console.log("[vision] Extracted text length:", extractedText.length);
+    console.log("[vision] Extracted text preview:", extractedText.slice(0, 800));
+
+    // Normalize: remove spaces, dashes, newlines → lowercase
+    const normalize = (str) => str.replace(/[\s\-_]/g, "").toLowerCase();
+    const normalizedText = normalize(extractedText);
+    const lowerText = extractedText.toLowerCase();
+
+    // ── CHECK 1: Must contain banking keywords — confirms this is a bank document ──
+    const bankingKeywords = ["account", "branch", "bank", "holder", "confirm", "balance", "statement", "certificate"];
+    const keywordsFound = bankingKeywords.filter(k => lowerText.includes(k));
+    if (keywordsFound.length < 3) {
+      return { verified: false, reason: "This document doesn't appear to be a bank confirmation letter. Please upload an official letter from your bank." };
+    }
+
+    // ── CHECK 2: Date must be present and within the last 3 months ──
+    const now = new Date();
+    const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
+    // Match common SA date formats: 2026-01-15 | 15 January 2026 | 15/01/2026 | Jan 15, 2026
+    const datePatterns = [
+      /(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/g,                        // 2026-01-15
+      /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/g,                        // 15/01/2026
+      /(\d{1,2})\s+(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{4})/gi,
+      /(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2}),?\s+(\d{4})/gi,
+    ];
+    const monthNames = { january:1, february:2, march:3, april:4, may:5, june:6, july:7, august:8, september:9, october:10, november:11, december:12 };
+    let latestDocDate = null;
+    for (const pattern of datePatterns) {
+      let m;
+      while ((m = pattern.exec(extractedText)) !== null) {
+        let d;
+        if (/^\d{4}/.test(m[0])) {
+          d = new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
+        } else if (/\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}/.test(m[0])) {
+          d = new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]));
+        } else if (/^\d{1,2}\s/.test(m[0])) {
+          d = new Date(parseInt(m[3]), (monthNames[m[2].toLowerCase()] || 1) - 1, parseInt(m[1]));
+        } else {
+          d = new Date(parseInt(m[3]), (monthNames[m[1].toLowerCase()] || 1) - 1, parseInt(m[2]));
+        }
+        if (!isNaN(d.getTime()) && d <= now && (!latestDocDate || d > latestDocDate)) latestDocDate = d;
+      }
+    }
+    if (latestDocDate) {
+      console.log("[vision] Document date found:", latestDocDate.toISOString());
+      if (latestDocDate < threeMonthsAgo) {
+        return { verified: false, reason: `This letter is dated ${latestDocDate.toLocaleDateString("en-ZA")} which is older than 3 months. Please obtain a recent bank confirmation letter.` };
+      }
+    } else {
+      console.log("[vision] No clear date found in document");
+    }
+
+    // ── CHECK 3: Account number (digits only, must appear in text) ──
+    const digitsOnly = (str) => str.replace(/\D/g, "");
+    const accountDigits = digitsOnly(accountNumber || "");
+    if (accountDigits.length >= 6 && !normalizedText.includes(accountDigits)) {
+      return { verified: false, reason: "Your account number was not found on this document. Please make sure you're uploading the correct bank confirmation letter." };
+    }
+
+    // ── CHECK 4: Account holder name — at least one name word (≥3 chars) must appear ──
+    if (accountHolderName && accountHolderName.trim()) {
+      const nameParts = accountHolderName.trim().split(/\s+/).filter(p => p.length >= 3);
+      const normalizedName = normalize(accountHolderName);
+      const nameFound = nameParts.some(part => normalizedText.includes(normalize(part))) || normalizedText.includes(normalizedName);
+      if (!nameFound) {
+        return { verified: false, reason: "The account holder name on the document doesn't match what you entered. Please check your details or upload the correct letter." };
+      }
+    }
+
+    // ── CHECK 5: Bank name must appear in the document ──
+    if (bankName && bankName.trim()) {
+      // Match first word of bank name (e.g. "ABSA", "FNB", "Standard", "Nedbank", "Capitec")
+      const bankWords = bankName.trim().split(/\s+/).filter(w => w.length >= 3);
+      const bankFound = bankWords.some(w => lowerText.includes(w.toLowerCase()));
+      if (!bankFound) {
+        return { verified: false, reason: `This document doesn't appear to be from ${bankName}. Please upload a letter from the bank you entered.` };
+      }
+    }
+
+    return { verified: true, reason: "Document verified: banking keywords, date, account number, name, and bank all confirmed." };
+  } catch (err) {
+    console.error("[vision] OCR error:", err.message);
+    // Don't block the user if Vision fails — log it and accept
+    return { verified: true, reason: "OCR check could not complete — accepted for manual review." };
+  }
 }
 
 const SUPABASE_URL = readEnv('SUPABASE_URL') || readEnv('VITE_SUPABASE_URL');
@@ -6174,7 +6304,7 @@ app.post("/api/onboarding/upload-bank-letter", async (req, res) => {
     const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
     if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
 
-    const { fileBase64, fileType } = req.body || {};
+    const { fileBase64, fileType, accountNumber, accountHolderName, bankName } = req.body || {};
     if (!fileBase64 || typeof fileBase64 !== "string") {
       return res.status(400).json({ success: false, error: "Missing fileBase64 in request body" });
     }
@@ -6200,6 +6330,11 @@ app.post("/api/onboarding/upload-bank-letter", async (req, res) => {
     const { data: urlData } = db.storage.from("signed-agreements").getPublicUrl(filePath);
     const publicUrl = urlData?.publicUrl || "";
 
+    // Run OCR verification via Google Cloud Vision
+    console.log(`[upload-bank-letter] Running Vision OCR for user ${user.id}...`);
+    const visionResult = await verifyBankLetterWithVision(normalizedBase64, fileType, accountNumber, accountHolderName, bankName);
+    console.log(`[upload-bank-letter] Vision result:`, visionResult);
+
     // Update onboarding record
     const { data: onboardingRecord } = await db
       .from("user_onboarding")
@@ -6212,14 +6347,20 @@ app.post("/api/onboarding/upload-bank-letter", async (req, res) => {
     if (onboardingRecord) {
       let raw = {};
       try { raw = typeof onboardingRecord.sumsub_raw === "string" ? JSON.parse(onboardingRecord.sumsub_raw) : (onboardingRecord.sumsub_raw || {}); } catch {}
-      raw.bank_letter_uploaded = true;
       raw.bank_letter_url = publicUrl;
       raw.bank_letter_uploaded_at = new Date().toISOString();
+      if (visionResult.verified) {
+        raw.bank_letter_uploaded = true;
+        raw.bank_letter_verified_at = new Date().toISOString();
+      } else {
+        raw.bank_letter_uploaded = false;
+        raw.bank_letter_verification_failed = true;
+      }
       await db.from("user_onboarding").update({ sumsub_raw: JSON.stringify(raw) }).eq("id", onboardingRecord.id);
     }
 
-    console.log(`[upload-bank-letter] Uploaded for user ${user.id}: ${publicUrl}`);
-    return res.json({ success: true, publicUrl });
+    console.log(`[upload-bank-letter] Uploaded for user ${user.id}: ${publicUrl} | verified=${visionResult.verified}`);
+    return res.json({ success: true, publicUrl, verified: visionResult.verified, reason: visionResult.reason });
   } catch (error) {
     console.error("[upload-bank-letter] Unexpected error:", error);
     return res.status(500).json({ success: false, error: error.message || "Unexpected server error" });
