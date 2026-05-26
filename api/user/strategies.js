@@ -207,7 +207,11 @@ export default async function handler(req, res) {
         sn.toLowerCase() === (strategy.short_name || "").toLowerCase()
       );
 
-      if (!matchedByHoldings && !matchedByTxName) continue;
+      // Only include strategies the user has active stock_holdings_c rows for.
+      // A lingering transaction alone (e.g. holdings row was deleted) must not
+      // resurrect the strategy on the dashboard — that produced "bought"-looking
+      // cards from orphaned tx data.
+      if (!matchedByHoldings) continue;
 
       const latestMetric = returnsMap[strategy.id] || null;
 
