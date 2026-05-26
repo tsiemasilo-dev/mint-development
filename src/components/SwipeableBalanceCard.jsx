@@ -163,6 +163,7 @@ const SwipeableBalanceCard = ({
   const childMode = !!familyMemberId;
   const _cacheKey = `${userId || ''}:${familyMemberId || ''}`;
   const [activeTab, setActiveTab] = useState("m");
+  const [periodReturn, setPeriodReturn] = useState(null);
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
   const { lastUpdated, isConnected } = useRealtimePrices();
@@ -660,6 +661,7 @@ const SwipeableBalanceCard = ({
       // Ensure we don't leave chart stuck in loading if no holdings
       if (dbData.holdings.length === 0) {
         setChartData([]);
+        setPeriodReturn(null);
         setChartLoading(false);
         return;
       }
@@ -890,6 +892,12 @@ const SwipeableBalanceCard = ({
 
         console.log(`[SwipeableBalanceCard] Final chart points: ${points.length}`);
         setChartData(points);
+        // Period return = last point's v (already normalized to period start by the loop above)
+        if (points.length >= 2) {
+          setPeriodReturn(points[points.length - 1].v);
+        } else {
+          setPeriodReturn(null);
+        }
       } catch (err) {
         console.error("❌ [SwipeableBalanceCard] Chart fetch error:", err);
       } finally {
@@ -936,17 +944,21 @@ const SwipeableBalanceCard = ({
     ? Number(selectedAsset.maxOfCostBasis || 0)
     : Number(dbData.totalMaxOfCostBasis || 0);
   const isPeriodTab = ["5d", "m", "ytd", "all"].includes(activeTab);
-  // PnL pill: live market value minus higher-of cost basis — consistent with headline.
-  // Period tab labels (5D/1M/YTD/Inc) still show for chart context.
+  // Total PnL (all-time): live market value minus higher-of cost basis.
   const displayReturn = displayMarketValue - displayBigValue;
   const displayBalance = overrideBalance !== undefined
     ? overrideBalance
     : displayMarketValue;
 
-  const isLoss = displayReturn < 0;
-  const returnPct = displayBigValue > 0
-    ? truncateDecimal((displayReturn / displayBigValue) * 100, 2).toFixed(2)
+  // PnL pill: use period-specific return from client_strategy_returns_c chart data when a period tab
+  // is active and data is available; fall back to all-time return.
+  const activeReturn = (isPeriodTab && periodReturn !== null) ? periodReturn : displayReturn;
+  const activeReturnPct = displayBigValue > 0
+    ? truncateDecimal((activeReturn / displayBigValue) * 100, 2).toFixed(2)
     : "0.00";
+
+  const isLoss = activeReturn < 0;
+  const returnPct = activeReturnPct;
   const chartColor = isLoss ? "hsl(0,84%,60%)" : "hsl(160,70%,45%)";
 
   const masked = "••••";
@@ -1007,7 +1019,7 @@ const SwipeableBalanceCard = ({
                           {activeTab === "5d" && "5D:"}{activeTab === "m" && "1M:"}{activeTab === "ytd" && "YTD:"}{activeTab === "all" && "Inc:"}
                         </span>
                       )}
-                      {displayReturn == null ? "N/A" : formatKMB(Math.abs(displayReturn))}
+                      {activeReturn == null ? "N/A" : formatKMB(Math.abs(activeReturn))}
                     </>
                   ) : (
                     masked
