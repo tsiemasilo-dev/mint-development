@@ -279,9 +279,6 @@ const SwipeableBalanceCard = ({
   const [dataSettled, setDataSettled] = useState(() => !!_warmCache?.totalMarketValue);
   const [chartData, setChartData] = useState([]);
   const [chartLoading, setChartLoading] = useState(false);
-  const [returnData5d, setReturnData5d] = useState({ pnl: 0, pct: 0 });
-  const [latestBasketValue, setLatestBasketValue] = useState(0);
-  const [defaultPortfolioBasketValue, setDefaultPortfolioBasketValue] = useState(0);
   const holdingsScrollRef = useRef(null);
 
   const scrollToHoldingIndex = (index) => {
@@ -874,147 +871,6 @@ const SwipeableBalanceCard = ({
     };
   }, [userId, familyMemberId, dbData.holdings, activeTab, selectedAsset, lastUpdated]);
 
-  useEffect(() => {
-    const fetchPeriodReturnData = async () => {
-      if (!["5d", "m", "ytd", "all"].includes(activeTab) || (!userId && !familyMemberId)) return;
-
-      try {
-        // If an asset is selected, show its returns
-        // Otherwise, calculate portfolio-wide returns
-        const asset = selectedAsset;
-
-        // Map activeTab to column names
-        const columnMap = {
-          "5d": { pnl: "5d_pnl", pct: "5d_pct" },
-          "m": { pnl: "1m_pnl", pct: "1m_pct" },
-          "ytd": { pnl: "ytd_pnl", pct: "ytd_pct" },
-          "all": { pnl: "inception_pnl", pct: "inception_pct" }
-        };
-
-        const columns = columnMap[activeTab];
-
-        if (asset) {
-          // For selected asset, fetch from appropriate table
-          if (asset.isStrategy && asset.strategyId && userId) {
-            const { data, error } = await supabase
-              .from("client_strategy_returns_c")
-              .select("*")
-              .eq("user_id", userId)
-              .eq("strategy_id", asset.strategyId)
-              .is("family_member", null) // parent-only period returns
-              .order("as_of_date", { ascending: false })
-              .limit(1)
-              .maybeSingle();
-
-            if (!error && data) {
-              const pnlValue = data[columns.pnl] || 0;
-              const pctValue = data[columns.pct] || 0;
-              const basketValue = (Number(data.basket_value || 0)) / 100;
-              setReturnData5d({
-                pnl: (Number(pnlValue)) / 100,
-                pct: Number(pctValue)
-              });
-              setLatestBasketValue(basketValue);
-            } else {
-              setLatestBasketValue(0);
-              setReturnData5d({ pnl: 0, pct: 0 });
-            }
-          } else if (asset.security_id) {
-            const { data, error } = await supabase
-              .from("stock_returns_c")
-              .select("*")
-              .eq("security_id", asset.security_id)
-              .order("as_of_date", { ascending: false })
-              .limit(1)
-              .single();
-
-            if (!error && data) {
-              const pnlValue = data[columns.pnl] || 0;
-              const pctValue = data[columns.pct] || 0;
-              const basketValue = (Number(data.basket_value || 0)) / 100;
-              setReturnData5d({
-                pnl: (Number(pnlValue)) / 100,
-                pct: Number(pctValue)
-              });
-              setLatestBasketValue(basketValue);
-            } else {
-              setLatestBasketValue(0);
-              setReturnData5d({ pnl: 0, pct: 0 });
-            }
-          }
-        } else if (dbData.holdings.length > 0) {
-          // For portfolio-wide returns, sum returns from all holdings
-          let totalPnl = 0;
-          let weightedPct = 0;
-          let totalValue = dbData.totalMarketValue;
-          let totalInvested = dbData.totalInvestedAmount;
-
-          const strategyIds = dbData.holdings
-            .filter(h => h.isStrategy && h.strategyId)
-            .map(h => h.strategyId);
-
-          const securityIds = dbData.holdings
-            .filter(h => h.security_id && !h.isStrategy)
-            .map(h => h.security_id);
-
-          // Fetch latest return data for each strategy (parent mode only)
-          if (strategyIds.length > 0 && userId) {
-            for (const strategyId of strategyIds) {
-              const { data: row, error: err } = await supabase
-                .from("client_strategy_returns_c")
-                .select("*")
-                .eq("user_id", userId)
-                .eq("strategy_id", strategyId)
-                .is("family_member", null) // parent-only aggregate
-                .order("as_of_date", { ascending: false })
-                .limit(1)
-                .maybeSingle();
-
-              if (!err && row) {
-                const pnlValue = row[columns.pnl] || 0;
-                const pctValue = row[columns.pct] || 0;
-                const basketValue = (Number(row.basket_value || 0)) / 100;
-                const weight = dbData.totalMarketValue > 0 ? basketValue / dbData.totalMarketValue : 0;
-                totalPnl += (Number(pnlValue)) / 100;
-                weightedPct += Number(pctValue) * weight;
-              }
-            }
-          }
-
-          // For stock holdings, compute personal unrealized P&L from cost basis vs live market value.
-          // This is always correct regardless of the selected time tab because the user's fill
-          // price is fixed — stock_returns_c period columns reflect the stock's own period return,
-          // not the user's personal gain/loss from their entry price.
-          // Cost basis prefers Expected_fill (rands, what the client saw at click time) over
-          // avg_fill/100 (broker fill in cents) so the company spread stays out of client PnL.
-          if (securityIds.length > 0) {
-            for (const holding of dbData.holdings.filter(h => h.security_id && !h.isStrategy)) {
-              const expectedFillRands = Number(holding.Expected_fill || 0);
-              const qty = Number(holding.quantity || 0);
-              const costCents = expectedFillRands > 0
-                ? Math.round(expectedFillRands * 100 * qty)
-                : Number(holding.avg_fill || 0) * qty;
-              const marketCents = Number(holding.market_value || 0);
-              totalPnl += (marketCents - costCents) / 100;
-            }
-          }
-
-          // Calculate portfolio return percentage
-          const portfolioPct = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0;
-
-          setReturnData5d({
-            pnl: totalPnl,
-            pct: portfolioPct
-          });
-        }
-      } catch (e) {
-        console.warn("[SwipeableBalanceCard] Error fetching period return data:", e);
-      }
-    };
-
-    fetchPeriodReturnData();
-  }, [activeTab, userId, familyMemberId, selectedAsset, dbData.holdings]);
-
   const displayMarketValue = selectedAsset
     ? Number(selectedAsset.market_value || 0) / 100
     : dbData.totalMarketValue;
@@ -1043,22 +899,17 @@ const SwipeableBalanceCard = ({
     ? Number(selectedAsset.maxOfCostBasis || 0)
     : Number(dbData.totalMaxOfCostBasis || 0);
   const isPeriodTab = ["5d", "m", "ytd", "all"].includes(activeTab);
-  // Period pill values come from the server-computed period returns
-  // (client_strategy_returns_c / stock_returns_c) so 5D/M/YTD/All all show
-  // tab-specific numbers. To be rewired later against the new headline.
-  const displayReturn = isPeriodTab
-    ? returnData5d.pnl
-    : (displayMarketValue - displayBigValue);
+  // PnL pill: live market value minus higher-of cost basis — consistent with headline.
+  // Period tab labels (5D/1M/YTD/Inc) still show for chart context.
+  const displayReturn = displayMarketValue - displayBigValue;
   const displayBalance = overrideBalance !== undefined
     ? overrideBalance
     : displayBigValue;
 
-  const isLoss = displayReturn != null && displayReturn < 0;
-  const returnPct = isPeriodTab
-    ? (returnData5d.pct == null ? null : truncateDecimal(returnData5d.pct, 2).toFixed(2))
-    : (displayBigValue > 0
-      ? truncateDecimal((displayReturn / displayBigValue) * 100, 2).toFixed(2)
-      : "0.00");
+  const isLoss = displayReturn < 0;
+  const returnPct = displayBigValue > 0
+    ? truncateDecimal((displayReturn / displayBigValue) * 100, 2).toFixed(2)
+    : "0.00";
   const chartColor = isLoss ? "hsl(0,84%,60%)" : "hsl(160,70%,45%)";
 
   const masked = "••••";
