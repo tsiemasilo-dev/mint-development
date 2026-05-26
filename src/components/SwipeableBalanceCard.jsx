@@ -956,13 +956,13 @@ const SwipeableBalanceCard = ({
   const TrendIcon = isLoss ? TrendingDown : TrendingUp;
 
   return (
-    <div className="rounded-3xl gradient-hero-card shadow-hero p-5 relative overflow-hidden border border-white/5">
+    <div className="rounded-3xl gradient-hero-card shadow-hero p-4 relative overflow-hidden border border-white/5">
       {/* Ambient glows */}
       <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-accent/30 blur-3xl pointer-events-none" />
       <div className="absolute -bottom-12 -left-8 w-32 h-32 rounded-full bg-primary/15 blur-3xl pointer-events-none" />
 
       {/* Top row: label + visibility + LIVE */}
-      <div className="flex items-center justify-between relative">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-semibold tracking-[0.18em] text-white/60">
             {selectedAsset ? selectedAsset.symbol.toUpperCase() : "PORTFOLIO VALUE"}
@@ -986,8 +986,8 @@ const SwipeableBalanceCard = ({
       </div>
 
       {/* Value + inline sparkline */}
-      <div className="flex items-end justify-between mt-2 relative min-h-[88px] overflow-hidden">
-        <div className="flex-1 min-w-0 pr-3">
+      <div className="flex items-end justify-between mt-1">
+        <div className="flex-1 min-w-0 pr-2">
           {!dataSettled ? (
             <Skeleton className="h-8 w-36 bg-white/15 rounded mb-2 animate-pulse" />
           ) : (
@@ -995,7 +995,7 @@ const SwipeableBalanceCard = ({
               {isVisible ? formatFull(displayBalance) : masked}
             </h2>
           )}
-          <div className="flex items-center gap-2 mt-2">
+          <div className="flex items-center gap-2 mt-1.5">
             {!dataSettled ? (
               <Skeleton className="h-5 w-24 bg-white/15 rounded-full animate-pulse" />
             ) : (
@@ -1025,10 +1025,10 @@ const SwipeableBalanceCard = ({
           </div>
         </div>
 
-        {/* Inline sparkline — absolute, clipped within value row */}
-        <div className="opacity-90 absolute right-4 bottom-0 pointer-events-none">
+        {/* Inline sparkline — flex item, never overlaps content below */}
+        <div className="opacity-90 shrink-0 self-end pointer-events-none" style={{ width: 140, height: 60 }}>
           {chartData.length > 1 ? (
-            <ResponsiveContainer width={185} height={85}>
+            <ResponsiveContainer width={140} height={60}>
               <ComposedChart data={chartData} margin={{ top: 2, right: 0, left: 0, bottom: 2 }}>
                 <Tooltip
                   content={({ active, payload }) => {
@@ -1047,7 +1047,7 @@ const SwipeableBalanceCard = ({
               </ComposedChart>
             </ResponsiveContainer>
           ) : (!dataSettled || chartLoading) ? (
-            <div className="flex items-end gap-0.5 w-[185px] h-[85px]">
+            <div className="flex items-end gap-0.5 w-full h-full">
               {[40, 55, 35, 65, 50, 70, 45, 60].map((h, i) => (
                 <Skeleton key={i} className="flex-1 rounded-sm bg-white/10 animate-pulse" style={{ height: `${h}%` }} />
               ))}
@@ -1057,7 +1057,7 @@ const SwipeableBalanceCard = ({
       </div>
 
       {/* Asset selector — hidden in child mode */}
-      <div ref={dropdownRef} className={`relative mt-3${childMode ? " hidden" : ""}`}>
+      <div ref={dropdownRef} className={`relative mt-2${childMode ? " hidden" : ""}`}>
         {!dataSettled ? (
           <Skeleton className="h-7 w-28 bg-white/10 rounded-full animate-pulse" />
         ) : (
@@ -1113,7 +1113,7 @@ const SwipeableBalanceCard = ({
       </div>
 
       {/* Period selector */}
-      <div className="mt-4 flex bg-black/20 backdrop-blur-sm rounded-full p-0.5 relative">
+      <div className="mt-2 flex bg-black/20 backdrop-blur-sm rounded-full p-0.5 relative">
         {[["5d","5D"],["m","M"],["ytd","YTD"],["all","All"]].map(([key, label]) => (
           <button
             key={key}
@@ -1128,7 +1128,7 @@ const SwipeableBalanceCard = ({
       </div>
 
       {/* Footer */}
-      <div className="mt-4 pt-4 border-t border-white/10 flex relative">
+      <div className="mt-3 pt-3 border-t border-white/10 flex relative">
         <div className="flex-1">
           <div className="text-[9px] tracking-[0.15em] text-white/50 font-semibold">CASH</div>
           <div className="text-sm font-bold text-white mt-0.5">
