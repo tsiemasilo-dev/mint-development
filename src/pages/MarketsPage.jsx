@@ -2346,7 +2346,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       {childFilter && selectedStrategy && showChildInvestModal && (
         <ChildInvestModal
           child={childFilter}
-          strategy={selectedStrategy}
+          strategy={{ ...selectedStrategy, calculatedMinInvestment: calculateMinInvestmentSync(selectedStrategy, holdingsBySymbol) }}
           initialStep="preview"
           onClose={() => { setSelectedStrategy(null); setShowChildInvestModal(false); }}
           onOpenFactsheet={(strategy) => {
