@@ -34,6 +34,7 @@ const PaymentPage = ({
   const [errorMessage, setErrorMessage] = useState("");
   const hasInitialized = useRef(false);
   const isMounted = useRef(true);
+  const isSubmittingWallet = useRef(false);
   const [isMethodModalOpen, setIsMethodModalOpen] = useState(!initialMethod);
   const isChildWalletPurchase = !!childFamilyMemberId;
 
@@ -297,7 +298,8 @@ const PaymentPage = ({
   const handleWalletConfirm = async () => {
     const totalToDeduct = amount;
 
-    if (paymentStatus === "processing") return;
+    if (isSubmittingWallet.current || paymentStatus === "processing") return;
+    isSubmittingWallet.current = true;
 
     setWalletConfirmOpen(false);
     setPaymentStatus("processing");
@@ -334,6 +336,7 @@ const PaymentPage = ({
       setWalletSuccessOpen(true);
     } catch (err) {
       console.error("Wallet payment error:", err);
+      isSubmittingWallet.current = false;
       setPaymentStatus("failed");
       setErrorMessage(err.message || "Wallet payment failed");
     }
