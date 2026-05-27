@@ -1,4 +1,4 @@
-import { supabaseAdmin, supabase } from "../_lib/supabase.js";
+import { supabaseAdmin, supabase, authenticateUser } from "../_lib/supabase.js";
 
 function parseOnboardingFlags(record) {
   // Accept both 'approved' (new) and legacy statuses for old SumSub users
@@ -57,13 +57,10 @@ export default async function handler(req, res) {
   }
 
   try {
-    const authHeader = req.headers.authorization || "";
-    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
-    if (!token) return res.status(401).json({ success: false, error: "Missing token" });
+    const { user, error: authErr } = await authenticateUser(req);
+    if (authErr || !user) return res.status(401).json({ success: false, error: authErr || "Invalid session" });
 
     const db = supabaseAdmin || supabase;
-    const { data: { user }, error: authErr } = await db.auth.getUser(token);
-    if (authErr || !user) return res.status(401).json({ success: false, error: "Invalid session" });
 
     const { data, error } = await db
       .from("user_onboarding")
