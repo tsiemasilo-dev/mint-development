@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import NotificationBell from "../components/NotificationBell";
 import Navbar from "../components/Navbar";
+import ChildPortfolioTab from "../components/ChildPortfolioTab";
 import SwipeableBalanceCard from "../components/SwipeableBalanceCard";
 import Skeleton from "../components/Skeleton";
 import { useProfile } from "../lib/useProfile";
@@ -1967,7 +1968,6 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   const [childFriendlyLoading, setChildFriendlyLoading] = useState(true);
   const [kycNotice, setKycNotice] = useState("");
   const [activeChildTab, setActiveChildTab] = useState("home");
-  const [activePortfolioSubTab, setActivePortfolioSubTab] = useState("strategies");
 
   const childName = [child?.first_name, child?.last_name].filter(Boolean).join(" ") || "Child";
   const age = getAge(child?.date_of_birth);
@@ -2783,131 +2783,8 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             </div>
           </motion.div>}
 
-          {/* -- Child Friendly Strategies — portfolio tab, STRATEGIES sub-tab, no holdings yet -- */}
-          {activeChildTab === "portfolio" && activePortfolioSubTab === "strategies" && strategyCardStacks.length === 0 && childFriendlyStrategies.length > 0 && (
-            <motion.div variants={item}>
-              <div className="flex items-center gap-2 mb-3 px-1">
-                <div className="h-2 w-2 rounded-full bg-green-300" />
-                <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Child Friendly Strategies</p>
-              </div>
-
-              {childFriendlyLoading ? (
-                <div className="space-y-3">
-                  {[0, 1].map((i) => (
-                    <div key={i} className="rounded-2xl border border-slate-200 bg-white shadow-md p-4">
-                      <div className="flex items-start justify-between gap-3 mb-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <Skeleton className="h-10 w-10 rounded-xl flex-shrink-0" />
-                          <div className="space-y-2 min-w-0">
-                            <Skeleton className="h-4 w-32" />
-                            <div className="flex gap-1.5">
-                              <Skeleton className="h-5 w-14 rounded-full" />
-                              <Skeleton className="h-5 w-16 rounded-full" />
-                            </div>
-                          </div>
-                        </div>
-                        <div className="space-y-2 flex-shrink-0">
-                          <Skeleton className="h-4 w-20" />
-                          <Skeleton className="h-3 w-16" />
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
-                        <div className="flex -space-x-2">
-                          {[0, 1, 2].map((idx) => (
-                            <Skeleton key={idx} className="h-7 w-7 rounded-full border-2 border-white" />
-                          ))}
-                        </div>
-                        <Skeleton className="h-3 w-20" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {childFriendlyStrategies.map((strategy) => (
-                    <button
-                      key={strategy.id}
-                      onClick={openInvestModal}
-                      className="w-full rounded-2xl border border-slate-200 bg-white shadow-md p-4 text-left transition hover:shadow-lg active:scale-[0.98]"
-                    >
-                      <div className="flex items-start justify-between gap-3 mb-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                            style={{ background: "linear-gradient(135deg,#dcfce7,#bbf7d0)" }}>
-                            <BarChart3 className="h-5 w-5 text-green-600" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-bold text-slate-900 truncate">{strategy.short_name || strategy.name}</p>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              {strategy.risk_level && (
-                                <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-violet-50 text-violet-600 border border-violet-100">{strategy.risk_level}</span>
-                              )}
-                              {strategy.is_featured && (
-                                <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-violet-100 text-violet-700">Featured</span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="text-right flex-shrink-0">
-                          <p className="text-sm font-bold text-slate-900 tabular-nums">
-                            {childFriendlyMinimums[strategy.id] ? `R${childFriendlyMinimums[strategy.id].toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "..."}
-                          </p>
-                          <p className="text-[10px] font-semibold text-slate-500">Min. invest</p>
-                        </div>
-                      </div>
-                      {strategy.holdingsList?.length > 0 && (
-                        <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
-                          <div className="flex -space-x-2">
-                            {strategy.holdingsList.slice(0, 4).map(h => (
-                              <div key={h.symbol} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white shadow-sm">
-                                {h.logo_url ? (
-                                  <img src={h.logo_url} alt={h.symbol} className="h-full w-full object-cover" />
-                                ) : (
-                                  <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">
-                                    {h.symbol?.substring(0, 2)}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                            {strategy.holdingsList.length > 4 && (
-                              <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-slate-100 text-[10px] font-semibold text-slate-500">
-                                +{strategy.holdingsList.length - 4}
-                              </div>
-                            )}
-                          </div>
-                          <span className="text-[11px] text-slate-400">{strategy.holdingsList.length} holding{strategy.holdingsList.length !== 1 ? "s" : ""}</span>
-                        </div>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </motion.div>
-          )}
-
-          {/* -- Portfolio tab: STRATEGIES / HOLDINGS pill sub-tabs -- */}
-          {activeChildTab === "portfolio" && (
-            <motion.div variants={item}>
-              <div className="flex items-center gap-2 rounded-2xl bg-slate-100 p-1">
-                {["strategies", "holdings"].map((subTab) => (
-                  <button
-                    key={subTab}
-                    onClick={() => setActivePortfolioSubTab(subTab)}
-                    className={`flex-1 rounded-xl py-2 text-[11px] font-bold uppercase tracking-widest transition-all ${
-                      activePortfolioSubTab === subTab
-                        ? "bg-[#31005e] text-white shadow"
-                        : "text-slate-400"
-                    }`}
-                  >
-                    {subTab === "strategies" ? "Strategies" : "Holdings"}
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-          )}
-
-          {/* -- Strategy Holdings — home tab + portfolio STRATEGIES sub-tab -- */}
-          {(activeChildTab === "home" || (activeChildTab === "portfolio" && activePortfolioSubTab === "strategies")) && <motion.div variants={item}>
+          {/* -- Strategy Holdings — home tab only -- */}
+          {activeChildTab === "home" && <motion.div variants={item}>
             <div className="flex items-center gap-2 mb-3 px-1">
               <div className="h-2 w-2 rounded-full bg-slate-300" />
               <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Strategies</p>
@@ -3199,8 +3076,8 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             )}
           </motion.div>}
 
-          {/* -- Best Performing Assets — home tab + portfolio HOLDINGS sub-tab -- */}
-          {(activeChildTab === "home" || (activeChildTab === "portfolio" && activePortfolioSubTab === "holdings")) && (loading ? (
+          {/* -- Best Performing Assets — home tab only -- */}
+          {activeChildTab === "home" && (loading ? (
             <motion.div variants={item}>
               <div className="flex items-center gap-2 mb-3 px-1">
                 <div className="h-2 w-2 rounded-full bg-emerald-200" />
@@ -3259,8 +3136,8 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             </motion.div>
           ))}
 
-          {/* -- Recent Activity — home tab + portfolio HOLDINGS sub-tab -- */}
-          {(activeChildTab === "home" || (activeChildTab === "portfolio" && activePortfolioSubTab === "holdings")) && <motion.div variants={item}>
+          {/* -- Recent Activity — home tab only -- */}
+          {activeChildTab === "home" && <motion.div variants={item}>
             <div className="flex items-center gap-2 mb-3 px-1">
               <div className="h-2 w-2 rounded-full bg-slate-300" />
               <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Recent Activity</p>
@@ -3361,6 +3238,15 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
           </motion.div>}
 
         </motion.div>
+
+        {/* -- Portfolio tab: ChildPortfolioTab replaces old pill-tabs layout -- */}
+        {activeChildTab === "portfolio" && (
+          <ChildPortfolioTab
+            child={child}
+            rawHoldings={holdings}
+            onOpenInvest={openInvestModal}
+          />
+        )}
       </div>
 
       {/* -- Bottom Navigation Bar (shared Mint Navbar) -- */}
