@@ -1256,7 +1256,7 @@ const App = () => {
                   onOpenMintBalance={() => navigateTo("mintBalance")}
                   onOpenActivity={() => navigateTo("activity")}
                   onOpenActions={() => navigateTo("actions")}
-                  onOpenInvestments={(tab) => { if (tab) setPortfolioDeepLink({ tab }); handleTabChange("investments"); }}
+                  onOpenInvestments={() => handleTabChange("investments")}
                   onOpenCredit={() => handleTabChange("credit")}
                   onOpenCreditApply={() => navigateTo("creditApply")}
                   onOpenCreditRepay={() => navigateTo("creditRepay")}
@@ -2240,7 +2240,7 @@ const App = () => {
         >
           <MintBalancePage
             onBack={goBack}
-            onOpenInvestments={(tab) => { if (tab) setPortfolioDeepLink({ tab }); setCurrentPage("investments"); }}
+            onOpenInvestments={() => setCurrentPage("investments")}
             onOpenCredit={() => setCurrentPage("credit")}
             onOpenActivity={() => navigateTo("activity")}
             onOpenSettings={() => navigateTo("settings")}
@@ -2603,3 +2603,4 @@ const App = () => {
 };
 
 export default App;
+
