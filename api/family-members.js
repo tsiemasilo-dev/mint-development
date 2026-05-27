@@ -435,10 +435,12 @@ export default async function handler(req, res) {
 
         const basePayload = {
           primary_user_id,
+          parent_id: parentIdForChild,
           relationship: "child",
           first_name: first_name.trim(),
           last_name: (last_name || "").trim(),
           date_of_birth,
+          certificate_uploaded_at: new Date().toISOString(),
           mint_number,
         };
 
@@ -498,7 +500,7 @@ export default async function handler(req, res) {
     try {
       const { data: member, error: fetchErr } = await db
         .from("family_members")
-        .select("primary_user_id, relationship")
+        .select("primary_user_id, relationship, spouse_can_manage")
         .eq("id", memberId)
         .maybeSingle();
 
@@ -508,7 +510,7 @@ export default async function handler(req, res) {
 
       const isOwner = member.primary_user_id === authUser.id;
       let isCoGuardianWithRights = false;
-      if (!isOwner && member.relationship === "child") {
+      if (!isOwner && member.relationship === "child" && member.spouse_can_manage) {
         const { data: spouseLink } = await db
           .from("family_members")
           .select("id")
@@ -559,7 +561,7 @@ export default async function handler(req, res) {
       // Read the member first so we know if it's a child and what funds to refund
       const { data: member, error: fetchErr } = await db
         .from("family_members")
-        .select("id, relationship, first_name")
+        .select("id, relationship, available_balance, first_name")
         .eq("id", member_id)
         .eq("primary_user_id", primary_user_id)
         .maybeSingle();
@@ -586,7 +588,7 @@ export default async function handler(req, res) {
           });
         }
 
-        const childBalanceCents = 0; // available_balance not tracked on family_members row
+        const childBalanceCents = Number(member.available_balance || 0);
 
         if (childBalanceCents > 0) {
           const { data: wallet, error: walletErr } = await db
@@ -607,7 +609,10 @@ export default async function handler(req, res) {
           if (creditErr) throw creditErr;
 
           // Zero out the child's balance so the funds aren't double-counted if delete fails later
-          // (available_balance column not present — nothing to zero out on family_members)
+          await db
+            .from("family_members")
+            .update({ available_balance: 0 })
+            .eq("id", member_id);
 
           const refundRef = `CHILD-REFUND-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
           try {
