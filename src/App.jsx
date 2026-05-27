@@ -1114,7 +1114,7 @@ const App = () => {
         );
       }
       case 'paymentSuccess':
-        return <PaymentSuccessPage onDone={noOp} />;
+        return <PaymentSuccessPage onDone={() => { navigationHistory.current = []; setPreviousPageName(null); setCurrentPage("home"); }} />;
       case 'userOnboarding':
         return <UserOnboardingPage onComplete={noOp} />;
       case 'familyDashboard':
@@ -1805,7 +1805,7 @@ const App = () => {
             setSelectedGoalId(null);
             navigationHistory.current = [];
             setPreviousPageName(null);
-            setCurrentPage("paymentSuccess");
+            startTransition(() => setCurrentPage("paymentSuccess"));
           }}
           onCancel={goBack}
         />
@@ -2089,7 +2089,7 @@ const App = () => {
             setSelectedChildForInvest(null);
             navigationHistory.current = [];
             setPreviousPageName(null);
-            setCurrentPage("paymentSuccess");
+            startTransition(() => setCurrentPage("paymentSuccess"));
           }}
           onCancel={goBack}
         />
