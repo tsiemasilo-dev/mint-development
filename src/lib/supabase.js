@@ -1,12 +1,14 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Missing Supabase environment variables. Please check your secrets.');
-  console.error('VITE_SUPABASE_URL:', supabaseUrl ? 'set' : 'not set');
-  console.error('VITE_SUPABASE_ANON_KEY:', supabaseAnonKey ? 'set' : 'not set');
+  console.error(
+    "Missing Supabase environment variables. Please check your secrets.",
+  );
+  console.error("VITE_SUPABASE_URL:", supabaseUrl ? "set" : "not set");
+  console.error("VITE_SUPABASE_ANON_KEY:", supabaseAnonKey ? "set" : "not set");
 }
 
 // ── Global auth cache & deduplication patch ───────────────────────────────────
@@ -31,11 +33,11 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // the "Multiple GoTrueClient instances" console warning).
 // ─────────────────────────────────────────────────────────────────────────────
 
-const GLOBAL_CLIENT_KEY = '__mint_supabase_v2__';
+const GLOBAL_CLIENT_KEY = "__mint_supabase_v2__";
 
 function _parseTokenExpiry(token) {
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
+    const payload = JSON.parse(atob(token.split(".")[1]));
     return payload.exp ? payload.exp * 1000 : Date.now() + 3600000;
   } catch {
     return Date.now() + 3600000;
@@ -53,10 +55,10 @@ function createAndPatch() {
   });
 
   const _origGetSession = client.auth.getSession.bind(client.auth);
-  const _origGetUser    = client.auth.getUser.bind(client.auth);
+  const _origGetUser = client.auth.getUser.bind(client.auth);
 
-  let _cached  = null;  // full session object
-  let _expiry  = 0;     // ms timestamp: when access_token expires
+  let _cached = null; // full session object
+  let _expiry = 0; // ms timestamp: when access_token expires
   let _inflight = null; // shared Promise while a real getSession fetch is running
 
   // Pre-warm cache via auth state events. Fires immediately on subscription
@@ -66,9 +68,9 @@ function createAndPatch() {
       _cached = session;
       _expiry = _parseTokenExpiry(session.access_token);
     }
-    if (event === 'SIGNED_OUT') {
-      _cached  = null;
-      _expiry  = 0;
+    if (event === "SIGNED_OUT") {
+      _cached = null;
+      _expiry = 0;
       _inflight = null;
     }
   });
@@ -99,7 +101,10 @@ function createAndPatch() {
         _inflight = null;
         // AbortError from Web Locks contention — serve stale cache instead
         if (_cached?.access_token) {
-          console.warn('[supabase] getSession failed, returning cached session:', err.message);
+          console.warn(
+            "[supabase] getSession failed, returning cached session:",
+            err.message,
+          );
           return { data: { session: _cached }, error: null };
         }
         return { data: { session: null }, error: err };
@@ -123,7 +128,8 @@ function createAndPatch() {
 
     // Cache miss — call patched getSession (which deduplicates + caches) then
     // extract the user from the result. This avoids a separate network request.
-    const { data: sessionData, error: sessionError } = await client.auth.getSession();
+    const { data: sessionData, error: sessionError } =
+      await client.auth.getSession();
     if (sessionData?.session?.user) {
       return { data: { user: sessionData.session.user }, error: null };
     }
@@ -141,6 +147,5 @@ if (!globalThis[GLOBAL_CLIENT_KEY] && supabaseUrl && supabaseAnonKey) {
   globalThis[GLOBAL_CLIENT_KEY] = createAndPatch();
 }
 
-export const supabase = (supabaseUrl && supabaseAnonKey)
-  ? globalThis[GLOBAL_CLIENT_KEY]
-  : null;
+export const supabase =
+  supabaseUrl && supabaseAnonKey ? globalThis[GLOBAL_CLIENT_KEY] : null;
