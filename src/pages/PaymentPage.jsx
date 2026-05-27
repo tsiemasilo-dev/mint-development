@@ -150,9 +150,11 @@ const PaymentPage = ({
       const finalMethod = method || selectedMethod;
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-          const {
-            data: { session },
-          } = await supabase.auth.getSession();
+          let { data: { session } } = await supabase.auth.getSession();
+          if (!session) {
+            const { data: refreshData } = await supabase.auth.refreshSession();
+            session = refreshData?.session;
+          }
           const token = session?.access_token;
           const stratId =
             strategy?.strategyId ||
