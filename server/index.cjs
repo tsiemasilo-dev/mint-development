@@ -6015,19 +6015,7 @@ app.post("/api/onboarding/check-id-number", async (req, res) => {
       }
     }
 
-    if (exists && matchedUserId) {
-      const db = supabaseAdmin || getAuthenticatedDb(token);
-      if (db) {
-        const { data: profile } = await db
-          .from("profiles")
-          .select("email")
-          .eq("id", matchedUserId)
-          .maybeSingle();
-        matchedEmail = profile?.email || null;
-      }
-    }
-
-    return res.json({ success: true, exists, masked_email: maskEmailAddress(matchedEmail) || null });
+    return res.json({ success: true, exists });
   } catch (error) {
     console.error("[Onboarding] ID precheck error:", error);
     return res.status(500).json({ success: false, error: error.message });

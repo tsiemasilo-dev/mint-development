@@ -103,17 +103,6 @@ export default async function handler(req, res) {
 
     const matchedRow = (rows || []).find((row) => hasMatchingPackIdNumber(row?.pack_details, idNumber));
     const exists = Boolean(matchedRow);
-    let email = null;
-
-    if (exists && matchedRow?.user_id) {
-      const profileClient = supabaseAdmin || db;
-      const { data: profile } = await profileClient
-        .from("profiles")
-        .select("email")
-        .eq("id", matchedRow.user_id)
-        .maybeSingle();
-      email = profile?.email || null;
-    }
 
     let applicantId = null;
 
@@ -126,7 +115,7 @@ export default async function handler(req, res) {
       }
     }
 
-    return res.status(200).json({ success: true, exists, masked_email: maskEmailAddress(email) || null, applicantId });
+    return res.status(200).json({ success: true, exists, applicantId });
   } catch (error) {
     console.error("[Onboarding] ID precheck error:", error);
     return res.status(500).json({ success: false, error: error.message });
