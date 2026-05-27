@@ -2,7 +2,6 @@ import React, { useMemo, useState, useRef } from "react";
 import { ArrowDownLeft, ArrowLeft, ArrowUpRight, CalendarDays, Search, X, TrendingUp, CreditCard, Wallet, RefreshCw, Gift, Filter, ChevronDown } from "lucide-react";
 import ActivitySkeleton from "../components/ActivitySkeleton";
 import { useTransactions } from "../lib/useFinancialData";
-import TransactionDetailSheet from "../components/TransactionDetailSheet";
 
 const filters = ["All", "Investments", "Fees", "Withdrawals"];
 
@@ -75,7 +74,6 @@ const ActivityPage = ({ onBack }) => {
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
-  const [selectedTx, setSelectedTx] = useState(null);
   const searchRef = useRef(null);
 
   const activityItems = useMemo(() => {
@@ -124,7 +122,91 @@ const ActivityPage = ({ onBack }) => {
     return { totalIn, totalOut, count: activityItems.length };
   }, [activityItems]);
 
+  // When the Fees tab is active, each investment tx is exploded into its
+  // server-recorded fee components (Execution Reserve, brokerage, ISIN,
+  // transaction fee) so users can see exactly what they were charged.
+  // Pre-migration txs (all fee columns 0) fall back to a single "Fees"
+  // line of "amount − base" so old purchases aren't blank.
+  const feeLineItems = useMemo(() => {
+    const lines = [];
+    for (const item of activityItems) {
+      if (item.direction !== "debit") continue;
+      const fb = item.feeBreakdown || {};
+      const baseC = Number(fb.baseCents || 0);
+      const bufferC = Number(fb.bufferCents || 0);
+      const brokerC = Number(fb.brokerFeeCents || 0);
+      const isinC = Number(fb.isinFeeCents || 0);
+      const txFeeC = Number(fb.transactionFeeCents || 0);
+      const hasBreakdown = baseC > 0 || bufferC > 0 || brokerC > 0 || isinC > 0 || txFeeC > 0;
+
+      const baseLine = {
+        date: item.date,
+        displayDate: item.displayDate,
+        time: item.time,
+        groupLabel: item.groupLabel,
+        parentTitle: item.title,
+        status: item.status,
+        logo_url: item.logo_url,
+        holding_logos: item.holding_logos,
+      };
+
+      if (!hasBreakdown) {
+        const impliedFeesC = (item.rawAmountCents || 0); // no base recorded — show whole charge as fees
+        if (impliedFeesC <= 0) continue;
+        lines.push({
+          ...baseLine,
+          id: `${item.id}-fees`,
+          feeType: "all",
+          feeLabel: "Fees & charges",
+          amountCents: impliedFeesC,
+        });
+        continue;
+      }
+
+      if (bufferC > 0) lines.push({
+        ...baseLine, id: `${item.id}-buffer`, feeType: "buffer",
+        feeLabel: "Execution Reserve", amountCents: bufferC,
+      });
+      if (brokerC > 0) lines.push({
+        ...baseLine, id: `${item.id}-broker`, feeType: "broker",
+        feeLabel: "Brokerage fee", amountCents: brokerC,
+      });
+      if (isinC > 0) lines.push({
+        ...baseLine, id: `${item.id}-isin`, feeType: "isin",
+        feeLabel: "ISIN fee", amountCents: isinC,
+      });
+      if (txFeeC > 0) lines.push({
+        ...baseLine, id: `${item.id}-txfee`, feeType: "txfee",
+        feeLabel: "Transaction fee", amountCents: txFeeC,
+      });
+    }
+    return lines;
+  }, [activityItems]);
+
   const visibleItems = useMemo(() => {
+    if (activeFilter === "Fees") {
+      let filtered = feeLineItems;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        filtered = filtered.filter((l) =>
+          l.feeLabel.toLowerCase().includes(q) ||
+          (l.parentTitle || "").toLowerCase().includes(q)
+        );
+      }
+      if (fromDate || toDate) {
+        const fromTime = fromDate ? new Date(`${fromDate}T00:00:00`).getTime() : null;
+        const toTime = toDate ? new Date(`${toDate}T23:59:59`).getTime() : null;
+        filtered = filtered.filter((l) => {
+          const t = new Date(l.date).getTime();
+          if (isNaN(t)) return false;
+          if (fromTime && t < fromTime) return false;
+          if (toTime && t > toTime) return false;
+          return true;
+        });
+      }
+      return filtered;
+    }
+
     let filtered = activeFilter === "All"
       ? activityItems
       : activityItems.filter((item) => item.filterCategory === activeFilter);
@@ -151,7 +233,7 @@ const ActivityPage = ({ onBack }) => {
     }
 
     return filtered;
-  }, [activeFilter, searchQuery, fromDate, toDate, activityItems]);
+  }, [activeFilter, searchQuery, fromDate, toDate, activityItems, feeLineItems]);
 
   const groupedItems = useMemo(() => {
     const groups = {};
@@ -293,7 +375,9 @@ const ActivityPage = ({ onBack }) => {
 
         <div className="mt-5 flex items-center justify-between">
           <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-            {visibleItems.length} transaction{visibleItems.length !== 1 ? "s" : ""}
+            {visibleItems.length} {activeFilter === "Fees"
+              ? `fee charge${visibleItems.length !== 1 ? "s" : ""}`
+              : `transaction${visibleItems.length !== 1 ? "s" : ""}`}
           </p>
         </div>
 
@@ -318,14 +402,53 @@ const ActivityPage = ({ onBack }) => {
                 </p>
                 <div className="space-y-2">
                   {group.items.map((item, itemIndex) => {
+                    // Fee line items have their own compact row (icon, fee label,
+                    // parent strategy as subtitle, rand amount). Surfaced only on the
+                    // Fees tab — the explosion happens in feeLineItems above.
+                    if (item.feeType) {
+                      const feeIconMap = {
+                        buffer: { Icon: ArrowDownLeft, bg: "bg-emerald-50", text: "text-emerald-600" },
+                        broker: { Icon: CreditCard, bg: "bg-blue-50", text: "text-blue-600" },
+                        isin:   { Icon: TrendingUp, bg: "bg-amber-50", text: "text-amber-600" },
+                        txfee:  { Icon: ArrowUpRight, bg: "bg-rose-50", text: "text-rose-500" },
+                        all:    { Icon: ArrowUpRight, bg: "bg-slate-100", text: "text-slate-500" },
+                      };
+                      const cfg = feeIconMap[item.feeType] || feeIconMap.all;
+                      const FeeIcon = cfg.Icon;
+                      const amountR = (item.amountCents || 0) / 100;
+                      return (
+                        <div
+                          key={`${item.id || itemIndex}`}
+                          className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm border border-slate-100/50"
+                        >
+                          <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full ${cfg.bg}`}>
+                            <FeeIcon className={`h-5 w-5 ${cfg.text}`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-slate-800 truncate">{item.feeLabel}</p>
+                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                              <p className="text-[11px] text-slate-400 truncate">from {item.parentTitle}</p>
+                              {item.displayDate ? (
+                                <>
+                                  <span className="text-slate-300">·</span>
+                                  <p className="text-[11px] text-slate-400">{item.displayDate}</p>
+                                </>
+                              ) : null}
+                            </div>
+                          </div>
+                          <p className="text-sm font-bold tabular-nums flex-shrink-0 text-slate-900">
+                            R{amountR.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                      );
+                    }
+
                     const Icon = getTransactionIcon(item.title, item.direction);
                     const colors = getIconColors(item.direction, item.title);
                     return (
-                      <button
-                        type="button"
+                      <div
                         key={`${item.id || itemIndex}`}
-                        onClick={() => setSelectedTx(item)}
-                        className="w-full flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm border border-slate-100/50 text-left active:scale-[0.99] active:bg-slate-50 transition"
+                        className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm border border-slate-100/50"
                       >
                         {item.holding_logos && item.holding_logos.length > 0 ? (
                           <div className="flex -space-x-2 flex-shrink-0">
@@ -381,7 +504,7 @@ const ActivityPage = ({ onBack }) => {
                         <p className="text-sm font-bold tabular-nums flex-shrink-0 text-slate-900">
                           {item.amount}
                         </p>
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -390,11 +513,6 @@ const ActivityPage = ({ onBack }) => {
           </section>
         )}
       </div>
-      <TransactionDetailSheet
-        isOpen={!!selectedTx}
-        onClose={() => setSelectedTx(null)}
-        transaction={selectedTx}
-      />
     </div>
   );
 };
