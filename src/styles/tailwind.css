@@ -169,3 +169,46 @@
     transform: translateY(0);
   }
 }
+
+/* News article HTML content */
+.news-html-body {
+  overflow-x: auto;
+}
+.news-html-body table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  margin: 1rem 0;
+}
+.news-html-body table td,
+.news-html-body table th {
+  padding: 6px 10px;
+  border: 1px solid #e2e8f0;
+  vertical-align: top;
+  color: #374151;
+}
+.news-html-body table tr:nth-child(even) td {
+  background-color: #f8fafc;
+}
+.news-html-body strong, .news-html-body b {
+  font-weight: 600;
+  color: #1e293b;
+}
+.news-html-body p {
+  margin-bottom: 0.75rem;
+}
+.news-html-body ul, .news-html-body ol {
+  margin: 0.5rem 0 0.75rem 1.25rem;
+}
+.news-html-body li {
+  margin-bottom: 0.25rem;
+}
+.news-html-body a {
+  color: #7c3aed;
+  text-decoration: underline;
+}
+.news-html-body h1, .news-html-body h2, .news-html-body h3 {
+  font-weight: 600;
+  color: #1e293b;
+  margin: 1rem 0 0.5rem;
+}
