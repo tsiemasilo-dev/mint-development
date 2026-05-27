@@ -2,6 +2,7 @@ import React, { useMemo, useState, useRef } from "react";
 import { ArrowDownLeft, ArrowLeft, ArrowUpRight, CalendarDays, Search, X, TrendingUp, CreditCard, Wallet, RefreshCw, Gift, Filter, ChevronDown } from "lucide-react";
 import ActivitySkeleton from "../components/ActivitySkeleton";
 import { useTransactions } from "../lib/useFinancialData";
+import TransactionDetailSheet from "../components/TransactionDetailSheet";
 
 const filters = ["All", "Investments", "Fees", "Withdrawals"];
 
@@ -74,6 +75,7 @@ const ActivityPage = ({ onBack }) => {
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [selectedTx, setSelectedTx] = useState(null);
   const searchRef = useRef(null);
 
   const activityItems = useMemo(() => {
@@ -88,6 +90,7 @@ const ActivityPage = ({ onBack }) => {
         time: formatTime(t.transaction_date || t.created_at),
         amount: formatAmount(t.amount, t.direction),
         rawAmount: (t.amount || 0) / 100,
+        rawAmountCents: t.amount || 0,
         direction: t.direction,
         status: t.status,
         filterCategory: getFilterCategory(t.direction, t.name),
@@ -95,6 +98,15 @@ const ActivityPage = ({ onBack }) => {
         groupLabel: formatRelativeDate(t.transaction_date || t.created_at),
         logo_url: t.logo_url,
         holding_logos: t.holding_logos || [],
+        storeReference: t.store_reference || "",
+        feeBreakdown: {
+          baseCents: t.base_amount_cents ?? null,
+          bufferCents: t.buffer_cents ?? null,
+          bufferConsumedCents: t.buffer_consumed_cents ?? null,
+          brokerFeeCents: t.broker_fee_cents ?? null,
+          isinFeeCents: t.isin_fee_cents ?? null,
+          transactionFeeCents: t.transaction_fee_cents ?? null,
+        },
       };
     });
   }, [transactions]);
@@ -309,9 +321,11 @@ const ActivityPage = ({ onBack }) => {
                     const Icon = getTransactionIcon(item.title, item.direction);
                     const colors = getIconColors(item.direction, item.title);
                     return (
-                      <div
+                      <button
+                        type="button"
                         key={`${item.id || itemIndex}`}
-                        className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm border border-slate-100/50"
+                        onClick={() => setSelectedTx(item)}
+                        className="w-full flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm border border-slate-100/50 text-left active:scale-[0.99] active:bg-slate-50 transition"
                       >
                         {item.holding_logos && item.holding_logos.length > 0 ? (
                           <div className="flex -space-x-2 flex-shrink-0">
@@ -367,7 +381,7 @@ const ActivityPage = ({ onBack }) => {
                         <p className="text-sm font-bold tabular-nums flex-shrink-0 text-slate-900">
                           {item.amount}
                         </p>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -376,6 +390,11 @@ const ActivityPage = ({ onBack }) => {
           </section>
         )}
       </div>
+      <TransactionDetailSheet
+        isOpen={!!selectedTx}
+        onClose={() => setSelectedTx(null)}
+        transaction={selectedTx}
+      />
     </div>
   );
 };
