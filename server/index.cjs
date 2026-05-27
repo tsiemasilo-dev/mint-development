@@ -9680,6 +9680,89 @@ app.post("/api/gift/claim-to-self", async (req, res) => {
 
 // ─── End gift routes ─────────────────────────────────────────────────────────
 
+// ─── Admin Panel API ──────────────────────────────────────────────────────────
+app.post('/api/admin/user-search', async (req, res) => {
+  try {
+    const { secret, query } = req.body;
+    const adminSecret = process.env.ADMIN_SECRET;
+    if (!adminSecret || secret !== adminSecret) {
+      return res.status(401).json({ error: 'Invalid admin secret' });
+    }
+    if (!query || query.trim().length < 2) {
+      return res.status(400).json({ error: 'Query too short' });
+    }
+    const db = supabaseAdmin || supabase;
+    const q = query.trim();
+    const { data: profiles, error } = await db
+      .from('profiles')
+      .select('id, first_name, last_name, email, mint_number, created_at')
+      .or(`email.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%,mint_number.ilike.%${q}%`)
+      .limit(20);
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ users: profiles || [] });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/admin/user-detail', async (req, res) => {
+  try {
+    const { secret, userId } = req.body;
+    const adminSecret = process.env.ADMIN_SECRET;
+    if (!adminSecret || secret !== adminSecret) {
+      return res.status(401).json({ error: 'Invalid admin secret' });
+    }
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+    const db = supabaseAdmin || supabase;
+
+    const [profileRes, onboardingRes, walletRes, transactionsRes, holdingsRes, goalsRes, familyRes] = await Promise.all([
+      db.from('profiles').select('*').eq('id', userId).maybeSingle(),
+      db.from('user_onboarding').select('kyc_status, sumsub_review_answer, bank_name, bank_account_number, signed_at, created_at, updated_at, ID_number, sumsub_raw').eq('user_id', userId).maybeSingle(),
+      db.from('wallets').select('balance, currency, updated_at').eq('user_id', userId).maybeSingle(),
+      db.from('transactions').select('id, type, amount, description, created_at, status').eq('user_id', userId).order('created_at', { ascending: false }).limit(50),
+      db.from('stock_holdings_c').select('id, security_id, quantity, avg_fill, market_value, Status, strategy_id, as_of_date').eq('user_id', userId).order('created_at', { ascending: false }),
+      db.from('investment_goals').select('id, name, target_amount, current_amount, deadline, created_at').eq('user_id', userId),
+      db.from('family_members').select('id, first_name, last_name, relationship, mint_number, available_balance, kyc_status').eq('primary_user_id', userId),
+    ]);
+
+    return res.json({
+      profile: profileRes.data,
+      onboarding: onboardingRes.data,
+      wallet: walletRes.data,
+      transactions: transactionsRes.data || [],
+      holdings: holdingsRes.data || [],
+      goals: goalsRes.data || [],
+      family: familyRes.data || [],
+    });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/admin/clear-user-assets', async (req, res) => {
+  try {
+    const { secret, userId } = req.body;
+    const adminSecret = process.env.ADMIN_SECRET;
+    if (!adminSecret || secret !== adminSecret) {
+      return res.status(401).json({ error: 'Invalid admin secret' });
+    }
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+    const db = supabaseAdmin || supabase;
+    await Promise.all([
+      db.from('transactions').delete().eq('user_id', userId),
+      db.from('stock_holdings_c').delete().eq('user_id', userId),
+      db.from('order_emails').delete().eq('user_id', userId),
+      db.from('investment_goals').delete().eq('user_id', userId),
+      db.from('notifications').delete().eq('user_id', userId),
+      db.from('client_strategy_returns_c').delete().eq('user_id', userId),
+    ]);
+    return res.json({ success: true });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+// ─── End Admin Panel API ──────────────────────────────────────────────────────
+
 // Catch-all 404 handler - MUST be after all route definitions
 app.use((req, res) => {
   res.status(404).json({ error: "Not found", message: "This is the API server. The frontend is served separately." });
