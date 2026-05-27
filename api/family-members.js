@@ -440,7 +440,6 @@ export default async function handler(req, res) {
           first_name: first_name.trim(),
           last_name: (last_name || "").trim(),
           date_of_birth,
-          certificate_uploaded_at: new Date().toISOString(),
           mint_number,
         };
 
