@@ -152,9 +152,16 @@ const PaymentPage = ({
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
           let { data: { session } } = await supabase.auth.getSession();
-          if (!session) {
-            const { data: refreshData } = await supabase.auth.refreshSession();
-            session = refreshData?.session;
+          // Always try to refresh on the first attempt to get the freshest token.
+          // If the session is invalidated server-side the refresh may fail, but the
+          // server's JWT decode fallback will still accept the existing token.
+          if (attempt === 1) {
+            try {
+              const { data: refreshData } = await supabase.auth.refreshSession();
+              if (refreshData?.session) session = refreshData.session;
+            } catch (_) {
+              // Refresh failed — proceed with existing session token
+            }
           }
           const token = session?.access_token;
           const stratId =
