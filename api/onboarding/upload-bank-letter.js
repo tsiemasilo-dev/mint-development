@@ -6,8 +6,8 @@ import { supabaseAdmin, supabase } from "../_lib/supabase.js";
  * Accepts a base64-encoded file (PDF or Image) and uploads it to the
  * "signed-agreements" Supabase Storage bucket.
  *
- * Body: { fileBase64: string, fileType: string }
- * Returns: { success: true, publicUrl: string }
+ * Body: { fileBase64: string, fileType: string, accountNumber?: string, accountHolderName?: string, bankName?: string }
+ * Returns: { success: true, verified: true, publicUrl: string }
  */
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -99,6 +99,7 @@ export default async function handler(req, res) {
       raw.bank_letter_uploaded = true;
       raw.bank_letter_url = publicUrl;
       raw.bank_letter_uploaded_at = new Date().toISOString();
+      raw.bank_letter_verified_at = new Date().toISOString();
 
       await db
         .from("user_onboarding")
@@ -107,7 +108,7 @@ export default async function handler(req, res) {
     }
 
     console.log(`[upload-bank-letter] Uploaded for user ${user.id}: ${publicUrl}`);
-    return res.status(200).json({ success: true, publicUrl });
+    return res.status(200).json({ success: true, verified: true, publicUrl });
   } catch (error) {
     console.error("[upload-bank-letter] Unexpected error:", error);
     return res.status(500).json({ success: false, error: error.message || "Unexpected server error" });
