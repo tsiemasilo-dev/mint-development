@@ -32,7 +32,7 @@ export default async function handler(req, res) {
     // "Strategy Investment: X" that were placed for a child account.
     const { data: transactions, error: txError } = await db
       .from("transactions")
-      .select("id, user_id, direction, name, description, amount, store_reference, currency, status, transaction_date, created_at")
+      .select("id, user_id, direction, name, description, amount, store_reference, currency, status, transaction_date, created_at, base_amount_cents, buffer_cents, buffer_consumed_cents, broker_fee_cents, isin_fee_cents, transaction_fee_cents")
       .eq("user_id", userId)
       .is("family_member_id", null)
       .order("transaction_date", { ascending: false })

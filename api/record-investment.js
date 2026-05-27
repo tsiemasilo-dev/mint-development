@@ -1,5 +1,6 @@
 import { supabase, supabaseAdmin, authenticateUser } from "./_lib/supabase.js";
 import { buildOrderConfirmationHtml } from "./_lib/order-email-templates.js";
+import { computeFees } from "./_lib/fees.js";
 import { Resend } from "resend";
 
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
@@ -303,6 +304,29 @@ export default async function handler(req, res) {
       ? `Invested in strategy ${name || "Strategy"}`
       : `Purchased shares of ${name || symbol || "Unknown"}`;
 
+    // Pre-fetch strategy basket so we know numAssets for the ISIN fee tier.
+    // The fetched holdings are reused below when writing stock_holdings_c rows
+    // so this does not duplicate any later query.
+    let preFetchedStrategyHoldings = null;
+    if (isStrategyInvestment) {
+      const { data: stratPre, error: stratPreErr } = await db
+        .from("strategies_c")
+        .select("holdings")
+        .eq("id", strategyId)
+        .maybeSingle();
+      if (stratPreErr || !stratPre?.holdings?.length) {
+        return res.status(500).json({ success: false, error: "Could not load strategy holdings to record positions" });
+      }
+      preFetchedStrategyHoldings = stratPre.holdings;
+    }
+
+    // Server-authoritative fee breakdown. baseAmount arrives in rands (raw,
+    // pre-buffer, pre-fees). Everything written to the row is in cents and
+    // sums (within a few cents of rounding) to transactions.amount.
+    const baseRandsForFees = (baseAmount && baseAmount > 0) ? baseAmount : amount;
+    const numAssetsForFees = isStrategyInvestment ? preFetchedStrategyHoldings.length : 1;
+    const fees = computeFees(baseRandsForFees, numAssetsForFees);
+
     const { data: txData, error: txError } = await db
       .from("transactions")
       .insert({
@@ -312,6 +336,12 @@ export default async function handler(req, res) {
         name: isStrategyInvestment ? `Strategy Investment: ${name || symbol || "Strategy"}` : `Purchased ${name || symbol || "Stock"}`,
         description: descriptionText,
         amount: Math.round(amount * 100),
+        base_amount_cents:     fees.baseCents,
+        buffer_cents:          fees.bufferCents,
+        buffer_consumed_cents: 0,
+        broker_fee_cents:      fees.brokerFeeCents,
+        isin_fee_cents:        fees.isinFeeCents,
+        transaction_fee_cents: fees.transactionFeeCents,
         store_reference: paymentReference || null,
         currency: "ZAR",
         status: "posted",
@@ -328,18 +358,7 @@ export default async function handler(req, res) {
     const txId = txData.id;
 
     if (isStrategyInvestment) {
-      const { data: strategyData, error: stratError } = await db
-        .from("strategies_c")
-        .select("holdings")
-        .eq("id", strategyId)
-        .maybeSingle();
-
-      if (stratError || !strategyData?.holdings?.length) {
-        console.warn("[record-investment] Could not fetch strategy holdings:", stratError?.message);
-        return res.status(500).json({ success: false, error: "Could not load strategy holdings to record positions" });
-      }
-
-      const strategyHoldings = strategyData.holdings;
+      const strategyHoldings = preFetchedStrategyHoldings;
       const symbols = strategyHoldings.map(h => h.symbol).filter(Boolean);
 
       const { data: securitiesData, error: secLookupError } = await db
