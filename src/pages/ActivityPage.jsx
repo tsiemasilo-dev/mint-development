@@ -88,6 +88,7 @@ const ActivityPage = ({ onBack }) => {
         time: formatTime(t.transaction_date || t.created_at),
         amount: formatAmount(t.amount, t.direction),
         rawAmount: (t.amount || 0) / 100,
+        rawAmountCents: t.amount || 0,
         direction: t.direction,
         status: t.status,
         filterCategory: getFilterCategory(t.direction, t.name),
@@ -95,24 +96,102 @@ const ActivityPage = ({ onBack }) => {
         groupLabel: formatRelativeDate(t.transaction_date || t.created_at),
         logo_url: t.logo_url,
         holding_logos: t.holding_logos || [],
+        storeReference: t.store_reference || "",
+        feeBreakdown: {
+          baseCents: t.base_amount_cents ?? null,
+          bufferCents: t.buffer_cents ?? null,
+          bufferConsumedCents: t.buffer_consumed_cents ?? null,
+          brokerFeeCents: t.broker_fee_cents ?? null,
+          isinFeeCents: t.isin_fee_cents ?? null,
+          transactionFeeCents: t.transaction_fee_cents ?? null,
+        },
       };
     });
   }, [transactions]);
 
+  // Money In = credits (wallet top-ups, refunds, dividends).
+  // Money Out = debits (purchases, withdrawals, fees).
+  // The previous name-based filter only counted withdraw/repay as Money Out,
+  // so stock purchases ("Purchased X") got bucketed into Money In.
   const summaryStats = useMemo(() => {
-    const totalIn = activityItems.filter(i => {
-      const lower = (i.title || "").toLowerCase();
-      const isWithdrawal = lower.includes("withdraw") || lower.includes("repay");
-      return !isWithdrawal;
-    }).reduce((sum, i) => sum + Math.abs(i.rawAmount), 0);
-    const totalOut = activityItems.filter(i => {
-      const lower = (i.title || "").toLowerCase();
-      return lower.includes("withdraw") || lower.includes("repay");
-    }).reduce((sum, i) => sum + Math.abs(i.rawAmount), 0);
+    const totalIn = activityItems
+      .filter(i => i.direction === "credit")
+      .reduce((sum, i) => sum + Math.abs(i.rawAmount), 0);
+    const totalOut = activityItems
+      .filter(i => i.direction === "debit")
+      .reduce((sum, i) => sum + Math.abs(i.rawAmount), 0);
     return { totalIn, totalOut, count: activityItems.length };
   }, [activityItems]);
 
+  // When the Fees tab is active, each investment tx is exploded into its
+  // server-recorded fee components (Execution Reserve, brokerage, ISIN,
+  // transaction fee) so users see what they were charged. Pre-migration txs
+  // (all fee columns 0) are skipped here — we don't have a breakdown for
+  // them and showing the full debit as "fees" would be misleading.
+  const feeLineItems = useMemo(() => {
+    const lines = [];
+    for (const item of activityItems) {
+      if (item.direction !== "debit") continue;
+      const fb = item.feeBreakdown || {};
+      const bufferC = Number(fb.bufferCents || 0);
+      const brokerC = Number(fb.brokerFeeCents || 0);
+      const isinC = Number(fb.isinFeeCents || 0);
+      const txFeeC = Number(fb.transactionFeeCents || 0);
+      if (bufferC + brokerC + isinC + txFeeC === 0) continue;
+
+      const baseLine = {
+        date: item.date,
+        displayDate: item.displayDate,
+        time: item.time,
+        groupLabel: item.groupLabel,
+        parentTitle: item.title,
+        status: item.status,
+      };
+
+      if (bufferC > 0) lines.push({
+        ...baseLine, id: `${item.id}-buffer`, feeType: "buffer",
+        feeLabel: "Execution Reserve", amountCents: bufferC,
+      });
+      if (brokerC > 0) lines.push({
+        ...baseLine, id: `${item.id}-broker`, feeType: "broker",
+        feeLabel: "Brokerage fee", amountCents: brokerC,
+      });
+      if (isinC > 0) lines.push({
+        ...baseLine, id: `${item.id}-isin`, feeType: "isin",
+        feeLabel: "ISIN fee", amountCents: isinC,
+      });
+      if (txFeeC > 0) lines.push({
+        ...baseLine, id: `${item.id}-txfee`, feeType: "txfee",
+        feeLabel: "Transaction fee", amountCents: txFeeC,
+      });
+    }
+    return lines;
+  }, [activityItems]);
+
   const visibleItems = useMemo(() => {
+    if (activeFilter === "Fees") {
+      let filtered = feeLineItems;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        filtered = filtered.filter((l) =>
+          l.feeLabel.toLowerCase().includes(q) ||
+          (l.parentTitle || "").toLowerCase().includes(q)
+        );
+      }
+      if (fromDate || toDate) {
+        const fromTime = fromDate ? new Date(`${fromDate}T00:00:00`).getTime() : null;
+        const toTime = toDate ? new Date(`${toDate}T23:59:59`).getTime() : null;
+        filtered = filtered.filter((l) => {
+          const t = new Date(l.date).getTime();
+          if (isNaN(t)) return false;
+          if (fromTime && t < fromTime) return false;
+          if (toTime && t > toTime) return false;
+          return true;
+        });
+      }
+      return filtered;
+    }
+
     let filtered = activeFilter === "All"
       ? activityItems
       : activityItems.filter((item) => item.filterCategory === activeFilter);
@@ -139,7 +218,7 @@ const ActivityPage = ({ onBack }) => {
     }
 
     return filtered;
-  }, [activeFilter, searchQuery, fromDate, toDate, activityItems]);
+  }, [activeFilter, searchQuery, fromDate, toDate, activityItems, feeLineItems]);
 
   const groupedItems = useMemo(() => {
     const groups = {};
@@ -281,7 +360,9 @@ const ActivityPage = ({ onBack }) => {
 
         <div className="mt-5 flex items-center justify-between">
           <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-            {visibleItems.length} transaction{visibleItems.length !== 1 ? "s" : ""}
+            {visibleItems.length} {activeFilter === "Fees"
+              ? `fee charge${visibleItems.length !== 1 ? "s" : ""}`
+              : `transaction${visibleItems.length !== 1 ? "s" : ""}`}
           </p>
         </div>
 
@@ -306,6 +387,47 @@ const ActivityPage = ({ onBack }) => {
                 </p>
                 <div className="space-y-2">
                   {group.items.map((item, itemIndex) => {
+                    // Fee line items have their own compact row (icon, fee label,
+                    // parent strategy as subtitle, rand amount). Surfaced only on the
+                    // Fees tab — the explosion happens in feeLineItems above.
+                    if (item.feeType) {
+                      const feeIconMap = {
+                        buffer: { Icon: ArrowDownLeft, bg: "bg-emerald-50", text: "text-emerald-600" },
+                        broker: { Icon: CreditCard, bg: "bg-blue-50", text: "text-blue-600" },
+                        isin:   { Icon: TrendingUp, bg: "bg-amber-50", text: "text-amber-600" },
+                        txfee:  { Icon: ArrowUpRight, bg: "bg-rose-50", text: "text-rose-500" },
+                        all:    { Icon: ArrowUpRight, bg: "bg-slate-100", text: "text-slate-500" },
+                      };
+                      const cfg = feeIconMap[item.feeType] || feeIconMap.all;
+                      const FeeIcon = cfg.Icon;
+                      const amountR = (item.amountCents || 0) / 100;
+                      return (
+                        <div
+                          key={`${item.id || itemIndex}`}
+                          className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm border border-slate-100/50"
+                        >
+                          <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full ${cfg.bg}`}>
+                            <FeeIcon className={`h-5 w-5 ${cfg.text}`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-slate-800 truncate">{item.feeLabel}</p>
+                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                              <p className="text-[11px] text-slate-400 truncate">from {item.parentTitle}</p>
+                              {item.displayDate ? (
+                                <>
+                                  <span className="text-slate-300">·</span>
+                                  <p className="text-[11px] text-slate-400">{item.displayDate}</p>
+                                </>
+                              ) : null}
+                            </div>
+                          </div>
+                          <p className="text-sm font-bold tabular-nums flex-shrink-0 text-slate-900">
+                            R{amountR.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                      );
+                    }
+
                     const Icon = getTransactionIcon(item.title, item.direction);
                     const colors = getIconColors(item.direction, item.title);
                     return (
