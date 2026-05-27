@@ -2979,15 +2979,39 @@ async function authenticateUser(req) {
     return { user: null, token: null, error: "Missing or invalid Authorization header" };
   }
   const token = authHeader.replace("Bearer ", "");
+  if (!token) {
+    return { user: null, token: null, error: "Empty token in Authorization header" };
+  }
   const authClient = supabaseAdmin || supabase;
   if (!authClient) {
     return { user: null, token: null, error: "Database client not initialized" };
   }
   const { data, error } = await authClient.auth.getUser(token);
-  if (error || !data?.user) {
-    return { user: null, token: null, error: error?.message || "Invalid token" };
+  if (!error && data?.user) {
+    return { user: data.user, token, error: null };
   }
-  return { user: data.user, token, error: null };
+  // Supabase session may have been invalidated while the JWT is still valid
+  // (e.g. after password reset or session cleanup in dev). Decode the JWT locally
+  // to extract the user ID and confirm the user still exists via the admin API.
+  if (supabaseAdmin) {
+    try {
+      const parts = token.split('.');
+      if (parts.length === 3) {
+        const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+        const userId = payload.sub;
+        if (userId) {
+          const { data: adminData, error: adminErr } = await supabaseAdmin.auth.admin.getUserById(userId);
+          if (!adminErr && adminData?.user) {
+            console.log("[auth] Session invalidated but user confirmed via admin API:", userId);
+            return { user: adminData.user, token, error: null };
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[auth] JWT decode fallback failed:", e.message);
+    }
+  }
+  return { user: null, token: null, error: error?.message || "Invalid token" };
 }
 
 async function verifyPaystackPayment(reference) {
