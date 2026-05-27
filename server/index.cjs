@@ -2979,10 +2979,11 @@ async function authenticateUser(req) {
     return { user: null, token: null, error: "Missing or invalid Authorization header" };
   }
   const token = authHeader.replace("Bearer ", "");
-  if (!supabase) {
+  const authClient = supabaseAdmin || supabase;
+  if (!authClient) {
     return { user: null, token: null, error: "Database client not initialized" };
   }
-  const { data, error } = await supabase.auth.getUser(token);
+  const { data, error } = await authClient.auth.getUser(token);
   if (error || !data?.user) {
     return { user: null, token: null, error: error?.message || "Invalid token" };
   }
