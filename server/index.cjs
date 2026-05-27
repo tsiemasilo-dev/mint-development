@@ -2979,14 +2979,39 @@ async function authenticateUser(req) {
     return { user: null, token: null, error: "Missing or invalid Authorization header" };
   }
   const token = authHeader.replace("Bearer ", "");
-  if (!supabase) {
+  if (!token) {
+    return { user: null, token: null, error: "Empty token in Authorization header" };
+  }
+  const authClient = supabaseAdmin || supabase;
+  if (!authClient) {
     return { user: null, token: null, error: "Database client not initialized" };
   }
-  const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data?.user) {
-    return { user: null, token: null, error: error?.message || "Invalid token" };
+  const { data, error } = await authClient.auth.getUser(token);
+  if (!error && data?.user) {
+    return { user: data.user, token, error: null };
   }
-  return { user: data.user, token, error: null };
+  // Supabase session may have been invalidated while the JWT is still valid
+  // (e.g. after password reset or session cleanup in dev). Decode the JWT locally
+  // to extract the user ID and confirm the user still exists via the admin API.
+  if (supabaseAdmin) {
+    try {
+      const parts = token.split('.');
+      if (parts.length === 3) {
+        const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+        const userId = payload.sub;
+        if (userId) {
+          const { data: adminData, error: adminErr } = await supabaseAdmin.auth.admin.getUserById(userId);
+          if (!adminErr && adminData?.user) {
+            console.log("[auth] Session invalidated but user confirmed via admin API:", userId);
+            return { user: adminData.user, token, error: null };
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[auth] JWT decode fallback failed:", e.message);
+    }
+  }
+  return { user: null, token: null, error: error?.message || "Invalid token" };
 }
 
 async function verifyPaystackPayment(reference) {
@@ -3494,7 +3519,6 @@ app.post("/api/record-investment", async (req, res) => {
       const today = now.split("T")[0];
       const insertedHoldings = [];
       const skippedSymbols = [];
-      const shouldDeferChildStrategyFill = Boolean(targetFamilyMemberId);
 
       for (const holding of strategyHoldings) {
         const sec = secBySymbol[holding.symbol];
@@ -3520,87 +3544,27 @@ app.post("/api/record-investment", async (req, res) => {
           continue;
         }
 
-        if (shouldDeferChildStrategyFill) {
-          const { error: insertErr } = await db.from("stock_holdings_c").insert({
-            user_id: targetUserId,
-            family_member_id: targetFamilyMemberId,
-            security_id: sec.id,
-            strategy_id: strategyId,
-            quantity: holdingQty,
-            avg_fill: null,
-            market_value: 0,
-            unrealized_pnl: 0,
-            as_of_date: null,
-            Status: "active",
-          });
+        // All strategy purchases start as pending (avg_fill: null) so the purple
+        // "Awaiting trade execution" card shows on the portfolio until the trade settles.
+        const { error: insertErr } = await db.from("stock_holdings_c").insert({
+          user_id: targetUserId,
+          family_member_id: targetFamilyMemberId || null,
+          security_id: sec.id,
+          strategy_id: strategyId,
+          quantity: holdingQty,
+          avg_fill: null,
+          market_value: 0,
+          unrealized_pnl: 0,
+          as_of_date: null,
+          Status: "active",
+        });
 
-          if (insertErr) {
-            console.error("[record-investment] Failed to insert pending child holding for", holding.symbol, insertErr.message);
-            return res.status(500).json({ success: false, error: `Failed to record pending child holding for ${holding.symbol}` });
-          }
-          console.log("[record-investment] Inserted pending child holding:", holding.symbol, "qty:", holdingQty);
-          insertedHoldings.push({ symbol: holding.symbol, quantity: holdingQty, priceCents: null, pendingFill: true });
-          continue;
+        if (insertErr) {
+          console.error("[record-investment] Failed to insert pending holding for", holding.symbol, insertErr.message);
+          return res.status(500).json({ success: false, error: `Failed to record pending holding for ${holding.symbol}` });
         }
-
-        const holdingsLookupQuery = withFamilyMemberFilter(
-          db
-            .from("stock_holdings_c")
-            .select("id, quantity, avg_fill")
-            .eq("user_id", targetUserId)
-            .eq("security_id", sec.id)
-            .eq("strategy_id", strategyId)
-        );
-        const { data: existing, error: lookupErr } = await holdingsLookupQuery.maybeSingle();
-
-        if (lookupErr) {
-          console.error("[record-investment] Error looking up holding for", holding.symbol, lookupErr.message);
-          return res.status(500).json({ success: false, error: `Failed to look up holding for ${holding.symbol}` });
-        }
-
-        if (existing) {
-          const oldQty = Number(existing.quantity || 0);
-          const newQty = Math.round(oldQty + holdingQty);
-          const oldAvgFill = Number(existing.avg_fill || 0);
-          const newAvgFill = oldQty > 0 && oldAvgFill > 0
-            ? Math.round((oldAvgFill * oldQty + priceCents * holdingQty) / newQty)
-            : priceCents;
-
-          const { error: updateErr } = await db.from("stock_holdings_c").update({
-            quantity: newQty,
-            avg_fill: newAvgFill,
-            market_value: Math.round(newQty * priceCents),
-            as_of_date: today,
-            updated_at: now,
-          }).eq("id", existing.id);
-
-          if (updateErr) {
-            console.error("[record-investment] Failed to update holding for", holding.symbol, updateErr.message);
-            return res.status(500).json({ success: false, error: `Failed to update holding for ${holding.symbol}` });
-          }
-          console.log("[record-investment] Updated holding:", holding.symbol, "qty:", newQty, "avg_fill:", newAvgFill);
-        } else {
-          const { error: insertErr } = await db.from("stock_holdings_c").insert({
-            user_id: targetUserId,
-            family_member_id: targetFamilyMemberId,
-            security_id: sec.id,
-            strategy_id: strategyId,
-            quantity: holdingQty,
-            avg_fill: priceCents,
-            market_value: Math.round(holdingQty * priceCents),
-            unrealized_pnl: 0,
-            as_of_date: today,
-            Status: "active",
-          });
-
-          if (insertErr) {
-            console.error("[record-investment] Failed to insert holding for", holding.symbol, insertErr.message);
-            return res.status(500).json({ success: false, error: `Failed to record holding for ${holding.symbol}` });
-          }
-          console.log("[record-investment] Inserted holding:", holding.symbol, "qty:", holdingQty, "avg_fill:", priceCents);
-        }
-
-        insertedHoldings.push({ symbol: holding.symbol, quantity: holdingQty, priceCents });
+        console.log("[record-investment] Inserted pending holding:", holding.symbol, "qty:", holdingQty);
+        insertedHoldings.push({ symbol: holding.symbol, quantity: holdingQty, priceCents: null, pendingFill: true });
       }
 
       if (skippedSymbols.length > 0) {

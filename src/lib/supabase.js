@@ -56,6 +56,7 @@ function createAndPatch() {
 
   const _origGetSession = client.auth.getSession.bind(client.auth);
   const _origGetUser = client.auth.getUser.bind(client.auth);
+  const _origRefreshSession = client.auth.refreshSession.bind(client.auth);
 
   let _cached = null; // full session object
   let _expiry = 0; // ms timestamp: when access_token expires
@@ -88,12 +89,25 @@ function createAndPatch() {
     if (_inflight) return _inflight;
 
     _inflight = _origGetSession()
-      .then((result) => {
+      .then(async (result) => {
         _inflight = null;
         const session = result?.data?.session;
         if (session?.access_token) {
           _cached = session;
           _expiry = _parseTokenExpiry(session.access_token);
+          return result;
+        }
+        // No session or token expired — try refreshing
+        try {
+          const refreshResult = await _origRefreshSession();
+          const refreshed = refreshResult?.data?.session;
+          if (refreshed?.access_token) {
+            _cached = refreshed;
+            _expiry = _parseTokenExpiry(refreshed.access_token);
+            return { data: { session: refreshed }, error: null };
+          }
+        } catch (_) {
+          // refresh failed — fall through to return original result
         }
         return result;
       })
