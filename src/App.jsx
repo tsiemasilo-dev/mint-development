@@ -31,7 +31,6 @@ const FactsheetPage = lazy(() => import("./pages/FactsheetPage.jsx"));
 const OpenStrategiesPage = lazy(() => import("./pages/OpenStrategiesPage.jsx"));
 const ManageSubscriptionsPage = lazy(() => import("./pages/ManageSubscriptionsPage.jsx"));
 const OnboardingPage = lazy(() => import("./pages/OnboardingPage.jsx"));
-const AdminPage = lazy(() => import("./pages/AdminPage.jsx"));
 const InstantLiquidityPage = lazy(() => import("./pages/credit/InstantLiquidity.jsx"));
 const CreditHowItWorksPage = lazy(() => import("./pages/credit/CreditHowItWorks.jsx"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage.jsx"));
