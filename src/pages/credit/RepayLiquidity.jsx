@@ -357,7 +357,7 @@ const RepayLiquidity = ({ onBack, profile, fonts }) => {
               const months = Number(selectedLoan.number_of_months || 1);
               const monthlyDue = totalRepayable > 0 ? totalRepayable / months : 0;
               const interestRate = Number(selectedLoan.interest_rate || 0);
-              const annualRate = (interestRate * 12 * 100);
+              const annualRate = 10.5; // Secured credit is charged at 10.5% p.a.
               const amountPaid = Math.max(0, totalRepayable - principal);
               const progressPct = totalRepayable > 0 ? Math.min(100, (amountPaid / totalRepayable) * 100) : 0;
               const nextDate = selectedLoan.first_repayment_date
