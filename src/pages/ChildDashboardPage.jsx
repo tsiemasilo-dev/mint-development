@@ -2295,14 +2295,14 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
       const linkedUserId = child?.linked_user_id || null;
       const familyTxQuery = supabase
         .from("transactions")
-        .select("id, user_id, family_member_id, name, direction, amount, description, created_at, transaction_date")
+        .select("id, user_id, family_member_id, name, direction, amount, description, created_at, transaction_date, base_amount_cents, buffer_cents, buffer_consumed_cents, broker_fee_cents, isin_fee_cents, transaction_fee_cents")
         .eq("family_member_id", child.id)
         .order("created_at", { ascending: false })
         .limit(10);
       const linkedTxQuery = linkedUserId
         ? supabase
             .from("transactions")
-            .select("id, user_id, family_member_id, name, direction, amount, description, created_at, transaction_date")
+            .select("id, user_id, family_member_id, name, direction, amount, description, created_at, transaction_date, base_amount_cents, buffer_cents, buffer_consumed_cents, broker_fee_cents, isin_fee_cents, transaction_fee_cents")
             .eq("user_id", linkedUserId)
             .order("created_at", { ascending: false })
             .limit(10)
