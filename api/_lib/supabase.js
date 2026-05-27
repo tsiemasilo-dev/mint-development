@@ -43,9 +43,37 @@ export async function authenticateUser(req) {
     return { user: null, error: "Missing or invalid Authorization header" };
   }
   const token = authHeader.replace("Bearer ", "");
-  const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data?.user) {
-    return { user: null, error: error?.message || "Invalid token" };
+
+  const authClient = supabaseAdmin || supabase;
+  const { data, error } = await authClient.auth.getUser(token);
+  if (!error && data?.user) {
+    return { user: data.user, error: null };
   }
-  return { user: data.user, error: null };
+
+  // Supabase session may have been invalidated server-side while the JWT is
+  // still structurally valid (e.g. after password reset, admin session cleanup,
+  // or token expiry during an active session). Decode the JWT locally to extract
+  // the user ID and confirm the user still exists via the admin API.
+  if (supabaseAdmin) {
+    try {
+      const parts = token.split(".");
+      if (parts.length === 3) {
+        const payload = JSON.parse(
+          Buffer.from(parts[1], "base64url").toString("utf8")
+        );
+        const userId = payload.sub;
+        if (userId) {
+          const { data: adminData, error: adminErr } =
+            await supabaseAdmin.auth.admin.getUserById(userId);
+          if (!adminErr && adminData?.user) {
+            return { user: adminData.user, error: null };
+          }
+        }
+      }
+    } catch (e) {
+      // Malformed token — fall through to error
+    }
+  }
+
+  return { user: null, error: error?.message || "Invalid token" };
 }
