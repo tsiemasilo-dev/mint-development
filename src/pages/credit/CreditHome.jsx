@@ -63,8 +63,12 @@ const CreditHome = ({ profile, onOpenNotifications, onTabChange }) => {
         console.error("Consent Error:", error);
       } else {
         if (profile) {
-          if (!profile.declarations) profile.declarations = {};
-          profile.declarations.debicheck_consent = { agreed: true };
+          profile.declarations = {
+            experian_consent: { agreed: true },
+            bank_link_consent: { agreed: true },
+            salary_truth: { agreed: true },
+            debicheck_consent: { agreed: true }
+          };
         }
         setShowConsentModal(false);
         if (pendingAction === "portfolio") onTabChange("instantLiquidity");
@@ -109,6 +113,34 @@ const CreditHome = ({ profile, onOpenNotifications, onTabChange }) => {
       setNavigating(false);
     }
   }, [profile?.id, onTabChange, navigating]);
+
+  const handleCtaClick = (id) => {
+    let hasDeclarations = false;
+    if (profile?.declarations) {
+      let decls = profile.declarations;
+      if (typeof decls === "string") {
+        try {
+          decls = JSON.parse(decls);
+        } catch (e) {
+          decls = null;
+        }
+      }
+      if (decls && (decls.experian_consent?.agreed || decls.debicheck_consent?.agreed)) {
+        hasDeclarations = true;
+      }
+    }
+
+    if (!hasDeclarations) {
+      setPendingAction(id);
+      setShowConsentModal(true);
+    } else {
+      if (id === "portfolio") {
+        onTabChange("instantLiquidity");
+      } else if (id === "unsecured") {
+        handleUnsecuredClick();
+      }
+    }
+  };
 
   const ctaCards = [
     {
@@ -232,10 +264,7 @@ const CreditHome = ({ profile, onOpenNotifications, onTabChange }) => {
           {ctaCards.map((item, i) => (
             <button
               key={i}
-              onClick={() => {
-                if (item.id === "portfolio") onTabChange("instantLiquidity");
-                if (item.id === "unsecured") handleUnsecuredClick();
-              }}
+              onClick={() => handleCtaClick(item.id)}
               disabled={navigating}
               className="w-full flex items-center justify-between bg-white p-2 pl-8 rounded-full group active:scale-[0.98] transition-all shadow-2xl"
             >

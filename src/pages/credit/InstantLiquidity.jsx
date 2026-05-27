@@ -97,6 +97,7 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange, onLinkBan
           .from('stock_holdings_c')
           .select(`
           quantity,
+          avg_fill,
           securities_c!inner (
             id, symbol, name, last_price, market_cap, sector,
             logo_url,
@@ -124,7 +125,9 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange, onLinkBan
               ? prices.map(p => parseFloat(p.close_price)).reverse()
               : [0, 0, 0, 0, 0, 0, 0];
 
-            const balance = (item.quantity * (sec.last_price || 0));
+            const hasAvgFill = item.avg_fill && Number(item.avg_fill) > 0;
+            const balance = hasAvgFill ? (item.quantity * (sec.last_price || 0)) : 0;
+            const isEligible = !sec.disqualified && hasAvgFill;
 
             return {
               id: sec.id,
@@ -135,10 +138,10 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange, onLinkBan
               marketCap: sec.market_cap,
               quantity: item.quantity,
               balance: balance,
-              isEligible: !sec.disqualified,
+              isEligible: isEligible,
               score: sec.collateral_score || 0,
               ltv: sec.ltv_pct || 0,
-              available: !sec.disqualified ? (balance * (sec.ltv_pct || 0)) : 0,
+              available: isEligible ? (balance * (sec.ltv_pct || 0)) : 0,
               spark,
               marginCall: sec.margin_call_pct || 0.65,
               autoLiq: sec.auto_liq_pct || 0.70

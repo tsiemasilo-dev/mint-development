@@ -890,6 +890,9 @@ const HomePage = ({
           const stratPnlPct = changePctVal;
           return {
             id: s.id,
+            purchaseKey: s.purchaseKey || s.id,
+            purchaseRef: s.purchaseRef || null,
+            firstInvestedDate: s.firstInvestedDate || null,
             name: s.name,
             short_name: s.shortName,
             description: s.description,
@@ -1945,7 +1948,7 @@ const HomePage = ({
             </div>
             {hasStrategies && !loadingBestStrategies && !strategySkeletonHold && (
               <button
-                onClick={onOpenStrategies}
+                onClick={() => onOpenInvestments && onOpenInvestments("strategy")}
                 className="mb-1 text-xs font-semibold text-violet-600 active:opacity-70 transition-colors"
               >
                 View all
@@ -2008,15 +2011,13 @@ const HomePage = ({
                           </p>
                         </div>
                         <div className="text-right flex-shrink-0">
-                          <p className="text-sm font-semibold text-slate-900">
-                            {strategy.currentValue ? `R${Number(strategy.currentValue).toFixed(2)}` : strategy.investedAmount ? `R${Number(strategy.investedAmount).toFixed(2)}` : '—'}
-                          </p>
                           {strategy.pnlRands != null && strategy.investedAmount > 0 ? (
-                            <p className={`text-xs font-semibold ${strategy.pnlRands >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                              {strategy.pnlRands >= 0 ? '+' : ''}R{Math.abs(strategy.pnlRands).toFixed(2)} ({strategy.pnlPct >= 0 ? '+' : ''}{strategy.pnlPct.toFixed(2)}%)
-                            </p>
+                            <div className={`text-right ${strategy.pnlRands >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                              <p className="text-sm font-semibold">{strategy.pnlRands >= 0 ? '+' : ''}R{Math.abs(strategy.pnlRands).toFixed(2)}</p>
+                              <p className="text-xs font-semibold">({strategy.pnlPct >= 0 ? '+' : ''}{strategy.pnlPct.toFixed(2)}%)</p>
+                            </div>
                           ) : (
-                            <p className={`text-xs font-semibold ${pct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                            <p className={`text-sm font-semibold ${pct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                               {pct >= 0 ? '+' : ''}{pct.toFixed(2)}%
                             </p>
                           )}
@@ -2024,9 +2025,17 @@ const HomePage = ({
                       </div>
                     </div>
                     <div className="mt-3 flex items-center justify-between">
-                      {strategy.risk_level && (
-                        <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">{strategy.risk_level}</span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {strategy.firstInvestedDate ? (
+                          <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-400">
+                            {formatDate(strategy.firstInvestedDate)}
+                          </span>
+                        ) : strategy.purchaseRef ? (
+                          <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-400">
+                            {strategy.purchaseRef}
+                          </span>
+                        ) : null}
+                      </div>
                       {holdingsSnapshot.length > 0 && (
                         <div className="flex items-center gap-2">
                           <div className="flex -space-x-2">
@@ -2088,7 +2097,7 @@ const HomePage = ({
 
                 return (
                   <button
-                    key={strategy.id}
+                    key={strategy.purchaseKey || strategy.id}
                     type="button"
                     onClick={() => onOpenStrategyInPortfolio ? onOpenStrategyInPortfolio(strategy.id) : onOpenStrategies && onOpenStrategies(strategy)}
                     className="flex-shrink-0 w-[280px] snap-start rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all active:scale-[0.97]"
