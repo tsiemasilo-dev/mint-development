@@ -109,35 +109,35 @@ const ActivityPage = ({ onBack }) => {
     });
   }, [transactions]);
 
+  // Money In = credits (wallet top-ups, refunds, dividends).
+  // Money Out = debits (purchases, withdrawals, fees).
+  // The previous name-based filter only counted withdraw/repay as Money Out,
+  // so stock purchases ("Purchased X") got bucketed into Money In.
   const summaryStats = useMemo(() => {
-    const totalIn = activityItems.filter(i => {
-      const lower = (i.title || "").toLowerCase();
-      const isWithdrawal = lower.includes("withdraw") || lower.includes("repay");
-      return !isWithdrawal;
-    }).reduce((sum, i) => sum + Math.abs(i.rawAmount), 0);
-    const totalOut = activityItems.filter(i => {
-      const lower = (i.title || "").toLowerCase();
-      return lower.includes("withdraw") || lower.includes("repay");
-    }).reduce((sum, i) => sum + Math.abs(i.rawAmount), 0);
+    const totalIn = activityItems
+      .filter(i => i.direction === "credit")
+      .reduce((sum, i) => sum + Math.abs(i.rawAmount), 0);
+    const totalOut = activityItems
+      .filter(i => i.direction === "debit")
+      .reduce((sum, i) => sum + Math.abs(i.rawAmount), 0);
     return { totalIn, totalOut, count: activityItems.length };
   }, [activityItems]);
 
   // When the Fees tab is active, each investment tx is exploded into its
   // server-recorded fee components (Execution Reserve, brokerage, ISIN,
-  // transaction fee) so users can see exactly what they were charged.
-  // Pre-migration txs (all fee columns 0) fall back to a single "Fees"
-  // line of "amount − base" so old purchases aren't blank.
+  // transaction fee) so users see what they were charged. Pre-migration txs
+  // (all fee columns 0) are skipped here — we don't have a breakdown for
+  // them and showing the full debit as "fees" would be misleading.
   const feeLineItems = useMemo(() => {
     const lines = [];
     for (const item of activityItems) {
       if (item.direction !== "debit") continue;
       const fb = item.feeBreakdown || {};
-      const baseC = Number(fb.baseCents || 0);
       const bufferC = Number(fb.bufferCents || 0);
       const brokerC = Number(fb.brokerFeeCents || 0);
       const isinC = Number(fb.isinFeeCents || 0);
       const txFeeC = Number(fb.transactionFeeCents || 0);
-      const hasBreakdown = baseC > 0 || bufferC > 0 || brokerC > 0 || isinC > 0 || txFeeC > 0;
+      if (bufferC + brokerC + isinC + txFeeC === 0) continue;
 
       const baseLine = {
         date: item.date,
@@ -146,22 +146,7 @@ const ActivityPage = ({ onBack }) => {
         groupLabel: item.groupLabel,
         parentTitle: item.title,
         status: item.status,
-        logo_url: item.logo_url,
-        holding_logos: item.holding_logos,
       };
-
-      if (!hasBreakdown) {
-        const impliedFeesC = (item.rawAmountCents || 0); // no base recorded — show whole charge as fees
-        if (impliedFeesC <= 0) continue;
-        lines.push({
-          ...baseLine,
-          id: `${item.id}-fees`,
-          feeType: "all",
-          feeLabel: "Fees & charges",
-          amountCents: impliedFeesC,
-        });
-        continue;
-      }
 
       if (bufferC > 0) lines.push({
         ...baseLine, id: `${item.id}-buffer`, feeType: "buffer",
