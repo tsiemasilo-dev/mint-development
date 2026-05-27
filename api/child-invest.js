@@ -1,4 +1,5 @@
 import { supabase, supabaseAdmin, authenticateUser } from "./_lib/supabase.js";
+import { computeFees } from "./_lib/fees.js";
 
 // Latest stock_intraday_c.current_price per security_id — stamped as
 // Expected_fill so child PnL is anchored to the price at click time.
@@ -41,7 +42,7 @@ export default async function handler(req, res) {
   const db = supabaseAdmin || supabase;
   if (!db) return res.status(500).json({ error: "Database not available." });
 
-  const { family_member_id, strategy_id, amount } = req.body || {};
+  const { family_member_id, strategy_id, amount, base_amount } = req.body || {};
 
   if (!family_member_id) return res.status(400).json({ error: "family_member_id is required." });
   if (!strategy_id) return res.status(400).json({ error: "strategy_id is required." });
@@ -122,6 +123,15 @@ export default async function handler(req, res) {
     // Insert transaction first so we can stamp its UUID on every holdings row.
     const ref = `CHILD-INV-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     let childTxId = null;
+
+    // Server-authoritative fee breakdown. base_amount arrives in cents (raw,
+    // pre-buffer, pre-fees) from ChildInvestModal. Fall back to deriving it
+    // from amount if older clients call without it.
+    const baseCentsIn = Number(base_amount || 0);
+    const baseRandsForFees = baseCentsIn > 0 ? baseCentsIn / 100 : (amount / 100);
+    const numAssetsForFees = (strategy.holdings || []).length || 1;
+    const fees = computeFees(baseRandsForFees, numAssetsForFees);
+
     try {
       const txInsert = await db.from("transactions").insert({
         user_id: parentUserId,
@@ -129,6 +139,12 @@ export default async function handler(req, res) {
         name: `Strategy Investment: ${strategy.name}`,
         direction: "debit",
         amount: amount,
+        base_amount_cents:     fees.baseCents,
+        buffer_cents:          fees.bufferCents,
+        buffer_consumed_cents: 0,
+        broker_fee_cents:      fees.brokerFeeCents,
+        isin_fee_cents:        fees.isinFeeCents,
+        transaction_fee_cents: fees.transactionFeeCents,
         description: `${strategy.name} investment for ${child.first_name}`,
         store_reference: ref,
         currency: "ZAR",
