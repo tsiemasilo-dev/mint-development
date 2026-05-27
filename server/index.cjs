@@ -3557,7 +3557,6 @@ app.post("/api/record-investment", async (req, res) => {
           unrealized_pnl: 0,
           as_of_date: null,
           Status: "active",
-          settlement_status: "pending",
         });
 
         if (insertErr) {
