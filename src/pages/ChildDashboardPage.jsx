@@ -1939,7 +1939,7 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
 
 // --- Main Page ---------------------------------------------------------------
 
-export default function ChildDashboardPage({ child: initialChild, onBack, onOpenFactsheet }) {
+export default function ChildDashboardPage({ child: initialChild, onBack, onOpenFactsheet, onTabChange }) {
   const { profile } = useProfile();
   const isMounted = useRef(true);
   const [child, setChild] = useState(initialChild);
@@ -1967,6 +1967,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   const [childFriendlyLoading, setChildFriendlyLoading] = useState(true);
   const [kycNotice, setKycNotice] = useState("");
   const [activeChildTab, setActiveChildTab] = useState("home");
+  const [activePortfolioSubTab, setActivePortfolioSubTab] = useState("strategies");
 
   const childName = [child?.first_name, child?.last_name].filter(Boolean).join(" ") || "Child";
   const age = getAge(child?.date_of_birth);
@@ -2741,8 +2742,8 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             </motion.div>
           )}
 
-          {/* Quick Actions — home tab only */}
-          {activeChildTab === "home" && <motion.div variants={item}>
+          {/* Quick Actions — always visible */}
+          {activeChildTab !== "portfolio" && <motion.div variants={item}>
             <div className="grid grid-cols-4 gap-2 text-[11px] font-medium">
               {[
                 { label: "Learn", icon: BookOpen, onClick: null, comingSoon: true },
@@ -2782,8 +2783,8 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             </div>
           </motion.div>}
 
-          {/* -- Child Friendly Strategies — home tab only -- */}
-          {activeChildTab === "home" && childFriendlyStrategies.length > 0 && (
+          {/* -- Child Friendly Strategies — portfolio tab, STRATEGIES sub-tab, no holdings yet -- */}
+          {activeChildTab === "portfolio" && activePortfolioSubTab === "strategies" && strategyCardStacks.length === 0 && childFriendlyStrategies.length > 0 && (
             <motion.div variants={item}>
               <div className="flex items-center gap-2 mb-3 px-1">
                 <div className="h-2 w-2 rounded-full bg-green-300" />
@@ -2884,8 +2885,29 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             </motion.div>
           )}
 
-          {/* -- Strategy Holdings — portfolio tab only -- */}
-          {activeChildTab === "portfolio" && <motion.div variants={item}>
+          {/* -- Portfolio tab: STRATEGIES / HOLDINGS pill sub-tabs -- */}
+          {activeChildTab === "portfolio" && (
+            <motion.div variants={item}>
+              <div className="flex items-center gap-2 rounded-2xl bg-slate-100 p-1">
+                {["strategies", "holdings"].map((subTab) => (
+                  <button
+                    key={subTab}
+                    onClick={() => setActivePortfolioSubTab(subTab)}
+                    className={`flex-1 rounded-xl py-2 text-[11px] font-bold uppercase tracking-widest transition-all ${
+                      activePortfolioSubTab === subTab
+                        ? "bg-[#31005e] text-white shadow"
+                        : "text-slate-400"
+                    }`}
+                  >
+                    {subTab === "strategies" ? "Strategies" : "Holdings"}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {/* -- Strategy Holdings — home tab + portfolio STRATEGIES sub-tab -- */}
+          {(activeChildTab === "home" || (activeChildTab === "portfolio" && activePortfolioSubTab === "strategies")) && <motion.div variants={item}>
             <div className="flex items-center gap-2 mb-3 px-1">
               <div className="h-2 w-2 rounded-full bg-slate-300" />
               <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Strategies</p>
@@ -3177,8 +3199,8 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             )}
           </motion.div>}
 
-          {/* -- Best Performing Assets — portfolio tab only -- */}
-          {activeChildTab === "portfolio" && (loading ? (
+          {/* -- Best Performing Assets — home tab + portfolio HOLDINGS sub-tab -- */}
+          {(activeChildTab === "home" || (activeChildTab === "portfolio" && activePortfolioSubTab === "holdings")) && (loading ? (
             <motion.div variants={item}>
               <div className="flex items-center gap-2 mb-3 px-1">
                 <div className="h-2 w-2 rounded-full bg-emerald-200" />
@@ -3237,8 +3259,8 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             </motion.div>
           ))}
 
-          {/* -- Recent Activity — portfolio tab only -- */}
-          {activeChildTab === "portfolio" && <motion.div variants={item}>
+          {/* -- Recent Activity — home tab + portfolio HOLDINGS sub-tab -- */}
+          {(activeChildTab === "home" || (activeChildTab === "portfolio" && activePortfolioSubTab === "holdings")) && <motion.div variants={item}>
             <div className="flex items-center gap-2 mb-3 px-1">
               <div className="h-2 w-2 rounded-full bg-slate-300" />
               <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Recent Activity</p>
@@ -3283,8 +3305,8 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             )}
           </motion.div>}
 
-          {/* -- Account Info — portfolio tab only -- */}
-          {activeChildTab === "portfolio" && <motion.div variants={item}>
+          {/* -- Account Info — home tab only -- */}
+          {activeChildTab === "home" && <motion.div variants={item}>
             <div className="flex items-center gap-2 mb-3 px-1">
               <div className="h-2 w-2 rounded-full bg-slate-300" />
               <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Account Details</p>
@@ -3343,10 +3365,12 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
 
       {/* -- Bottom Navigation Bar (shared Mint Navbar) -- */}
       <Navbar
-        activeTab={activeChildTab === "portfolio" ? "investments" : "home"}
+        activeTab={activeChildTab === "portfolio" ? "investments" : activeChildTab === "news" ? "news" : activeChildTab === "more" ? "more" : "home"}
         setActiveTab={(tab) => {
-          if (tab === "investments") setActiveChildTab("portfolio");
-          else setActiveChildTab("home");
+          if (tab === "investments") { setActiveChildTab("portfolio"); }
+          else if (tab === "news") { onTabChange?.("news"); }
+          else if (tab === "more") { onTabChange?.("more"); }
+          else { setActiveChildTab("home"); }
         }}
       />
 
