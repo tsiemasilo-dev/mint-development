@@ -5,7 +5,10 @@ import {
   Wallet, BarChart3, ChevronRight, ChevronDown, ChevronUp,
   RefreshCw, Search, Star, AlertCircle, Check, ClipboardList,
   BookOpen, LayoutGrid, ArrowDownToLine, Target, FileSignature, Plus,
+  Home, PieChart,
 } from "lucide-react";
+import NotificationBell from "../components/NotificationBell";
+import FamilyDropdown from "../components/FamilyDropdown";
 import SwipeableBalanceCard from "../components/SwipeableBalanceCard";
 import Skeleton from "../components/Skeleton";
 import { useProfile } from "../lib/useProfile";
@@ -1964,6 +1967,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   const [childFriendlyMinimums, setChildFriendlyMinimums] = useState({});
   const [childFriendlyLoading, setChildFriendlyLoading] = useState(true);
   const [kycNotice, setKycNotice] = useState("");
+  const [activeChildTab, setActiveChildTab] = useState("home");
 
   const childName = [child?.first_name, child?.last_name].filter(Boolean).join(" ") || "Child";
   const age = getAge(child?.date_of_birth);
@@ -2647,17 +2651,35 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
       {/* -- Header -- */}
       <div className="px-4 pt-12 pb-6">
         <div className="mx-auto w-full max-w-sm md:max-w-md">
-          <div className="flex items-center gap-3">
+          <header className="relative flex items-center justify-between text-white mb-4">
+            {/* Parent profile icon — tapping goes back */}
             <button
               onClick={onBack}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-sm transition active:scale-95"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-white/10 text-white backdrop-blur-md transition active:scale-95 flex-shrink-0"
+              aria-label="Back"
             >
-              <ArrowLeft className="h-5 w-5" />
+              {profile?.avatarUrl ? (
+                <img src={profile.avatarUrl} alt="profile" className="h-full w-full rounded-full object-cover" />
+              ) : (
+                <span className="text-[13px] font-bold">
+                  {[profile?.firstName, profile?.lastName].filter(Boolean).map(n => n[0].toUpperCase()).join("") || "P"}
+                </span>
+              )}
             </button>
-            <div className="flex-1" />
-          </div>
 
-          <div className="mt-4">
+            {/* Child name — centered */}
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
+              <p className="text-[15px] font-bold text-white leading-tight tracking-tight">{childName}</p>
+              {age !== null && (
+                <p className="text-[11px] text-white/60 font-medium leading-none mt-0.5">Age {age}</p>
+              )}
+            </div>
+
+            {/* Notification bell */}
+            <NotificationBell onClick={() => {}} />
+          </header>
+
+          <div className="">
             {loading ? (
               <div className="rounded-[28px] bg-white/95 p-5 shadow-xl border border-white/70">
                 <div className="flex items-center justify-between mb-8">
@@ -2684,7 +2706,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
       </div>
 
       {/* Content */}
-      <div className="mx-auto w-full max-w-sm px-4 pb-12 md:max-w-md">
+      <div className="mx-auto w-full max-w-sm px-4 pb-28 md:max-w-md">
         <motion.div variants={container} initial="hidden" animate="show" className="space-y-4">
 
           {/* -- Incomplete profile banner -- */}
@@ -2718,8 +2740,8 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             </motion.div>
           )}
 
-          {/* Quick Actions */}
-          <motion.div variants={item}>
+          {/* Quick Actions — home tab only */}
+          {activeChildTab === "home" && <motion.div variants={item}>
             <div className="grid grid-cols-4 gap-2 text-[11px] font-medium">
               {[
                 { label: "Learn", icon: BookOpen, onClick: null, comingSoon: true },
@@ -2757,10 +2779,10 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                 );
               })}
             </div>
-          </motion.div>
+          </motion.div>}
 
-          {/* -- Child Friendly Strategies -- */}
-          {childFriendlyStrategies.length > 0 && (
+          {/* -- Child Friendly Strategies — home tab only -- */}
+          {activeChildTab === "home" && childFriendlyStrategies.length > 0 && (
             <motion.div variants={item}>
               <div className="flex items-center gap-2 mb-3 px-1">
                 <div className="h-2 w-2 rounded-full bg-green-300" />
@@ -2861,8 +2883,8 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             </motion.div>
           )}
 
-          {/* -- Strategy Holdings -- */}
-          <motion.div variants={item}>
+          {/* -- Strategy Holdings — portfolio tab only -- */}
+          {activeChildTab === "portfolio" && <motion.div variants={item}>
             <div className="flex items-center gap-2 mb-3 px-1">
               <div className="h-2 w-2 rounded-full bg-slate-300" />
               <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Strategies</p>
@@ -3152,10 +3174,10 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                 </button>
               </div>
             )}
-          </motion.div>
+          </motion.div>}
 
-          {/* -- Best Performing Assets -- */}
-          {loading ? (
+          {/* -- Best Performing Assets — portfolio tab only -- */}
+          {activeChildTab === "portfolio" && (loading ? (
             <motion.div variants={item}>
               <div className="flex items-center gap-2 mb-3 px-1">
                 <div className="h-2 w-2 rounded-full bg-emerald-200" />
@@ -3212,10 +3234,10 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                 })}
               </div>
             </motion.div>
-          )}
+          ))}
 
-          {/* -- Recent Activity -- */}
-          <motion.div variants={item}>
+          {/* -- Recent Activity — portfolio tab only -- */}
+          {activeChildTab === "portfolio" && <motion.div variants={item}>
             <div className="flex items-center gap-2 mb-3 px-1">
               <div className="h-2 w-2 rounded-full bg-slate-300" />
               <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Recent Activity</p>
@@ -3258,10 +3280,10 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                 <p className="text-xs text-slate-600">No activity yet. Transfer or invest to get started.</p>
               </div>
             )}
-          </motion.div>
+          </motion.div>}
 
-          {/* -- Account Info -- */}
-          <motion.div variants={item}>
+          {/* -- Account Info — portfolio tab only -- */}
+          {activeChildTab === "portfolio" && <motion.div variants={item}>
             <div className="flex items-center gap-2 mb-3 px-1">
               <div className="h-2 w-2 rounded-full bg-slate-300" />
               <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Account Details</p>
@@ -3313,9 +3335,60 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                 </div>
               </div>
             </div>
-          </motion.div>
+          </motion.div>}
 
         </motion.div>
+      </div>
+
+      {/* -- Bottom Navigation Bar -- */}
+      <div
+        className="fixed bottom-0 left-0 right-0 z-40"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        <div className="mx-auto w-full max-w-sm md:max-w-md px-4 pb-3">
+          <div
+            className="flex items-center rounded-[22px] border border-white/20 shadow-xl overflow-hidden"
+            style={{
+              background: "rgba(20, 10, 35, 0.82)",
+              backdropFilter: "blur(20px)",
+              WebkitBackdropFilter: "blur(20px)",
+            }}
+          >
+            {[
+              { id: "home", label: "Home", Icon: Home },
+              { id: "portfolio", label: "Portfolio", Icon: PieChart },
+            ].map(({ id, label, Icon }) => {
+              const isActive = activeChildTab === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setActiveChildTab(id)}
+                  className="relative flex flex-1 flex-col items-center justify-center gap-1 py-3 transition-colors active:scale-95"
+                >
+                  {isActive && (
+                    <motion.div
+                      layoutId="child-tab-pill"
+                      className="absolute inset-x-3 inset-y-1.5 rounded-2xl"
+                      style={{ background: "rgba(255,255,255,0.12)" }}
+                      transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                    />
+                  )}
+                  <Icon
+                    className="relative z-10 h-5 w-5 transition-colors"
+                    style={{ color: isActive ? "#fff" : "rgba(255,255,255,0.4)" }}
+                  />
+                  <span
+                    className="relative z-10 text-[10px] font-semibold tracking-wide transition-colors"
+                    style={{ color: isActive ? "#fff" : "rgba(255,255,255,0.4)" }}
+                  >
+                    {label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {/* -- Modals -- */}
