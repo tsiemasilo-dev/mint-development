@@ -5,10 +5,9 @@ import {
   Wallet, BarChart3, ChevronRight, ChevronDown, ChevronUp,
   RefreshCw, Search, Star, AlertCircle, Check, ClipboardList,
   BookOpen, LayoutGrid, ArrowDownToLine, Target, FileSignature, Plus,
-  Home, PieChart,
 } from "lucide-react";
 import NotificationBell from "../components/NotificationBell";
-import FamilyDropdown from "../components/FamilyDropdown";
+import Navbar from "../components/Navbar";
 import SwipeableBalanceCard from "../components/SwipeableBalanceCard";
 import Skeleton from "../components/Skeleton";
 import { useProfile } from "../lib/useProfile";
@@ -2652,19 +2651,21 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
       <div className="px-4 pt-12 pb-6">
         <div className="mx-auto w-full max-w-sm md:max-w-md">
           <header className="relative flex items-center justify-between text-white mb-4">
-            {/* Parent profile icon — tapping goes back */}
+            {/* Parent profile pill — tapping goes back */}
             <button
               onClick={onBack}
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-white/10 text-white backdrop-blur-md transition active:scale-95 flex-shrink-0"
+              className="flex items-center gap-1.5 rounded-full py-1 pl-1 pr-2.5 focus:outline-none transition-all duration-200 active:scale-95"
+              style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.18)" }}
               aria-label="Back"
             >
               {profile?.avatarUrl ? (
-                <img src={profile.avatarUrl} alt="profile" className="h-full w-full rounded-full object-cover" />
+                <img src={profile.avatarUrl} alt="profile" className="h-8 w-8 rounded-full border border-white/30 object-cover" />
               ) : (
-                <span className="text-[13px] font-bold">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20 text-xs font-semibold text-white">
                   {[profile?.firstName, profile?.lastName].filter(Boolean).map(n => n[0].toUpperCase()).join("") || "P"}
-                </span>
+                </div>
               )}
+              <ChevronDown className="h-3.5 w-3.5 text-white/70" />
             </button>
 
             {/* Child name — centered */}
@@ -2706,7 +2707,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
       </div>
 
       {/* Content */}
-      <div className="mx-auto w-full max-w-sm px-4 pb-28 md:max-w-md">
+      <div className="mx-auto w-full max-w-sm px-4 pb-[calc(var(--navbar-height,80px)+1rem)] md:max-w-md">
         <motion.div variants={container} initial="hidden" animate="show" className="space-y-4">
 
           {/* -- Incomplete profile banner -- */}
@@ -3340,56 +3341,14 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
         </motion.div>
       </div>
 
-      {/* -- Bottom Navigation Bar -- */}
-      <div
-        className="fixed bottom-0 left-0 right-0 z-40"
-        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-      >
-        <div className="mx-auto w-full max-w-sm md:max-w-md px-4 pb-3">
-          <div
-            className="flex items-center rounded-[22px] border border-white/20 shadow-xl overflow-hidden"
-            style={{
-              background: "rgba(20, 10, 35, 0.82)",
-              backdropFilter: "blur(20px)",
-              WebkitBackdropFilter: "blur(20px)",
-            }}
-          >
-            {[
-              { id: "home", label: "Home", Icon: Home },
-              { id: "portfolio", label: "Portfolio", Icon: PieChart },
-            ].map(({ id, label, Icon }) => {
-              const isActive = activeChildTab === id;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setActiveChildTab(id)}
-                  className="relative flex flex-1 flex-col items-center justify-center gap-1 py-3 transition-colors active:scale-95"
-                >
-                  {isActive && (
-                    <motion.div
-                      layoutId="child-tab-pill"
-                      className="absolute inset-x-3 inset-y-1.5 rounded-2xl"
-                      style={{ background: "rgba(255,255,255,0.12)" }}
-                      transition={{ type: "spring", stiffness: 380, damping: 32 }}
-                    />
-                  )}
-                  <Icon
-                    className="relative z-10 h-5 w-5 transition-colors"
-                    style={{ color: isActive ? "#fff" : "rgba(255,255,255,0.4)" }}
-                  />
-                  <span
-                    className="relative z-10 text-[10px] font-semibold tracking-wide transition-colors"
-                    style={{ color: isActive ? "#fff" : "rgba(255,255,255,0.4)" }}
-                  >
-                    {label}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+      {/* -- Bottom Navigation Bar (shared Mint Navbar) -- */}
+      <Navbar
+        activeTab={activeChildTab === "portfolio" ? "investments" : "home"}
+        setActiveTab={(tab) => {
+          if (tab === "investments") setActiveChildTab("portfolio");
+          else setActiveChildTab("home");
+        }}
+      />
 
       {/* -- Modals -- */}
       <AnimatePresence>
