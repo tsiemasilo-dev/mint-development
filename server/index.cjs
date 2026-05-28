@@ -4344,7 +4344,8 @@ app.get("/api/user/holdings", async (req, res) => {
       .from("stock_holdings_c")
       .select("id, user_id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status, settlement_status, is_active, exit_price")
       .eq("user_id", userId)
-      .is("family_member_id", null);
+      .is("family_member_id", null)
+      .eq("Status", "active");
 
     if (!holdingsFull.error) {
       holdings = holdingsFull.data;
@@ -4355,7 +4356,8 @@ app.get("/api/user/holdings", async (req, res) => {
         .from("stock_holdings_c")
         .select("id, user_id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status, is_active, exit_price")
         .eq("user_id", userId)
-        .is("family_member_id", null);
+        .is("family_member_id", null)
+        .eq("Status", "active");
 
       if (!noSettlement.error) {
         holdings = noSettlement.data;
@@ -4366,7 +4368,8 @@ app.get("/api/user/holdings", async (req, res) => {
           .from("stock_holdings_c")
           .select("id, user_id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status")
           .eq("user_id", userId)
-          .is("family_member_id", null);
+          .is("family_member_id", null)
+          .eq("Status", "active");
         holdings = (noExtras.data || []).map(h => ({ ...h, is_active: true, exit_price: null }));
         holdingsError = noExtras.error;
       } else {
