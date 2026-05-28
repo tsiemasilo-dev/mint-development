@@ -364,33 +364,73 @@ const SwipeableBalanceCard = ({
         let enrichedHoldings = [];
 
         if (familyMemberId) {
-          // ── CHILD MODE: stock_holdings_c × stock_intraday_c ──────────────────
-          // Queries directly via the anon/auth client (RLS allows family_member_id reads).
-          const { data: rawHoldings } = await supabase
-            .from("stock_holdings_c")
-            .select("id, security_id, quantity, avg_fill, Expected_fill, strategy_id, Fill_date, securities(symbol, name, logo_url)")
-            .eq("family_member_id", familyMemberId)
-            .eq("Status", "active");
+          // ── CHILD MODE: mirrors ChildDashboardPage.fetchHoldings exactly ──────
+          // Step 1: resolve linked_user_id (child may have their own Supabase account)
+          const { data: familyMemberRow } = await supabase
+            .from("family_members")
+            .select("id, linked_user_id")
+            .eq("id", familyMemberId)
+            .maybeSingle();
+          if (cancelled) return;
+          const linkedUserId = familyMemberRow?.linked_user_id || null;
+
+          // Step 2: fetch holdings — by family_member_id, plus by linked_user_id if present
+          const holdingsSelect = "id, user_id, family_member_id, security_id, quantity, avg_fill, Expected_fill, market_value, strategy_id, Fill_date, Status, created_at";
+          const [familyRes, linkedRes] = await Promise.all([
+            supabase
+              .from("stock_holdings_c")
+              .select(holdingsSelect)
+              .eq("family_member_id", familyMemberId)
+              .eq("Status", "active"),
+            linkedUserId
+              ? supabase
+                  .from("stock_holdings_c")
+                  .select(holdingsSelect)
+                  .eq("user_id", linkedUserId)
+                  .eq("Status", "active")
+              : Promise.resolve({ data: [], error: null }),
+          ]);
           if (cancelled) return;
 
-          const childHoldings = rawHoldings || [];
+          // Deduplicate by id
+          const rowsById = new Map();
+          [...(familyRes.data || []), ...(linkedRes.data || [])].forEach(r => {
+            if (r?.id) rowsById.set(r.id, r);
+          });
+          const childHoldings = Array.from(rowsById.values());
           const childSecIds = [...new Set(childHoldings.map(h => h.security_id).filter(Boolean))];
+
+          // Step 3: parallel lookup of securities info + intraday prices
+          const secMap = {};
           const intradayMap = {};
-          await Promise.all(childSecIds.map(async (secId) => {
-            const { data } = await supabase
-              .from("stock_intraday_c")
-              .select("current_price")
-              .eq("security_id", secId)
-              .order("timestamp", { ascending: false })
-              .limit(1)
-              .maybeSingle();
-            if (data?.current_price != null) intradayMap[secId] = Number(data.current_price);
-          }));
+          if (childSecIds.length > 0) {
+            const [secsRes, intradayRes] = await Promise.all([
+              supabase
+                .from("securities_c")
+                .select("id, symbol, name, logo_url, last_price")
+                .in("id", childSecIds),
+              supabase
+                .from("stock_intraday_c")
+                .select("security_id, current_price, timestamp")
+                .in("security_id", childSecIds)
+                .order("timestamp", { ascending: false }),
+            ]);
+            if (cancelled) return;
+            (secsRes.data || []).forEach(s => { secMap[s.id] = s; });
+            // Keep latest intraday row per security (rows ordered DESC)
+            (intradayRes.data || []).forEach(r => {
+              if (r.security_id != null && intradayMap[r.security_id] === undefined && r.current_price != null) {
+                intradayMap[r.security_id] = Number(r.current_price);
+              }
+            });
+          }
           if (cancelled) return;
 
+          // Step 4: enrich — only filled holdings (avg_fill > 0 + Fill_date), same logic as page
           enrichedHoldings = childHoldings
-            .filter(h => Number(h.avg_fill || 0) > 0)
+            .filter(h => Number(h.avg_fill || 0) > 0 && !!h.Fill_date)
             .map(h => {
+              const sec = secMap[h.security_id] || {};
               const quantity = Number(h.quantity || 0);
               const avgFillCents = Number(h.avg_fill || 0);
               const avgFillRands = avgFillCents / 100;
@@ -401,20 +441,25 @@ const SwipeableBalanceCard = ({
               const costBasisPerShareRands = expectedFillRands > 0
                 ? Math.max(expectedFillRands, avgFillRands)
                 : avgFillRands;
-              const currentPriceCents = intradayMap[h.security_id] ?? 0;
+              // Prefer live intraday price, fall back to last_price from securities_c
+              const intradayCents = intradayMap[h.security_id];
+              const lastPriceRands = Number(sec.last_price || 0);
+              const currentPriceCents = intradayCents != null
+                ? intradayCents
+                : (lastPriceRands > 0 ? Math.round(lastPriceRands * 100) : 0);
               const marketValueCents = currentPriceCents > 0
                 ? Math.round(currentPriceCents * quantity) : 0;
               const investedCents = Math.round(costBasisPerShareRands * 100 * quantity);
               return {
                 id: h.id,
-                symbol: h.securities?.symbol || `SEC-${String(h.security_id || "").slice(0, 6)}`,
-                name: h.securities?.name || "Security",
+                symbol: sec.symbol || `SEC-${String(h.security_id || "").slice(0, 6)}`,
+                name: sec.name || "Security",
                 market_value: marketValueCents,
                 invested_amount: investedCents,
                 avg_fill: avgFillCents,
                 Expected_fill: expectedFillRands,
                 quantity,
-                logo_url: h.securities?.logo_url || null,
+                logo_url: sec.logo_url || null,
                 security_id: h.security_id,
                 strategy_id: h.strategy_id,
                 isStrategy: false,
