@@ -1971,6 +1971,14 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   const [childFriendlyLoading, setChildFriendlyLoading] = useState(true);
   const [kycNotice, setKycNotice] = useState("");
   const [activeChildTab, setActiveChildTab] = useState("home");
+  const [mountedChildTabs, setMountedChildTabs] = useState(() => new Set(["home"]));
+
+  // Track which overlay tabs have been visited so they stay mounted (no re-mount flicker)
+  useEffect(() => {
+    if (activeChildTab === "news" || activeChildTab === "more") {
+      setMountedChildTabs(prev => new Set([...prev, activeChildTab]));
+    }
+  }, [activeChildTab]);
 
   const childName = [child?.first_name, child?.last_name].filter(Boolean).join(" ") || "Child";
   const age = getAge(child?.date_of_birth);
@@ -3251,9 +3259,12 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
         )}
       </div>
 
-      {/* -- News tab -- */}
-      {activeChildTab === "news" && (
-        <div className="fixed inset-0 z-10 overflow-y-auto" style={{ background: "var(--bg, #0f0a1e)" }}>
+      {/* -- News tab — mounted on first visit, shown/hidden to avoid flicker -- */}
+      <div
+        className="fixed inset-0 z-10 overflow-y-auto"
+        style={{ background: "var(--bg, #0f0a1e)", display: activeChildTab === "news" ? "block" : "none" }}
+      >
+        {mountedChildTabs.has("news") && (
           <Suspense fallback={<div className="flex items-center justify-center h-full text-white/50">Loading…</div>}>
             <MarketsPage
               initialViewMode="news"
@@ -3265,33 +3276,36 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
               onViewModeChange={() => {}}
             />
           </Suspense>
-          <Navbar
-            activeTab="news"
-            setActiveTab={(tab) => {
-              if (tab === "investments") setActiveChildTab("portfolio");
-              else if (tab === "more") setActiveChildTab("more");
-              else setActiveChildTab("home");
-            }}
-          />
-        </div>
-      )}
+        )}
+        <Navbar
+          activeTab="news"
+          setActiveTab={(tab) => {
+            if (tab === "investments") setActiveChildTab("portfolio");
+            else if (tab === "more") setActiveChildTab("more");
+            else setActiveChildTab("home");
+          }}
+        />
+      </div>
 
-      {/* -- More tab -- */}
-      {activeChildTab === "more" && (
-        <div className="fixed inset-0 z-10 overflow-y-auto" style={{ background: "var(--bg, #0f0a1e)" }}>
+      {/* -- More tab — mounted on first visit, shown/hidden to avoid flicker -- */}
+      <div
+        className="fixed inset-0 z-10 overflow-y-auto"
+        style={{ background: "var(--bg, #0f0a1e)", display: activeChildTab === "more" ? "block" : "none" }}
+      >
+        {mountedChildTabs.has("more") && (
           <Suspense fallback={<div className="flex items-center justify-center h-full text-white/50">Loading…</div>}>
             <MorePage onNavigate={onTabChange} onBeforeLogout={() => {}} />
           </Suspense>
-          <Navbar
-            activeTab="more"
-            setActiveTab={(tab) => {
-              if (tab === "investments") setActiveChildTab("portfolio");
-              else if (tab === "news") setActiveChildTab("news");
-              else setActiveChildTab("home");
-            }}
-          />
-        </div>
-      )}
+        )}
+        <Navbar
+          activeTab="more"
+          setActiveTab={(tab) => {
+            if (tab === "investments") setActiveChildTab("portfolio");
+            else if (tab === "news") setActiveChildTab("news");
+            else setActiveChildTab("home");
+          }}
+        />
+      </div>
 
       {/* -- Bottom Navigation Bar (shared Mint Navbar) -- */}
       <Navbar
