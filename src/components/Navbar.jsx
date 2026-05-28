@@ -7,7 +7,7 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 
-const Navbar = ({ activeTab, setActiveTab }) => {
+const Navbar = ({ activeTab, setActiveTab, comingSoonTabs = [] }) => {
   const navRef = useRef(null);
   const ImpactStyle = {
     Light: "LIGHT",
@@ -72,21 +72,45 @@ const Navbar = ({ activeTab, setActiveTab }) => {
           }}
         >
           <div className="relative mx-auto grid w-full max-w-lg grid-cols-4 items-center px-4">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  triggerHaptic(ImpactStyle.Light);
-                  setActiveTab(tab.id);
-                }}
-                className={`flex flex-col items-center justify-center gap-1.5 py-1 transition-all ${
-                  activeTab === tab.id ? "text-[#31005e] scale-110" : "text-slate-400 opacity-60"
-                }`}
-              >
-                <tab.icon size={24} strokeWidth={activeTab === tab.id ? 2.5 : 1.5} />
-                <span className="text-[9px] font-black uppercase tracking-[0.1em]">{tab.label}</span>
-              </button>
-            ))}
+            {tabs.map((tab) => {
+              const isComingSoon = comingSoonTabs.includes(tab.id);
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    if (isComingSoon) return;
+                    triggerHaptic(ImpactStyle.Light);
+                    setActiveTab(tab.id);
+                  }}
+                  className={`relative flex flex-col items-center justify-center gap-1.5 py-1 transition-all ${
+                    activeTab === tab.id ? "text-[#31005e] scale-110" : "text-slate-400 opacity-60"
+                  }`}
+                >
+                  {isComingSoon && (
+                    <span style={{
+                      position: "absolute",
+                      top: "-4px",
+                      left: "50%",
+                      transform: "translateX(-50%)",
+                      background: "linear-gradient(135deg,#7c3aed,#5b21b6)",
+                      color: "#fff",
+                      fontSize: "7px",
+                      fontWeight: 800,
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
+                      padding: "2px 5px",
+                      borderRadius: "999px",
+                      whiteSpace: "nowrap",
+                      pointerEvents: "none",
+                    }}>
+                      Soon
+                    </span>
+                  )}
+                  <tab.icon size={24} strokeWidth={activeTab === tab.id ? 2.5 : 1.5} />
+                  <span className="text-[9px] font-black uppercase tracking-[0.1em]">{tab.label}</span>
+                </button>
+              );
+            })}
           </div>
         </nav>,
         document.body

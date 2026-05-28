@@ -3269,9 +3269,9 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
         </Suspense>
         <Navbar
           activeTab="news"
+          comingSoonTabs={["investments"]}
           setActiveTab={(tab) => {
-            if (tab === "investments") setActiveChildTab("portfolio");
-            else if (tab === "more") setActiveChildTab("more");
+            if (tab === "more") setActiveChildTab("more");
             else setActiveChildTab("home");
           }}
         />
@@ -3287,9 +3287,9 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
         </Suspense>
         <Navbar
           activeTab="more"
+          comingSoonTabs={["investments"]}
           setActiveTab={(tab) => {
-            if (tab === "investments") setActiveChildTab("portfolio");
-            else if (tab === "news") setActiveChildTab("news");
+            if (tab === "news") setActiveChildTab("news");
             else setActiveChildTab("home");
           }}
         />
@@ -3297,10 +3297,10 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
 
       {/* -- Bottom Navigation Bar (shared Mint Navbar) -- */}
       <Navbar
-        activeTab={activeChildTab === "portfolio" ? "investments" : activeChildTab === "news" ? "news" : activeChildTab === "more" ? "more" : "home"}
+        activeTab={activeChildTab === "news" ? "news" : activeChildTab === "more" ? "more" : "home"}
+        comingSoonTabs={["investments"]}
         setActiveTab={(tab) => {
-          if (tab === "investments") setActiveChildTab("portfolio");
-          else if (tab === "news") setActiveChildTab("news");
+          if (tab === "news") setActiveChildTab("news");
           else if (tab === "more") setActiveChildTab("more");
           else setActiveChildTab("home");
         }}
