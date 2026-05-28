@@ -362,219 +362,228 @@ const SwipeableBalanceCard = ({
 
       try {
         let enrichedHoldings = [];
-        let strategiesRes = { strategies: [] };
-        let holdingsRes = { holdings: [] };
 
-        // Child mode: fetch from stock_holdings_c directly
         if (familyMemberId) {
-          const { data: childHoldings, error } = await supabase
-            .from("stock_holdings_c")
-            .select("id, security_id, quantity, avg_fill, Expected_fill, market_value, unrealized_pnl, strategy_id, Fill_date, securities(symbol, name, logo_url, last_price)")
-            .eq("family_member_id", familyMemberId);
+          // ── CHILD MODE: mirrors ChildDashboardPage.fetchHoldings exactly ──────
+          // Step 1: resolve linked_user_id (child may have their own Supabase account)
+          const { data: familyMemberRow } = await supabase
+            .from("family_members")
+            .select("id, linked_user_id")
+            .eq("id", familyMemberId)
+            .maybeSingle();
+          if (cancelled) return;
+          const linkedUserId = familyMemberRow?.linked_user_id || null;
 
-          if (!error && childHoldings) {
-            enrichedHoldings = childHoldings.map((h) => {
+          // Step 2: fetch holdings — by family_member_id, plus by linked_user_id if present
+          const holdingsSelect = "id, user_id, family_member_id, security_id, quantity, avg_fill, Expected_fill, market_value, strategy_id, Fill_date, Status, created_at";
+          const [familyRes, linkedRes] = await Promise.all([
+            supabase
+              .from("stock_holdings_c")
+              .select(holdingsSelect)
+              .eq("family_member_id", familyMemberId)
+              .eq("Status", "active"),
+            linkedUserId
+              ? supabase
+                  .from("stock_holdings_c")
+                  .select(holdingsSelect)
+                  .eq("user_id", linkedUserId)
+                  .eq("Status", "active")
+              : Promise.resolve({ data: [], error: null }),
+          ]);
+          if (cancelled) return;
+
+          // Deduplicate by id
+          const rowsById = new Map();
+          [...(familyRes.data || []), ...(linkedRes.data || [])].forEach(r => {
+            if (r?.id) rowsById.set(r.id, r);
+          });
+          const childHoldings = Array.from(rowsById.values());
+          const childSecIds = [...new Set(childHoldings.map(h => h.security_id).filter(Boolean))];
+
+          // Step 3: parallel lookup of securities info + intraday prices
+          const secMap = {};
+          const intradayMap = {};
+          if (childSecIds.length > 0) {
+            const [secsRes, intradayRes] = await Promise.all([
+              supabase
+                .from("securities_c")
+                .select("id, symbol, name, logo_url, last_price")
+                .in("id", childSecIds),
+              supabase
+                .from("stock_intraday_c")
+                .select("security_id, current_price, timestamp")
+                .in("security_id", childSecIds)
+                .order("timestamp", { ascending: false }),
+            ]);
+            if (cancelled) return;
+            (secsRes.data || []).forEach(s => { secMap[s.id] = s; });
+            // Keep latest intraday row per security (rows ordered DESC)
+            (intradayRes.data || []).forEach(r => {
+              if (r.security_id != null && intradayMap[r.security_id] === undefined && r.current_price != null) {
+                intradayMap[r.security_id] = Number(r.current_price);
+              }
+            });
+          }
+          if (cancelled) return;
+
+          // Step 4: enrich — only filled holdings (avg_fill > 0 + Fill_date), same logic as page
+          enrichedHoldings = childHoldings
+            .filter(h => Number(h.avg_fill || 0) > 0 && !!h.Fill_date)
+            .map(h => {
+              const sec = secMap[h.security_id] || {};
               const quantity = Number(h.quantity || 0);
               const avgFillCents = Number(h.avg_fill || 0);
+              const avgFillRands = avgFillCents / 100;
               const expectedFillRaw = Number(h.Expected_fill || 0);
-              const isFilled = avgFillCents > 0 && !!h.Fill_date;
-              // Defensive: Expected_fill > 5x avg_fill/100 is legacy cents.
-              const avgFillRandsForCheck = avgFillCents / 100;
               const expectedFillRands = expectedFillRaw > 0
-                ? (expectedFillRaw > avgFillRandsForCheck * 5 ? expectedFillRaw / 100 : expectedFillRaw)
+                ? (expectedFillRaw > avgFillRands * 5 ? expectedFillRaw / 100 : expectedFillRaw)
                 : 0;
-              // Cost basis per share in cents: Expected_fill (rands→cents) > avg_fill (cents)
-              const costBasisCentsPerShare = expectedFillRands > 0
-                ? Math.round(expectedFillRands * 100)
-                : avgFillCents;
-              const livePriceCents = Number(h.securities?.last_price || 0) > 0
-                ? Math.round(Number(h.securities.last_price) * 100)
-                : 0;
-              const marketValueCents = isFilled
-                ? (livePriceCents > 0 && quantity > 0
-                  ? Math.round(livePriceCents * quantity)
-                  : Math.round(Number(h.market_value || 0)))
-                : 0;
-              const investedCents = isFilled ? Math.round(costBasisCentsPerShare * quantity) : 0;
+              const costBasisPerShareRands = expectedFillRands > 0
+                ? Math.max(expectedFillRands, avgFillRands)
+                : avgFillRands;
+              // Prefer live intraday price, fall back to last_price from securities_c
+              const intradayCents = intradayMap[h.security_id];
+              const lastPriceRands = Number(sec.last_price || 0);
+              const currentPriceCents = intradayCents != null
+                ? intradayCents
+                : (lastPriceRands > 0 ? Math.round(lastPriceRands * 100) : 0);
+              const marketValueCents = currentPriceCents > 0
+                ? Math.round(currentPriceCents * quantity) : 0;
+              const investedCents = Math.round(costBasisPerShareRands * 100 * quantity);
               return {
                 id: h.id,
-                symbol: h.securities?.symbol || `SEC-${String(h.security_id || "").slice(0, 6)}`,
-                name: h.securities?.name || "Security",
+                symbol: sec.symbol || `SEC-${String(h.security_id || "").slice(0, 6)}`,
+                name: sec.name || "Security",
                 market_value: marketValueCents,
                 invested_amount: investedCents,
-                avg_fill: isFilled ? avgFillCents : 0,
-                Expected_fill: isFilled ? expectedFillRands : 0,
+                avg_fill: avgFillCents,
+                Expected_fill: expectedFillRands,
                 quantity,
-                logo_url: h.securities?.logo_url || null,
+                logo_url: sec.logo_url || null,
                 security_id: h.security_id,
                 strategy_id: h.strategy_id,
                 isStrategy: false,
               };
             });
-          }
+
         } else {
-          // Parent mode: pull strategy values directly from client_strategy_returns_c
-          // (avoids dependency on /api/user/strategies which joins the deleted strategy_metrics table)
-          //
-          // ── PARALLELISE everything ───────────────────────────────────────────
-          // The Supabase JS client manages its own auth — it does NOT need us to
-          // resolve the session before firing queries.  Start all three fetches
-          // simultaneously:
-          //   • getSessionWithRetry()          – needed only for the Express API
-          //   • client_strategy_returns_c      – Supabase direct (no token needed)
-          //   • strategies_c                   – Supabase direct (no token needed)
-          // Then, the moment the session resolves, fire /api/user/holdings in
-          // parallel with the still-in-flight Supabase queries.
-          const returnsPromise = supabase
-            .from("client_strategy_returns_c")
-            .select("strategy_id, basket_value, holdings_snapshot, as_of_date")
-            .eq("user_id", userId)
-            .is("family_member", null) // parent rows only — child strategies live on their own rows
-            .order("as_of_date", { ascending: false });
-
-          const strategiesPromise = supabase
-            .from("strategies_c")
-            .select("id, name, short_name, holdings, status")
-            .eq("status", "active");
-
-          // Session resolves in parallel with the Supabase queries above
+          // ── PARENT MODE: /api/user/holdings (supabaseAdmin + Status=active + intraday) ──
+          // API already fetches stock_intraday_c as primary price source.
+          // Also fetch strategy IDs from client_strategy_returns_c for the chart placeholders.
           const session = await getSessionWithRetry();
           if (cancelled) return;
           const token = session?.access_token;
 
-          // Holdings API (needs token) + Supabase queries all land in parallel
-          const [holdingsJson, returnsResult, strategiesResult] = await Promise.all([
+          const [holdingsJson, returnsResult] = await Promise.all([
             token
-              ? fetchJsonWithAuth("/api/user/holdings", token).then((json) => json || { holdings: [] })
+              ? fetchJsonWithAuth("/api/user/holdings", token).then(j => j || { holdings: [] })
               : Promise.resolve({ holdings: [] }),
-            returnsPromise,
-            strategiesPromise,
+            supabase
+              .from("client_strategy_returns_c")
+              .select("strategy_id")
+              .eq("user_id", userId)
+              .is("family_member", null)
+              .order("as_of_date", { ascending: false }),
           ]);
-          holdingsRes = holdingsJson;
-          const stockHoldings = (holdingsRes.holdings || []).filter(h => !h.strategy_id);
+          if (cancelled) return;
 
-          // Take the most-recent row per strategy_id
-          const latestByStrategy = {};
-          for (const row of (returnsResult.data || [])) {
-            if (!latestByStrategy[row.strategy_id]) {
-              latestByStrategy[row.strategy_id] = row;
+          const apiHoldings = holdingsJson.holdings || [];
+
+          // Apply higher-of cost basis: max(Expected_fill, avg_fill÷100).
+          // API already normalises Expected_fill to rands and market_value to intraday cents.
+          enrichedHoldings = apiHoldings
+            .filter(h => Number(h.avg_fill || 0) > 0)
+            .map(h => {
+              const quantity = Number(h.quantity || 0);
+              const avgFillCents = Number(h.avg_fill || 0);
+              const avgFillRands = avgFillCents / 100;
+              const expectedFillRands = Number(h.Expected_fill || 0); // already rands from API
+              const costBasisPerShareRands = expectedFillRands > 0
+                ? Math.max(expectedFillRands, avgFillRands)
+                : avgFillRands;
+              const investedCents = Math.round(costBasisPerShareRands * 100 * quantity);
+              return {
+                id: h.id,
+                symbol: h.symbol || `SEC-${String(h.security_id || "").slice(0, 6)}`,
+                name: h.name || "Security",
+                market_value: Number(h.market_value || 0), // intraday-based, in cents
+                invested_amount: investedCents,
+                avg_fill: avgFillCents,
+                Expected_fill: expectedFillRands,
+                quantity,
+                logo_url: h.logo_url || null,
+                security_id: h.security_id,
+                strategy_id: h.strategy_id,
+                last_price: Number(h.last_price || 0),
+                isStrategy: false,
+              };
+            });
+
+          // Build proper strategy items for the dropdown + chart:
+          // - Fetch real strategy name/icon from strategies_c
+          // - Aggregate market_value and invested_amount from the underlying stock holdings
+          if (returnsResult.data?.length > 0) {
+            const strategyIdsWithReturns = [
+              ...new Set(returnsResult.data.map(r => r.strategy_id).filter(Boolean))
+            ];
+
+            const { data: stratMeta } = await supabase
+              .from("strategies_c")
+              .select("id, name, short_name, icon_url")
+              .in("id", strategyIdsWithReturns);
+            const stratMap = {};
+            (stratMeta || []).forEach(s => { stratMap[s.id] = s; });
+
+            // Sum up market_value and invested_amount from individual stock holdings per strategy
+            const stratAgg = {};
+            enrichedHoldings.filter(h => !h.isStrategy && h.strategy_id).forEach(h => {
+              if (!stratAgg[h.strategy_id]) stratAgg[h.strategy_id] = { market_value: 0, invested_amount: 0 };
+              stratAgg[h.strategy_id].market_value += Number(h.market_value || 0);
+              stratAgg[h.strategy_id].invested_amount += Number(h.invested_amount || 0);
+            });
+
+            const seenStrategyIds = new Set();
+            for (const row of returnsResult.data) {
+              if (row.strategy_id && !seenStrategyIds.has(row.strategy_id)) {
+                seenStrategyIds.add(row.strategy_id);
+                const meta = stratMap[row.strategy_id] || {};
+                const agg = stratAgg[row.strategy_id] || { market_value: 0, invested_amount: 0 };
+                enrichedHoldings.push({
+                  symbol: meta.short_name || meta.name || "Strategy",
+                  name: meta.name || "Strategy",
+                  market_value: agg.market_value,
+                  invested_amount: agg.invested_amount,
+                  avg_fill: 0, Expected_fill: 0, quantity: 1,
+                  logo_url: meta.icon_url || null,
+                  security_id: null,
+                  strategy_id: row.strategy_id,
+                  isStrategy: true, strategyId: row.strategy_id,
+                  topLogos: [], changePct: 0, holdings: [], firstInvestedDate: null,
+                });
+              }
             }
           }
-
-          const strategiesMap = {};
-          for (const s of (strategiesResult.data || [])) {
-            strategiesMap[s.id] = s;
-          }
-
-          const strategyItems = Object.entries(latestByStrategy).map(([stratId, row]) => {
-            const strat = strategiesMap[stratId] || {};
-            const basketCents = Number(row.basket_value || 0);
-
-            const snapshot = (() => {
-              try {
-                return typeof row.holdings_snapshot === "string"
-                  ? JSON.parse(row.holdings_snapshot)
-                  : (row.holdings_snapshot || []);
-              } catch { return []; }
-            })();
-
-            // Higher-of cost basis per underlying security: max(Expected_fill rands,
-            // avg_fill/100) × qty. Skip pending (no avg_fill). Falls back to whichever
-            // exists for legacy snapshot rows.
-            // Defensive: Expected_fill > 5x avg_fill/100 is legacy cents — divide by 100.
-            const investedCents = snapshot.reduce(
-              (sum, h) => {
-                const qty = Number(h.qty || 0);
-                if (qty <= 0) return sum;
-                const avgFillCents = Number(h.avg_fill || 0);
-                if (avgFillCents <= 0) return sum;
-                const expectedRaw = Number(h.Expected_fill ?? h.expected_fill ?? 0);
-                const avgFillRands = avgFillCents / 100;
-                const expectedRands = expectedRaw > 0
-                  ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw)
-                  : 0;
-                const perShareRands = expectedRands > 0
-                  ? Math.max(expectedRands, avgFillRands)
-                  : avgFillRands;
-                return sum + Math.round(perShareRands * 100 * qty);
-              },
-              0
-            );
-            const changePct = investedCents > 0
-              ? ((basketCents - investedCents) / investedCents) * 100
-              : 0;
-
-            const holdingsArr = strat.holdings || [];
-            const topLogos = [...holdingsArr]
-              .sort((a, b) => (b.weight || 0) - (a.weight || 0))
-              .slice(0, 3)
-              .map(h => h.logo_url || null)
-              .filter(Boolean);
-
-            return {
-              symbol: strat.short_name || strat.name || "Strategy",
-              name: strat.name || "Strategy",
-              market_value: basketCents,
-              invested_amount: investedCents,
-              avg_fill: investedCents,
-              quantity: 1,
-              logo_url: null,
-              security_id: null,
-              isStrategy: true,
-              strategyId: stratId,
-              topLogos,
-              changePct,
-              holdings: holdingsArr,
-              firstInvestedDate: null,
-            };
-          });
-
-          enrichedHoldings = [...stockHoldings, ...strategyItems];
         }
 
-        // Live value: use last_price × qty for stocks, market_value for strategies
-        const liveMarketValue = (h) => {
-          if (!h.isStrategy && h.last_price != null && h.quantity != null) {
-            return (Number(h.last_price) * Number(h.quantity));
-          }
-          return Number(h.market_value || 0);
-        };
+        // Portfolio value: sum market_value (cents → rands) for real holdings only
+        const mValue = enrichedHoldings
+          .filter(h => !h.isStrategy)
+          .reduce((acc, h) => acc + Number(h.market_value || 0) / 100, 0);
 
-        const mValue = enrichedHoldings.reduce((acc, h) => acc + liveMarketValue(h) / 100, 0);
-        // Cost basis per share in Rands: Expected_fill (rands) > avg_fill (cents).
-        // Defensive: Expected_fill > 5x avg_fill/100 is legacy cents — divide by 100.
-        const costBasisRands = (h) => {
-          const expectedRaw = Number(h.Expected_fill || 0);
-          const qty = Number(h.quantity || 0);
-          const avgFillCents = Number(h.avg_fill || 0);
-          const avgFillRands = avgFillCents / 100;
-          const expectedRands = expectedRaw > 0
-            ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw)
-            : 0;
-          if (expectedRands > 0) return expectedRands * qty;
-          return avgFillRands * qty;
-        };
-        const invested = enrichedHoldings.reduce((acc, h) => acc + costBasisRands(h), 0);
-        const investedAmount = enrichedHoldings.reduce(
-          (acc, h) => {
-            if (h.invested_amount !== undefined) return acc + Number(h.invested_amount) / 100;
-            return acc + costBasisRands(h);
-          },
-          0,
-        );
+        // Total cost basis: max(Expected_fill, avg_fill÷100) × qty, already computed per holding
+        const totalCostBasis = enrichedHoldings
+          .filter(h => !h.isStrategy)
+          .reduce((acc, h) => acc + Number(h.invested_amount || 0) / 100, 0);
 
-        // Higher-of cost basis — drives the "Portfolio Value" headline.
-        // Strategies already aggregated max-of into invested_amount during
-        // construction; for stocks we compute max-of per row here.
-        enrichedHoldings.forEach((h) => {
-          h.maxOfCostBasis = h.isStrategy
-            ? Number(h.invested_amount || 0) / 100
-            : maxOfCostBasisRands(h);
+        // maxOfCostBasis per item: used when selectedAsset is active (both stock and strategy items).
+        // Strategy items carry the aggregated invested_amount so they display correctly when selected.
+        // For the portfolio total we only sum individual stocks to avoid double-counting.
+        enrichedHoldings.forEach(h => {
+          h.maxOfCostBasis = Number(h.invested_amount || 0) / 100;
         });
-        const totalMaxOfCostBasis = enrichedHoldings.reduce(
-          (acc, h) => acc + Number(h.maxOfCostBasis || 0),
-          0,
-        );
+        const totalMaxOfCostBasis = enrichedHoldings
+          .filter(h => !h.isStrategy)
+          .reduce((acc, h) => acc + Number(h.maxOfCostBasis || 0), 0);
 
         console.log("[SwipeableBalanceCard] Loaded holdings:", {
           count: enrichedHoldings.length,
@@ -593,9 +602,9 @@ const SwipeableBalanceCard = ({
           holdings: enrichedHoldings,
           totalMarketValue: mValue,
           totalMaxOfCostBasis,
-          totalInvested: invested,
-          totalInvestedAmount: investedAmount,
-          holdingsCount: enrichedHoldings.length,
+          totalInvested: totalCostBasis,
+          totalInvestedAmount: totalCostBasis,
+          holdingsCount: enrichedHoldings.filter(h => !h.isStrategy).length,
         };
         // Persist in module-level cache (tab switches) + localStorage (page refreshes)
         if (mValue > 0 || enrichedHoldings.length > 0) {
@@ -644,11 +653,20 @@ const SwipeableBalanceCard = ({
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
+
+    // Poll every 15 seconds for live price updates
+    const pollInterval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        loadDataRef.current?.();
+      }
+    }, 15000);
+
     return () => {
       cancelled = true;
       clearTimeout(safetyTimer);
       clearTimeout(abortTimer);
       clearTimeout(visibilityDebounce);
+      clearInterval(pollInterval);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [userId, familyMemberId, lastUpdated]);
@@ -657,6 +675,13 @@ const SwipeableBalanceCard = ({
     let chartCancelled = false;
     const fetchChartPrices = async () => {
       if (!userId && !familyMemberId) return;
+      // Child cards have no chart history — clear any stale state and stop
+      if (childMode) {
+        setChartData([]);
+        setPeriodReturn(null);
+        setChartLoading(false);
+        return;
+      }
 
       // Ensure we don't leave chart stuck in loading if no holdings
       if (dbData.holdings.length === 0) {
@@ -737,8 +762,15 @@ const SwipeableBalanceCard = ({
           }
         }
 
-        // Process stocks
-        const stockHoldings = holdingsToChart.filter(h => h.security_id && !h.isStrategy);
+        // Process stocks — exclude any stock whose strategy already has a chart entry
+        // in client_strategy_returns_c (strategyBasketByDate). Double-counting
+        // would add both the per-stock stock_returns_c P&L AND the strategy 1d_pnl.
+        const chartedStrategyIds = new Set(
+          holdingsToChart.filter(h => h.isStrategy).map(h => h.strategyId).filter(Boolean)
+        );
+        const stockHoldings = holdingsToChart.filter(h =>
+          h.security_id && !h.isStrategy && !chartedStrategyIds.has(h.strategy_id)
+        );
         const pricePromises = stockHoldings.map(async (h) => {
           try {
             let { data, error } = await supabase
@@ -1078,7 +1110,7 @@ const SwipeableBalanceCard = ({
         >
           <LayoutGrid size={12} className="text-violet-400" />
           <span className="text-[11px] font-medium text-slate-200 whitespace-nowrap">
-            {selectedAsset ? selectedAsset.symbol : (dbData.holdings.length > 0 ? dbData.holdings[0].symbol : "Investments")}
+            {selectedAsset ? selectedAsset.symbol : (dbData.holdings.find(h => h.isStrategy)?.symbol || dbData.holdings.find(h => !h.isStrategy)?.symbol || "Investments")}
           </span>
           {isOpen ? <ChevronUp size={12} className="text-slate-300" /> : <ChevronDown size={12} className="text-slate-300" />}
         </button>
@@ -1086,7 +1118,13 @@ const SwipeableBalanceCard = ({
         {isOpen && (
           <div className="absolute top-full mt-1 left-0 w-48 bg-white rounded-xl z-[120] overflow-hidden border border-slate-200 shadow-lg">
             <div className="py-1 overflow-y-auto max-h-[140px]">
-              {dbData.holdings.map((item, idx) => (
+              {(() => {
+                const strategyItemIds = new Set(dbData.holdings.filter(h => h.isStrategy).map(h => h.strategy_id).filter(Boolean));
+                const dropdownItems = [
+                  ...dbData.holdings.filter(h => h.isStrategy),
+                  ...dbData.holdings.filter(h => !h.isStrategy && !strategyItemIds.has(h.strategy_id)),
+                ];
+                return dropdownItems.map((item, idx) => (
                 <button
                   key={idx}
                   onClick={() => { setSelectedAsset(item); setIsOpen(false); scrollToHoldingIndex(idx); }}
@@ -1117,7 +1155,8 @@ const SwipeableBalanceCard = ({
                     return s && s !== "confirmed" ? <SettlementBadge status={s} size="xs" /> : null;
                   })()}
                 </button>
-              ))}
+              ));
+              })()}
             </div>
           </div>
         )}
