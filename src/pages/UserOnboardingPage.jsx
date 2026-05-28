@@ -706,6 +706,65 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
     expectedMonthlyInvestment &&
     agreedSourceOfFunds;
 
+  // ── Progressive auto-save: bank details ──────────────────────────────────
+  // Saves as soon as all 5 bank fields are filled — no need to hit Continue.
+  useEffect(() => {
+    if (!bankDetailsReady) return;
+    const timer = setTimeout(async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const userId = session?.user?.id;
+        if (userId) {
+          await supabase.from("user_onboarding").update({
+            bank_name: bankName || null,
+            bank_account_number: bankAccountNumber || null,
+            bank_branch_code: bankBranchCode || null,
+          }).eq("user_id", userId);
+        }
+      } catch {}
+      await saveProgressFlag("bank_details_saved", {
+        bank_details: {
+          bank_name: bankName || null,
+          bank_account_name: bankAccountName || null,
+          bank_account_type: bankAccountType || null,
+          bank_account_number: bankAccountNumber || null,
+          bank_branch_code: bankBranchCode || null,
+          savedAt: new Date().toISOString(),
+        },
+      });
+    }, 600);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bankName, bankAccountName, bankAccountType, bankAccountNumber, bankBranchCode]);
+
+  // ── Progressive auto-save: tax number ────────────────────────────────────
+  useEffect(() => {
+    if (!taxNumber || taxNumber.length < 6) return;
+    const timer = setTimeout(async () => {
+      await saveProgressFlag("tax_details_saved", {
+        tax_details: { tax_number: taxNumber, savedAt: new Date().toISOString() },
+      });
+    }, 600);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taxNumber]);
+
+  // ── Progressive auto-save: source of funds ───────────────────────────────
+  useEffect(() => {
+    if (!sofReady) return;
+    const timer = setTimeout(async () => {
+      await saveProgressFlag("source_of_funds_accepted", {
+        source_of_funds_details: {
+          source_of_funds: sourceOfFunds,
+          source_of_funds_other: sourceOfFunds === "other" ? sourceOfFundsOther : null,
+          expected_monthly_investment: expectedMonthlyInvestment,
+        },
+      });
+    }, 600);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sofReady, sourceOfFunds, sourceOfFundsOther, expectedMonthlyInvestment]);
+
   const handleFinalComplete = async (signingResults = {}) => {
     if (!supabase) {
       if (onComplete) onComplete();
