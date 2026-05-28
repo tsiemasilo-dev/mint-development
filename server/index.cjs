@@ -9638,6 +9638,9 @@ app.post("/api/gift/claim-to-self", async (req, res) => {
 
 const INTRADAY_BATCH_SIZE = 10;
 const INTRADAY_INTERVAL_MS = 2 * 60 * 1000;
+const INTRADAY_HELD_INTERVAL_MS = 15 * 1000;
+let isFullRefreshing = false;
+let isHeldRefreshing = false;
 
 async function fetchYahooPrice(symbol) {
   try {
@@ -9663,50 +9666,96 @@ async function fetchYahooPrice(symbol) {
 }
 
 async function refreshIntradayPrices() {
+  if (isFullRefreshing) return; // prevent overlapping full sweeps (~25 s each)
   // Only run during JSE trading hours: 07:00–15:30 UTC (09:00–17:30 SAST)
   const now = new Date();
   const utcMins = now.getUTCHours() * 60 + now.getUTCMinutes();
   if (utcMins < 7 * 60 || utcMins > 15 * 60 + 30) return;
 
+  isFullRefreshing = true;
   const db = supabaseAdmin || supabase;
-  if (!db) return;
+  if (!db) { isFullRefreshing = false; return; }
 
-  const { data: securities, error } = await db.from("securities_c").select("id, symbol");
-  if (error || !securities?.length) {
-    if (error) console.error("[intraday-refresh] Failed to fetch securities:", error.message);
-    return;
+  try {
+    const { data: securities, error } = await db.from("securities_c").select("id, symbol");
+    if (error || !securities?.length) {
+      if (error) console.error("[intraday-refresh] Failed to fetch securities:", error.message);
+      return;
+    }
+
+    const timestamp = now.toISOString();
+    let updated = 0, failed = 0;
+
+    for (let i = 0; i < securities.length; i += INTRADAY_BATCH_SIZE) {
+      const batch = securities.slice(i, i + INTRADAY_BATCH_SIZE);
+      await Promise.all(batch.map(async (sec) => {
+        const prices = await fetchYahooPrice(sec.symbol);
+        if (!prices) { failed++; return; }
+        const { error: upsertErr } = await db.from("stock_intraday_c").insert({
+          security_id: sec.id, symbol: sec.symbol, timestamp,
+          current_price: prices.currentPrice, "1d_abs": prices.changeAbs, "1d_pct": prices.changePct,
+        });
+        if (upsertErr) { failed++; } else { updated++; }
+      }));
+      if (i + INTRADAY_BATCH_SIZE < securities.length) {
+        await new Promise(r => setTimeout(r, 300));
+      }
+    }
+    console.log(`[intraday-refresh] ${timestamp} — updated ${updated}, failed ${failed} / ${securities.length} securities`);
+  } finally {
+    isFullRefreshing = false;
   }
+}
 
-  const timestamp = now.toISOString();
-  let updated = 0, failed = 0;
+// ── Targeted 15-second refresh — only securities held by active portfolios ───
+// Fast (~1–3 s for 10–30 securities) so it never overlaps with itself.
+async function refreshHeldSecurities() {
+  if (isHeldRefreshing) return;
+  const now = new Date();
+  const utcMins = now.getUTCHours() * 60 + now.getUTCMinutes();
+  if (utcMins < 7 * 60 || utcMins > 15 * 60 + 30) return;
 
-  for (let i = 0; i < securities.length; i += INTRADAY_BATCH_SIZE) {
-    const batch = securities.slice(i, i + INTRADAY_BATCH_SIZE);
-    await Promise.all(batch.map(async (sec) => {
+  isHeldRefreshing = true;
+  const db = supabaseAdmin || supabase;
+  if (!db) { isHeldRefreshing = false; return; }
+
+  try {
+    // Unique security IDs currently held (Status = active)
+    const { data: rows } = await db
+      .from("stock_holdings_c")
+      .select("security_id")
+      .eq("Status", "active");
+    if (!rows?.length) return;
+
+    const secIds = [...new Set(rows.map(r => r.security_id).filter(Boolean))];
+    const { data: securities } = await db
+      .from("securities_c")
+      .select("id, symbol")
+      .in("id", secIds);
+    if (!securities?.length) return;
+
+    const timestamp = now.toISOString();
+    let updated = 0, failed = 0;
+
+    await Promise.all(securities.map(async (sec) => {
       const prices = await fetchYahooPrice(sec.symbol);
       if (!prices) { failed++; return; }
-      const { error: upsertErr } = await db.from("stock_intraday_c").insert({
-        security_id: sec.id,
-        symbol: sec.symbol,
-        timestamp,
-        current_price: prices.currentPrice,
-        "1d_abs": prices.changeAbs,
-        "1d_pct": prices.changePct,
+      const { error } = await db.from("stock_intraday_c").insert({
+        security_id: sec.id, symbol: sec.symbol, timestamp,
+        current_price: prices.currentPrice, "1d_abs": prices.changeAbs, "1d_pct": prices.changePct,
       });
-      if (upsertErr) { failed++; } else { updated++; }
+      if (error) { failed++; } else { updated++; }
     }));
-    // Small pause between batches to respect Yahoo rate limits
-    if (i + INTRADAY_BATCH_SIZE < securities.length) {
-      await new Promise(r => setTimeout(r, 300));
-    }
+    console.log(`[held-refresh] ${timestamp} — updated ${updated}, failed ${failed} / ${securities.length} held securities`);
+  } finally {
+    isHeldRefreshing = false;
   }
-  console.log(`[intraday-refresh] ${timestamp} — updated ${updated}, failed ${failed} / ${securities.length} securities`);
 }
 
 // Manual trigger endpoint (no auth required — read-only market data refresh)
 app.post("/api/prices/refresh", async (req, res) => {
   try {
-    await refreshIntradayPrices();
+    await refreshHeldSecurities();
     res.json({ success: true, message: "Intraday price refresh complete" });
   } catch (err) {
     console.error("[intraday-refresh] Manual trigger error:", err.message);
@@ -9714,8 +9763,11 @@ app.post("/api/prices/refresh", async (req, res) => {
   }
 });
 
-// Run once 10 s after server start, then every 2 minutes during JSE hours
-setTimeout(refreshIntradayPrices, 10000);
+// Held securities: every 15 s (fast, targeted)
+// Full sweep: every 2 min (all 246 securities, for markets page etc.)
+setTimeout(refreshHeldSecurities, 5000);
+setInterval(refreshHeldSecurities, INTRADAY_HELD_INTERVAL_MS);
+setTimeout(refreshIntradayPrices, 30000);
 setInterval(refreshIntradayPrices, INTRADAY_INTERVAL_MS);
 
 // Catch-all 404 handler - MUST be after all route definitions
