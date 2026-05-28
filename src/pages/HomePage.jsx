@@ -1267,17 +1267,23 @@ const HomePage = ({
             {[
               { label: "Invest", icon: LayoutGrid, onClick: onOpenStrategies || onOpenInvest },
               { label: "Deposit", icon: ArrowDownToLine, onClick: onOpenDeposit },
-              { label: "Gifting", icon: Gift, onClick: () => onNavigate?.("giftStrategies") },
+              { label: "Gifting", icon: Gift, onClick: null, comingSoon: true },
               { label: "Goals", icon: Target, onClick: () => setShowGoalsModal(true) },
             ].map((item, index) => {
               const Icon = item.icon;
               return (
                 <button
                   key={index}
-                  className="flex flex-col items-center gap-2 rounded-2xl bg-white px-1 py-3 text-slate-700 shadow-md transition-all active:scale-95 active:shadow-sm"
+                  className={`relative flex flex-col items-center gap-2 rounded-2xl bg-white px-1 py-3 text-slate-700 shadow-md transition-all ${item.comingSoon ? "cursor-not-allowed" : "active:scale-95 active:shadow-sm"}`}
                   type="button"
-                  onClick={item.onClick}
+                  onClick={item.comingSoon ? undefined : item.onClick}
+                  disabled={item.comingSoon}
                 >
+                  {item.comingSoon && (
+                    <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-violet-600 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white shadow-sm">
+                      Soon
+                    </span>
+                  )}
                   <span className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-50 text-violet-700">
                     <Icon className="h-4 w-4" />
                   </span>

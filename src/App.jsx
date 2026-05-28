@@ -1137,6 +1137,7 @@ const App = () => {
           <ChildDashboardPage
             child={selectedFamilyChild}
             onBack={noOp}
+            onTabChange={handleTabChange}
             onOpenFactsheet={(strategy) => {
               setSelectedChildForInvest(selectedFamilyChild);
               setSelectedStrategy(strategy);

@@ -401,6 +401,8 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWi
           amountDisplay={formatCurrency(fees.totalCost, currency)}
         />
 
+        <div className="mt-4" />
+
         {/* Continue Button or Onboarding Block */}
         {!giftEnabled && !isLoadingStatus && !isFullyOnboarded ? (
           <div className="w-full rounded-2xl border border-rose-200 bg-rose-50 p-4 text-center">
