@@ -1,4 +1,8 @@
-import React, { useState, useEffect, useRef, useMemo, useId } from "react";
+import React, { useState, useEffect, useRef, useMemo, useId, lazy, Suspense } from "react";
+
+const MarketsPage = lazy(() => import("./MarketsPage.jsx"));
+const MorePage = lazy(() => import("./MorePage.jsx"));
+const NewsArticlePage = lazy(() => import("./NewsArticlePage.jsx"));
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, ArrowUpRight, ArrowDownLeft, X,
@@ -1968,6 +1972,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   const [childFriendlyLoading, setChildFriendlyLoading] = useState(true);
   const [kycNotice, setKycNotice] = useState("");
   const [activeChildTab, setActiveChildTab] = useState("home");
+  const [childNewsArticleId, setChildNewsArticleId] = useState(null);
 
   const childName = [child?.first_name, child?.last_name].filter(Boolean).join(" ") || "Child";
   const age = getAge(child?.date_of_birth);
@@ -2699,7 +2704,6 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                 userId={null}
                 familyMemberId={child?.id || null}
                 mintNumber={child?.mint_number || null}
-                overrideBalance={totalPortfolioCents / 100}
                 overrideWalletBalance={childBalance / 100}
               />
             )}
@@ -3249,14 +3253,70 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
         )}
       </div>
 
+      {/* -- News tab — pre-mounted, shown/hidden via display to avoid flicker -- */}
+      <div
+        className="fixed inset-0 z-10 overflow-y-auto"
+        style={{ background: "var(--bg, #0f0a1e)", display: activeChildTab === "news" ? "block" : "none" }}
+      >
+        <Suspense fallback={<div style={{ background: "var(--bg, #0f0a1e)", height: "100%" }} />}>
+          <MarketsPage
+            initialViewMode="news"
+            onBack={() => setActiveChildTab("home")}
+            onOpenNotifications={() => {}}
+            onOpenStockDetail={() => {}}
+            onOpenNewsArticle={(id) => setChildNewsArticleId(id)}
+            onOpenFactsheet={() => {}}
+            onViewModeChange={() => {}}
+          />
+        </Suspense>
+        <Navbar
+          activeTab="news"
+          comingSoonTabs={["investments"]}
+          setActiveTab={(tab) => {
+            if (tab === "more") setActiveChildTab("more");
+            else setActiveChildTab("home");
+          }}
+        />
+      </div>
+
+      {/* -- News article overlay -- */}
+      {childNewsArticleId && (
+        <div className="fixed inset-0 z-20 overflow-y-auto" style={{ background: "var(--bg, #0f0a1e)" }}>
+          <Suspense fallback={<div style={{ background: "var(--bg, #0f0a1e)", height: "100%" }} />}>
+            <NewsArticlePage
+              articleId={childNewsArticleId}
+              onBack={() => setChildNewsArticleId(null)}
+            />
+          </Suspense>
+        </div>
+      )}
+
+      {/* -- More tab — pre-mounted, shown/hidden via display to avoid flicker -- */}
+      <div
+        className="fixed inset-0 z-10 overflow-y-auto"
+        style={{ background: "var(--bg, #0f0a1e)", display: activeChildTab === "more" ? "block" : "none" }}
+      >
+        <Suspense fallback={<div style={{ background: "var(--bg, #0f0a1e)", height: "100%" }} />}>
+          <MorePage onNavigate={onTabChange} onBeforeLogout={() => {}} />
+        </Suspense>
+        <Navbar
+          activeTab="more"
+          comingSoonTabs={["investments"]}
+          setActiveTab={(tab) => {
+            if (tab === "news") setActiveChildTab("news");
+            else setActiveChildTab("home");
+          }}
+        />
+      </div>
+
       {/* -- Bottom Navigation Bar (shared Mint Navbar) -- */}
       <Navbar
-        activeTab={activeChildTab === "portfolio" ? "investments" : activeChildTab === "news" ? "news" : activeChildTab === "more" ? "more" : "home"}
+        activeTab={activeChildTab === "news" ? "news" : activeChildTab === "more" ? "more" : "home"}
+        comingSoonTabs={["investments"]}
         setActiveTab={(tab) => {
-          if (tab === "investments") { setActiveChildTab("portfolio"); }
-          else if (tab === "news") { onTabChange?.("news"); }
-          else if (tab === "more") { onTabChange?.("more"); }
-          else { setActiveChildTab("home"); }
+          if (tab === "news") setActiveChildTab("news");
+          else if (tab === "more") setActiveChildTab("more");
+          else setActiveChildTab("home");
         }}
       />
 
