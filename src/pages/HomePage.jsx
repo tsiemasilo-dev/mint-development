@@ -1271,20 +1271,20 @@ const HomePage = ({
               return (
                 <button
                   key={index}
-                  className={`relative flex flex-col items-center gap-2 rounded-2xl bg-white px-1 py-3 shadow-md transition-all ${item.comingSoon ? "opacity-60 cursor-not-allowed" : "text-slate-700 active:scale-95 active:shadow-sm"}`}
+                  className={`relative flex flex-col items-center gap-2 rounded-2xl bg-white px-1 py-3 text-slate-700 shadow-md transition-all ${item.comingSoon ? "cursor-not-allowed" : "active:scale-95 active:shadow-sm"}`}
                   type="button"
                   onClick={item.comingSoon ? undefined : item.onClick}
                   disabled={item.comingSoon}
                 >
                   {item.comingSoon && (
-                    <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-slate-700 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white shadow-sm">
+                    <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-violet-600 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white shadow-sm">
                       Soon
                     </span>
                   )}
-                  <span className={`flex h-8 w-8 items-center justify-center rounded-full ${item.comingSoon ? "bg-slate-100 text-slate-400" : "bg-violet-50 text-violet-700"}`}>
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-50 text-violet-700">
                     <Icon className="h-4 w-4" />
                   </span>
-                  <span className="text-center leading-tight text-slate-500">{item.label}</span>
+                  <span className="text-center leading-tight">{item.label}</span>
                 </button>
               );
             })}
