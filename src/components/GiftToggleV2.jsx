@@ -145,15 +145,15 @@ export default function GiftToggleV2({
 
   return (
     <div className="mt-4">
-      <div className="w-full flex items-center justify-between rounded-2xl px-4 py-3.5 bg-white border border-slate-200 shadow-sm opacity-60 cursor-not-allowed">
+      <div className="w-full flex items-center justify-between rounded-2xl px-4 py-3.5 bg-white border border-slate-200 shadow-sm cursor-not-allowed">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-slate-100">
-            <Gift size={16} className="text-slate-400" />
+            <Gift size={16} className="text-violet-600" />
           </div>
           <div className="text-left">
             <div className="flex items-center gap-2">
               <p className="text-sm font-semibold text-slate-800">Send as a gift</p>
-              <span className="rounded-full bg-slate-700 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white">Soon</span>
+              <span className="rounded-full bg-violet-600 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white">Soon</span>
             </div>
             <p className="text-[11px] text-slate-400">Recipient claims with their SA ID + code</p>
           </div>
