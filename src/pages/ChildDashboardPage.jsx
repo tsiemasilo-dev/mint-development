@@ -1,4 +1,7 @@
-import React, { useState, useEffect, useRef, useMemo, useId } from "react";
+import React, { useState, useEffect, useRef, useMemo, useId, lazy, Suspense } from "react";
+
+const MarketsPage = lazy(() => import("./MarketsPage.jsx"));
+const MorePage = lazy(() => import("./MorePage.jsx"));
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, ArrowUpRight, ArrowDownLeft, X,
@@ -3248,14 +3251,56 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
         )}
       </div>
 
+      {/* -- News tab -- */}
+      {activeChildTab === "news" && (
+        <div className="fixed inset-0 z-10 overflow-y-auto" style={{ background: "var(--bg, #0f0a1e)" }}>
+          <Suspense fallback={<div className="flex items-center justify-center h-full text-white/50">Loading…</div>}>
+            <MarketsPage
+              initialViewMode="news"
+              onBack={() => setActiveChildTab("home")}
+              onOpenNotifications={() => {}}
+              onOpenStockDetail={() => {}}
+              onOpenNewsArticle={() => {}}
+              onOpenFactsheet={() => {}}
+              onViewModeChange={() => {}}
+            />
+          </Suspense>
+          <Navbar
+            activeTab="news"
+            setActiveTab={(tab) => {
+              if (tab === "investments") setActiveChildTab("portfolio");
+              else if (tab === "more") setActiveChildTab("more");
+              else setActiveChildTab("home");
+            }}
+          />
+        </div>
+      )}
+
+      {/* -- More tab -- */}
+      {activeChildTab === "more" && (
+        <div className="fixed inset-0 z-10 overflow-y-auto" style={{ background: "var(--bg, #0f0a1e)" }}>
+          <Suspense fallback={<div className="flex items-center justify-center h-full text-white/50">Loading…</div>}>
+            <MorePage onNavigate={onTabChange} onBeforeLogout={() => {}} />
+          </Suspense>
+          <Navbar
+            activeTab="more"
+            setActiveTab={(tab) => {
+              if (tab === "investments") setActiveChildTab("portfolio");
+              else if (tab === "news") setActiveChildTab("news");
+              else setActiveChildTab("home");
+            }}
+          />
+        </div>
+      )}
+
       {/* -- Bottom Navigation Bar (shared Mint Navbar) -- */}
       <Navbar
         activeTab={activeChildTab === "portfolio" ? "investments" : activeChildTab === "news" ? "news" : activeChildTab === "more" ? "more" : "home"}
         setActiveTab={(tab) => {
-          if (tab === "investments") { setActiveChildTab("portfolio"); }
-          else if (tab === "news") { onTabChange?.("news"); }
-          else if (tab === "more") { onTabChange?.("more"); }
-          else { setActiveChildTab("home"); }
+          if (tab === "investments") setActiveChildTab("portfolio");
+          else if (tab === "news") setActiveChildTab("news");
+          else if (tab === "more") setActiveChildTab("more");
+          else setActiveChildTab("home");
         }}
       />
 
