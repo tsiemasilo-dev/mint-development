@@ -169,7 +169,7 @@ function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onCl
       >
         <div className="flex justify-center pt-3 pb-1"><div className="h-1 w-10 rounded-full bg-slate-200" /></div>
 
-        <div className="px-6 pt-3 pb-8">
+        <div className="px-6 pt-3 pb-[calc(var(--navbar-height,80px)+1.5rem)]">
           {!success ? (
             <>
               <div className="flex items-center justify-between mb-6">
