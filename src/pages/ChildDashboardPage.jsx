@@ -2699,7 +2699,6 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                 userId={null}
                 familyMemberId={child?.id || null}
                 mintNumber={child?.mint_number || null}
-                overrideBalance={totalPortfolioCents / 100}
                 overrideWalletBalance={childBalance / 100}
               />
             )}
