@@ -2464,16 +2464,12 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
 
   const isHoldingFilled = (holding) => Number(holding.avg_fill || 0) > 0 && !!holding.Fill_date;
 
-  // Live price per share in Rands: intraday first (cents / 100), then securities_c.last_price (already Rands).
-  // Returns null when neither source has a value.
+  // Live price per share in Rands: intraday only (cents / 100).
+  // Returns null when no intraday row is available.
   const getHoldingLivePriceRands = (holding) => {
     const intradayCents = Number(holding.intraday_price_cents);
     if (Number.isFinite(intradayCents) && intradayCents > 0) {
       return intradayCents / 100;
-    }
-    const lastPrice = Number(holding.last_price);
-    if (Number.isFinite(lastPrice) && lastPrice > 0) {
-      return lastPrice;
     }
     return null;
   };
