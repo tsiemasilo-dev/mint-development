@@ -306,6 +306,8 @@ export default async function generateFactsheetPdf({
   holdingsWithMetrics,
   userPosition,
   calculatedMinInvestment,
+  performanceData,
+  timeframeReturns,
   preOpenedWindow = null,
 }) {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -377,21 +379,14 @@ export default async function generateFactsheetPdf({
   ly = secHead(doc, "Return Analysis", ML, ly, LW) + 3;
   const summary = analytics?.summary || {};
   const ytdVal = summary.ytd_return ?? analytics?.ytd_return;
-  const latestV = analytics?.latest_value != null ? +analytics.latest_value / 100 - 1 : null;
   const retRows = [
-    ["7 Days", curves["1W"]],
-    ["30 Days", curves["1M"]],
-    ["90 Days", curves["3M"]],
-    ["6 Months", curves["6M"]],
-  ].map(([label, curve]) => {
-    if (Array.isArray(curve) && curve.length > 1) {
-      const f = curve[0]?.v ?? 0, l = curve[curve.length-1]?.v ?? 0;
-      return [label, fmtPct(f ? (l - f) / f : 0)];
-    }
-    return [label, "N/A"];
-  });
-  retRows.push(["YTD", fmtPct(ytdVal)]);
-  retRows.push(["All-time", latestV != null ? fmtPct(latestV) : "N/A"]);
+    ["5 Days",   fmtPct(timeframeReturns?.["5D"])],
+    ["30 Days",  fmtPct(timeframeReturns?.["1M"])],
+    ["90 Days",  fmtPct(performanceData?.threeMonthReturn)],
+    ["6 Months", fmtPct(timeframeReturns?.["6M"])],
+    ["YTD",      fmtPct(timeframeReturns?.["YTD"] ?? ytdVal)],
+    ["All-time", fmtPct(timeframeReturns?.["ALL"])],
+  ];
 
   autoTable(doc, {
     startY: ly,
@@ -410,10 +405,10 @@ export default async function generateFactsheetPdf({
 
   ly = secHead(doc, "Risk Analysis", ML, ly, LW) + 3;
   const riskRows = [
-    ["Best Day", fmtPct(summary.best_day)],
-    ["Worst Day", fmtPct(summary.worst_day)],
-    ["Avg Daily Return", fmtPct(summary.avg_day)],
-    ["YTD Return", fmtPct(ytdVal)],
+    ["Best Day",         fmtPct(performanceData?.bestDay  != null ? performanceData.bestDay  / 100 : summary.best_day)],
+    ["Worst Day",        fmtPct(performanceData?.worstDay != null ? performanceData.worstDay / 100 : summary.worst_day)],
+    ["Avg Daily Return", fmtPct(performanceData?.avgDaily != null ? performanceData.avgDaily / 100 : summary.avg_day)],
+    ["YTD Return",       fmtPct(timeframeReturns?.["YTD"] ?? (performanceData?.ytdReturn != null ? performanceData.ytdReturn / 100 : null) ?? ytdVal)],
   ];
   if (summary.max_drawdown != null)        riskRows.push(["Max Drawdown",      fmtPct(summary.max_drawdown)]);
   if (summary.volatility != null)          riskRows.push(["Volatility (Ann.)", fmtPct(summary.volatility)]);
