@@ -657,7 +657,7 @@ const SwipeableBalanceCard = ({
     // Poll every 15 seconds for live price updates
     const pollInterval = setInterval(() => {
       if (document.visibilityState === "visible") {
-        loadData({ silent: true });
+        loadDataRef.current?.();
       }
     }, 15000);
 
@@ -675,6 +675,7 @@ const SwipeableBalanceCard = ({
     let chartCancelled = false;
     const fetchChartPrices = async () => {
       if (!userId && !familyMemberId) return;
+      if (childMode) return; // Chart history not available for child cards yet
 
       // Ensure we don't leave chart stuck in loading if no holdings
       if (dbData.holdings.length === 0) {
