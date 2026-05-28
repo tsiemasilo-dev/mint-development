@@ -675,7 +675,13 @@ const SwipeableBalanceCard = ({
     let chartCancelled = false;
     const fetchChartPrices = async () => {
       if (!userId && !familyMemberId) return;
-      if (childMode) return; // Chart history not available for child cards yet
+      // Child cards have no chart history — clear any stale state and stop
+      if (childMode) {
+        setChartData([]);
+        setPeriodReturn(null);
+        setChartLoading(false);
+        return;
+      }
 
       // Ensure we don't leave chart stuck in loading if no holdings
       if (dbData.holdings.length === 0) {
