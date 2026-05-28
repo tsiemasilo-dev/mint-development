@@ -144,7 +144,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
           // Fetch latest returns data from strategies_returns_c
           const { data: returnsData, error: returnsError } = await supabase
             .from("strategies_returns_c")
-            .select("strategy_id, as_of_date, \"5d_pct\", \"1m_pct\", \"6m_pct\", ytd_pct")
+            .select("strategy_id, as_of_date, \"5d_pct\", \"1m_pct\", \"6m_pct\", ytd_pct, all_pct")
             .eq("strategy_id", resolvedId)
             .order("as_of_date", { ascending: false })
             .limit(1)
@@ -156,10 +156,11 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
             }
           } else if (returnsData && isMounted) {
             setTimeframeReturns({
-              "5D": returnsData["5d_pct"] ? returnsData["5d_pct"] / 100 : null,
-              "1M": returnsData["1m_pct"] ? returnsData["1m_pct"] / 100 : null,
-              "6M": returnsData["6m_pct"] ? returnsData["6m_pct"] / 100 : null,
-              "YTD": returnsData.ytd_pct ? returnsData.ytd_pct / 100 : null,
+              "5D":  returnsData["5d_pct"] != null ? returnsData["5d_pct"] / 100 : null,
+              "1M":  returnsData["1m_pct"] != null ? returnsData["1m_pct"] / 100 : null,
+              "6M":  returnsData["6m_pct"] != null ? returnsData["6m_pct"] / 100 : null,
+              "YTD": returnsData.ytd_pct   != null ? returnsData.ytd_pct   / 100 : null,
+              "ALL": returnsData.all_pct   != null ? returnsData.all_pct   / 100 : null,
             });
             // Preserve any curves already populated by fetchCumulativeData (race condition fix)
             setAnalytics(prev => ({
@@ -343,17 +344,30 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
       try {
         const yearStart = `${calendarYear}-01-01`;
         const yearEnd = `${calendarYear}-12-31`;
+        const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
-        // Fetch all daily returns for the year
-        const { data: dailyReturns, error: dailyError } = await supabase
-          .from("strategies_returns_c")
-          .select("strategy_id, as_of_date, \"1d_pct\", ytd_pct, \"1m_pct\"")
-          .eq("strategy_id", strategyId)
-          .gte("as_of_date", yearStart)
-          .lte("as_of_date", yearEnd)
-          .order("as_of_date", { ascending: true });
+        const [{ data: dailyReturns, error: dailyError }, { data: q3Data }] = await Promise.all([
+          supabase
+            .from("strategies_returns_c")
+            .select("strategy_id, as_of_date, \"1d_pct\", ytd_pct, \"1m_pct\"")
+            .eq("strategy_id", strategyId)
+            .gte("as_of_date", yearStart)
+            .lte("as_of_date", yearEnd)
+            .order("as_of_date", { ascending: true }),
+          supabase
+            .from("strategies_returns_c")
+            .select("\"1d_pct\"")
+            .eq("strategy_id", strategyId)
+            .gte("as_of_date", ninetyDaysAgo)
+            .order("as_of_date", { ascending: true }),
+        ]);
 
         if (dailyError) throw dailyError;
+
+        // Compounded 90-day return as a decimal (e.g. 0.0523 for 5.23%)
+        const threeMonthReturn = q3Data?.length
+          ? q3Data.reduce((prod, d) => prod * (1 + (d["1d_pct"] || 0) / 100), 1) - 1
+          : null;
 
         if (dailyReturns && dailyReturns.length > 0 && isMounted) {
           // Calculate performance summary
@@ -364,10 +378,11 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
           const ytdReturn = dailyReturns[dailyReturns.length - 1]?.ytd_pct || 0;
 
           setPerformanceData({
-            bestDay: bestDay,
-            worstDay: worstDay,
-            avgDaily: avgDaily,
-            ytdReturn: ytdReturn
+            bestDay,
+            worstDay,
+            avgDaily,
+            ytdReturn,
+            threeMonthReturn,
           });
 
           // Build calendar returns (monthly) - sum all daily returns for each month
@@ -642,6 +657,8 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
                     holdingsSecurities,
                     userPosition,
                     calculatedMinInvestment: minimumInvestmentAmount,
+                    performanceData,
+                    timeframeReturns,
                   });
                 } catch (e) {
                   console.error("PDF generation error:", e?.message || e?.toString?.() || e, e?.stack);
