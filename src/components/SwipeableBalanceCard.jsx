@@ -608,11 +608,20 @@ const SwipeableBalanceCard = ({
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
+
+    // Poll every 15 seconds for live price updates
+    const pollInterval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        loadData({ silent: true });
+      }
+    }, 15000);
+
     return () => {
       cancelled = true;
       clearTimeout(safetyTimer);
       clearTimeout(abortTimer);
       clearTimeout(visibilityDebounce);
+      clearInterval(pollInterval);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [userId, familyMemberId, lastUpdated]);
