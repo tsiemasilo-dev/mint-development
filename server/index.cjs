@@ -9763,12 +9763,71 @@ app.post("/api/prices/refresh", async (req, res) => {
   }
 });
 
+// ── Auto-repair: child strategy returns with missing family_member ────────────
+// An external P&L computation job sometimes writes client_strategy_returns_c
+// rows with family_member = NULL for child strategies, causing them to bleed
+// through onto the parent's balance card. This function scans all users and
+// re-stamps any bad rows with the correct family_member ID.
+async function repairChildStrategyReturns() {
+  const db = supabaseAdmin || supabase;
+  if (!db) return;
+  try {
+    // 1. Find all active child holdings (family_member_id is not null)
+    const { data: childHoldings, error: hErr } = await db
+      .from('stock_holdings_c')
+      .select('user_id, family_member_id, strategy_id')
+      .not('family_member_id', 'is', null)
+      .not('strategy_id', 'is', null)
+      .eq('Status', 'active');
+
+    if (hErr || !childHoldings?.length) return;
+
+    // 2. Build unique (user_id, family_member_id, strategy_id) triples
+    const seen = new Set();
+    const triples = [];
+    for (const h of childHoldings) {
+      const key = `${h.user_id}:${h.family_member_id}:${h.strategy_id}`;
+      if (!seen.has(key)) { seen.add(key); triples.push(h); }
+    }
+
+    let totalFixed = 0;
+    for (const { user_id, family_member_id, strategy_id } of triples) {
+      const { data: badRows, error: fetchErr } = await db
+        .from('client_strategy_returns_c')
+        .select('id')
+        .eq('user_id', user_id)
+        .eq('strategy_id', strategy_id)
+        .is('family_member', null);
+
+      if (fetchErr || !badRows?.length) continue;
+
+      const ids = badRows.map(r => r.id);
+      const { error: patchErr } = await db
+        .from('client_strategy_returns_c')
+        .update({ family_member: family_member_id })
+        .in('id', ids);
+
+      if (!patchErr) totalFixed += ids.length;
+    }
+
+    if (totalFixed > 0) {
+      console.log(`[repair-child-returns] Fixed ${totalFixed} row(s) with missing family_member`);
+    }
+  } catch (err) {
+    console.error('[repair-child-returns] Error:', err.message);
+  }
+}
+
 // Held securities: every 15 s (fast, targeted)
 // Full sweep: every 2 min (all 246 securities, for markets page etc.)
 setTimeout(refreshHeldSecurities, 5000);
 setInterval(refreshHeldSecurities, INTRADAY_HELD_INTERVAL_MS);
 setTimeout(refreshIntradayPrices, 30000);
 setInterval(refreshIntradayPrices, INTRADAY_INTERVAL_MS);
+
+// Repair child strategy returns: once at startup (60 s delay) then every 24 h
+setTimeout(repairChildStrategyReturns, 60 * 1000);
+setInterval(repairChildStrategyReturns, 24 * 60 * 60 * 1000);
 
 // Catch-all 404 handler - MUST be after all route definitions
 app.use((req, res) => {
