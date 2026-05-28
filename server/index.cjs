@@ -9631,6 +9631,93 @@ app.post("/api/gift/claim-to-self", async (req, res) => {
 
 // ─── End gift routes ─────────────────────────────────────────────────────────
 
+// ── Intraday Price Refresh ────────────────────────────────────────────────────
+// Fetches live JSE prices from Yahoo Finance and upserts into stock_intraday_c
+// so the portfolio card always reflects the latest market prices.
+// Runs every 2 minutes during JSE trading hours (09:00–17:30 SAST = 07:00–15:30 UTC).
+
+const INTRADAY_BATCH_SIZE = 10;
+const INTRADAY_INTERVAL_MS = 2 * 60 * 1000;
+
+async function fetchYahooPrice(symbol) {
+  try {
+    const res = await fetch(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`,
+      {
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" },
+        signal: AbortSignal.timeout(8000),
+      }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const meta = data?.chart?.result?.[0]?.meta;
+    if (!meta || meta.regularMarketPrice == null) return null;
+    const prevClose = meta.chartPreviousClose || meta.previousClose || meta.regularMarketPrice;
+    const currentPrice = meta.regularMarketPrice; // ZAc (cents) for JSE stocks
+    const changeAbs = currentPrice - prevClose;
+    const changePct = prevClose ? (changeAbs / prevClose) * 100 : 0;
+    return { currentPrice: Math.round(currentPrice), changeAbs: Math.round(changeAbs), changePct: parseFloat(changePct.toFixed(4)) };
+  } catch {
+    return null;
+  }
+}
+
+async function refreshIntradayPrices() {
+  // Only run during JSE trading hours: 07:00–15:30 UTC (09:00–17:30 SAST)
+  const now = new Date();
+  const utcMins = now.getUTCHours() * 60 + now.getUTCMinutes();
+  if (utcMins < 7 * 60 || utcMins > 15 * 60 + 30) return;
+
+  const db = supabaseAdmin || supabase;
+  if (!db) return;
+
+  const { data: securities, error } = await db.from("securities_c").select("id, symbol");
+  if (error || !securities?.length) {
+    if (error) console.error("[intraday-refresh] Failed to fetch securities:", error.message);
+    return;
+  }
+
+  const timestamp = now.toISOString();
+  let updated = 0, failed = 0;
+
+  for (let i = 0; i < securities.length; i += INTRADAY_BATCH_SIZE) {
+    const batch = securities.slice(i, i + INTRADAY_BATCH_SIZE);
+    await Promise.all(batch.map(async (sec) => {
+      const prices = await fetchYahooPrice(sec.symbol);
+      if (!prices) { failed++; return; }
+      const { error: upsertErr } = await db.from("stock_intraday_c").insert({
+        security_id: sec.id,
+        symbol: sec.symbol,
+        timestamp,
+        current_price: prices.currentPrice,
+        "1d_abs": prices.changeAbs,
+        "1d_pct": prices.changePct,
+      });
+      if (upsertErr) { failed++; } else { updated++; }
+    }));
+    // Small pause between batches to respect Yahoo rate limits
+    if (i + INTRADAY_BATCH_SIZE < securities.length) {
+      await new Promise(r => setTimeout(r, 300));
+    }
+  }
+  console.log(`[intraday-refresh] ${timestamp} — updated ${updated}, failed ${failed} / ${securities.length} securities`);
+}
+
+// Manual trigger endpoint (no auth required — read-only market data refresh)
+app.post("/api/prices/refresh", async (req, res) => {
+  try {
+    await refreshIntradayPrices();
+    res.json({ success: true, message: "Intraday price refresh complete" });
+  } catch (err) {
+    console.error("[intraday-refresh] Manual trigger error:", err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Run once 10 s after server start, then every 2 minutes during JSE hours
+setTimeout(refreshIntradayPrices, 10000);
+setInterval(refreshIntradayPrices, INTRADAY_INTERVAL_MS);
+
 // Catch-all 404 handler - MUST be after all route definitions
 app.use((req, res) => {
   res.status(404).json({ error: "Not found", message: "This is the API server. The frontend is served separately." });
