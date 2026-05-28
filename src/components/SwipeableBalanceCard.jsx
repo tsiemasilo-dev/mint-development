@@ -369,7 +369,8 @@ const SwipeableBalanceCard = ({
           const { data: rawHoldings } = await supabase
             .from("stock_holdings_c")
             .select("id, security_id, quantity, avg_fill, Expected_fill, strategy_id, Fill_date, securities(symbol, name, logo_url)")
-            .eq("family_member_id", familyMemberId);
+            .eq("family_member_id", familyMemberId)
+            .eq("Status", "active");
           if (cancelled) return;
 
           const childHoldings = rawHoldings || [];
