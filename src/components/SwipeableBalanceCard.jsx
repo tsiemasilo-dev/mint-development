@@ -473,19 +473,45 @@ const SwipeableBalanceCard = ({
               };
             });
 
-          // Lightweight strategy placeholder items for the chart section.
-          // market_value=0 so they don't affect the portfolio headline number.
+          // Build proper strategy items for the dropdown + chart:
+          // - Fetch real strategy name/icon from strategies_c
+          // - Aggregate market_value and invested_amount from the underlying stock holdings
           if (returnsResult.data?.length > 0) {
+            const strategyIdsWithReturns = [
+              ...new Set(returnsResult.data.map(r => r.strategy_id).filter(Boolean))
+            ];
+
+            const { data: stratMeta } = await supabase
+              .from("strategies_c")
+              .select("id, name, short_name, icon_url")
+              .in("id", strategyIdsWithReturns);
+            const stratMap = {};
+            (stratMeta || []).forEach(s => { stratMap[s.id] = s; });
+
+            // Sum up market_value and invested_amount from individual stock holdings per strategy
+            const stratAgg = {};
+            enrichedHoldings.filter(h => !h.isStrategy && h.strategy_id).forEach(h => {
+              if (!stratAgg[h.strategy_id]) stratAgg[h.strategy_id] = { market_value: 0, invested_amount: 0 };
+              stratAgg[h.strategy_id].market_value += Number(h.market_value || 0);
+              stratAgg[h.strategy_id].invested_amount += Number(h.invested_amount || 0);
+            });
+
             const seenStrategyIds = new Set();
             for (const row of returnsResult.data) {
               if (row.strategy_id && !seenStrategyIds.has(row.strategy_id)) {
                 seenStrategyIds.add(row.strategy_id);
+                const meta = stratMap[row.strategy_id] || {};
+                const agg = stratAgg[row.strategy_id] || { market_value: 0, invested_amount: 0 };
                 enrichedHoldings.push({
-                  symbol: row.strategy_id,
-                  name: "Strategy",
-                  market_value: 0, invested_amount: 0, avg_fill: 0, Expected_fill: 0,
-                  quantity: 1, logo_url: null, security_id: null,
-                  strategy_id: row.strategy_id, isStrategy: true, strategyId: row.strategy_id,
+                  symbol: meta.short_name || meta.name || "Strategy",
+                  name: meta.name || "Strategy",
+                  market_value: agg.market_value,
+                  invested_amount: agg.invested_amount,
+                  avg_fill: 0, Expected_fill: 0, quantity: 1,
+                  logo_url: meta.icon_url || null,
+                  security_id: null,
+                  strategy_id: row.strategy_id,
+                  isStrategy: true, strategyId: row.strategy_id,
                   topLogos: [], changePct: 0, holdings: [], firstInvestedDate: null,
                 });
               }
@@ -503,14 +529,15 @@ const SwipeableBalanceCard = ({
           .filter(h => !h.isStrategy)
           .reduce((acc, h) => acc + Number(h.invested_amount || 0) / 100, 0);
 
-        // maxOfCostBasis matches invested_amount for all holdings (already max-of)
+        // maxOfCostBasis per item: used when selectedAsset is active (both stock and strategy items).
+        // Strategy items carry the aggregated invested_amount so they display correctly when selected.
+        // For the portfolio total we only sum individual stocks to avoid double-counting.
         enrichedHoldings.forEach(h => {
-          h.maxOfCostBasis = h.isStrategy ? 0 : Number(h.invested_amount || 0) / 100;
+          h.maxOfCostBasis = Number(h.invested_amount || 0) / 100;
         });
-        const totalMaxOfCostBasis = enrichedHoldings.reduce(
-          (acc, h) => acc + Number(h.maxOfCostBasis || 0),
-          0,
-        );
+        const totalMaxOfCostBasis = enrichedHoldings
+          .filter(h => !h.isStrategy)
+          .reduce((acc, h) => acc + Number(h.maxOfCostBasis || 0), 0);
 
         console.log("[SwipeableBalanceCard] Loaded holdings:", {
           count: enrichedHoldings.length,
@@ -673,8 +700,15 @@ const SwipeableBalanceCard = ({
           }
         }
 
-        // Process stocks
-        const stockHoldings = holdingsToChart.filter(h => h.security_id && !h.isStrategy);
+        // Process stocks — exclude any stock whose strategy already has a chart entry
+        // in client_strategy_returns_c (strategyBasketByDate). Double-counting
+        // would add both the per-stock stock_returns_c P&L AND the strategy 1d_pnl.
+        const chartedStrategyIds = new Set(
+          holdingsToChart.filter(h => h.isStrategy).map(h => h.strategyId).filter(Boolean)
+        );
+        const stockHoldings = holdingsToChart.filter(h =>
+          h.security_id && !h.isStrategy && !chartedStrategyIds.has(h.strategy_id)
+        );
         const pricePromises = stockHoldings.map(async (h) => {
           try {
             let { data, error } = await supabase
@@ -1014,7 +1048,7 @@ const SwipeableBalanceCard = ({
         >
           <LayoutGrid size={12} className="text-violet-400" />
           <span className="text-[11px] font-medium text-slate-200 whitespace-nowrap">
-            {selectedAsset ? selectedAsset.symbol : (dbData.holdings.find(h => !h.isStrategy)?.symbol || "Investments")}
+            {selectedAsset ? selectedAsset.symbol : (dbData.holdings.find(h => h.isStrategy)?.symbol || dbData.holdings.find(h => !h.isStrategy)?.symbol || "Investments")}
           </span>
           {isOpen ? <ChevronUp size={12} className="text-slate-300" /> : <ChevronDown size={12} className="text-slate-300" />}
         </button>
@@ -1022,7 +1056,13 @@ const SwipeableBalanceCard = ({
         {isOpen && (
           <div className="absolute top-full mt-1 left-0 w-48 bg-white rounded-xl z-[120] overflow-hidden border border-slate-200 shadow-lg">
             <div className="py-1 overflow-y-auto max-h-[140px]">
-              {dbData.holdings.filter(h => !h.isStrategy).map((item, idx) => (
+              {(() => {
+                const strategyItemIds = new Set(dbData.holdings.filter(h => h.isStrategy).map(h => h.strategy_id).filter(Boolean));
+                const dropdownItems = [
+                  ...dbData.holdings.filter(h => h.isStrategy),
+                  ...dbData.holdings.filter(h => !h.isStrategy && !strategyItemIds.has(h.strategy_id)),
+                ];
+                return dropdownItems.map((item, idx) => (
                 <button
                   key={idx}
                   onClick={() => { setSelectedAsset(item); setIsOpen(false); scrollToHoldingIndex(idx); }}
@@ -1053,7 +1093,8 @@ const SwipeableBalanceCard = ({
                     return s && s !== "confirmed" ? <SettlementBadge status={s} size="xs" /> : null;
                   })()}
                 </button>
-              ))}
+              ));
+              })()}
             </div>
           </div>
         )}
