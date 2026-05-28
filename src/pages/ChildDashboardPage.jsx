@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useId, lazy, Suspense } fr
 
 const MarketsPage = lazy(() => import("./MarketsPage.jsx"));
 const MorePage = lazy(() => import("./MorePage.jsx"));
+const NewsArticlePage = lazy(() => import("./NewsArticlePage.jsx"));
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, ArrowUpRight, ArrowDownLeft, X,
@@ -1971,6 +1972,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   const [childFriendlyLoading, setChildFriendlyLoading] = useState(true);
   const [kycNotice, setKycNotice] = useState("");
   const [activeChildTab, setActiveChildTab] = useState("home");
+  const [childNewsArticleId, setChildNewsArticleId] = useState(null);
 
   const childName = [child?.first_name, child?.last_name].filter(Boolean).join(" ") || "Child";
   const age = getAge(child?.date_of_birth);
@@ -3262,7 +3264,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             onBack={() => setActiveChildTab("home")}
             onOpenNotifications={() => {}}
             onOpenStockDetail={() => {}}
-            onOpenNewsArticle={() => {}}
+            onOpenNewsArticle={(id) => setChildNewsArticleId(id)}
             onOpenFactsheet={() => {}}
             onViewModeChange={() => {}}
           />
@@ -3276,6 +3278,18 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
           }}
         />
       </div>
+
+      {/* -- News article overlay -- */}
+      {childNewsArticleId && (
+        <div className="fixed inset-0 z-20 overflow-y-auto" style={{ background: "var(--bg, #0f0a1e)" }}>
+          <Suspense fallback={<div style={{ background: "var(--bg, #0f0a1e)", height: "100%" }} />}>
+            <NewsArticlePage
+              articleId={childNewsArticleId}
+              onBack={() => setChildNewsArticleId(null)}
+            />
+          </Suspense>
+        </div>
+      )}
 
       {/* -- More tab — pre-mounted, shown/hidden via display to avoid flicker -- */}
       <div
