@@ -9691,10 +9691,10 @@ async function refreshIntradayPrices() {
       await Promise.all(batch.map(async (sec) => {
         const prices = await fetchYahooPrice(sec.symbol);
         if (!prices) { failed++; return; }
-        const { error: upsertErr } = await db.from("stock_intraday_c").upsert({
+        const { error: upsertErr } = await db.from("stock_intraday_c").insert({
           security_id: sec.id, symbol: sec.symbol, timestamp,
           current_price: prices.currentPrice, "1d_abs": prices.changeAbs, "1d_pct": prices.changePct,
-        }, { onConflict: "security_id" });
+        });
         if (upsertErr) { failed++; } else { updated++; }
       }));
       if (i + INTRADAY_BATCH_SIZE < securities.length) {
@@ -9740,10 +9740,10 @@ async function refreshHeldSecurities() {
     await Promise.all(securities.map(async (sec) => {
       const prices = await fetchYahooPrice(sec.symbol);
       if (!prices) { failed++; return; }
-      const { error } = await db.from("stock_intraday_c").upsert({
+      const { error } = await db.from("stock_intraday_c").insert({
         security_id: sec.id, symbol: sec.symbol, timestamp,
         current_price: prices.currentPrice, "1d_abs": prices.changeAbs, "1d_pct": prices.changePct,
-      }, { onConflict: "security_id" });
+      });
       if (error) { failed++; } else { updated++; }
     }));
     console.log(`[held-refresh] ${timestamp} — updated ${updated}, failed ${failed} / ${securities.length} held securities`);
