@@ -63,12 +63,26 @@ export const useUserStrategies = (familyMemberId = null) => {
         ? returnsQuery.eq("family_member", familyMemberId)
         : returnsQuery.is("family_member", null);
 
-      const [allReturnsResult, strategiesResult] = await Promise.all([
+      /* Per-strategy residual cash from rebalances. Owned at the parent
+         user_id level — there is no family_member_id column on this table
+         (admin-side rebalances always credit residual to the parent). So we
+         only fetch this for the parent view. Each row's balance_cents counts
+         toward that strategy's "current value" so the user sees their cash
+         portion alongside their positions. */
+      const residualQuery = familyMemberId
+        ? Promise.resolve({ data: [] })
+        : supabase
+            .from("strategy_rebalance_residuals")
+            .select("strategy_id, balance_cents")
+            .eq("user_id", userId);
+
+      const [allReturnsResult, strategiesResult, residualResult] = await Promise.all([
         returnsQuery.order("as_of_date", { ascending: false }),
         supabase
           .from("strategies_c")
           .select("id, name, short_name, description, risk_level, sector, icon_url, image_url, holdings")
           .eq("status", "active"),
+        residualQuery,
       ]);
 
       if (allReturnsResult.error) {
@@ -78,6 +92,12 @@ export const useUserStrategies = (familyMemberId = null) => {
       }
 
       const allReturns = allReturnsResult.data || [];
+
+      const residualRandsByStrategy = {};
+      (residualResult?.data || []).forEach((row) => {
+        if (!row?.strategy_id) return;
+        residualRandsByStrategy[row.strategy_id] = Number(row.balance_cents || 0) / 100;
+      });
 
       if (allReturns.length === 0) {
         setData({ strategies: [], selectedStrategy: null, loading: false, error: null });
@@ -112,7 +132,13 @@ export const useUserStrategies = (familyMemberId = null) => {
           } catch { return []; }
         })();
 
-        const currentVal = Number((returnsRow.basket_value / 100).toFixed(2));
+        const positionsVal = Number((returnsRow.basket_value / 100).toFixed(2));
+        /* Residual cash from rebalances counts toward the strategy's value —
+           the cash hasn't been redeployed yet but it's still part of the
+           strategy's capital. Without this, a rebalance would look like the
+           portfolio shrank. */
+        const residualVal = Number((residualRandsByStrategy[strategyId] || 0).toFixed(2));
+        const currentVal = Number((positionsVal + residualVal).toFixed(2));
         const invested = snapshot.reduce((sum, h) => sum + costBasisRandsPerShare(h) * (h.qty || h.quantity || 0), 0);
         const changePct = invested > 0 ? ((currentVal - invested) / invested) * 100 : 0;
         const ytdPctDecimal = returnsRow.ytd_pct != null ? returnsRow.ytd_pct / 100 : null;
@@ -149,6 +175,10 @@ export const useUserStrategies = (familyMemberId = null) => {
           holdings: augmentedHoldings,
           investedAmount: Number(invested.toFixed(2)),
           currentValue: currentVal,
+          /* Cash component (rebalance residual) surfaced separately so the
+             UI can show "Positions R890 + Cash R104.61" if it wants to. */
+          positionsValue: positionsVal,
+          residualCash: residualVal,
           unitsHeld: 0,
           entryDate: null,
           lastUpdated: returnsRow.as_of_date,
