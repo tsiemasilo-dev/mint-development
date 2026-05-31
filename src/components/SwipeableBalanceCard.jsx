@@ -566,9 +566,36 @@ const SwipeableBalanceCard = ({
         }
 
         // Portfolio value: sum market_value (cents → rands) for real holdings only
-        const mValue = enrichedHoldings
+        let mValue = enrichedHoldings
           .filter(h => !h.isStrategy)
           .reduce((acc, h) => acc + Number(h.market_value || 0) / 100, 0);
+
+        /* Per-strategy residual cash (admin-side rebalance leftover) counts
+           toward the headline portfolio total. Scoped to the active view:
+           child mode → family_member_id = familyMemberId,
+           parent mode → family_member_id IS NULL.
+           If userId isn't directly in scope (child mode pulls via family
+           link), we still scope by user_id when we have it. */
+        try {
+          if (familyMemberId) {
+            const { data: residRows } = await supabase
+              .from("strategy_rebalance_residuals")
+              .select("balance_cents")
+              .eq("family_member_id", familyMemberId);
+            const residRands = (residRows || []).reduce((s, r) => s + Number(r.balance_cents || 0) / 100, 0);
+            mValue += residRands;
+          } else if (userId) {
+            const { data: residRows } = await supabase
+              .from("strategy_rebalance_residuals")
+              .select("balance_cents")
+              .eq("user_id", userId)
+              .is("family_member_id", null);
+            const residRands = (residRows || []).reduce((s, r) => s + Number(r.balance_cents || 0) / 100, 0);
+            mValue += residRands;
+          }
+        } catch (residErr) {
+          console.warn("[SwipeableBalanceCard] residual fetch failed:", residErr);
+        }
 
         // Total cost basis: max(Expected_fill, avg_fill÷100) × qty, already computed per holding
         const totalCostBasis = enrichedHoldings
