@@ -63,18 +63,18 @@ export const useUserStrategies = (familyMemberId = null) => {
         ? returnsQuery.eq("family_member", familyMemberId)
         : returnsQuery.is("family_member", null);
 
-      /* Per-strategy residual cash from rebalances. Owned at the parent
-         user_id level — there is no family_member_id column on this table
-         (admin-side rebalances always credit residual to the parent). So we
-         only fetch this for the parent view. Each row's balance_cents counts
-         toward that strategy's "current value" so the user sees their cash
-         portion alongside their positions. */
-      const residualQuery = familyMemberId
-        ? Promise.resolve({ data: [] })
-        : supabase
-            .from("strategy_rebalance_residuals")
-            .select("strategy_id, balance_cents")
-            .eq("user_id", userId);
+      /* Per-strategy residual cash from rebalances. Each row's balance_cents
+         counts toward that strategy's "current value" so the user sees their
+         cash portion alongside their positions. Scoped:
+         - parent view (familyMemberId null): rows where family_member_id IS NULL
+         - child view (familyMemberId set):  rows where family_member_id = id */
+      let residualQuery = supabase
+        .from("strategy_rebalance_residuals")
+        .select("strategy_id, balance_cents")
+        .eq("user_id", userId);
+      residualQuery = familyMemberId
+        ? residualQuery.eq("family_member_id", familyMemberId)
+        : residualQuery.is("family_member_id", null);
 
       const [allReturnsResult, strategiesResult, residualResult] = await Promise.all([
         returnsQuery.order("as_of_date", { ascending: false }),
