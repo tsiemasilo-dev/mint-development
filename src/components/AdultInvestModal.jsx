@@ -1,9 +1,8 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, X, ChevronDown, ChevronUp, Download, Info } from "lucide-react";
+import { ArrowLeft, X, ChevronDown, ChevronUp, Download, Wallet, BarChart3 } from "lucide-react";
 import { formatCurrency } from "../lib/formatCurrency";
-import { useOnboardingStatus } from "../lib/useOnboardingStatus";
 import PdfViewer from "./PdfViewer";
 import { supabase } from "../lib/supabase.js";
 import { calculateMinInvestmentSync, buildHoldingsBySymbol, getHoldingsArray } from "../lib/strategyUtils";
@@ -22,34 +21,56 @@ function firstBillingDate() {
   return d.toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" });
 }
 
+const fmt = (n) => Number(n).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 export default function AdultInvestModal({
   isOpen,
   onClose,
   strategy,
   onContinue,
-  onGiftDone,
 }) {
   const currency = strategy?.currency || "R";
   const isAdditionalStrategy = !!strategy?.isAdditionalStrategy;
 
-  const [minimum, setMinimum] = useState(strategy?.calculatedMinInvestment || null);
-  const [amount, setAmount] = useState(strategy?.calculatedMinInvestment || 0);
+  const [minimum, setMinimum] = useState(null);
+  const [minimumLoading, setMinimumLoading] = useState(false);
+  const [units, setUnits] = useState(1);
   const [feeExpanded, setFeeExpanded] = useState(false);
   const [agreementChecked, setAgreementChecked] = useState(false);
   const [showMandateModal, setShowMandateModal] = useState(false);
+  const [walletCents, setWalletCents] = useState(null);
 
-  const { onboardingComplete: isFullyOnboarded, loading: isLoadingStatus } = useOnboardingStatus();
-
-  // Sync minimum & amount when strategy changes
+  // Load minimum + wallet balance when opened
   useEffect(() => {
     if (!isOpen) return;
-    const min = strategy?.calculatedMinInvestment || strategy?.min_investment || null;
-    if (min) {
-      setMinimum(min);
-      setAmount(min);
+    setUnits(1);
+    setFeeExpanded(false);
+    setAgreementChecked(false);
+    setShowMandateModal(false);
+
+    // Fetch wallet balance
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) return;
+        const { data } = await supabase
+          .from("wallets")
+          .select("balance_cents")
+          .eq("user_id", session.user.id)
+          .single();
+        if (data) setWalletCents(data.balance_cents ?? 0);
+      } catch { /* ignore */ }
+    })();
+
+    // Resolve minimum investment
+    const preCalc = strategy?.calculatedMinInvestment || strategy?.min_investment;
+    if (preCalc) {
+      setMinimum(preCalc);
+      setMinimumLoading(false);
       return;
     }
-    if (!strategy || !supabase) return;
+    if (!strategy || !supabase) { setMinimumLoading(false); return; }
+    setMinimumLoading(true);
     (async () => {
       try {
         const holdings = getHoldingsArray(strategy);
@@ -60,43 +81,33 @@ export default function AdultInvestModal({
           (data || []).forEach(s => { secMap[s.symbol] = s; });
         }
         const hMap = buildHoldingsBySymbol(Object.values(secMap).filter(s => s.last_price != null));
-        const calc = calculateMinInvestmentSync(strategy, hMap);
-        setMinimum(calc);
-        setAmount(calc || 0);
-      } catch { setMinimum(null); }
+        setMinimum(calculateMinInvestmentSync(strategy, hMap));
+      } catch { setMinimum(null); } finally { setMinimumLoading(false); }
     })();
   }, [isOpen, strategy]);
 
-  // Reset state when closed
-  useEffect(() => {
-    if (!isOpen) {
-      setFeeExpanded(false);
-      setAgreementChecked(false);
-      setShowMandateModal(false);
-    }
-  }, [isOpen]);
-
   const holdingsData = strategy?.holdingsWithLogos || strategy?.holdings || [];
   const numAssets = holdingsData.length || 0;
-  const extraHoldings = holdingsData.length > 3 ? holdingsData.length - 3 : 0;
+
+  // Amount = units × minimum
+  const baseAmount = units * (minimum || 0);
 
   const fees = useMemo(() => {
-    const bufferedBase = amount * (1 + CASH_BUFFER_RATE);
+    const bufferedBase = baseAmount * (1 + CASH_BUFFER_RATE);
     const brokerAmount = bufferedBase * BROKER_FEE_RATE;
     const isinTotal = ISIN_FEE_PER_ASSET * numAssets;
     const transactionAmount = bufferedBase * TRANSACTION_FEE_RATE;
     const totalCost = bufferedBase + brokerAmount + isinTotal + transactionAmount;
     return { bufferedBase, brokerAmount, isinTotal, transactionAmount, totalCost };
-  }, [amount, numAssets]);
+  }, [baseAmount, numAssets]);
 
-  const step = minimum || 0;
-  const handleIncrement = () => { if (step > 0) setAmount(p => p + step); };
-  const handleDecrement = () => { if (step > 0 && amount > step) setAmount(p => p - step); };
+  const totalCostCents = Math.round(fees.totalCost * 100);
+  const insufficient = walletCents !== null && totalCostCents > walletCents;
 
   const handleConfirm = () => {
     const sharePrice = strategy?.price_per_share || strategy?.pricePerShare || null;
-    const shareCount = sharePrice && sharePrice > 0 ? Math.floor(amount / sharePrice) : null;
-    onContinue?.(fees.totalCost, amount, shareCount, fees);
+    const shareCount = sharePrice && sharePrice > 0 ? Math.floor(baseAmount / sharePrice) : null;
+    onContinue?.(fees.totalCost, baseAmount, shareCount, fees);
   };
 
   const portalTarget = document.getElementById("modal-root") || document.body;
@@ -121,7 +132,7 @@ export default function AdultInvestModal({
           <motion.div
             key="adult-invest-sheet"
             className="fixed inset-x-0 bottom-0 flex flex-col rounded-t-[28px] bg-white shadow-2xl overflow-hidden"
-            style={{ zIndex: 9999, maxHeight: "92dvh", paddingBottom: "env(safe-area-inset-bottom)" }}
+            style={{ zIndex: 9999, paddingBottom: "env(safe-area-inset-bottom)" }}
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
@@ -150,193 +161,151 @@ export default function AdultInvestModal({
               </button>
             </div>
 
-            {/* Scrollable body */}
-            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pb-6" style={{ WebkitOverflowScrolling: "touch" }}>
+            {/* Body */}
+            <div className="px-5 pb-5">
 
-              {/* Strategy Card */}
-              <div className="mb-4 rounded-2xl border border-slate-100 bg-slate-50 p-4">
-                <div className="flex items-start gap-3 mb-3">
-                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-slate-200 overflow-hidden">
-                    <img
-                      src="https://s3-symbol-logo.tradingview.com/country/ZA--big.svg"
-                      alt="ZA"
-                      className="h-full w-full object-cover"
-                    />
+              {/* Stat chips */}
+              <div className="flex gap-3 mb-4">
+                <div className="flex-1 rounded-2xl p-3.5 border border-slate-100" style={{ background: "linear-gradient(135deg,#f5f3ff,#ede9fe)" }}>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Wallet className="h-3 w-3 text-purple-400" />
+                    <p className="text-[10px] font-bold text-purple-400 uppercase tracking-wide">My balance</p>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-slate-900 truncate">{strategy?.name}</p>
-                    <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">
-                      {strategy?.description?.split(".")[0] || "Investment strategy"}
-                    </p>
-                    <p className="text-xs font-semibold text-slate-600 mt-1">
-                      {minimum ? `Min. ${formatCurrency(minimum, currency)}` : "Calculating..."}
-                    </p>
-                  </div>
+                  <p className="text-base font-bold text-purple-900 tabular-nums">
+                    {walletCents === null ? "…" : `R${fmt(walletCents / 100)}`}
+                  </p>
                 </div>
-
-                {/* Holdings avatars */}
-                <div className="flex items-center justify-between pt-3 border-t border-slate-200">
-                  <div className="flex items-center -space-x-2">
-                    {holdingsData.slice(0, 3).map((h) => {
-                      const sym = h.ticker || h.symbol || h;
-                      return (
-                        <div key={sym} className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-slate-200 overflow-hidden flex-shrink-0">
-                          {h.logo_url ? (
-                            <img src={h.logo_url} alt={sym} className="h-full w-full object-cover" onError={e => { e.target.style.display = "none"; e.target.parentElement.textContent = sym.charAt(0); }} />
-                          ) : (
-                            <span className="text-[9px] font-bold text-slate-500">{String(sym).charAt(0)}</span>
-                          )}
-                        </div>
-                      );
-                    })}
-                    {extraHoldings > 0 && (
-                      <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-slate-300 text-white text-[9px] font-bold flex-shrink-0">
-                        +{extraHoldings}
-                      </div>
-                    )}
+                <div className="flex-1 rounded-2xl p-3.5 border border-slate-100 bg-white">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <BarChart3 className="h-3 w-3 text-indigo-400" />
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Min. per basket</p>
                   </div>
-                  <span className="text-[11px] font-semibold text-slate-500">Holdings snapshot</span>
+                  <p className="text-base font-bold text-slate-900 tabular-nums">
+                    {minimumLoading ? "…" : minimum ? `R${fmt(minimum)}` : "—"}
+                  </p>
                 </div>
               </div>
 
               {/* Amount stepper */}
-              <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4">
-                <p className="text-[11px] font-semibold text-slate-500 text-center mb-2 uppercase tracking-wide">Investment Amount</p>
-                <div className="flex items-center justify-between gap-3">
+              <div className="rounded-3xl border border-slate-100 bg-white shadow-sm p-5 mb-4">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center mb-4">Investment Amount</p>
+                <div className="flex items-center justify-center gap-5 mb-3">
                   <button
                     type="button"
-                    onClick={handleDecrement}
-                    disabled={!minimum || amount <= minimum || !isFullyOnboarded}
-                    className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed transition active:scale-95"
+                    onClick={() => setUnits(u => Math.max(1, u - 1))}
+                    disabled={units <= 1 || !minimum}
+                    className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 text-xl font-semibold disabled:opacity-30 disabled:cursor-not-allowed active:scale-90 transition-all shadow-sm"
                   >
-                    <span className="text-lg font-light leading-none">−</span>
+                    −
                   </button>
-                  <p className="text-3xl font-bold text-slate-900 flex-1 text-center">
-                    {formatCurrency(amount * (1 + CASH_BUFFER_RATE), currency)}
-                  </p>
+                  <div className="flex-1 text-center">
+                    <p className="text-4xl font-black text-slate-900 tabular-nums tracking-tight">
+                      {minimum && fees.bufferedBase > 0 ? `R${fmt(fees.bufferedBase)}` : "R0.00"}
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      {units} basket{units !== 1 ? "s" : ""} × R{minimum ? fmt(minimum) : "0.00"}
+                    </p>
+                  </div>
                   <button
                     type="button"
-                    onClick={handleIncrement}
-                    disabled={!isFullyOnboarded}
-                    className="flex h-10 w-10 items-center justify-center rounded-xl text-white disabled:opacity-50 disabled:cursor-not-allowed transition active:scale-95"
-                    style={{ background: "linear-gradient(135deg,#5b21b6,#7c3aed)" }}
+                    onClick={() => setUnits(u => u + 1)}
+                    disabled={!minimum || insufficient}
+                    className="flex h-11 w-11 items-center justify-center rounded-2xl text-white text-xl font-semibold disabled:opacity-30 disabled:cursor-not-allowed active:scale-90 transition-all shadow-md"
+                    style={{ background: "linear-gradient(135deg,#6366f1,#7c3aed)" }}
                   >
-                    <span className="text-lg font-light leading-none">+</span>
+                    +
                   </button>
                 </div>
               </div>
 
-              {/* Fee Breakdown */}
-              <div className="mb-4 rounded-2xl border border-slate-100 bg-white overflow-hidden">
+              {/* Fee breakdown */}
+              <div className="mb-4 rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
                 <button
                   type="button"
                   onClick={() => setFeeExpanded(v => !v)}
-                  className="w-full flex items-center justify-between px-4 py-3"
+                  className="w-full flex items-center justify-between px-4 py-3.5"
                 >
-                  <span className="text-xs font-semibold text-slate-600">Fee Breakdown</span>
-                  {feeExpanded
-                    ? <ChevronUp className="h-4 w-4 text-slate-400" />
-                    : <ChevronDown className="h-4 w-4 text-slate-400" />
-                  }
+                  <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Fee Breakdown</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-400">R{fmt(fees.totalCost - baseAmount)}</span>
+                    {feeExpanded ? <ChevronUp className="h-3.5 w-3.5 text-slate-400" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-400" />}
+                  </div>
                 </button>
                 {feeExpanded && (
-                  <div className="px-4 pb-4 space-y-2 border-t border-slate-100">
-                    <div className="flex items-center justify-between pt-2">
+                  <div className="px-4 pb-3 space-y-2.5 border-t border-slate-50">
+                    <div className="pt-3 flex justify-between">
                       <p className="text-xs text-slate-500">Investment + 8% reserve</p>
-                      <p className="text-xs font-semibold text-slate-800">{formatCurrency(fees.bufferedBase, currency)}</p>
+                      <p className="text-xs font-semibold text-slate-800">R{fmt(fees.bufferedBase)}</p>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs text-slate-500">Broker Fee (0.25%)</p>
-                      <p className="text-xs font-semibold text-slate-800">{formatCurrency(fees.brokerAmount, currency)}</p>
+                    <div className="flex justify-between">
+                      <p className="text-xs text-slate-500">Broker fee (0.25%)</p>
+                      <p className="text-xs font-semibold text-slate-800">R{fmt(fees.brokerAmount)}</p>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs text-slate-500">Custody Fee ({formatCurrency(ISIN_FEE_PER_ASSET, currency)} × {numAssets} asset{numAssets !== 1 ? "s" : ""})</p>
-                      <p className="text-xs font-semibold text-slate-800">{formatCurrency(fees.isinTotal, currency)}</p>
+                    <div className="flex justify-between">
+                      <p className="text-xs text-slate-500">Custody (R{ISIN_FEE_PER_ASSET} × {numAssets})</p>
+                      <p className="text-xs font-semibold text-slate-800">R{fmt(fees.isinTotal)}</p>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs text-slate-500">Transaction Fee (3.8%)</p>
-                      <p className="text-xs font-semibold text-slate-800">{formatCurrency(fees.transactionAmount, currency)}</p>
+                    <div className="flex justify-between">
+                      <p className="text-xs text-slate-500">Transaction fee (3.8%)</p>
+                      <p className="text-xs font-semibold text-slate-800">R{fmt(fees.transactionAmount)}</p>
                     </div>
                     {isAdditionalStrategy && (
-                      <div className="flex items-center justify-between pt-1 border-t border-dashed border-violet-100">
+                      <div className="flex justify-between pt-1 border-t border-dashed border-violet-100">
                         <div>
                           <p className="text-xs text-violet-700 font-medium">Monthly Strategy Fee</p>
                           <p className="text-[10px] text-violet-500">From {firstBillingDate()}</p>
                         </div>
-                        <p className="text-xs font-semibold text-violet-700">{formatCurrency(MONTHLY_STRATEGY_FEE, currency)}/month</p>
+                        <p className="text-xs font-semibold text-violet-700">R{fmt(MONTHLY_STRATEGY_FEE)}/month</p>
                       </div>
                     )}
                   </div>
                 )}
-                <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-t border-slate-100">
-                  <div>
-                    <p className="text-xs font-bold text-slate-700">Total Due Today</p>
-                    {isAdditionalStrategy && (
-                      <p className="text-[10px] text-violet-600">R29/month from {firstBillingDate()}</p>
-                    )}
-                  </div>
-                  <p className="text-sm font-bold text-slate-900">{formatCurrency(fees.totalCost, currency)}</p>
+                <div className="flex items-center justify-between px-4 py-3.5 border-t border-slate-100" style={{ background: "linear-gradient(135deg,#f5f3ff,#ede9fe)" }}>
+                  <p className="text-xs font-bold text-purple-700">Total Due Today</p>
+                  <p className="text-base font-black text-purple-900">R{fmt(fees.totalCost)}</p>
                 </div>
               </div>
 
-              {/* Agreement checkbox */}
-              <div className="mb-4 rounded-2xl border border-slate-100 bg-white p-4">
-                <label className="flex items-start gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={agreementChecked}
-                    onChange={e => setAgreementChecked(e.target.checked)}
-                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500 flex-shrink-0"
-                  />
-                  <div className="flex-1">
-                    <p className="text-xs font-semibold text-slate-900">
-                      I agree to Risk Disclosure, Fee Schedule &{" "}
-                      <button
-                        type="button"
-                        onClick={e => { e.preventDefault(); setShowMandateModal(true); }}
-                        className="underline text-violet-700"
-                      >
-                        Strategy Mandate
-                      </button>
-                    </p>
-                    <p className="text-xs text-slate-500 mt-1">
-                      By continuing you confirm you have reviewed and agree to all terms
-                      {isAdditionalStrategy && <span className="text-violet-700 font-medium">, including the R29/month recurring fee</span>}.
-                    </p>
-                  </div>
-                </label>
-              </div>
+              {/* Insufficient funds warning */}
+              {insufficient && (
+                <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 mb-4 flex items-start gap-2">
+                  <div className="h-1.5 w-1.5 rounded-full bg-red-400 mt-1.5 flex-shrink-0" />
+                  <p className="text-xs font-semibold text-red-600">
+                    Insufficient wallet balance — please top up before investing.
+                  </p>
+                </div>
+              )}
 
-              {/* Info banner */}
-              <div className="mb-4 flex items-start gap-2 rounded-xl bg-violet-50 px-3 py-2.5">
-                <Info className="h-4 w-4 flex-shrink-0 text-violet-500 mt-0.5" />
-                <p className="text-xs text-violet-700">You'll be guided through our secure payment process with multiple options available.</p>
-              </div>
-
-              {/* CTA */}
-              {!isLoadingStatus && !isFullyOnboarded ? (
-                <div className="w-full rounded-2xl border border-rose-200 bg-rose-50 p-4 text-center">
-                  <p className="text-sm font-semibold text-rose-800 mb-1">Onboarding Required</p>
-                  <p className="text-xs text-rose-600 mb-3">Complete your profile and identity verification before investing.</p>
+              {/* Compact agreement */}
+              <label className="flex items-center gap-2.5 mb-4 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={agreementChecked}
+                  onChange={e => setAgreementChecked(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500 flex-shrink-0"
+                />
+                <p className="text-xs text-slate-500">
+                  I agree to the Risk Disclosure, Fee Schedule &{" "}
                   <button
                     type="button"
-                    onClick={() => { onClose(); window.dispatchEvent(new CustomEvent("navigate-within-app", { detail: { page: "userOnboarding" } })); }}
-                    className="w-full rounded-xl bg-rose-600 py-2.5 text-sm font-semibold text-white transition active:scale-95"
+                    onClick={e => { e.preventDefault(); setShowMandateModal(true); }}
+                    className="underline text-violet-600 font-medium"
                   >
-                    Complete Onboarding
+                    Strategy Mandate
                   </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleConfirm}
-                  disabled={!agreementChecked || isLoadingStatus || !minimum}
-                  className="w-full rounded-2xl py-3.5 text-sm font-bold text-white shadow-lg disabled:opacity-40 disabled:cursor-not-allowed transition active:scale-[0.98]"
-                  style={{ background: "linear-gradient(135deg,#5b21b6,#7c3aed)" }}
-                >
-                  {isLoadingStatus ? "Checking status…" : "Continue"}
-                </button>
-              )}
+                </p>
+              </label>
+
+              {/* CTA */}
+              <button
+                type="button"
+                onClick={handleConfirm}
+                disabled={!agreementChecked || !minimum || insufficient}
+                className="w-full rounded-2xl py-4 text-sm font-bold text-white shadow-lg active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ background: "linear-gradient(135deg,#4f46e5,#7c3aed)" }}
+              >
+                Confirm Investment
+              </button>
             </div>
           </motion.div>
 
