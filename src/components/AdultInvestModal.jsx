@@ -164,6 +164,51 @@ export default function AdultInvestModal({
             {/* Body */}
             <div className="px-5 pb-5">
 
+              {/* Strategy Card */}
+              <div className="mb-4 rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                <div className="flex items-start gap-3 mb-3">
+                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl overflow-hidden">
+                    <img
+                      src="https://s3-symbol-logo.tradingview.com/country/ZA--big.svg"
+                      alt="ZA"
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-slate-900 truncate">{strategy?.name}</p>
+                    <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">
+                      {strategy?.description?.split(".")[0] || "Investment strategy"}
+                    </p>
+                    <p className="text-xs font-semibold text-slate-600 mt-1">
+                      {minimum ? `Min. ${formatCurrency(minimum, currency)}` : "Calculating..."}
+                    </p>
+                  </div>
+                </div>
+                {/* Holdings avatars */}
+                <div className="flex items-center justify-between pt-3 border-t border-slate-200">
+                  <div className="flex items-center -space-x-2">
+                    {holdingsData.slice(0, 3).map((h) => {
+                      const sym = h.ticker || h.symbol || h;
+                      return (
+                        <div key={sym} className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-slate-200 overflow-hidden flex-shrink-0">
+                          {h.logo_url ? (
+                            <img src={h.logo_url} alt={sym} className="h-full w-full object-cover" onError={e => { e.target.style.display = "none"; e.target.parentElement.textContent = String(sym).charAt(0); }} />
+                          ) : (
+                            <span className="text-[9px] font-bold text-slate-500">{String(sym).charAt(0)}</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {holdingsData.length > 3 && (
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-slate-300 text-white text-[9px] font-bold flex-shrink-0">
+                        +{holdingsData.length - 3}
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-[11px] font-semibold text-slate-500">Holdings snapshot</span>
+                </div>
+              </div>
+
               {/* Stat chips */}
               <div className="flex gap-3 mb-4">
                 <div className="flex-1 rounded-2xl p-3.5 border border-slate-100" style={{ background: "linear-gradient(135deg,#f5f3ff,#ede9fe)" }}>
