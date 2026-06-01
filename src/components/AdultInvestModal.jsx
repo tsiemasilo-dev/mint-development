@@ -38,7 +38,7 @@ export default function AdultInvestModal({
   const [feeExpanded, setFeeExpanded] = useState(false);
   const [agreementChecked, setAgreementChecked] = useState(false);
   const [showMandateModal, setShowMandateModal] = useState(false);
-  const [walletCents, setWalletCents] = useState(null);
+  const [walletBalance, setWalletBalance] = useState(null);
 
   // Load minimum + wallet balance when opened
   useEffect(() => {
@@ -55,10 +55,10 @@ export default function AdultInvestModal({
         if (!session?.user) return;
         const { data } = await supabase
           .from("wallets")
-          .select("balance_cents")
+          .select("balance")
           .eq("user_id", session.user.id)
-          .single();
-        if (data) setWalletCents(data.balance_cents ?? 0);
+          .maybeSingle();
+        if (data) setWalletBalance(data.balance ?? 0);
       } catch { /* ignore */ }
     })();
 
@@ -102,7 +102,7 @@ export default function AdultInvestModal({
   }, [baseAmount, numAssets]);
 
   const totalCostCents = Math.round(fees.totalCost * 100);
-  const insufficient = walletCents !== null && totalCostCents > walletCents;
+  const insufficient = walletBalance !== null && fees.totalCost > walletBalance;
 
   const handleConfirm = () => {
     const sharePrice = strategy?.price_per_share || strategy?.pricePerShare || null;
@@ -217,7 +217,7 @@ export default function AdultInvestModal({
                     <p className="text-[10px] font-bold text-purple-400 uppercase tracking-wide">My balance</p>
                   </div>
                   <p className="text-base font-bold text-purple-900 tabular-nums">
-                    {walletCents === null ? "…" : `R${fmt(walletCents / 100)}`}
+                    {walletBalance === null ? "…" : `R${fmt(walletBalance)}`}
                   </p>
                 </div>
                 <div className="flex-1 rounded-2xl p-3.5 border border-slate-100 bg-white">
@@ -272,7 +272,6 @@ export default function AdultInvestModal({
                 >
                   <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Fee Breakdown</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-400">R{fmt(fees.totalCost - baseAmount)}</span>
                     {feeExpanded ? <ChevronUp className="h-3.5 w-3.5 text-slate-400" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-400" />}
                   </div>
                 </button>
