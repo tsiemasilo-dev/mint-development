@@ -132,7 +132,7 @@ export default function AdultInvestModal({
           <motion.div
             key="adult-invest-sheet"
             className="fixed inset-x-0 bottom-0 mx-auto flex w-full max-w-md flex-col rounded-t-[28px] bg-white shadow-2xl overflow-hidden"
-            style={{ zIndex: 9999, paddingBottom: "env(safe-area-inset-bottom)" }}
+            style={{ zIndex: 9999, maxHeight: "92dvh", paddingBottom: "env(safe-area-inset-bottom)" }}
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
@@ -162,7 +162,7 @@ export default function AdultInvestModal({
             </div>
 
             {/* Body */}
-            <div className="px-5 pb-5">
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pb-5" style={{ WebkitOverflowScrolling: "touch" }}>
 
               {/* Strategy Card */}
               <div className="mb-4 rounded-2xl border border-slate-100 bg-slate-50 p-4">
