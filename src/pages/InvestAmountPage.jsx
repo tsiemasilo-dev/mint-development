@@ -352,8 +352,8 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWi
 
         {/* Strategy Mandate PDF Modal — always mounted so PDF pre-loads in background */}
         <div
-          className="fixed inset-0 z-50 flex flex-col bg-white"
-          style={{ display: showMandateModal ? "flex" : "none" }}
+          className="fixed inset-0 flex flex-col bg-white"
+          style={{ zIndex: 100, display: showMandateModal ? "flex" : "none" }}
         >
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
             <h2 className="text-sm font-semibold text-slate-900">
