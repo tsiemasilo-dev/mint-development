@@ -362,7 +362,7 @@ registerCacheResetCallback(() => {
   _mkHoldingsSecurities = null;
 });
 
-const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNewsArticle, onOpenFactsheet, initialViewMode, onViewModeChange, childFilter }) => {
+const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNewsArticle, onOpenFactsheet, onInvestNow, initialViewMode, onViewModeChange, childFilter }) => {
   const { profile, loading: profileLoading } = useProfile();
   const [portalTarget, setPortalTarget] = useState(null);
   const { lastUpdated: pricesLastUpdated } = useRealtimePrices();
@@ -2126,41 +2126,59 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       </div>
 
       {/* Strategy Preview Modal — hidden in child mode (child uses its own modal below) */}
-      {selectedStrategy && portalTarget && !childFilter && createPortal(
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 overscroll-contain"
-          style={{ paddingBottom: "calc(var(--navbar-height, 64px) + 8px)" }}
-        >
-          <button
-            type="button"
-            className="absolute inset-0 h-full w-full cursor-default"
-            aria-label="Close preview"
-            onClick={() => setSelectedStrategy(null)}
-          />
-          <div className="relative z-10 flex w-full max-w-sm flex-col overflow-hidden rounded-[32px] bg-white shadow-2xl" style={{ maxHeight: "calc(90vh - var(--navbar-height, 64px) - 16px)" }}>
-            <button
-              type="button"
-              onClick={() => setSelectedStrategy(null)}
-              className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 z-10"
-              aria-label="Close"
-            >
-              <X className="h-4 w-4" />
-            </button>
-            
-            <div
-              className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6"
-              style={{ WebkitOverflowScrolling: "touch" }}
-            >
-              <div className="flex items-start gap-3 mb-6">
-                <div className="flex-1">
-                  <h2 className="text-lg font-semibold text-slate-900">{selectedStrategy.name}</h2>
-                  <p className="text-sm text-slate-500">
-                    {calculateMinInvestmentSync(selectedStrategy, holdingsBySymbol) ? `Min. ${formatCurrency(calculateMinInvestmentSync(selectedStrategy, holdingsBySymbol), "R")}` : "Calculating..."}
-                  </p>
+      {portalTarget && !childFilter && createPortal(
+        <AnimatePresence>
+          {selectedStrategy && (
+            <>
+              {/* Backdrop */}
+              <motion.div
+                key="preview-backdrop"
+                className="fixed inset-0"
+                style={{ zIndex: 9998, background: "rgba(15,10,30,0.65)" }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                onClick={() => setSelectedStrategy(null)}
+              />
+              {/* Sheet */}
+              <motion.div
+                key="preview-sheet"
+                className="fixed inset-x-0 bottom-0 mx-auto flex w-full max-w-md flex-col overflow-hidden rounded-t-[28px] bg-white shadow-2xl"
+                style={{ zIndex: 9999, maxHeight: "92dvh" }}
+                initial={{ y: "100%" }}
+                animate={{ y: 0 }}
+                exit={{ y: "100%" }}
+                transition={{ type: "spring", damping: 28, stiffness: 320 }}
+              >
+                {/* Gradient accent strip */}
+                <div className="h-1 w-full flex-shrink-0" style={{ background: "linear-gradient(90deg,#7c3aed,#6366f1,#8b5cf6)" }} />
+                {/* Drag handle */}
+                <div className="flex justify-center pt-2.5 pb-1 flex-shrink-0">
+                  <div className="h-[3px] w-9 rounded-full bg-slate-200" />
                 </div>
-              </div>
+                {/* Header */}
+                <div className="flex items-center justify-between px-5 py-3 flex-shrink-0">
+                  <div>
+                    <h2 className="text-[15px] font-bold text-slate-900">{selectedStrategy.name}</h2>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {calculateMinInvestmentSync(selectedStrategy, holdingsBySymbol) ? `Min. ${formatCurrency(calculateMinInvestmentSync(selectedStrategy, holdingsBySymbol), "R")}` : "Calculating..."}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedStrategy(null)}
+                    className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 transition"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
 
-              <div className="flex items-center gap-3 mb-6">
+                <div
+                  className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pb-6"
+                  style={{ WebkitOverflowScrolling: "touch" }}
+                >
+                  <div className="flex items-center gap-3 mb-6">
                 {(() => {
                   const minInvest = calculateMinInvestmentSync(selectedStrategy, holdingsBySymbol);
                   return minInvest ? (
@@ -2323,24 +2341,44 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
               </div>
               )}
 
-              <button
-                onClick={() => {
-                  setSelectedStrategy(null);
-                  const hArr = getHoldingsArray(selectedStrategy);
-                  const enrichedHoldings = hArr.map(h => {
-                    const sym = h.ticker || h.symbol || h;
-                    const sec = holdingsBySymbol.get(sym) || holdingsBySymbol.get(normalizeSymbol(sym));
-                    return { ...h, logo_url: sec?.logo_url || null, shares: getAdjustedShares(h, holdingsBySymbol) };
-                  });
-                  onOpenFactsheet({ ...selectedStrategy, calculatedMinInvestment: calculateMinInvestmentSync(selectedStrategy, holdingsBySymbol), holdingsWithLogos: enrichedHoldings });
-                }}
-                className="mt-6 w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-4 font-semibold text-white shadow-lg transition-all active:scale-95"
-              >
-                View Factsheet
-              </button>
-            </div>
-          </div>
-        </div>
+              <div className="mt-6 flex flex-col gap-2">
+                <button
+                  onClick={() => {
+                    const hArr = getHoldingsArray(selectedStrategy);
+                    const enrichedHoldings = hArr.map(h => {
+                      const sym = h.ticker || h.symbol || h;
+                      const sec = holdingsBySymbol.get(sym) || holdingsBySymbol.get(normalizeSymbol(sym));
+                      return { ...h, logo_url: sec?.logo_url || null, shares: getAdjustedShares(h, holdingsBySymbol) };
+                    });
+                    const enrichedStrategy = { ...selectedStrategy, calculatedMinInvestment: calculateMinInvestmentSync(selectedStrategy, holdingsBySymbol), holdingsWithLogos: enrichedHoldings };
+                    setSelectedStrategy(null);
+                    setTimeout(() => onInvestNow?.(enrichedStrategy), 220);
+                  }}
+                  className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-4 font-semibold text-white shadow-lg transition-all active:scale-95"
+                >
+                  Invest Now
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedStrategy(null);
+                    const hArr = getHoldingsArray(selectedStrategy);
+                    const enrichedHoldings = hArr.map(h => {
+                      const sym = h.ticker || h.symbol || h;
+                      const sec = holdingsBySymbol.get(sym) || holdingsBySymbol.get(normalizeSymbol(sym));
+                      return { ...h, logo_url: sec?.logo_url || null, shares: getAdjustedShares(h, holdingsBySymbol) };
+                    });
+                    onOpenFactsheet({ ...selectedStrategy, calculatedMinInvestment: calculateMinInvestmentSync(selectedStrategy, holdingsBySymbol), holdingsWithLogos: enrichedHoldings });
+                  }}
+                  className="w-full rounded-2xl border border-slate-200 bg-white py-4 font-semibold text-slate-700 transition-all active:scale-95"
+                >
+                  View Factsheet
+                </button>
+              </div>
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
       , portalTarget)}
 
       {childFilter && selectedStrategy && showChildInvestModal && (

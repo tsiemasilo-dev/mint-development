@@ -253,12 +253,8 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWi
           {feeExpanded && (
             <div className="px-4 pb-4 space-y-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1 group relative">
-                  <p className="text-xs text-slate-600">Investment Amount</p>
-                  <span className="text-xs text-slate-400">*</span>
-                  <div className="absolute bottom-full left-0 mb-2 px-2 py-1 bg-white text-violet-600 text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition pointer-events-none z-10 shadow-md border border-violet-100">
-                    Includes 8% cash reserve
-                  </div>
+                <div className="flex items-center gap-1">
+                  <p className="text-xs text-slate-600">Investment + 8% reserve</p>
                 </div>
                 <p className="text-xs font-semibold text-slate-900">
                   {formatCurrency(fees.bufferedBase, currency)}
@@ -352,8 +348,8 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWi
 
         {/* Strategy Mandate PDF Modal — always mounted so PDF pre-loads in background */}
         <div
-          className="fixed inset-0 z-50 flex flex-col bg-white"
-          style={{ display: showMandateModal ? "flex" : "none" }}
+          className="fixed inset-0 flex flex-col bg-white"
+          style={{ zIndex: 100, display: showMandateModal ? "flex" : "none" }}
         >
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
             <h2 className="text-sm font-semibold text-slate-900">
