@@ -321,25 +321,67 @@ export default function AdultInvestModal({
                 </div>
               )}
 
-              {/* Compact agreement */}
-              <label className="flex items-center gap-2.5 mb-4 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={agreementChecked}
-                  onChange={e => setAgreementChecked(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500 flex-shrink-0"
-                />
-                <p className="text-xs text-slate-500">
-                  I agree to the Risk Disclosure, Fee Schedule &{" "}
-                  <button
-                    type="button"
-                    onClick={e => { e.preventDefault(); setShowMandateModal(true); }}
-                    className="underline text-violet-600 font-medium"
-                  >
-                    Strategy Mandate
-                  </button>
+              {/* Agreement */}
+              <div className="mb-4 rounded-2xl border border-slate-100 bg-white p-4">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={agreementChecked}
+                    onChange={e => setAgreementChecked(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500 flex-shrink-0"
+                  />
+                  <div>
+                    <p className="text-xs font-semibold text-slate-800">
+                      I agree to Risk Disclosure, Fee Schedule &{" "}
+                      <button
+                        type="button"
+                        onClick={e => { e.preventDefault(); setShowMandateModal(true); }}
+                        className="underline text-violet-600"
+                      >
+                        Strategy Mandate
+                      </button>
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      By continuing, you confirm you have reviewed and agree to all terms and conditions
+                    </p>
+                  </div>
+                </label>
+              </div>
+
+              {/* Payment info notice */}
+              <div className="mb-4 rounded-2xl px-4 py-3 flex items-start gap-3" style={{ background: "linear-gradient(135deg,#f5f3ff,#ede9fe)" }}>
+                <svg className="h-4 w-4 text-violet-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 16v-4M12 8h.01" strokeLinecap="round" />
+                </svg>
+                <p className="text-xs text-violet-700 leading-relaxed">
+                  You'll be guided through our secure payment process with multiple payment options available.
                 </p>
-              </label>
+              </div>
+
+              {/* Send as a gift */}
+              <div className="mb-5 rounded-2xl border border-slate-100 bg-white p-4 flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl flex-shrink-0" style={{ background: "linear-gradient(135deg,#f5f3ff,#ede9fe)" }}>
+                  <svg className="h-5 w-5 text-violet-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v-2a2 2 0 10-4 0c0 1.1.9 2 2 2h2zm0 0h2a2 2 0 100-4c-1.1 0-2 .9-2 2v2zm0 0v10m-6-6h12" />
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-slate-800">Send as a gift</p>
+                    <span className="rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{ background: "linear-gradient(90deg,#7c3aed,#6366f1)" }}>SOON</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Recipient claims with their SA ID + code</p>
+                </div>
+                <button
+                  type="button"
+                  disabled
+                  className="relative inline-flex h-6 w-11 items-center rounded-full bg-slate-200 transition-colors cursor-not-allowed flex-shrink-0"
+                  aria-label="Send as a gift (coming soon)"
+                >
+                  <span className="inline-block h-4 w-4 transform rounded-full bg-white shadow translate-x-1 transition-transform" />
+                </button>
+              </div>
 
               {/* CTA */}
               <button
@@ -349,7 +391,7 @@ export default function AdultInvestModal({
                 className="w-full rounded-2xl py-4 text-sm font-bold text-white shadow-lg active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ background: "linear-gradient(135deg,#4f46e5,#7c3aed)" }}
               >
-                Confirm Investment
+                Continue
               </button>
             </div>
           </motion.div>
