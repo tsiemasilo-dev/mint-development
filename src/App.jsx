@@ -11,6 +11,7 @@ import { useProfile } from "./lib/useProfile";
 import { NotificationsProvider, createWelcomeNotification, useNotificationsContext } from "./lib/NotificationsContext.jsx";
 import HomePage from "./pages/HomePage.jsx";
 import ChildInvestModal from "./components/ChildInvestModal.jsx";
+import AdultInvestModal from "./components/AdultInvestModal.jsx";
 const CreditHome = lazy(() => import("./pages/credit/CreditHome"));
 const NewPortfolioPage = lazy(() => import("./pages/NewPortfolioPage.jsx"));
 const MarketsPage = lazy(() => import("./pages/MarketsPage.jsx"));
@@ -181,6 +182,7 @@ const App = () => {
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [showChildPickerModal, setShowChildPickerModal] = useState(false);
   const [showChildInvestModal, setShowChildInvestModal] = useState(false);
+  const [showAdultInvestModal, setShowAdultInvestModal] = useState(false);
   const [selectedChildForInvest, setSelectedChildForInvest] = useState(null);
   const [marketsChildFilter, setMarketsChildFilter] = useState(null);
   const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
@@ -1319,6 +1321,7 @@ const App = () => {
                   onOpenStockDetail={(security) => { setSelectedChildForInvest(null); setMarketsChildFilter(null); setSelectedSecurity(security); navigateTo("stockDetail"); }}
                   onOpenNewsArticle={(articleId) => { setSelectedArticleId(articleId); navigateTo("newsArticle"); }}
                   onOpenFactsheet={(strategy) => { if (!marketsChildFilter) setSelectedChildForInvest(null); setSelectedStrategy(strategy); navigateTo("factsheet"); }}
+                  onInvestNow={(strategy) => { if (!marketsChildFilter) { setSelectedChildForInvest(null); setSelectedStrategy(strategy); setShowAdultInvestModal(true); } }}
                   childFilter={marketsChildFilter}
                 />
               </AppLayout>
@@ -1384,6 +1387,38 @@ const App = () => {
               </AppLayout>
             )}
           </div>
+          <AdultInvestModal
+            isOpen={showAdultInvestModal && !marketsChildFilter}
+            onClose={() => setShowAdultInvestModal(false)}
+            strategy={selectedStrategy}
+            paymentMethod={pendingPaymentMethod}
+            onContinue={(amount, baseAmount, shareCount, fees) => {
+              setInvestmentAmount(amount);
+              setBaseInvestmentAmount(baseAmount || amount);
+              setInvestmentFees(fees);
+              setPendingGoalFlow({
+                type: "strategy",
+                amount,
+                baseAmount: baseAmount || amount,
+                assetName: selectedStrategy?.name || "Strategy",
+                strategyId: selectedStrategy?.id || selectedStrategy?.strategyId || null,
+                fees,
+              });
+              setShowAdultInvestModal(false);
+              if (selectedStrategy?.is_kid_strategy) {
+                if (selectedChildForInvest?.id) {
+                  setShowGoalModal(true);
+                } else {
+                  setShowChildPickerModal(true);
+                }
+              } else {
+                setSelectedChildForInvest(null);
+                setShowGoalModal(true);
+              }
+              navigateTo("investAmount");
+            }}
+            onGiftDone={() => { setShowAdultInvestModal(false); navigateTo("home"); }}
+          />
         </>
       </Suspense>
     );
@@ -1843,7 +1878,7 @@ const App = () => {
               if (marketsChildFilter) {
                 setShowChildInvestModal(true);
               } else {
-                navigateTo("investAmount");
+                setShowAdultInvestModal(true);
               }
             }}
             onNavigateToOnboarding={() => navigateTo("identityCheck")}
@@ -1857,6 +1892,38 @@ const App = () => {
             onClose={() => setShowChildInvestModal(false)}
           />
         )}
+        <AdultInvestModal
+          isOpen={showAdultInvestModal && !marketsChildFilter}
+          onClose={() => setShowAdultInvestModal(false)}
+          strategy={selectedStrategy}
+          paymentMethod={pendingPaymentMethod}
+          onContinue={(amount, baseAmount, shareCount, fees) => {
+            setInvestmentAmount(amount);
+            setBaseInvestmentAmount(baseAmount || amount);
+            setInvestmentFees(fees);
+            setPendingGoalFlow({
+              type: "strategy",
+              amount,
+              baseAmount: baseAmount || amount,
+              assetName: selectedStrategy?.name || "Strategy",
+              strategyId: selectedStrategy?.id || selectedStrategy?.strategyId || null,
+              fees,
+            });
+            setShowAdultInvestModal(false);
+            if (selectedStrategy?.is_kid_strategy) {
+              if (selectedChildForInvest?.id) {
+                setShowGoalModal(true);
+              } else {
+                setShowChildPickerModal(true);
+              }
+            } else {
+              setSelectedChildForInvest(null);
+              setShowGoalModal(true);
+            }
+            navigateTo("investAmount");
+          }}
+          onGiftDone={() => { setShowAdultInvestModal(false); navigateTo("home"); }}
+        />
       </>
     );
   }
