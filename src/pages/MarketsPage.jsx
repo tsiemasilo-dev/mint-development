@@ -2323,7 +2323,23 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
               </div>
               )}
 
-              <div className="mt-6 flex gap-3">
+              <div className="mt-6 flex flex-col gap-2">
+                <button
+                  onClick={() => {
+                    const hArr = getHoldingsArray(selectedStrategy);
+                    const enrichedHoldings = hArr.map(h => {
+                      const sym = h.ticker || h.symbol || h;
+                      const sec = holdingsBySymbol.get(sym) || holdingsBySymbol.get(normalizeSymbol(sym));
+                      return { ...h, logo_url: sec?.logo_url || null, shares: getAdjustedShares(h, holdingsBySymbol) };
+                    });
+                    const enrichedStrategy = { ...selectedStrategy, calculatedMinInvestment: calculateMinInvestmentSync(selectedStrategy, holdingsBySymbol), holdingsWithLogos: enrichedHoldings };
+                    setSelectedStrategy(null);
+                    setTimeout(() => onInvestNow?.(enrichedStrategy), 220);
+                  }}
+                  className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-4 font-semibold text-white shadow-lg transition-all active:scale-95"
+                >
+                  Invest Now
+                </button>
                 <button
                   onClick={() => {
                     setSelectedStrategy(null);
@@ -2335,25 +2351,9 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                     });
                     onOpenFactsheet({ ...selectedStrategy, calculatedMinInvestment: calculateMinInvestmentSync(selectedStrategy, holdingsBySymbol), holdingsWithLogos: enrichedHoldings });
                   }}
-                  className="flex-1 rounded-2xl border border-slate-200 bg-white py-4 font-semibold text-slate-700 transition-all active:scale-95"
+                  className="w-full rounded-2xl border border-slate-200 bg-white py-4 font-semibold text-slate-700 transition-all active:scale-95"
                 >
                   View Factsheet
-                </button>
-                <button
-                  onClick={() => {
-                    const hArr = getHoldingsArray(selectedStrategy);
-                    const enrichedHoldings = hArr.map(h => {
-                      const sym = h.ticker || h.symbol || h;
-                      const sec = holdingsBySymbol.get(sym) || holdingsBySymbol.get(normalizeSymbol(sym));
-                      return { ...h, logo_url: sec?.logo_url || null, shares: getAdjustedShares(h, holdingsBySymbol) };
-                    });
-                    const enrichedStrategy = { ...selectedStrategy, calculatedMinInvestment: calculateMinInvestmentSync(selectedStrategy, holdingsBySymbol), holdingsWithLogos: enrichedHoldings };
-                    setSelectedStrategy(null);
-                    onInvestNow?.(enrichedStrategy);
-                  }}
-                  className="flex-1 rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-4 font-semibold text-white shadow-lg transition-all active:scale-95"
-                >
-                  Invest Now
                 </button>
               </div>
             </div>
