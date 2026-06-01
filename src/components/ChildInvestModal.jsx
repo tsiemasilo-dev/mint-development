@@ -509,7 +509,6 @@ export default function ChildInvestModal({
                 >
                   <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Fee Breakdown</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-400">R{fmt(fees.totalCost - baseAmount)}</span>
                     {feeExpanded ? <ChevronUp className="h-3.5 w-3.5 text-slate-400" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-400" />}
                   </div>
                 </button>
