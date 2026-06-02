@@ -9842,16 +9842,19 @@ async function getStitchAccessToken() {
   const clientId = process.env.STITCH_CLIENT_ID;
   const clientSecret = process.env.STITCH_CLIENT_SECRET;
   if (!clientId || !clientSecret) throw new Error("Stitch credentials not configured");
+
+  const encoded = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
   const params = new URLSearchParams({
     grant_type: "client_credentials",
-    client_id: clientId,
-    client_secret: clientSecret,
-    audience: "https://secure.stitch.money/connect/token",
     scope: "client_paymentrequest",
+    audience: "https://secure.stitch.money/connect/token",
   });
   const resp = await fetch(STITCH_TOKEN_ENDPOINT, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Authorization": `Basic ${encoded}`,
+    },
     body: params.toString(),
   });
   if (!resp.ok) { const t = await resp.text(); throw new Error(`Stitch token ${resp.status}: ${t}`); }
