@@ -461,6 +461,15 @@ export default function ChildInvestModal({
                     R{(childBalance / 100).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                 </div>
+                <div className="flex-1 rounded-2xl p-3.5 border border-slate-100 bg-white">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <BarChart3 className="h-3 w-3 text-indigo-400" />
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Min. per basket</p>
+                  </div>
+                  <p className="text-base font-bold text-slate-900 tabular-nums">
+                    {minimumLoading ? "…" : minimum ? `R${fmt(minimum * (1 + CASH_BUFFER_RATE))}` : "—"}
+                  </p>
+                </div>
               </div>
 
               {/* Amount stepper */}
