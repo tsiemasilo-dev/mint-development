@@ -179,9 +179,6 @@ export default function AdultInvestModal({
                     <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">
                       {strategy?.description?.split(".")[0] || "Investment strategy"}
                     </p>
-                    <p className="text-xs font-semibold text-slate-600 mt-1">
-                      {minimum ? `Min. ${formatCurrency(minimum, currency)}` : "Calculating..."}
-                    </p>
                   </div>
                 </div>
                 {/* Holdings avatars */}
@@ -226,7 +223,7 @@ export default function AdultInvestModal({
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Min. per basket</p>
                   </div>
                   <p className="text-base font-bold text-slate-900 tabular-nums">
-                    {minimumLoading ? "…" : minimum ? `R${fmt(minimum)}` : "—"}
+                    {minimumLoading ? "…" : minimum ? `R${fmt(minimum * (1 + CASH_BUFFER_RATE))}` : "—"}
                   </p>
                 </div>
               </div>
@@ -248,7 +245,7 @@ export default function AdultInvestModal({
                       {minimum && fees.bufferedBase > 0 ? `R${fmt(fees.bufferedBase)}` : "R0.00"}
                     </p>
                     <p className="text-[11px] text-slate-400 mt-1">
-                      {units} basket{units !== 1 ? "s" : ""} × R{minimum ? fmt(minimum) : "0.00"}
+                      {units} basket{units !== 1 ? "s" : ""} × R{minimum ? fmt(minimum * (1 + CASH_BUFFER_RATE)) : "0.00"}
                     </p>
                   </div>
                   <button

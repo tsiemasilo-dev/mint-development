@@ -467,7 +467,7 @@ export default function ChildInvestModal({
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Min. per basket</p>
                   </div>
                   <p className="text-base font-bold text-slate-900 tabular-nums">
-                    {minimumLoading ? "…" : minimum ? `R${fmt(minimum)}` : "—"}
+                    {minimumLoading ? "…" : minimum ? `R${fmt(minimum * (1 + CASH_BUFFER_RATE))}` : "—"}
                   </p>
                 </div>
               </div>
@@ -487,7 +487,7 @@ export default function ChildInvestModal({
                     <p className="text-4xl font-black text-slate-900 tabular-nums tracking-tight">
                       {minimum && fees.bufferedBase > 0 ? `R${fmt(fees.bufferedBase)}` : "R0.00"}
                     </p>
-                    <p className="text-[11px] text-slate-400 mt-1">{units} basket{units !== 1 ? "s" : ""} × R{minimum ? fmt(minimum) : "0.00"}</p>
+                    <p className="text-[11px] text-slate-400 mt-1">{units} basket{units !== 1 ? "s" : ""} × R{minimum ? fmt(minimum * (1 + CASH_BUFFER_RATE)) : "0.00"}</p>
                   </div>
                   <button
                     onClick={() => setUnits(u => u + 1)}
