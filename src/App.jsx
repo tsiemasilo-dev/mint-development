@@ -1587,7 +1587,6 @@ const App = () => {
           onClose={() => setShowPaymentMethodModal(false)}
           amount={stockCheckout.amount}
           strategyName={stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock"}
-          onSelectPaystack={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("paystack"); navigateTo("stockPayment"); }}
           onSelectWallet={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("wallet"); navigateTo("stockPayment"); }}
           onSelectOzow={async () => {
             try {
@@ -1700,7 +1699,6 @@ const App = () => {
           onClose={() => setShowPaymentMethodModal(false)}
           amount={stockCheckout.amount}
           strategyName={stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock"}
-          onSelectPaystack={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("paystack"); navigateTo("stockPayment"); }}
           onSelectWallet={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("wallet"); navigateTo("stockPayment"); }}
           onSelectOzow={async () => {
             try {
@@ -2016,7 +2014,6 @@ const App = () => {
           childFamilyMemberId={isChildStrategyPurchase ? selectedChildForInvest?.id : null}
           childFirstName={isChildStrategyPurchase ? selectedChildForInvest?.first_name : null}
           childWalletBalanceCents={isChildStrategyPurchase ? (selectedChildForInvest?.available_balance ?? null) : null}
-          onSelectPaystack={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("paystack"); navigateTo("payment"); }}
           onSelectWallet={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("wallet"); navigateTo("payment"); }}
           onSelectOzow={async () => {
             try {

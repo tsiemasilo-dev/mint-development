@@ -11,7 +11,6 @@ const PaymentMethodModal = ({
   onClose,
   amount,
   strategyName,
-  onSelectPaystack,
   onSelectOzow,
   onEFTConfirm,
   onSelectWallet,

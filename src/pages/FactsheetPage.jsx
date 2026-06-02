@@ -1085,7 +1085,6 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
             <li>• Performance fee: 20% of profits</li>
             <li>• Brokerage fee: 0.25% of investment amount</li>
             <li>• Custody fee (ISIN): R69.00 per asset</li>
-            <li>• Transaction fee (Paystack): 3.5% of total</li>
             <li>• Past performance does not guarantee future results</li>
             <li>• All data is for informational purposes only</li>
           </ul>
