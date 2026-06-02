@@ -2660,6 +2660,8 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
               userId={profile?.id}
               initials={[profile?.firstName, profile?.lastName].filter(Boolean).map(n => n[0].toUpperCase()).join("") || "P"}
               avatarUrl={profile?.avatarUrl}
+              activeChildId={child?.id}
+              onGoToParent={onBack}
             />
 
             {/* Child name — centered */}
@@ -2736,9 +2738,8 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
 
           {/* Quick Actions — always visible */}
           {activeChildTab !== "portfolio" && <motion.div variants={item}>
-            <div className="grid grid-cols-4 gap-2 text-[11px] font-medium">
+            <div className="grid grid-cols-3 gap-2 text-[11px] font-medium">
               {[
-                { label: "Learn", icon: BookOpen, onClick: null, comingSoon: true },
                 { label: "Invest", icon: LayoutGrid, onClick: openInvestModal },
                 { label: "Deposit", icon: ArrowDownToLine, onClick: openTransferModal, disabled: openingTransfer },
                 { label: "Goals", icon: Target, onClick: () => setShowGoalsModal(true) },
