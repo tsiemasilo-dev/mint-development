@@ -245,7 +245,7 @@ export default function AdultInvestModal({
                       {minimum && fees.bufferedBase > 0 ? `R${fmt(fees.bufferedBase)}` : "R0.00"}
                     </p>
                     <p className="text-[11px] text-slate-400 mt-1">
-                      {units} basket{units !== 1 ? "s" : ""} × R{minimum ? fmt(minimum) : "0.00"}
+                      {units} basket{units !== 1 ? "s" : ""} × R{minimum ? fmt(minimum * (1 + CASH_BUFFER_RATE)) : "0.00"}
                     </p>
                   </div>
                   <button
