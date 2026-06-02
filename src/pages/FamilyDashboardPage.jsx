@@ -1243,7 +1243,7 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
       // Total wallet (converted to cents)
       const totalWalletRands = wallets.reduce((s, w) => s + (w.balance || 0), 0);
 
-      setPortfolioValue(totalHoldingsValue + (totalWalletRands * 100) + totalChildWalletCents);
+      setPortfolioValue(totalHoldingsValue);
       setPortfolioChange(totalHoldingsChange);
 
       // Map individual member balances
@@ -1267,7 +1267,7 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
             ...childHoldings.filter(h => h.family_member_id === m.id),
             ...(m.linked_user_id ? holdings.filter(h => h.user_id === m.linked_user_id) : []),
           ];
-          balances[m.id] = cHoldings.reduce((s, h) => s + marketValueCents(h), 0) + (childBalanceCentsMap[m.id] || 0);
+          balances[m.id] = cHoldings.reduce((s, h) => s + marketValueCents(h), 0);
         }
       });
       setMemberBalances(balances);
@@ -1444,7 +1444,7 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
                   <div className="flex items-center gap-4 px-5 py-4">
                     <Avatar name={[spouse.first_name, spouse.last_name].filter(Boolean).join(" ")} gradient="linear-gradient(135deg,#a855f7,#7c3aed)" size="h-12 w-12" text="text-lg" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-[15px] font-bold text-slate-900 leading-tight truncate">{[spouse.first_name, spouse.last_name].filter(Boolean).join(" ")}</p>
+                      <p className="text-[15px] font-bold text-slate-900 leading-tight line-clamp-2 break-words">{[spouse.first_name, spouse.last_name].filter(Boolean).join(" ")}</p>
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
                         <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold tracking-widest uppercase" style={{ background: P_CARD, color: P }}>
                           <Heart className="h-2.5 w-2.5" />Spouse
@@ -1532,7 +1532,7 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
                         >
                           <Avatar name={childName} gradient={childAvatarGradients[i % childAvatarGradients.length]} size="h-12 w-12" text="text-lg" />
                           <div className="flex-1 min-w-0">
-                            <p className="text-[15px] font-bold text-slate-900 leading-tight truncate">{childName}</p>
+                            <p className="text-[15px] font-bold text-slate-900 leading-tight line-clamp-2 break-words">{childName}</p>
                             <div className="flex items-center gap-2 mt-1 flex-wrap">
                               <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold tracking-widest uppercase" style={{ background: P_CARD, color: P }}>
                                 <Baby className="h-3 w-3" />Child
