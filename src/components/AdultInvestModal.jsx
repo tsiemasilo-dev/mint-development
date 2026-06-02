@@ -179,9 +179,6 @@ export default function AdultInvestModal({
                     <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">
                       {strategy?.description?.split(".")[0] || "Investment strategy"}
                     </p>
-                    <p className="text-xs font-semibold text-slate-600 mt-1">
-                      {minimum ? `Min. ${formatCurrency(minimum, currency)}` : "Calculating..."}
-                    </p>
                   </div>
                 </div>
                 {/* Holdings avatars */}
