@@ -2461,11 +2461,6 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 <div className="flex items-start gap-3 mb-5">
                   <div className="flex-1">
                     <h2 className="text-lg font-semibold text-slate-900">{selectedStrategy.name}</h2>
-                    <p className="text-sm text-slate-500">
-                      {childStrategyMinimum
-                        ? `Min. R${childStrategyMinimum.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                        : 'Calculating...'}
-                    </p>
                   </div>
                 </div>
 
