@@ -2050,7 +2050,7 @@ app.post("/api/experian/kyc", async (req, res) => {
 // POST /api/experian/idmn/start — start ID Me Now biometric workflow
 app.post("/api/experian/idmn/start", async (req, res) => {
   try {
-    const IDMN_MOCK = !EXPERIAN_IDMN_USERNAME || !EXPERIAN_IDMN_PASSWORD;
+    const IDMN_MOCK = process.env.EXPERIAN_MOCK_MODE === "true" || !EXPERIAN_IDMN_USERNAME || !EXPERIAN_IDMN_PASSWORD;
     const authHeader = req.headers.authorization;
     const { data: { user }, error: authErr } = await supabase.auth.getUser(authHeader?.replace("Bearer ", "") || "");
     if (authErr || !user) return res.status(401).json({ success: false, error: { message: "Unauthorized" } });
@@ -2155,7 +2155,7 @@ app.post("/api/experian/idmn/start", async (req, res) => {
 // POST /api/experian/idmn/collect — collect biometric results
 app.post("/api/experian/idmn/collect", async (req, res) => {
   try {
-    const IDMN_MOCK = !EXPERIAN_IDMN_USERNAME || !EXPERIAN_IDMN_PASSWORD;
+    const IDMN_MOCK = process.env.EXPERIAN_MOCK_MODE === "true" || !EXPERIAN_IDMN_USERNAME || !EXPERIAN_IDMN_PASSWORD;
     const authHeader = req.headers.authorization;
     const { data: { user }, error: authErr } = await supabase.auth.getUser(authHeader?.replace("Bearer ", "") || "");
     if (authErr || !user) return res.status(401).json({ success: false, error: { message: "Unauthorized" } });
