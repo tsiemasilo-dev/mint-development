@@ -11,6 +11,7 @@ import {
   BookOpen, LayoutGrid, ArrowDownToLine, Target, FileSignature, Plus,
 } from "lucide-react";
 import NotificationBell from "../components/NotificationBell";
+import FamilyDropdown from "../components/FamilyDropdown";
 import Navbar from "../components/Navbar";
 import ChildPortfolioTab from "../components/ChildPortfolioTab";
 import SwipeableBalanceCard from "../components/SwipeableBalanceCard";
@@ -2293,9 +2294,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
       return;
     }
     setKycNotice("");
-    window.dispatchEvent(new CustomEvent("navigate-within-app", {
-      detail: { page: "marketsChildInvest", child: latestChild }
-    }));
+    setActiveChildTab("markets");
   }
 
   async function fetchTransactions() {
@@ -2653,22 +2652,15 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
       <div className="px-4 pt-12 pb-6">
         <div className="mx-auto w-full max-w-sm md:max-w-md">
           <header className="relative flex items-center justify-between text-white mb-4">
-            {/* Parent profile pill — tapping goes back */}
-            <button
-              onClick={onBack}
-              className="flex items-center gap-1.5 rounded-full py-1 pl-1 pr-2.5 focus:outline-none transition-all duration-200 active:scale-95"
-              style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.18)" }}
-              aria-label="Back"
-            >
-              {profile?.avatarUrl ? (
-                <img src={profile.avatarUrl} alt="profile" className="h-8 w-8 rounded-full border border-white/30 object-cover" />
-              ) : (
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20 text-xs font-semibold text-white">
-                  {[profile?.firstName, profile?.lastName].filter(Boolean).map(n => n[0].toUpperCase()).join("") || "P"}
-                </div>
-              )}
-              <ChevronDown className="h-3.5 w-3.5 text-white/70" />
-            </button>
+            {/* Parent profile pill — shows family dropdown */}
+            <FamilyDropdown
+              profile={profile}
+              userId={profile?.id}
+              initials={[profile?.firstName, profile?.lastName].filter(Boolean).map(n => n[0].toUpperCase()).join("") || "P"}
+              avatarUrl={profile?.avatarUrl}
+              activeChildId={child?.id}
+              onGoToParent={onBack}
+            />
 
             {/* Child name — centered */}
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
@@ -2744,9 +2736,8 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
 
           {/* Quick Actions — always visible */}
           {activeChildTab !== "portfolio" && <motion.div variants={item}>
-            <div className="grid grid-cols-4 gap-2 text-[11px] font-medium">
+            <div className="grid grid-cols-3 gap-2 text-[11px] font-medium">
               {[
-                { label: "Learn", icon: BookOpen, onClick: null, comingSoon: true },
                 { label: "Invest", icon: LayoutGrid, onClick: openInvestModal },
                 { label: "Deposit", icon: ArrowDownToLine, onClick: openTransferModal, disabled: openingTransfer },
                 { label: "Goals", icon: Target, onClick: () => setShowGoalsModal(true) },
@@ -3248,6 +3239,32 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
           />
         )}
       </div>
+
+      {/* -- Markets/Invest tab — conditionally rendered to reset state on close -- */}
+      {activeChildTab === "markets" && (
+        <div className="fixed inset-0 z-10 overflow-y-auto" style={{ background: "var(--bg, #0f0a1e)" }}>
+          <Suspense fallback={<div style={{ background: "var(--bg, #0f0a1e)", height: "100%" }} />}>
+            <MarketsPage
+              childFilter={child}
+              onBack={() => setActiveChildTab("home")}
+              onOpenNotifications={() => {}}
+              onOpenStockDetail={() => {}}
+              onOpenNewsArticle={(id) => setChildNewsArticleId(id)}
+              onOpenFactsheet={onOpenFactsheet}
+              onViewModeChange={() => {}}
+            />
+          </Suspense>
+          <Navbar
+            activeTab="home"
+            comingSoonTabs={["investments"]}
+            setActiveTab={(tab) => {
+              if (tab === "news") setActiveChildTab("news");
+              else if (tab === "more") setActiveChildTab("more");
+              else setActiveChildTab("home");
+            }}
+          />
+        </div>
+      )}
 
       {/* -- News tab — pre-mounted, shown/hidden via display to avoid flicker -- */}
       <div
