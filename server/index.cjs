@@ -3357,7 +3357,7 @@ app.post("/api/record-investment", async (req, res) => {
     }
 
     let payData = { amount: Math.round(amount * 100) };
-    const skipVerification = paymentMethod === "wallet" || paymentMethod === "direct_eft" || paymentMethod === "ozow";
+    const skipVerification = paymentMethod === "wallet" || paymentMethod === "direct_eft" || paymentMethod === "ozow" || paymentMethod === "stitch";
 
     if (!skipVerification) {
       console.log("[record-investment] Verifying Paystack payment:", paymentReference);
@@ -9828,6 +9828,123 @@ setInterval(refreshIntradayPrices, INTRADAY_INTERVAL_MS);
 // Repair child strategy returns: once at startup (60 s delay) then every 24 h
 setTimeout(repairChildStrategyReturns, 60 * 1000);
 setInterval(repairChildStrategyReturns, 24 * 60 * 60 * 1000);
+
+// ─────────────────────────── STITCH PAYMENT ROUTES ───────────────────────────
+
+const STITCH_TOKEN_ENDPOINT = "https://secure.stitch.money/connect/token";
+const STITCH_GRAPHQL_ENDPOINT = "https://api.stitch.money/graphql";
+let _stitchToken = null;
+let _stitchTokenExpiry = 0;
+
+async function getStitchAccessToken() {
+  const now = Date.now();
+  if (_stitchToken && now < _stitchTokenExpiry) return _stitchToken;
+  const clientId = process.env.STITCH_CLIENT_ID;
+  const clientSecret = process.env.STITCH_CLIENT_SECRET;
+  if (!clientId || !clientSecret) throw new Error("Stitch credentials not configured");
+  const params = new URLSearchParams({
+    grant_type: "client_credentials",
+    client_id: clientId,
+    client_secret: clientSecret,
+    audience: "https://secure.stitch.money/connect/token",
+    scope: "client_paymentrequest",
+  });
+  const resp = await fetch(STITCH_TOKEN_ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: params.toString(),
+  });
+  if (!resp.ok) { const t = await resp.text(); throw new Error(`Stitch token ${resp.status}: ${t}`); }
+  const data = await resp.json();
+  _stitchToken = data.access_token;
+  _stitchTokenExpiry = now + (data.expires_in - 60) * 1000;
+  return _stitchToken;
+}
+
+app.post("/api/stitch/initiate", async (req, res) => {
+  try {
+    const { amount, strategyName, userId, successUrl, cancelUrl, failureUrl } = req.body;
+    if (!amount || Number(amount) <= 0) return res.status(400).json({ success: false, error: "Invalid amount" });
+
+    const baseUrl = process.env.APP_URL || req.headers.origin || "https://mymint.co.za";
+    const externalRef = `MINT-${userId ? String(userId).substring(0, 8) : "USR"}-${Date.now()}`;
+
+    const token = await getStitchAccessToken();
+
+    const mutation = `mutation CreatePaymentRequest($amount:MoneyInput!,$payerRef:String!,$benefRef:String!,$extRef:String!,$successUrl:URL!,$failureUrl:URL!,$cancelUrl:URL!){clientPaymentInitiationRequestCreate(input:{amount:$amount payerReference:$payerRef beneficiaryReference:$benefRef externalReference:$extRef successUrl:$successUrl failureUrl:$failureUrl cancelUrl:$cancelUrl}){paymentInitiationRequest{id url}}}`;
+
+    const gqlResp = await fetch(STITCH_GRAPHQL_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        query: mutation,
+        variables: {
+          amount: { quantity: Number(amount).toFixed(2), currency: "ZAR" },
+          payerRef: "Mint Wallet Top-up",
+          benefRef: (strategyName || "Mint Investment").substring(0, 25),
+          extRef: externalRef,
+          successUrl: successUrl || `${baseUrl}/?stitch=success&ref=${externalRef}`,
+          failureUrl: failureUrl || `${baseUrl}/?stitch=failed&ref=${externalRef}`,
+          cancelUrl: cancelUrl || `${baseUrl}/?stitch=cancel&ref=${externalRef}`,
+        },
+      }),
+    });
+
+    const gqlData = await gqlResp.json();
+    if (gqlData.errors?.length) {
+      console.error("[stitch/initiate] GQL errors:", JSON.stringify(gqlData.errors));
+      return res.status(400).json({ success: false, error: gqlData.errors[0]?.message || "Stitch error" });
+    }
+
+    const payReq = gqlData?.data?.clientPaymentInitiationRequestCreate?.paymentInitiationRequest;
+    if (!payReq?.url) return res.status(500).json({ success: false, error: "No payment URL from Stitch" });
+
+    console.log(`[stitch/initiate] created paymentId=${payReq.id} ref=${externalRef} amount=${amount}`);
+    return res.json({ success: true, payUrl: payReq.url, paymentId: payReq.id, externalReference: externalRef });
+  } catch (err) {
+    console.error("[stitch/initiate] error:", err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get("/api/stitch/status", async (req, res) => {
+  try {
+    const { paymentId } = req.query;
+    if (!paymentId) return res.status(400).json({ success: false, error: "paymentId required" });
+
+    const token = await getStitchAccessToken();
+    const query = `query S($id:ID!){node(id:$id){...on PaymentInitiationRequest{id externalReference state{__typename ...on PaymentInitiationRequestCompleted{date amount{quantity currency}} ...on PaymentInitiationRequestPending{__typename} ...on PaymentInitiationRequestCancelled{date reason} ...on PaymentInitiationRequestError{date reason}}}}}`;
+
+    const gqlResp = await fetch(STITCH_GRAPHQL_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ query, variables: { id: paymentId } }),
+    });
+
+    const gqlData = await gqlResp.json();
+    if (gqlData.errors?.length) return res.status(400).json({ success: false, error: gqlData.errors[0]?.message });
+
+    const node = gqlData?.data?.node;
+    if (!node) return res.status(404).json({ success: false, error: "Payment not found" });
+
+    const statusMap = {
+      PaymentInitiationRequestCompleted: "completed",
+      PaymentInitiationRequestPending: "pending",
+      PaymentInitiationRequestCancelled: "cancelled",
+      PaymentInitiationRequestError: "failed",
+    };
+
+    return res.json({
+      success: true,
+      status: statusMap[node.state?.__typename] || "unknown",
+      paymentId: node.id,
+      externalReference: node.externalReference,
+    });
+  } catch (err) {
+    console.error("[stitch/status] error:", err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 // Catch-all 404 handler - MUST be after all route definitions
 app.use((req, res) => {
