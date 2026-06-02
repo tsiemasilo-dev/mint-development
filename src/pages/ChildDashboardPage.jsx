@@ -2294,9 +2294,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
       return;
     }
     setKycNotice("");
-    window.dispatchEvent(new CustomEvent("navigate-within-app", {
-      detail: { page: "marketsChildInvest", child: latestChild }
-    }));
+    setActiveChildTab("markets");
   }
 
   async function fetchTransactions() {
@@ -3241,6 +3239,32 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
           />
         )}
       </div>
+
+      {/* -- Markets/Invest tab — conditionally rendered to reset state on close -- */}
+      {activeChildTab === "markets" && (
+        <div className="fixed inset-0 z-10 overflow-y-auto" style={{ background: "var(--bg, #0f0a1e)" }}>
+          <Suspense fallback={<div style={{ background: "var(--bg, #0f0a1e)", height: "100%" }} />}>
+            <MarketsPage
+              childFilter={child}
+              onBack={() => setActiveChildTab("home")}
+              onOpenNotifications={() => {}}
+              onOpenStockDetail={() => {}}
+              onOpenNewsArticle={(id) => setChildNewsArticleId(id)}
+              onOpenFactsheet={onOpenFactsheet}
+              onViewModeChange={() => {}}
+            />
+          </Suspense>
+          <Navbar
+            activeTab="home"
+            comingSoonTabs={["investments"]}
+            setActiveTab={(tab) => {
+              if (tab === "news") setActiveChildTab("news");
+              else if (tab === "more") setActiveChildTab("more");
+              else setActiveChildTab("home");
+            }}
+          />
+        </div>
+      )}
 
       {/* -- News tab — pre-mounted, shown/hidden via display to avoid flicker -- */}
       <div

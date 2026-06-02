@@ -226,7 +226,7 @@ export default function AdultInvestModal({
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Min. per basket</p>
                   </div>
                   <p className="text-base font-bold text-slate-900 tabular-nums">
-                    {minimumLoading ? "…" : minimum ? `R${fmt(minimum)}` : "—"}
+                    {minimumLoading ? "…" : minimum ? `R${fmt(minimum * (1 + CASH_BUFFER_RATE))}` : "—"}
                   </p>
                 </div>
               </div>
