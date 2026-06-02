@@ -230,18 +230,8 @@ const App = () => {
   const ozowReturnParam = useRef(new URLSearchParams(window.location.search).get("ozow"));
   const ozowRecordedRef = useRef(false);
 
-  // Read stitch param synchronously at init — before any effect can clear the URL
-  const stitchReturnParam = useRef(new URLSearchParams(window.location.search).get("stitch"));
-  const stitchRecordedRef = useRef(false);
-
   useEffect(() => {
     if (ozowReturnParam.current) {
-      window.history.replaceState({}, "", window.location.pathname);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (stitchReturnParam.current) {
       window.history.replaceState({}, "", window.location.pathname);
     }
   }, []);
@@ -279,55 +269,6 @@ const App = () => {
         }
       } catch (err) {
         console.error("[ozow] record-success error:", err);
-      }
-    })();
-  }, [currentPage]);
-
-  useEffect(() => {
-    if (currentPage !== "paymentSuccess" || stitchRecordedRef.current) return;
-    const pending = sessionStorage.getItem("stitch_pending");
-    if (!pending) return;
-    let parsed;
-    try { parsed = JSON.parse(pending); } catch { return; }
-    if (!parsed?.paymentId) return;
-    stitchRecordedRef.current = true;
-    sessionStorage.removeItem("stitch_pending");
-    (async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.access_token) return;
-        const statusResp = await fetch(`/api/stitch/status?paymentId=${encodeURIComponent(parsed.paymentId)}`);
-        const statusData = await statusResp.json();
-        if (!statusData.success || statusData.status !== "completed") {
-          console.warn("[stitch] payment not completed:", statusData.status);
-          return;
-        }
-        const recordResp = await fetch("/api/record-investment", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            securityId: parsed.securityId,
-            strategyId: parsed.strategyId,
-            symbol: parsed.symbol || "",
-            name: parsed.name || "",
-            amount: parsed.amount,
-            baseAmount: parsed.baseAmount || parsed.amount,
-            paymentReference: parsed.externalReference,
-            shareCount: parsed.shareCount || null,
-            paymentMethod: "stitch",
-          }),
-        });
-        const result = await recordResp.json();
-        if (result.success) {
-          console.log("[stitch] Investment recorded successfully");
-        } else {
-          console.error("[stitch] record-investment failed:", result.error);
-        }
-      } catch (err) {
-        console.error("[stitch] record error:", err);
       }
     })();
   }, [currentPage]);
@@ -600,7 +541,7 @@ const App = () => {
           const { data: { session } } = await supabase.auth.getSession();
           clearTimeout(safetyTimer);
           if (session) {
-            if (ozowReturnParam.current === "success" || stitchReturnParam.current === "success") {
+            if (ozowReturnParam.current === "success") {
               setCurrentPage("paymentSuccess");
             } else {
               setCurrentPage("home");
@@ -1647,37 +1588,6 @@ const App = () => {
           amount={stockCheckout.amount}
           strategyName={stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock"}
           onSelectWallet={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("wallet"); navigateTo("stockPayment"); }}
-          onSelectStitch={async () => {
-            try {
-              const { data: { user } } = await supabase.auth.getUser();
-              const resp = await fetch("/api/stitch/initiate", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  amount: stockCheckout.amount,
-                  strategyName: stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock",
-                  userId: user?.id || null,
-                }),
-              });
-              const data = await resp.json();
-              if (data.success && data.payUrl) {
-                sessionStorage.setItem("stitch_pending", JSON.stringify({
-                  paymentId: data.paymentId,
-                  externalReference: data.externalReference,
-                  securityId: stockCheckout.security?.id,
-                  strategyId: null,
-                  symbol: stockCheckout.security?.symbol || "",
-                  name: stockCheckout.security?.name || "",
-                  amount: stockCheckout.amount,
-                  baseAmount: stockCheckout.baseAmount || stockCheckout.amount,
-                  shareCount: stockCheckout.shareCount || null,
-                }));
-                window.location.href = data.payUrl;
-              } else {
-                alert(data.error || "Failed to initiate Stitch payment.");
-              }
-            } catch (err) { alert("Could not connect to Stitch. Please try another payment method."); }
-          }}
           onSelectOzow={async () => {
             try {
               const { data: { user } } = await supabase.auth.getUser();
@@ -1790,40 +1700,6 @@ const App = () => {
           amount={stockCheckout.amount}
           strategyName={stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock"}
           onSelectWallet={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("wallet"); navigateTo("stockPayment"); }}
-          onSelectStitch={async () => {
-            try {
-              const { data: { user } } = await supabase.auth.getUser();
-              const resp = await fetch("/api/stitch/initiate", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  amount: stockCheckout.amount,
-                  strategyName: stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock",
-                  userId: user?.id || null,
-                }),
-              });
-              const data = await resp.json();
-              if (data.success && data.payUrl) {
-                sessionStorage.setItem("stitch_pending", JSON.stringify({
-                  paymentId: data.paymentId,
-                  externalReference: data.externalReference,
-                  securityId: stockCheckout.security?.id,
-                  strategyId: null,
-                  symbol: stockCheckout.security?.symbol || "",
-                  name: stockCheckout.security?.name || "",
-                  amount: stockCheckout.amount,
-                  baseAmount: stockCheckout.baseAmount || stockCheckout.amount,
-                  shareCount: stockCheckout.shareCount || null,
-                }));
-                window.location.href = data.payUrl;
-              } else {
-                alert(data.error || "Failed to initiate Stitch payment.");
-              }
-            } catch (err) {
-              console.error("Stitch error:", err);
-              alert("Could not connect to Stitch. Please try another payment method.");
-            }
-          }}
           onSelectOzow={async () => {
             try {
               const { data: { user } } = await supabase.auth.getUser();
@@ -2139,40 +2015,6 @@ const App = () => {
           childFirstName={isChildStrategyPurchase ? selectedChildForInvest?.first_name : null}
           childWalletBalanceCents={isChildStrategyPurchase ? (selectedChildForInvest?.available_balance ?? null) : null}
           onSelectWallet={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("wallet"); navigateTo("payment"); }}
-          onSelectStitch={async () => {
-            try {
-              const { data: { user } } = await supabase.auth.getUser();
-              const resp = await fetch("/api/stitch/initiate", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  amount: investmentAmount,
-                  strategyName: selectedStrategy?.name || "Investment",
-                  userId: user?.id || null,
-                }),
-              });
-              const data = await resp.json();
-              if (data.success && data.payUrl) {
-                sessionStorage.setItem("stitch_pending", JSON.stringify({
-                  paymentId: data.paymentId,
-                  externalReference: data.externalReference,
-                  securityId: selectedStrategy?.id,
-                  strategyId: selectedStrategy?.strategyId || selectedStrategy?.id || null,
-                  symbol: selectedStrategy?.symbol || selectedStrategy?.short_name || "",
-                  name: selectedStrategy?.name || "",
-                  amount: investmentAmount,
-                  baseAmount: baseInvestmentAmount || investmentAmount,
-                  shareCount: null,
-                }));
-                window.location.href = data.payUrl;
-              } else {
-                alert(data.error || "Failed to initiate Stitch payment.");
-              }
-            } catch (err) {
-              console.error("Stitch error:", err);
-              alert("Could not connect to Stitch. Please try another payment method.");
-            }
-          }}
           onSelectOzow={async () => {
             try {
               const { data: { user } } = await supabase.auth.getUser();

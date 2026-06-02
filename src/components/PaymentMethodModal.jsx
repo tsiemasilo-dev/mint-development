@@ -11,7 +11,6 @@ const PaymentMethodModal = ({
   onClose,
   amount,
   strategyName,
-  onSelectStitch,
   onSelectOzow,
   onEFTConfirm,
   onSelectWallet,
@@ -206,28 +205,6 @@ const PaymentMethodModal = ({
                     {hasEnoughFunds ? "Wallet" : "Top Up"}
                   </span>
                 </button>
-
-                {/* ── Pay with Stitch ── */}
-                {onSelectStitch && (
-                  <button
-                    type="button"
-                    onClick={onSelectStitch}
-                    className="w-full flex items-center gap-4 rounded-2xl border-2 border-slate-200 bg-white px-4 py-3.5 text-left transition active:scale-[0.98] hover:border-emerald-300 hover:bg-emerald-50/40"
-                  >
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 flex-shrink-0">
-                      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-5 h-5">
-                        <path d="M12 3C7.03 3 3 7.03 3 12s4.03 9 9 9 9-4.03 9-9-4.03-9-9-9zm.75 13.5h-1.5v-6h1.5v6zm0-7.5h-1.5V7.5h1.5V9z" fill="white"/>
-                      </svg>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-slate-900">Pay with Stitch</p>
-                      <p className="text-xs text-slate-500 mt-0.5">Instant EFT — bank-to-bank</p>
-                    </div>
-                    <span className="text-[11px] font-semibold rounded-full px-2 py-0.5 flex-shrink-0 text-emerald-700 bg-emerald-100">
-                      Instant
-                    </span>
-                  </button>
-                )}
 
                 {/* ── Ozow (Coming Soon) ── */}
                 <div className="relative w-full">
