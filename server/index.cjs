@@ -2050,9 +2050,7 @@ app.post("/api/experian/kyc", async (req, res) => {
 // POST /api/experian/idmn/start — start ID Me Now biometric workflow
 app.post("/api/experian/idmn/start", async (req, res) => {
   try {
-    if (!EXPERIAN_IDMN_USERNAME || !EXPERIAN_IDMN_PASSWORD) {
-      return res.status(500).json({ success: false, error: { message: "Experian IDMN credentials not configured." } });
-    }
+    const IDMN_MOCK = !EXPERIAN_IDMN_USERNAME || !EXPERIAN_IDMN_PASSWORD;
     const authHeader = req.headers.authorization;
     const { data: { user }, error: authErr } = await supabase.auth.getUser(authHeader?.replace("Bearer ", "") || "");
     if (authErr || !user) return res.status(401).json({ success: false, error: { message: "Unauthorized" } });
@@ -2075,6 +2073,20 @@ app.post("/api/experian/idmn/start", async (req, res) => {
     const identityNumber = req.body.identity_number || raw?.identity_details?.identity_number;
     if (!identityNumber) {
       return res.status(400).json({ success: false, error: { message: "Identity number not found. Please complete the ID number step first." } });
+    }
+
+    // ── Mock mode (no credentials configured) ──────────────────────────────
+    if (IDMN_MOCK) {
+      console.log(`[Experian IDMN] MOCK MODE — simulating StartWorkflow for user ${userId}`);
+      const mockTxId = `mock-${Date.now()}`;
+      const mockToken = `mock-token-${userId.slice(0, 8)}`;
+      const updatedRaw = { ...raw, experian_idmn_transaction_id: mockTxId, experian_idmn_token: mockToken, experian_idmn_started_at: new Date().toISOString(), experian_mock: true };
+      await db.from("user_onboarding").update({ sumsub_raw: updatedRaw, sumsub_applicant_id: mockTxId, kyc_status: "pending", kyc_checked_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("user_id", userId);
+      const { data: existingAction } = await db.from("required_actions").select("id").eq("user_id", userId).maybeSingle();
+      const raPayload = { kyc_pending: true, kyc_verified: false, kyc_needs_resubmission: false };
+      if (existingAction) { await db.from("required_actions").update(raPayload).eq("user_id", userId); }
+      else { await db.from("required_actions").insert({ user_id: userId, ...raPayload }); }
+      return res.json({ success: true, mockMode: true, url: null, transaction_id: mockTxId, token: mockToken });
     }
 
     const { data: profile } = await db.from("profiles").select("first_name, last_name").eq("id", userId).maybeSingle();
@@ -2143,9 +2155,7 @@ app.post("/api/experian/idmn/start", async (req, res) => {
 // POST /api/experian/idmn/collect — collect biometric results
 app.post("/api/experian/idmn/collect", async (req, res) => {
   try {
-    if (!EXPERIAN_IDMN_USERNAME || !EXPERIAN_IDMN_PASSWORD) {
-      return res.status(500).json({ success: false, error: { message: "Experian IDMN credentials not configured." } });
-    }
+    const IDMN_MOCK = !EXPERIAN_IDMN_USERNAME || !EXPERIAN_IDMN_PASSWORD;
     const authHeader = req.headers.authorization;
     const { data: { user }, error: authErr } = await supabase.auth.getUser(authHeader?.replace("Bearer ", "") || "");
     if (authErr || !user) return res.status(401).json({ success: false, error: { message: "Unauthorized" } });
@@ -2160,6 +2170,17 @@ app.post("/api/experian/idmn/collect", async (req, res) => {
     const token = raw?.experian_idmn_token;
     if (!transaction_id || !token) {
       return res.status(400).json({ success: false, error: { message: "No pending verification found. Please start the verification first." } });
+    }
+
+    // ── Mock mode ────────────────────────────────────────────────────────────
+    if (IDMN_MOCK || raw?.experian_mock) {
+      console.log(`[Experian IDMN] MOCK MODE — simulating CollectWorkflowResults for user ${userId}`);
+      const verifiedRaw = { ...raw, experian_idmn_status: "verified", experian_idmn_completed_at: new Date().toISOString(), experian_mock: true };
+      await db.from("user_onboarding").update({ sumsub_raw: verifiedRaw, kyc_status: "onboarding_complete", kyc_verified_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("user_id", userId);
+      await db.from("required_actions").update({ kyc_verified: true, kyc_pending: false, kyc_needs_resubmission: false, kyc_verified_at: new Date().toISOString() }).eq("user_id", userId);
+      const { data: packCheck } = await db.from("user_onboarding_pack_details").select("user_id").eq("user_id", userId).maybeSingle();
+      if (!packCheck) { await db.from("user_onboarding_pack_details").insert({ user_id: userId, created_at: new Date().toISOString() }); }
+      return res.json({ success: true, status: "verified", mockMode: true, message: "Mock verification complete." });
     }
 
     const collectBody = {

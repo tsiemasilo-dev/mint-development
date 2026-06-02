@@ -31,6 +31,12 @@ const ExternalLinkIcon = (props) => (
   </svg>
 );
 
+const BeakerIcon = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" {...props}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 0 1 4.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15M14.25 3.104c.251.023.501.05.75.082M19.8 15a2.25 2.25 0 0 1 .45 2.311l-1.8 3.6a2.25 2.25 0 0 1-2.011 1.239H7.562a2.25 2.25 0 0 1-2.011-1.239l-1.8-3.6A2.25 2.25 0 0 1 4.2 15m15.6 0H4.2" />
+  </svg>
+);
+
 const LoadingSpinner = ({ size = "md" }) => {
   const cls = size === "sm" ? "h-4 w-4" : "h-6 w-6";
   return <div className={`inline-block ${cls} animate-spin rounded-full border-2 border-solid border-current border-r-transparent`} />;
@@ -39,6 +45,7 @@ const LoadingSpinner = ({ size = "md" }) => {
 const STAGE = {
   INITIALIZING: "initializing",
   READY: "ready",
+  MOCK_READY: "mock_ready",
   AWAITING: "awaiting",
   CHECKING: "checking",
   PENDING: "pending",
@@ -50,6 +57,7 @@ const STAGE = {
 const ExperianVerification = ({ onVerified }) => {
   const [stage, setStage] = useState(STAGE.INITIALIZING);
   const [verificationUrl, setVerificationUrl] = useState(null);
+  const [isMockMode, setIsMockMode] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [errorCode, setErrorCode] = useState(null);
   const [pollCount, setPollCount] = useState(0);
@@ -89,6 +97,12 @@ const ExperianVerification = ({ onVerified }) => {
       if (!data.success) {
         setErrorMessage(data.error?.message || "Failed to start identity verification.");
         setStage(STAGE.ERROR);
+        return;
+      }
+
+      if (data.mockMode) {
+        setIsMockMode(true);
+        setStage(STAGE.MOCK_READY);
         return;
       }
 
@@ -171,6 +185,7 @@ const ExperianVerification = ({ onVerified }) => {
     setErrorMessage("");
     setErrorCode(null);
     setVerificationUrl(null);
+    setIsMockMode(false);
     initRef.current = false;
     startWorkflow();
   };
@@ -182,7 +197,7 @@ const ExperianVerification = ({ onVerified }) => {
           <LoadingSpinner />
         </div>
         <h3 className="text-lg font-medium text-slate-800 mb-2">Setting Up Verification</h3>
-        <p className="text-sm text-slate-500">Preparing your identity check with Experian…</p>
+        <p className="text-sm text-slate-500">Preparing your identity check…</p>
       </div>
     );
   }
@@ -194,11 +209,17 @@ const ExperianVerification = ({ onVerified }) => {
           <CheckCircleIcon className="w-8 h-8 text-white" />
         </div>
         <h3 className="text-lg font-medium text-slate-800 mb-2">Identity Verified</h3>
-        <p className="text-sm text-slate-500">Your identity has been successfully verified by Experian.</p>
+        <p className="text-sm text-slate-500">Your identity has been successfully verified.</p>
         <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-100 text-emerald-700 text-sm font-medium">
           <CheckCircleIcon className="w-4 h-4" />
           <span>Verification Complete</span>
         </div>
+        {isMockMode && (
+          <p className="text-xs text-amber-600 mt-3 flex items-center justify-center gap-1">
+            <BeakerIcon className="w-3 h-3" />
+            Test mode — no real Experian check was performed
+          </p>
+        )}
       </div>
     );
   }
@@ -210,7 +231,9 @@ const ExperianVerification = ({ onVerified }) => {
           <ShieldCheckIcon className="w-8 h-8 text-white" />
         </div>
         <h3 className="text-lg font-medium text-slate-800 mb-2">Checking Your Verification</h3>
-        <p className="text-sm text-slate-500">Retrieving your biometric verification result…</p>
+        <p className="text-sm text-slate-500">
+          {isMockMode ? "Simulating verification result…" : "Retrieving your biometric verification result…"}
+        </p>
       </div>
     );
   }
@@ -222,11 +245,9 @@ const ExperianVerification = ({ onVerified }) => {
           <ShieldCheckIcon className="w-8 h-8 text-white" />
         </div>
         <h3 className="text-lg font-medium text-slate-800 mb-2">Verification In Progress</h3>
-        <p className="text-sm text-slate-500 mb-2">
-          Your biometric check is still being processed by Experian.
-        </p>
+        <p className="text-sm text-slate-500 mb-2">Your biometric check is still being processed.</p>
         <p className="text-xs text-slate-400 mb-6">
-          This may take a moment. If you haven't completed the verification page yet, please do so and come back.
+          If you haven't completed the verification page yet, please do so and come back.
         </p>
         <div className="flex flex-col gap-3">
           {verificationUrl && (
@@ -305,6 +326,61 @@ const ExperianVerification = ({ onVerified }) => {
     );
   }
 
+  // ── Mock mode ready ───────────────────────────────────────────────────────
+  if (stage === STAGE.MOCK_READY) {
+    return (
+      <div className="w-full max-w-md mx-auto">
+        <div className="mb-4 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 flex items-center gap-2">
+          <BeakerIcon className="w-4 h-4 text-amber-600 flex-shrink-0" />
+          <p className="text-xs text-amber-700 font-medium">Test mode — Experian credentials not configured</p>
+        </div>
+
+        <div className="mb-6 text-center">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+            <FaceIcon className="w-8 h-8 text-white" />
+          </div>
+          <h3 className="text-lg font-medium text-slate-800 mb-2">Biometric Identity Check</h3>
+          <p className="text-sm text-slate-500">
+            In production, you'd be redirected to Experian to complete a selfie and liveness check. In test mode, click below to simulate a successful verification.
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-slate-50 border border-slate-200 p-5 mb-6">
+          <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-3">Production flow</p>
+          <ul className="space-y-2 text-sm text-slate-600">
+            <li className="flex items-start gap-2">
+              <span className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center text-xs font-bold">1</span>
+              Redirected to a secure Experian verification page
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center text-xs font-bold">2</span>
+              Take a selfie and complete a short liveness check
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center text-xs font-bold">3</span>
+              Return here — Experian confirms your identity
+            </li>
+          </ul>
+        </div>
+
+        <button
+          type="button"
+          onClick={collectResults}
+          className="w-full inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl font-semibold text-white shadow-lg transition-all active:scale-95"
+          style={{ background: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)" }}
+        >
+          <BeakerIcon className="w-5 h-5" />
+          Simulate Verification (Test Mode)
+        </button>
+
+        <p className="text-xs text-center text-slate-400 mt-4">
+          This button only appears when Experian credentials are not configured
+        </p>
+      </div>
+    );
+  }
+
+  // ── Real mode ready ───────────────────────────────────────────────────────
   return (
     <div className="w-full max-w-md mx-auto">
       <div className="mb-6 text-center">
