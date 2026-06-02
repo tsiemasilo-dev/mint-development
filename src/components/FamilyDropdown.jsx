@@ -27,7 +27,7 @@ function MemberAvatar({ firstName, avatarUrl, size = "h-9 w-9", isChild = false,
   );
 }
 
-export default function FamilyDropdown({ profile, userId, initials, avatarUrl, onOpenFamily, onSelectMember }) {
+export default function FamilyDropdown({ profile, userId, initials, avatarUrl, onOpenFamily, onSelectMember, activeChildId, onGoToParent }) {
   const [open, setOpen] = useState(false);
   const [members, setMembers] = useState([]);
   const [ready, setReady] = useState(false);
@@ -130,26 +130,59 @@ export default function FamilyDropdown({ profile, userId, initials, avatarUrl, o
             className="absolute left-0 top-full mt-2 z-50 min-w-[260px] rounded-2xl shadow-2xl overflow-hidden"
             style={{ background: "#1a1325", border: "1px solid rgba(255,255,255,0.08)" }}
           >
-            {/* Main Account */}
-            <div className="flex items-center gap-3 px-4 py-3.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-              <div className="relative">
-                {avatarUrl ? (
-                  <img src={avatarUrl} alt={displayName} className="h-10 w-10 rounded-full object-cover" />
-                ) : (
-                  <div
-                    className="h-10 w-10 rounded-full flex items-center justify-center text-white text-sm font-semibold"
-                    style={{ background: "linear-gradient(135deg,#7c3aed,#a855f7)" }}
-                  >
-                    {initials || "—"}
-                  </div>
-                )}
+            {/* Main Account — clickable when viewing a child dashboard */}
+            {activeChildId ? (
+              <button
+                onClick={() => {
+                  setOpen(false);
+                  if (onGoToParent) {
+                    onGoToParent();
+                  } else {
+                    window.dispatchEvent(new CustomEvent("navigate-within-app", { detail: { page: "home" } }));
+                  }
+                }}
+                className="flex items-center gap-3 px-4 py-3.5 w-full text-left hover:bg-white/5 transition-colors"
+                style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}
+              >
+                <div className="relative">
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt={displayName} className="h-10 w-10 rounded-full object-cover" />
+                  ) : (
+                    <div
+                      className="h-10 w-10 rounded-full flex items-center justify-center text-white text-sm font-semibold"
+                      style={{ background: "linear-gradient(135deg,#7c3aed,#a855f7)" }}
+                    >
+                      {initials || "—"}
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">{displayName}</p>
+                  <p className="text-xs text-white/50">Main Account</p>
+                </div>
+                <span className="text-white/30 text-xs">›</span>
+              </button>
+            ) : (
+              <div className="flex items-center gap-3 px-4 py-3.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+                <div className="relative">
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt={displayName} className="h-10 w-10 rounded-full object-cover" />
+                  ) : (
+                    <div
+                      className="h-10 w-10 rounded-full flex items-center justify-center text-white text-sm font-semibold"
+                      style={{ background: "linear-gradient(135deg,#7c3aed,#a855f7)" }}
+                    >
+                      {initials || "—"}
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">{displayName}</p>
+                  <p className="text-xs text-white/50">Main Account</p>
+                </div>
+                <span className="h-2 w-2 rounded-full bg-emerald-400 flex-shrink-0" />
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-white truncate">{displayName}</p>
-                <p className="text-xs text-white/50">Main Account</p>
-              </div>
-              <span className="h-2 w-2 rounded-full bg-emerald-400 flex-shrink-0" />
-            </div>
+            )}
 
             {/* Members — shown only once data is ready */}
             {!ready ? (
@@ -212,6 +245,7 @@ export default function FamilyDropdown({ profile, userId, initials, avatarUrl, o
                   </p>
                   {children.map((child) => {
                     const age = getAge(child.date_of_birth);
+                    const isActive = activeChildId && child.id === activeChildId;
                     return (
                       <button
                         key={child.id}
@@ -225,7 +259,10 @@ export default function FamilyDropdown({ profile, userId, initials, avatarUrl, o
                           </p>
                           <p className="text-[11px] text-white/40">{age !== null ? `Age ${age}` : ""}</p>
                         </div>
-                        <span className="text-white/30 text-xs">›</span>
+                        {isActive
+                          ? <span className="h-2 w-2 rounded-full bg-emerald-400 flex-shrink-0" />
+                          : <span className="text-white/30 text-xs">›</span>
+                        }
                       </button>
                     );
                   })}
