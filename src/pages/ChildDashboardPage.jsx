@@ -11,6 +11,7 @@ import {
   BookOpen, LayoutGrid, ArrowDownToLine, Target, FileSignature, Plus,
 } from "lucide-react";
 import NotificationBell from "../components/NotificationBell";
+import FamilyDropdown from "../components/FamilyDropdown";
 import Navbar from "../components/Navbar";
 import ChildPortfolioTab from "../components/ChildPortfolioTab";
 import SwipeableBalanceCard from "../components/SwipeableBalanceCard";
@@ -2653,22 +2654,13 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
       <div className="px-4 pt-12 pb-6">
         <div className="mx-auto w-full max-w-sm md:max-w-md">
           <header className="relative flex items-center justify-between text-white mb-4">
-            {/* Parent profile pill — tapping goes back */}
-            <button
-              onClick={onBack}
-              className="flex items-center gap-1.5 rounded-full py-1 pl-1 pr-2.5 focus:outline-none transition-all duration-200 active:scale-95"
-              style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.18)" }}
-              aria-label="Back"
-            >
-              {profile?.avatarUrl ? (
-                <img src={profile.avatarUrl} alt="profile" className="h-8 w-8 rounded-full border border-white/30 object-cover" />
-              ) : (
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20 text-xs font-semibold text-white">
-                  {[profile?.firstName, profile?.lastName].filter(Boolean).map(n => n[0].toUpperCase()).join("") || "P"}
-                </div>
-              )}
-              <ChevronDown className="h-3.5 w-3.5 text-white/70" />
-            </button>
+            {/* Parent profile pill — shows family dropdown */}
+            <FamilyDropdown
+              profile={profile}
+              userId={profile?.id}
+              initials={[profile?.firstName, profile?.lastName].filter(Boolean).map(n => n[0].toUpperCase()).join("") || "P"}
+              avatarUrl={profile?.avatarUrl}
+            />
 
             {/* Child name — centered */}
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
