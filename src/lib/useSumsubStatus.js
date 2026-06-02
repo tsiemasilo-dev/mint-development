@@ -120,7 +120,7 @@ export const useSumsubStatus = () => {
       }
 
       const userId = userData.user.id;
-      const response = await fetch("/api/sumsub/status", {
+      const response = await fetch("/api/experian/status", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId })

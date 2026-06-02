@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import SumsubVerification from "../components/SumsubVerification";
+import ExperianVerification from "../components/ExperianVerification";
 import MandateViewer from "../components/MandateViewer";
 import AccountAgreementStep from "../components/AccountAgreementStep";
 import { supabase } from "../lib/supabase";
@@ -646,7 +646,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
       const { data: userData } = await supabase.auth.getUser();
         const userId = userData?.user?.id;
         if (!userId) return;
-        const res = await fetch("/api/sumsub/status", {
+        const res = await fetch("/api/experian/status", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ userId }),
@@ -994,14 +994,14 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   </div>
                 </>
               ) : (
-                <SumsubVerification onVerified={() => {
+                <ExperianVerification onVerified={() => {
                   setKycVerificationDone(true);
                   goToStep(getNextIncompleteStep(2));
                 }} />
               )}
             </div>
           ) : step === 2 ? (
-            <SumsubVerification onVerified={() => {
+            <ExperianVerification onVerified={() => {
               setKycVerificationDone(true);
               goToStep(getNextIncompleteStep(2));
             }} />
