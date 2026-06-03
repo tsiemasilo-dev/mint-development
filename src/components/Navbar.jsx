@@ -83,7 +83,11 @@ const Navbar = ({ activeTab, setActiveTab, comingSoonTabs = [] }) => {
                     setActiveTab(tab.id);
                   }}
                   className={`relative flex flex-col items-center justify-center gap-1.5 py-1 transition-all ${
-                    activeTab === tab.id ? "text-[#31005e] scale-110" : "text-slate-400 opacity-60"
+                    activeTab === tab.id
+                      ? "text-[#31005e] scale-110"
+                      : isComingSoon
+                      ? "text-[#7c3aed]"
+                      : "text-slate-400 opacity-60"
                   }`}
                 >
                   {isComingSoon && (
