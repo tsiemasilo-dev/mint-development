@@ -1,0 +1,1 @@
+- [Securities price units](securities-price-units.md) — last_price & avg_fill are in CENTS; divide by 100 for Rand math (caused 100x credit/liquidity inflation).

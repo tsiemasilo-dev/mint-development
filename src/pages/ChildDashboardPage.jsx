@@ -3325,11 +3325,11 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
       {/* -- Bottom Navigation Bar (shared Mint Navbar) -- */}
       <Navbar
         activeTab={activeChildTab === "news" ? "news" : activeChildTab === "more" ? "more" : activeChildTab === "portfolio" ? "investments" : "home"}
-        comingSoonTabs={[]}
+        comingSoonTabs={["investments"]}
         setActiveTab={(tab) => {
           if (tab === "news") setActiveChildTab("news");
           else if (tab === "more") setActiveChildTab("more");
-          else if (tab === "investments") setActiveChildTab("portfolio");
+          else if (tab === "investments") return;
           else setActiveChildTab("home");
         }}
       />
