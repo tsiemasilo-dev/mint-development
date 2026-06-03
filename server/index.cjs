@@ -6342,6 +6342,8 @@ app.post("/api/onboarding/complete", async (req, res) => {
       agreed_privacy,
       bank_name,
       bank_account_number,
+      bank_account_name,
+      bank_account_type,
       bank_branch_code,
       signed_agreement_url,
       signed_at,
@@ -6386,6 +6388,8 @@ app.post("/api/onboarding/complete", async (req, res) => {
     const bankDetails = (bank_name || bank_account_number || bank_branch_code) ? {
       bank_name: bank_name || null,
       bank_account_number: bank_account_number || null,
+      bank_account_name: bank_account_name || null,
+      bank_account_type: bank_account_type || null,
       bank_branch_code: bank_branch_code || null,
       savedAt: new Date().toISOString(),
     } : null;
