@@ -86,7 +86,7 @@ const Navbar = ({ activeTab, setActiveTab, comingSoonTabs = [] }) => {
                     activeTab === tab.id
                       ? "text-[#31005e] scale-110"
                       : isComingSoon
-                      ? "text-[#7c3aed]"
+                      ? "text-slate-400"
                       : "text-slate-400 opacity-60"
                   }`}
                 >
