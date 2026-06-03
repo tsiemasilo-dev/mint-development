@@ -7489,13 +7489,6 @@ app.get('/api/family-members', async (req, res) => {
   const userId = req.query.user_id;
   if (!userId) return res.status(400).json({ error: 'user_id required' });
   try {
-    if (pgPool) {
-      const rows = await fmQuery(
-        'SELECT * FROM family_members WHERE primary_user_id = $1 ORDER BY created_at ASC',
-        [userId]
-      );
-      return res.json({ members: rows });
-    }
     const db = supabaseAdmin || supabase;
     const { data, error } = await db.from('family_members').select('*').eq('primary_user_id', userId).order('created_at', { ascending: true });
     if (error) throw error;
