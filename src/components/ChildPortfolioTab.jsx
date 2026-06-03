@@ -319,14 +319,16 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
                       return (
                         <>
                           <p className="text-3xl font-bold text-slate-900">{fmt(cv)}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className={`text-sm font-semibold ${isPos ? "text-emerald-500" : "text-rose-500"}`}>
-                              {isPos ? "+" : "-"}{fmt(Math.abs(pnl))}
-                            </span>
-                            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${isPos ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-500"}`}>
-                              {isPos ? "+" : ""}{pnlPct.toFixed(1)}%
-                            </span>
-                          </div>
+                          {!lockedMessage && (
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className={`text-sm font-semibold ${isPos ? "text-emerald-500" : "text-rose-500"}`}>
+                                {isPos ? "+" : "-"}{fmt(Math.abs(pnl))}
+                              </span>
+                              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${isPos ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-500"}`}>
+                                {isPos ? "+" : ""}{pnlPct.toFixed(1)}%
+                              </span>
+                            </div>
+                          )}
                         </>
                       );
                     })()}
