@@ -9822,6 +9822,201 @@ setInterval(refreshIntradayPrices, INTRADAY_INTERVAL_MS);
 setTimeout(repairChildStrategyReturns, 60 * 1000);
 setInterval(repairChildStrategyReturns, 24 * 60 * 60 * 1000);
 
+// ── Child Portfolio Returns ───────────────────────────────────────────────────
+// Calculates a child's live portfolio returns using intraday prices.
+// Expected_fill is in Rands (e.g. 34.38), intraday current_price is in ZAc (cents).
+// basket_value and pnl values are stored in cents to match parent convention.
+
+async function calculateChildPortfolioReturns(familyMemberId, strategyId, userId) {
+  const db = supabaseAdmin || supabase;
+  if (!db) return null;
+
+  // 1. Get child's active holdings for this strategy
+  const { data: holdings, error: hErr } = await db
+    .from('stock_holdings_c')
+    .select('security_id, quantity, Expected_fill, strategy_id')
+    .eq('family_member_id', familyMemberId)
+    .eq('strategy_id', strategyId)
+    .eq('is_active', true);
+
+  if (hErr || !holdings?.length) return null;
+
+  const securityIds = [...new Set(holdings.map(h => h.security_id).filter(Boolean))];
+
+  // 2. Get latest intraday prices for those securities
+  const { data: intradayRows, error: iErr } = await db
+    .from('stock_intraday_c')
+    .select('security_id, current_price, 1d_abs, 1d_pct, symbol')
+    .in('security_id', securityIds)
+    .order('timestamp', { ascending: false });
+
+  if (iErr) return null;
+
+  // Build latest price map per security (first row = most recent)
+  const priceMap = {};
+  (intradayRows || []).forEach(p => {
+    if (!priceMap[p.security_id]) {
+      priceMap[p.security_id] = {
+        current_price: Number(p.current_price || 0),
+        change_abs: Number(p['1d_abs'] || 0),
+        change_pct: Number(p['1d_pct'] || 0),
+        symbol: p.symbol,
+      };
+    }
+  });
+
+  // 3. Calculate portfolio metrics
+  let basketValueCents = 0;   // live value in cents
+  let costBasisCents = 0;     // what was paid in cents
+  let oneDayPnlCents = 0;     // today's gain/loss in cents
+  const holdingsSnapshot = [];
+
+  for (const h of holdings) {
+    const qty = Number(h.quantity || 0);
+    const expectedFill = Number(h.Expected_fill || 0); // Rands
+    const costBasisForHolding = Math.round(expectedFill * 100 * qty); // convert to cents
+
+    const price = priceMap[h.security_id];
+    const livePriceCents = price?.current_price || 0;
+    const liveValueCents = Math.round(livePriceCents * qty);
+    const dayChangeCents = Math.round((price?.change_abs || 0) * qty);
+
+    basketValueCents += liveValueCents;
+    costBasisCents += costBasisForHolding;
+    oneDayPnlCents += dayChangeCents;
+
+    holdingsSnapshot.push({
+      security_id: h.security_id,
+      symbol: price?.symbol || null,
+      qty,
+      avg_fill_rands: expectedFill,
+      current_price_cents: livePriceCents,
+      live_value_cents: liveValueCents,
+      cost_basis_cents: costBasisForHolding,
+      unrealized_pnl_cents: liveValueCents - costBasisForHolding,
+    });
+  }
+
+  const inceptionPnlCents = basketValueCents - costBasisCents;
+  const inceptionPct = costBasisCents > 0 ? (inceptionPnlCents / costBasisCents) * 100 : 0;
+  const oneDayPct = costBasisCents > 0 ? (oneDayPnlCents / costBasisCents) * 100 : 0;
+
+  return {
+    user_id: userId,
+    strategy_id: strategyId,
+    family_member: familyMemberId,
+    basket_value: basketValueCents,
+    portfolio_value: basketValueCents,
+    inception_pnl: inceptionPnlCents,
+    inception_pct: parseFloat(inceptionPct.toFixed(4)),
+    '1d_pnl': oneDayPnlCents,
+    '1d_pct': parseFloat(oneDayPct.toFixed(4)),
+    holdings_snapshot: JSON.stringify(holdingsSnapshot),
+    as_of_date: new Date().toISOString().split('T')[0],
+    fetched_at: new Date().toISOString(),
+  };
+}
+
+// Saves end-of-day returns for all children with active holdings
+async function saveAllChildReturnsEOD() {
+  const db = supabaseAdmin || supabase;
+  if (!db) return;
+
+  console.log('[child-returns-eod] Running end-of-day save...');
+
+  try {
+    // Find all unique (user_id, family_member_id, strategy_id) combinations
+    const { data: childHoldings, error: hErr } = await db
+      .from('stock_holdings_c')
+      .select('user_id, family_member_id, strategy_id')
+      .not('family_member_id', 'is', null)
+      .not('strategy_id', 'is', null)
+      .eq('is_active', true);
+
+    if (hErr || !childHoldings?.length) {
+      console.log('[child-returns-eod] No active child holdings found.');
+      return;
+    }
+
+    // Deduplicate
+    const seen = new Set();
+    const combos = [];
+    for (const h of childHoldings) {
+      const key = `${h.user_id}:${h.family_member_id}:${h.strategy_id}`;
+      if (!seen.has(key)) { seen.add(key); combos.push(h); }
+    }
+
+    console.log(`[child-returns-eod] Saving returns for ${combos.length} child-strategy combination(s)...`);
+    let saved = 0, failed = 0;
+
+    for (const { user_id, family_member_id, strategy_id } of combos) {
+      try {
+        const returns = await calculateChildPortfolioReturns(family_member_id, strategy_id, user_id);
+        if (!returns) { failed++; continue; }
+
+        const { error: upsertErr } = await db
+          .from('client_strategy_returns_c')
+          .upsert(returns, { onConflict: 'user_id,strategy_id,as_of_date,family_member', ignoreDuplicates: false });
+
+        if (upsertErr) {
+          console.error(`[child-returns-eod] Upsert failed for child ${family_member_id}:`, upsertErr.message);
+          failed++;
+        } else {
+          saved++;
+        }
+      } catch (e) {
+        console.error(`[child-returns-eod] Error for child ${family_member_id}:`, e.message);
+        failed++;
+      }
+    }
+
+    console.log(`[child-returns-eod] Done — saved: ${saved}, failed: ${failed}`);
+  } catch (err) {
+    console.error('[child-returns-eod] Unexpected error:', err.message);
+  }
+}
+
+// Live endpoint — calculates child returns on the fly without writing to DB.
+// Also triggers an immediate upsert during trading hours so the tab is never blank.
+app.get('/api/child-live-returns', async (req, res) => {
+  const { family_member_id, strategy_id, user_id } = req.query;
+  if (!family_member_id || !strategy_id || !user_id) {
+    return res.status(400).json({ error: 'family_member_id, strategy_id, and user_id are required' });
+  }
+
+  try {
+    const returns = await calculateChildPortfolioReturns(family_member_id, strategy_id, user_id);
+    if (!returns) {
+      return res.json({ basket_value: 0, portfolio_value: 0, inception_pnl: 0, inception_pct: 0, '1d_pnl': 0, '1d_pct': 0, holdings_snapshot: [] });
+    }
+
+    // Also upsert so client_strategy_returns_c stays current during the day
+    const db = supabaseAdmin || supabase;
+    if (db) {
+      db.from('client_strategy_returns_c')
+        .upsert(returns, { onConflict: 'user_id,strategy_id,as_of_date,family_member', ignoreDuplicates: false })
+        .then(({ error }) => { if (error) console.warn('[child-live-returns] upsert warn:', error.message); });
+    }
+
+    return res.json({
+      ...returns,
+      holdings_snapshot: JSON.parse(returns.holdings_snapshot || '[]'),
+    });
+  } catch (err) {
+    console.error('[child-live-returns] Error:', err.message);
+    return res.status(500).json({ error: 'Failed to calculate child returns' });
+  }
+});
+
+// End-of-day save: runs at 17:30 SAST (15:30 UTC) Mon–Fri
+cron.schedule('30 15 * * 1-5', () => {
+  console.log('[child-returns-eod] Market close cron triggered');
+  saveAllChildReturnsEOD();
+});
+
+// Also run at startup (90s delay) to seed any missing today's records
+setTimeout(saveAllChildReturnsEOD, 90 * 1000);
+
 // Catch-all 404 handler - MUST be after all route definitions
 app.use((req, res) => {
   res.status(404).json({ error: "Not found", message: "This is the API server. The frontend is served separately." });
