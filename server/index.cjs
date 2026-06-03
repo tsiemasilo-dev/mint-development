@@ -6340,6 +6340,7 @@ app.post("/api/onboarding/complete", async (req, res) => {
       expected_monthly_investment,
       agreed_terms,
       agreed_privacy,
+      tax_number,
       bank_name,
       bank_account_number,
       bank_account_name,
@@ -6411,9 +6412,11 @@ app.post("/api/onboarding/complete", async (req, res) => {
       downloaded_at: downloaded_at || null,
     };
 
+    if (tax_number) updatePayload.Tax_number = tax_number;
     if (bank_name) updatePayload.bank_name = bank_name;
     if (bank_account_number) updatePayload.bank_account_number = bank_account_number;
     if (bank_branch_code) updatePayload.bank_branch_code = bank_branch_code;
+    if (tax_number) insertPayload.Tax_number = tax_number;
     if (bank_name) insertPayload.bank_name = bank_name;
     if (bank_account_number) insertPayload.bank_account_number = bank_account_number;
     if (bank_branch_code) insertPayload.bank_branch_code = bank_branch_code;
