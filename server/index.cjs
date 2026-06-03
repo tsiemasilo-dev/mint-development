@@ -9908,6 +9908,48 @@ async function calculateChildPortfolioReturns(familyMemberId, strategyId, userId
   const inceptionPct = costBasisCents > 0 ? (inceptionPnlCents / costBasisCents) * 100 : 0;
   const oneDayPct = costBasisCents > 0 ? (oneDayPnlCents / costBasisCents) * 100 : 0;
 
+  // 4. Look up historical records to calculate 5D, 1M, YTD periods
+  // We fetch enough past records and find the closest one to each target date.
+  const today = new Date();
+  const yearStart = `${today.getUTCFullYear()}-01-01`;
+  const oneMonthAgo = new Date(today); oneMonthAgo.setUTCDate(today.getUTCDate() - 31);
+  const fiveDaysAgo = new Date(today); fiveDaysAgo.setUTCDate(today.getUTCDate() - 9);
+
+  const { data: historyRows } = await db
+    .from('client_strategy_returns_c')
+    .select('as_of_date, basket_value')
+    .eq('family_member', familyMemberId)
+    .eq('strategy_id', strategyId)
+    .gte('as_of_date', yearStart)
+    .order('as_of_date', { ascending: true });
+
+  // Helper: find the record closest to (but not after) a target date string
+  function closestRecord(rows, targetDate) {
+    if (!rows?.length) return null;
+    const target = targetDate instanceof Date ? targetDate.toISOString().split('T')[0] : targetDate;
+    let best = null;
+    for (const r of rows) {
+      if (r.as_of_date <= target) best = r;
+      else break;
+    }
+    return best;
+  }
+
+  function periodMetrics(historicRecord) {
+    if (!historicRecord || !historicRecord.basket_value || historicRecord.basket_value === basketValueCents) return { pnl: null, pct: null };
+    const pnl = basketValueCents - Number(historicRecord.basket_value);
+    const pct = costBasisCents > 0 ? (pnl / costBasisCents) * 100 : 0;
+    return { pnl, pct: parseFloat(pct.toFixed(4)) };
+  }
+
+  const rec5d  = closestRecord(historyRows, fiveDaysAgo);
+  const rec1m  = closestRecord(historyRows, oneMonthAgo);
+  const recYtd = historyRows?.length ? historyRows[0] : null; // earliest record this year
+
+  const p5d  = periodMetrics(rec5d);
+  const p1m  = periodMetrics(rec1m);
+  const pYtd = periodMetrics(recYtd);
+
   return {
     user_id: userId,
     strategy_id: strategyId,
@@ -9918,9 +9960,15 @@ async function calculateChildPortfolioReturns(familyMemberId, strategyId, userId
     inception_pct: parseFloat(inceptionPct.toFixed(4)),
     '1d_pnl': oneDayPnlCents,
     '1d_pct': parseFloat(oneDayPct.toFixed(4)),
+    '5d_pnl': p5d.pnl,
+    '5d_pct': p5d.pct,
+    '1m_pnl': p1m.pnl,
+    '1m_pct': p1m.pct,
+    ytd_pnl: pYtd.pnl,
+    ytd_pct: pYtd.pct,
     holdings_snapshot: JSON.stringify(holdingsSnapshot),
-    as_of_date: new Date().toISOString().split('T')[0],
-    fetched_at: new Date().toISOString(),
+    as_of_date: today.toISOString().split('T')[0],
+    fetched_at: today.toISOString(),
   };
 }
 

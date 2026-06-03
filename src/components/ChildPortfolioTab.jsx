@@ -7,6 +7,7 @@ import {
 } from "recharts";
 import { useUserStrategies, useStrategyChartData, useStrategyPeriodReturns } from "../lib/useUserStrategies";
 import { useProfile } from "../lib/useProfile";
+import { supabase } from "../lib/supabase";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -61,6 +62,35 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
   const { returnData: periodReturnData, loading: periodReturnLoading } = useStrategyPeriodReturns(
     profile?.id, selectedStrategy?.strategyId, timeFilter, familyMemberId
   );
+
+  // which time period tabs have enough data to show
+  const [availablePeriods, setAvailablePeriods] = useState({ D: true, "5d": false, m: false, ytd: false });
+
+  useEffect(() => {
+    if (!familyMemberId || !selectedStrategy?.strategyId) return;
+    supabase
+      .from("client_strategy_returns_c")
+      .select("5d_pct, 1m_pct, ytd_pct")
+      .eq("family_member", familyMemberId)
+      .eq("strategy_id", selectedStrategy.strategyId)
+      .order("as_of_date", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          setAvailablePeriods({
+            D: true,
+            "5d": data["5d_pct"] != null,
+            m: data["1m_pct"] != null,
+            ytd: data["ytd_pct"] != null,
+          });
+        }
+      });
+  }, [familyMemberId, selectedStrategy?.strategyId]);
+
+  // Derive locked message directly from availablePeriods + current filter — always in sync
+  const _lockedLabels = { "5d": "Available after 5 trading days", m: "Available after 1 month", ytd: "Available after first full year" };
+  const lockedMessage = (!availablePeriods[timeFilter] && _lockedLabels[timeFilter]) ? _lockedLabels[timeFilter] : null;
 
   // sub-tab within the portfolio tab
   const [activeTab, setActiveTab] = useState("strategy");
@@ -257,19 +287,23 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
                     </div>
 
                     <div className="flex gap-1">
-                      {[{ id: "D", label: "D" }, { id: "5d", label: "5D" }, { id: "m", label: "M" }, { id: "ytd", label: "YTD" }].map((f) => (
-                        <button
-                          key={f.id}
-                          onClick={() => setTimeFilter(f.id)}
-                          className={`px-3 h-8 rounded-full text-xs font-bold transition-all ${
-                            timeFilter === f.id
-                              ? "bg-slate-700 text-white shadow"
-                              : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-                          }`}
-                        >
-                          {f.label}
-                        </button>
-                      ))}
+                      {[{ id: "D", label: "D" }, { id: "5d", label: "5D" }, { id: "m", label: "M" }, { id: "ytd", label: "YTD" }].map((f) => {
+                        return (
+                          <button
+                            key={f.id}
+                            onClick={() => {
+                              setTimeFilter(f.id);
+                            }}
+                            className={`px-3 h-8 rounded-full text-xs font-bold transition-all ${
+                              timeFilter === f.id
+                                ? "bg-slate-700 text-white shadow"
+                                : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                            }`}
+                          >
+                            {f.label}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -286,14 +320,16 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
                       return (
                         <>
                           <p className="text-3xl font-bold text-slate-900">{fmt(cv)}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className={`text-sm font-semibold ${isPos ? "text-emerald-500" : "text-rose-500"}`}>
-                              {isPos ? "+" : "-"}{fmt(Math.abs(pnl))}
-                            </span>
-                            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${isPos ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-500"}`}>
-                              {isPos ? "+" : ""}{pnlPct.toFixed(1)}%
-                            </span>
-                          </div>
+                          {!lockedMessage && (
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className={`text-sm font-semibold ${isPos ? "text-emerald-500" : "text-rose-500"}`}>
+                                {isPos ? "+" : "-"}{fmt(Math.abs(pnl))}
+                              </span>
+                              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${isPos ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-500"}`}>
+                                {isPos ? "+" : ""}{pnlPct.toFixed(1)}%
+                              </span>
+                            </div>
+                          )}
                         </>
                       );
                     })()}
@@ -301,7 +337,13 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
 
                   {/* Equity curve chart */}
                   <div style={{ width: "100%", height: 200 }}>
-                    {currentChartData.length === 0 ? (
+                    {lockedMessage ? (
+                      <div className="h-full flex flex-col items-center justify-center gap-2">
+                        <span className="text-2xl">📈</span>
+                        <p className="text-slate-500 text-sm font-medium">{lockedMessage}</p>
+                        <p className="text-slate-400 text-xs">Check back once more data has been recorded</p>
+                      </div>
+                    ) : currentChartData.length === 0 ? (
                       <div className="h-full flex items-center justify-center">
                         <p className="text-slate-400 text-sm">{isLoadingData ? "Loading chart..." : "No data available"}</p>
                       </div>
