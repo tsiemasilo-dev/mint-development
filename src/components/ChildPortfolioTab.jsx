@@ -283,41 +283,26 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
                       )}
                     </div>
 
-                    <div className="flex flex-col items-end gap-1">
-                      <div className="flex gap-1">
-                        {[{ id: "D", label: "D" }, { id: "5d", label: "5D" }, { id: "m", label: "M" }, { id: "ytd", label: "YTD" }].map((f) => {
-                          const isAvailable = availablePeriods[f.id];
-                          const lockedLabels = { "5d": "Available after 5 trading days", m: "Available after 1 month", ytd: "Available after first full year" };
-                          return (
-                            <button
-                              key={f.id}
-                              onClick={() => {
-                                if (!isAvailable) {
-                                  setLockedMessage(lockedLabels[f.id] || null);
-                                  setTimeout(() => setLockedMessage(null), 2500);
-                                  return;
-                                }
-                                setLockedMessage(null);
-                                setTimeFilter(f.id);
-                              }}
-                              className={`px-3 h-8 rounded-full text-xs font-bold transition-all ${
-                                !isAvailable
-                                  ? "text-slate-300 opacity-50 cursor-not-allowed"
-                                  : timeFilter === f.id
-                                  ? "bg-slate-700 text-white shadow"
-                                  : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-                              }`}
-                            >
-                              {f.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {lockedMessage && (
-                        <p className="text-[10px] text-slate-400 text-right pr-1 animate-fade-in">
-                          ⏳ {lockedMessage}
-                        </p>
-                      )}
+                    <div className="flex gap-1">
+                      {[{ id: "D", label: "D" }, { id: "5d", label: "5D" }, { id: "m", label: "M" }, { id: "ytd", label: "YTD" }].map((f) => {
+                        const lockedLabels = { "5d": "Available after 5 trading days", m: "Available after 1 month", ytd: "Available after first full year" };
+                        return (
+                          <button
+                            key={f.id}
+                            onClick={() => {
+                              setTimeFilter(f.id);
+                              setLockedMessage(!availablePeriods[f.id] ? (lockedLabels[f.id] || null) : null);
+                            }}
+                            className={`px-3 h-8 rounded-full text-xs font-bold transition-all ${
+                              timeFilter === f.id
+                                ? "bg-slate-700 text-white shadow"
+                                : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                            }`}
+                          >
+                            {f.label}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -349,7 +334,13 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
 
                   {/* Equity curve chart */}
                   <div style={{ width: "100%", height: 200 }}>
-                    {currentChartData.length === 0 ? (
+                    {lockedMessage ? (
+                      <div className="h-full flex flex-col items-center justify-center gap-2">
+                        <span className="text-2xl">📈</span>
+                        <p className="text-slate-500 text-sm font-medium">{lockedMessage}</p>
+                        <p className="text-slate-400 text-xs">Check back once more data has been recorded</p>
+                      </div>
+                    ) : currentChartData.length === 0 ? (
                       <div className="h-full flex items-center justify-center">
                         <p className="text-slate-400 text-sm">{isLoadingData ? "Loading chart..." : "No data available"}</p>
                       </div>
