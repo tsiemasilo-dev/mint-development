@@ -65,7 +65,6 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
 
   // which time period tabs have enough data to show
   const [availablePeriods, setAvailablePeriods] = useState({ D: true, "5d": false, m: false, ytd: false });
-  const [lockedMessage, setLockedMessage] = useState(null);
 
   useEffect(() => {
     if (!familyMemberId || !selectedStrategy?.strategyId) return;
@@ -88,6 +87,10 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
         }
       });
   }, [familyMemberId, selectedStrategy?.strategyId]);
+
+  // Derive locked message directly from availablePeriods + current filter — always in sync
+  const _lockedLabels = { "5d": "Available after 5 trading days", m: "Available after 1 month", ytd: "Available after first full year" };
+  const lockedMessage = (!availablePeriods[timeFilter] && _lockedLabels[timeFilter]) ? _lockedLabels[timeFilter] : null;
 
   // sub-tab within the portfolio tab
   const [activeTab, setActiveTab] = useState("strategy");
@@ -285,13 +288,11 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
 
                     <div className="flex gap-1">
                       {[{ id: "D", label: "D" }, { id: "5d", label: "5D" }, { id: "m", label: "M" }, { id: "ytd", label: "YTD" }].map((f) => {
-                        const lockedLabels = { "5d": "Available after 5 trading days", m: "Available after 1 month", ytd: "Available after first full year" };
                         return (
                           <button
                             key={f.id}
                             onClick={() => {
                               setTimeFilter(f.id);
-                              setLockedMessage(!availablePeriods[f.id] ? (lockedLabels[f.id] || null) : null);
                             }}
                             className={`px-3 h-8 rounded-full text-xs font-bold transition-all ${
                               timeFilter === f.id
