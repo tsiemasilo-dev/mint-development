@@ -7,6 +7,7 @@ import {
 } from "recharts";
 import { useUserStrategies, useStrategyChartData, useStrategyPeriodReturns } from "../lib/useUserStrategies";
 import { useProfile } from "../lib/useProfile";
+import { supabase } from "../lib/supabase";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -61,6 +62,32 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
   const { returnData: periodReturnData, loading: periodReturnLoading } = useStrategyPeriodReturns(
     profile?.id, selectedStrategy?.strategyId, timeFilter, familyMemberId
   );
+
+  // which time period tabs have enough data to show
+  const [availablePeriods, setAvailablePeriods] = useState({ D: true, "5d": false, m: false, ytd: false });
+  const [lockedMessage, setLockedMessage] = useState(null);
+
+  useEffect(() => {
+    if (!familyMemberId || !selectedStrategy?.strategyId) return;
+    supabase
+      .from("client_strategy_returns_c")
+      .select("5d_pct, 1m_pct, ytd_pct")
+      .eq("family_member", familyMemberId)
+      .eq("strategy_id", selectedStrategy.strategyId)
+      .order("as_of_date", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          setAvailablePeriods({
+            D: true,
+            "5d": data["5d_pct"] != null,
+            m: data["1m_pct"] != null,
+            ytd: data["ytd_pct"] != null,
+          });
+        }
+      });
+  }, [familyMemberId, selectedStrategy?.strategyId]);
 
   // sub-tab within the portfolio tab
   const [activeTab, setActiveTab] = useState("strategy");
@@ -256,20 +283,41 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
                       )}
                     </div>
 
-                    <div className="flex gap-1">
-                      {[{ id: "D", label: "D" }, { id: "5d", label: "5D" }, { id: "m", label: "M" }, { id: "ytd", label: "YTD" }].map((f) => (
-                        <button
-                          key={f.id}
-                          onClick={() => setTimeFilter(f.id)}
-                          className={`px-3 h-8 rounded-full text-xs font-bold transition-all ${
-                            timeFilter === f.id
-                              ? "bg-slate-700 text-white shadow"
-                              : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-                          }`}
-                        >
-                          {f.label}
-                        </button>
-                      ))}
+                    <div className="flex flex-col items-end gap-1">
+                      <div className="flex gap-1">
+                        {[{ id: "D", label: "D" }, { id: "5d", label: "5D" }, { id: "m", label: "M" }, { id: "ytd", label: "YTD" }].map((f) => {
+                          const isAvailable = availablePeriods[f.id];
+                          const lockedLabels = { "5d": "Available after 5 trading days", m: "Available after 1 month", ytd: "Available after first full year" };
+                          return (
+                            <button
+                              key={f.id}
+                              onClick={() => {
+                                if (!isAvailable) {
+                                  setLockedMessage(lockedLabels[f.id] || null);
+                                  setTimeout(() => setLockedMessage(null), 2500);
+                                  return;
+                                }
+                                setLockedMessage(null);
+                                setTimeFilter(f.id);
+                              }}
+                              className={`px-3 h-8 rounded-full text-xs font-bold transition-all ${
+                                !isAvailable
+                                  ? "text-slate-300 opacity-50 cursor-not-allowed"
+                                  : timeFilter === f.id
+                                  ? "bg-slate-700 text-white shadow"
+                                  : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                              }`}
+                            >
+                              {f.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {lockedMessage && (
+                        <p className="text-[10px] text-slate-400 text-right pr-1 animate-fade-in">
+                          ⏳ {lockedMessage}
+                        </p>
+                      )}
                     </div>
                   </div>
 
