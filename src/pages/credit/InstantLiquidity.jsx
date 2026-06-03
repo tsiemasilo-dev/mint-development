@@ -126,7 +126,7 @@ const InstantLiquidity = ({ profile, onOpenNotifications, onTabChange, onLinkBan
               : [0, 0, 0, 0, 0, 0, 0];
 
             const hasAvgFill = item.avg_fill && Number(item.avg_fill) > 0;
-            const balance = hasAvgFill ? (item.quantity * (sec.last_price || 0)) : 0;
+            const balance = hasAvgFill ? (item.quantity * ((sec.last_price || 0) / 100)) : 0;
             const isEligible = !sec.disqualified && hasAvgFill;
 
             return {

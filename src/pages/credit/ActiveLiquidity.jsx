@@ -100,7 +100,7 @@ const ActiveLiquidity = ({ onBack, profile, fonts }) => {
     return loans.map(loan => {
       const liveCollateralValue = loan.pbc_collateral_pledges?.reduce((acc, p) => {
         const livePrice = p.securities_c?.last_price || 0;
-        const liveBalance = (p.pledged_quantity * livePrice);
+        const liveBalance = (p.pledged_quantity * (livePrice / 100));
         return acc + (liveBalance > 0 ? liveBalance : (p.pledged_value || 0));
       }, 0) || 1;
 
@@ -438,7 +438,7 @@ const ActiveLiquidity = ({ onBack, profile, fonts }) => {
                     <div className="space-y-3">
                       {loan.pbc_collateral_pledges?.map((pledge, idx) => {
                         const sec = pledge.securities_c;
-                        const liveValue = (pledge.pledged_quantity * (sec?.last_price || 0));
+                        const liveValue = (pledge.pledged_quantity * ((sec?.last_price || 0) / 100));
 
                         return (
                           <div key={idx} className="flex justify-between items-center bg-slate-50 p-3 rounded-2xl border border-slate-100">
