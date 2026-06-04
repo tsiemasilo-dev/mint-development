@@ -65,28 +65,53 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
 
   // which time period tabs have enough data to show
   const [availablePeriods, setAvailablePeriods] = useState({ D: true, "5d": false, m: false, ytd: false });
+  // raw snapshot rows used for period P&L derivation (basket_value in cents, ascending by date)
+  const [snapshotRows, setSnapshotRows] = useState([]);
 
   useEffect(() => {
     if (!familyMemberId || !selectedStrategy?.strategyId) return;
     supabase
       .from("client_strategy_returns_c")
-      .select("5d_pct, 1m_pct, ytd_pct")
+      .select("as_of_date, basket_value, ytd_pct")
       .eq("family_member", familyMemberId)
       .eq("strategy_id", selectedStrategy.strategyId)
-      .order("as_of_date", { ascending: false })
-      .limit(1)
-      .maybeSingle()
+      .order("as_of_date", { ascending: true })
       .then(({ data }) => {
-        if (data) {
+        if (data && data.length > 0) {
+          setSnapshotRows(data);
+          const count = data.length;
+          const latestYtdPct = data[data.length - 1]?.ytd_pct;
           setAvailablePeriods({
             D: true,
-            "5d": data["5d_pct"] != null,
-            m: data["1m_pct"] != null,
-            ytd: data["ytd_pct"] != null,
+            "5d": count >= 5,
+            m: count >= 22,
+            ytd: latestYtdPct != null,
           });
         }
       });
   }, [familyMemberId, selectedStrategy?.strategyId]);
+
+  // derive period P&L from basket snapshots when pre-calculated columns are null
+  const derivedPeriodReturn = useMemo(() => {
+    if (!snapshotRows.length) return { pnl: 0, pct: 0 };
+    const last = snapshotRows[snapshotRows.length - 1];
+    const latestCents = Number(last?.basket_value || 0);
+    if (!latestCents) return { pnl: 0, pct: 0 };
+
+    let startCents = 0;
+    if (timeFilter === "5d" && snapshotRows.length >= 5) {
+      startCents = Number(snapshotRows[snapshotRows.length - 5]?.basket_value || 0);
+    } else if (timeFilter === "m" && snapshotRows.length >= 22) {
+      startCents = Number(snapshotRows[snapshotRows.length - 22]?.basket_value || 0);
+    } else {
+      return { pnl: 0, pct: 0 };
+    }
+
+    if (!startCents) return { pnl: 0, pct: 0 };
+    const pnl = (latestCents - startCents) / 100;
+    const pct = ((latestCents - startCents) / startCents) * 100;
+    return { pnl, pct: parseFloat(pct.toFixed(4)) };
+  }, [snapshotRows, timeFilter]);
 
   // Derive locked message directly from availablePeriods + current filter — always in sync
   const _lockedLabels = { "5d": "Available after 5 trading days", m: "Available after 1 month", ytd: "Available after first full year" };
@@ -534,10 +559,10 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
                       const livePct = ia > 0 ? (livePnl / ia) * 100 : 0;
                       const pnl = timeFilter === "D"
                         ? liveStrategyMetrics.todayPnl
-                        : (periodReturnData?.pnl !== undefined && periodReturnData.pnl !== 0 ? periodReturnData.pnl : livePnl);
+                        : (periodReturnData?.pnl !== undefined && periodReturnData.pnl !== 0 ? periodReturnData.pnl : (derivedPeriodReturn.pnl !== 0 ? derivedPeriodReturn.pnl : livePnl));
                       const pnlPct = timeFilter === "D"
                         ? liveStrategyMetrics.todayPct
-                        : (periodReturnData?.pct !== undefined && periodReturnData.pct !== 0 ? periodReturnData.pct : livePct);
+                        : (periodReturnData?.pct !== undefined && periodReturnData.pct !== 0 ? periodReturnData.pct : (derivedPeriodReturn.pct !== 0 ? derivedPeriodReturn.pct : livePct));
                       const isPos = pnl >= 0;
                       if (isPending) return <p className="text-3xl font-bold text-slate-900">R0,00</p>;
                       return (
