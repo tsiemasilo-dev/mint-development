@@ -53,7 +53,7 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
 
   // strategy hooks — filtered to child
   const { strategies, selectedStrategy, loading: strategiesLoading, selectStrategy } = useUserStrategies(familyMemberId);
-  const [timeFilter, setTimeFilter] = useState("all");
+  const [timeFilter, setTimeFilter] = useState("ytd");
   const [tabJustChanged, setTabJustChanged] = useState(false);
   const tabJustChangedTimer = useRef(null);
   const { chartData: realChartData, loading: chartLoading } = useStrategyChartData(
@@ -534,7 +534,7 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
                     </div>
 
                     <div className="flex gap-1">
-                      {[{ id: "D", label: "D" }, { id: "5d", label: "5D" }, { id: "m", label: "M" }, { id: "ytd", label: "YTD" }, { id: "all", label: "ALL" }].map((f) => {
+                      {[{ id: "D", label: "D" }, { id: "5d", label: "5D" }, { id: "m", label: "M" }, { id: "ytd", label: "YTD" }].map((f) => {
                         return (
                           <button
                             key={f.id}

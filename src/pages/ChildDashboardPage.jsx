@@ -1616,7 +1616,7 @@ function StrategyDetailModal({ data, onClose }) {
         </div>
 
         {/* Holdings list ranked by PnL % */}
-        <div className="flex-1 overflow-y-auto px-5 py-4">
+        <div className="flex-1 overflow-y-auto px-5 py-4" style={{ paddingBottom: "calc(var(--navbar-height, 64px) + 1rem)" }}>
           {holdings.length === 0 ? (
             <div className="text-center py-12">
               <p className="text-sm text-slate-500">No filled holdings yet.</p>
@@ -1974,6 +1974,15 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   const [kycNotice, setKycNotice] = useState("");
   const [activeChildTab, setActiveChildTab] = useState("home");
   const [childNewsArticleId, setChildNewsArticleId] = useState(null);
+
+  useEffect(() => {
+    if (childNewsArticleId) {
+      document.body.classList.add("child-article-open");
+    } else {
+      document.body.classList.remove("child-article-open");
+    }
+    return () => document.body.classList.remove("child-article-open");
+  }, [childNewsArticleId]);
 
   const childName = [child?.first_name, child?.last_name].filter(Boolean).join(" ") || "Child";
   const age = getAge(child?.date_of_birth);
@@ -3262,16 +3271,18 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
               onViewModeChange={() => {}}
             />
           </Suspense>
-          <Navbar
-            activeTab="home"
-            comingSoonTabs={[]}
-            setActiveTab={(tab) => {
-              if (tab === "news") setActiveChildTab("news");
-              else if (tab === "more") setActiveChildTab("more");
-              else if (tab === "investments") setActiveChildTab("portfolio");
-              else setActiveChildTab("home");
-            }}
-          />
+          {!childNewsArticleId && (
+            <Navbar
+              activeTab="home"
+              comingSoonTabs={[]}
+              setActiveTab={(tab) => {
+                if (tab === "news") setActiveChildTab("news");
+                else if (tab === "more") setActiveChildTab("more");
+                else if (tab === "investments") setActiveChildTab("portfolio");
+                else setActiveChildTab("home");
+              }}
+            />
+          )}
         </div>
       )}
 
@@ -3291,20 +3302,22 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             onViewModeChange={() => {}}
           />
         </Suspense>
-        <Navbar
-          activeTab="news"
-          comingSoonTabs={[]}
-          setActiveTab={(tab) => {
-            if (tab === "more") setActiveChildTab("more");
-            else if (tab === "investments") setActiveChildTab("portfolio");
-            else setActiveChildTab("home");
-          }}
-        />
+        {!childNewsArticleId && (
+          <Navbar
+            activeTab="news"
+            comingSoonTabs={[]}
+            setActiveTab={(tab) => {
+              if (tab === "more") setActiveChildTab("more");
+              else if (tab === "investments") setActiveChildTab("portfolio");
+              else setActiveChildTab("home");
+            }}
+          />
+        )}
       </div>
 
       {/* -- News article overlay -- */}
       {childNewsArticleId && (
-        <div className="fixed inset-0 z-20 overflow-y-auto" style={{ background: "var(--bg, #0f0a1e)" }}>
+        <div className="fixed inset-0 z-[1100] overflow-y-auto" style={{ background: "var(--bg, #0f0a1e)" }}>
           <Suspense fallback={<div style={{ background: "var(--bg, #0f0a1e)", height: "100%" }} />}>
             <NewsArticlePage
               articleId={childNewsArticleId}
@@ -3322,28 +3335,32 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
         <Suspense fallback={<div style={{ background: "var(--bg, #0f0a1e)", height: "100%" }} />}>
           <MorePage onNavigate={onTabChange} onBeforeLogout={() => {}} />
         </Suspense>
+        {!childNewsArticleId && (
+          <Navbar
+            activeTab="more"
+            comingSoonTabs={[]}
+            setActiveTab={(tab) => {
+              if (tab === "news") setActiveChildTab("news");
+              else if (tab === "investments") setActiveChildTab("portfolio");
+              else setActiveChildTab("home");
+            }}
+          />
+        )}
+      </div>
+
+      {/* -- Bottom Navigation Bar (shared Mint Navbar) -- */}
+      {!childNewsArticleId && (
         <Navbar
-          activeTab="more"
+          activeTab={activeChildTab === "news" ? "news" : activeChildTab === "more" ? "more" : activeChildTab === "portfolio" ? "investments" : "home"}
           comingSoonTabs={[]}
           setActiveTab={(tab) => {
             if (tab === "news") setActiveChildTab("news");
+            else if (tab === "more") setActiveChildTab("more");
             else if (tab === "investments") setActiveChildTab("portfolio");
             else setActiveChildTab("home");
           }}
         />
-      </div>
-
-      {/* -- Bottom Navigation Bar (shared Mint Navbar) -- */}
-      <Navbar
-        activeTab={activeChildTab === "news" ? "news" : activeChildTab === "more" ? "more" : activeChildTab === "portfolio" ? "investments" : "home"}
-        comingSoonTabs={[]}
-        setActiveTab={(tab) => {
-          if (tab === "news") setActiveChildTab("news");
-          else if (tab === "more") setActiveChildTab("more");
-          else if (tab === "investments") setActiveChildTab("portfolio");
-          else setActiveChildTab("home");
-        }}
-      />
+      )}
 
       {/* -- Modals -- */}
       <AnimatePresence>

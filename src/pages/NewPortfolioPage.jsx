@@ -70,7 +70,7 @@ const getReturnColor = (value) => {
 const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies, onBack, deepLink, onDeepLinkConsumed, onOpenStockDetail }) => {
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [activeTab, setActiveTab] = useState("holdings");
-  const [timeFilter, setTimeFilter] = useState("m");
+  const [timeFilter, setTimeFilter] = useState("ytd");
   const [failedLogos, setFailedLogos] = useState({});
   const [currentView, setCurrentView] = useState("portfolio");
   const [showStrategyDropdown, setShowStrategyDropdown] = useState(false);

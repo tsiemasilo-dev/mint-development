@@ -228,3 +228,7 @@
   color: #1e293b;
   margin: 1rem 0 0.5rem;
 }
+
+body.child-article-open > nav {
+  display: none !important;
+}
