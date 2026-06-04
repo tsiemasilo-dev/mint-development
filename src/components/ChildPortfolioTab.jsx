@@ -114,6 +114,10 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
   const [failedLogos, setFailedLogos] = useState({});
   const [activePieIndex, setActivePieIndex] = useState(-1);
 
+  // intraday D chart
+  const [intradayChartData, setIntradayChartData] = useState(null);
+  const [intradayLoading, setIntradayLoading] = useState(false);
+
   // ── chart data ─────────────────────────────────────────────────────────────
   const currentStrategy = selectedStrategy || { name: strategiesLoading ? "Loading..." : "No Strategy", currentValue: 0, investedAmount: 0 };
 
@@ -166,6 +170,106 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
     return { liveValue, costBasis, todayPnl, todayPct, isPending: false, hasPrices };
   }, [rawHoldings, selectedStrategy?.strategyId]);
 
+  // ── intraday D chart — fetches 5-min bucketed prices from stock_intraday_c ──
+  useEffect(() => {
+    if (timeFilter !== "D") { setIntradayChartData(null); return; }
+    const stratId = selectedStrategy?.strategyId;
+    if (!stratId || liveStrategyMetrics.isPending) return;
+
+    const stratHoldings = (rawHoldings || []).filter(h =>
+      h.strategy_id === stratId && Number(h.avg_fill || 0) > 0 && !!h.Fill_date
+    );
+    if (stratHoldings.length === 0) return;
+
+    const securityIds = [...new Set(stratHoldings.map(h => h.security_id).filter(Boolean))];
+    const qtyMap = {};
+    stratHoldings.forEach(h => { qtyMap[h.security_id] = Math.abs(Number(h.quantity || 0)); });
+
+    let cancelled = false;
+    setIntradayLoading(true);
+
+    (async () => {
+      try {
+        const todayUTC = new Date().toISOString().slice(0, 10);
+
+        // Yesterday's basket as the P&L baseline
+        const { data: baselineRows } = await supabase
+          .from("client_strategy_returns_c")
+          .select("basket_value, as_of_date")
+          .eq("family_member", familyMemberId)
+          .eq("strategy_id", stratId)
+          .lt("as_of_date", todayUTC)
+          .order("as_of_date", { ascending: false })
+          .limit(1);
+
+        const baselineRands = baselineRows?.[0]?.basket_value
+          ? baselineRows[0].basket_value / 100
+          : liveStrategyMetrics.costBasis;
+
+        // Today's intraday rows for all strategy securities
+        const { data: intradayRows } = await supabase
+          .from("stock_intraday_c")
+          .select("security_id, current_price, timestamp")
+          .in("security_id", securityIds)
+          .gte("timestamp", `${todayUTC}T00:00:00Z`)
+          .order("timestamp", { ascending: true });
+
+        if (cancelled) return;
+        if (!intradayRows?.length) { setIntradayChartData([]); setIntradayLoading(false); return; }
+
+        // Group into 5-minute buckets
+        const bucketMap = new Map();
+        for (const row of intradayRows) {
+          const d = new Date(row.timestamp);
+          d.setSeconds(0, 0);
+          d.setMinutes(Math.floor(d.getMinutes() / 5) * 5);
+          const key = d.toISOString();
+          if (!bucketMap.has(key)) bucketMap.set(key, {});
+          bucketMap.get(key)[row.security_id] = Number(row.current_price);
+        }
+
+        const sorted = [...bucketMap.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1);
+        const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        const lastKnown = {};
+        const points = [{ day: null, value: 0, fullDate: null }];
+
+        for (const [isoKey, prices] of sorted) {
+          for (const sid of securityIds) {
+            if (prices[sid] != null) lastKnown[sid] = prices[sid];
+          }
+          if (Object.keys(lastKnown).length === 0) continue;
+
+          const portfolioRands = securityIds.reduce((sum, sid) => {
+            const price = lastKnown[sid];
+            return price != null ? sum + (price / 100) * (qtyMap[sid] || 0) : sum;
+          }, 0);
+
+          const pnl = Number((portfolioRands - baselineRands).toFixed(2));
+
+          // Convert UTC → SAST (+2h) for labels
+          const d = new Date(isoKey);
+          const sast = new Date(d.getTime() + 2 * 60 * 60 * 1000);
+          const hh = String(sast.getUTCHours()).padStart(2, "0");
+          const mm = String(sast.getUTCMinutes()).padStart(2, "0");
+          const dd = sast.getUTCDate();
+          const mo = MONTH_NAMES[sast.getUTCMonth()];
+          const yr = sast.getUTCFullYear();
+
+          points.push({ day: `${hh}:${mm}`, value: pnl, fullDate: `${dd} ${mo} ${yr} ${hh}:${mm}` });
+        }
+
+        if (!cancelled) setIntradayChartData(points.length > 1 ? points : []);
+      } catch (e) {
+        console.error("[intraday-chart]", e);
+        if (!cancelled) setIntradayChartData([]);
+      } finally {
+        if (!cancelled) setIntradayLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [timeFilter, selectedStrategy?.strategyId, rawHoldings, familyMemberId, liveStrategyMetrics.costBasis, liveStrategyMetrics.isPending]);
+
   const currentChartData = useMemo(() => {
     if (realChartData && realChartData.length > 0) {
       if (realChartData[0]?.day === null && realChartData[0]?.value === 0) return realChartData;
@@ -183,8 +287,13 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
     return [];
   }, [realChartData, currentStrategy, liveStrategyMetrics]);
 
-  const stratAxisConfig = computePnlAxisConfig(currentChartData);
-  const isLoadingData = strategiesLoading || chartLoading;
+  // Use intraday buckets for D, otherwise the snapshot-based curve
+  const displayChartData = (timeFilter === "D" && intradayChartData && intradayChartData.length > 1)
+    ? intradayChartData
+    : currentChartData;
+
+  const stratAxisConfig = computePnlAxisConfig(displayChartData);
+  const isLoadingData = strategiesLoading || chartLoading || (timeFilter === "D" && intradayLoading);
 
   // ── holdings data (for Holdings tab) ──────────────────────────────────────
   const allStrategyHoldings = useMemo(() => {
@@ -398,13 +507,13 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
                         <p className="text-slate-500 text-sm font-medium">{lockedMessage}</p>
                         <p className="text-slate-400 text-xs">Check back once more data has been recorded</p>
                       </div>
-                    ) : currentChartData.length === 0 ? (
+                    ) : displayChartData.length === 0 ? (
                       <div className="h-full flex items-center justify-center">
                         <p className="text-slate-400 text-sm">{isLoadingData ? "Loading chart..." : "No data available"}</p>
                       </div>
                     ) : (
                       <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={currentChartData} margin={{ top: 8, right: 12, left: 4, bottom: 24 }}>
+                        <ComposedChart data={displayChartData} margin={{ top: 8, right: 12, left: 4, bottom: 24 }}>
                           <defs>
                             <linearGradient id="childGradient" x1="0" y1="0" x2="0" y2="1">
                               <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.4" />
@@ -416,7 +525,7 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
                             axisLine={false}
                             tickLine={false}
                             tickMargin={8}
-                            interval={currentChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(currentChartData.length / 6) - 1)}
+                            interval={displayChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(displayChartData.length / 6) - 1)}
                             tick={({ x, y, payload }) => payload.value ? <text x={x} y={y} dy={12} textAnchor="middle" fill="#64748b" fontSize={10} fontWeight={500}>{payload.value}</text> : null}
                           />
                           <YAxis domain={stratAxisConfig.domain} ticks={stratAxisConfig.ticks} tickFormatter={formatPnlAxis} tick={{ fill: "#94a3b8", fontSize: 10 }} axisLine={false} tickLine={false} width={50} />
