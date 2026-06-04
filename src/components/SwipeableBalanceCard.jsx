@@ -164,6 +164,7 @@ const SwipeableBalanceCard = ({
   const _cacheKey = `${userId || ''}:${familyMemberId || ''}`;
   const [activeTab, setActiveTab] = useState("ytd");
   const [periodReturn, setPeriodReturn] = useState(null);
+  const [childSnapshotCount, setChildSnapshotCount] = useState(null);
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
   const { lastUpdated, isConnected } = useRealtimePrices();
@@ -698,6 +699,24 @@ const SwipeableBalanceCard = ({
     };
   }, [userId, familyMemberId, lastUpdated]);
 
+  // Fetch total snapshot row count for child accounts so we can lock tabs with insufficient data
+  useEffect(() => {
+    if (!childMode || !familyMemberId) return;
+    const fetchCount = async () => {
+      const strategyIds = [...new Set(
+        dbData.holdings.map(h => h.strategy_id).filter(Boolean)
+      )];
+      if (!strategyIds.length) { setChildSnapshotCount(0); return; }
+      const { count } = await supabase
+        .from("client_strategy_returns_c")
+        .select("as_of_date", { count: "exact", head: true })
+        .eq("family_member", familyMemberId)
+        .in("strategy_id", strategyIds);
+      setChildSnapshotCount(count ?? 0);
+    };
+    fetchCount();
+  }, [childMode, familyMemberId, dbData.holdings]);
+
   useEffect(() => {
     let chartCancelled = false;
     const fetchChartPrices = async () => {
@@ -738,6 +757,14 @@ const SwipeableBalanceCard = ({
 
           const dates = Object.keys(basketByDate).sort();
           if (!dates.length) {
+            setChartData([]);
+            setPeriodReturn(null);
+            setChartLoading(false);
+            return;
+          }
+          // Lock tab if not enough history (same rule as bottom section)
+          const minRows = activeTab === "5d" ? 5 : activeTab === "m" ? 22 : 1;
+          if (dates.length < minRows) {
             setChartData([]);
             setPeriodReturn(null);
             setChartLoading(false);
@@ -1241,17 +1268,26 @@ const SwipeableBalanceCard = ({
 
       {/* Period selector */}
       <div className="mt-2 flex bg-black/20 backdrop-blur-sm rounded-full p-0.5 relative">
-        {[["5d","5D"],["m","M"],["ytd","YTD"],["all","All"]].map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setActiveTab(key)}
-            className={`flex-1 py-1.5 rounded-full text-[11px] font-semibold transition-all ${
-              activeTab === key ? "bg-white text-slate-900 shadow-sm" : "text-white/60 hover:text-white/90"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+        {[["5d","5D"],["m","M"],["ytd","YTD"],["all","All"]].map(([key, label]) => {
+          const minRowsForTab = key === "5d" ? 5 : key === "m" ? 22 : 1;
+          const tabLocked = childMode && childSnapshotCount !== null && childSnapshotCount < minRowsForTab;
+          return (
+            <button
+              key={key}
+              onClick={() => { if (!tabLocked) setActiveTab(key); }}
+              disabled={tabLocked}
+              className={`flex-1 py-1.5 rounded-full text-[11px] font-semibold transition-all ${
+                tabLocked
+                  ? "text-white/20 cursor-not-allowed"
+                  : activeTab === key
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-white/60 hover:text-white/90"
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Footer */}
