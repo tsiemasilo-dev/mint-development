@@ -286,6 +286,11 @@ const App = () => {
               sessionStorage.removeItem('mint_pin_unlocked');
               setShowPinLock(true);
             } else {
+              // Mark as intentional so the SIGNED_OUT handler does not
+              // simultaneously show the session-expired overlay while we
+              // are already navigating to welcome — that conflict was the
+              // root cause of the infinite-refresh loop.
+              intentionalLogoutRef.current = true;
               if (supabase) supabase.auth.signOut({ scope: 'local' });
               sessionStorage.removeItem('mint_pin_unlocked');
               setShowPinLock(false);
@@ -615,10 +620,20 @@ const App = () => {
       }
       if (event === 'SIGNED_IN' && session) {
         setCachedSession(session);
-        // If a different user just logged in, nuke all stale caches immediately
-        // so they never see the previous user's data
         const incomingId = session.user?.id;
         if (incomingId && incomingId !== lastAuthUserIdRef.current) {
+          // A DIFFERENT user signed in.
+          if (lastAuthUserIdRef.current !== null) {
+            // There was already a user in this tab — this is a cross-tab sign-in
+            // (another browser tab logged in as someone else and Supabase synced
+            // the session here via localStorage).  Force a full page reload so
+            // React state from the previous user is completely wiped and we never
+            // show a mix of two users' data.
+            window.location.reload();
+            return;
+          }
+          // lastAuthUserIdRef is null → fresh page load, normal first login in
+          // this tab.  Just clear stale caches and proceed normally.
           clearAllUserCaches();
         }
         lastAuthUserIdRef.current = incomingId || null;
