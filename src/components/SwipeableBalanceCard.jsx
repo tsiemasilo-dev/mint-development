@@ -767,10 +767,11 @@ const SwipeableBalanceCard = ({
         });
         setChartData(points);
 
-        // Use the pre-stored P&L column (same source as the portfolio tab) so both
-        // screens always show identical numbers. Only fall back to basket computation
-        // for the "all" tab which has no stored column.
+        // Mirror the portfolio tab's priority exactly (ChildPortfolioTab.jsx line 572):
+        // 1. Use the pre-stored P&L column if it has a non-zero value
+        // 2. Fall back to the basket-computed value from the chart rows above
         const storedPnlCol = { "5d": "5d_pnl", "m": "1m_pnl", "ytd": "ytd_pnl" }[activeTab];
+        const basketVal = points[points.length - 1].v;
         if (storedPnlCol) {
           let totalPnlCents = 0;
           await Promise.all(strategyIds.map(async (sid) => {
@@ -785,9 +786,10 @@ const SwipeableBalanceCard = ({
             totalPnlCents += Number(pnlRow?.[storedPnlCol] || 0);
           }));
           if (cancelled) return;
-          setPeriodReturn(totalPnlCents / 100);
+          const storedVal = totalPnlCents / 100;
+          setPeriodReturn(storedVal !== 0 ? storedVal : basketVal);
         } else {
-          setPeriodReturn(points[points.length - 1].v);
+          setPeriodReturn(basketVal);
         }
       } catch (e) {
         console.warn("[SwipeableBalanceCard] childMode snapshot error:", e.message);
