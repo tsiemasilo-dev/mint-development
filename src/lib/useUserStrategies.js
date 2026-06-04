@@ -195,16 +195,27 @@ export const useUserStrategies = (familyMemberId = null) => {
       // investedAmount match the bottom ALL tab (live price × qty instead of
       // the stale daily basket_value snapshot).
       try {
-        let holdingsQuery = supabase
-          .from("stock_holdings_c")
-          .select("security_id, quantity, avg_fill, Expected_fill, strategy_id, Fill_date")
-          .eq("user_id", userId)
-          .not("strategy_id", "is", null)
-          .gt("avg_fill", 0)
-          .eq("Status", "active");
-        holdingsQuery = familyMemberId
-          ? holdingsQuery.eq("family_member_id", familyMemberId)
-          : holdingsQuery.is("family_member_id", null);
+        // Child mode: filter only by family_member_id (no user_id) — matches ChildDashboardPage.fetchHoldings()
+        // Parent mode: filter by user_id + family_member IS NULL
+        let holdingsQuery;
+        if (familyMemberId) {
+          holdingsQuery = supabase
+            .from("stock_holdings_c")
+            .select("security_id, quantity, avg_fill, Expected_fill, strategy_id, Fill_date")
+            .eq("family_member_id", familyMemberId)
+            .not("strategy_id", "is", null)
+            .gt("avg_fill", 0)
+            .eq("Status", "active");
+        } else {
+          holdingsQuery = supabase
+            .from("stock_holdings_c")
+            .select("security_id, quantity, avg_fill, Expected_fill, strategy_id, Fill_date")
+            .eq("user_id", userId)
+            .is("family_member_id", null)
+            .not("strategy_id", "is", null)
+            .gt("avg_fill", 0)
+            .eq("Status", "active");
+        }
 
         const { data: liveHoldings } = await holdingsQuery;
         // Also require Fill_date to match ChildPortfolioTab's liveStrategyMetrics filter
@@ -240,9 +251,14 @@ export const useUserStrategies = (familyMemberId = null) => {
               liveVal += (livePrice / 100) * qty;
               hasLive = true;
             }
-            const expected = Number(h.Expected_fill || 0);
-            const avgFill = Number(h.avg_fill || 0);
-            costBasis += (expected > 0 ? expected : avgFill / 100) * qty;
+            // Match SwipeableBalanceCard: max(Expected_fill, avg_fill/100) with legacy-cents guard
+            const avgFillCentsH = Number(h.avg_fill || 0);
+            const avgFillRandsH = avgFillCentsH / 100;
+            const expectedRawH = Number(h.Expected_fill || 0);
+            const expectedRandsH = expectedRawH > 0
+              ? (expectedRawH > avgFillRandsH * 5 ? expectedRawH / 100 : expectedRawH)
+              : 0;
+            costBasis += Math.max(expectedRandsH, avgFillRandsH) * qty;
           }
 
           if (hasLive) {
