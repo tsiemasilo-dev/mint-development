@@ -198,7 +198,8 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
           .select("security_id, current_price, 1d_abs, timestamp")
           .in("security_id", securityIds)
           .gte("timestamp", `${todayUTC}T00:00:00Z`)
-          .order("timestamp", { ascending: true });
+          .order("timestamp", { ascending: true })
+          .limit(5000);
 
         if (cancelled) return;
         if (!intradayRows?.length) { setIntradayChartData([]); setIntradayLoading(false); return; }
