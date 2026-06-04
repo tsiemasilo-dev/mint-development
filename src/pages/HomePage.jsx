@@ -2034,7 +2034,7 @@ const HomePage = ({
                       <div className="flex items-center gap-2">
                         {strategy.firstInvestedDate ? (
                           <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-400">
-                            {formatDate(strategy.firstInvestedDate)}
+                            Purchased {formatDate(strategy.firstInvestedDate)}
                           </span>
                         ) : strategy.purchaseRef ? (
                           <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-400">
