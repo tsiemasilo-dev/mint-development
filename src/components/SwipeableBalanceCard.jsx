@@ -1154,7 +1154,7 @@ const SwipeableBalanceCard = ({
                 <span className="text-white/70 text-[11px] font-semibold">{childLockedLabel}</span>
                 <span className="text-white/40 text-[10px]">Check back once more data has been recorded</span>
               </div>
-            ) : (
+            ) : (childMode && periodReturn === null) ? null : (
               <>
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${isLoss ? "bg-destructive/20 text-destructive" : "bg-success/20 text-success"}`}>
                   <TrendIcon size={11} strokeWidth={2.5} />
