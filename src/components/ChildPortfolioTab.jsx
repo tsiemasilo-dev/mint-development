@@ -126,6 +126,45 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
     return () => clearInterval(id);
   }, [timeFilter]);
 
+  // ── live price map — polls every 15s directly from stock_intraday_c ──────
+  const [livePriceMap, setLivePriceMap] = useState({});
+
+  useEffect(() => {
+    const stratId = selectedStrategy?.strategyId;
+    if (!stratId) return;
+
+    const securityIds = [...new Set(
+      (rawHoldings || [])
+        .filter(h => h.strategy_id === stratId && h.security_id)
+        .map(h => h.security_id)
+    )];
+    if (securityIds.length === 0) return;
+
+    const fetchPrices = async () => {
+      const { data } = await supabase
+        .from("stock_intraday_c")
+        .select("security_id, current_price, 1d_abs, 1d_pct")
+        .in("security_id", securityIds)
+        .order("timestamp", { ascending: false });
+      if (!data?.length) return;
+      const map = {};
+      for (const row of data) {
+        if (!map[row.security_id]) {
+          map[row.security_id] = {
+            priceCents: Number(row.current_price),
+            abs1dCents: row["1d_abs"] != null ? Number(row["1d_abs"]) : null,
+            pct1d: row["1d_pct"] != null ? Number(row["1d_pct"]) : null,
+          };
+        }
+      }
+      setLivePriceMap(map);
+    };
+
+    fetchPrices();
+    const id = setInterval(fetchPrices, 15000);
+    return () => clearInterval(id);
+  }, [selectedStrategy?.strategyId, rawHoldings]);
+
   // ── chart data ─────────────────────────────────────────────────────────────
   const currentStrategy = selectedStrategy || { name: strategiesLoading ? "Loading..." : "No Strategy", currentValue: 0, investedAmount: 0 };
 
@@ -150,13 +189,14 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
     for (const h of stratHoldings) {
       const qty = Math.abs(Number(h.quantity || 0));
 
+      // Prefer live price from 15s poll, fall back to rawHoldings intraday, then last_price
+      const liveEntry = livePriceMap[h.security_id];
+      const liveCents = liveEntry?.priceCents;
       const intraCents = Number(h.intraday_price_cents);
       const lastCents = Number(h.last_price);
-      if (Number.isFinite(intraCents) && intraCents > 0) {
-        liveValue += (intraCents / 100) * qty;
-        hasPrices = true;
-      } else if (Number.isFinite(lastCents) && lastCents > 0) {
-        liveValue += (lastCents / 100) * qty;
+      const priceCents = (liveCents > 0) ? liveCents : (Number.isFinite(intraCents) && intraCents > 0) ? intraCents : lastCents;
+      if (Number.isFinite(priceCents) && priceCents > 0) {
+        liveValue += (priceCents / 100) * qty;
         hasPrices = true;
       }
 
@@ -168,7 +208,8 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
         if (Number.isFinite(avgFill) && avgFill > 0) costBasis += (avgFill / 100) * qty;
       }
 
-      const abs1d = Number(h.intraday_1d_abs_cents);
+      // Prefer live 1d_abs from poll, fall back to rawHoldings field
+      const abs1d = liveEntry?.abs1dCents ?? Number(h.intraday_1d_abs_cents);
       if (Number.isFinite(abs1d)) {
         todayPnl += (abs1d / 100) * qty;
       }
@@ -176,7 +217,7 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
 
     const todayPct = costBasis > 0 ? (todayPnl / costBasis) * 100 : 0;
     return { liveValue, costBasis, todayPnl, todayPct, isPending: false, hasPrices };
-  }, [rawHoldings, selectedStrategy?.strategyId]);
+  }, [rawHoldings, selectedStrategy?.strategyId, livePriceMap]);
 
   // ── intraday D chart — fetches 5-min bucketed prices from stock_intraday_c ──
   useEffect(() => {
