@@ -574,7 +574,7 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
                         ? liveStrategyMetrics.todayPct
                         : timeFilter === "all"
                           ? livePct
-                          : (periodReturnData?.pct !== undefined && periodReturnData.pct !== 0 ? periodReturnData.pct : (derivedPeriodReturn.pct !== 0 ? derivedPeriodReturn.pct : livePct));
+                          : (periodReturnData?.pct !== undefined && periodReturnData.pct !== 0 ? periodReturnData.pct : (derivedPeriodReturn.pct !== 0 ? derivedPeriodReturn.pct : (ia > 0 ? (pnl / ia) * 100 : 0)));
                       const isPos = pnl >= 0;
                       if (isPending) return <p className="text-3xl font-bold text-slate-900">R0,00</p>;
                       return (

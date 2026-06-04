@@ -801,12 +801,6 @@ const SwipeableBalanceCard = ({
           const pctFallback = activeTab === "ytd" ? null : (basketPct || null);
           const finalReturn = storedVal !== 0 ? storedVal : basketVal;
           const finalPct = storedPct !== 0 ? storedPct : pctFallback;
-          console.log("[BalanceCard YTD debug]", {
-            tab: activeTab, userId, familyMemberId,
-            totalPnlCents, storedVal, storedPct,
-            basketVal, basketPct,
-            finalReturn, finalPct
-          });
           setPeriodReturn(finalReturn);
           setPeriodPct(finalPct);
         } else {
