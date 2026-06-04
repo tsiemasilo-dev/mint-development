@@ -161,18 +161,17 @@ export default function ChildInvestModal({
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) { setStep("amount"); return; }
 
-      const { data: strategyTxns } = await supabase
-        .from("transactions")
-        .select("name")
-        .eq("user_id", session.user.id)
-        .like("name", "Strategy Investment:%");
+      const { data: childHoldings } = await supabase
+        .from("stock_holdings")
+        .select("strategy_id")
+        .eq("family_member_id", child.id);
 
-      const investedStrategies = new Set(
-        (strategyTxns || []).map(t => t.name.replace("Strategy Investment: ", "").trim())
+      const childStrategyIds = new Set(
+        (childHoldings || []).map(h => h.strategy_id).filter(Boolean)
       );
-      const alreadyInvested = strategy?.name && investedStrategies.has(strategy.name);
+      const alreadyHasThisStrategy = strategy?.id && childStrategyIds.has(strategy.id);
 
-      if (!alreadyInvested && investedStrategies.size >= 1) {
+      if (!alreadyHasThisStrategy && childStrategyIds.size >= 1) {
         setShowFeeModal(true);
       } else {
         setStep("amount");
@@ -243,7 +242,7 @@ export default function ChildInvestModal({
                   {step === "success" ? "Investment Placed!" : step === "amount" ? "Confirm Investment" : (strategy?.short_name || strategy?.name)}
                 </h2>
                 {step === "preview" && minimum && (
-                  <p className="text-[11px] text-slate-400 mt-0.5">Min. R{fmt(minimum)} per basket</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Min. R{fmt(minimum * (1 + CASH_BUFFER_RATE))} per basket</p>
                 )}
                 {step === "amount" && (
                   <p className="text-[11px] text-slate-400 mt-0.5">{strategy?.short_name || strategy?.name}</p>
@@ -334,7 +333,7 @@ export default function ChildInvestModal({
                 {minimum && (
                   <div className="text-right">
                     <p className="text-[10px] text-purple-400 uppercase tracking-wide">Min. invest</p>
-                    <p className="text-sm font-bold text-purple-800">R{fmt(minimum)}</p>
+                    <p className="text-sm font-bold text-purple-800">R{fmt(minimum * (1 + CASH_BUFFER_RATE))}</p>
                   </div>
                 )}
               </div>
