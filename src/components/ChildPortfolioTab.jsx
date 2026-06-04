@@ -117,6 +117,14 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
   // intraday D chart
   const [intradayChartData, setIntradayChartData] = useState(null);
   const [intradayLoading, setIntradayLoading] = useState(false);
+  const [intradayTick, setIntradayTick] = useState(0);
+
+  // Poll every 60 seconds while on D view
+  useEffect(() => {
+    if (timeFilter !== "D") return;
+    const id = setInterval(() => setIntradayTick(t => t + 1), 60000);
+    return () => clearInterval(id);
+  }, [timeFilter]);
 
   // ── chart data ─────────────────────────────────────────────────────────────
   const currentStrategy = selectedStrategy || { name: strategiesLoading ? "Loading..." : "No Strategy", currentValue: 0, investedAmount: 0 };
@@ -268,7 +276,7 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
     })();
 
     return () => { cancelled = true; };
-  }, [timeFilter, selectedStrategy?.strategyId, rawHoldings, familyMemberId, liveStrategyMetrics.costBasis, liveStrategyMetrics.isPending]);
+  }, [timeFilter, selectedStrategy?.strategyId, rawHoldings, familyMemberId, liveStrategyMetrics.costBasis, liveStrategyMetrics.isPending, intradayTick]);
 
   const currentChartData = useMemo(() => {
     if (realChartData && realChartData.length > 0) {
