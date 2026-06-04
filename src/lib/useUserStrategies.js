@@ -273,6 +273,8 @@ export const useStrategyChartData = (strategyId, timeFilter = "W", purchaseDate 
             query = query.gte("as_of_date", fromDate.toISOString().split("T")[0]);
           } else if (timeFilter === "ytd") {
             query = query.gte("as_of_date", `${now.getFullYear()}-01-01`);
+          } else if (timeFilter === "all") {
+            // no date restriction — fetch full history
           }
 
           const { data: rows, error } = await query;
