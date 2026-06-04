@@ -1132,11 +1132,11 @@ const SwipeableBalanceCard = ({
   const activeReturn = (isPeriodTab && activeTab !== "all" && periodReturn !== null) ? periodReturn : displayReturn;
   // For child period tabs use the stored/basket pct (same source as portfolio tab).
   // For all other cases derive from pnl / costBasis.
-  const activeReturnPct = (childMode && isPeriodTab && activeTab !== "all" && periodPct !== null)
-    ? Math.abs(periodPct).toFixed(1)   // match portfolio tab: standard rounding not truncation
-    : (displayBigValue > 0
-        ? truncateDecimal((Math.abs(activeReturn) / displayBigValue) * 100, 1).toFixed(1)
-        : "0.0");
+  const activeReturnPct = displayBigValue > 0
+    ? ((childMode && isPeriodTab && activeTab !== "all" && periodPct !== null)
+        ? Math.abs(periodPct).toFixed(1)
+        : ((Math.abs(activeReturn) / displayBigValue) * 100).toFixed(1))
+    : "0.0";
 
   const isLoss = activeReturn < 0;
   const returnPct = activeReturnPct;
