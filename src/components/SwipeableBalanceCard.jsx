@@ -1155,8 +1155,10 @@ const SwipeableBalanceCard = ({
                 <span className="text-white/40 text-[10px]">Check back once more data has been recorded</span>
               </div>
             ) : (childMode && periodReturn === null) ? (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-white/10 overflow-hidden relative w-24 h-5">
-                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent animate-shimmer" />
+              <span className="inline-flex items-center gap-1 px-3 py-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-white/60 loading-dot-1" />
+                <span className="w-1.5 h-1.5 rounded-full bg-white/60 loading-dot-2" />
+                <span className="w-1.5 h-1.5 rounded-full bg-white/60 loading-dot-3" />
               </span>
             ) : (
               <>
