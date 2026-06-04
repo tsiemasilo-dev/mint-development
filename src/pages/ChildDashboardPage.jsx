@@ -3304,7 +3304,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
 
       {/* -- News article overlay -- */}
       {childNewsArticleId && (
-        <div className="fixed inset-0 z-20 overflow-y-auto" style={{ background: "var(--bg, #0f0a1e)" }}>
+        <div className="fixed inset-0 z-[1100] overflow-y-auto" style={{ background: "var(--bg, #0f0a1e)" }}>
           <Suspense fallback={<div style={{ background: "var(--bg, #0f0a1e)", height: "100%" }} />}>
             <NewsArticlePage
               articleId={childNewsArticleId}
