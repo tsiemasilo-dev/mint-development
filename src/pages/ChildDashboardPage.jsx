@@ -3256,10 +3256,11 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
           </Suspense>
           <Navbar
             activeTab="home"
-            comingSoonTabs={["investments"]}
+            comingSoonTabs={[]}
             setActiveTab={(tab) => {
               if (tab === "news") setActiveChildTab("news");
               else if (tab === "more") setActiveChildTab("more");
+              else if (tab === "investments") setActiveChildTab("portfolio");
               else setActiveChildTab("home");
             }}
           />
@@ -3284,9 +3285,10 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
         </Suspense>
         <Navbar
           activeTab="news"
-          comingSoonTabs={["investments"]}
+          comingSoonTabs={[]}
           setActiveTab={(tab) => {
             if (tab === "more") setActiveChildTab("more");
+            else if (tab === "investments") setActiveChildTab("portfolio");
             else setActiveChildTab("home");
           }}
         />
@@ -3314,9 +3316,10 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
         </Suspense>
         <Navbar
           activeTab="more"
-          comingSoonTabs={["investments"]}
+          comingSoonTabs={[]}
           setActiveTab={(tab) => {
             if (tab === "news") setActiveChildTab("news");
+            else if (tab === "investments") setActiveChildTab("portfolio");
             else setActiveChildTab("home");
           }}
         />
@@ -3325,11 +3328,11 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
       {/* -- Bottom Navigation Bar (shared Mint Navbar) -- */}
       <Navbar
         activeTab={activeChildTab === "news" ? "news" : activeChildTab === "more" ? "more" : activeChildTab === "portfolio" ? "investments" : "home"}
-        comingSoonTabs={["investments"]}
+        comingSoonTabs={[]}
         setActiveTab={(tab) => {
           if (tab === "news") setActiveChildTab("news");
           else if (tab === "more") setActiveChildTab("more");
-          else if (tab === "investments") return;
+          else if (tab === "investments") setActiveChildTab("portfolio");
           else setActiveChildTab("home");
         }}
       />
