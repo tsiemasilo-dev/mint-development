@@ -53,7 +53,9 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
 
   // strategy hooks — filtered to child
   const { strategies, selectedStrategy, loading: strategiesLoading, selectStrategy } = useUserStrategies(familyMemberId);
-  const [timeFilter, setTimeFilter] = useState("m");
+  const [timeFilter, setTimeFilter] = useState("all");
+  const [tabJustChanged, setTabJustChanged] = useState(false);
+  const tabJustChangedTimer = useRef(null);
   const { chartData: realChartData, loading: chartLoading } = useStrategyChartData(
     selectedStrategy?.strategyId, timeFilter,
     selectedStrategy?.firstInvestedDate || null,
@@ -64,32 +66,59 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
   );
 
   // which time period tabs have enough data to show
-  const [availablePeriods, setAvailablePeriods] = useState({ D: true, "5d": false, m: false, ytd: false });
+  const [availablePeriods, setAvailablePeriods] = useState({ D: true, "5d": false, m: false, ytd: false, all: true });
+  // raw snapshot rows used for period P&L derivation (basket_value in cents, ascending by date)
+  const [snapshotRows, setSnapshotRows] = useState([]);
 
   useEffect(() => {
     if (!familyMemberId || !selectedStrategy?.strategyId) return;
     supabase
       .from("client_strategy_returns_c")
-      .select("5d_pct, 1m_pct, ytd_pct")
+      .select("as_of_date, basket_value, ytd_pct")
       .eq("family_member", familyMemberId)
       .eq("strategy_id", selectedStrategy.strategyId)
-      .order("as_of_date", { ascending: false })
-      .limit(1)
-      .maybeSingle()
+      .order("as_of_date", { ascending: true })
       .then(({ data }) => {
-        if (data) {
+        if (data && data.length > 0) {
+          setSnapshotRows(data);
+          const count = data.length;
+          const latestYtdPct = data[data.length - 1]?.ytd_pct;
           setAvailablePeriods({
             D: true,
-            "5d": data["5d_pct"] != null,
-            m: data["1m_pct"] != null,
-            ytd: data["ytd_pct"] != null,
+            "5d": count >= 5,
+            m: count >= 22,
+            ytd: latestYtdPct != null,
+            all: true,
           });
         }
       });
   }, [familyMemberId, selectedStrategy?.strategyId]);
 
+  // derive period P&L from basket snapshots when pre-calculated columns are null
+  const derivedPeriodReturn = useMemo(() => {
+    if (!snapshotRows.length) return { pnl: 0, pct: 0 };
+    const last = snapshotRows[snapshotRows.length - 1];
+    const latestCents = Number(last?.basket_value || 0);
+    if (!latestCents) return { pnl: 0, pct: 0 };
+
+    let startCents = 0;
+    if (timeFilter === "5d" && snapshotRows.length >= 5) {
+      startCents = Number(snapshotRows[snapshotRows.length - 5]?.basket_value || 0);
+    } else if (timeFilter === "m" && snapshotRows.length >= 22) {
+      startCents = Number(snapshotRows[snapshotRows.length - 22]?.basket_value || 0);
+    } else {
+      return { pnl: 0, pct: 0 };
+    }
+
+    if (!startCents) return { pnl: 0, pct: 0 };
+    const pnl = (latestCents - startCents) / 100;
+    const pct = ((latestCents - startCents) / startCents) * 100;
+    return { pnl, pct: parseFloat(pct.toFixed(4)) };
+  }, [snapshotRows, timeFilter]);
+
+
   // Derive locked message directly from availablePeriods + current filter — always in sync
-  const _lockedLabels = { "5d": "Available after 5 trading days", m: "Available after 1 month", ytd: "Available after first full year" };
+  const _lockedLabels = { "5d": "Available after 5 trading days", m: "Available after 1 month", ytd: "Available after first full year", all: null };
   const lockedMessage = (!availablePeriods[timeFilter] && _lockedLabels[timeFilter]) ? _lockedLabels[timeFilter] : null;
 
   // sub-tab within the portfolio tab
@@ -114,14 +143,227 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
   const [failedLogos, setFailedLogos] = useState({});
   const [activePieIndex, setActivePieIndex] = useState(-1);
 
+  // intraday D chart
+  const [intradayChartData, setIntradayChartData] = useState(null);
+  const [intradayLoading, setIntradayLoading] = useState(false);
+  const [intradayTick, setIntradayTick] = useState(0);
+
+  // Poll every 60 seconds while on D view
+  useEffect(() => {
+    if (timeFilter !== "D") return;
+    const id = setInterval(() => setIntradayTick(t => t + 1), 60000);
+    return () => clearInterval(id);
+  }, [timeFilter]);
+
+  // ── live price map — polls every 15s directly from stock_intraday_c ──────
+  const [livePriceMap, setLivePriceMap] = useState({});
+
+  useEffect(() => {
+    const stratId = selectedStrategy?.strategyId;
+    if (!stratId) return;
+
+    const securityIds = [...new Set(
+      (rawHoldings || [])
+        .filter(h => h.strategy_id === stratId && h.security_id)
+        .map(h => h.security_id)
+    )];
+    if (securityIds.length === 0) return;
+
+    const fetchPrices = async () => {
+      const { data } = await supabase
+        .from("stock_intraday_c")
+        .select("security_id, current_price, 1d_abs, 1d_pct")
+        .in("security_id", securityIds)
+        .order("timestamp", { ascending: false });
+      if (!data?.length) return;
+      const map = {};
+      for (const row of data) {
+        if (!map[row.security_id]) {
+          map[row.security_id] = {
+            priceCents: Number(row.current_price),
+            abs1dCents: row["1d_abs"] != null ? Number(row["1d_abs"]) : null,
+            pct1d: row["1d_pct"] != null ? Number(row["1d_pct"]) : null,
+          };
+        }
+      }
+      setLivePriceMap(map);
+    };
+
+    fetchPrices();
+    const id = setInterval(fetchPrices, 15000);
+    return () => clearInterval(id);
+  }, [selectedStrategy?.strategyId, rawHoldings]);
+
   // ── chart data ─────────────────────────────────────────────────────────────
   const currentStrategy = selectedStrategy || { name: strategiesLoading ? "Loading..." : "No Strategy", currentValue: 0, investedAmount: 0 };
+
+  // ── live strategy metrics — computed from holdings instead of saved snapshot ──
+  const liveStrategyMetrics = useMemo(() => {
+    const stratId = selectedStrategy?.strategyId;
+    const empty = { liveValue: 0, costBasis: 0, todayPnl: 0, todayPct: 0, isPending: true, hasPrices: false };
+    if (!stratId) return empty;
+
+    const stratHoldings = (rawHoldings || []).filter(h =>
+      h.strategy_id === stratId &&
+      Number(h.avg_fill || 0) > 0 &&
+      !!h.Fill_date
+    );
+    if (stratHoldings.length === 0) return empty;
+
+    let liveValue = 0;
+    let costBasis = 0;
+    let todayPnl = 0;
+    let hasPrices = false;
+
+    for (const h of stratHoldings) {
+      const qty = Math.abs(Number(h.quantity || 0));
+
+      // Prefer live price from 15s poll, fall back to rawHoldings intraday, then last_price
+      const liveEntry = livePriceMap[h.security_id];
+      const liveCents = liveEntry?.priceCents;
+      const intraCents = Number(h.intraday_price_cents);
+      const lastCents = Number(h.last_price);
+      const priceCents = (liveCents > 0) ? liveCents : (Number.isFinite(intraCents) && intraCents > 0) ? intraCents : lastCents;
+      if (Number.isFinite(priceCents) && priceCents > 0) {
+        liveValue += (priceCents / 100) * qty;
+        hasPrices = true;
+      }
+
+      // Match SwipeableBalanceCard: max(Expected_fill, avg_fill/100) with legacy-cents guard
+      const avgFillCents = Number(h.avg_fill || 0);
+      const avgFillRands = avgFillCents / 100;
+      const expectedRaw = Number(h.Expected_fill || 0);
+      const expectedRands = expectedRaw > 0
+        ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw)
+        : 0;
+      costBasis += Math.max(expectedRands, avgFillRands) * qty;
+
+      // Prefer live 1d_abs from poll, fall back to rawHoldings field
+      const abs1d = liveEntry?.abs1dCents ?? Number(h.intraday_1d_abs_cents);
+      if (Number.isFinite(abs1d)) {
+        todayPnl += (abs1d / 100) * qty;
+      }
+    }
+
+    const todayPct = costBasis > 0 ? (todayPnl / costBasis) * 100 : 0;
+    return { liveValue, costBasis, todayPnl, todayPct, isPending: false, hasPrices };
+  }, [rawHoldings, selectedStrategy?.strategyId, livePriceMap]);
+
+  // ── intraday D chart — fetches 5-min bucketed prices from stock_intraday_c ──
+  useEffect(() => {
+    if (timeFilter !== "D") { setIntradayChartData(null); return; }
+    const stratId = selectedStrategy?.strategyId;
+    if (!stratId || liveStrategyMetrics.isPending) return;
+
+    const stratHoldings = (rawHoldings || []).filter(h =>
+      h.strategy_id === stratId && Number(h.avg_fill || 0) > 0 && !!h.Fill_date
+    );
+    if (stratHoldings.length === 0) return;
+
+    const securityIds = [...new Set(stratHoldings.map(h => h.security_id).filter(Boolean))];
+    const qtyMap = {};
+    stratHoldings.forEach(h => { qtyMap[h.security_id] = Math.abs(Number(h.quantity || 0)); });
+
+    let cancelled = false;
+    setIntradayLoading(true);
+
+    (async () => {
+      try {
+        const todayUTC = new Date().toISOString().slice(0, 10);
+
+        // Today's intraday rows — paginate in batches of 1000 to bypass Supabase's server-side row cap
+        const PAGE = 1000;
+        let intradayRows = [];
+        let page = 0;
+        while (true) {
+          const { data: batch } = await supabase
+            .from("stock_intraday_c")
+            .select("security_id, current_price, 1d_abs, timestamp")
+            .in("security_id", securityIds)
+            .gte("timestamp", `${todayUTC}T00:00:00Z`)
+            .order("timestamp", { ascending: true })
+            .range(page * PAGE, (page + 1) * PAGE - 1);
+          if (!batch?.length) break;
+          intradayRows = intradayRows.concat(batch);
+          if (batch.length < PAGE) break; // last page
+          page++;
+          if (cancelled) return;
+        }
+
+        if (cancelled) return;
+        if (!intradayRows.length) { setIntradayChartData([]); setIntradayLoading(false); return; }
+
+        // Derive yesterday's closing price per security from the latest 1d_abs value:
+        // yesterday_close = current_price - 1d_abs  (1d_abs = today's change vs yesterday's close)
+        const latestBySecId = {};
+        for (const row of intradayRows) {
+          latestBySecId[row.security_id] = row; // later rows overwrite earlier → we get the latest
+        }
+        const baselineRands = securityIds.reduce((sum, sid) => {
+          const row = latestBySecId[sid];
+          if (!row) return sum;
+          const yesterdayCloseCents = Number(row.current_price) - Number(row["1d_abs"] || 0);
+          return sum + (yesterdayCloseCents / 100) * (qtyMap[sid] || 0);
+        }, 0) || liveStrategyMetrics.costBasis;
+
+        // Group into 5-minute buckets
+        const bucketMap = new Map();
+        for (const row of intradayRows) {
+          const d = new Date(row.timestamp);
+          d.setSeconds(0, 0);
+          d.setMinutes(Math.floor(d.getMinutes() / 5) * 5);
+          const key = d.toISOString();
+          if (!bucketMap.has(key)) bucketMap.set(key, {});
+          bucketMap.get(key)[row.security_id] = Number(row.current_price);
+        }
+
+        const sorted = [...bucketMap.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1);
+        const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        const lastKnown = {};
+        const points = [{ day: null, value: 0, fullDate: null }];
+
+        for (const [isoKey, prices] of sorted) {
+          for (const sid of securityIds) {
+            if (prices[sid] != null) lastKnown[sid] = prices[sid];
+          }
+          if (Object.keys(lastKnown).length === 0) continue;
+
+          const portfolioRands = securityIds.reduce((sum, sid) => {
+            const price = lastKnown[sid];
+            return price != null ? sum + (price / 100) * (qtyMap[sid] || 0) : sum;
+          }, 0);
+
+          const pnl = Number((portfolioRands - baselineRands).toFixed(2));
+
+          // Convert UTC → SAST (+2h) for labels
+          const d = new Date(isoKey);
+          const sast = new Date(d.getTime() + 2 * 60 * 60 * 1000);
+          const hh = String(sast.getUTCHours()).padStart(2, "0");
+          const mm = String(sast.getUTCMinutes()).padStart(2, "0");
+          const dd = sast.getUTCDate();
+          const mo = MONTH_NAMES[sast.getUTCMonth()];
+          const yr = sast.getUTCFullYear();
+
+          points.push({ day: `${hh}:${mm}`, value: pnl, fullDate: `${dd} ${mo} ${yr} ${hh}:${mm}` });
+        }
+
+        if (!cancelled) setIntradayChartData(points.length > 1 ? points : []);
+      } catch (e) {
+        console.error("[intraday-chart]", e);
+        if (!cancelled) setIntradayChartData([]);
+      } finally {
+        if (!cancelled) setIntradayLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [timeFilter, selectedStrategy?.strategyId, rawHoldings, familyMemberId, liveStrategyMetrics.costBasis, liveStrategyMetrics.isPending, intradayTick]);
 
   const currentChartData = useMemo(() => {
     if (realChartData && realChartData.length > 0) {
       if (realChartData[0]?.day === null && realChartData[0]?.value === 0) return realChartData;
-      const cv = currentStrategy.currentValue || 0;
-      const ia = currentStrategy.investedAmount || 0;
+      const cv = liveStrategyMetrics.hasPrices ? liveStrategyMetrics.liveValue : (currentStrategy.currentValue || 0);
+      const ia = liveStrategyMetrics.costBasis || currentStrategy.investedAmount || 0;
       if (cv > 0 && realChartData.length > 0) {
         const latestNav = realChartData[realChartData.length - 1].value;
         if (!latestNav || latestNav <= 0) return [];
@@ -132,10 +374,15 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
       }
     }
     return [];
-  }, [realChartData, currentStrategy]);
+  }, [realChartData, currentStrategy, liveStrategyMetrics]);
 
-  const stratAxisConfig = computePnlAxisConfig(currentChartData);
-  const isLoadingData = strategiesLoading || chartLoading;
+  // Use intraday buckets for D, otherwise the snapshot-based curve
+  const displayChartData = (timeFilter === "D" && intradayChartData && intradayChartData.length > 1)
+    ? intradayChartData
+    : currentChartData;
+
+  const stratAxisConfig = computePnlAxisConfig(displayChartData);
+  const isLoadingData = strategiesLoading || chartLoading || (timeFilter === "D" && intradayLoading);
 
   // ── holdings data (for Holdings tab) ──────────────────────────────────────
   const allStrategyHoldings = useMemo(() => {
@@ -287,12 +534,15 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
                     </div>
 
                     <div className="flex gap-1">
-                      {[{ id: "D", label: "D" }, { id: "5d", label: "5D" }, { id: "m", label: "M" }, { id: "ytd", label: "YTD" }].map((f) => {
+                      {[{ id: "D", label: "D" }, { id: "5d", label: "5D" }, { id: "m", label: "M" }, { id: "ytd", label: "YTD" }, { id: "all", label: "ALL" }].map((f) => {
                         return (
                           <button
                             key={f.id}
                             onClick={() => {
+                              setTabJustChanged(true);
                               setTimeFilter(f.id);
+                              clearTimeout(tabJustChangedTimer.current);
+                              tabJustChangedTimer.current = setTimeout(() => setTabJustChanged(false), 800);
                             }}
                             className={`px-3 h-8 rounded-full text-xs font-bold transition-all ${
                               timeFilter === f.id
@@ -310,17 +560,33 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
                   {/* Value + P&L */}
                   <div>
                     {(() => {
-                      const cv = currentStrategy.currentValue || 0;
-                      const ia = currentStrategy.investedAmount || 0;
-                      const isPending = cv === 0 && ia === 0;
-                      const pnl = periodReturnData?.pnl !== undefined && periodReturnData.pnl !== 0 ? periodReturnData.pnl : cv - ia;
-                      const pnlPct = periodReturnData?.pct !== undefined && periodReturnData.pct !== 0 ? periodReturnData.pct : (ia > 0 ? (pnl / ia) * 100 : 0);
+                      const cv = liveStrategyMetrics.hasPrices ? liveStrategyMetrics.liveValue : (currentStrategy.currentValue || 0);
+                      const ia = liveStrategyMetrics.costBasis || currentStrategy.investedAmount || 0;
+                      const isPending = liveStrategyMetrics.isPending;
+                      const livePnl = liveStrategyMetrics.liveValue - liveStrategyMetrics.costBasis;
+                      const livePct = ia > 0 ? (livePnl / ia) * 100 : 0;
+                      const pnl = timeFilter === "D"
+                        ? liveStrategyMetrics.todayPnl
+                        : timeFilter === "all"
+                          ? livePnl
+                          : (periodReturnData?.pnl !== undefined && periodReturnData.pnl !== 0 ? periodReturnData.pnl : (derivedPeriodReturn.pnl !== 0 ? derivedPeriodReturn.pnl : livePnl));
+                      const pnlPct = timeFilter === "D"
+                        ? liveStrategyMetrics.todayPct
+                        : timeFilter === "all"
+                          ? livePct
+                          : (periodReturnData?.pct !== undefined && periodReturnData.pct !== 0 ? periodReturnData.pct : (derivedPeriodReturn.pct !== 0 ? derivedPeriodReturn.pct : livePct));
                       const isPos = pnl >= 0;
                       if (isPending) return <p className="text-3xl font-bold text-slate-900">R0,00</p>;
                       return (
                         <>
                           <p className="text-3xl font-bold text-slate-900">{fmt(cv)}</p>
-                          {!lockedMessage && (
+                          {!lockedMessage && tabJustChanged && (
+                            <div className="flex items-center gap-2 mt-1">
+                              <div className="h-4 w-16 bg-slate-200 rounded-full animate-pulse" />
+                              <div className="h-4 w-10 bg-slate-200 rounded-full animate-pulse" />
+                            </div>
+                          )}
+                      {!lockedMessage && !tabJustChanged && (
                             <div className="flex items-center gap-2 mt-1">
                               <span className={`text-sm font-semibold ${isPos ? "text-emerald-500" : "text-rose-500"}`}>
                                 {isPos ? "+" : "-"}{fmt(Math.abs(pnl))}
@@ -343,13 +609,13 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
                         <p className="text-slate-500 text-sm font-medium">{lockedMessage}</p>
                         <p className="text-slate-400 text-xs">Check back once more data has been recorded</p>
                       </div>
-                    ) : currentChartData.length === 0 ? (
+                    ) : displayChartData.length === 0 ? (
                       <div className="h-full flex items-center justify-center">
                         <p className="text-slate-400 text-sm">{isLoadingData ? "Loading chart..." : "No data available"}</p>
                       </div>
                     ) : (
                       <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={currentChartData} margin={{ top: 8, right: 12, left: 4, bottom: 24 }}>
+                        <ComposedChart data={displayChartData} margin={{ top: 8, right: 12, left: 4, bottom: 24 }}>
                           <defs>
                             <linearGradient id="childGradient" x1="0" y1="0" x2="0" y2="1">
                               <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.4" />
@@ -361,7 +627,7 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
                             axisLine={false}
                             tickLine={false}
                             tickMargin={8}
-                            interval={currentChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(currentChartData.length / 6) - 1)}
+                            interval={displayChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(displayChartData.length / 6) - 1)}
                             tick={({ x, y, payload }) => payload.value ? <text x={x} y={y} dy={12} textAnchor="middle" fill="#64748b" fontSize={10} fontWeight={500}>{payload.value}</text> : null}
                           />
                           <YAxis domain={stratAxisConfig.domain} ticks={stratAxisConfig.ticks} tickFormatter={formatPnlAxis} tick={{ fill: "#94a3b8", fontSize: 10 }} axisLine={false} tickLine={false} width={50} />

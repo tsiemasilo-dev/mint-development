@@ -38,7 +38,7 @@ export const useUserStrategies = (familyMemberId = null) => {
     error: null,
   });
 
-  const fetchUserStrategies = useCallback(async () => {
+  const fetchUserStrategies = useCallback(async (silent = false) => {
     if (!supabase) {
       setData((prev) => ({ ...prev, loading: false, error: "Database not connected" }));
       return;
@@ -190,6 +190,93 @@ export const useUserStrategies = (familyMemberId = null) => {
         };
       });
 
+      // ── Live price override ────────────────────────────────────────────────
+      // Fetch stock_holdings_c + stock_intraday_c so currentValue and
+      // investedAmount match the bottom ALL tab (live price × qty instead of
+      // the stale daily basket_value snapshot).
+      try {
+        // Child mode: filter only by family_member_id (no user_id) — matches ChildDashboardPage.fetchHoldings()
+        // Parent mode: filter by user_id + family_member IS NULL
+        let holdingsQuery;
+        if (familyMemberId) {
+          holdingsQuery = supabase
+            .from("stock_holdings_c")
+            .select("security_id, quantity, avg_fill, Expected_fill, strategy_id, Fill_date")
+            .eq("family_member_id", familyMemberId)
+            .not("strategy_id", "is", null)
+            .gt("avg_fill", 0)
+            .eq("Status", "active");
+        } else {
+          holdingsQuery = supabase
+            .from("stock_holdings_c")
+            .select("security_id, quantity, avg_fill, Expected_fill, strategy_id, Fill_date")
+            .eq("user_id", userId)
+            .is("family_member_id", null)
+            .not("strategy_id", "is", null)
+            .gt("avg_fill", 0)
+            .eq("Status", "active");
+        }
+
+        const { data: liveHoldings } = await holdingsQuery;
+        // Also require Fill_date to match ChildPortfolioTab's liveStrategyMetrics filter
+        const allLiveHoldings = (liveHoldings || []).filter(h => h.Fill_date != null);
+        const secIds = [...new Set(allLiveHoldings.map(h => h.security_id).filter(Boolean))];
+
+        let livePriceMap = {};
+        if (secIds.length > 0) {
+          const { data: intradayRows } = await supabase
+            .from("stock_intraday_c")
+            .select("security_id, current_price")
+            .in("security_id", secIds)
+            .order("timestamp", { ascending: false });
+          for (const row of (intradayRows || [])) {
+            if (!livePriceMap[row.security_id]) {
+              livePriceMap[row.security_id] = Number(row.current_price); // cents
+            }
+          }
+        }
+
+        for (const strat of formattedStrategies) {
+          const stratHoldings = allLiveHoldings.filter(h => h.strategy_id === strat.strategyId);
+          if (stratHoldings.length === 0) continue;
+
+          let liveVal = 0;
+          let costBasis = 0;
+          let hasLive = false;
+
+          for (const h of stratHoldings) {
+            const qty = Math.abs(Number(h.quantity || 0));
+            const livePrice = livePriceMap[h.security_id];
+            if (livePrice > 0) {
+              liveVal += (livePrice / 100) * qty;
+              hasLive = true;
+            }
+            // Match SwipeableBalanceCard: max(Expected_fill, avg_fill/100) with legacy-cents guard
+            const avgFillCentsH = Number(h.avg_fill || 0);
+            const avgFillRandsH = avgFillCentsH / 100;
+            const expectedRawH = Number(h.Expected_fill || 0);
+            const expectedRandsH = expectedRawH > 0
+              ? (expectedRawH > avgFillRandsH * 5 ? expectedRawH / 100 : expectedRawH)
+              : 0;
+            costBasis += Math.max(expectedRandsH, avgFillRandsH) * qty;
+          }
+
+          if (hasLive) {
+            const liveValR = Number(liveVal.toFixed(2));
+            const costBasisR = Number(costBasis.toFixed(2));
+            strat.currentValue = liveValR;
+            strat.positionsValue = liveValR;
+            strat.investedAmount = costBasisR;
+            strat.previousMonthChange = costBasisR > 0
+              ? parseFloat(((liveValR - costBasisR) / costBasisR * 100).toFixed(1))
+              : 0;
+          }
+        }
+      } catch (liveErr) {
+        console.warn("[useUserStrategies] Live price fetch failed, keeping snapshot values:", liveErr.message);
+      }
+      // ── end live price override ────────────────────────────────────────────
+
       const nextData = {
         strategies: formattedStrategies,
         selectedStrategy: formattedStrategies[0] || null,
@@ -223,7 +310,13 @@ export const useUserStrategies = (familyMemberId = null) => {
       setData((prev) => prev.loading ? { ...prev, loading: false } : prev);
     }, 6000);
 
-    return () => clearTimeout(safetyTimer);
+    // Silent refresh every 15 s — keeps live P&L in sync with the top balance card
+    const pollId = setInterval(() => fetchUserStrategies(true), 15000);
+
+    return () => {
+      clearTimeout(safetyTimer);
+      clearInterval(pollId);
+    };
   }, [fetchUserStrategies]);
 
   return { ...data, selectStrategy, refetch: fetchUserStrategies };
@@ -273,6 +366,8 @@ export const useStrategyChartData = (strategyId, timeFilter = "W", purchaseDate 
             query = query.gte("as_of_date", fromDate.toISOString().split("T")[0]);
           } else if (timeFilter === "ytd") {
             query = query.gte("as_of_date", `${now.getFullYear()}-01-01`);
+          } else if (timeFilter === "all") {
+            // no date restriction — fetch full history
           }
 
           const { data: rows, error } = await query;

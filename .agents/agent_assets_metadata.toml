@@ -1,0 +1,14 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "OJ3oU7IkfLgGla9Vdt1VK"
+uri = "file://IRESS_Explained.txt"
+type = "text"
+title = "IRESS API — Explained in Simple English"
+
+[[outputs]]
+id = "AB4787xAcmyhWLYvsbDyK"
+uri = "file://MINT - APP STORE.pdf"
+type = "pdf"
+title = "MINT - App Store Readiness & Launch Guide"
