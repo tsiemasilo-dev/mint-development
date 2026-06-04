@@ -1,0 +1,30 @@
+index-CL9PUNOc.js:64 [realtime-prices] Setting up singleton subscription
+index-CL9PUNOc.js:64 Setting up SINGLETON notifications subscription
+index-CL9PUNOc.js:64 [realtime-prices] Subscription status: SUBSCRIBED
+index-CL9PUNOc.js:64 Notifications singleton status: SUBSCRIBED
+index-CL9PUNOc.js:64 KYC status check: stored="verified" current="verified"
+index-CL9PUNOc.js:64 [useOnboardingStatus] Total Onboarding Status: COMPLETE ✅ Object
+index-CL9PUNOc.js:64 Setting up SINGLETON real-time subscription: required-actions-singleton
+index-CL9PUNOc.js:64 Singleton subscription status: SUBSCRIBED
+index-CL9PUNOc.js:64 [useFinancialData] Updated balance from DB: 112894.15
+index-CL9PUNOc.js:105 [SwipeableBalanceCard] Loaded holdings: Object
+index-CL9PUNOc.js:105 [SwipeableBalanceCard] Fetching history for tab: m, days: 30, startDate: 2026-04-05
+index-CL9PUNOc.js:105 [SwipeableBalanceCard] Fetching history for tab: m, days: 30, startDate: 2026-04-05
+index-CL9PUNOc.js:35 @supabase/gotrue-js: Lock "lock:sb-mfxnghmuccevsxwcetej-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover.
+hZ @ index-CL9PUNOc.js:35
+index-CL9PUNOc.js:35 @supabase/gotrue-js: Lock "lock:sb-mfxnghmuccevsxwcetej-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover.
+hZ @ index-CL9PUNOc.js:35
+index-CL9PUNOc.js:35 @supabase/gotrue-js: Lock "lock:sb-mfxnghmuccevsxwcetej-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover.
+hZ @ index-CL9PUNOc.js:35
+index-CL9PUNOc.js:64 [useFinancialData] Updated balance from DB: 0
+index-CL9PUNOc.js:105 [SwipeableBalanceCard] Loaded holdings: Object
+index-CL9PUNOc.js:64 [realtime-prices] Tearing down subscription
+index-CL9PUNOc.js:64 [realtime-prices] Subscription status: CLOSED
+/api/banking/initiate:1  Failed to load resource: the server responded with a status of 500 ()
+index-CL9PUNOc.js:110 Error: Failed to parse URL from truidconnect.io/consultant-api/collections
+    at p (index-CL9PUNOc.js:110:70674)
+p @ index-CL9PUNOc.js:110
+/api/banking/initiate:1  Failed to load resource: the server responded with a status of 500 ()
+index-CL9PUNOc.js:110 Error: Failed to parse URL from truidconnect.io/consultant-api/collections
+    at p (index-CL9PUNOc.js:110:70674)
+p @ index-CL9PUNOc.js:110

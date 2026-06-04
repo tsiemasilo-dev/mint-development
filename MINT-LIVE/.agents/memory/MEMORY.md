@@ -1,0 +1,2 @@
+- [Securities price units](securities-price-units.md) — last_price & avg_fill are in CENTS; divide by 100 for Rand math (caused 100x credit/liquidity inflation).
+- [Onboarding reset](onboarding-reset.md) — full reset must also DELETE user_onboarding_pack_details (gates KYC/Step 1); per-step reset uses sumsub_raw.address_saved=false; includes internal-vs-UI step number map.

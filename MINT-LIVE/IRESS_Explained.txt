@@ -1,0 +1,338 @@
+================================================================================
+IRESS / IRIS MARKET DATA API — EXPLAINED IN SIMPLE ENGLISH
+A plain-language companion to: IRESS_API_Requirements_Mint_OEMS_v1.0.docx
+Prepared for: Mint Investment Platform
+================================================================================
+
+
+--------------------------------------------------------------------------------
+0. THE ONE-PARAGRAPH SUMMARY (READ THIS FIRST)
+--------------------------------------------------------------------------------
+The original document is NOT software and it is NOT something you install. It is
+a "shopping list" / contract specification that Mint wrote FOR a financial data
+company called IRESS (their data service is branded "IRIS"). It lists every single
+type of market data Mint wants IRESS to deliver, how fresh that data must be, and
+how reliably it must arrive. The aim is to give Mint the same depth of data that
+big professional investment banks get from Bloomberg — hence the phrase
+"Bloomberg-grade" all over the document.
+
+Think of it like a restaurant handing a supplier an extremely detailed order form:
+"Here is every ingredient we need, how fresh it must be, and how fast you must
+deliver it." Each line in the spec is one data "feed" Mint is asking IRESS to
+switch on.
+
+
+--------------------------------------------------------------------------------
+1. KEY WORDS, IN PLAIN ENGLISH
+--------------------------------------------------------------------------------
+- IRESS .............. The vendor (supplier). A real company that sells financial
+                       market data, especially for the JSE (Johannesburg Stock
+                       Exchange).
+- IRIS .............. The name of IRESS's market-data product.
+- OEMS .............. "Order & Execution Management System." A professional
+                       trading cockpit: see prices -> decide -> place orders ->
+                       track fills -> report. Mint wants to build one.
+- OMS / PMS ......... Order Management / Portfolio Management System. Cousins of
+                       the OEMS for managing orders and portfolios.
+- API ............... The technical "doorway" one piece of software uses to ask
+                       another for data. IRESS exposes data through an API.
+- REST .............. A style of API where your app ASKS a question and gets one
+                       answer back (good for "give me today's price").
+- WebSocket (WS) .... A style of API where data STREAMS to you continuously
+                       without re-asking (good for live, tick-by-tick prices).
+- Endpoint .......... A single web address that returns one specific kind of data.
+- Entitlement ....... A permission switch. You only receive the data types you
+                       have paid/licensed for. No entitlement = no data.
+- Sandbox vs Prod ... "Sandbox" is the safe practice environment with fake/sample
+                       data. "Production" (prod) is the real, live environment.
+- Tenant ............ Your dedicated account on IRESS's system
+                       (e.g. "mint-sandbox", "mint-prod").
+- OAuth 2.0 ......... The secure login method. Your app trades a client ID +
+                       secret for a temporary "access token" used on every call.
+- L1 / Level 1 ...... "Top of book" — the single best buy price and best sell
+                       price for a stock, plus last traded price.
+- L2 / Level 2 ...... "Market depth" — the full ladder of buy and sell orders at
+                       many price levels. Much richer (and more expensive).
+- SLA ............... "Service Level Agreement" — promised speed and uptime.
+- FSCA .............. South Africa's financial regulator. Some data must be kept
+                       as evidence for them.
+
+
+--------------------------------------------------------------------------------
+2. WHAT THE DOCUMENT IS ASKING IRESS TO DELIVER (THE BIG PICTURE)
+--------------------------------------------------------------------------------
+The spec is divided into ~21 sections and roughly 150 individual data feeds.
+Grouped simply, they cover:
+
+  1.  Logging in & staying connected (authentication, health checks, rate limits)
+  2.  The master list of all stocks/bonds ("reference data" / "security master")
+  3.  Share prices: live quotes, order-book depth, and 25 years of history
+  4.  Stock-market indices (JSE Top 40, S&P 500, etc.)
+  5.  Bonds (government & company debt) and their analytics
+  6.  Interest rates and yield curves (JIBAR, repo, prime, etc.)
+  7.  Money-market instruments (T-Bills, NCDs, etc.)
+  8.  Foreign exchange (USD/ZAR and other currency pairs)
+  9.  Commodities & futures (gold, oil, maize, etc.)
+  10. Macro-economics (inflation, GDP, interest-rate decisions)
+  11. News (Reuters, Dow Jones, plus JSE company announcements = "SENS")
+  12. Company fundamentals (financial statements, analyst ratings, ESG)
+  13. Funds / ETFs (prices, holdings, performance)
+  14. Derivatives & structured products (options, futures) — mostly "Phase 2"
+  15. Risk & compliance data (sanctions lists, trading halts)
+  16. Actually placing trades (order execution via the "FIX" protocol)
+  17. The live streaming (WebSocket) rules
+  18. Speed & uptime promises (SLAs)
+  19. Security & governance
+  20. The acceptance checklist (how the vendor proves it's done correctly)
+  21. A map showing which feed powers which screen in the Mint app
+
+
+--------------------------------------------------------------------------------
+3. SECTION-BY-SECTION, IN SIMPLE ENGLISH
+--------------------------------------------------------------------------------
+
+SECTION 1 — AUTHENTICATION & INFRASTRUCTURE
+  What it means: The plumbing for getting in and staying in.
+  - Your app logs in with OAuth and receives an access token that lasts 1 hour;
+    you refresh it at ~55 minutes so you're never locked out.
+  - Every request must carry a header naming your tenant (mint-prod).
+  - There's a way to ask "what am I allowed to see?" (entitlements).
+  - There are health-check endpoints so your app can tell if the feed is up; if it
+    goes down, your app's "circuit breaker" can switch to a backup or show a
+    friendly message instead of crashing.
+  - Rate limits: at least 600 requests/minute and 50 simultaneous live streams.
+  - Audit logs must be exportable daily (kept as evidence for the regulator).
+
+SECTION 2 — REFERENCE DATA (THE SECURITY MASTER)
+  What it means: The foundational dictionary of every tradable thing.
+  - The master list of all securities, refreshed nightly, with every possible ID
+    code (ISIN, JSE code, Bloomberg ticker, etc.), the company name, sector,
+    currency, exchange, listing date, lot size, and more.
+  - Why it matters MOST: the document says "without it nothing else reconciles."
+    Every price, news item, and trade links back to this list. If your app can't
+    match IRESS's stock IDs to your own records, nothing else lines up. This is
+    always step one of any integration.
+  - Also includes exchange info, holiday calendars, sector classifications,
+    issuer/credit-rating data, and CORPORATE ACTIONS (dividends, share splits,
+    mergers, name changes) — crucial for keeping prices and holdings accurate.
+
+SECTION 3 — EQUITIES (SHARE PRICES)
+  What it means: Everything about individual share prices.
+  - Level 1 (3.1): best bid/ask, last price, day high/low, volume, etc. — updated
+    every second or live via streaming. This is the bread-and-butter price data.
+  - Level 2 (3.2): the full order book (10 levels of buyers and sellers) plus a
+    "time & sales" tape of every trade. Powerful but heavier/costlier. Mandatory
+    for JSE here; "Phase 2" (later) for global markets.
+  - History (3.3): up to 25 years of daily prices, intraday bars, raw ticks, and
+    "total-return" series (price growth WITH dividends reinvested). Needed for
+    charts and performance reporting.
+  - Analytics (3.4): pre-calculated risk and performance numbers (volatility,
+    beta, drawdown, Value-at-Risk, style factors) so Mint doesn't have to compute
+    them itself.
+
+SECTION 4 — INDICES
+  What it means: The "market thermometers."
+  - Live values and history for JSE indices (ALSI, Top 40, SWIX...) and global
+    ones (S&P 500, Nasdaq, FTSE, VIX...), including their member companies and
+    weights, and a sector "heatmap."
+
+SECTION 5 — BONDS (FIXED INCOME)
+  What it means: Government and company debt, plus the heavy maths.
+  - The bond universe, live prices/yields, cash-flow schedules, credit ratings,
+    auction results, and inflation-linked bond data. Includes professional
+    analytics (yield-to-maturity, duration, convexity, spreads) that normally
+    require a Bloomberg terminal.
+
+SECTION 6 — YIELD CURVES & RATES
+  What it means: The cost of money over time.
+  - Official SA interest-rate benchmarks (JIBAR, SABOR, ZARONIA, SARB repo,
+    prime), full yield curves for ZAR/USD/EUR/GBP, swaps, and central-bank policy
+    rates with the market's expected future path.
+
+SECTION 7 — MONEY MARKET
+  What it means: Short-term cash instruments.
+  - Treasury Bills, Negotiable Certificates of Deposit, commercial paper, repos,
+    their rates, auctions, and a short-term curve.
+
+SECTION 8 — FX (FOREIGN EXCHANGE)
+  What it means: Currency exchange rates.
+  - Live spot rates (USD/ZAR etc.), forward rates, official daily "fixings" used
+    for valuations, 25 years of history, and a full cross-rate matrix.
+
+SECTION 9 — COMMODITIES & FUTURES
+  What it means: Physical goods and contracts on them.
+  - Gold, platinum, Brent/WTI oil, natural gas, copper, iron ore, and SA
+    agricultural products (maize, wheat, soya), plus futures contracts and option
+    chains (with "Greeks" — sensitivity measures).
+
+SECTION 10 — MACRO-ECONOMICS
+  What it means: The health of the economy.
+  - An economic calendar (when CPI/GDP/rate decisions are released), the actual
+    data series, SARB and StatsSA feeds, global indicators, and analyst consensus
+    forecasts.
+
+SECTION 11 — NEWS
+  What it means: What's happening, as it happens.
+  - Live news from Reuters, Dow Jones, Moneyweb, Business Day, etc., tagged by
+    company and sentiment; full-text search; and crucially SENS — the official
+    JSE channel where listed companies publish announcements (results, cautionary
+    notices, director dealings). Mint wants SENS within 5 seconds of publication.
+
+SECTION 12 — FUNDAMENTALS & ESTIMATES (RESEARCH)
+  What it means: Deep company analysis.
+  - 10 years of financial statements, valuation ratios (P/E, ROE...), analyst
+    forecasts and Buy/Hold/Sell recommendations, ownership data, ESG scores, and
+    earnings-call transcripts.
+
+SECTION 13 — ETFs, UNIT TRUSTS & FUNDS
+  What it means: Pooled investment products.
+  - Fund prices (NAV), holdings, performance over many periods, and risk metrics.
+
+SECTION 14 — DERIVATIVES & STRUCTURED PRODUCTS (mostly Phase 2 / later)
+  What it means: Advanced contracts.
+  - Single-stock futures, index futures, currency futures, and implied-volatility
+    surfaces. Marked as acceptable to deliver later.
+
+SECTION 15 — RISK & COMPLIANCE DATASETS
+  What it means: Safety and legal guardrails.
+  - Live list of halted/suspended stocks, sanctions lists (OFAC, UN, EU, FSCA),
+    Politically Exposed Persons, per-stock trading flags, and short-sale
+    disclosures. Used to BLOCK trades that shouldn't happen (the "pre-trade
+    rebalance gate").
+
+SECTION 16 — ORDER EXECUTION
+  What it means: Actually buying and selling.
+  - A "FIX" gateway (the industry-standard messaging protocol brokers use) to
+    place, cancel, and amend orders; a "drop-copy" feed mirroring all fills for
+    risk; post-trade allocations; and best-execution evidence. Note: this comes
+    from the wider IRESS Group, not the IRIS data product itself.
+
+SECTION 17 — STREAMING (WEBSOCKET) RULES
+  What it means: How the live firehose behaves.
+  - You connect once and "subscribe" to channels (quotes, depth, news...). The
+    feed must auto-reconnect with no missed messages, send a heartbeat every 15s,
+    give a full snapshot on subscribe then live updates, and support large numbers
+    of simultaneous symbols.
+
+SECTION 18 — SLAs & OPERATIONAL REQUIREMENTS
+  What it means: The speed and reliability promises.
+  - Typical response under 80 milliseconds, live JSE updates under 100ms, 99.95%
+    uptime during market hours, defined maintenance windows, fast incident
+    response, and quick correction of bad data.
+
+SECTION 19 — SECURITY & GOVERNANCE
+  What it means: Keeping it safe and compliant.
+  - Mandatory OAuth login, IP allow-listing, encryption in transit (TLS 1.3),
+    signed entitlement files, annual security audit reports (SOC 2), and a
+    right-to-audit clause.
+
+SECTION 20 — ACCEPTANCE CHECKLIST (SIGN-OFF GATE)
+  What it means: How Mint proves the vendor did it right before going live.
+  - e.g. prices must match the JSE official close within one tick; 10-year
+    total-return series must reconcile to official factsheets within 5 basis
+    points; SENS announcements must arrive within 5 seconds; the live feed must
+    survive a forced disconnection with zero data loss; both sandbox and prod must
+    be live with separate credentials.
+
+SECTION 21 — MAPPING TO THE MINT APP SCREENS
+  What it means: Which feed powers which part of the app. Examples:
+  - Dashboard tiles  -> indices + FX + quotes
+  - Equities blotter -> live quotes + depth + trading halts
+  - Yield curve/macro-> rates + macro calendar
+  - News feed        -> news + SENS
+  - Rebalance gate   -> halts + corporate actions + snapshots
+  - Compliance       -> halts + sanctions lists
+  - Client reporting -> total-return + performance + fund data
+
+
+--------------------------------------------------------------------------------
+4. WHAT IS ACTUALLY REQUIRED FOR THIS TO WORK WITH THE MINT APP
+--------------------------------------------------------------------------------
+Two sides have to come together.
+
+A) WHAT IRESS (THE VENDOR) MUST GIVE YOU
+   1. Two accounts (tenants): a sandbox (testing) and production (live).
+   2. OAuth credentials — a client ID + secret (kept as protected secrets, never
+      hard-coded). These are rotated every 90 days.
+   3. Entitlements — the permission switches for each data type you license
+      (JSE prices, news, bonds, etc.). You only receive what you pay for.
+   4. The base web addresses:
+        REST:      https://api.iress.com/v1
+        WebSocket: wss://stream.iress.com/v1
+   5. A signed "entitlement file" describing exactly what you're allowed to see.
+
+B) WHAT THE MINT APP MUST BE BUILT TO DO
+   1. AUTHENTICATE: fetch an access token via OAuth and auto-refresh it before it
+      expires (~every 55 minutes). Tokens are kept server-side, never in the
+      browser.
+   2. CALL THE DATA: use REST for one-off requests and WebSocket for live streams.
+   3. STORE THE SECURITY MASTER FIRST: import IRESS's reference list and map their
+      stock identifiers to Mint's existing securities records so prices reconcile.
+      This is non-negotiable step one.
+   4. RESPECT THE RULES: handle rate limits (back off when told), watch the health
+      endpoints, and fall back gracefully if the feed drops.
+   5. STORE DATA CORRECTLY: keep price units consistent and convert where needed
+      (Mint's existing data stores some prices in cents, so any new feed must be
+      normalised to match before it's used in calculations).
+   6. SECURE THE SECRETS: client ID/secret and tokens live only in protected
+      server-side configuration.
+
+
+--------------------------------------------------------------------------------
+5. HOW THIS COMPARES TO WHAT MINT HAS TODAY
+--------------------------------------------------------------------------------
+Today, Mint gets market data the simple, low-cost way: a custom proxy that pulls
+from Yahoo Finance, with prices stored in a database table. That is completely
+fine for a consumer-facing investing app.
+
+What this document describes is a MAJOR step up — a professional, institutional-
+grade data subscription. Being honest about it:
+
+  - It is a LARGE, EXPENSIVE, LONG-TERM integration, not a quick feature.
+    Institutional JSE Level-2 data, bond analytics, and news wires like Reuters
+    carry significant monthly licensing costs and formal contracts.
+  - The VAST MAJORITY of what's listed is well beyond what the Mint app currently
+    does or needs. Mint shows portfolios, strategies, and basic prices — it does
+    not need bond convexity, option Greeks, or a FIX order gateway to function.
+  - The sensible approach is PHASED: start with the few feeds Mint would actually
+    use, prove them in the sandbox, then expand only as the product grows.
+
+
+--------------------------------------------------------------------------------
+6. A REALISTIC "START SMALL" SHORTLIST
+--------------------------------------------------------------------------------
+If Mint wanted to begin a first, minimal IRESS connection that matches how the app
+works today, these are the feeds that would actually matter first:
+
+  MUST-HAVE TO START
+  - Section 1  Authentication (you can't do anything without logging in)
+  - Section 2  Reference data / security master (map stocks to Mint's records)
+  - Section 3.1 Level 1 equity quotes (live JSE prices — the core need)
+  - Section 3.3 Historical prices + total return (powers charts & performance)
+
+  NICE TO HAVE SOON AFTER
+  - Section 4  Indices (dashboard context)
+  - Section 11 News + SENS (company announcements)
+  - Section 2.7 / 15.4 Corporate actions + trading-halt flags (keeps holdings and
+    the rebalance logic correct and safe)
+
+  LEAVE FOR LATER (only if the product expands into pro trading)
+  - Level 2 depth, bonds, money market, FX, commodities, derivatives, fundamentals
+    research, FIX order execution.
+
+
+--------------------------------------------------------------------------------
+7. BOTTOM LINE
+--------------------------------------------------------------------------------
+- This document is a VENDOR BRIEF: Mint telling IRESS exactly what data service to
+  build and deliver. Nothing in it runs inside the Mint codebase yet.
+- To make it work with the app you need: (1) IRESS to grant sandbox credentials +
+  entitlements, then (2) a connector built into Mint that logs in, pulls/streams
+  the specific feeds you choose, and maps them onto Mint's existing securities
+  data — starting with the security master and live JSE prices.
+- Treat the full document as the long-term "wish list," not the day-one build.
+  Start with the must-have shortlist in Section 6 above.
+
+================================================================================
+End of plain-English explanation.
+================================================================================

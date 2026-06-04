@@ -1,0 +1,111 @@
+Windows PowerShell
+Copyright (C) Microsoft Corporation. All rights reserved.
+
+Install the latest PowerShell for new features and improvements! https://aka.ms/PSWindows
+
+PS C:\Users\tsiem\StudioProjects\mint\android> git branch -a
+* Android.v1
+  main
+  remotes/origin/Android.v1
+  remotes/origin/Credit-Code
+  remotes/origin/HEAD -> origin/main
+  remotes/origin/TruID
+  remotes/origin/codex/add-biometrics-debug-screen-in-settings
+  remotes/origin/codex/add-biometrics-debug-screen-in-settings-i9rkzn
+  remotes/origin/codex/add-charts-to-openstrategies-preview-page
+  remotes/origin/codex/add-creditpage-and-creditscorepage
+  remotes/origin/codex/add-responsiveness-and-close-icon-to-navbar
+  remotes/origin/codex/apply-purple-gradient-to-more-page-icons
+  remotes/origin/codex/change-total-balance-to-mint-balance-and-update-ui
+  remotes/origin/codex/create-openstrategies-mobile-app-screen
+  remotes/origin/codex/create-performance-chart-component-for-mint
+PS C:\Users\tsiem\StudioProjects\mint\android> git status
+On branch Android.v1
+Your branch is up to date with 'origin/Android.v1'.
+
+Changes not staged for commit:
+  (use "git add/rm <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+        deleted:    .idea/.gitignore
+        modified:   .idea/misc.xml
+        modified:   app/capacitor.build.gradle
+        modified:   capacitor.settings.gradle
+        modified:   gradle/wrapper/gradle-wrapper.jar
+        modified:   gradle/wrapper/gradle-wrapper.properties
+        modified:   gradlew
+        modified:   gradlew.bat
+        modified:   ../package-lock.json
+        modified:   ../package.json
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+        ../.idea/
+
+no changes added to commit (use "git add" and/or "git commit -a")
+PS C:\Users\tsiem\StudioProjects\mint\android> git fetch --prune --all
+remote: Enumerating objects: 40, done.
+remote: Counting objects: 100% (40/40), done.
+remote: Compressing objects: 100% (11/11), done.
+remote: Total 40 (delta 29), reused 40 (delta 29), pack-reused 0 (from 0)
+Unpacking objects: 100% (40/40), 100.35 KiB | 324.00 KiB/s, done.
+From https://github.com/mihle-matimba/mint
+   3e7113a..a17334e  Android.v1 -> origin/Android.v1
+   0474b94..aa0aa27  TruID      -> origin/TruID
+PS C:\Users\tsiem\StudioProjects\mint\android> git switch origin/Android.v1 
+fatal: a branch is expected, got remote branch 'origin/Android.v1'
+hint: If you want to detach HEAD at the commit, try again with the --detach option.
+PS C:\Users\tsiem\StudioProjects\mint\android> git switch Android.v1
+D       android/.idea/.gitignore
+M       android/.idea/misc.xml
+M       android/app/capacitor.build.gradle
+M       android/capacitor.settings.gradle
+M       android/gradle/wrapper/gradle-wrapper.jar
+M       android/gradle/wrapper/gradle-wrapper.properties
+M       android/gradlew
+M       android/gradlew.bat
+M       package-lock.json
+M       package.json
+Already on 'Android.v1'
+Your branch is behind 'origin/Android.v1' by 18 commits, and can be fast-forwarded.
+  (use "git pull" to update your local branch)
+PS C:\Users\tsiem\StudioProjects\mint\android> git pull
+Updating 3e7113a..a17334e
+error: Your local changes to the following files would be overwritten by merge:
+        package-lock.json
+        package.json
+Please commit your changes or stash them before you merge.
+Aborting
+PS C:\Users\tsiem\StudioProjects\mint\android> git stash
+warning: in the working copy of 'android/.idea/misc.xml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'android/app/capacitor.build.gradle', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'android/capacitor.settings.gradle', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'android/gradle/wrapper/gradle-wrapper.properties', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'android/gradlew', LF will be replaced by CRLF the next time Git touches it
+Saved working directory and index state WIP on Android.v1: 3e7113a Merge pull request #77 from mihle-matimba/feat/markets-factsheet-reapply
+PS C:\Users\tsiem\StudioProjects\mint\android> git pull origin main
+From https://github.com/mihle-matimba/mint
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+PS C:\Users\tsiem\StudioProjects\mint\android> git stash pop
+On branch Android.v1
+Your branch is behind 'origin/Android.v1' by 18 commits, and can be fast-forwarded.
+  (use "git pull" to update your local branch)
+
+Changes not staged for commit:
+  (use "git add/rm <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+        deleted:    .idea/.gitignore
+        modified:   gradle/wrapper/gradle-wrapper.jar
+        modified:   gradle/wrapper/gradle-wrapper.properties
+        modified:   gradlew
+        modified:   gradlew.bat
+        modified:   ../package-lock.json
+        modified:   ../package.json
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+        ../.idea/
+
+no changes added to commit (use "git add" and/or "git commit -a")
+Dropped refs/stash@{0} (a5a573a131559f652766cdcb6da965f4516969a9)
+PS C:\Users\tsiem\StudioProjects\mint\android> 

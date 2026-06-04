@@ -1,6 +1,5 @@
 # Force LF line endings for all text files
 * text=auto eol=lf
-
 # Explicitly declare JS/JSX/TS/CSS as text
 *.js text eol=lf
 *.jsx text eol=lf
@@ -22,4 +21,5 @@
 *.woff2 binary
 *.eot binary
 *.pdf binary
+MINT-LIVE/attached_assets/onboardingmint-main_(1)_1770030047742.zip filter=lfs diff=lfs merge=lfs -text
 *.zip !text !filter !merge !diff

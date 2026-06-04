@@ -32,7 +32,7 @@ const sliceForTF = (data, tf) => {
 };
 
 export function StrategyReturnHeaderChart({ series, onValueChange }) {
-  const [tf, setTf] = useState("6M");
+  const [tf, setTf] = useState("YTD");
   const fallbackSeries = useMemo(() => buildDummySeries(), []);
   const resolvedSeries = series?.length ? series : fallbackSeries;
   const filtered = useMemo(() => sliceForTF(resolvedSeries, tf), [resolvedSeries, tf]);

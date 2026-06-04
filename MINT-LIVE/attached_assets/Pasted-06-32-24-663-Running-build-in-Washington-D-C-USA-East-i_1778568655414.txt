@@ -1,0 +1,46 @@
+06:32:24.663 Running build in Washington, D.C., USA (East) – iad1
+06:32:24.664 Build machine configuration: 4 cores, 8 GB
+06:32:24.791 Cloning github.com/mihle-matimba/mint (Branch: main, Commit: 24926e9)
+06:32:31.696 Warning: Failed to fetch one or more git submodules
+06:32:31.697 Cloning completed: 6.905s
+06:32:31.864 Restored build cache from previous deployment (GK38J8GQxMneTt9aomatPuLFbHFk)
+06:32:32.076 Running "vercel build"
+06:32:32.820 Vercel CLI 53.3.2
+06:32:33.580 Installing dependencies...
+06:32:34.839 
+06:32:34.840 up to date in 890ms
+06:32:34.840 
+06:32:34.840 76 packages are looking for funding
+06:32:34.840   run `npm fund` for details
+06:32:34.956 
+06:32:34.956 > mint@1.0.0 build
+06:32:34.956 > vite build
+06:32:34.956 
+06:32:35.184 vite v7.3.2 building client environment for production...
+06:32:35.533 transforming...
+06:32:35.806 
+06:32:35.806 ../assets/fonts/future-earth.ttf referenced in ../assets/fonts/future-earth.ttf didn't resolve at build time, it will remain unchanged to be resolved at runtime
+06:32:40.648 ✓ 3059 modules transformed.
+06:32:40.652 ✗ Build failed in 5.44s
+06:32:40.653 error during build:
+06:32:40.653 src/App.jsx (4:9): "clearAllUserCaches" is not exported by "src/lib/userCacheReset.js", imported by "src/App.jsx".
+06:32:40.653 file: /vercel/path0/src/App.jsx:4:9
+06:32:40.653 
+06:32:40.653 2: import { supabase } from "./lib/supabase.js";
+06:32:40.653 3: import { setCachedSession, clearSessionCache } from "./lib/sessionCache.js";
+06:32:40.653 4: import { clearAllUserCaches } from "./lib/userCacheReset.js";
+06:32:40.653             ^
+06:32:40.653 5: import { App as CapacitorApp } from '@capacitor/app';
+06:32:40.653 6: import { Capacitor } from '@capacitor/core';
+06:32:40.653 
+06:32:40.653     at getRollupError (file:///vercel/path0/node_modules/rollup/dist/es/shared/parseAst.js:402:41)
+06:32:40.654     at error (file:///vercel/path0/node_modules/rollup/dist/es/shared/parseAst.js:398:42)
+06:32:40.654     at Module.error (file:///vercel/path0/node_modules/rollup/dist/es/shared/node-entry.js:17040:16)
+06:32:40.654     at Module.traceVariable (file:///vercel/path0/node_modules/rollup/dist/es/shared/node-entry.js:17452:29)
+06:32:40.654     at ModuleScope.findVariable (file:///vercel/path0/node_modules/rollup/dist/es/shared/node-entry.js:15070:39)
+06:32:40.654     at ReturnValueScope.findVariable (file:///vercel/path0/node_modules/rollup/dist/es/shared/node-entry.js:5673:38)
+06:32:40.655     at FunctionBodyScope.findVariable (file:///vercel/path0/node_modules/rollup/dist/es/shared/node-entry.js:5673:38)
+06:32:40.655     at ReturnValueScope.findVariable (file:///vercel/path0/node_modules/rollup/dist/es/shared/node-entry.js:5673:38)
+06:32:40.655     at FunctionBodyScope.findVariable (file:///vercel/path0/node_modules/rollup/dist/es/shared/node-entry.js:5673:38)
+06:32:40.655     at ReturnValueScope.findVariable (file:///vercel/path0/node_modules/rollup/dist/es/shared/node-entry.js:5673:38)
+06:32:40.724 Error: Command "npm run build" exited with 1
