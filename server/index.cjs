@@ -9941,15 +9941,19 @@ async function calculateChildPortfolioReturns(familyMemberId, strategyId, userId
   }
 
   function periodMetrics(historicRecord) {
-    if (!historicRecord || !historicRecord.basket_value || historicRecord.basket_value === basketValueCents) return { pnl: null, pct: null };
+    if (!historicRecord || !historicRecord.basket_value) return { pnl: null, pct: null };
+    // If the reference basket equals the current value, P&L is genuinely 0 — store 0 not null.
     const pnl = basketValueCents - Number(historicRecord.basket_value);
     const pct = costBasisCents > 0 ? (pnl / costBasisCents) * 100 : 0;
     return { pnl, pct: parseFloat(pct.toFixed(4)) };
   }
 
-  const rec5d  = closestRecord(historyRows, fiveDaysAgo);
-  const rec1m  = closestRecord(historyRows, oneMonthAgo);
-  const recYtd = historyRows?.length ? historyRows[0] : null; // earliest record this year
+  const earliestRecord = historyRows?.length ? historyRows[0] : null;
+  // If no record old enough exists (child invested < 9 days ago), fall back to the earliest
+  // available record so we show a real change instead of storing null.
+  const rec5d  = closestRecord(historyRows, fiveDaysAgo) || earliestRecord;
+  const rec1m  = closestRecord(historyRows, oneMonthAgo) || earliestRecord;
+  const recYtd = earliestRecord; // earliest record this year
 
   const p5d  = periodMetrics(rec5d);
   const p1m  = periodMetrics(rec1m);
