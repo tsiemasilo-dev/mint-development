@@ -702,11 +702,61 @@ const SwipeableBalanceCard = ({
     let chartCancelled = false;
     const fetchChartPrices = async () => {
       if (!userId && !familyMemberId) return;
-      // Child cards have no chart history — clear any stale state and stop
+      // Child cards — build period chart from client_strategy_returns_c snapshots
       if (childMode) {
-        setChartData([]);
-        setPeriodReturn(null);
-        setChartLoading(false);
+        const strategyIds = [...new Set(
+          dbData.holdings.map(h => h.strategy_id).filter(Boolean)
+        )];
+        if (!strategyIds.length) {
+          setChartData([]);
+          setPeriodReturn(null);
+          setChartLoading(false);
+          return;
+        }
+        setChartLoading(true);
+        try {
+          const rowLimit = activeTab === "5d" ? 5 : activeTab === "m" ? 22 : undefined;
+          const now = new Date();
+          const yearStart = `${now.getUTCFullYear()}-01-01`;
+
+          // Fetch snapshots for every strategy this child holds, merge by date
+          const basketByDate = {};
+          await Promise.all(strategyIds.map(async (sid) => {
+            let q = supabase
+              .from("client_strategy_returns_c")
+              .select("as_of_date, basket_value")
+              .eq("family_member", familyMemberId)
+              .eq("strategy_id", sid)
+              .order("as_of_date", { ascending: false });
+            if (activeTab === "ytd") q = q.gte("as_of_date", yearStart);
+            if (rowLimit) q = q.limit(rowLimit);
+            const { data } = await q;
+            (data || []).forEach(r => {
+              basketByDate[r.as_of_date] = (basketByDate[r.as_of_date] || 0) + Number(r.basket_value || 0);
+            });
+          }));
+
+          const dates = Object.keys(basketByDate).sort();
+          if (!dates.length) {
+            setChartData([]);
+            setPeriodReturn(null);
+            setChartLoading(false);
+            return;
+          }
+          const firstBasket = basketByDate[dates[0]];
+          const points = [{ d: null, v: 0 }];
+          dates.forEach(d => {
+            points.push({ d, v: Number(((basketByDate[d] - firstBasket) / 100).toFixed(2)) });
+          });
+          setChartData(points);
+          setPeriodReturn(points[points.length - 1].v);
+        } catch (e) {
+          console.warn("[SwipeableBalanceCard] childMode chart error:", e.message);
+          setChartData([]);
+          setPeriodReturn(null);
+        } finally {
+          setChartLoading(false);
+        }
         return;
       }
 
