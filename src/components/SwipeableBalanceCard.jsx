@@ -756,6 +756,9 @@ const SwipeableBalanceCard = ({
         if (dates.length < minRows) { setChartData([]); setPeriodReturn(null); return; }
 
         const firstBasket = basketByDate[dates[0]];
+        const lastBasket = basketByDate[dates[dates.length - 1]];
+        console.log("[DEBUG 5D snapshot rows]", activeTab, dates.map(d => `${d}: R${(basketByDate[d]/100).toFixed(2)}`));
+        console.log("[DEBUG 5D calc]", `firstBasket=R${(firstBasket/100).toFixed(2)} lastBasket=R${(lastBasket/100).toFixed(2)} diff=R${((lastBasket-firstBasket)/100).toFixed(2)}`);
         const points = [{ d: null, v: 0 }];
         dates.forEach(d => {
           points.push({ d, v: Number(((basketByDate[d] - firstBasket) / 100).toFixed(2)) });
