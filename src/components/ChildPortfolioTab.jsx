@@ -574,7 +574,13 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
                       return (
                         <>
                           <p className="text-3xl font-bold text-slate-900">{fmt(cv)}</p>
-                          {!lockedMessage && !tabJustChanged && (
+                          {!lockedMessage && tabJustChanged && (
+                            <div className="flex items-center gap-2 mt-1">
+                              <div className="h-4 w-16 bg-slate-200 rounded-full animate-pulse" />
+                              <div className="h-4 w-10 bg-slate-200 rounded-full animate-pulse" />
+                            </div>
+                          )}
+                      {!lockedMessage && !tabJustChanged && (
                             <div className="flex items-center gap-2 mt-1">
                               <span className={`text-sm font-semibold ${isPos ? "text-emerald-500" : "text-rose-500"}`}>
                                 {isPos ? "+" : "-"}{fmt(Math.abs(pnl))}
