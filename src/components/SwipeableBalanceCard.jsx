@@ -798,13 +798,17 @@ const SwipeableBalanceCard = ({
           if (cancelled) return;
           const storedVal = totalPnlCents / 100;
           const storedPct = totalPctCents / strategyIds.length;
-          // YTD fallback: portfolio tab uses livePct (cost-basis denominator) when stored = 0.
-          // basketPct uses jan-1 basket as denominator — different result.
-          // Returning null lets the display fall through to displayReturn/displayBigValue (= livePct).
-          // 5d/m fallback: basketPct matches derivedPeriodReturn.pct exactly, so keep it.
           const pctFallback = activeTab === "ytd" ? null : (basketPct || null);
-          setPeriodReturn(storedVal !== 0 ? storedVal : basketVal);
-          setPeriodPct(storedPct !== 0 ? storedPct : pctFallback);
+          const finalReturn = storedVal !== 0 ? storedVal : basketVal;
+          const finalPct = storedPct !== 0 ? storedPct : pctFallback;
+          console.log("[BalanceCard YTD debug]", {
+            tab: activeTab, userId, familyMemberId,
+            totalPnlCents, storedVal, storedPct,
+            basketVal, basketPct,
+            finalReturn, finalPct
+          });
+          setPeriodReturn(finalReturn);
+          setPeriodPct(finalPct);
         } else {
           setPeriodReturn(basketVal);
           setPeriodPct(activeTab === "ytd" ? null : (basketPct || null));

@@ -2705,7 +2705,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
               </div>
             ) : (
               <SwipeableBalanceCard
-                userId={null}
+                userId={profile?.id || null}
                 familyMemberId={child?.id || null}
                 mintNumber={child?.mint_number || null}
                 overrideWalletBalance={childBalance / 100}
