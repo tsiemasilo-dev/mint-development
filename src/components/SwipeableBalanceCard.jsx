@@ -717,75 +717,67 @@ const SwipeableBalanceCard = ({
     fetchCount();
   }, [childMode, familyMemberId, dbData.holdings]);
 
+  // Child snapshot fetch — runs only when holdings or active tab change, NOT on every live-price tick
+  useEffect(() => {
+    if (!childMode || !familyMemberId) return;
+    let cancelled = false;
+    const fetchChildSnapshots = async () => {
+      const strategyIds = [...new Set(
+        dbData.holdings.map(h => h.strategy_id).filter(Boolean)
+      )];
+      if (!strategyIds.length) return; // keep previous periodReturn — don't flash fallback
+      setChartLoading(true);
+      try {
+        const rowLimit = activeTab === "5d" ? 5 : activeTab === "m" ? 22 : undefined;
+        const now = new Date();
+        const yearStart = `${now.getUTCFullYear()}-01-01`;
+
+        const basketByDate = {};
+        await Promise.all(strategyIds.map(async (sid) => {
+          let q = supabase
+            .from("client_strategy_returns_c")
+            .select("as_of_date, basket_value")
+            .eq("family_member", familyMemberId)
+            .eq("strategy_id", sid)
+            .order("as_of_date", { ascending: false });
+          if (activeTab === "ytd") q = q.gte("as_of_date", yearStart);
+          if (rowLimit) q = q.limit(rowLimit);
+          const { data } = await q;
+          (data || []).forEach(r => {
+            basketByDate[r.as_of_date] = (basketByDate[r.as_of_date] || 0) + Number(r.basket_value || 0);
+          });
+        }));
+
+        if (cancelled) return;
+        const dates = Object.keys(basketByDate).sort();
+        if (!dates.length) { setChartData([]); setPeriodReturn(null); return; }
+
+        const minRows = activeTab === "5d" ? 5 : activeTab === "m" ? 22 : 1;
+        if (dates.length < minRows) { setChartData([]); setPeriodReturn(null); return; }
+
+        const firstBasket = basketByDate[dates[0]];
+        const points = [{ d: null, v: 0 }];
+        dates.forEach(d => {
+          points.push({ d, v: Number(((basketByDate[d] - firstBasket) / 100).toFixed(2)) });
+        });
+        setChartData(points);
+        setPeriodReturn(points[points.length - 1].v);
+      } catch (e) {
+        console.warn("[SwipeableBalanceCard] childMode snapshot error:", e.message);
+      } finally {
+        if (!cancelled) setChartLoading(false);
+      }
+    };
+    fetchChildSnapshots();
+    return () => { cancelled = true; };
+  }, [childMode, familyMemberId, dbData.holdings, activeTab]);
+
   useEffect(() => {
     let chartCancelled = false;
     const fetchChartPrices = async () => {
       if (!userId && !familyMemberId) return;
-      // Child cards — build period chart from client_strategy_returns_c snapshots
-      if (childMode) {
-        const strategyIds = [...new Set(
-          dbData.holdings.map(h => h.strategy_id).filter(Boolean)
-        )];
-        if (!strategyIds.length) {
-          setChartData([]);
-          setPeriodReturn(null);
-          setChartLoading(false);
-          return;
-        }
-        setChartLoading(true);
-        try {
-          const rowLimit = activeTab === "5d" ? 5 : activeTab === "m" ? 22 : undefined;
-          const now = new Date();
-          const yearStart = `${now.getUTCFullYear()}-01-01`;
-
-          // Fetch snapshots for every strategy this child holds, merge by date
-          const basketByDate = {};
-          await Promise.all(strategyIds.map(async (sid) => {
-            let q = supabase
-              .from("client_strategy_returns_c")
-              .select("as_of_date, basket_value")
-              .eq("family_member", familyMemberId)
-              .eq("strategy_id", sid)
-              .order("as_of_date", { ascending: false });
-            if (activeTab === "ytd") q = q.gte("as_of_date", yearStart);
-            if (rowLimit) q = q.limit(rowLimit);
-            const { data } = await q;
-            (data || []).forEach(r => {
-              basketByDate[r.as_of_date] = (basketByDate[r.as_of_date] || 0) + Number(r.basket_value || 0);
-            });
-          }));
-
-          const dates = Object.keys(basketByDate).sort();
-          if (!dates.length) {
-            setChartData([]);
-            setPeriodReturn(null);
-            setChartLoading(false);
-            return;
-          }
-          // Lock tab if not enough history (same rule as bottom section)
-          const minRows = activeTab === "5d" ? 5 : activeTab === "m" ? 22 : 1;
-          if (dates.length < minRows) {
-            setChartData([]);
-            setPeriodReturn(null);
-            setChartLoading(false);
-            return;
-          }
-          const firstBasket = basketByDate[dates[0]];
-          const points = [{ d: null, v: 0 }];
-          dates.forEach(d => {
-            points.push({ d, v: Number(((basketByDate[d] - firstBasket) / 100).toFixed(2)) });
-          });
-          setChartData(points);
-          setPeriodReturn(points[points.length - 1].v);
-        } catch (e) {
-          console.warn("[SwipeableBalanceCard] childMode chart error:", e.message);
-          setChartData([]);
-          setPeriodReturn(null);
-        } finally {
-          setChartLoading(false);
-        }
-        return;
-      }
+      // Child cards are handled by the separate snapshot effect above
+      if (childMode) return;
 
       // Ensure we don't leave chart stuck in loading if no holdings
       if (dbData.holdings.length === 0) {
