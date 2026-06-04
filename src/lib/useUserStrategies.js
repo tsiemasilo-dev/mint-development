@@ -292,8 +292,8 @@ export const useUserStrategies = (familyMemberId = null) => {
       setData((prev) => prev.loading ? { ...prev, loading: false } : prev);
     }, 6000);
 
-    // Silent refresh every 60 s — keeps live P&L current without a skeleton flash
-    const pollId = setInterval(() => fetchUserStrategies(true), 60000);
+    // Silent refresh every 15 s — keeps live P&L in sync with the top balance card
+    const pollId = setInterval(() => fetchUserStrategies(true), 15000);
 
     return () => {
       clearTimeout(safetyTimer);
