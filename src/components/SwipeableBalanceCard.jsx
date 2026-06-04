@@ -1093,7 +1093,8 @@ const SwipeableBalanceCard = ({
 
   // PnL pill: use period-specific return from client_strategy_returns_c chart data when a period tab
   // is active and data is available; fall back to all-time return.
-  const activeReturn = (isPeriodTab && periodReturn !== null) ? periodReturn : displayReturn;
+  // "all" always uses displayReturn (live market value − cost basis) so it matches the bottom ALL tab.
+  const activeReturn = (isPeriodTab && activeTab !== "all" && periodReturn !== null) ? periodReturn : displayReturn;
   const activeReturnPct = displayBigValue > 0
     ? truncateDecimal((activeReturn / displayBigValue) * 100, 2).toFixed(2)
     : "0.00";
