@@ -166,6 +166,7 @@ const SwipeableBalanceCard = ({
   const [periodReturn, setPeriodReturn] = useState(null);
   const [periodPct, setPeriodPct] = useState(null);
   const [childSnapshotCount, setChildSnapshotCount] = useState(null);
+  const [childLivePriceMap, setChildLivePriceMap] = useState({});
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
   const { lastUpdated, isConnected } = useRealtimePrices();
@@ -817,6 +818,29 @@ const SwipeableBalanceCard = ({
     return () => { cancelled = true; };
   }, [childMode, familyMemberId, dbData.holdings, activeTab, userId]);
 
+  // Live price poll for child mode — 15s, mirrors ChildPortfolioTab exactly
+  useEffect(() => {
+    if (!childMode || !familyMemberId || !dbData.holdings.length) return;
+    const securityIds = [...new Set(dbData.holdings.map(h => h.security_id).filter(Boolean))];
+    if (!securityIds.length) return;
+    const fetchLive = async () => {
+      const { data } = await supabase
+        .from("stock_intraday_c")
+        .select("security_id, current_price")
+        .in("security_id", securityIds)
+        .order("timestamp", { ascending: false });
+      if (!data?.length) return;
+      const map = {};
+      for (const row of data) {
+        if (!map[row.security_id]) map[row.security_id] = Number(row.current_price);
+      }
+      setChildLivePriceMap(map);
+    };
+    fetchLive();
+    const id = setInterval(fetchLive, 15000);
+    return () => clearInterval(id);
+  }, [childMode, familyMemberId, dbData.holdings]);
+
   useEffect(() => {
     let chartCancelled = false;
     const fetchChartPrices = async () => {
@@ -1119,6 +1143,29 @@ const SwipeableBalanceCard = ({
   const isPeriodTab = ["5d", "m", "ytd", "all"].includes(activeTab);
   // Total PnL (all-time): live market value minus higher-of cost basis.
   const displayReturn = displayMarketValue - displayBigValue;
+
+  // Live P&L for child YTD — uses 15s price poll, mirrors ChildPortfolioTab.liveStrategyMetrics
+  const childLiveMetrics = useMemo(() => {
+    if (!childMode || !dbData.holdings.length) return null;
+    let liveValue = 0;
+    let costBasis = 0;
+    let hasPrices = false;
+    for (const h of dbData.holdings) {
+      const qty = Number(h.quantity || 0);
+      if (qty <= 0) continue;
+      // Prefer 15s live price, fall back to per-share price derived from market_value
+      const liveCents = childLivePriceMap[h.security_id];
+      const fallbackCents = qty > 0 ? Math.round(Number(h.market_value || 0) / qty) : 0;
+      const priceCents = liveCents > 0 ? liveCents : fallbackCents;
+      if (priceCents > 0) { liveValue += (priceCents / 100) * qty; hasPrices = true; }
+      // Cost basis in Rands — invested_amount stored as cents
+      costBasis += Number(h.invested_amount || 0) / 100;
+    }
+    if (!hasPrices || costBasis === 0) return null;
+    const pnl = liveValue - costBasis;
+    const pct = (pnl / costBasis) * 100;
+    return { pnl, pct };
+  }, [childMode, dbData.holdings, childLivePriceMap]);
   const displayBalance = overrideBalance !== undefined
     ? overrideBalance
     : displayMarketValue;
@@ -1131,16 +1178,18 @@ const SwipeableBalanceCard = ({
     return (childSnapshotCount < minRows && _childLockedLabels[activeTab]) ? _childLockedLabels[activeTab] : null;
   })();
 
-  // PnL pill: use period-specific return from client_strategy_returns_c chart data when a period tab
-  // is active and data is available; fall back to all-time return.
-  // "all" always uses displayReturn (live market value − cost basis) so it matches the bottom ALL tab.
-  const activeReturn = (isPeriodTab && activeTab !== "all" && periodReturn !== null) ? periodReturn : displayReturn;
-  // For child period tabs use the stored/basket pct (same source as portfolio tab).
-  // For all other cases derive from pnl / costBasis.
+  // PnL pill: for child YTD use live metrics (15s poll); for other period tabs use stored/basket.
+  // "all" always uses displayReturn (live market value − cost basis).
+  const useChildLiveYtd = childMode && activeTab === "ytd" && childLiveMetrics != null;
+  const activeReturn = useChildLiveYtd
+    ? childLiveMetrics.pnl
+    : ((isPeriodTab && activeTab !== "all" && periodReturn !== null) ? periodReturn : displayReturn);
   const activeReturnPct = displayBigValue > 0
-    ? ((childMode && isPeriodTab && activeTab !== "all" && periodPct !== null)
-        ? Math.abs(periodPct).toFixed(1)
-        : ((Math.abs(activeReturn) / displayBigValue) * 100).toFixed(1))
+    ? (useChildLiveYtd
+        ? Math.abs(childLiveMetrics.pct).toFixed(1)
+        : ((childMode && isPeriodTab && activeTab !== "all" && periodPct !== null)
+            ? Math.abs(periodPct).toFixed(1)
+            : ((Math.abs(activeReturn) / displayBigValue) * 100).toFixed(1)))
     : "0.0";
 
   const isLoss = activeReturn < 0;

@@ -567,12 +567,12 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
                       const livePct = ia > 0 ? (livePnl / ia) * 100 : 0;
                       const pnl = timeFilter === "D"
                         ? liveStrategyMetrics.todayPnl
-                        : timeFilter === "all"
+                        : (timeFilter === "all" || timeFilter === "ytd")
                           ? livePnl
                           : (periodReturnData?.pnl !== undefined && periodReturnData.pnl !== 0 ? periodReturnData.pnl : (derivedPeriodReturn.pnl !== 0 ? derivedPeriodReturn.pnl : livePnl));
                       const pnlPct = timeFilter === "D"
                         ? liveStrategyMetrics.todayPct
-                        : timeFilter === "all"
+                        : (timeFilter === "all" || timeFilter === "ytd")
                           ? livePct
                           : (periodReturnData?.pct !== undefined && periodReturnData.pct !== 0 ? periodReturnData.pct : (derivedPeriodReturn.pct !== 0 ? derivedPeriodReturn.pct : (ia > 0 ? (pnl / ia) * 100 : 0)));
                       const isPos = pnl >= 0;
