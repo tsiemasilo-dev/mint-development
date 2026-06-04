@@ -55,6 +55,7 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
   const { strategies, selectedStrategy, loading: strategiesLoading, selectStrategy } = useUserStrategies(familyMemberId);
   const [timeFilter, setTimeFilter] = useState("m");
   const [tabJustChanged, setTabJustChanged] = useState(false);
+  const tabJustChangedTimer = useRef(null);
   const { chartData: realChartData, loading: chartLoading } = useStrategyChartData(
     selectedStrategy?.strategyId, timeFilter,
     selectedStrategy?.firstInvestedDate || null,
@@ -114,10 +115,6 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
     return { pnl, pct: parseFloat(pct.toFixed(4)) };
   }, [snapshotRows, timeFilter]);
 
-  // Clear the "tab just changed" flag once new period data arrives
-  useEffect(() => {
-    setTabJustChanged(false);
-  }, [periodReturnData, derivedPeriodReturn]);
 
   // Derive locked message directly from availablePeriods + current filter — always in sync
   const _lockedLabels = { "5d": "Available after 5 trading days", m: "Available after 1 month", ytd: "Available after first full year" };
@@ -542,6 +539,8 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
                             onClick={() => {
                               setTabJustChanged(true);
                               setTimeFilter(f.id);
+                              clearTimeout(tabJustChangedTimer.current);
+                              tabJustChangedTimer.current = setTimeout(() => setTabJustChanged(false), 800);
                             }}
                             className={`px-3 h-8 rounded-full text-xs font-bold transition-all ${
                               timeFilter === f.id
