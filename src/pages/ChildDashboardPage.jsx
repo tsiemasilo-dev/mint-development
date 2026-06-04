@@ -2680,6 +2680,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             <NotificationBell onClick={() => {}} />
           </header>
 
+          {activeChildTab !== "portfolio" && (
           <div className="">
             {loading ? (
               <div className="rounded-[28px] bg-white/95 p-5 shadow-xl border border-white/70">
@@ -2702,6 +2703,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
               />
             )}
           </div>
+          )}
         </div>
       </div>
 
