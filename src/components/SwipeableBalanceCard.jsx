@@ -159,6 +159,7 @@ const SwipeableBalanceCard = ({
   overrideBalance,       // Rands — replaces the big portfolio number
   overrideWalletBalance, // Rands — replaces the CASH footer value
   managedByLabel,        // For child cards: "Managed by parent · Age X · Independent at Y"
+  livePriceMap: livePriceMapProp = null, // Shared from ChildDashboardPage — skips internal poll
 }) => {
   const childMode = !!familyMemberId;
   const _cacheKey = `${userId || ''}:${familyMemberId || ''}`;
@@ -818,9 +819,9 @@ const SwipeableBalanceCard = ({
     return () => { cancelled = true; };
   }, [childMode, familyMemberId, dbData.holdings, activeTab, userId]);
 
-  // Live price poll for child mode — 15s, mirrors ChildPortfolioTab exactly
+  // Live price poll for child mode — 15s, only runs when no shared prop from ChildDashboardPage
   useEffect(() => {
-    if (!childMode || !familyMemberId || !dbData.holdings.length) return;
+    if (!childMode || !familyMemberId || !dbData.holdings.length || livePriceMapProp) return;
     const securityIds = [...new Set(dbData.holdings.map(h => h.security_id).filter(Boolean))];
     if (!securityIds.length) return;
     const fetchLive = async () => {
@@ -839,7 +840,7 @@ const SwipeableBalanceCard = ({
     fetchLive();
     const id = setInterval(fetchLive, 15000);
     return () => clearInterval(id);
-  }, [childMode, familyMemberId, dbData.holdings]);
+  }, [childMode, familyMemberId, dbData.holdings, livePriceMapProp]);
 
   useEffect(() => {
     let chartCancelled = false;
@@ -1153,8 +1154,10 @@ const SwipeableBalanceCard = ({
     for (const h of dbData.holdings) {
       const qty = Number(h.quantity || 0);
       if (qty <= 0) continue;
-      // Prefer 15s live price, fall back to per-share price derived from market_value
-      const liveCents = childLivePriceMap[h.security_id];
+      // Prefer shared prop (rich format) → internal poll (number) → fallback
+      const liveCents = livePriceMapProp
+        ? livePriceMapProp[h.security_id]?.priceCents
+        : childLivePriceMap[h.security_id];
       const fallbackCents = qty > 0 ? Math.round(Number(h.market_value || 0) / qty) : 0;
       const priceCents = liveCents > 0 ? liveCents : fallbackCents;
       if (priceCents > 0) { liveValue += (priceCents / 100) * qty; hasPrices = true; }
@@ -1165,7 +1168,7 @@ const SwipeableBalanceCard = ({
     const pnl = liveValue - costBasis;
     const pct = (pnl / costBasis) * 100;
     return { pnl, pct };
-  }, [childMode, dbData.holdings, childLivePriceMap]);
+  }, [childMode, dbData.holdings, childLivePriceMap, livePriceMapProp]);
   const displayBalance = overrideBalance !== undefined
     ? overrideBalance
     : displayMarketValue;

@@ -47,7 +47,7 @@ const PIE_COLORS = ["#4C1D95","#5B21B6","#6D28D9","#7C3AED","#8B5CF6","#A78BFA",
 
 // ─── ChildPortfolioTab ─────────────────────────────────────────────────────────
 
-const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
+const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, livePriceMap: livePriceMapProp = null }) => {
   const { profile } = useProfile();
   const familyMemberId = child?.id || null;
 
@@ -156,9 +156,12 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
   }, [timeFilter]);
 
   // ── live price map — polls every 15s directly from stock_intraday_c ──────
-  const [livePriceMap, setLivePriceMap] = useState({});
+  // Skipped when livePriceMapProp is provided from ChildDashboardPage (shared poll)
+  const [ownLivePriceMap, setOwnLivePriceMap] = useState({});
+  const livePriceMap = livePriceMapProp ?? ownLivePriceMap;
 
   useEffect(() => {
+    if (livePriceMapProp) return; // shared poll from parent handles it
     const stratId = selectedStrategy?.strategyId;
     if (!stratId) return;
 
@@ -186,13 +189,13 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
           };
         }
       }
-      setLivePriceMap(map);
+      setOwnLivePriceMap(map);
     };
 
     fetchPrices();
     const id = setInterval(fetchPrices, 15000);
     return () => clearInterval(id);
-  }, [selectedStrategy?.strategyId, rawHoldings]);
+  }, [livePriceMapProp, selectedStrategy?.strategyId, rawHoldings]);
 
   // ── chart data ─────────────────────────────────────────────────────────────
   const currentStrategy = selectedStrategy || { name: strategiesLoading ? "Loading..." : "No Strategy", currentValue: 0, investedAmount: 0 };

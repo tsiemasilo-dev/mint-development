@@ -1950,6 +1950,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   const isMounted = useRef(true);
   const [child, setChild] = useState(initialChild);
   const [holdings, setHoldings] = useState([]);
+  const [childLivePriceMap, setChildLivePriceMap] = useState({});
   const [strategyMap, setStrategyMap] = useState({});
   const [transactions, setTransactions] = useState([]);
   const [parentBalance, setParentBalance] = useState(null);
@@ -2346,6 +2347,36 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     } catch (e) { console.error("[child-dash] txns", e); }
   }
 
+  // Shared live price poll — runs once every 15s for all child securities,
+  // fed to both SwipeableBalanceCard and ChildPortfolioTab to avoid duplicate queries.
+  useEffect(() => {
+    if (!child?.id || !holdings.length) return;
+    const securityIds = [...new Set(holdings.map(h => h.security_id).filter(Boolean))];
+    if (!securityIds.length) return;
+    const fetchLive = async () => {
+      const { data } = await supabase
+        .from("stock_intraday_c")
+        .select("security_id, current_price, 1d_abs, 1d_pct")
+        .in("security_id", securityIds)
+        .order("timestamp", { ascending: false });
+      if (!data?.length) return;
+      const map = {};
+      for (const row of data) {
+        if (!map[row.security_id]) {
+          map[row.security_id] = {
+            priceCents: Number(row.current_price),
+            abs1dCents: row["1d_abs"] != null ? Number(row["1d_abs"]) : null,
+            pct1d: row["1d_pct"] != null ? Number(row["1d_pct"]) : null,
+          };
+        }
+      }
+      setChildLivePriceMap(map);
+    };
+    fetchLive();
+    const id = setInterval(fetchLive, 15000);
+    return () => clearInterval(id);
+  }, [child?.id, holdings]);
+
   function handleTransferDone(result) {
     if (result.child_balance !== undefined) {
       setChild(prev => ({ ...prev, available_balance: result.child_balance }));
@@ -2709,6 +2740,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                 familyMemberId={child?.id || null}
                 mintNumber={child?.mint_number || null}
                 overrideWalletBalance={childBalance / 100}
+                livePriceMap={childLivePriceMap}
               />
             )}
           </div>
@@ -3253,6 +3285,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             child={child}
             rawHoldings={holdings}
             onOpenInvest={openInvestModal}
+            livePriceMap={childLivePriceMap}
           />
         )}
       </div>
