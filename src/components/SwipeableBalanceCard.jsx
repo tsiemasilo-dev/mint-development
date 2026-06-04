@@ -1155,7 +1155,9 @@ const SwipeableBalanceCard = ({
                 <span className="text-white/40 text-[10px]">Check back once more data has been recorded</span>
               </div>
             ) : (childMode && periodReturn === null) ? (
-              <div className="h-5 w-24 bg-white/15 rounded-full animate-pulse" />
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-white/10 overflow-hidden relative w-24 h-5">
+                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent animate-shimmer" />
+              </span>
             ) : (
               <>
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${isLoss ? "bg-destructive/20 text-destructive" : "bg-success/20 text-success"}`}>
