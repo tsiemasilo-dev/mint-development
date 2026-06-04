@@ -726,7 +726,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
               <div className="flex-1">
                 <h2 className="text-lg font-semibold text-slate-900">{selected.name}</h2>
                 <p className="text-sm text-slate-500">
-                  {selectedStrategyMinimum ? `Min. R${selectedStrategyMinimum.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "Calculating..."}
+                  {selectedStrategyMinimum ? `Min. R${(selectedStrategyMinimum * (1 + CASH_BUFFER_RATE)).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "Calculating..."}
                 </p>
               </div>
             </div>
@@ -734,7 +734,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
             <div className="flex items-center gap-3 mb-6">
               {selectedStrategyMinimum ? (
                 <>
-                  <p className="text-2xl font-semibold text-slate-900">R{selectedStrategyMinimum.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  <p className="text-2xl font-semibold text-slate-900">R{(selectedStrategyMinimum * (1 + CASH_BUFFER_RATE)).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   <span className="rounded-full px-2.5 py-1 text-xs font-semibold bg-slate-100 text-slate-500">
                     Min. investment
                   </span>
@@ -1004,7 +1004,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
                                   {s.risk_level || "Balanced"}{s.description ? ` - ${s.description.substring(0, 60)}${s.description.length > 60 ? "..." : ""}` : ""}
                                 </p>
                                 <p className="text-[11px] text-slate-400">
-                                  {minimumLoading ? "Calculating..." : (strategyMinimums[s.id] ? `Min. R${strategyMinimums[s.id].toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â")}
+                                  {minimumLoading ? "Calculating..." : (strategyMinimums[s.id] ? `Min. R${(strategyMinimums[s.id] * (1 + CASH_BUFFER_RATE)).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—")}
                                 </p>
                               </div>
                               {/* Sparkline */}
