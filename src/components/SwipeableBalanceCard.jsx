@@ -164,6 +164,7 @@ const SwipeableBalanceCard = ({
   const _cacheKey = `${userId || ''}:${familyMemberId || ''}`;
   const [activeTab, setActiveTab] = useState("ytd");
   const [periodReturn, setPeriodReturn] = useState(null);
+  const [periodPct, setPeriodPct] = useState(null);
   const [childSnapshotCount, setChildSnapshotCount] = useState(null);
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -719,7 +720,7 @@ const SwipeableBalanceCard = ({
 
   // Clear P&L immediately when tab changes — prevents stale value flashing
   useEffect(() => {
-    if (childMode) setPeriodReturn(null);
+    if (childMode) { setPeriodReturn(null); setPeriodPct(null); }
   }, [activeTab, childMode]);
 
   // Child snapshot fetch — runs only when holdings or active tab change, NOT on every live-price tick
@@ -767,29 +768,39 @@ const SwipeableBalanceCard = ({
         });
         setChartData(points);
 
-        // Mirror the portfolio tab's priority exactly (ChildPortfolioTab.jsx line 572):
-        // 1. Use the pre-stored P&L column if it has a non-zero value
-        // 2. Fall back to the basket-computed value from the chart rows above
+        // Mirror the portfolio tab's priority exactly (ChildPortfolioTab.jsx lines 572/577):
+        // 1. Use the pre-stored P&L/pct columns if non-zero
+        // 2. Fall back to basket-computed values (same formula as derivedPeriodReturn)
         const storedPnlCol = { "5d": "5d_pnl", "m": "1m_pnl", "ytd": "ytd_pnl" }[activeTab];
+        const storedPctCol = { "5d": "5d_pct", "m": "1m_pct", "ytd": "ytd_pct" }[activeTab];
         const basketVal = points[points.length - 1].v;
+        // Basket-based pct: (latest - first) / first * 100 — matches derivedPeriodReturn.pct
+        const latestBasketCents = basketByDate[dates[dates.length - 1]];
+        const basketPct = firstBasket > 0 ? ((latestBasketCents - firstBasket) / firstBasket) * 100 : 0;
+
         if (storedPnlCol) {
           let totalPnlCents = 0;
+          let totalPctCents = 0;
           await Promise.all(strategyIds.map(async (sid) => {
             const { data: pnlRow } = await supabase
               .from("client_strategy_returns_c")
-              .select(storedPnlCol)
+              .select(`${storedPnlCol}, ${storedPctCol}`)
               .eq("family_member", familyMemberId)
               .eq("strategy_id", sid)
               .order("as_of_date", { ascending: false })
               .limit(1)
               .maybeSingle();
             totalPnlCents += Number(pnlRow?.[storedPnlCol] || 0);
+            totalPctCents += Number(pnlRow?.[storedPctCol] || 0);
           }));
           if (cancelled) return;
           const storedVal = totalPnlCents / 100;
+          const storedPct = totalPctCents / strategyIds.length; // average pct across strategies
           setPeriodReturn(storedVal !== 0 ? storedVal : basketVal);
+          setPeriodPct(storedPct !== 0 ? storedPct : (basketPct || null));
         } else {
           setPeriodReturn(basketVal);
+          setPeriodPct(basketPct || null);
         }
       } catch (e) {
         console.warn("[SwipeableBalanceCard] childMode snapshot error:", e.message);
@@ -1119,9 +1130,13 @@ const SwipeableBalanceCard = ({
   // is active and data is available; fall back to all-time return.
   // "all" always uses displayReturn (live market value − cost basis) so it matches the bottom ALL tab.
   const activeReturn = (isPeriodTab && activeTab !== "all" && periodReturn !== null) ? periodReturn : displayReturn;
-  const activeReturnPct = displayBigValue > 0
-    ? truncateDecimal((Math.abs(activeReturn) / displayBigValue) * 100, 1).toFixed(1)
-    : "0.0";
+  // For child period tabs use the stored/basket pct (same source as portfolio tab).
+  // For all other cases derive from pnl / costBasis.
+  const activeReturnPct = (childMode && isPeriodTab && activeTab !== "all" && periodPct !== null)
+    ? truncateDecimal(Math.abs(periodPct), 1).toFixed(1)
+    : (displayBigValue > 0
+        ? truncateDecimal((Math.abs(activeReturn) / displayBigValue) * 100, 1).toFixed(1)
+        : "0.0");
 
   const isLoss = activeReturn < 0;
   const returnPct = activeReturnPct;
