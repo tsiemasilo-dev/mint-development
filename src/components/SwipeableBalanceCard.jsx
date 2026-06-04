@@ -85,7 +85,7 @@ const formatKMB = (value) => {
   if (absNum >= 1e9) formatted = (truncateDecimal(absNum / 1e9, 1)).toString() + "b";
   else if (absNum >= 1e6) formatted = (truncateDecimal(absNum / 1e6, 1)).toString() + "m";
   else if (absNum >= 1e3) formatted = (truncateDecimal(absNum / 1e3, 1)).toString() + "k";
-  else formatted = truncateDecimal(absNum, 2).toString();
+  else formatted = truncateDecimal(absNum, 2).toFixed(2);
   return `${sign}R${formatted}`;
 };
 
@@ -1096,8 +1096,8 @@ const SwipeableBalanceCard = ({
   // "all" always uses displayReturn (live market value − cost basis) so it matches the bottom ALL tab.
   const activeReturn = (isPeriodTab && activeTab !== "all" && periodReturn !== null) ? periodReturn : displayReturn;
   const activeReturnPct = displayBigValue > 0
-    ? truncateDecimal((activeReturn / displayBigValue) * 100, 2).toFixed(2)
-    : "0.00";
+    ? truncateDecimal((Math.abs(activeReturn) / displayBigValue) * 100, 1).toFixed(1)
+    : "0.0";
 
   const isLoss = activeReturn < 0;
   const returnPct = activeReturnPct;
