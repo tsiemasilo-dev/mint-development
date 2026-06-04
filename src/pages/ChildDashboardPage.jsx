@@ -1975,6 +1975,15 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   const [activeChildTab, setActiveChildTab] = useState("home");
   const [childNewsArticleId, setChildNewsArticleId] = useState(null);
 
+  useEffect(() => {
+    if (childNewsArticleId) {
+      document.body.classList.add("child-article-open");
+    } else {
+      document.body.classList.remove("child-article-open");
+    }
+    return () => document.body.classList.remove("child-article-open");
+  }, [childNewsArticleId]);
+
   const childName = [child?.first_name, child?.last_name].filter(Boolean).join(" ") || "Child";
   const age = getAge(child?.date_of_birth);
   const parentName = [profile?.firstName, profile?.lastName].filter(Boolean).join(" ") || "Parent";
