@@ -1285,7 +1285,7 @@ const SwipeableBalanceCard = ({
 
       {/* Period selector */}
       <div className="mt-2 flex bg-black/20 backdrop-blur-sm rounded-full p-0.5 relative">
-        {[["5d","5D"],["m","M"],["ytd","YTD"],["all","All"]].map(([key, label]) => (
+        {[["5d","5D"],["m","M"],["ytd","YTD"]].map(([key, label]) => (
           <button
             key={key}
             onClick={() => setActiveTab(key)}
