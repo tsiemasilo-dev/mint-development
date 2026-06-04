@@ -1936,7 +1936,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                         : '';
                       
                       const calcMin = calculateMinInvestmentSync(strategy, holdingsBySymbol);
-                      const formattedMinInvestment = calcMin ? `Min. ${formatCurrency(calcMin, "R")}` : null;
+                      const formattedMinInvestment = calcMin ? `Min. ${formatCurrency(calcMin * 1.08, "R")}` : null;
                       
                       const sparkline = [20, 22, 21, 24, 26, 25, 28, 30, 29, 32];
                       
@@ -2162,7 +2162,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                   <div>
                     <h2 className="text-[15px] font-bold text-slate-900">{selectedStrategy.name}</h2>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      {calculateMinInvestmentSync(selectedStrategy, holdingsBySymbol) ? `Min. ${formatCurrency(calculateMinInvestmentSync(selectedStrategy, holdingsBySymbol), "R")}` : "Calculating..."}
+                      {(() => { const _m = calculateMinInvestmentSync(selectedStrategy, holdingsBySymbol); return _m ? `Min. ${formatCurrency(_m * 1.08, "R")}` : "Calculating..."; })()}
                     </p>
                   </div>
                   <button
@@ -2184,7 +2184,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                   return minInvest ? (
                     <>
                       <p className="text-2xl font-semibold text-slate-900">
-                        {formatCurrency(minInvest, selectedStrategy.currency || 'R')}
+                        {formatCurrency(minInvest * 1.08, selectedStrategy.currency || 'R')}
                       </p>
                       <span className="rounded-full px-2.5 py-1 text-xs font-semibold bg-slate-100 text-slate-500">
                         Min. investment
