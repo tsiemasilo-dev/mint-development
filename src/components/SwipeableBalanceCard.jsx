@@ -85,7 +85,7 @@ const formatKMB = (value) => {
   if (absNum >= 1e9) formatted = (truncateDecimal(absNum / 1e9, 1)).toString() + "b";
   else if (absNum >= 1e6) formatted = (truncateDecimal(absNum / 1e6, 1)).toString() + "m";
   else if (absNum >= 1e3) formatted = (truncateDecimal(absNum / 1e3, 1)).toString() + "k";
-  else formatted = truncateDecimal(absNum, 2).toString();
+  else formatted = truncateDecimal(absNum, 2).toFixed(2);
   return `${sign}R${formatted}`;
 };
 
@@ -162,8 +162,9 @@ const SwipeableBalanceCard = ({
 }) => {
   const childMode = !!familyMemberId;
   const _cacheKey = `${userId || ''}:${familyMemberId || ''}`;
-  const [activeTab, setActiveTab] = useState("ytd");
+  const [activeTab, setActiveTab] = useState("all");
   const [periodReturn, setPeriodReturn] = useState(null);
+  const [childSnapshotCount, setChildSnapshotCount] = useState(null);
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
   const { lastUpdated, isConnected } = useRealtimePrices();
@@ -698,17 +699,90 @@ const SwipeableBalanceCard = ({
     };
   }, [userId, familyMemberId, lastUpdated]);
 
+  // Fetch total snapshot row count for child accounts so we can lock tabs with insufficient data
+  useEffect(() => {
+    if (!childMode || !familyMemberId) return;
+    const fetchCount = async () => {
+      const strategyIds = [...new Set(
+        dbData.holdings.map(h => h.strategy_id).filter(Boolean)
+      )];
+      if (!strategyIds.length) { setChildSnapshotCount(0); return; }
+      const { count } = await supabase
+        .from("client_strategy_returns_c")
+        .select("as_of_date", { count: "exact", head: true })
+        .eq("family_member", familyMemberId)
+        .in("strategy_id", strategyIds);
+      setChildSnapshotCount(count ?? 0);
+    };
+    fetchCount();
+  }, [childMode, familyMemberId, dbData.holdings]);
+
+  // Clear P&L immediately when tab changes — prevents stale value flashing
+  useEffect(() => {
+    if (childMode) setPeriodReturn(null);
+  }, [activeTab, childMode]);
+
+  // Child snapshot fetch — runs only when holdings or active tab change, NOT on every live-price tick
+  useEffect(() => {
+    if (!childMode || !familyMemberId) return;
+    let cancelled = false;
+    const fetchChildSnapshots = async () => {
+      const strategyIds = [...new Set(
+        dbData.holdings.map(h => h.strategy_id).filter(Boolean)
+      )];
+      if (!strategyIds.length) return; // keep previous periodReturn — don't flash fallback
+      setChartLoading(true);
+      try {
+        const rowLimit = activeTab === "5d" ? 5 : activeTab === "m" ? 22 : undefined;
+        const now = new Date();
+        const yearStart = `${now.getUTCFullYear()}-01-01`;
+
+        const basketByDate = {};
+        await Promise.all(strategyIds.map(async (sid) => {
+          let q = supabase
+            .from("client_strategy_returns_c")
+            .select("as_of_date, basket_value")
+            .eq("family_member", familyMemberId)
+            .eq("strategy_id", sid)
+            .order("as_of_date", { ascending: false });
+          if (activeTab === "ytd") q = q.gte("as_of_date", yearStart);
+          if (rowLimit) q = q.limit(rowLimit);
+          const { data } = await q;
+          (data || []).forEach(r => {
+            basketByDate[r.as_of_date] = (basketByDate[r.as_of_date] || 0) + Number(r.basket_value || 0);
+          });
+        }));
+
+        if (cancelled) return;
+        const dates = Object.keys(basketByDate).sort();
+        if (!dates.length) { setChartData([]); setPeriodReturn(null); return; }
+
+        const minRows = activeTab === "5d" ? 5 : activeTab === "m" ? 22 : 1;
+        if (dates.length < minRows) { setChartData([]); setPeriodReturn(null); return; }
+
+        const firstBasket = basketByDate[dates[0]];
+        const points = [{ d: null, v: 0 }];
+        dates.forEach(d => {
+          points.push({ d, v: Number(((basketByDate[d] - firstBasket) / 100).toFixed(2)) });
+        });
+        setChartData(points);
+        setPeriodReturn(points[points.length - 1].v);
+      } catch (e) {
+        console.warn("[SwipeableBalanceCard] childMode snapshot error:", e.message);
+      } finally {
+        if (!cancelled) setChartLoading(false);
+      }
+    };
+    fetchChildSnapshots();
+    return () => { cancelled = true; };
+  }, [childMode, familyMemberId, dbData.holdings, activeTab]);
+
   useEffect(() => {
     let chartCancelled = false;
     const fetchChartPrices = async () => {
       if (!userId && !familyMemberId) return;
-      // Child cards have no chart history — clear any stale state and stop
-      if (childMode) {
-        setChartData([]);
-        setPeriodReturn(null);
-        setChartLoading(false);
-        return;
-      }
+      // Child cards are handled by the separate snapshot effect above
+      if (childMode) return;
 
       // Ensure we don't leave chart stuck in loading if no holdings
       if (dbData.holdings.length === 0) {
@@ -1009,12 +1083,21 @@ const SwipeableBalanceCard = ({
     ? overrideBalance
     : displayMarketValue;
 
+  // For child accounts: derive a locked label when the active tab needs more data
+  const _childLockedLabels = { "5d": "Available after 5 trading days", m: "Available after 1 month", ytd: "Available after first full year" };
+  const childLockedLabel = (() => {
+    if (!childMode || childSnapshotCount === null) return null;
+    const minRows = activeTab === "5d" ? 5 : activeTab === "m" ? 22 : 1;
+    return (childSnapshotCount < minRows && _childLockedLabels[activeTab]) ? _childLockedLabels[activeTab] : null;
+  })();
+
   // PnL pill: use period-specific return from client_strategy_returns_c chart data when a period tab
   // is active and data is available; fall back to all-time return.
-  const activeReturn = (isPeriodTab && periodReturn !== null) ? periodReturn : displayReturn;
+  // "all" always uses displayReturn (live market value − cost basis) so it matches the bottom ALL tab.
+  const activeReturn = (isPeriodTab && activeTab !== "all" && periodReturn !== null) ? periodReturn : displayReturn;
   const activeReturnPct = displayBigValue > 0
-    ? truncateDecimal((activeReturn / displayBigValue) * 100, 2).toFixed(2)
-    : "0.00";
+    ? truncateDecimal((Math.abs(activeReturn) / displayBigValue) * 100, 1).toFixed(1)
+    : "0.0";
 
   const isLoss = activeReturn < 0;
   const returnPct = activeReturnPct;
@@ -1067,6 +1150,17 @@ const SwipeableBalanceCard = ({
           <div className="flex items-center gap-2 mt-1.5">
             {!dataSettled ? (
               <Skeleton className="h-5 w-24 bg-white/15 rounded-full animate-pulse" />
+            ) : childLockedLabel ? (
+              <div className="flex flex-col gap-0.5">
+                <span className="text-white/70 text-[11px] font-semibold">{childLockedLabel}</span>
+                <span className="text-white/40 text-[10px]">Check back once more data has been recorded</span>
+              </div>
+            ) : (childMode && periodReturn === null) ? (
+              <span className="inline-flex items-center gap-1 px-3 py-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-white/60 loading-dot-1" />
+                <span className="w-1.5 h-1.5 rounded-full bg-white/60 loading-dot-2" />
+                <span className="w-1.5 h-1.5 rounded-full bg-white/60 loading-dot-3" />
+              </span>
             ) : (
               <>
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${isLoss ? "bg-destructive/20 text-destructive" : "bg-success/20 text-success"}`}>
@@ -1078,7 +1172,7 @@ const SwipeableBalanceCard = ({
                           {activeTab === "5d" && "5D:"}{activeTab === "m" && "1M:"}{activeTab === "ytd" && "YTD:"}{activeTab === "all" && "Inc:"}
                         </span>
                       )}
-                      {activeReturn == null ? "N/A" : formatKMB(Math.abs(activeReturn))}
+                      {activeReturn == null ? "N/A" : `${isLoss ? "-" : "+"}${formatKMB(Math.abs(activeReturn))}`}
                     </>
                   ) : (
                     masked

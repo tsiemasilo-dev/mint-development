@@ -108,7 +108,7 @@ const PinLockScreen = ({ onUnlock, onLogout, userEmail, userAvatar, userName }) 
     } catch (e) {
       console.error('Sign out failed:', e);
     }
-    onLogout?.();
+    window.location.href = '/';
   };
 
   const handlePress = useCallback(

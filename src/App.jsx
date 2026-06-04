@@ -213,9 +213,7 @@ const App = () => {
     enabled: isAuthenticated,
     onLogout: () => {
       if (supabase) supabase.auth.signOut({ scope: 'local' });
-      sessionStorage.removeItem('mint_pin_unlocked');
-      setShowPinLock(false);
-      setCurrentPage("welcome");
+      window.location.href = '/';
     },
   });
 

@@ -726,7 +726,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
               <div className="flex-1">
                 <h2 className="text-lg font-semibold text-slate-900">{selected.name}</h2>
                 <p className="text-sm text-slate-500">
-                  {selectedStrategyMinimum ? `Min. R${selectedStrategyMinimum.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "Calculating..."}
+                  {selectedStrategyMinimum ? `Min. R${(selectedStrategyMinimum * (1 + CASH_BUFFER_RATE)).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "Calculating..."}
                 </p>
               </div>
             </div>
@@ -734,7 +734,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
             <div className="flex items-center gap-3 mb-6">
               {selectedStrategyMinimum ? (
                 <>
-                  <p className="text-2xl font-semibold text-slate-900">R{selectedStrategyMinimum.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  <p className="text-2xl font-semibold text-slate-900">R{(selectedStrategyMinimum * (1 + CASH_BUFFER_RATE)).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   <span className="rounded-full px-2.5 py-1 text-xs font-semibold bg-slate-100 text-slate-500">
                     Min. investment
                   </span>
@@ -1004,7 +1004,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
                                   {s.risk_level || "Balanced"}{s.description ? ` - ${s.description.substring(0, 60)}${s.description.length > 60 ? "..." : ""}` : ""}
                                 </p>
                                 <p className="text-[11px] text-slate-400">
-                                  {minimumLoading ? "Calculating..." : (strategyMinimums[s.id] ? `Min. R${strategyMinimums[s.id].toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â")}
+                                  {minimumLoading ? "Calculating..." : (strategyMinimums[s.id] ? `Min. R${(strategyMinimums[s.id] * (1 + CASH_BUFFER_RATE)).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—")}
                                 </p>
                               </div>
                               {/* Sparkline */}
@@ -2214,7 +2214,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             .in("id", securityIds),
           supabase
             .from("stock_intraday_c")
-            .select("security_id, current_price, timestamp")
+            .select("security_id, current_price, 1d_abs, 1d_pct, timestamp")
             .in("security_id", securityIds)
             .order("timestamp", { ascending: false }),
         ]);
@@ -2222,7 +2222,11 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
         // Keep latest intraday row per security_id (rows are already ordered DESC)
         (intradayRes.data || []).forEach(r => {
           if (r.security_id != null && intradayPriceMap[r.security_id] === undefined && r.current_price != null) {
-            intradayPriceMap[r.security_id] = Number(r.current_price);
+            intradayPriceMap[r.security_id] = {
+              current_price: Number(r.current_price),
+              abs_1d: r['1d_abs'] != null ? Number(r['1d_abs']) : null,
+              pct_1d: r['1d_pct'] != null ? Number(r['1d_pct']) : null,
+            };
           }
         });
       }
@@ -2234,7 +2238,9 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
           name: sec.name || null,
           logo_url: sec.logo_url || null,
           last_price: sec.last_price ?? null,
-          intraday_price_cents: intradayPriceMap[h.security_id] ?? null,
+          intraday_price_cents: intradayPriceMap[h.security_id]?.current_price ?? null,
+          intraday_1d_abs_cents: intradayPriceMap[h.security_id]?.abs_1d ?? null,
+          intraday_1d_pct: intradayPriceMap[h.security_id]?.pct_1d ?? null,
         };
       });
       if (isMounted.current) setHoldings(rows);
@@ -2674,6 +2680,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             <NotificationBell onClick={() => {}} />
           </header>
 
+          {activeChildTab !== "portfolio" && (
           <div className="">
             {loading ? (
               <div className="rounded-[28px] bg-white/95 p-5 shadow-xl border border-white/70">
@@ -2696,6 +2703,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
               />
             )}
           </div>
+          )}
         </div>
       </div>
 
@@ -3256,10 +3264,11 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
           </Suspense>
           <Navbar
             activeTab="home"
-            comingSoonTabs={["investments"]}
+            comingSoonTabs={[]}
             setActiveTab={(tab) => {
               if (tab === "news") setActiveChildTab("news");
               else if (tab === "more") setActiveChildTab("more");
+              else if (tab === "investments") setActiveChildTab("portfolio");
               else setActiveChildTab("home");
             }}
           />
@@ -3284,9 +3293,10 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
         </Suspense>
         <Navbar
           activeTab="news"
-          comingSoonTabs={["investments"]}
+          comingSoonTabs={[]}
           setActiveTab={(tab) => {
             if (tab === "more") setActiveChildTab("more");
+            else if (tab === "investments") setActiveChildTab("portfolio");
             else setActiveChildTab("home");
           }}
         />
@@ -3314,9 +3324,10 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
         </Suspense>
         <Navbar
           activeTab="more"
-          comingSoonTabs={["investments"]}
+          comingSoonTabs={[]}
           setActiveTab={(tab) => {
             if (tab === "news") setActiveChildTab("news");
+            else if (tab === "investments") setActiveChildTab("portfolio");
             else setActiveChildTab("home");
           }}
         />
@@ -3325,11 +3336,11 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
       {/* -- Bottom Navigation Bar (shared Mint Navbar) -- */}
       <Navbar
         activeTab={activeChildTab === "news" ? "news" : activeChildTab === "more" ? "more" : activeChildTab === "portfolio" ? "investments" : "home"}
-        comingSoonTabs={["investments"]}
+        comingSoonTabs={[]}
         setActiveTab={(tab) => {
           if (tab === "news") setActiveChildTab("news");
           else if (tab === "more") setActiveChildTab("more");
-          else if (tab === "investments") return;
+          else if (tab === "investments") setActiveChildTab("portfolio");
           else setActiveChildTab("home");
         }}
       />

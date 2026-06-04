@@ -143,7 +143,9 @@ const MorePage = ({ onNavigate, onBeforeLogout }) => {
     } catch (error) {
       console.error("Failed to sign out:", error);
     } finally {
-      onNavigate?.("welcome");
+      // Full reload wipes all in-memory React state so the next user
+      // never sees a previous user's data.
+      window.location.href = '/';
     }
   };
 
