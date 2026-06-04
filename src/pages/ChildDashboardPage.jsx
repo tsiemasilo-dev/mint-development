@@ -3262,16 +3262,18 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
               onViewModeChange={() => {}}
             />
           </Suspense>
-          <Navbar
-            activeTab="home"
-            comingSoonTabs={[]}
-            setActiveTab={(tab) => {
-              if (tab === "news") setActiveChildTab("news");
-              else if (tab === "more") setActiveChildTab("more");
-              else if (tab === "investments") setActiveChildTab("portfolio");
-              else setActiveChildTab("home");
-            }}
-          />
+          {!childNewsArticleId && (
+            <Navbar
+              activeTab="home"
+              comingSoonTabs={[]}
+              setActiveTab={(tab) => {
+                if (tab === "news") setActiveChildTab("news");
+                else if (tab === "more") setActiveChildTab("more");
+                else if (tab === "investments") setActiveChildTab("portfolio");
+                else setActiveChildTab("home");
+              }}
+            />
+          )}
         </div>
       )}
 
@@ -3291,15 +3293,17 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             onViewModeChange={() => {}}
           />
         </Suspense>
-        <Navbar
-          activeTab="news"
-          comingSoonTabs={[]}
-          setActiveTab={(tab) => {
-            if (tab === "more") setActiveChildTab("more");
-            else if (tab === "investments") setActiveChildTab("portfolio");
-            else setActiveChildTab("home");
-          }}
-        />
+        {!childNewsArticleId && (
+          <Navbar
+            activeTab="news"
+            comingSoonTabs={[]}
+            setActiveTab={(tab) => {
+              if (tab === "more") setActiveChildTab("more");
+              else if (tab === "investments") setActiveChildTab("portfolio");
+              else setActiveChildTab("home");
+            }}
+          />
+        )}
       </div>
 
       {/* -- News article overlay -- */}
@@ -3322,15 +3326,17 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
         <Suspense fallback={<div style={{ background: "var(--bg, #0f0a1e)", height: "100%" }} />}>
           <MorePage onNavigate={onTabChange} onBeforeLogout={() => {}} />
         </Suspense>
-        <Navbar
-          activeTab="more"
-          comingSoonTabs={[]}
-          setActiveTab={(tab) => {
-            if (tab === "news") setActiveChildTab("news");
-            else if (tab === "investments") setActiveChildTab("portfolio");
-            else setActiveChildTab("home");
-          }}
-        />
+        {!childNewsArticleId && (
+          <Navbar
+            activeTab="more"
+            comingSoonTabs={[]}
+            setActiveTab={(tab) => {
+              if (tab === "news") setActiveChildTab("news");
+              else if (tab === "investments") setActiveChildTab("portfolio");
+              else setActiveChildTab("home");
+            }}
+          />
+        )}
       </div>
 
       {/* -- Bottom Navigation Bar (shared Mint Navbar) -- */}
