@@ -66,7 +66,7 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
   );
 
   // which time period tabs have enough data to show
-  const [availablePeriods, setAvailablePeriods] = useState({ D: true, "5d": false, m: false, ytd: false });
+  const [availablePeriods, setAvailablePeriods] = useState({ D: true, "5d": false, m: false, ytd: false, all: true });
   // raw snapshot rows used for period P&L derivation (basket_value in cents, ascending by date)
   const [snapshotRows, setSnapshotRows] = useState([]);
 
@@ -88,6 +88,7 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
             "5d": count >= 5,
             m: count >= 22,
             ytd: latestYtdPct != null,
+            all: true,
           });
         }
       });
@@ -117,7 +118,7 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
 
 
   // Derive locked message directly from availablePeriods + current filter — always in sync
-  const _lockedLabels = { "5d": "Available after 5 trading days", m: "Available after 1 month", ytd: "Available after first full year" };
+  const _lockedLabels = { "5d": "Available after 5 trading days", m: "Available after 1 month", ytd: "Available after first full year", all: null };
   const lockedMessage = (!availablePeriods[timeFilter] && _lockedLabels[timeFilter]) ? _lockedLabels[timeFilter] : null;
 
   // sub-tab within the portfolio tab
@@ -532,7 +533,7 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
                     </div>
 
                     <div className="flex gap-1">
-                      {[{ id: "D", label: "D" }, { id: "5d", label: "5D" }, { id: "m", label: "M" }, { id: "ytd", label: "YTD" }].map((f) => {
+                      {[{ id: "D", label: "D" }, { id: "5d", label: "5D" }, { id: "m", label: "M" }, { id: "ytd", label: "YTD" }, { id: "all", label: "ALL" }].map((f) => {
                         return (
                           <button
                             key={f.id}
@@ -565,10 +566,14 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
                       const livePct = ia > 0 ? (livePnl / ia) * 100 : 0;
                       const pnl = timeFilter === "D"
                         ? liveStrategyMetrics.todayPnl
-                        : (periodReturnData?.pnl !== undefined && periodReturnData.pnl !== 0 ? periodReturnData.pnl : (derivedPeriodReturn.pnl !== 0 ? derivedPeriodReturn.pnl : livePnl));
+                        : timeFilter === "all"
+                          ? livePnl
+                          : (periodReturnData?.pnl !== undefined && periodReturnData.pnl !== 0 ? periodReturnData.pnl : (derivedPeriodReturn.pnl !== 0 ? derivedPeriodReturn.pnl : livePnl));
                       const pnlPct = timeFilter === "D"
                         ? liveStrategyMetrics.todayPct
-                        : (periodReturnData?.pct !== undefined && periodReturnData.pct !== 0 ? periodReturnData.pct : (derivedPeriodReturn.pct !== 0 ? derivedPeriodReturn.pct : livePct));
+                        : timeFilter === "all"
+                          ? livePct
+                          : (periodReturnData?.pct !== undefined && periodReturnData.pct !== 0 ? periodReturnData.pct : (derivedPeriodReturn.pct !== 0 ? derivedPeriodReturn.pct : livePct));
                       const isPos = pnl >= 0;
                       if (isPending) return <p className="text-3xl font-bold text-slate-900">R0,00</p>;
                       return (
