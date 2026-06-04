@@ -2214,7 +2214,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             .in("id", securityIds),
           supabase
             .from("stock_intraday_c")
-            .select("security_id, current_price, timestamp")
+            .select("security_id, current_price, 1d_abs, 1d_pct, timestamp")
             .in("security_id", securityIds)
             .order("timestamp", { ascending: false }),
         ]);
@@ -2222,7 +2222,11 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
         // Keep latest intraday row per security_id (rows are already ordered DESC)
         (intradayRes.data || []).forEach(r => {
           if (r.security_id != null && intradayPriceMap[r.security_id] === undefined && r.current_price != null) {
-            intradayPriceMap[r.security_id] = Number(r.current_price);
+            intradayPriceMap[r.security_id] = {
+              current_price: Number(r.current_price),
+              abs_1d: r['1d_abs'] != null ? Number(r['1d_abs']) : null,
+              pct_1d: r['1d_pct'] != null ? Number(r['1d_pct']) : null,
+            };
           }
         });
       }
@@ -2234,7 +2238,9 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
           name: sec.name || null,
           logo_url: sec.logo_url || null,
           last_price: sec.last_price ?? null,
-          intraday_price_cents: intradayPriceMap[h.security_id] ?? null,
+          intraday_price_cents: intradayPriceMap[h.security_id]?.current_price ?? null,
+          intraday_1d_abs_cents: intradayPriceMap[h.security_id]?.abs_1d ?? null,
+          intraday_1d_pct: intradayPriceMap[h.security_id]?.pct_1d ?? null,
         };
       });
       if (isMounted.current) setHoldings(rows);

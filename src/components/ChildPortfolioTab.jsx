@@ -117,11 +117,60 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
   // ── chart data ─────────────────────────────────────────────────────────────
   const currentStrategy = selectedStrategy || { name: strategiesLoading ? "Loading..." : "No Strategy", currentValue: 0, investedAmount: 0 };
 
+  // ── live strategy metrics — computed from holdings instead of saved snapshot ──
+  const liveStrategyMetrics = useMemo(() => {
+    const stratId = selectedStrategy?.strategyId;
+    const empty = { liveValue: 0, costBasis: 0, todayPnl: 0, todayPct: 0, isPending: true, hasPrices: false };
+    if (!stratId) return empty;
+
+    const stratHoldings = (rawHoldings || []).filter(h =>
+      h.strategy_id === stratId &&
+      Number(h.avg_fill || 0) > 0 &&
+      !!h.Fill_date
+    );
+    if (stratHoldings.length === 0) return empty;
+
+    let liveValue = 0;
+    let costBasis = 0;
+    let todayPnl = 0;
+    let hasPrices = false;
+
+    for (const h of stratHoldings) {
+      const qty = Math.abs(Number(h.quantity || 0));
+
+      const intraCents = Number(h.intraday_price_cents);
+      const lastCents = Number(h.last_price);
+      if (Number.isFinite(intraCents) && intraCents > 0) {
+        liveValue += (intraCents / 100) * qty;
+        hasPrices = true;
+      } else if (Number.isFinite(lastCents) && lastCents > 0) {
+        liveValue += (lastCents / 100) * qty;
+        hasPrices = true;
+      }
+
+      const expected = Number(h.Expected_fill);
+      if (Number.isFinite(expected) && expected > 0) {
+        costBasis += expected * qty;
+      } else {
+        const avgFill = Number(h.avg_fill);
+        if (Number.isFinite(avgFill) && avgFill > 0) costBasis += (avgFill / 100) * qty;
+      }
+
+      const abs1d = Number(h.intraday_1d_abs_cents);
+      if (Number.isFinite(abs1d)) {
+        todayPnl += (abs1d / 100) * qty;
+      }
+    }
+
+    const todayPct = costBasis > 0 ? (todayPnl / costBasis) * 100 : 0;
+    return { liveValue, costBasis, todayPnl, todayPct, isPending: false, hasPrices };
+  }, [rawHoldings, selectedStrategy?.strategyId]);
+
   const currentChartData = useMemo(() => {
     if (realChartData && realChartData.length > 0) {
       if (realChartData[0]?.day === null && realChartData[0]?.value === 0) return realChartData;
-      const cv = currentStrategy.currentValue || 0;
-      const ia = currentStrategy.investedAmount || 0;
+      const cv = liveStrategyMetrics.hasPrices ? liveStrategyMetrics.liveValue : (currentStrategy.currentValue || 0);
+      const ia = liveStrategyMetrics.costBasis || currentStrategy.investedAmount || 0;
       if (cv > 0 && realChartData.length > 0) {
         const latestNav = realChartData[realChartData.length - 1].value;
         if (!latestNav || latestNav <= 0) return [];
@@ -132,7 +181,7 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
       }
     }
     return [];
-  }, [realChartData, currentStrategy]);
+  }, [realChartData, currentStrategy, liveStrategyMetrics]);
 
   const stratAxisConfig = computePnlAxisConfig(currentChartData);
   const isLoadingData = strategiesLoading || chartLoading;
@@ -310,11 +359,17 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
                   {/* Value + P&L */}
                   <div>
                     {(() => {
-                      const cv = currentStrategy.currentValue || 0;
-                      const ia = currentStrategy.investedAmount || 0;
-                      const isPending = cv === 0 && ia === 0;
-                      const pnl = periodReturnData?.pnl !== undefined && periodReturnData.pnl !== 0 ? periodReturnData.pnl : cv - ia;
-                      const pnlPct = periodReturnData?.pct !== undefined && periodReturnData.pct !== 0 ? periodReturnData.pct : (ia > 0 ? (pnl / ia) * 100 : 0);
+                      const cv = liveStrategyMetrics.hasPrices ? liveStrategyMetrics.liveValue : (currentStrategy.currentValue || 0);
+                      const ia = liveStrategyMetrics.costBasis || currentStrategy.investedAmount || 0;
+                      const isPending = liveStrategyMetrics.isPending;
+                      const livePnl = liveStrategyMetrics.liveValue - liveStrategyMetrics.costBasis;
+                      const livePct = ia > 0 ? (livePnl / ia) * 100 : 0;
+                      const pnl = timeFilter === "D"
+                        ? liveStrategyMetrics.todayPnl
+                        : (periodReturnData?.pnl !== undefined && periodReturnData.pnl !== 0 ? periodReturnData.pnl : livePnl);
+                      const pnlPct = timeFilter === "D"
+                        ? liveStrategyMetrics.todayPct
+                        : (periodReturnData?.pct !== undefined && periodReturnData.pct !== 0 ? periodReturnData.pct : livePct);
                       const isPos = pnl >= 0;
                       if (isPending) return <p className="text-3xl font-bold text-slate-900">R0,00</p>;
                       return (
