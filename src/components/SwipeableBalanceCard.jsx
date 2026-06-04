@@ -1086,6 +1086,14 @@ const SwipeableBalanceCard = ({
     ? overrideBalance
     : displayMarketValue;
 
+  // For child accounts: derive a locked label when the active tab needs more data
+  const _childLockedLabels = { "5d": "Available after 5 trading days", m: "Available after 1 month", ytd: "Available after first full year" };
+  const childLockedLabel = (() => {
+    if (!childMode || childSnapshotCount === null) return null;
+    const minRows = activeTab === "5d" ? 5 : activeTab === "m" ? 22 : 1;
+    return (childSnapshotCount < minRows && _childLockedLabels[activeTab]) ? _childLockedLabels[activeTab] : null;
+  })();
+
   // PnL pill: use period-specific return from client_strategy_returns_c chart data when a period tab
   // is active and data is available; fall back to all-time return.
   const activeReturn = (isPeriodTab && periodReturn !== null) ? periodReturn : displayReturn;
@@ -1144,6 +1152,11 @@ const SwipeableBalanceCard = ({
           <div className="flex items-center gap-2 mt-1.5">
             {!dataSettled ? (
               <Skeleton className="h-5 w-24 bg-white/15 rounded-full animate-pulse" />
+            ) : childLockedLabel ? (
+              <div className="flex flex-col gap-0.5">
+                <span className="text-white/70 text-[11px] font-semibold">{childLockedLabel}</span>
+                <span className="text-white/40 text-[10px]">Check back once more data has been recorded</span>
+              </div>
             ) : (
               <>
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${isLoss ? "bg-destructive/20 text-destructive" : "bg-success/20 text-success"}`}>
@@ -1268,26 +1281,17 @@ const SwipeableBalanceCard = ({
 
       {/* Period selector */}
       <div className="mt-2 flex bg-black/20 backdrop-blur-sm rounded-full p-0.5 relative">
-        {[["5d","5D"],["m","M"],["ytd","YTD"],["all","All"]].map(([key, label]) => {
-          const minRowsForTab = key === "5d" ? 5 : key === "m" ? 22 : 1;
-          const tabLocked = childMode && childSnapshotCount !== null && childSnapshotCount < minRowsForTab;
-          return (
-            <button
-              key={key}
-              onClick={() => { if (!tabLocked) setActiveTab(key); }}
-              disabled={tabLocked}
-              className={`flex-1 py-1.5 rounded-full text-[11px] font-semibold transition-all ${
-                tabLocked
-                  ? "text-white/20 cursor-not-allowed"
-                  : activeTab === key
-                    ? "bg-white text-slate-900 shadow-sm"
-                    : "text-white/60 hover:text-white/90"
-              }`}
-            >
-              {label}
-            </button>
-          );
-        })}
+        {[["5d","5D"],["m","M"],["ytd","YTD"],["all","All"]].map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setActiveTab(key)}
+            className={`flex-1 py-1.5 rounded-full text-[11px] font-semibold transition-all ${
+              activeTab === key ? "bg-white text-slate-900 shadow-sm" : "text-white/60 hover:text-white/90"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {/* Footer */}
