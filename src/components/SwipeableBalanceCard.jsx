@@ -1172,7 +1172,7 @@ const SwipeableBalanceCard = ({
                           {activeTab === "5d" && "5D:"}{activeTab === "m" && "1M:"}{activeTab === "ytd" && "YTD:"}{activeTab === "all" && "Inc:"}
                         </span>
                       )}
-                      {activeReturn == null ? "N/A" : formatKMB(Math.abs(activeReturn))}
+                      {activeReturn == null ? "N/A" : `${isLoss ? "-" : "+"}${formatKMB(Math.abs(activeReturn))}`}
                     </>
                   ) : (
                     masked
