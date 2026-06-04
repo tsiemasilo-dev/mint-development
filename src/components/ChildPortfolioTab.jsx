@@ -192,30 +192,29 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
       try {
         const todayUTC = new Date().toISOString().slice(0, 10);
 
-        // Yesterday's basket as the P&L baseline
-        const { data: baselineRows } = await supabase
-          .from("client_strategy_returns_c")
-          .select("basket_value, as_of_date")
-          .eq("family_member", familyMemberId)
-          .eq("strategy_id", stratId)
-          .lt("as_of_date", todayUTC)
-          .order("as_of_date", { ascending: false })
-          .limit(1);
-
-        const baselineRands = baselineRows?.[0]?.basket_value
-          ? baselineRows[0].basket_value / 100
-          : liveStrategyMetrics.costBasis;
-
-        // Today's intraday rows for all strategy securities
+        // Today's intraday rows for all strategy securities (include 1d_abs to derive yesterday's close)
         const { data: intradayRows } = await supabase
           .from("stock_intraday_c")
-          .select("security_id, current_price, timestamp")
+          .select("security_id, current_price, 1d_abs, timestamp")
           .in("security_id", securityIds)
           .gte("timestamp", `${todayUTC}T00:00:00Z`)
           .order("timestamp", { ascending: true });
 
         if (cancelled) return;
         if (!intradayRows?.length) { setIntradayChartData([]); setIntradayLoading(false); return; }
+
+        // Derive yesterday's closing price per security from the latest 1d_abs value:
+        // yesterday_close = current_price - 1d_abs  (1d_abs = today's change vs yesterday's close)
+        const latestBySecId = {};
+        for (const row of intradayRows) {
+          latestBySecId[row.security_id] = row; // later rows overwrite earlier → we get the latest
+        }
+        const baselineRands = securityIds.reduce((sum, sid) => {
+          const row = latestBySecId[sid];
+          if (!row) return sum;
+          const yesterdayCloseCents = Number(row.current_price) - Number(row["1d_abs"] || 0);
+          return sum + (yesterdayCloseCents / 100) * (qtyMap[sid] || 0);
+        }, 0) || liveStrategyMetrics.costBasis;
 
         // Group into 5-minute buckets
         const bucketMap = new Map();
