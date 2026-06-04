@@ -3334,16 +3334,18 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
       </div>
 
       {/* -- Bottom Navigation Bar (shared Mint Navbar) -- */}
-      <Navbar
-        activeTab={activeChildTab === "news" ? "news" : activeChildTab === "more" ? "more" : activeChildTab === "portfolio" ? "investments" : "home"}
-        comingSoonTabs={[]}
-        setActiveTab={(tab) => {
-          if (tab === "news") setActiveChildTab("news");
-          else if (tab === "more") setActiveChildTab("more");
-          else if (tab === "investments") setActiveChildTab("portfolio");
-          else setActiveChildTab("home");
-        }}
-      />
+      {!childNewsArticleId && (
+        <Navbar
+          activeTab={activeChildTab === "news" ? "news" : activeChildTab === "more" ? "more" : activeChildTab === "portfolio" ? "investments" : "home"}
+          comingSoonTabs={[]}
+          setActiveTab={(tab) => {
+            if (tab === "news") setActiveChildTab("news");
+            else if (tab === "more") setActiveChildTab("more");
+            else if (tab === "investments") setActiveChildTab("portfolio");
+            else setActiveChildTab("home");
+          }}
+        />
+      )}
 
       {/* -- Modals -- */}
       <AnimatePresence>
