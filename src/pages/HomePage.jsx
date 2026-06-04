@@ -553,7 +553,7 @@ const HomePage = ({
     try {
       const { data: holdings, error: holdingsError } = await supabase
         .from('stock_holdings_c')
-        .select('id, family_member_id, security_id, strategy_id, quantity, avg_fill, Expected_fill, market_value, unrealized_pnl, Status, created_at, transaction_id')
+        .select('id, family_member_id, security_id, strategy_id, quantity, avg_fill, Expected_fill, market_value, unrealized_pnl, Status, created_at, transaction_id, rebalance_batch_id')
         .eq('user_id', profile.id)
         .is('family_member_id', null)
         .eq('Status', 'active');
@@ -945,18 +945,42 @@ const HomePage = ({
   // legacy rows written before the store_reference column existed.
   // Each batch is fully filled (all have avg_fill) or fully pending (none do).
   const purchaseBatchesByStrategy = useMemo(() => {
-    const out = {};
-    for (const h of (rawStrategyHoldings || [])) {
-      if (!h.strategy_id) continue;
+    const rows = (rawStrategyHoldings || []).filter((h) => h.strategy_id);
+
+    // A rebalance is a position swap, NOT a new purchase. Rebalance-created
+    // holdings (rebalance_batch_id set) carry no transaction_id, so they'd land
+    // in their own batch and show the strategy as "2 purchases / 2x". Instead,
+    // merge them into the strategy's earliest ORIGINAL purchase batch (the anchor)
+    // so a rebalanced strategy still reads as one purchase.
+    const anchorByStrategy = {};
+    for (const h of rows) {
+      if (h.rebalance_batch_id) continue; // rebalance rows can't be the anchor
       const minute = h.created_at ? new Date(h.created_at).toISOString().slice(0, 16) : "unknown";
       const batchId = h.transaction_id || `legacy:${minute}`;
+      const cur = anchorByStrategy[h.strategy_id];
+      if (!cur || minute < cur.minute) {
+        anchorByStrategy[h.strategy_id] = { batchId, minute, transactionId: h.transaction_id || null };
+      }
+    }
+
+    const out = {};
+    for (const h of rows) {
+      const minute = h.created_at ? new Date(h.created_at).toISOString().slice(0, 16) : "unknown";
+      const anchor = anchorByStrategy[h.strategy_id];
+      let batchId, txnId, batchMinute;
+      if (h.rebalance_batch_id && anchor) {
+        // Fold the rebalance holding into the original purchase batch.
+        batchId = anchor.batchId; txnId = anchor.transactionId; batchMinute = anchor.minute;
+      } else {
+        batchId = h.transaction_id || `legacy:${minute}`; txnId = h.transaction_id || null; batchMinute = minute;
+      }
       const key = `${h.strategy_id}__${batchId}`;
       if (!out[h.strategy_id]) out[h.strategy_id] = {};
       if (!out[h.strategy_id][key]) {
         out[h.strategy_id][key] = {
           strategyId: h.strategy_id,
-          transactionId: h.transaction_id || null,
-          minute,
+          transactionId: txnId,
+          minute: batchMinute,
           holdings: [],
           filled: true,
         };
