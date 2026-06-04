@@ -782,11 +782,13 @@ const SwipeableBalanceCard = ({
           let totalPnlCents = 0;
           let totalPctCents = 0;
           await Promise.all(strategyIds.map(async (sid) => {
-            const { data: pnlRow } = await supabase
+            let q = supabase
               .from("client_strategy_returns_c")
               .select(`${storedPnlCol}, ${storedPctCol}`)
               .eq("family_member", familyMemberId)
-              .eq("strategy_id", sid)
+              .eq("strategy_id", sid);
+            if (userId) q = q.eq("user_id", userId); // match useStrategyPeriodReturns hook exactly
+            const { data: pnlRow } = await q
               .order("as_of_date", { ascending: false })
               .limit(1)
               .maybeSingle();
@@ -795,12 +797,17 @@ const SwipeableBalanceCard = ({
           }));
           if (cancelled) return;
           const storedVal = totalPnlCents / 100;
-          const storedPct = totalPctCents / strategyIds.length; // average pct across strategies
+          const storedPct = totalPctCents / strategyIds.length;
+          // YTD fallback: portfolio tab uses livePct (cost-basis denominator) when stored = 0.
+          // basketPct uses jan-1 basket as denominator — different result.
+          // Returning null lets the display fall through to displayReturn/displayBigValue (= livePct).
+          // 5d/m fallback: basketPct matches derivedPeriodReturn.pct exactly, so keep it.
+          const pctFallback = activeTab === "ytd" ? null : (basketPct || null);
           setPeriodReturn(storedVal !== 0 ? storedVal : basketVal);
-          setPeriodPct(storedPct !== 0 ? storedPct : (basketPct || null));
+          setPeriodPct(storedPct !== 0 ? storedPct : pctFallback);
         } else {
           setPeriodReturn(basketVal);
-          setPeriodPct(basketPct || null);
+          setPeriodPct(activeTab === "ytd" ? null : (basketPct || null));
         }
       } catch (e) {
         console.warn("[SwipeableBalanceCard] childMode snapshot error:", e.message);
@@ -810,7 +817,7 @@ const SwipeableBalanceCard = ({
     };
     fetchChildSnapshots();
     return () => { cancelled = true; };
-  }, [childMode, familyMemberId, dbData.holdings, activeTab]);
+  }, [childMode, familyMemberId, dbData.holdings, activeTab, userId]);
 
   useEffect(() => {
     let chartCancelled = false;
