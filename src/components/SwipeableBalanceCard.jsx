@@ -766,7 +766,14 @@ const SwipeableBalanceCard = ({
           points.push({ d, v: Number(((basketByDate[d] - firstBasket) / 100).toFixed(2)) });
         });
         setChartData(points);
-        setPeriodReturn(points[points.length - 1].v);
+
+        // Option A: live end-point — use market_value (intraday-priced) from dbData.holdings
+        // so the P&L pill reflects current prices, not last night's batch close.
+        const liveBasketCents = dbData.holdings
+          .filter(h => !h.isStrategy && Number(h.avg_fill || 0) > 0)
+          .reduce((sum, h) => sum + Number(h.market_value || 0), 0);
+        const endCents = liveBasketCents > 0 ? liveBasketCents : basketByDate[dates[dates.length - 1]];
+        setPeriodReturn(Number(((endCents - firstBasket) / 100).toFixed(2)));
       } catch (e) {
         console.warn("[SwipeableBalanceCard] childMode snapshot error:", e.message);
       } finally {

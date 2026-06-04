@@ -93,11 +93,19 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
       });
   }, [familyMemberId, selectedStrategy?.strategyId]);
 
-  // derive period P&L from basket snapshots when pre-calculated columns are null
+  // derive period P&L from basket snapshots.
+  // Option A: use live intraday value as the end-point so the pill is never
+  // behind — the historical start is still anchored to the batch snapshot for
+  // that period, so the shape of past performance is preserved.
   const derivedPeriodReturn = useMemo(() => {
     if (!snapshotRows.length) return { pnl: 0, pct: 0 };
-    const last = snapshotRows[snapshotRows.length - 1];
-    const latestCents = Number(last?.basket_value || 0);
+
+    // Live end-point in cents (falls back to last batch row when prices unavailable)
+    const liveValueCents = liveStrategyMetrics.hasPrices
+      ? Math.round(liveStrategyMetrics.liveValue * 100)
+      : 0;
+    const lastBatchCents = Number(snapshotRows[snapshotRows.length - 1]?.basket_value || 0);
+    const latestCents = liveValueCents > 0 ? liveValueCents : lastBatchCents;
     if (!latestCents) return { pnl: 0, pct: 0 };
 
     let startCents = 0;
@@ -105,6 +113,8 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
       startCents = Number(snapshotRows[snapshotRows.length - 5]?.basket_value || 0);
     } else if (timeFilter === "m" && snapshotRows.length >= 22) {
       startCents = Number(snapshotRows[snapshotRows.length - 22]?.basket_value || 0);
+    } else if (timeFilter === "ytd" && snapshotRows.length >= 1) {
+      startCents = Number(snapshotRows[0]?.basket_value || 0);
     } else {
       return { pnl: 0, pct: 0 };
     }
@@ -113,7 +123,7 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
     const pnl = (latestCents - startCents) / 100;
     const pct = ((latestCents - startCents) / startCents) * 100;
     return { pnl, pct: parseFloat(pct.toFixed(4)) };
-  }, [snapshotRows, timeFilter]);
+  }, [snapshotRows, timeFilter, liveStrategyMetrics]);
 
 
   // Derive locked message directly from availablePeriods + current filter — always in sync
@@ -565,10 +575,10 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
                       const livePct = ia > 0 ? (livePnl / ia) * 100 : 0;
                       const pnl = timeFilter === "D"
                         ? liveStrategyMetrics.todayPnl
-                        : (periodReturnData?.pnl !== undefined && periodReturnData.pnl !== 0 ? periodReturnData.pnl : (derivedPeriodReturn.pnl !== 0 ? derivedPeriodReturn.pnl : livePnl));
+                        : (derivedPeriodReturn.pnl !== 0 ? derivedPeriodReturn.pnl : (periodReturnData?.pnl !== undefined && periodReturnData.pnl !== 0 ? periodReturnData.pnl : livePnl));
                       const pnlPct = timeFilter === "D"
                         ? liveStrategyMetrics.todayPct
-                        : (periodReturnData?.pct !== undefined && periodReturnData.pct !== 0 ? periodReturnData.pct : (derivedPeriodReturn.pct !== 0 ? derivedPeriodReturn.pct : livePct));
+                        : (derivedPeriodReturn.pct !== 0 ? derivedPeriodReturn.pct : (periodReturnData?.pct !== undefined && periodReturnData.pct !== 0 ? periodReturnData.pct : livePct));
                       const isPos = pnl >= 0;
                       if (isPending) return <p className="text-3xl font-bold text-slate-900">R0,00</p>;
                       return (
