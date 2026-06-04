@@ -54,6 +54,7 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
   // strategy hooks — filtered to child
   const { strategies, selectedStrategy, loading: strategiesLoading, selectStrategy } = useUserStrategies(familyMemberId);
   const [timeFilter, setTimeFilter] = useState("m");
+  const [tabJustChanged, setTabJustChanged] = useState(false);
   const { chartData: realChartData, loading: chartLoading } = useStrategyChartData(
     selectedStrategy?.strategyId, timeFilter,
     selectedStrategy?.firstInvestedDate || null,
@@ -112,6 +113,11 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
     const pct = ((latestCents - startCents) / startCents) * 100;
     return { pnl, pct: parseFloat(pct.toFixed(4)) };
   }, [snapshotRows, timeFilter]);
+
+  // Clear the "tab just changed" flag once new period data arrives
+  useEffect(() => {
+    setTabJustChanged(false);
+  }, [periodReturnData, derivedPeriodReturn]);
 
   // Derive locked message directly from availablePeriods + current filter — always in sync
   const _lockedLabels = { "5d": "Available after 5 trading days", m: "Available after 1 month", ytd: "Available after first full year" };
@@ -534,6 +540,7 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
                           <button
                             key={f.id}
                             onClick={() => {
+                              setTabJustChanged(true);
                               setTimeFilter(f.id);
                             }}
                             className={`px-3 h-8 rounded-full text-xs font-bold transition-all ${
@@ -568,7 +575,7 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
                       return (
                         <>
                           <p className="text-3xl font-bold text-slate-900">{fmt(cv)}</p>
-                          {!lockedMessage && (
+                          {!lockedMessage && !tabJustChanged && (
                             <div className="flex items-center gap-2 mt-1">
                               <span className={`text-sm font-semibold ${isPos ? "text-emerald-500" : "text-rose-500"}`}>
                                 {isPos ? "+" : "-"}{fmt(Math.abs(pnl))}
