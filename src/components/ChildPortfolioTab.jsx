@@ -53,7 +53,7 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
 
   // strategy hooks — filtered to child
   const { strategies, selectedStrategy, loading: strategiesLoading, selectStrategy } = useUserStrategies(familyMemberId);
-  const [timeFilter, setTimeFilter] = useState("all");
+  const [timeFilter, setTimeFilter] = useState("ytd");
   const [tabJustChanged, setTabJustChanged] = useState(false);
   const tabJustChangedTimer = useRef(null);
   const { chartData: realChartData, loading: chartLoading } = useStrategyChartData(
