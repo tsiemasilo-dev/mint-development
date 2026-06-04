@@ -200,13 +200,15 @@ export const useUserStrategies = (familyMemberId = null) => {
           .select("security_id, quantity, avg_fill, Expected_fill, strategy_id, Fill_date")
           .eq("user_id", userId)
           .not("strategy_id", "is", null)
-          .gt("avg_fill", 0);
+          .gt("avg_fill", 0)
+          .eq("Status", "active");
         holdingsQuery = familyMemberId
           ? holdingsQuery.eq("family_member_id", familyMemberId)
           : holdingsQuery.is("family_member_id", null);
 
         const { data: liveHoldings } = await holdingsQuery;
-        const allLiveHoldings = liveHoldings || [];
+        // Also require Fill_date to match ChildPortfolioTab's liveStrategyMetrics filter
+        const allLiveHoldings = (liveHoldings || []).filter(h => h.Fill_date != null);
         const secIds = [...new Set(allLiveHoldings.map(h => h.security_id).filter(Boolean))];
 
         let livePriceMap = {};
@@ -232,7 +234,7 @@ export const useUserStrategies = (familyMemberId = null) => {
           let hasLive = false;
 
           for (const h of stratHoldings) {
-            const qty = Number(h.quantity || 0);
+            const qty = Math.abs(Number(h.quantity || 0));
             const livePrice = livePriceMap[h.security_id];
             if (livePrice > 0) {
               liveVal += (livePrice / 100) * qty;
