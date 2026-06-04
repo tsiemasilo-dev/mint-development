@@ -229,13 +229,14 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
         hasPrices = true;
       }
 
-      const expected = Number(h.Expected_fill);
-      if (Number.isFinite(expected) && expected > 0) {
-        costBasis += expected * qty;
-      } else {
-        const avgFill = Number(h.avg_fill);
-        if (Number.isFinite(avgFill) && avgFill > 0) costBasis += (avgFill / 100) * qty;
-      }
+      // Match SwipeableBalanceCard: max(Expected_fill, avg_fill/100) with legacy-cents guard
+      const avgFillCents = Number(h.avg_fill || 0);
+      const avgFillRands = avgFillCents / 100;
+      const expectedRaw = Number(h.Expected_fill || 0);
+      const expectedRands = expectedRaw > 0
+        ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw)
+        : 0;
+      costBasis += Math.max(expectedRands, avgFillRands) * qty;
 
       // Prefer live 1d_abs from poll, fall back to rawHoldings field
       const abs1d = liveEntry?.abs1dCents ?? Number(h.intraday_1d_abs_cents);
