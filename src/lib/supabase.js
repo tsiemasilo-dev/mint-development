@@ -97,18 +97,11 @@ function createAndPatch() {
           _expiry = _parseTokenExpiry(session.access_token);
           return result;
         }
-        // No session or token expired — try refreshing
-        try {
-          const refreshResult = await _origRefreshSession();
-          const refreshed = refreshResult?.data?.session;
-          if (refreshed?.access_token) {
-            _cached = refreshed;
-            _expiry = _parseTokenExpiry(refreshed.access_token);
-            return { data: { session: refreshed }, error: null };
-          }
-        } catch (_) {
-          // refresh failed — fall through to return original result
-        }
+        // No session found — return null result.
+        // Do NOT call _origRefreshSession() here: autoRefreshToken:true already
+        // handles refresh automatically, and calling it manually can fire a
+        // spurious SIGNED_OUT event when there is no refresh token, which
+        // causes an infinite loop in the auth state machine.
         return result;
       })
       .catch((err) => {
