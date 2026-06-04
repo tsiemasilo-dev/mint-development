@@ -766,7 +766,29 @@ const SwipeableBalanceCard = ({
           points.push({ d, v: Number(((basketByDate[d] - firstBasket) / 100).toFixed(2)) });
         });
         setChartData(points);
-        setPeriodReturn(points[points.length - 1].v);
+
+        // Use the pre-stored P&L column (same source as the portfolio tab) so both
+        // screens always show identical numbers. Only fall back to basket computation
+        // for the "all" tab which has no stored column.
+        const storedPnlCol = { "5d": "5d_pnl", "m": "1m_pnl", "ytd": "ytd_pnl" }[activeTab];
+        if (storedPnlCol) {
+          let totalPnlCents = 0;
+          await Promise.all(strategyIds.map(async (sid) => {
+            const { data: pnlRow } = await supabase
+              .from("client_strategy_returns_c")
+              .select(storedPnlCol)
+              .eq("family_member", familyMemberId)
+              .eq("strategy_id", sid)
+              .order("as_of_date", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            totalPnlCents += Number(pnlRow?.[storedPnlCol] || 0);
+          }));
+          if (cancelled) return;
+          setPeriodReturn(totalPnlCents / 100);
+        } else {
+          setPeriodReturn(points[points.length - 1].v);
+        }
       } catch (e) {
         console.warn("[SwipeableBalanceCard] childMode snapshot error:", e.message);
       } finally {
