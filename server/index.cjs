@@ -45,8 +45,13 @@ const uploadPdf = multer({ storage: multer.memoryStorage(), limits: { fileSize: 
 
 let _anthropicClient = null;
 function getAnthropicClient() {
-  const key = process.env.ANTHROPIC_API_KEY || process.env.VITE_ANTHROPIC_API_KEY;
-  if (!_anthropicClient && key) _anthropicClient = new Anthropic({ apiKey: key });
+  const key = process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY || process.env.VITE_ANTHROPIC_API_KEY;
+  const baseURL = process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL;
+  if (!_anthropicClient && key) {
+    const opts = { apiKey: key };
+    if (baseURL) opts.baseURL = baseURL;
+    _anthropicClient = new Anthropic(opts);
+  }
   return _anthropicClient;
 }
 
@@ -2692,7 +2697,7 @@ app.post("/api/banking/verify-letter", uploadPdf.single("file"), async (req, res
 }` }];
 
     const response = await claude.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 1024,
       messages: [{ role: "user", content }],
     });
