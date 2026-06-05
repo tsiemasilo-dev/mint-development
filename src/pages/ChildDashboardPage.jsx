@@ -2995,7 +2995,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                         disabled={isFilling}
                         onClick={opts.onClick || (() => !isFilling && setStrategyDetailId(sc.id))}
                         className={cardCls}
-                        style={{ background: isFilling ? "#fff" : "#eef1fa" }}
+                        style={{ background: isFilling ? "#fff" : "linear-gradient(145deg,#fdfbff 0%,#f0eaff 100%)" }}
                       >
                         <div className="px-4 pt-4 pb-3">
                         {/* Purchase date top-right when in expanded stack */}
