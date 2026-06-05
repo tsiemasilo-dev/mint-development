@@ -19,6 +19,21 @@ import FamilyDropdown from "../components/FamilyDropdown";
 
 const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+// Returns the first data point of each month — used as YTD X-axis ticks so
+// only one label per month appears, labeled as just the month name ("Mar").
+const computeYtdMonthTicks = (chartData) => {
+  const seen = new Set();
+  return chartData
+    .filter(pt => {
+      if (!pt.day) return false;
+      const mon = pt.day.split(' ')[1];
+      if (!mon || seen.has(mon)) return false;
+      seen.add(mon);
+      return true;
+    })
+    .map(pt => pt.day);
+};
+
 const formatPnlAxis = (value) => {
   const num = Number(value);
   if (Math.abs(num) < 0.5) return "R0";
@@ -776,7 +791,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       slice.forEach(row => {
         const [y, m, d] = row.as_of_date.split("-").map(Number);
         const pnl = Number(((Number(row.basket_value) - firstVal) / 100).toFixed(2));
-        pts.push({ day: `${d} ${MN[m - 1]} '${String(y).slice(-2)}`, value: pnl, fullDate: row.as_of_date });
+        pts.push({ day: `${d} ${MN[m - 1]}`, value: pnl, fullDate: row.as_of_date });
       });
       return pts;
     }
@@ -798,7 +813,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       rows.forEach(row => {
         const [y, m, d] = row.as_of_date.split("-").map(Number);
         const val = Number((Number(row.ytd_pnl) / 100).toFixed(2));
-        pts.push({ day: `${d} ${MN[m - 1]} '${String(y).slice(-2)}`, value: val, fullDate: row.as_of_date });
+        pts.push({ day: `${d} ${MN[m - 1]}`, value: val, fullDate: row.as_of_date });
       });
 
       // Append live endpoint to keep chart tip in sync with pill (15s poll)
@@ -807,7 +822,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
         const today = new Date();
         const todayStr = today.toISOString().slice(0, 10);
         const [ty, tm, td] = todayStr.split("-").map(Number);
-        const liveDay = `${td} ${MN[tm - 1]} '${String(ty).slice(-2)}`;
+        const liveDay = `${td} ${MN[tm - 1]}`;
         // Replace last point if it's already today, otherwise append
         if (pts.length > 0 && pts[pts.length - 1].fullDate === todayStr) {
           pts[pts.length - 1] = { day: liveDay, value: liveVal, fullDate: todayStr };
@@ -1374,10 +1389,14 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                                 axisLine={false}
                                 tickLine={false}
                                 tickMargin={8}
-                                interval={displayChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(displayChartData.length / 6) - 1)}
+                                ticks={timeFilter === 'ytd' ? computeYtdMonthTicks(displayChartData) : undefined}
+                                interval={timeFilter === 'ytd' ? 0 : (displayChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(displayChartData.length / 4) - 1))}
                                 tick={({ x, y, payload }) => {
                                   if (!payload.value) return null;
-                                  return <text x={x} y={y} dy={12} textAnchor="middle" fill="#64748b" fontSize={11} fontWeight={500}>{payload.value}</text>;
+                                  const label = timeFilter === 'ytd'
+                                    ? String(payload.value).split(' ')[1]
+                                    : payload.value;
+                                  return <text x={x} y={y} dy={12} textAnchor="middle" fill="#64748b" fontSize={11} fontWeight={500}>{label}</text>;
                                 }}
                               />
 
@@ -1793,9 +1812,11 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                                   axisLine={false}
                                   tickLine={false}
                                   tickMargin={8}
+                                  ticks={stockTimeFilter === 'ytd' ? computeYtdMonthTicks(stockChartData) : undefined}
                                   interval={stockTimeFilter === 'D'
                                     ? Math.max(0, Math.ceil(stockChartData.length / 4) - 1)
-                                    : stockChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(stockChartData.length / 6) - 1)}
+                                    : stockTimeFilter === 'ytd' ? 0
+                                    : stockChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(stockChartData.length / 4) - 1)}
                                   tick={({ x, y, payload }) => {
                                     if (!payload.value) return null;
                                     const val = String(payload.value);
@@ -1808,7 +1829,10 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                                         </text>
                                       );
                                     }
-                                    return <text x={x} y={y} dy={12} textAnchor="middle" fill="#64748b" fontSize={11} fontWeight={500}>{payload.value}</text>;
+                                    const label = stockTimeFilter === 'ytd'
+                                      ? val.split(' ')[1]
+                                      : val;
+                                    return <text x={x} y={y} dy={12} textAnchor="middle" fill="#64748b" fontSize={11} fontWeight={500}>{label}</text>;
                                   }}
                                 />
 
@@ -2798,9 +2822,11 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                           axisLine={false}
                           tickLine={false}
                           tickMargin={8}
+                          ticks={modalTimeFilter === 'ytd' ? computeYtdMonthTicks(mChartData) : undefined}
                           interval={modalTimeFilter === 'D'
                             ? Math.max(0, Math.ceil(mChartData.length / 4) - 1)
-                            : mChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(mChartData.length / 6) - 1)}
+                            : modalTimeFilter === 'ytd' ? 0
+                            : mChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(mChartData.length / 4) - 1)}
                           tick={({ x, y, payload }) => {
                             if (!payload.value) return null;
                             const val = String(payload.value);
@@ -2813,7 +2839,10 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                                 </text>
                               );
                             }
-                            return <text x={x} y={y} dy={12} textAnchor="middle" fill="#64748b" fontSize={11} fontWeight={500}>{payload.value}</text>;
+                            const label = modalTimeFilter === 'ytd'
+                              ? val.split(' ')[1]
+                              : val;
+                            return <text x={x} y={y} dy={12} textAnchor="middle" fill="#64748b" fontSize={11} fontWeight={500}>{label}</text>;
                           }}
                         />
                         <YAxis
