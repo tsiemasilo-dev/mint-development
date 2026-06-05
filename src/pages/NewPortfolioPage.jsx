@@ -583,16 +583,29 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     return { liveValue, costBasis, todayPnl, todayPct: costBasis > 0 ? (todayPnl / costBasis) * 100 : 0, isPending: false, hasPrices };
   }, [rawHoldings, userSelectedStrategy?.strategyId, ownLivePriceMap]);
 
-  // ── derived period return (5D/M from basket snapshots) ────────────────────
+  // ── derived period return (5D/M/YTD from basket snapshots) ───────────────
   const derivedPeriodReturn = useMemo(() => {
     if (!snapshotRows.length) return { pnl: 0, pct: 0 };
     const last = snapshotRows[snapshotRows.length - 1];
     const latestCents = Number(last?.basket_value || 0);
     if (!latestCents) return { pnl: 0, pct: 0 };
     let startCents = 0;
-    if (timeFilter === "5d" && snapshotRows.length >= 5) startCents = Number(snapshotRows[snapshotRows.length - 5]?.basket_value || 0);
-    else if (timeFilter === "m" && snapshotRows.length >= 22) startCents = Number(snapshotRows[snapshotRows.length - 22]?.basket_value || 0);
-    else return { pnl: 0, pct: 0 };
+    if (timeFilter === "5d" && snapshotRows.length >= 5) {
+      startCents = Number(snapshotRows[snapshotRows.length - 5]?.basket_value || 0);
+    } else if (timeFilter === "m" && snapshotRows.length >= 22) {
+      startCents = Number(snapshotRows[snapshotRows.length - 22]?.basket_value || 0);
+    } else if (timeFilter === "ytd") {
+      const currentYear = new Date().getFullYear();
+      const hasPriorYearData = snapshotRows.some(r => r.as_of_date < `${currentYear}-01-01`);
+      if (hasPriorYearData) {
+        const yearStartRow = snapshotRows.find(r => r.as_of_date >= `${currentYear}-01-01`);
+        startCents = Number(yearStartRow?.basket_value || 0);
+      } else {
+        startCents = Number(snapshotRows[0]?.basket_value || 0);
+      }
+    } else {
+      return { pnl: 0, pct: 0 };
+    }
     if (!startCents) return { pnl: 0, pct: 0 };
     const pnl = (latestCents - startCents) / 100;
     return { pnl, pct: parseFloat((((latestCents - startCents) / startCents) * 100).toFixed(4)) };
@@ -687,7 +700,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   const currentChartData = useMemo(() => {
     const MN = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-    // 5D and M: build directly from snapshotRows (same source as derivedPeriodReturn)
+    // 5D, M, YTD: build directly from snapshotRows (same source as derivedPeriodReturn)
     // so chart endpoints always match the displayed P&L number.
     if (timeFilter === "5d" || timeFilter === "m") {
       const count = timeFilter === "5d" ? 5 : 22;
@@ -705,7 +718,26 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       return pts;
     }
 
-    // YTD and ALL: use realChartData (from useStrategyChartData)
+    if (timeFilter === "ytd") {
+      const currentYear = new Date().getFullYear();
+      const hasPriorYearData = snapshotRows.some(r => r.as_of_date < `${currentYear}-01-01`);
+      const startIdx = hasPriorYearData
+        ? snapshotRows.findIndex(r => r.as_of_date >= `${currentYear}-01-01`)
+        : 0;
+      const ytdSlice = startIdx >= 0 ? snapshotRows.slice(startIdx) : snapshotRows;
+      if (!ytdSlice.length) return [];
+      const firstVal = Number(ytdSlice[0].basket_value || 0);
+      if (!firstVal) return [];
+      const pts = [];
+      ytdSlice.forEach(row => {
+        const [y, m, d] = row.as_of_date.split("-").map(Number);
+        const pnl = Number(((Number(row.basket_value) - firstVal) / 100).toFixed(2));
+        pts.push({ day: `${d} ${MN[m - 1]} '${String(y).slice(-2)}`, value: pnl, fullDate: row.as_of_date });
+      });
+      return pts;
+    }
+
+    // ALL: use realChartData (from useStrategyChartData)
     if (realChartData && realChartData.length > 0) {
       if (realChartData[0]?.day === null && realChartData[0]?.value === 0) return realChartData;
       const cv = liveStrategyMetrics.hasPrices ? liveStrategyMetrics.liveValue : (currentStrategy.currentValue || 0);
@@ -1121,9 +1153,8 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                             pnl = liveStrategyMetrics.todayPnl;
                             pnlPct = liveStrategyMetrics.todayPct;
                           } else if (timeFilter === "ytd") {
-                            const ytdRow = snapshotRows.length ? snapshotRows[snapshotRows.length - 1] : null;
-                            pnlPct = ytdRow?.ytd_pct != null ? Number(ytdRow.ytd_pct) : 0;
-                            pnl = ia > 0 ? (ia * pnlPct) / 100 : 0;
+                            pnl = derivedPeriodReturn.pnl;
+                            pnlPct = derivedPeriodReturn.pct;
                           } else if (timeFilter === "5d" || timeFilter === "m") {
                             pnl = derivedPeriodReturn.pnl;
                             pnlPct = derivedPeriodReturn.pct;
