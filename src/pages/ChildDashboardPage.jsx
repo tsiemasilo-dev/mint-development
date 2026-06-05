@@ -3089,7 +3089,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                               <BarChart3 className="h-5 w-5 text-purple-600" />
                             </div>
                             <div className="min-w-0">
-                              <p className="text-sm font-bold text-slate-900 truncate">{sc.short_name || sc.name}</p>
+                              <p className="text-sm font-bold tracking-[0.18em] uppercase text-slate-900 truncate">{sc.short_name || sc.name}</p>
                               <div className="flex items-center gap-1.5 mt-0.5">
                                 {sc.risk_level && (
                                   <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-violet-100 text-violet-700 border border-violet-200">{sc.risk_level}</span>
@@ -3252,7 +3252,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                                       <BarChart3 className="h-5 w-5 text-purple-600" />
                                     </div>
                                     <div className="min-w-0">
-                                      <p className="text-sm font-bold text-slate-900 truncate">{sc.short_name || sc.name}</p>
+                                      <p className="text-sm font-bold tracking-[0.18em] uppercase text-slate-900 truncate">{sc.short_name || sc.name}</p>
                                       <div className="flex items-center gap-1.5 mt-0.5">
                                         {sc.risk_level && (
                                           <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-violet-50 text-violet-600 border border-violet-100">{sc.risk_level}</span>
