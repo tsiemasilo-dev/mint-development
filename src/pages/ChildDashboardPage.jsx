@@ -2960,7 +2960,6 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                             ) : strategySparklines[sc.id]?.length >= 2 ? (
                               <>
                                 <MiniSparkline values={strategySparklines[sc.id]} isUp={isUp} />
-                                <p className="text-xs font-semibold text-slate-500 tabular-nums mt-0.5">{fmt(sc.totalValue)}</p>
                                 {pnlAvailable && (
                                   <p className={`text-xs font-semibold tabular-nums ${isUp ? "text-emerald-600" : "text-red-500"}`}>
                                     {isUp ? "+" : ""}{fmt(sc.pnl)} ({isUp ? "+" : ""}{sc.pnlPct.toFixed(2)}%)
