@@ -9,6 +9,7 @@ import { useUserStrategies, useStrategyChartData, useStrategyPeriodReturns } fro
 import { getMonthlyReturns, getStockMonthlyReturns, getOverallPortfolioMonthlyReturns, getStrategyMonthlyReturnsFromDB } from "../lib/strategyData";
 import { useStockQuotes, useStockChart } from "../lib/useStockData";
 import { clearMarketDataCache } from "../lib/marketData";
+import { supabase } from "../lib/supabase";
 import SwipeBackWrapper from "../components/SwipeBackWrapper.jsx";
 import PortfolioSkeleton from "../components/PortfolioSkeleton";
 import SettlementBadge from "../components/PendingBadge";
@@ -17,6 +18,21 @@ import FamilyDropdown from "../components/FamilyDropdown";
 
 
 const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// Returns the first data point of each month — used as YTD X-axis ticks so
+// only one label per month appears, labeled as just the month name ("Mar").
+const computeYtdMonthTicks = (chartData) => {
+  const seen = new Set();
+  return chartData
+    .filter(pt => {
+      if (!pt.day) return false;
+      const mon = pt.day.split(' ')[1];
+      if (!mon || seen.has(mon)) return false;
+      seen.add(mon);
+      return true;
+    })
+    .map(pt => pt.day);
+};
 
 const formatPnlAxis = (value) => {
   const num = Number(value);
@@ -82,9 +98,11 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   const [otherStocksPage, setOtherStocksPage] = useState(0);
   const [holdingsPage, setHoldingsPage] = useState(0);
   const [expandedStrategyId, setExpandedStrategyId] = useState(null);
+  const [pendingStrategyId, setPendingStrategyId] = useState(null);
   const [modalHolding, setModalHolding] = useState(null);
   const [modalTimeFilter, setModalTimeFilter] = useState("W");
   const expandedRowRef = useRef(null);
+  const tabJustChangedTimer = useRef(null);
   const [tabRipple, setTabRipple] = useState(null);
   const [tabDirection, setTabDirection] = useState(0);
   const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
@@ -92,6 +110,20 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   const [showYearDropdown, setShowYearDropdown] = useState(false);
   const [calendarFilter, setCalendarFilter] = useState("overall");
   const [showCalendarFilterDropdown, setShowCalendarFilterDropdown] = useState(false);
+  const [snapshotRows, setSnapshotRows] = useState([]);
+  const [availablePeriods, setAvailablePeriods] = useState({ D: true, "5d": false, m: false, ytd: false, all: true });
+  const [intradayChartData, setIntradayChartData] = useState(null);
+  const [intradayLoading, setIntradayLoading] = useState(false);
+  const [intradayTick, setIntradayTick] = useState(0);
+  const [stockTabIntradayData, setStockTabIntradayData] = useState(null);
+  const [stockTabIntradayLoading, setStockTabIntradayLoading] = useState(false);
+  const [modalIntradayData, setModalIntradayData] = useState(null);
+  const [modalIntradayLoading, setModalIntradayLoading] = useState(false);
+  const [stockLiveReturns, setStockLiveReturns] = useState(null);
+  const [modalLiveReturns, setModalLiveReturns] = useState(null);
+  const [ownLivePriceMap, setOwnLivePriceMap] = useState({});
+  const [tabJustChanged, setTabJustChanged] = useState(false);
+  const [directStratHoldings, setDirectStratHoldings] = useState([]);
   const tabOrder = ["strategy", "holdings"];
 
   useEffect(() => {
@@ -119,6 +151,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     }
     if (deepLink.strategyId) {
       setExpandedStrategyId(deepLink.strategyId);
+      setPendingStrategyId(deepLink.strategyId);
     }
     if (onDeepLinkConsumed) onDeepLinkConsumed();
   }, [deepLink]);
@@ -163,6 +196,16 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   const stockDropdownRef = useRef(null);
   const { profile } = useProfile();
   const { strategies, selectedStrategy: userSelectedStrategy, loading: strategiesLoading, selectStrategy, refetch: refetchStrategies } = useUserStrategies();
+
+  useEffect(() => {
+    if (!pendingStrategyId || !strategies.length) return;
+    const match = strategies.find(s => s.strategyId === pendingStrategyId || s.id === pendingStrategyId);
+    if (match) {
+      selectStrategy(match);
+      setPendingStrategyId(null);
+    }
+  }, [pendingStrategyId, strategies]);
+
   const { chartData: realChartData, loading: chartLoading } = useStrategyChartData(userSelectedStrategy?.strategyId, timeFilter, userSelectedStrategy?.firstInvestedDate || null, profile?.id);
   const { returnData: periodReturnData, loading: periodReturnLoading } = useStrategyPeriodReturns(profile?.id, userSelectedStrategy?.strategyId, timeFilter);
 
@@ -451,36 +494,624 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
 
   const holdings = allStrategyHoldings;
 
-  const getChartData = () => {
-    if (realChartData && realChartData.length > 0) {
-      // Pre-computed P&L format from client_strategy_returns_c — first point has day:null, value:0
-      if (realChartData[0]?.day === null && realChartData[0]?.value === 0) {
-        return realChartData;
+  // ── direct strategy holdings (bypasses server-API timeout for metrics/chart) ─
+  useEffect(() => {
+    const stratId = userSelectedStrategy?.strategyId;
+    if (!stratId || !profile?.id) return;
+    supabase
+      .from("stock_holdings_c")
+      .select("security_id, quantity, avg_fill, Expected_fill, strategy_id, last_price, change_price")
+      .eq("user_id", profile.id)
+      .is("family_member_id", null)
+      .eq("strategy_id", stratId)
+      .gt("avg_fill", 0)
+      .eq("Status", "active")
+      .then(({ data }) => {
+        setDirectStratHoldings(data || []);
+      });
+  }, [userSelectedStrategy?.strategyId, profile?.id]);
+
+  // ── snapshot rows (period P&L derivation + available period locks) ──────────
+  useEffect(() => {
+    if (!userSelectedStrategy?.strategyId || !profile?.id) return;
+    supabase
+      .from("client_strategy_returns_c")
+      .select("as_of_date, basket_value, ytd_pct, ytd_pnl")
+      .eq("user_id", profile.id)
+      .is("family_member", null)
+      .eq("strategy_id", userSelectedStrategy.strategyId)
+      .order("as_of_date", { ascending: true })
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          setSnapshotRows(data);
+          const count = data.length;
+          const latestYtdPct = data[data.length - 1]?.ytd_pct;
+          setAvailablePeriods({ D: true, "5d": count >= 5, m: count >= 22, ytd: latestYtdPct != null, all: true });
+        }
+      });
+  }, [userSelectedStrategy?.strategyId, profile?.id]);
+
+  // ── intraday tick (60s refresh while on D view) ───────────────────────────
+  useEffect(() => {
+    if (timeFilter !== "D") return;
+    const id = setInterval(() => setIntradayTick(t => t + 1), 60000);
+    return () => clearInterval(id);
+  }, [timeFilter]);
+
+  // ── live price map (15s poll from stock_intraday_c) ───────────────────────
+  useEffect(() => {
+    const stratId = userSelectedStrategy?.strategyId;
+    if (!stratId) return;
+    // Use directStratHoldings (direct Supabase fetch) so we're not blocked by server-API timeouts
+    const baseHoldings = directStratHoldings.length
+      ? directStratHoldings
+      : (rawHoldings || []).filter(h => h.strategy_id === stratId);
+    const securityIds = [...new Set(baseHoldings.filter(h => h.security_id).map(h => h.security_id))];
+    if (!securityIds.length) return;
+    const fetchPrices = async () => {
+      const { data } = await supabase
+        .from("stock_intraday_c")
+        .select("security_id, current_price, 1d_abs, 1d_pct")
+        .in("security_id", securityIds)
+        .order("timestamp", { ascending: false });
+      if (!data?.length) return;
+      const map = {};
+      for (const row of data) {
+        if (!map[row.security_id]) {
+          map[row.security_id] = {
+            priceCents: Number(row.current_price),
+            abs1dCents: row["1d_abs"] != null ? Number(row["1d_abs"]) : null,
+            pct1d: row["1d_pct"] != null ? Number(row["1d_pct"]) : null,
+          };
+        }
       }
-      // Legacy NAV-based format from strategy_price_history — scale to user P&L
-      const currentValue = currentStrategy.currentValue || 0;
-      const costBasis = currentStrategy.investedAmount || 0;
-      if (currentValue > 0 && realChartData.length > 0) {
+      setOwnLivePriceMap(map);
+    };
+    fetchPrices();
+    const id = setInterval(fetchPrices, 15000);
+    return () => clearInterval(id);
+  }, [userSelectedStrategy?.strategyId, directStratHoldings, rawHoldings]);
+
+  // ── live strategy metrics (today P&L, live value, cost basis) ────────────
+  const liveStrategyMetrics = useMemo(() => {
+    const stratId = userSelectedStrategy?.strategyId;
+    const empty = { liveValue: 0, costBasis: 0, todayPnl: 0, todayPct: 0, isPending: true, hasPrices: false };
+    if (!stratId) return empty;
+    // Prefer direct Supabase fetch (not blocked by server-API timeout); fall back to rawHoldings
+    const stratHoldings = directStratHoldings.length
+      ? directStratHoldings.filter(h => Number(h.avg_fill || 0) > 0)
+      : (rawHoldings || []).filter(h => h.strategy_id === stratId && Number(h.avg_fill || 0) > 0);
+    if (!stratHoldings.length) return empty;
+    let liveValue = 0, costBasis = 0, todayPnl = 0, hasPrices = false;
+    for (const h of stratHoldings) {
+      const qty = Math.abs(Number(h.quantity || 0));
+      const liveEntry = ownLivePriceMap[h.security_id];
+      const liveCents = liveEntry?.priceCents;
+      const lastCents = Number(h.last_price);
+      const priceCents = (liveCents > 0) ? liveCents : lastCents;
+      if (Number.isFinite(priceCents) && priceCents > 0) { liveValue += (priceCents / 100) * qty; hasPrices = true; }
+      const avgFillCents = Number(h.avg_fill || 0);
+      const avgFillRands = avgFillCents / 100;
+      const expectedRaw = Number(h.Expected_fill || 0);
+      const expectedRands = expectedRaw > 0 ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw) : 0;
+      costBasis += Math.max(expectedRands, avgFillRands) * qty;
+      // Prefer live poll abs1d → fall back to rawHoldings change_price (daily delta cents/share from server)
+      const abs1d = liveEntry?.abs1dCents != null
+        ? liveEntry.abs1dCents
+        : (Number.isFinite(Number(h.change_price)) ? Number(h.change_price) : null);
+      if (abs1d != null) todayPnl += (abs1d / 100) * qty;
+    }
+    return { liveValue, costBasis, todayPnl, todayPct: costBasis > 0 ? (todayPnl / costBasis) * 100 : 0, isPending: false, hasPrices };
+  // directStratHoldings included so metrics update when Supabase fetch completes (not just on ownLivePriceMap poll)
+  }, [rawHoldings, userSelectedStrategy?.strategyId, ownLivePriceMap, directStratHoldings]);
+
+  // ── derived period return (5D/M/YTD from basket snapshots) ───────────────
+  // Formula: liveValue − periodStartBasket (same as purple card parent mode).
+  // "latest" is always the current live market value (not stored basket), so M/5D stay in sync
+  // with the purple card during market hours.
+  const derivedPeriodReturn = useMemo(() => {
+    if (!snapshotRows.length) return { pnl: 0, pct: 0 };
+
+    // Use live value as "latest" — matches purple card's displayMarketValue formula.
+    // Explicit initial fallback: when the 15s intraday poll hasn't fired yet, compute
+    // liveValue from directStratHoldings.last_price (stored cents) so YTD/M/5D are never
+    // R0 on first render. liveStrategyMetrics already uses last_price as its internal fallback
+    // (liveCents=0 → lastCents), so liveValue > 0 after holdings load even without the poll.
+    const liveVal = liveStrategyMetrics.liveValue > 0
+      ? liveStrategyMetrics.liveValue
+      : directStratHoldings
+          .filter(h => Number(h.avg_fill || 0) > 0)
+          .reduce((sum, h) => {
+            const qty = Math.abs(Number(h.quantity || 0));
+            const lastCents = Number(h.last_price || 0);
+            return sum + (lastCents > 0 ? (lastCents / 100) * qty : 0);
+          }, 0);
+    // hasLive: true once any holdings are loaded (last_price used as initial value)
+    const hasLive = liveVal > 0;
+
+    if (timeFilter === "5d") {
+      if (snapshotRows.length < 5 || !hasLive) return { pnl: 0, pct: 0 };
+      const startCents = Number(snapshotRows[snapshotRows.length - 5]?.basket_value || 0);
+      if (!startCents) return { pnl: 0, pct: 0 };
+      const startRands = startCents / 100;
+      const pnl = parseFloat((liveVal - startRands).toFixed(2));
+      const pct = parseFloat(((pnl / startRands) * 100).toFixed(4));
+      console.log("[PERIOD_DEBUG portfolio] 5D:", { liveVal, startRands, pnl, pct, snapshotCount: snapshotRows.length });
+      return { pnl, pct };
+    }
+
+    if (timeFilter === "m") {
+      if (snapshotRows.length < 22 || !hasLive) return { pnl: 0, pct: 0 };
+      const startCents = Number(snapshotRows[snapshotRows.length - 22]?.basket_value || 0);
+      if (!startCents) return { pnl: 0, pct: 0 };
+      const startRands = startCents / 100;
+      const pnl = parseFloat((liveVal - startRands).toFixed(2));
+      const pct = parseFloat(((pnl / startRands) * 100).toFixed(4));
+      console.log("[PERIOD_DEBUG portfolio] M:", { liveVal, startRands, pnl, pct, snapshotCount: snapshotRows.length });
+      return { pnl, pct };
+    }
+
+    if (timeFilter === "ytd") {
+      if (!hasLive) {
+        console.log("[PERIOD_DEBUG portfolio] YTD: no live prices yet", { liveVal, hasPrices: liveStrategyMetrics.hasPrices });
+        return { pnl: 0, pct: 0 };
+      }
+      const yearStr = `${new Date().getFullYear()}-01-01`;
+      const priorRows = snapshotRows.filter(r => r.as_of_date < yearStr);
+      const currentYearRows = snapshotRows.filter(r => r.as_of_date >= yearStr);
+
+      const allTimePnl = parseFloat((liveVal - liveStrategyMetrics.costBasis).toFixed(2));
+      const allTimePct = parseFloat((liveStrategyMetrics.costBasis > 0
+        ? (allTimePnl / liveStrategyMetrics.costBasis) * 100 : 0).toFixed(4));
+
+      // No prior-year rows: user invested entirely this year → YTD = All-time.
+      // Mirrors purple card: useParentYtdTab=true, !useParentLiveYtd → displayReturn.
+      if (priorRows.length === 0) {
+        console.log("[PERIOD_DEBUG portfolio] YTD: no prior-year rows → All-time:", {
+          liveVal, costBasis: liveStrategyMetrics.costBasis, allTimePnl, allTimePct,
+        });
+        return { pnl: allTimePnl, pct: allTimePct };
+      }
+
+      // Prior-year data exists: anchor = first basket of the current year.
+      const yearStartCents = currentYearRows.length > 0 ? Number(currentYearRows[0]?.basket_value || 0) : 0;
+      if (!yearStartCents) return { pnl: 0, pct: 0 };
+
+      const yearStartRands = yearStartCents / 100;
+      const rawPnl = liveVal - yearStartRands;
+      // Cap at all-time: mid-year deposits inflate rawPnl above actual gains
+      const pnl = parseFloat(Math.min(rawPnl, allTimePnl).toFixed(2));
+      const anchor = liveVal - pnl;
+      const pct = parseFloat((anchor > 0 ? (pnl / anchor) * 100 : 0).toFixed(4));
+
+      console.log("[PERIOD_DEBUG portfolio] YTD:", {
+        liveVal, costBasis: liveStrategyMetrics.costBasis,
+        yearStartRands, rawPnl, allTimePnl, pnl, pct,
+        priorRowsCount: priorRows.length, currentYearRowsCount: currentYearRows.length,
+      });
+      return { pnl, pct };
+    }
+
+    return { pnl: 0, pct: 0 };
+  }, [snapshotRows, timeFilter, liveStrategyMetrics, directStratHoldings]);
+
+  // ── intraday D chart (5-min buckets from stock_intraday_c) ────────────────
+  useEffect(() => {
+    if (timeFilter !== "D") { setIntradayChartData(null); return; }
+    const stratId = userSelectedStrategy?.strategyId;
+    if (!stratId) return;
+    // Prefer direct Supabase fetch; fall back to rawHoldings
+    const stratHoldings = directStratHoldings.length
+      ? directStratHoldings.filter(h => Number(h.avg_fill || 0) > 0)
+      : (rawHoldings || []).filter(h => h.strategy_id === stratId && Number(h.avg_fill || 0) > 0);
+    if (!stratHoldings.length) return;
+    const securityIds = [...new Set(stratHoldings.map(h => h.security_id).filter(Boolean))];
+    const qtyMap = {};
+    stratHoldings.forEach(h => { qtyMap[h.security_id] = Math.abs(Number(h.quantity || 0)); });
+    let cancelled = false;
+    setIntradayLoading(true);
+    (async () => {
+      try {
+        const todayUTC = new Date().toISOString().slice(0, 10);
+        const PAGE = 1000;
+        let intradayRows = [];
+        let page = 0;
+        while (true) {
+          const { data: batch } = await supabase
+            .from("stock_intraday_c")
+            .select("security_id, current_price, 1d_abs, timestamp")
+            .in("security_id", securityIds)
+            .gte("timestamp", `${todayUTC}T00:00:00Z`)
+            .order("timestamp", { ascending: true })
+            .range(page * PAGE, (page + 1) * PAGE - 1);
+          if (!batch?.length) break;
+          intradayRows = intradayRows.concat(batch);
+          if (batch.length < PAGE) break;
+          page++;
+          if (cancelled) return;
+        }
+        if (cancelled) return;
+        if (!intradayRows.length) { setIntradayChartData([]); setIntradayLoading(false); return; }
+        const latestBySecId = {};
+        for (const row of intradayRows) latestBySecId[row.security_id] = row;
+        const baselineRands = securityIds.reduce((sum, sid) => {
+          const row = latestBySecId[sid];
+          if (!row) return sum;
+          return sum + ((Number(row.current_price) - Number(row["1d_abs"] || 0)) / 100) * (qtyMap[sid] || 0);
+        }, 0) || liveStrategyMetrics.costBasis;
+        const bucketMap = new Map();
+        for (const row of intradayRows) {
+          const d = new Date(row.timestamp);
+          d.setSeconds(0, 0);
+          d.setMinutes(Math.floor(d.getMinutes() / 5) * 5);
+          const key = d.toISOString();
+          if (!bucketMap.has(key)) bucketMap.set(key, {});
+          bucketMap.get(key)[row.security_id] = Number(row.current_price);
+        }
+        const sorted = [...bucketMap.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1);
+        const MN = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        const lastKnown = {};
+        const points = [{ day: null, value: 0, fullDate: null }];
+        for (const [isoKey, prices] of sorted) {
+          for (const sid of securityIds) { if (prices[sid] != null) lastKnown[sid] = prices[sid]; }
+          if (!Object.keys(lastKnown).length) continue;
+          const portfolioRands = securityIds.reduce((sum, sid) => {
+            const price = lastKnown[sid];
+            return price != null ? sum + (price / 100) * (qtyMap[sid] || 0) : sum;
+          }, 0);
+          const pnl = Number((portfolioRands - baselineRands).toFixed(2));
+          const d = new Date(isoKey);
+          const sast = new Date(d.getTime() + 2 * 60 * 60 * 1000);
+          const hh = String(sast.getUTCHours()).padStart(2, "0");
+          const mm = String(sast.getUTCMinutes()).padStart(2, "0");
+          const dd = sast.getUTCDate();
+          const mo = MN[sast.getUTCMonth()];
+          const yr = sast.getUTCFullYear();
+          points.push({ day: `${hh}:${mm}`, value: pnl, fullDate: `${dd} ${mo} ${yr} ${hh}:${mm}` });
+        }
+        if (!cancelled) setIntradayChartData(points.length > 1 ? points : []);
+      } catch (e) {
+        console.error("[parent-intraday-chart]", e);
+        if (!cancelled) setIntradayChartData([]);
+      } finally {
+        if (!cancelled) setIntradayLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [timeFilter, userSelectedStrategy?.strategyId, directStratHoldings, rawHoldings, liveStrategyMetrics.costBasis, intradayTick]);
+
+  // ── individual stock tab intraday D chart ─────────────────────────────────
+  useEffect(() => {
+    if (stockTimeFilter !== "D" || !selectedSecurityId) { setStockTabIntradayData(null); return; }
+    const rawH = (rawHoldings || []).find(h => String(h.security_id) === String(selectedSecurityId) && !h.strategy_id);
+    const qty = rawH ? Math.abs(Number(rawH.quantity || 0)) : 0;
+    let cancelled = false;
+    setStockTabIntradayLoading(true);
+    (async () => {
+      try {
+        const todayUTC = new Date().toISOString().slice(0, 10);
+        const { data: rows } = await supabase
+          .from("stock_intraday_c")
+          .select("security_id, current_price, 1d_abs, timestamp")
+          .eq("security_id", selectedSecurityId)
+          .gte("timestamp", `${todayUTC}T00:00:00Z`)
+          .order("timestamp", { ascending: true });
+        if (cancelled) return;
+        if (!rows?.length) { setStockTabIntradayData([]); setStockTabIntradayLoading(false); return; }
+        const latestRow = rows[rows.length - 1];
+        const baselineRands = ((Number(latestRow.current_price) - Number(latestRow["1d_abs"] || 0)) / 100) * qty;
+        const bucketMap = new Map();
+        for (const row of rows) {
+          const d = new Date(row.timestamp);
+          d.setSeconds(0, 0); d.setMinutes(Math.floor(d.getMinutes() / 5) * 5);
+          bucketMap.set(d.toISOString(), Number(row.current_price));
+        }
+        const MN = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        const points = [{ day: null, value: 0, fullDate: null }];
+        for (const [isoKey, priceCents] of [...bucketMap.entries()].sort()) {
+          const pnl = Number(((priceCents / 100) * qty - baselineRands).toFixed(2));
+          const d = new Date(isoKey);
+          const sast = new Date(d.getTime() + 2 * 60 * 60 * 1000);
+          const hh = String(sast.getUTCHours()).padStart(2, "0");
+          const mm = String(sast.getUTCMinutes()).padStart(2, "0");
+          const dd = sast.getUTCDate(); const mo = MN[sast.getUTCMonth()]; const yr = sast.getUTCFullYear();
+          points.push({ day: `${hh}:${mm}`, value: pnl, rawCents: priceCents, fullDate: `${dd} ${mo} ${yr} ${hh}:${mm}` });
+        }
+        if (!cancelled) setStockTabIntradayData(points.length > 1 ? points : []);
+      } catch (e) {
+        console.error("[stock-tab-intraday]", e);
+        if (!cancelled) setStockTabIntradayData([]);
+      } finally {
+        if (!cancelled) setStockTabIntradayLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [stockTimeFilter, selectedSecurityId, rawHoldings]);
+
+  // ── individual stock modal intraday D chart ───────────────────────────────
+  useEffect(() => {
+    if (!modalHolding || modalTimeFilter !== "D" || !modalSecurityId) { setModalIntradayData(null); return; }
+    const rawH = (rawHoldings || []).find(h => String(h.security_id) === String(modalSecurityId));
+    const qty = rawH ? Math.abs(Number(rawH.quantity || 0)) : 0;
+    let cancelled = false;
+    setModalIntradayLoading(true);
+    (async () => {
+      try {
+        const todayUTC = new Date().toISOString().slice(0, 10);
+        const { data: rows } = await supabase
+          .from("stock_intraday_c")
+          .select("security_id, current_price, 1d_abs, timestamp")
+          .eq("security_id", modalSecurityId)
+          .gte("timestamp", `${todayUTC}T00:00:00Z`)
+          .order("timestamp", { ascending: true });
+        if (cancelled) return;
+        if (!rows?.length) { setModalIntradayData([]); setModalIntradayLoading(false); return; }
+        const latestRow = rows[rows.length - 1];
+        const baselineRands = ((Number(latestRow.current_price) - Number(latestRow["1d_abs"] || 0)) / 100) * qty;
+        const bucketMap = new Map();
+        for (const row of rows) {
+          const d = new Date(row.timestamp);
+          d.setSeconds(0, 0); d.setMinutes(Math.floor(d.getMinutes() / 5) * 5);
+          bucketMap.set(d.toISOString(), Number(row.current_price));
+        }
+        const MN = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        const points = [{ day: null, value: 0, fullDate: null }];
+        for (const [isoKey, priceCents] of [...bucketMap.entries()].sort()) {
+          const pnl = Number(((priceCents / 100) * qty - baselineRands).toFixed(2));
+          const d = new Date(isoKey);
+          const sast = new Date(d.getTime() + 2 * 60 * 60 * 1000);
+          const hh = String(sast.getUTCHours()).padStart(2, "0");
+          const mm = String(sast.getUTCMinutes()).padStart(2, "0");
+          const dd = sast.getUTCDate(); const mo = MN[sast.getUTCMonth()]; const yr = sast.getUTCFullYear();
+          points.push({ day: `${hh}:${mm}`, value: pnl, rawCents: priceCents, fullDate: `${dd} ${mo} ${yr} ${hh}:${mm}` });
+        }
+        if (!cancelled) setModalIntradayData(points.length > 1 ? points : []);
+      } catch (e) {
+        console.error("[modal-intraday]", e);
+        if (!cancelled) setModalIntradayData([]);
+      } finally {
+        if (!cancelled) setModalIntradayLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [modalHolding, modalTimeFilter, modalSecurityId, rawHoldings]);
+
+  // ── stocks tab: fetch live D/W/M returns per security ────────────────────
+  useEffect(() => {
+    if (!selectedSecurityId) { setStockLiveReturns(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const ref5d = new Date(); ref5d.setUTCDate(ref5d.getUTCDate() - 9);
+        const ref1m = new Date(); ref1m.setUTCDate(ref1m.getUTCDate() - 31);
+        const str5d = ref5d.toISOString().split('T')[0];
+        const str1m = ref1m.toISOString().split('T')[0];
+
+        const [{ data: intradayRows }, { data: histRows }] = await Promise.all([
+          supabase.from('stock_intraday_c')
+            .select('current_price, 1d_abs, 1d_pct')
+            .eq('security_id', selectedSecurityId)
+            .order('timestamp', { ascending: false })
+            .limit(1),
+          supabase.from('stock_returns_c')
+            .select('as_of_date, current_price')
+            .eq('security_id', selectedSecurityId)
+            .gte('as_of_date', str1m)
+            .lt('as_of_date', todayStr)
+            .order('as_of_date', { ascending: true }),
+        ]);
+
+        if (cancelled) return;
+        const latest = intradayRows?.[0];
+        if (!latest) return;
+
+        const liveCents = Number(latest.current_price || 0);
+        const d_abs = Number(latest['1d_abs'] || 0);
+        const d_pct = Number(latest['1d_pct'] || 0);
+
+        function closestBefore(rows, targetStr) {
+          if (!rows?.length) return null;
+          let best = null;
+          for (const r of rows) { if (r.as_of_date <= targetStr) best = r; else break; }
+          return best ? Number(best.current_price) : null;
+        }
+
+        const price5d = closestBefore(histRows, str5d);
+        const price1m = closestBefore(histRows, str1m);
+        const w_abs = price5d != null ? liveCents - price5d : null;
+        const w_pct = price5d > 0 ? ((w_abs / price5d) * 100) : null;
+        const m_abs = price1m != null ? liveCents - price1m : null;
+        const m_pct = price1m > 0 ? ((m_abs / price1m) * 100) : null;
+
+        if (!cancelled) setStockLiveReturns({ current_price: liveCents, d_abs, d_pct, w_abs, w_pct, m_abs, m_pct });
+      } catch (e) {
+        console.error('[stock-live-returns]', e);
+      }
+    })();
+    const interval = setInterval(async () => {
+      if (cancelled) return;
+      try {
+        const { data } = await supabase.from('stock_intraday_c')
+          .select('current_price, 1d_abs, 1d_pct')
+          .eq('security_id', selectedSecurityId)
+          .order('timestamp', { ascending: false })
+          .limit(1);
+        if (cancelled || !data?.[0]) return;
+        const r = data[0];
+        setStockLiveReturns(prev => prev ? {
+          ...prev,
+          current_price: Number(r.current_price || 0),
+          d_abs: Number(r['1d_abs'] || 0),
+          d_pct: Number(r['1d_pct'] || 0),
+        } : prev);
+      } catch {}
+    }, 15000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [selectedSecurityId]);
+
+  // ── modal: fetch live D/W/M returns per security ─────────────────────────
+  useEffect(() => {
+    if (!modalSecurityId) { setModalLiveReturns(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const ref5d = new Date(); ref5d.setUTCDate(ref5d.getUTCDate() - 9);
+        const ref1m = new Date(); ref1m.setUTCDate(ref1m.getUTCDate() - 31);
+        const str5d = ref5d.toISOString().split('T')[0];
+        const str1m = ref1m.toISOString().split('T')[0];
+
+        const [{ data: intradayRows }, { data: histRows }] = await Promise.all([
+          supabase.from('stock_intraday_c')
+            .select('current_price, 1d_abs, 1d_pct')
+            .eq('security_id', modalSecurityId)
+            .order('timestamp', { ascending: false })
+            .limit(1),
+          supabase.from('stock_returns_c')
+            .select('as_of_date, current_price')
+            .eq('security_id', modalSecurityId)
+            .gte('as_of_date', str1m)
+            .lt('as_of_date', todayStr)
+            .order('as_of_date', { ascending: true }),
+        ]);
+
+        if (cancelled) return;
+        const latest = intradayRows?.[0];
+        if (!latest) return;
+
+        const liveCents = Number(latest.current_price || 0);
+        const d_abs = Number(latest['1d_abs'] || 0);
+        const d_pct = Number(latest['1d_pct'] || 0);
+
+        function closestBefore(rows, targetStr) {
+          if (!rows?.length) return null;
+          let best = null;
+          for (const r of rows) { if (r.as_of_date <= targetStr) best = r; else break; }
+          return best ? Number(best.current_price) : null;
+        }
+
+        const price5d = closestBefore(histRows, str5d);
+        const price1m = closestBefore(histRows, str1m);
+        const w_abs = price5d != null ? liveCents - price5d : null;
+        const w_pct = price5d > 0 ? ((w_abs / price5d) * 100) : null;
+        const m_abs = price1m != null ? liveCents - price1m : null;
+        const m_pct = price1m > 0 ? ((m_abs / price1m) * 100) : null;
+
+        if (!cancelled) setModalLiveReturns({ current_price: liveCents, d_abs, d_pct, w_abs, w_pct, m_abs, m_pct });
+      } catch (e) {
+        console.error('[modal-live-returns]', e);
+      }
+    })();
+    const interval = setInterval(async () => {
+      if (cancelled) return;
+      try {
+        const { data } = await supabase.from('stock_intraday_c')
+          .select('current_price, 1d_abs, 1d_pct')
+          .eq('security_id', modalSecurityId)
+          .order('timestamp', { ascending: false })
+          .limit(1);
+        if (cancelled || !data?.[0]) return;
+        const r = data[0];
+        setModalLiveReturns(prev => prev ? {
+          ...prev,
+          current_price: Number(r.current_price || 0),
+          d_abs: Number(r['1d_abs'] || 0),
+          d_pct: Number(r['1d_pct'] || 0),
+        } : prev);
+      } catch {}
+    }, 15000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [modalSecurityId]);
+
+  // ── chart data (snapshot-based for non-D filters) ─────────────────────────
+  const currentChartData = useMemo(() => {
+    const MN = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+    // 5D, M, YTD: build directly from snapshotRows (same source as derivedPeriodReturn)
+    // so chart endpoints always match the displayed P&L number.
+    if (timeFilter === "5d" || timeFilter === "m") {
+      const count = timeFilter === "5d" ? 5 : 22;
+      if (snapshotRows.length < count) return [];
+      const slice = snapshotRows.slice(snapshotRows.length - count);
+      const firstVal = Number(slice[0].basket_value || 0);
+      if (!firstVal) return [];
+      // No null anchor needed: first dated point is already value=0 (the reference row)
+      const pts = [];
+      slice.forEach(row => {
+        const [y, m, d] = row.as_of_date.split("-").map(Number);
+        const pnl = Number(((Number(row.basket_value) - firstVal) / 100).toFixed(2));
+        pts.push({ day: `${d} ${MN[m - 1]}`, value: pnl, fullDate: row.as_of_date });
+      });
+      return pts;
+    }
+
+    if (timeFilter === "ytd") {
+      // Build YTD chart from stored ytd_pnl history, then cap the last point at the live value
+      // so the chart endpoint always matches the pill (which uses liveValue - yearStartBasket).
+      const yearStr = `${new Date().getFullYear()}-01-01`;
+      const priorRows = snapshotRows.filter(r => r.as_of_date < yearStr);
+      const currentYearRowsForChart = snapshotRows.filter(r => r.as_of_date >= yearStr);
+      // Mirror child mode: anchor = FIRST basket of current year, only when prior-year data exists
+      const yearStartCents = (priorRows.length > 0 && currentYearRowsForChart.length > 0)
+        ? Number(currentYearRowsForChart[0]?.basket_value || 0)
+        : 0;
+
+      // Use ytd_pnl rows (Jan 1 onwards) for the chart body
+      const rows = snapshotRows.filter(r => r.ytd_pnl != null && r.as_of_date >= yearStr);
+      const pts = [];
+      rows.forEach(row => {
+        const [y, m, d] = row.as_of_date.split("-").map(Number);
+        const val = Number((Number(row.ytd_pnl) / 100).toFixed(2));
+        pts.push({ day: `${d} ${MN[m - 1]}`, value: val, fullDate: row.as_of_date });
+      });
+
+      // Append live endpoint to keep chart tip in sync with pill (15s poll)
+      if (yearStartCents > 0 && liveStrategyMetrics.hasPrices) {
+        const liveVal = Number((liveStrategyMetrics.liveValue - yearStartCents / 100).toFixed(2));
+        const today = new Date();
+        const todayStr = today.toISOString().slice(0, 10);
+        const [ty, tm, td] = todayStr.split("-").map(Number);
+        const liveDay = `${td} ${MN[tm - 1]}`;
+        // Replace last point if it's already today, otherwise append
+        if (pts.length > 0 && pts[pts.length - 1].fullDate === todayStr) {
+          pts[pts.length - 1] = { day: liveDay, value: liveVal, fullDate: todayStr };
+        } else {
+          pts.push({ day: liveDay, value: liveVal, fullDate: todayStr });
+        }
+      }
+
+      if (!pts.length) return [];
+      return pts;
+    }
+
+    // ALL: use realChartData (from useStrategyChartData)
+    if (realChartData && realChartData.length > 0) {
+      if (realChartData[0]?.day === null && realChartData[0]?.value === 0) return realChartData;
+      const cv = liveStrategyMetrics.hasPrices ? liveStrategyMetrics.liveValue : (currentStrategy.currentValue || 0);
+      const ia = liveStrategyMetrics.costBasis || currentStrategy.investedAmount || 0;
+      if (cv > 0 && realChartData.length > 0) {
         const latestNav = realChartData[realChartData.length - 1].value;
         if (!latestNav || latestNav <= 0) return [];
-        const scaleFactor = currentValue / latestNav;
-        const points = [];
-        points.push({ ...realChartData[0], day: null, value: 0 });
-        realChartData.forEach(d => {
-          const marketValueAtDate = d.value * scaleFactor;
-          const pnl = marketValueAtDate - costBasis;
-          points.push({ ...d, value: Number(pnl.toFixed(2)) });
-        });
-        return points;
+        const scale = cv / latestNav;
+        const pts = [{ ...realChartData[0], day: null, value: 0 }];
+        realChartData.forEach(d => pts.push({ ...d, value: Number(((d.value * scale) - ia).toFixed(2)) }));
+        return pts;
       }
     }
     return [];
-  };
+  }, [realChartData, currentStrategy, liveStrategyMetrics, snapshotRows, timeFilter]);
 
-  const currentChartData = getChartData();
-  const isLoadingData = strategiesLoading || chartLoading;
+  const isLoadingData = strategiesLoading || chartLoading || (timeFilter === "D" && intradayLoading);
 
-  const strategyAxisConfig = computePnlAxisConfig(currentChartData);
+  const displayChartData = (() => {
+    if (isLoadingData) return [];
+    if (timeFilter === "D") return (intradayChartData && intradayChartData.length > 1 ? intradayChartData : []);
+    return currentChartData;
+  })();
+  const strategyAxisConfig = computePnlAxisConfig(displayChartData);
+  const _lockedLabels = { "5d": "Available after 5 trading days", m: "Available after 1 month", ytd: "Available after first full year" };
+  const lockedMessage = (!availablePeriods[timeFilter] && _lockedLabels[timeFilter]) ? _lockedLabels[timeFilter] : null;
 
   const formatCurrency = (value) => {
     return `R${value.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -861,16 +1492,24 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
 
                       <div className="mb-3 px-1">
                         {(() => {
-                          const cv = currentStrategy.currentValue || 0;
-                          const ia = currentStrategy.investedAmount || 0;
-                          const isStratPending = cv === 0 && ia === 0;
-                          // Use period return data if available, otherwise fall back to current calculation
-                          const pnl = (periodReturnData?.pnl !== undefined && periodReturnData.pnl !== 0)
-                            ? periodReturnData.pnl
-                            : (cv - ia);
-                          const pnlPct = (periodReturnData?.pct !== undefined && periodReturnData.pct !== 0)
-                            ? periodReturnData.pct
-                            : (ia > 0 ? (pnl / ia) * 100 : 0);
+                          const cv = liveStrategyMetrics.hasPrices ? liveStrategyMetrics.liveValue : (currentStrategy.currentValue || 0);
+                          const ia = liveStrategyMetrics.costBasis || currentStrategy.investedAmount || 0;
+                          const isStratPending = liveStrategyMetrics.isPending && (currentStrategy.currentValue || 0) === 0 && ia === 0;
+                          // Filter-aware P&L: D=today, YTD=ytd, 5D/M=derivedPeriodReturn, ALL=live total P&L
+                          let pnl, pnlPct;
+                          if (timeFilter === "D") {
+                            pnl = liveStrategyMetrics.todayPnl;
+                            pnlPct = liveStrategyMetrics.todayPct;
+                          } else if (timeFilter === "ytd") {
+                            pnl = derivedPeriodReturn.pnl;
+                            pnlPct = derivedPeriodReturn.pct;
+                          } else if (timeFilter === "5d" || timeFilter === "m") {
+                            pnl = derivedPeriodReturn.pnl;
+                            pnlPct = derivedPeriodReturn.pct;
+                          } else {
+                            pnl = cv - ia;
+                            pnlPct = ia > 0 ? ((cv - ia) / ia) * 100 : 0;
+                          }
                           const isPos = pnl >= 0;
                           if (isStratPending) {
                             return (
@@ -893,6 +1532,18 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                                 <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${isPos ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-500'}`}>
                                   {isPos ? '+' : ''}{pnlPct.toFixed(1)}%
                                 </span>
+                                {timeFilter === "D" && (
+                                  <span className="text-[10px] text-slate-400 font-medium">Today</span>
+                                )}
+                                {timeFilter === "ytd" && (
+                                  <span className="text-[10px] text-slate-400 font-medium">YTD</span>
+                                )}
+                                {timeFilter === "5d" && (
+                                  <span className="text-[10px] text-slate-400 font-medium">5 days</span>
+                                )}
+                                {timeFilter === "m" && (
+                                  <span className="text-[10px] text-slate-400 font-medium">1 month</span>
+                                )}
                               </div>
                             </>
                           );
@@ -900,14 +1551,79 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                       </div>
 
                       <div style={{ width: '100%', height: 220, marginBottom: 8, minWidth: 0 }}>
-                        {currentChartData.length === 0 ? (
-                          <div style={{ width: '100%', height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <div className="text-slate-400 text-sm">{isLoadingData ? 'Loading chart...' : 'No data available'}</div>
+                        {lockedMessage ? (
+                          <div style={{ width: '100%', height: 220, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                            </svg>
+                            <p className="text-slate-400 text-sm text-center px-6">{lockedMessage}</p>
                           </div>
+                        ) : displayChartData.length === 0 ? (
+                          isLoadingData ? (
+                            <div style={{ width: '100%', height: 220 }}>
+                              <svg width="100%" height="220" viewBox="0 0 400 220" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+                                <defs>
+                                  <linearGradient id="skeletonFill" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor="#e2e8f0" stopOpacity="0.6" />
+                                    <stop offset="100%" stopColor="#e2e8f0" stopOpacity="0.05" />
+                                  </linearGradient>
+                                  <linearGradient id="shimmer" x1="0" y1="0" x2="1" y2="0">
+                                    <stop offset="0%" stopColor="transparent">
+                                      <animate attributeName="offset" values="-1;0;1" dur="1.6s" repeatCount="indefinite" />
+                                    </stop>
+                                    <stop offset="50%" stopColor="rgba(255,255,255,0.55)">
+                                      <animate attributeName="offset" values="-0.5;0.5;1.5" dur="1.6s" repeatCount="indefinite" />
+                                    </stop>
+                                    <stop offset="100%" stopColor="transparent">
+                                      <animate attributeName="offset" values="0;1;2" dur="1.6s" repeatCount="indefinite" />
+                                    </stop>
+                                  </linearGradient>
+                                  <mask id="shimmerMask">
+                                    <rect width="400" height="220" fill="url(#shimmer)" />
+                                  </mask>
+                                </defs>
+                                {/* Y-axis ticks */}
+                                {[40,80,120,160].map((y, i) => (
+                                  <rect key={i} x="0" y={y} width="22" height="8" rx="4" fill="#e2e8f0" />
+                                ))}
+                                {/* Filled area under the line */}
+                                <path
+                                  d="M32,160 C55,155 70,130 90,118 C110,106 125,125 145,108 C165,91 180,70 205,65 C230,60 245,80 265,72 C285,64 300,82 320,75 C340,68 360,85 380,78 L380,190 L32,190 Z"
+                                  fill="url(#skeletonFill)"
+                                />
+                                {/* Main line */}
+                                <path
+                                  d="M32,160 C55,155 70,130 90,118 C110,106 125,125 145,108 C165,91 180,70 205,65 C230,60 245,80 265,72 C285,64 300,82 320,75 C340,68 360,85 380,78"
+                                  fill="none"
+                                  stroke="#cbd5e1"
+                                  strokeWidth="2.5"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                                {/* Shimmer overlay */}
+                                <path
+                                  d="M32,160 C55,155 70,130 90,118 C110,106 125,125 145,108 C165,91 180,70 205,65 C230,60 245,80 265,72 C285,64 300,82 320,75 C340,68 360,85 380,78 L380,190 L32,190 Z"
+                                  fill="url(#shimmer)"
+                                  mask="url(#shimmerMask)"
+                                />
+                                {/* Baseline */}
+                                <line x1="32" y1="190" x2="400" y2="190" stroke="#e2e8f0" strokeWidth="1" />
+                                {/* X-axis tick placeholders */}
+                                {[55,128,200,272,345].map((x, i) => (
+                                  <rect key={i} x={x - 16} y="200" width="32" height="8" rx="4" fill="#e2e8f0" />
+                                ))}
+                              </svg>
+                            </div>
+                          ) : (
+                            <div style={{ width: '100%', height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <div className="text-slate-400 text-sm">No data available</div>
+                            </div>
+                          )
                         ) : (
                           <ResponsiveContainer width="100%" height="100%">
                             <ComposedChart
-                              data={currentChartData}
+                              data={displayChartData}
                               margin={{ top: 10, right: 15, left: 5, bottom: 30 }}
                             >
                               <defs>
@@ -923,10 +1639,14 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                                 axisLine={false}
                                 tickLine={false}
                                 tickMargin={8}
-                                interval={currentChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(currentChartData.length / 6) - 1)}
+                                ticks={timeFilter === 'ytd' ? computeYtdMonthTicks(displayChartData) : undefined}
+                                interval={timeFilter === 'ytd' ? 0 : (displayChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(displayChartData.length / 4) - 1))}
                                 tick={({ x, y, payload }) => {
                                   if (!payload.value) return null;
-                                  return <text x={x} y={y} dy={12} textAnchor="middle" fill="#64748b" fontSize={11} fontWeight={500}>{payload.value}</text>;
+                                  const label = timeFilter === 'ytd'
+                                    ? String(payload.value).split(' ')[1]
+                                    : payload.value;
+                                  return <text x={x} y={y} dy={12} textAnchor="middle" fill="#64748b" fontSize={11} fontWeight={500}>{label}</text>;
                                 }}
                               />
 
@@ -1181,19 +1901,47 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
               const avgFillRands = userHolding ? (userHolding.avg_fill || 0) / 100 : 0;
               const costBasisStock = avgFillRands * userQuantity;
               const showStockPnl = isMyStock && userQuantity > 0 && avgFillRands > 0;
-              const stockChartData = liveStockChartData.length > 0
-                ? (showStockPnl
-                  ? (() => {
+              const stockChartData = (() => {
+                if (stockTimeFilter === "D") {
+                  const raw = stockTabIntradayData || [];
+                  if (!showStockPnl || !raw.length) return raw;
+                  const liveD_abs = stockLiveReturns?.d_abs ?? null;
+                  if (liveD_abs == null) return raw;
+                  const lastReal = [...raw].reverse().find(p => p.rawCents != null);
+                  if (!lastReal) return raw;
+                  const newBaseline = ((lastReal.rawCents - liveD_abs) / 100) * userQuantity;
+                  return raw.map(p => p.rawCents != null
+                    ? { ...p, value: Number(((p.rawCents / 100) * userQuantity - newBaseline).toFixed(2)) }
+                    : p
+                  );
+                }
+                if (liveStockChartData.length > 0) {
+                  if (showStockPnl) {
+                    if (stockTimeFilter === 'W' || stockTimeFilter === 'M') {
+                      const daysBack = stockTimeFilter === 'W' ? 9 : 31;
+                      const refMs = Date.now() - daysBack * 24 * 60 * 60 * 1000;
+                      let refPoint = liveStockChartData[0];
+                      for (const d of liveStockChartData) {
+                        if ((d.timestamp || 0) <= refMs) refPoint = d;
+                        else break;
+                      }
+                      const refPrice = refPoint.value;
+                      const pts = [{ ...liveStockChartData[0], day: null, value: 0 }];
+                      liveStockChartData.forEach(d => {
+                        pts.push({ ...d, value: Number(((d.value - refPrice) * userQuantity).toFixed(2)) });
+                      });
+                      return pts;
+                    }
                     const pts = [{ ...liveStockChartData[0], day: null, value: 0 }];
                     liveStockChartData.forEach(d => {
                       pts.push({ ...d, value: Number(((d.value * userQuantity) - costBasisStock).toFixed(2)) });
                     });
                     return pts;
-                  })()
-                  : liveStockChartData)
-                : (showStockPnl
-                  ? [{ day: null, value: 0 }, { day: "Today", value: 0 }]
-                  : []);
+                  }
+                  return liveStockChartData;
+                }
+                return showStockPnl ? [{ day: null, value: 0 }, { day: "Today", value: 0 }] : [];
+              })();
               const stockAxisConfig = computePnlAxisConfig(stockChartData);
               if (!selectedStock) {
                 if (quotesLoading || holdingsLoading) {
@@ -1292,39 +2040,89 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                             if (isMyStock && userHolding && userQuantity > 0) {
                               const holdingMarketValue = liveHoldingValue(userHolding);
                               const costBasis = ((userHolding.avg_fill || 0) * userQuantity) / 100;
-                              const pnl = holdingMarketValue - costBasis;
-                              const pnlPct = costBasis > 0 ? ((pnl / costBasis) * 100) : 0;
-                              const dailyChangePct = userHolding.change_percent || 0;
-                              const dailyChangeAmt = (holdingMarketValue * dailyChangePct) / (100 + dailyChangePct);
+                              // Filter-aware P&L: D/W/M from live intraday data; ALL = all-time
+                              let pnl, pnlPct;
+                              if (stockTimeFilter === "D" && stockLiveReturns?.d_abs != null) {
+                                pnl = (stockLiveReturns.d_abs / 100) * userQuantity;
+                                pnlPct = stockLiveReturns.d_pct ?? 0;
+                              } else if (stockTimeFilter === "W" && stockLiveReturns?.w_abs != null) {
+                                pnl = (stockLiveReturns.w_abs / 100) * userQuantity;
+                                pnlPct = stockLiveReturns.w_pct ?? 0;
+                              } else if (stockTimeFilter === "M" && stockLiveReturns?.m_abs != null) {
+                                pnl = (stockLiveReturns.m_abs / 100) * userQuantity;
+                                pnlPct = stockLiveReturns.m_pct ?? 0;
+                              } else {
+                                pnl = holdingMarketValue - costBasis;
+                                pnlPct = costBasis > 0 ? ((pnl / costBasis) * 100) : 0;
+                              }
+                              const isPos = pnl >= 0;
                               return (
                                 <>
                                   <p className="text-3xl font-bold text-slate-900">{formatCurrency(holdingMarketValue)}</p>
-                                  <p className={`text-sm ${pnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                    {pnl >= 0 ? '+' : ''}{formatCurrency(pnl)} ({pnl >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%)
-                                  </p>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <span className={`text-sm font-semibold ${isPos ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                      {isPos ? '+' : '-'}R{Math.abs(pnl).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </span>
+                                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${isPos ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-500'}`}>
+                                      {isPos ? '+' : ''}{pnlPct.toFixed(1)}%
+                                    </span>
+                                    {stockTimeFilter === "D" && <span className="text-[10px] text-slate-400 font-medium">Today</span>}
+                                    {stockTimeFilter === "W" && <span className="text-[10px] text-slate-400 font-medium">1 week</span>}
+                                    {stockTimeFilter === "M" && <span className="text-[10px] text-slate-400 font-medium">1 month</span>}
+                                    {stockTimeFilter === "ALL" && <span className="text-[10px] text-slate-400 font-medium">All time</span>}
+                                  </div>
                                 </>
                               );
                             }
                             const perSharePrice = liveQuotes[selectedStock.ticker]?.price || selectedStock.price;
                             const changePct = liveQuotes[selectedStock.ticker]?.changePercent ?? selectedStock.dailyChange;
+                            const isPos = changePct >= 0;
                             return (
                               <>
                                 <p className="text-3xl font-bold text-slate-900">{formatCurrency(perSharePrice)}</p>
-                                <p className={`text-sm ${changePct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                  ({changePct >= 0 ? '+' : ''}{changePct.toFixed(2)}% Today)
-                                </p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className={`text-sm font-semibold ${isPos ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                    {isPos ? '+' : ''}{changePct.toFixed(2)}%
+                                  </span>
+                                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${isPos ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-500'}`}>Today</span>
+                                </div>
                               </>
                             );
                           })()}
                         </div>
 
-                        <div style={{ width: '100%', height: 220, marginBottom: 8 }}>
+                        <div style={{ width: '100%', height: 220, marginBottom: 8, minWidth: 0 }}>
                           {stockChartData.length === 0 ? (
-                            <div style={{ width: '100%', height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <div className="text-slate-400 text-sm">{stockChartLoading ? 'Loading chart...' : 'No data available'}</div>
-                            </div>
+                            (stockTimeFilter === "D" ? stockTabIntradayLoading : stockChartLoading) ? (
+                              <div style={{ width: '100%', height: 220 }}>
+                                <svg width="100%" height="220" viewBox="0 0 400 220" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+                                  <defs>
+                                    <linearGradient id="stockSkeletonFill" x1="0" y1="0" x2="0" y2="1">
+                                      <stop offset="0%" stopColor="#e2e8f0" stopOpacity="0.6" />
+                                      <stop offset="100%" stopColor="#e2e8f0" stopOpacity="0.05" />
+                                    </linearGradient>
+                                    <linearGradient id="stockShimmer" x1="0" y1="0" x2="1" y2="0">
+                                      <stop offset="0%" stopColor="transparent"><animate attributeName="offset" values="-1;0;1" dur="1.6s" repeatCount="indefinite" /></stop>
+                                      <stop offset="50%" stopColor="rgba(255,255,255,0.55)"><animate attributeName="offset" values="-0.5;0.5;1.5" dur="1.6s" repeatCount="indefinite" /></stop>
+                                      <stop offset="100%" stopColor="transparent"><animate attributeName="offset" values="0;1;2" dur="1.6s" repeatCount="indefinite" /></stop>
+                                    </linearGradient>
+                                    <mask id="stockShimmerMask"><rect width="400" height="220" fill="url(#stockShimmer)" /></mask>
+                                  </defs>
+                                  {[40,80,120,160].map((y, i) => <rect key={i} x="0" y={y} width="22" height="8" rx="4" fill="#e2e8f0" />)}
+                                  <path d="M32,160 C55,155 70,130 90,118 C110,106 125,125 145,108 C165,91 180,70 205,65 C230,60 245,80 265,72 C285,64 300,82 320,75 C340,68 360,85 380,78 L380,190 L32,190 Z" fill="url(#stockSkeletonFill)" />
+                                  <path d="M32,160 C55,155 70,130 90,118 C110,106 125,125 145,108 C165,91 180,70 205,65 C230,60 245,80 265,72 C285,64 300,82 320,75 C340,68 360,85 380,78" fill="none" stroke="#cbd5e1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                                  <path d="M32,160 C55,155 70,130 90,118 C110,106 125,125 145,108 C165,91 180,70 205,65 C230,60 245,80 265,72 C285,64 300,82 320,75 C340,68 360,85 380,78 L380,190 L32,190 Z" fill="url(#stockShimmer)" mask="url(#stockShimmerMask)" />
+                                  <line x1="32" y1="190" x2="400" y2="190" stroke="#e2e8f0" strokeWidth="1" />
+                                  {[55,128,200,272,345].map((x, i) => <rect key={i} x={x - 16} y="200" width="32" height="8" rx="4" fill="#e2e8f0" />)}
+                                </svg>
+                              </div>
+                            ) : (
+                              <div style={{ width: '100%', height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <div className="text-slate-400 text-sm">No data available</div>
+                              </div>
+                            )
                           ) : (
-                            <ResponsiveContainer width="100%" height={220}>
+                            <ResponsiveContainer width="100%" height="100%">
                               <ComposedChart
                                 data={stockChartData}
                                 margin={{ top: 10, right: 15, left: 5, bottom: 30 }}
@@ -1342,13 +2140,18 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                                   axisLine={false}
                                   tickLine={false}
                                   tickMargin={8}
+                                  ticks={stockTimeFilter === 'ytd' ? computeYtdMonthTicks(stockChartData) : undefined}
                                   interval={stockTimeFilter === 'D'
                                     ? Math.max(0, Math.ceil(stockChartData.length / 4) - 1)
-                                    : stockChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(stockChartData.length / 6) - 1)}
+                                    : stockTimeFilter === 'ytd' ? 0
+                                    : stockChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(stockChartData.length / 4) - 1)}
                                   tick={({ x, y, payload }) => {
                                     if (!payload.value) return null;
                                     const val = String(payload.value);
-                                    if (stockTimeFilter === 'D' && val.includes('|')) {
+                                    if (stockTimeFilter === 'D') {
+                                      return <text x={x} y={y} dy={12} textAnchor="middle" fill="#64748b" fontSize={10} fontWeight={500}>{val}</text>;
+                                    }
+                                    if (val.includes('|')) {
                                       const [dayPart, timePart] = val.split('|');
                                       return (
                                         <text x={x} y={y} textAnchor="middle" fill="#64748b" fontSize={10} fontWeight={500}>
@@ -1357,7 +2160,8 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                                         </text>
                                       );
                                     }
-                                    return <text x={x} y={y} dy={12} textAnchor="middle" fill="#64748b" fontSize={11} fontWeight={500}>{payload.value}</text>;
+                                    const label = stockTimeFilter === 'ytd' ? val.split(' ')[1] : val;
+                                    return <text x={x} y={y} dy={12} textAnchor="middle" fill="#64748b" fontSize={11} fontWeight={500}>{label}</text>;
                                   }}
                                 />
 
@@ -1371,9 +2175,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                                   width={55}
                                 />
 
-                                {showStockPnl && (
-                                  <ReferenceLine y={0} stroke="#cbd5e1" strokeDasharray="3 3" strokeWidth={1} />
-                                )}
+                                <ReferenceLine y={0} stroke="#cbd5e1" strokeDasharray="3 3" strokeWidth={1} />
 
                                 <Tooltip
                                   content={({ active, payload, label }) => {
@@ -1922,10 +2724,18 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                                         const matchedHolding = (rawHoldings || []).find(h => h.symbol === c.symbol);
                                         const matchedStock = stocksList?.find(s => s.ticker === c.symbol);
                                         const logo = matchedHolding?.logo || matchedStock?.logo || null;
+                                        // Use live price from liveQuotes (rands) + rawHoldings cost basis
+                                        const cQty = matchedHolding ? Math.abs(Number(matchedHolding.quantity || 0)) : 0;
+                                        const cAvgFillRands = matchedHolding ? Number(matchedHolding.avg_fill || 0) / 100 : 0;
+                                        const cLivePriceRands = liveQuotes[c.symbol]?.price ?? 0;
+                                        const cHasLive = cQty > 0 && cLivePriceRands > 0;
                                         let pnlRands, pnlPct;
-                                        if (c.pnlRands != null) {
+                                        if (cHasLive) {
+                                          pnlRands = (cLivePriceRands * cQty) - (cAvgFillRands * cQty);
+                                          pnlPct = cAvgFillRands > 0 ? (pnlRands / (cAvgFillRands * cQty)) * 100 : 0;
+                                        } else if (c.pnlRands != null && !isNaN(c.pnlRands)) {
                                           pnlRands = c.pnlRands;
-                                          pnlPct = c.pnlPct ?? 0;
+                                          pnlPct = (c.pnlPct != null && !isNaN(c.pnlPct)) ? c.pnlPct : 0;
                                         } else {
                                           const totalW = stock.strategyHoldings.reduce((s, x) => s + (x.weight || 0), 0) || 100;
                                           const fraction = (c.weight || 0) / totalW;
@@ -2184,8 +2994,21 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           const mCostBasis = mAvgFill * mQty;
           const mShowPnl = mQty > 0 && mAvgFill > 0;
           const mMarketValue = mHolding.currentValue || 0;
-          const mPnl = mShowPnl ? mMarketValue - mCostBasis : 0;
-          const mPnlPct = mShowPnl && mCostBasis > 0 ? (mPnl / mCostBasis) * 100 : 0;
+          // Filter-aware P&L: D/W/M from live intraday data; ALL = all-time
+          let mPnl, mPnlPct;
+          if (modalTimeFilter === "D" && modalLiveReturns?.d_abs != null) {
+            mPnl = (modalLiveReturns.d_abs / 100) * mQty;
+            mPnlPct = modalLiveReturns.d_pct ?? 0;
+          } else if (modalTimeFilter === "W" && modalLiveReturns?.w_abs != null) {
+            mPnl = (modalLiveReturns.w_abs / 100) * mQty;
+            mPnlPct = modalLiveReturns.w_pct ?? 0;
+          } else if (modalTimeFilter === "M" && modalLiveReturns?.m_abs != null) {
+            mPnl = (modalLiveReturns.m_abs / 100) * mQty;
+            mPnlPct = modalLiveReturns.m_pct ?? 0;
+          } else {
+            mPnl = mShowPnl ? mMarketValue - mCostBasis : 0;
+            mPnlPct = mShowPnl && mCostBasis > 0 ? (mPnl / mCostBasis) * 100 : 0;
+          }
           const mLiveChange = liveQuotes[mHolding.ticker]?.changePercent ?? mHolding.change ?? 0;
 
           // Use the date string as-is from the DB (no timezone conversion).
@@ -2217,17 +3040,43 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           })();
 
           const mIsPending = mQty > 0 && mAvgFill === 0;
-          const mChartData = mIsPending
-            ? [{ day: mPurchaseLabel || 'Purchase', value: 0 }, { day: mNowLabel || 'Now', value: 0 }]
-            : mBaseChartData.length > 0
-              ? (mShowPnl
-                ? mBaseChartData.map(d => ({
-                  ...d,
-                  value: Number(((d.value * mQty) - mCostBasis).toFixed(2)),
-                }))
-                : mBaseChartData)
-              // No closes after purchase yet (e.g. bought on weekend): flat line at current P&L.
-              : (mShowPnl ? [{ day: mPurchaseLabel, value: 0 }, { day: mNowLabel, value: Number(mPnl.toFixed(2)) }] : []);
+          const mChartData = (() => {
+            if (modalTimeFilter === "D") {
+              const raw = modalIntradayData || [];
+              if (!mShowPnl || !raw.length) return raw;
+              const liveD_abs = modalLiveReturns?.d_abs ?? null;
+              if (liveD_abs == null) return raw;
+              const lastReal = [...raw].reverse().find(p => p.rawCents != null);
+              if (!lastReal) return raw;
+              const newBaseline = ((lastReal.rawCents - liveD_abs) / 100) * mQty;
+              return raw.map(p => p.rawCents != null
+                ? { ...p, value: Number(((p.rawCents / 100) * mQty - newBaseline).toFixed(2)) }
+                : p
+              );
+            }
+            if (mIsPending) return [{ day: mPurchaseLabel || 'Purchase', value: 0 }, { day: mNowLabel || 'Now', value: 0 }];
+            if (mBaseChartData.length > 0) {
+              if (mShowPnl) {
+                if (modalTimeFilter === 'W' || modalTimeFilter === 'M') {
+                  const daysBack = modalTimeFilter === 'W' ? 9 : 31;
+                  const refMs = Date.now() - daysBack * 24 * 60 * 60 * 1000;
+                  let refPoint = mBaseChartData[0];
+                  for (const d of mBaseChartData) {
+                    if ((d.timestamp || 0) <= refMs) refPoint = d;
+                    else break;
+                  }
+                  const refPrice = refPoint.value;
+                  return [
+                    { ...mBaseChartData[0], day: null, value: 0 },
+                    ...mBaseChartData.map(d => ({ ...d, value: Number(((d.value - refPrice) * mQty).toFixed(2)) }))
+                  ];
+                }
+                return mBaseChartData.map(d => ({ ...d, value: Number(((d.value * mQty) - mCostBasis).toFixed(2)) }));
+              }
+              return mBaseChartData;
+            }
+            return mShowPnl ? [{ day: mPurchaseLabel, value: 0 }, { day: mNowLabel, value: Number(mPnl.toFixed(2)) }] : [];
+          })();
           const mAxisConfig = computePnlAxisConfig(mChartData);
           return (
             <>
@@ -2292,19 +3141,29 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                       <p className="text-3xl font-bold text-amber-500">Pending</p>
                       <p className="text-sm mt-0.5 text-slate-400">Awaiting broker fill — value not yet settled</p>
                     </>
-                  ) : mShowPnl ? (
-                    <>
-                      <p className="text-3xl font-bold text-slate-900">{formatCurrency(mMarketValue)}</p>
-                      <p className={`text-sm mt-0.5 ${mPnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                        {mPnl >= 0 ? '+' : ''}{formatCurrency(mPnl)} ({mPnlPct >= 0 ? '+' : ''}{mPnlPct.toFixed(2)}%) since purchase
-                      </p>
-                    </>
                   ) : (
                     <>
                       <p className="text-3xl font-bold text-slate-900">{formatCurrency(mMarketValue)}</p>
-                      <p className={`text-sm mt-0.5 ${mLiveChange >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                        {mLiveChange >= 0 ? '+' : ''}{mLiveChange.toFixed(2)}% today
-                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        {(mShowPnl || (modalTimeFilter !== "ALL" && mQty > 0 && mPnl != null)) ? (
+                          <>
+                            <span className={`text-sm font-semibold ${mPnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                              {mPnl >= 0 ? '+' : '-'}R{Math.abs(mPnl).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${mPnl >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-500'}`}>
+                              {mPnl >= 0 ? '+' : ''}{mPnlPct.toFixed(1)}%
+                            </span>
+                          </>
+                        ) : (
+                          <span className={`text-sm font-semibold ${mLiveChange >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                            {mLiveChange >= 0 ? '+' : ''}{mLiveChange.toFixed(2)}%
+                          </span>
+                        )}
+                        {modalTimeFilter === "D" && <span className="text-[10px] text-slate-400 font-medium">Today</span>}
+                        {modalTimeFilter === "W" && <span className="text-[10px] text-slate-400 font-medium">1 week</span>}
+                        {modalTimeFilter === "M" && <span className="text-[10px] text-slate-400 font-medium">1 month</span>}
+                        {modalTimeFilter === "ALL" && <span className="text-[10px] text-slate-400 font-medium">All time</span>}
+                      </div>
                     </>
                   )}
                 </div>
@@ -2327,13 +3186,38 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                 </div>
 
                 {/* Chart */}
-                <div style={{ width: '100%', height: 230, paddingBottom: 8 }}>
-                  {modalChartLoading || mChartData.length === 0 ? (
-                    <div style={{ width: '100%', height: 230, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <div className="text-slate-400 text-sm">{modalChartLoading ? 'Loading chart...' : 'No data available'}</div>
-                    </div>
+                <div style={{ width: '100%', height: 230, paddingBottom: 8, minWidth: 0 }}>
+                  {mChartData.length === 0 ? (
+                    (modalTimeFilter === "D" ? modalIntradayLoading : modalChartLoading) ? (
+                      <div style={{ width: '100%', height: 230 }}>
+                        <svg width="100%" height="230" viewBox="0 0 400 230" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+                          <defs>
+                            <linearGradient id="modalSkeletonFill" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#e2e8f0" stopOpacity="0.6" />
+                              <stop offset="100%" stopColor="#e2e8f0" stopOpacity="0.05" />
+                            </linearGradient>
+                            <linearGradient id="modalShimmer" x1="0" y1="0" x2="1" y2="0">
+                              <stop offset="0%" stopColor="transparent"><animate attributeName="offset" values="-1;0;1" dur="1.6s" repeatCount="indefinite" /></stop>
+                              <stop offset="50%" stopColor="rgba(255,255,255,0.55)"><animate attributeName="offset" values="-0.5;0.5;1.5" dur="1.6s" repeatCount="indefinite" /></stop>
+                              <stop offset="100%" stopColor="transparent"><animate attributeName="offset" values="0;1;2" dur="1.6s" repeatCount="indefinite" /></stop>
+                            </linearGradient>
+                            <mask id="modalShimmerMask"><rect width="400" height="230" fill="url(#modalShimmer)" /></mask>
+                          </defs>
+                          {[45,90,135,180].map((y, i) => <rect key={i} x="0" y={y} width="22" height="8" rx="4" fill="#e2e8f0" />)}
+                          <path d="M32,170 C55,165 70,138 90,124 C110,110 125,132 145,114 C165,96 180,72 205,67 C230,62 245,84 265,75 C285,66 300,86 320,78 C340,70 360,88 380,80 L380,200 L32,200 Z" fill="url(#modalSkeletonFill)" />
+                          <path d="M32,170 C55,165 70,138 90,124 C110,110 125,132 145,114 C165,96 180,72 205,67 C230,62 245,84 265,75 C285,66 300,86 320,78 C340,70 360,88 380,80" fill="none" stroke="#cbd5e1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                          <path d="M32,170 C55,165 70,138 90,124 C110,110 125,132 145,114 C165,96 180,72 205,67 C230,62 245,84 265,75 C285,66 300,86 320,78 C340,70 360,88 380,80 L380,200 L32,200 Z" fill="url(#modalShimmer)" mask="url(#modalShimmerMask)" />
+                          <line x1="32" y1="200" x2="400" y2="200" stroke="#e2e8f0" strokeWidth="1" />
+                          {[55,128,200,272,345].map((x, i) => <rect key={i} x={x - 16} y="212" width="32" height="8" rx="4" fill="#e2e8f0" />)}
+                        </svg>
+                      </div>
+                    ) : (
+                      <div style={{ width: '100%', height: 230, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div className="text-slate-400 text-sm">No data available</div>
+                      </div>
+                    )
                   ) : (
-                    <ResponsiveContainer width="100%" height={230}>
+                    <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart data={mChartData} margin={{ top: 10, right: 55, left: 5, bottom: 30 }}>
                         <defs>
                           <linearGradient id="modalStockGradient" x1="0" y1="0" x2="0" y2="1">
@@ -2347,13 +3231,18 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                           axisLine={false}
                           tickLine={false}
                           tickMargin={8}
+                          ticks={modalTimeFilter === 'ytd' ? computeYtdMonthTicks(mChartData) : undefined}
                           interval={modalTimeFilter === 'D'
                             ? Math.max(0, Math.ceil(mChartData.length / 4) - 1)
-                            : mChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(mChartData.length / 6) - 1)}
+                            : modalTimeFilter === 'ytd' ? 0
+                            : mChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(mChartData.length / 4) - 1)}
                           tick={({ x, y, payload }) => {
                             if (!payload.value) return null;
                             const val = String(payload.value);
-                            if (modalTimeFilter === 'D' && val.includes('|')) {
+                            if (modalTimeFilter === 'D') {
+                              return <text x={x} y={y} dy={12} textAnchor="middle" fill="#64748b" fontSize={10} fontWeight={500}>{val}</text>;
+                            }
+                            if (val.includes('|')) {
                               const [dayPart, timePart] = val.split('|');
                               return (
                                 <text x={x} y={y} textAnchor="middle" fill="#64748b" fontSize={10} fontWeight={500}>
@@ -2362,7 +3251,8 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                                 </text>
                               );
                             }
-                            return <text x={x} y={y} dy={12} textAnchor="middle" fill="#64748b" fontSize={11} fontWeight={500}>{payload.value}</text>;
+                            const label = modalTimeFilter === 'ytd' ? val.split(' ')[1] : val;
+                            return <text x={x} y={y} dy={12} textAnchor="middle" fill="#64748b" fontSize={11} fontWeight={500}>{label}</text>;
                           }}
                         />
                         <YAxis
@@ -2374,7 +3264,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                           tickLine={false}
                           width={55}
                         />
-                        {mShowPnl && <ReferenceLine y={0} stroke="#cbd5e1" strokeDasharray="3 3" strokeWidth={1} />}
+                        <ReferenceLine y={0} stroke="#cbd5e1" strokeDasharray="3 3" strokeWidth={1} />
                         <Tooltip
                           content={({ active, payload, label }) => {
                             if (active && payload && payload.length) {

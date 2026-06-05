@@ -43,6 +43,23 @@ const computePnlAxisConfig = (data) => {
   return { domain: [axisMin, axisMax], ticks: unique.length >= 2 ? unique : [0, 5, 10] };
 };
 
+// Returns the first data point of each calendar month from chart data.
+// Handles both daily labels ("13 Mar '26") and monthly labels ("Mar '26").
+const computeChildYtdTicks = (chartData) => {
+  const seen = new Set();
+  return chartData
+    .filter(pt => {
+      if (!pt.day) return false;
+      const parts = String(pt.day).split(' ');
+      // "Mar '26" → parts[0] is a month name (letter); "13 Mar '26" → parts[1]
+      const mon = isNaN(Number(parts[0])) ? parts[0] : parts[1];
+      if (!mon || seen.has(mon)) return false;
+      seen.add(mon);
+      return true;
+    })
+    .map(pt => pt.day);
+};
+
 const PIE_COLORS = ["#4C1D95","#5B21B6","#6D28D9","#7C3AED","#8B5CF6","#A78BFA","#C4B5FD","#DDD6FE","#EDE9FE","#F5F3FF"];
 
 // ─── ChildPortfolioTab ─────────────────────────────────────────────────────────
@@ -656,8 +673,23 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, livePriceMap
                             axisLine={false}
                             tickLine={false}
                             tickMargin={8}
-                            interval={displayChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(displayChartData.length / 6) - 1)}
-                            tick={({ x, y, payload }) => payload.value ? <text x={x} y={y} dy={12} textAnchor="middle" fill="#64748b" fontSize={10} fontWeight={500}>{payload.value}</text> : null}
+                            ticks={timeFilter === 'ytd' ? computeChildYtdTicks(displayChartData) : undefined}
+                            interval={timeFilter === 'ytd' ? 0 : (displayChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(displayChartData.length / 4) - 1))}
+                            tick={({ x, y, payload }) => {
+                              if (!payload.value) return null;
+                              const val = String(payload.value);
+                              let label;
+                              if (timeFilter === 'ytd') {
+                                const parts = val.split(' ');
+                                label = isNaN(Number(parts[0])) ? parts[0] : parts[1];
+                              } else if (timeFilter === 'm' || timeFilter === '5d') {
+                                const parts = val.split(' ');
+                                label = parts.length >= 3 ? parts.slice(0, 2).join(' ') : val;
+                              } else {
+                                label = val;
+                              }
+                              return <text x={x} y={y} dy={12} textAnchor="middle" fill="#64748b" fontSize={10} fontWeight={500}>{label}</text>;
+                            }}
                           />
                           <YAxis domain={stratAxisConfig.domain} ticks={stratAxisConfig.ticks} tickFormatter={formatPnlAxis} tick={{ fill: "#94a3b8", fontSize: 10 }} axisLine={false} tickLine={false} width={50} />
                           <ReferenceLine y={0} stroke="#cbd5e1" strokeDasharray="3 3" strokeWidth={1} />

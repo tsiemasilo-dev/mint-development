@@ -212,8 +212,9 @@ const App = () => {
   useInactivityTimeout({
     enabled: isAuthenticated,
     onLogout: () => {
+      intentionalLogoutRef.current = true;
       if (supabase) supabase.auth.signOut({ scope: 'local' });
-      window.location.href = '/';
+      setCurrentPage("welcome");
     },
   });
 
@@ -1273,6 +1274,7 @@ const App = () => {
                   onOpenActivity={() => navigateTo("activity")}
                   onOpenActions={() => navigateTo("actions")}
                   onOpenInvestments={(tab) => { if (tab) setPortfolioDeepLink({ tab }); handleTabChange("investments"); }}
+                  onOpenStrategyInPortfolio={(strategyId) => { setPortfolioDeepLink({ tab: "strategy", strategyId }); handleTabChange("investments"); }}
                   onOpenCredit={() => handleTabChange("credit")}
                   onOpenCreditApply={() => navigateTo("creditApply")}
                   onOpenCreditRepay={() => navigateTo("creditRepay")}

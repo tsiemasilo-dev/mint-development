@@ -4614,12 +4614,14 @@ app.get("/api/user/strategies", async (req, res) => {
 
     // Also check stock_holdings_c for holdings with strategy_id (fallback when transactions are empty or RLS blocks them).
     // Parent view only includes direct parent investments; child-linked holdings stay on the child dashboard.
+    // Status = active ensures cancelled/exited rows don't inflate cost basis.
     const { data: userStratHoldings } = await db
       .from("stock_holdings_c")
-      .select("id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, created_at")
+      .select("id, family_member_id, security_id, strategy_id, quantity, avg_fill, Expected_fill, market_value, created_at, Status")
       .eq("user_id", userId)
       .is("family_member_id", null)
-      .not("strategy_id", "is", null);
+      .not("strategy_id", "is", null)
+      .eq("Status", "active");
 
     const holdingStrategyIds = [...new Set((userStratHoldings || []).map(h => h.strategy_id).filter(Boolean))];
     console.log("[user/strategies] Holdings with strategy_id found:", (userStratHoldings || []).length, "unique strategy IDs:", holdingStrategyIds);
@@ -4635,30 +4637,50 @@ app.get("/api/user/strategies", async (req, res) => {
       stratHoldingsByStratId[h.strategy_id].push(h);
     }
 
-    // Fetch live prices for those securities
-    const stratSecIds = (userStratHoldings || []).map(h => h.security_id).filter(Boolean);
-    let stratLivePriceMap = {};
+    // Fetch live prices for those securities.
+    // Priority: stock_intraday_c (refreshed every ~15s) > securities_c.last_price (daily fallback).
+    // This matches the balance card's live price source so P&L figures stay in sync.
+    const stratSecIds = [...new Set((userStratHoldings || []).map(h => h.security_id).filter(Boolean))];
+    let stratLivePriceMap = {}; // security_id → price in rands
     const symbolPnlMap = {};
     if (stratSecIds.length > 0) {
-      const { data: stratSecs } = await db
-        .from("securities_c")
-        .select("id, symbol, last_price")
-        .in("id", stratSecIds);
-      (stratSecs || []).forEach(s => { stratLivePriceMap[s.id] = (s.last_price || 0); }); // Keep as Rands as in DB
+      const [secsResult, intradayResult] = await Promise.all([
+        db.from("securities_c").select("id, symbol, last_price").in("id", stratSecIds),
+        db.from("stock_intraday_c").select("security_id, current_price").in("security_id", stratSecIds).order("timestamp", { ascending: false }),
+      ]);
 
-      // Build per-symbol P&L from actual user holdings (skip pending - no avg_fill)
+      // Build intraday map (current_price is in cents → convert to rands; first-seen = latest)
+      const intradayMap = {};
+      for (const row of (intradayResult.data || [])) {
+        if (!intradayMap[row.security_id]) intradayMap[row.security_id] = Number(row.current_price) / 100;
+      }
+
+      const stratSecs = secsResult.data || [];
+      stratSecs.forEach(s => {
+        stratLivePriceMap[s.id] = intradayMap[s.id] != null ? intradayMap[s.id] : Number(s.last_price || 0);
+      });
+
+      // Build per-symbol P&L using the same cost basis formula as the balance card:
+      // max(Expected_fill, avg_fill/100) with a legacy-cents guard on Expected_fill.
       for (const h of (userStratHoldings || [])) {
-        const sec = (stratSecs || []).find(s => s.id === h.security_id);
+        const sec = stratSecs.find(s => s.id === h.security_id);
         if (!sec) continue;
-        const qty = Number(h.quantity || 0);
-        const avgFill = Number(h.avg_fill || 0);
-        if (!avgFill) continue;
-        const livePrice = (sec.last_price != null) ? (sec.last_price) : (avgFill / 100);
+        const qty = Math.abs(Number(h.quantity || 0));
+        const avgFillCents = Number(h.avg_fill || 0);
+        if (!avgFillCents) continue;
+        const avgFillRands = avgFillCents / 100;
+        const expectedRaw = Number(h.Expected_fill || 0);
+        // Legacy-cents guard: if Expected_fill > 5× avg_fill/100 it was stored in cents — divide by 100
+        const expectedRands = expectedRaw > 0
+          ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw)
+          : 0;
+        const costBasisRands = expectedRands > 0 ? Math.max(expectedRands, avgFillRands) : avgFillRands;
+        const livePrice = stratLivePriceMap[h.security_id] || costBasisRands;
         symbolPnlMap[sec.symbol] = {
-          pnlRands: (livePrice - (avgFill / 100)) * qty,
-          pnlPct: avgFill > 0 ? ((livePrice - (avgFill / 100)) / (avgFill / 100)) * 100 : 0,
-          currentValue: (livePrice * qty) * 100, // Send as cents
-          costBasis: (avgFill * qty), // avgFill is already cents
+          pnlRands: (livePrice - costBasisRands) * qty,
+          pnlPct: costBasisRands > 0 ? ((livePrice - costBasisRands) / costBasisRands) * 100 : 0,
+          currentValue: (livePrice * qty) * 100, // cents
+          costBasis: Math.round(costBasisRands * 100) * qty, // cents
         };
       }
     }
@@ -4785,10 +4807,31 @@ app.get("/api/user/strategies", async (req, res) => {
           };
         });
 
-        // Emits one card per transaction
+        // Compute investedAmount and currentMarketValue from live holdings — same method as the
+        // balance card's "All" tab — so this card always agrees with the purple card's figures.
+        // inception_pnl from client_strategy_returns_c is intentionally NOT used here: it was
+        // computed by a background job using a different cost basis which caused sign disagreements.
+        const filledHoldings = (stratHoldingsByStratId[strategy.id] || []).filter(h => Number(h.avg_fill || 0) > 0);
+        let liveInvested = 0;
+        let liveCurrent = 0;
+        for (const h of filledHoldings) {
+          const qty = Math.abs(Number(h.quantity || 0));
+          const avgFillCents = Number(h.avg_fill || 0);
+          const avgFillRands = avgFillCents / 100;
+          const expectedRaw = Number(h.Expected_fill || 0);
+          const expectedRands = expectedRaw > 0
+            ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw)
+            : 0;
+          const costBasisRands = expectedRands > 0 ? Math.max(expectedRands, avgFillRands) : avgFillRands;
+          liveInvested += costBasisRands * qty;
+          liveCurrent += (stratLivePriceMap[h.security_id] || costBasisRands) * qty;
+        }
+        const hasLiveData = filledHoldings.length > 0;
+
         for (const tx of matchingTxs) {
-          const txInvested = Number(tx.amount || 0) / 100; // in Rands
-          const currentValue = txInvested * performanceFactor; // in Rands
+          // Use live holdings P&L when available; fall back to transaction amount + performance factor.
+          const txInvested = hasLiveData ? liveInvested : Number(tx.amount || 0) / 100;
+          const currentValue = hasLiveData ? liveCurrent : txInvested * performanceFactor;
 
           const date = new Date(tx.created_at);
           const pad = (num) => String(num).padStart(2, '0');
@@ -4807,8 +4850,8 @@ app.get("/api/user/strategies", async (req, res) => {
             imageUrl: strategy.image_url,
             isKidStrategy: !!strategy.is_kid_strategy,
             holdings: enrichedHoldings,
-            investedAmount: txInvested, // Return as Rands
-            currentMarketValue: currentValue, // Return as Rands
+            investedAmount: txInvested, // Return as Rands (cost basis)
+            currentMarketValue: currentValue, // Return as Rands (basket value)
             currentValue: currentValue, // Return as Rands
             metrics: latestMetric ? { ...latestMetric, r_ytd: rytd } : { r_ytd: rytd },
             firstInvestedDate: tx.transaction_date || null,
@@ -9953,11 +9996,24 @@ async function calculateChildPortfolioReturns(familyMemberId, strategyId, userId
   // available record so we show a real change instead of storing null.
   const rec5d  = closestRecord(historyRows, fiveDaysAgo) || earliestRecord;
   const rec1m  = closestRecord(historyRows, oneMonthAgo) || earliestRecord;
-  const recYtd = earliestRecord; // earliest record this year
+
+  // Mirror the frontend's logic: if the child has NO rows before Jan 1 (invested this year),
+  // YTD should equal ALL (inception), not the diff from the earliest row this year.
+  const { count: priorYearCount } = await db
+    .from('client_strategy_returns_c')
+    .select('as_of_date', { count: 'exact', head: true })
+    .eq('family_member', familyMemberId)
+    .eq('strategy_id', strategyId)
+    .lt('as_of_date', yearStart);
+
+  const investedThisYearOnly = (priorYearCount || 0) === 0;
 
   const p5d  = periodMetrics(rec5d);
   const p1m  = periodMetrics(rec1m);
-  const pYtd = periodMetrics(recYtd);
+  // If invested this year only → YTD = inception (same as ALL)
+  const pYtd = investedThisYearOnly
+    ? { pnl: inceptionPnlCents, pct: parseFloat(inceptionPct.toFixed(4)) }
+    : periodMetrics(earliestRecord);
 
   return {
     user_id: userId,
@@ -10072,14 +10128,430 @@ app.get('/api/child-live-returns', async (req, res) => {
   }
 });
 
+// ── Parent live-returns ───────────────────────────────────────────────────────
+// Mirrors calculateChildPortfolioReturns exactly, but for the primary account
+// holder (family_member_id IS NULL). Reads live intraday prices + historical
+// basket rows to compute 1D / 5D / 1M / YTD period P&L on the fly.
+async function calculateParentPortfolioReturns(userId, strategyId) {
+  const db = supabaseAdmin || supabase;
+  if (!db) return null;
+
+  // 1. Get parent's active holdings for this strategy
+  const { data: holdings, error: hErr } = await db
+    .from('stock_holdings_c')
+    .select('security_id, quantity, Expected_fill, avg_fill, strategy_id')
+    .eq('user_id', userId)
+    .eq('strategy_id', strategyId)
+    .is('family_member_id', null)
+    .or('is_active.eq.true,Status.eq.active');
+
+  if (hErr || !holdings?.length) return null;
+
+  const securityIds = [...new Set(holdings.map(h => h.security_id).filter(Boolean))];
+
+  // 2. Get latest intraday prices for those securities
+  const { data: intradayRows, error: iErr } = await db
+    .from('stock_intraday_c')
+    .select('security_id, current_price, 1d_abs, 1d_pct, symbol')
+    .in('security_id', securityIds)
+    .order('timestamp', { ascending: false });
+
+  if (iErr) return null;
+
+  const priceMap = {};
+  (intradayRows || []).forEach(p => {
+    if (!priceMap[p.security_id]) {
+      priceMap[p.security_id] = {
+        current_price: Number(p.current_price || 0),
+        change_abs: Number(p['1d_abs'] || 0),
+        change_pct: Number(p['1d_pct'] || 0),
+        symbol: p.symbol,
+      };
+    }
+  });
+
+  // 3. Calculate portfolio metrics
+  let basketValueCents = 0;
+  let costBasisCents = 0;
+  let oneDayPnlCents = 0;
+  const holdingsSnapshot = [];
+
+  for (const h of holdings) {
+    const qty = Number(h.quantity || 0);
+    const avgFillCents = Number(h.avg_fill || 0);
+    const avgFillRands = avgFillCents / 100;
+    const expectedFillRands = Number(h.Expected_fill || 0);
+    const costBasisRands = expectedFillRands > 0 ? Math.max(expectedFillRands, avgFillRands) : avgFillRands;
+    const costBasisForHolding = Math.round(costBasisRands * 100 * qty);
+
+    const price = priceMap[h.security_id];
+    const livePriceCents = price?.current_price || 0;
+    const liveValueCents = Math.round(livePriceCents * qty);
+    const dayChangeCents = Math.round((price?.change_abs || 0) * qty);
+
+    basketValueCents += liveValueCents;
+    costBasisCents += costBasisForHolding;
+    oneDayPnlCents += dayChangeCents;
+
+    holdingsSnapshot.push({
+      security_id: h.security_id,
+      symbol: price?.symbol || null,
+      qty,
+      avg_fill_rands: costBasisRands,
+      current_price_cents: livePriceCents,
+      live_value_cents: liveValueCents,
+      cost_basis_cents: costBasisForHolding,
+      unrealized_pnl_cents: liveValueCents - costBasisForHolding,
+    });
+  }
+
+  // Same formula as child: basket value now minus what was originally paid.
+  const inceptionPnlCents = basketValueCents - costBasisCents;
+  const inceptionPct = costBasisCents > 0 ? (inceptionPnlCents / costBasisCents) * 100 : 0;
+  const oneDayPct = costBasisCents > 0 ? (oneDayPnlCents / costBasisCents) * 100 : 0;
+
+  // 4. Look up historical basket rows to compute 5D / 1M / YTD periods
+  const today = new Date();
+  const yearStart = `${today.getUTCFullYear()}-01-01`;
+  const oneMonthAgo = new Date(today); oneMonthAgo.setUTCDate(today.getUTCDate() - 31);
+  const fiveDaysAgo = new Date(today); fiveDaysAgo.setUTCDate(today.getUTCDate() - 9);
+
+  const { data: historyRows } = await db
+    .from('client_strategy_returns_c')
+    .select('as_of_date, basket_value')
+    .eq('user_id', userId)
+    .eq('strategy_id', strategyId)
+    .is('family_member', null)
+    .gte('as_of_date', yearStart)
+    .order('as_of_date', { ascending: true });
+
+  function closestRecord(rows, targetDate) {
+    if (!rows?.length) return null;
+    const target = targetDate instanceof Date ? targetDate.toISOString().split('T')[0] : targetDate;
+    let best = null;
+    for (const r of rows) {
+      if (r.as_of_date <= target) best = r;
+      else break;
+    }
+    return best;
+  }
+
+  function periodMetrics(historicRecord) {
+    if (!historicRecord || !historicRecord.basket_value) return { pnl: null, pct: null };
+    const pnl = basketValueCents - Number(historicRecord.basket_value);
+    const pct = costBasisCents > 0 ? (pnl / costBasisCents) * 100 : 0;
+    return { pnl, pct: parseFloat(pct.toFixed(4)) };
+  }
+
+  const earliestRecord = historyRows?.length ? historyRows[0] : null;
+  const rec5d  = closestRecord(historyRows, fiveDaysAgo) || earliestRecord;
+  const rec1m  = closestRecord(historyRows, oneMonthAgo) || earliestRecord;
+
+  // Mirror the child's logic: if the parent has NO rows before Jan 1 (invested this year),
+  // YTD should equal ALL (inception), not the earliest row this year.
+  const { count: priorYearCount } = await db
+    .from('client_strategy_returns_c')
+    .select('as_of_date', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('strategy_id', strategyId)
+    .is('family_member', null)
+    .lt('as_of_date', yearStart);
+
+  const investedThisYearOnly = (priorYearCount || 0) === 0;
+
+  const p5d  = periodMetrics(rec5d);
+  const p1m  = periodMetrics(rec1m);
+  // If invested this year only → YTD = inception (same as ALL), not earliest-row diff
+  const pYtd = investedThisYearOnly
+    ? { pnl: inceptionPnlCents, pct: parseFloat(inceptionPct.toFixed(4)) }
+    : periodMetrics(earliestRecord);
+
+  return {
+    user_id: userId,
+    strategy_id: strategyId,
+    family_member: null,
+    basket_value: basketValueCents,
+    portfolio_value: basketValueCents,
+    inception_pnl: inceptionPnlCents,
+    inception_pct: parseFloat(inceptionPct.toFixed(4)),
+    '1d_pnl': oneDayPnlCents,
+    '1d_pct': parseFloat(oneDayPct.toFixed(4)),
+    '5d_pnl': p5d.pnl,
+    '5d_pct': p5d.pct,
+    '1m_pnl': p1m.pnl,
+    '1m_pct': p1m.pct,
+    ytd_pnl: pYtd.pnl,
+    ytd_pct: pYtd.pct,
+    holdings_snapshot: JSON.stringify(holdingsSnapshot),
+    as_of_date: today.toISOString().split('T')[0],
+    fetched_at: today.toISOString(),
+  };
+}
+
+// Live endpoint — calculates parent returns on demand and upserts today's row
+// so client_strategy_returns_c history builds up day by day (no external script needed).
+app.get('/api/parent-live-returns', async (req, res) => {
+  const { user_id, strategy_id } = req.query;
+  if (!user_id || !strategy_id) {
+    return res.status(400).json({ error: 'user_id and strategy_id are required' });
+  }
+
+  try {
+    const returns = await calculateParentPortfolioReturns(user_id, strategy_id);
+    if (!returns) {
+      return res.json({ basket_value: 0, portfolio_value: 0, inception_pnl: 0, inception_pct: 0, '1d_pnl': 0, '1d_pct': 0, holdings_snapshot: [] });
+    }
+
+    const db = supabaseAdmin || supabase;
+    if (db) {
+      db.from('client_strategy_returns_c')
+        .upsert(returns, { onConflict: 'user_id,strategy_id,as_of_date,family_member', ignoreDuplicates: false })
+        .then(({ error }) => { if (error) console.warn('[parent-live-returns] upsert warn:', error.message); });
+    }
+
+    return res.json({
+      ...returns,
+      holdings_snapshot: JSON.parse(returns.holdings_snapshot || '[]'),
+    });
+  } catch (err) {
+    console.error('[parent-live-returns] Error:', err.message);
+    return res.status(500).json({ error: 'Failed to calculate parent returns' });
+  }
+});
+
+// Saves end-of-day returns for all parent accounts with active strategy holdings
+async function saveAllParentReturnsEOD() {
+  const db = supabaseAdmin || supabase;
+  if (!db) return;
+
+  console.log('[parent-returns-eod] Running end-of-day save...');
+
+  try {
+    const { data: parentHoldings, error: hErr } = await db
+      .from('stock_holdings_c')
+      .select('user_id, strategy_id')
+      .is('family_member_id', null)
+      .not('strategy_id', 'is', null)
+      .eq('is_active', true);
+
+    if (hErr || !parentHoldings?.length) {
+      console.log('[parent-returns-eod] No active parent strategy holdings found.');
+      return;
+    }
+
+    const seen = new Set();
+    const combos = [];
+    for (const h of parentHoldings) {
+      const key = `${h.user_id}:${h.strategy_id}`;
+      if (!seen.has(key)) { seen.add(key); combos.push(h); }
+    }
+
+    console.log(`[parent-returns-eod] Saving returns for ${combos.length} parent-strategy combination(s)...`);
+    let saved = 0, failed = 0;
+
+    for (const { user_id, strategy_id } of combos) {
+      try {
+        const returns = await calculateParentPortfolioReturns(user_id, strategy_id);
+        if (!returns) { failed++; continue; }
+
+        const { error: upsertErr } = await db
+          .from('client_strategy_returns_c')
+          .upsert(returns, { onConflict: 'user_id,strategy_id,as_of_date,family_member', ignoreDuplicates: false });
+
+        if (upsertErr) {
+          console.error(`[parent-returns-eod] Upsert failed for user ${user_id}:`, upsertErr.message);
+          failed++;
+        } else {
+          saved++;
+        }
+      } catch (e) {
+        console.error(`[parent-returns-eod] Error for user ${user_id}:`, e.message);
+        failed++;
+      }
+    }
+
+    console.log(`[parent-returns-eod] Done — saved: ${saved}, failed: ${failed}`);
+  } catch (err) {
+    console.error('[parent-returns-eod] Unexpected error:', err.message);
+  }
+}
+
+// ── EOD Stock Returns Save ─────────────────────────────────────────────────
+// Saves end-of-day price + period returns for all held securities into stock_returns_c.
+// Runs at 17:30 SAST alongside strategy EOD saves.
+async function saveAllStockReturnsEOD() {
+  const db = supabaseAdmin || supabase;
+  if (!db) return;
+  console.log('[stock-returns-eod] Running end-of-day save...');
+
+  try {
+    // 1. Get all unique active security_ids from held positions
+    const { data: holdingRows, error: hErr } = await db
+      .from('stock_holdings_c')
+      .select('security_id')
+      .eq('is_active', true)
+      .not('security_id', 'is', null);
+
+    if (hErr || !holdingRows?.length) {
+      console.log('[stock-returns-eod] No active holdings found.');
+      return;
+    }
+
+    const securityIds = [...new Set(holdingRows.map(h => h.security_id).filter(Boolean))];
+    console.log(`[stock-returns-eod] Processing ${securityIds.length} held securities...`);
+
+    // 2. Get latest intraday prices for all held securities
+    const { data: intradayRows, error: iErr } = await db
+      .from('stock_intraday_c')
+      .select('security_id, symbol, current_price, 1d_abs, 1d_pct, timestamp')
+      .in('security_id', securityIds)
+      .order('timestamp', { ascending: false });
+
+    if (iErr) { console.error('[stock-returns-eod] Intraday fetch error:', iErr.message); return; }
+
+    // Build latest price map (first row per security = most recent)
+    const priceMap = {};
+    for (const row of (intradayRows || [])) {
+      if (!priceMap[row.security_id]) {
+        priceMap[row.security_id] = {
+          current_price: Number(row.current_price || 0),
+          '1d_abs': Number(row['1d_abs'] || 0),
+          '1d_pct': Number(row['1d_pct'] || 0),
+          symbol: row.symbol,
+        };
+      }
+    }
+
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+
+    // Reference windows (calendar days — we snap to nearest available trading record)
+    const ref5d  = new Date(today); ref5d.setUTCDate(today.getUTCDate() - 9);   // ~5 trading days
+    const ref1m  = new Date(today); ref1m.setUTCDate(today.getUTCDate() - 31);  // ~1 month
+    const ref6m  = new Date(today); ref6m.setUTCDate(today.getUTCDate() - 190); // ~6 months
+    const ref1y  = new Date(today); ref1y.setUTCDate(today.getUTCDate() - 370); // ~1 year
+    const str5d  = ref5d.toISOString().split('T')[0];
+    const str1m  = ref1m.toISOString().split('T')[0];
+    const str6m  = ref6m.toISOString().split('T')[0];
+    const str1y  = ref1y.toISOString().split('T')[0];
+    const strYtd = `${today.getUTCFullYear()}-01-01`;
+
+    // Helper: find the closest record whose as_of_date <= targetStr (binary search on sorted asc array)
+    function closestPriceBefore(rows, targetStr) {
+      if (!rows?.length) return null;
+      let best = null;
+      for (const r of rows) {
+        if (r.as_of_date <= targetStr) best = r;
+        else break;
+      }
+      return best ? Number(best.current_price) : null;
+    }
+
+    function absAndPct(todayCents, refCents) {
+      if (refCents == null || refCents <= 0) return { abs: null, pct: null };
+      const abs = todayCents - refCents;
+      const pct = parseFloat(((abs / refCents) * 100).toFixed(4));
+      return { abs, pct };
+    }
+
+    let saved = 0, failed = 0;
+
+    for (const secId of securityIds) {
+      try {
+        const price = priceMap[secId];
+        if (!price || !price.current_price) { failed++; continue; }
+
+        const todayCents = price.current_price;
+
+        // Fetch historical rows back to ~1 year (for all reference windows)
+        const { data: histRows } = await db
+          .from('stock_returns_c')
+          .select('as_of_date, current_price')
+          .eq('security_id', secId)
+          .gte('as_of_date', str1y)
+          .lt('as_of_date', todayStr)
+          .order('as_of_date', { ascending: true });
+
+        // For ALL-time we need the earliest available record
+        const { data: earliestRows } = await db
+          .from('stock_returns_c')
+          .select('as_of_date, current_price')
+          .eq('security_id', secId)
+          .lt('as_of_date', todayStr)
+          .order('as_of_date', { ascending: true })
+          .limit(1);
+
+        const p5d  = absAndPct(todayCents, closestPriceBefore(histRows, str5d));
+        const p1m  = absAndPct(todayCents, closestPriceBefore(histRows, str1m));
+        const p6m  = absAndPct(todayCents, closestPriceBefore(histRows, str6m));
+        const p1y  = absAndPct(todayCents, closestPriceBefore(histRows, str1y));
+        const pYtd = absAndPct(todayCents, closestPriceBefore(histRows, strYtd));
+        const pAll = earliestRows?.length ? absAndPct(todayCents, Number(earliestRows[0].current_price)) : { abs: null, pct: null };
+
+        const upsertRow = {
+          security_id: secId,
+          symbol: price.symbol,
+          as_of_date: todayStr,
+          fetched_at: today.toISOString(),
+          current_price: todayCents,
+          '1d_abs': price['1d_abs'],
+          '1d_pct': price['1d_pct'],
+          '5d_abs': p5d.abs,
+          '5d_pct': p5d.pct,
+          '1m_abs': p1m.abs,
+          '1m_pct': p1m.pct,
+          '6m_abs': p6m.abs,
+          '6m_pct': p6m.pct,
+          '1y_abs': p1y.abs,
+          '1y_pct': p1y.pct,
+          'ytd_abs': pYtd.abs,
+          'ytd_pct': pYtd.pct,
+          'all_abs': pAll.abs,
+          'all_pct': pAll.pct,
+        };
+
+        // Delete any existing row for this security + date, then insert fresh
+        await db.from('stock_returns_c')
+          .delete()
+          .eq('security_id', secId)
+          .eq('as_of_date', todayStr);
+
+        const { error: insertErr } = await db
+          .from('stock_returns_c')
+          .insert(upsertRow);
+
+        if (insertErr) {
+          console.error(`[stock-returns-eod] Insert failed for ${price.symbol}:`, insertErr.message);
+          failed++;
+        } else {
+          saved++;
+        }
+      } catch (e) {
+        console.error(`[stock-returns-eod] Error for security ${secId}:`, e.message);
+        failed++;
+      }
+    }
+
+    console.log(`[stock-returns-eod] Done — saved: ${saved}, failed: ${failed}`);
+  } catch (err) {
+    console.error('[stock-returns-eod] Unexpected error:', err.message);
+  }
+}
+
 // End-of-day save: runs at 17:30 SAST (15:30 UTC) Mon–Fri
 cron.schedule('30 15 * * 1-5', () => {
-  console.log('[child-returns-eod] Market close cron triggered');
+  console.log('[eod-cron] Market close triggered — saving all EOD returns');
+  saveAllStockReturnsEOD();
   saveAllChildReturnsEOD();
+  saveAllParentReturnsEOD();
 });
 
 // Also run at startup (90s delay) to seed any missing today's records
-setTimeout(saveAllChildReturnsEOD, 90 * 1000);
+setTimeout(() => {
+  saveAllStockReturnsEOD();
+  saveAllChildReturnsEOD();
+  saveAllParentReturnsEOD();
+}, 90 * 1000);
 
 // Catch-all 404 handler - MUST be after all route definitions
 app.use((req, res) => {
