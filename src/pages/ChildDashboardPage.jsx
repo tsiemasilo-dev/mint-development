@@ -3102,9 +3102,12 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                                     <p className={`text-base font-bold tabular-nums ${isUp ? "text-emerald-500" : "text-red-500"}`}>
                                       {isUp ? "+" : ""}{fmt(ytdPnlCents)}
                                     </p>
-                                    <p className={`text-sm font-bold tabular-nums mt-0.5 ${isUp ? "text-emerald-600" : "text-red-500"}`}>
-                                      {isUp ? "+" : ""}{Math.abs(ytdPct).toFixed(1)}% <span className="text-slate-400 font-medium text-xs">YTD</span>
-                                    </p>
+                                    <div className="flex items-center justify-end gap-1.5 mt-0.5">
+                                      <p className={`text-sm font-bold tabular-nums ${isUp ? "text-emerald-600" : "text-red-500"}`}>
+                                        {isUp ? "+" : ""}{Math.abs(ytdPct).toFixed(1)}%
+                                      </p>
+                                      <span className="text-[9px] font-bold uppercase tracking-wider px-1 py-0.5 rounded bg-slate-100 text-slate-500">YTD</span>
+                                    </div>
                                   </>
                                 ) : sc.pnl != null ? (
                                   <>
