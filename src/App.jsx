@@ -212,8 +212,9 @@ const App = () => {
   useInactivityTimeout({
     enabled: isAuthenticated,
     onLogout: () => {
+      intentionalLogoutRef.current = true;
       if (supabase) supabase.auth.signOut({ scope: 'local' });
-      window.location.href = '/';
+      setCurrentPage("welcome");
     },
   });
 
