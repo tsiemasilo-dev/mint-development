@@ -1961,6 +1961,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   const [showInvest, setShowInvest] = useState(false);
   const [strategyDetailId, setStrategyDetailId] = useState(null);
   const [expandedStrategyStack, setExpandedStrategyStack] = useState(null);
+  const [strategySparklines, setStrategySparklines] = useState({});
   const [showAllTransactions, setShowAllTransactions] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [showGoalsModal, setShowGoalsModal] = useState(false);
@@ -2686,6 +2687,48 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
 
 
 
+  // Fetch 7-day sparkline basket values per strategy for the card chart
+  useEffect(() => {
+    if (!child?.id || !holdings.length) return;
+    const stratIds = [...new Set(holdings.filter(h => h.strategy_id).map(h => h.strategy_id))];
+    if (!stratIds.length) return;
+    Promise.all(stratIds.map(async (sid) => {
+      const { data } = await supabase
+        .from("client_strategy_returns_c")
+        .select("as_of_date, basket_value")
+        .eq("family_member", child.id)
+        .eq("strategy_id", sid)
+        .order("as_of_date", { ascending: false })
+        .limit(7);
+      const values = (data || []).reverse().map(r => Number(r.basket_value || 0));
+      return [sid, values];
+    })).then(results => setStrategySparklines(Object.fromEntries(results)));
+  }, [child?.id, holdings]);
+
+  // Inline SVG sparkline — no extra library needed
+  const MiniSparkline = ({ values, isUp }) => {
+    if (!values || values.length < 2) return null;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const range = max - min || 1;
+    const w = 72, h = 30, pad = 2;
+    const pts = values.map((v, i) => {
+      const x = pad + (i / (values.length - 1)) * (w - pad * 2);
+      const y = h - pad - ((v - min) / range) * (h - pad * 2);
+      return [x.toFixed(1), y.toFixed(1)];
+    });
+    const linePath = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0]},${p[1]}`).join(" ");
+    const areaPath = `${linePath} L${pts[pts.length - 1][0]},${h - pad} L${pts[0][0]},${h - pad} Z`;
+    const color = isUp ? "#10b981" : "#ef4444";
+    return (
+      <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
+        <path d={areaPath} fill={color} fillOpacity="0.12" />
+        <path d={linePath} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r="2" fill={color} />
+      </svg>
+    );
+  };
+
   return (
     <div
       className="min-h-screen pb-[env(safe-area-inset-bottom)]"
@@ -2908,11 +2951,21 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                               </div>
                             </div>
                           </div>
-                          <div className="text-right flex-shrink-0">
+                          <div className="flex flex-col items-end flex-shrink-0">
                             {isFilling ? (
                               <>
                                 <p className="text-sm font-bold text-amber-700">Pending</p>
                                 <p className="text-xs font-semibold text-amber-600">Awaiting fill</p>
+                              </>
+                            ) : strategySparklines[sc.id]?.length >= 2 ? (
+                              <>
+                                <MiniSparkline values={strategySparklines[sc.id]} isUp={isUp} />
+                                <p className="text-xs font-semibold text-slate-500 tabular-nums mt-0.5">{fmt(sc.totalValue)}</p>
+                                {pnlAvailable && (
+                                  <p className={`text-xs font-semibold tabular-nums ${isUp ? "text-emerald-600" : "text-red-500"}`}>
+                                    {isUp ? "+" : ""}{fmt(sc.pnl)} ({isUp ? "+" : ""}{sc.pnlPct.toFixed(2)}%)
+                                  </p>
+                                )}
                               </>
                             ) : (
                               <>
