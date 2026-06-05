@@ -1865,37 +1865,74 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                               const costBasis = ((userHolding.avg_fill || 0) * userQuantity) / 100;
                               const pnl = holdingMarketValue - costBasis;
                               const pnlPct = costBasis > 0 ? ((pnl / costBasis) * 100) : 0;
-                              const dailyChangePct = userHolding.change_percent || 0;
-                              const dailyChangeAmt = (holdingMarketValue * dailyChangePct) / (100 + dailyChangePct);
+                              const isPos = pnl >= 0;
                               return (
                                 <>
                                   <p className="text-3xl font-bold text-slate-900">{formatCurrency(holdingMarketValue)}</p>
-                                  <p className={`text-sm ${pnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                    {pnl >= 0 ? '+' : ''}{formatCurrency(pnl)} ({pnl >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%)
-                                  </p>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <span className={`text-sm font-semibold ${isPos ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                      {isPos ? '+' : '-'}R{Math.abs(pnl).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </span>
+                                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${isPos ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-500'}`}>
+                                      {isPos ? '+' : ''}{pnlPct.toFixed(1)}%
+                                    </span>
+                                    {stockTimeFilter === "D" && <span className="text-[10px] text-slate-400 font-medium">Today</span>}
+                                    {stockTimeFilter === "W" && <span className="text-[10px] text-slate-400 font-medium">1 week</span>}
+                                    {stockTimeFilter === "M" && <span className="text-[10px] text-slate-400 font-medium">1 month</span>}
+                                    {stockTimeFilter === "ALL" && <span className="text-[10px] text-slate-400 font-medium">All time</span>}
+                                  </div>
                                 </>
                               );
                             }
                             const perSharePrice = liveQuotes[selectedStock.ticker]?.price || selectedStock.price;
                             const changePct = liveQuotes[selectedStock.ticker]?.changePercent ?? selectedStock.dailyChange;
+                            const isPos = changePct >= 0;
                             return (
                               <>
                                 <p className="text-3xl font-bold text-slate-900">{formatCurrency(perSharePrice)}</p>
-                                <p className={`text-sm ${changePct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                  ({changePct >= 0 ? '+' : ''}{changePct.toFixed(2)}% Today)
-                                </p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className={`text-sm font-semibold ${isPos ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                    {isPos ? '+' : ''}{changePct.toFixed(2)}%
+                                  </span>
+                                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${isPos ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-500'}`}>Today</span>
+                                </div>
                               </>
                             );
                           })()}
                         </div>
 
-                        <div style={{ width: '100%', height: 220, marginBottom: 8 }}>
+                        <div style={{ width: '100%', height: 220, marginBottom: 8, minWidth: 0 }}>
                           {stockChartData.length === 0 ? (
-                            <div style={{ width: '100%', height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <div className="text-slate-400 text-sm">{stockTimeFilter === "D" ? (stockTabIntradayLoading ? 'Loading chart...' : 'No data available') : (stockChartLoading ? 'Loading chart...' : 'No data available')}</div>
-                            </div>
+                            (stockTimeFilter === "D" ? stockTabIntradayLoading : stockChartLoading) ? (
+                              <div style={{ width: '100%', height: 220 }}>
+                                <svg width="100%" height="220" viewBox="0 0 400 220" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+                                  <defs>
+                                    <linearGradient id="stockSkeletonFill" x1="0" y1="0" x2="0" y2="1">
+                                      <stop offset="0%" stopColor="#e2e8f0" stopOpacity="0.6" />
+                                      <stop offset="100%" stopColor="#e2e8f0" stopOpacity="0.05" />
+                                    </linearGradient>
+                                    <linearGradient id="stockShimmer" x1="0" y1="0" x2="1" y2="0">
+                                      <stop offset="0%" stopColor="transparent"><animate attributeName="offset" values="-1;0;1" dur="1.6s" repeatCount="indefinite" /></stop>
+                                      <stop offset="50%" stopColor="rgba(255,255,255,0.55)"><animate attributeName="offset" values="-0.5;0.5;1.5" dur="1.6s" repeatCount="indefinite" /></stop>
+                                      <stop offset="100%" stopColor="transparent"><animate attributeName="offset" values="0;1;2" dur="1.6s" repeatCount="indefinite" /></stop>
+                                    </linearGradient>
+                                    <mask id="stockShimmerMask"><rect width="400" height="220" fill="url(#stockShimmer)" /></mask>
+                                  </defs>
+                                  {[40,80,120,160].map((y, i) => <rect key={i} x="0" y={y} width="22" height="8" rx="4" fill="#e2e8f0" />)}
+                                  <path d="M32,160 C55,155 70,130 90,118 C110,106 125,125 145,108 C165,91 180,70 205,65 C230,60 245,80 265,72 C285,64 300,82 320,75 C340,68 360,85 380,78 L380,190 L32,190 Z" fill="url(#stockSkeletonFill)" />
+                                  <path d="M32,160 C55,155 70,130 90,118 C110,106 125,125 145,108 C165,91 180,70 205,65 C230,60 245,80 265,72 C285,64 300,82 320,75 C340,68 360,85 380,78" fill="none" stroke="#cbd5e1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                                  <path d="M32,160 C55,155 70,130 90,118 C110,106 125,125 145,108 C165,91 180,70 205,65 C230,60 245,80 265,72 C285,64 300,82 320,75 C340,68 360,85 380,78 L380,190 L32,190 Z" fill="url(#stockShimmer)" mask="url(#stockShimmerMask)" />
+                                  <line x1="32" y1="190" x2="400" y2="190" stroke="#e2e8f0" strokeWidth="1" />
+                                  {[55,128,200,272,345].map((x, i) => <rect key={i} x={x - 16} y="200" width="32" height="8" rx="4" fill="#e2e8f0" />)}
+                                </svg>
+                              </div>
+                            ) : (
+                              <div style={{ width: '100%', height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <div className="text-slate-400 text-sm">No data available</div>
+                              </div>
+                            )
                           ) : (
-                            <ResponsiveContainer width="100%" height={220}>
+                            <ResponsiveContainer width="100%" height="100%">
                               <ComposedChart
                                 data={stockChartData}
                                 margin={{ top: 10, right: 15, left: 5, bottom: 30 }}
@@ -1948,9 +1985,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                                   width={55}
                                 />
 
-                                {showStockPnl && (
-                                  <ReferenceLine y={0} stroke="#cbd5e1" strokeDasharray="3 3" strokeWidth={1} />
-                                )}
+                                <ReferenceLine y={0} stroke="#cbd5e1" strokeDasharray="3 3" strokeWidth={1} />
 
                                 <Tooltip
                                   content={({ active, payload, label }) => {
@@ -2876,19 +2911,29 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                       <p className="text-3xl font-bold text-amber-500">Pending</p>
                       <p className="text-sm mt-0.5 text-slate-400">Awaiting broker fill — value not yet settled</p>
                     </>
-                  ) : mShowPnl ? (
-                    <>
-                      <p className="text-3xl font-bold text-slate-900">{formatCurrency(mMarketValue)}</p>
-                      <p className={`text-sm mt-0.5 ${mPnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                        {mPnl >= 0 ? '+' : ''}{formatCurrency(mPnl)} ({mPnlPct >= 0 ? '+' : ''}{mPnlPct.toFixed(2)}%) since purchase
-                      </p>
-                    </>
                   ) : (
                     <>
                       <p className="text-3xl font-bold text-slate-900">{formatCurrency(mMarketValue)}</p>
-                      <p className={`text-sm mt-0.5 ${mLiveChange >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                        {mLiveChange >= 0 ? '+' : ''}{mLiveChange.toFixed(2)}% today
-                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        {mShowPnl ? (
+                          <>
+                            <span className={`text-sm font-semibold ${mPnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                              {mPnl >= 0 ? '+' : '-'}R{Math.abs(mPnl).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${mPnl >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-500'}`}>
+                              {mPnl >= 0 ? '+' : ''}{mPnlPct.toFixed(1)}%
+                            </span>
+                          </>
+                        ) : (
+                          <span className={`text-sm font-semibold ${mLiveChange >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                            {mLiveChange >= 0 ? '+' : ''}{mLiveChange.toFixed(2)}%
+                          </span>
+                        )}
+                        {modalTimeFilter === "D" && <span className="text-[10px] text-slate-400 font-medium">Today</span>}
+                        {modalTimeFilter === "W" && <span className="text-[10px] text-slate-400 font-medium">1 week</span>}
+                        {modalTimeFilter === "M" && <span className="text-[10px] text-slate-400 font-medium">1 month</span>}
+                        {modalTimeFilter === "ALL" && <span className="text-[10px] text-slate-400 font-medium">All time</span>}
+                      </div>
                     </>
                   )}
                 </div>
@@ -2911,13 +2956,38 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                 </div>
 
                 {/* Chart */}
-                <div style={{ width: '100%', height: 230, paddingBottom: 8 }}>
-                  {((modalTimeFilter === "D" ? modalIntradayLoading : modalChartLoading) || mChartData.length === 0) ? (
-                    <div style={{ width: '100%', height: 230, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <div className="text-slate-400 text-sm">{(modalTimeFilter === "D" ? modalIntradayLoading : modalChartLoading) ? 'Loading chart...' : 'No data available'}</div>
-                    </div>
+                <div style={{ width: '100%', height: 230, paddingBottom: 8, minWidth: 0 }}>
+                  {mChartData.length === 0 ? (
+                    (modalTimeFilter === "D" ? modalIntradayLoading : modalChartLoading) ? (
+                      <div style={{ width: '100%', height: 230 }}>
+                        <svg width="100%" height="230" viewBox="0 0 400 230" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+                          <defs>
+                            <linearGradient id="modalSkeletonFill" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#e2e8f0" stopOpacity="0.6" />
+                              <stop offset="100%" stopColor="#e2e8f0" stopOpacity="0.05" />
+                            </linearGradient>
+                            <linearGradient id="modalShimmer" x1="0" y1="0" x2="1" y2="0">
+                              <stop offset="0%" stopColor="transparent"><animate attributeName="offset" values="-1;0;1" dur="1.6s" repeatCount="indefinite" /></stop>
+                              <stop offset="50%" stopColor="rgba(255,255,255,0.55)"><animate attributeName="offset" values="-0.5;0.5;1.5" dur="1.6s" repeatCount="indefinite" /></stop>
+                              <stop offset="100%" stopColor="transparent"><animate attributeName="offset" values="0;1;2" dur="1.6s" repeatCount="indefinite" /></stop>
+                            </linearGradient>
+                            <mask id="modalShimmerMask"><rect width="400" height="230" fill="url(#modalShimmer)" /></mask>
+                          </defs>
+                          {[45,90,135,180].map((y, i) => <rect key={i} x="0" y={y} width="22" height="8" rx="4" fill="#e2e8f0" />)}
+                          <path d="M32,170 C55,165 70,138 90,124 C110,110 125,132 145,114 C165,96 180,72 205,67 C230,62 245,84 265,75 C285,66 300,86 320,78 C340,70 360,88 380,80 L380,200 L32,200 Z" fill="url(#modalSkeletonFill)" />
+                          <path d="M32,170 C55,165 70,138 90,124 C110,110 125,132 145,114 C165,96 180,72 205,67 C230,62 245,84 265,75 C285,66 300,86 320,78 C340,70 360,88 380,80" fill="none" stroke="#cbd5e1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                          <path d="M32,170 C55,165 70,138 90,124 C110,110 125,132 145,114 C165,96 180,72 205,67 C230,62 245,84 265,75 C285,66 300,86 320,78 C340,70 360,88 380,80 L380,200 L32,200 Z" fill="url(#modalShimmer)" mask="url(#modalShimmerMask)" />
+                          <line x1="32" y1="200" x2="400" y2="200" stroke="#e2e8f0" strokeWidth="1" />
+                          {[55,128,200,272,345].map((x, i) => <rect key={i} x={x - 16} y="212" width="32" height="8" rx="4" fill="#e2e8f0" />)}
+                        </svg>
+                      </div>
+                    ) : (
+                      <div style={{ width: '100%', height: 230, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div className="text-slate-400 text-sm">No data available</div>
+                      </div>
+                    )
                   ) : (
-                    <ResponsiveContainer width="100%" height={230}>
+                    <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart data={mChartData} margin={{ top: 10, right: 55, left: 5, bottom: 30 }}>
                         <defs>
                           <linearGradient id="modalStockGradient" x1="0" y1="0" x2="0" y2="1">
@@ -2964,7 +3034,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                           tickLine={false}
                           width={55}
                         />
-                        {mShowPnl && <ReferenceLine y={0} stroke="#cbd5e1" strokeDasharray="3 3" strokeWidth={1} />}
+                        <ReferenceLine y={0} stroke="#cbd5e1" strokeDasharray="3 3" strokeWidth={1} />
                         <Tooltip
                           content={({ active, payload, label }) => {
                             if (active && payload && payload.length) {
