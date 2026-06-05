@@ -160,6 +160,7 @@ const SwipeableBalanceCard = ({
   overrideWalletBalance, // Rands — replaces the CASH footer value
   managedByLabel,        // For child cards: "Managed by parent · Age X · Independent at Y"
   livePriceMap: livePriceMapProp = null, // Shared from ChildDashboardPage — skips internal poll
+  onChildYtdMetrics = null, // Callback(pnl, pct) fired when childLiveMetrics updates
 }) => {
   const childMode = !!familyMemberId;
   const _cacheKey = `${userId || ''}:${familyMemberId || ''}`;
@@ -168,6 +169,7 @@ const SwipeableBalanceCard = ({
   const [periodPct, setPeriodPct] = useState(null);
   const [childSnapshotCount, setChildSnapshotCount] = useState(null);
   const [childLivePriceMap, setChildLivePriceMap] = useState({});
+  const [yearStartBasketCents, setYearStartBasketCents] = useState(null);
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
   const { lastUpdated, isConnected } = useRealtimePrices();
@@ -722,7 +724,7 @@ const SwipeableBalanceCard = ({
 
   // Clear P&L immediately when tab changes — prevents stale value flashing
   useEffect(() => {
-    if (childMode) { setPeriodReturn(null); setPeriodPct(null); }
+    if (childMode) { setPeriodReturn(null); setPeriodPct(null); setYearStartBasketCents(null); }
   }, [activeTab, childMode]);
 
   // Child snapshot fetch — runs only when holdings or active tab change, NOT on every live-price tick
@@ -764,6 +766,17 @@ const SwipeableBalanceCard = ({
         if (dates.length < minRows) { setChartData([]); setPeriodReturn(null); return; }
 
         const firstBasket = basketByDate[dates[0]];
+        // Capture year-start basket for true YTD PnL — but only if the child had investments
+        // before this year. If all data is from this year, YTD should equal ALL (use cost basis).
+        if (activeTab === "ytd") {
+          const yearStart = `${new Date().getUTCFullYear()}-01-01`;
+          const { count: priorYearCount } = await supabase
+            .from("client_strategy_returns_c")
+            .select("as_of_date", { count: "exact", head: true })
+            .eq("family_member", familyMemberId)
+            .lt("as_of_date", yearStart);
+          setYearStartBasketCents(priorYearCount > 0 ? firstBasket : null);
+        }
         const points = [{ d: null, v: 0 }];
         dates.forEach(d => {
           points.push({ d, v: Number(((basketByDate[d] - firstBasket) / 100).toFixed(2)) });
@@ -1165,10 +1178,24 @@ const SwipeableBalanceCard = ({
       costBasis += Number(h.invested_amount || 0) / 100;
     }
     if (!hasPrices || costBasis === 0) return null;
+    // True YTD: compare live value to start-of-year portfolio value, not all-time cost basis
+    if (activeTab === "ytd" && yearStartBasketCents > 0) {
+      const yearStartRands = yearStartBasketCents / 100;
+      const pnl = liveValue - yearStartRands;
+      const pct = (pnl / yearStartRands) * 100;
+      return { pnl, pct };
+    }
     const pnl = liveValue - costBasis;
     const pct = (pnl / costBasis) * 100;
     return { pnl, pct };
-  }, [childMode, dbData.holdings, childLivePriceMap, livePriceMapProp]);
+  }, [childMode, dbData.holdings, childLivePriceMap, livePriceMapProp, activeTab, yearStartBasketCents]);
+
+  useEffect(() => {
+    if (childMode && childLiveMetrics && onChildYtdMetrics) {
+      onChildYtdMetrics(childLiveMetrics);
+    }
+  }, [childMode, childLiveMetrics, onChildYtdMetrics]);
+
   const displayBalance = overrideBalance !== undefined
     ? overrideBalance
     : displayMarketValue;

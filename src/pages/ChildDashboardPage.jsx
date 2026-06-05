@@ -48,6 +48,11 @@ function fmt(cents) {
   const val = (cents || 0) / 100;
   return `R\u202F${val.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
+function fmtRands(rands) {
+  const absNum = Math.abs(Number(rands || 0));
+  const truncated = Math.floor(absNum * 100) / 100;
+  return `R\u202F${truncated.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
 function withTimeout(promise, ms, message) {
   let timeoutId;
@@ -1961,6 +1966,9 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   const [showInvest, setShowInvest] = useState(false);
   const [strategyDetailId, setStrategyDetailId] = useState(null);
   const [expandedStrategyStack, setExpandedStrategyStack] = useState(null);
+  const [strategySparklines, setStrategySparklines] = useState({});
+  const [strategyYearStartBasket, setStrategyYearStartBasket] = useState({});
+  const [purpleCardYtdMetrics, setPurpleCardYtdMetrics] = useState(null);
   const [showAllTransactions, setShowAllTransactions] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [showGoalsModal, setShowGoalsModal] = useState(false);
@@ -2521,6 +2529,9 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   // Live price per share in Rands: intraday only (cents / 100).
   // Returns null when no intraday row is available.
   const getHoldingLivePriceRands = (holding) => {
+    // Prefer 15s live poll (same source as balance card) → intraday DB fallback
+    const pollCents = childLivePriceMap[holding.security_id]?.priceCents;
+    if (pollCents > 0) return pollCents / 100;
     const intradayCents = Number(holding.intraday_price_cents);
     if (Number.isFinite(intradayCents) && intradayCents > 0) {
       return intradayCents / 100;
@@ -2683,6 +2694,176 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
 
 
 
+  // Fetch year-start basket per strategy — mirrors purple SwipeableBalanceCard YTD logic exactly
+  useEffect(() => {
+    if (!child?.id || !holdings.length) return;
+    const stratIds = [...new Set(holdings.filter(h => h.strategy_id).map(h => h.strategy_id))];
+    if (!stratIds.length) return;
+    const yearStart = `${new Date().getUTCFullYear()}-01-01`;
+    Promise.all(stratIds.map(async (sid) => {
+      // Fetch YTD basket rows for this strategy (ascending so first = earliest this year)
+      let q = supabase
+        .from("client_strategy_returns_c")
+        .select("as_of_date, basket_value")
+        .eq("family_member", child.id)
+        .eq("strategy_id", sid)
+        .gte("as_of_date", yearStart)
+        .order("as_of_date", { ascending: true });
+      const { data: ytdRows } = await q;
+      if (!ytdRows?.length) return [sid, null];
+      const firstBasket = Number(ytdRows[0].basket_value || 0);
+      // Check if prior-year data exists (same check purple card does)
+      const { count: priorCount } = await supabase
+        .from("client_strategy_returns_c")
+        .select("as_of_date", { count: "exact", head: true })
+        .eq("family_member", child.id)
+        .eq("strategy_id", sid)
+        .lt("as_of_date", yearStart);
+      // yearStartBasketCents = firstBasket only when prior-year data exists; otherwise use cost basis
+      return [sid, priorCount > 0 ? firstBasket : null];
+    })).then(results => setStrategyYearStartBasket(Object.fromEntries(results)));
+  }, [child?.id, holdings]);
+
+  // Compute live YTD per strategy — exact same formula as purple card's childLiveMetrics
+  const strategyYtdMetrics = useMemo(() => {
+    const result = {};
+    const stratIds = [...new Set(holdings.filter(h => h.strategy_id).map(h => h.strategy_id))];
+    for (const sid of stratIds) {
+      const stratHoldings = holdings.filter(h => h.strategy_id === sid && isHoldingFilled(h));
+      let liveValue = 0;
+      let costBasis = 0;
+      let hasPrices = false;
+      for (const h of stratHoldings) {
+        const qty = Number(h.quantity || 0);
+        if (qty <= 0) continue;
+        const liveCents = childLivePriceMap[h.security_id]?.priceCents;
+        const fallbackCents = qty > 0 ? Math.round(Number(h.market_value || 0) / qty) : 0;
+        const priceCents = liveCents > 0 ? liveCents : fallbackCents;
+        if (priceCents > 0) { liveValue += (priceCents / 100) * qty; hasPrices = true; }
+        costBasis += Number(h.invested_amount || 0) / 100;
+      }
+      if (!hasPrices || costBasis === 0) continue;
+      const yearStartBasketCents = strategyYearStartBasket[sid];
+      let pnl, pct;
+      if (yearStartBasketCents > 0) {
+        const yearStartRands = yearStartBasketCents / 100;
+        pnl = liveValue - yearStartRands;
+        pct = (pnl / yearStartRands) * 100;
+      } else {
+        pnl = liveValue - costBasis;
+        pct = (pnl / costBasis) * 100;
+      }
+      result[sid] = { ytdPnlRands: pnl, ytdPct: pct };
+    }
+    return result;
+  }, [holdings, childLivePriceMap, strategyYearStartBasket]);
+
+  // Fetch today's intraday 5-min P&L curve per strategy — same logic as ChildPortfolioTab "D" chart
+  useEffect(() => {
+    if (!holdings.length) return;
+    const stratIds = [...new Set(holdings.filter(h => h.strategy_id).map(h => h.strategy_id))];
+    if (!stratIds.length) return;
+    const todayUTC = new Date().toISOString().slice(0, 10);
+
+    Promise.all(stratIds.map(async (sid) => {
+      const stratHoldings = holdings.filter(h =>
+        h.strategy_id === sid && Number(h.avg_fill || 0) > 0 && !!h.Fill_date
+      );
+      if (!stratHoldings.length) return [sid, []];
+
+      const secIds = [...new Set(stratHoldings.map(h => h.security_id).filter(Boolean))];
+      const qtyMap = {};
+      stratHoldings.forEach(h => { qtyMap[h.security_id] = Math.abs(Number(h.quantity || 0)); });
+
+      // Paginate intraday rows (same as portfolio tab)
+      const PAGE = 1000;
+      let intradayRows = [];
+      let page = 0;
+      while (true) {
+        const { data: batch } = await supabase
+          .from("stock_intraday_c")
+          .select("security_id, current_price, 1d_abs, timestamp")
+          .in("security_id", secIds)
+          .gte("timestamp", `${todayUTC}T00:00:00Z`)
+          .order("timestamp", { ascending: true })
+          .range(page * PAGE, (page + 1) * PAGE - 1);
+        if (!batch?.length) break;
+        intradayRows = intradayRows.concat(batch);
+        if (batch.length < PAGE) break;
+        page++;
+      }
+      if (!intradayRows.length) return [sid, []];
+
+      // Yesterday's close baseline
+      const latestBySecId = {};
+      for (const row of intradayRows) latestBySecId[row.security_id] = row;
+      const baselineRands = secIds.reduce((sum, id) => {
+        const row = latestBySecId[id];
+        if (!row) return sum;
+        const yClose = Number(row.current_price) - Number(row["1d_abs"] || 0);
+        return sum + (yClose / 100) * (qtyMap[id] || 0);
+      }, 0);
+
+      // 5-min buckets → P&L points
+      const bucketMap = new Map();
+      for (const row of intradayRows) {
+        const d = new Date(row.timestamp);
+        d.setSeconds(0, 0);
+        d.setMinutes(Math.floor(d.getMinutes() / 5) * 5);
+        const key = d.toISOString();
+        if (!bucketMap.has(key)) bucketMap.set(key, {});
+        bucketMap.get(key)[row.security_id] = Number(row.current_price);
+      }
+
+      const sorted = [...bucketMap.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1));
+      const lastKnown = {};
+      const points = [{ value: 0 }];
+      for (const [, prices] of sorted) {
+        for (const id of secIds) {
+          if (prices[id] != null) lastKnown[id] = prices[id];
+        }
+        if (!Object.keys(lastKnown).length) continue;
+        const portfolioRands = secIds.reduce((sum, id) => {
+          const price = lastKnown[id];
+          return price != null ? sum + (price / 100) * (qtyMap[id] || 0) : sum;
+        }, 0);
+        points.push({ value: Number((portfolioRands - baselineRands).toFixed(2)) });
+      }
+      return [sid, points.length > 1 ? points : []];
+    })).then(results => setStrategySparklines(Object.fromEntries(results)));
+  }, [holdings]);
+
+  // Full-width intraday P&L sparkline — same rendering + domain logic as ChildPortfolioTab "D" chart
+  const StrategySparkline = ({ points, isUp, gradId }) => {
+    if (!points || points.length < 2) return null;
+    const color = isUp ? "#16a34a" : "#dc2626";
+    const vals = points.map(p => p.value);
+    let dataMin = Math.min(...vals);
+    let dataMax = Math.max(...vals);
+    if (Math.abs(dataMax - dataMin) < 1) { dataMin = Math.min(dataMin, -5); dataMax = Math.max(dataMax, 5); }
+    const absMax = Math.max(Math.abs(dataMin), Math.abs(dataMax));
+    const domain = dataMin >= 0 ? [0, dataMax * 1.15 || 10]
+      : dataMax <= 0 ? [dataMin * 1.15 || -10, 0]
+      : [-(absMax * 1.15), absMax * 1.15];
+    return (
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={points} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%"   stopColor={color} stopOpacity={0.35} />
+              <stop offset="60%"  stopColor={color} stopOpacity={0.12} />
+              <stop offset="100%" stopColor="#ffffff" stopOpacity={0}  />
+            </linearGradient>
+          </defs>
+          <YAxis hide domain={domain} />
+          <ReferenceLine y={0} stroke={isUp ? "#bbf7d0" : "#fecaca"} strokeDasharray="4 3" strokeWidth={1.5} />
+          <Area type="monotone" dataKey="value" stroke="transparent" fill={`url(#${gradId})`} dot={false} activeDot={false} isAnimationActive={true} animationBegin={0} animationDuration={700} animationEasing="ease-out" />
+          <Line type="monotone" dataKey="value" stroke={color} strokeWidth={2.5} dot={false} activeDot={false} isAnimationActive={false} />
+        </ComposedChart>
+      </ResponsiveContainer>
+    );
+  };
+
   return (
     <div
       className="min-h-screen pb-[env(safe-area-inset-bottom)]"
@@ -2741,6 +2922,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                 mintNumber={child?.mint_number || null}
                 overrideWalletBalance={childBalance / 100}
                 livePriceMap={childLivePriceMap}
+                onChildYtdMetrics={setPurpleCardYtdMetrics}
               />
             )}
           </div>
@@ -2833,31 +3015,32 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             {loading ? (
               <div className="space-y-3">
                 {[0, 1].map((i) => (
-                  <div key={i} className="rounded-2xl border border-slate-200 bg-white shadow-md p-4">
-                    <div className="flex items-start justify-between gap-3 mb-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <Skeleton className="h-10 w-10 rounded-xl flex-shrink-0" />
-                        <div className="space-y-2 min-w-0">
-                          <Skeleton className="h-4 w-32" />
-                          <div className="flex gap-1.5">
-                            <Skeleton className="h-5 w-14 rounded-full" />
+                  <div key={i} className="rounded-2xl border border-slate-200 overflow-hidden shadow-sm" style={{ background: "linear-gradient(150deg,#fdfbff 0%,#f3eeff 60%,#ede8ff 100%)" }}>
+                    <div className="px-4 pt-4 pb-3">
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Skeleton className="h-10 w-10 rounded-xl flex-shrink-0" />
+                          <div className="space-y-2 min-w-0">
+                            <Skeleton className="h-4 w-28" />
                             <Skeleton className="h-5 w-16 rounded-full" />
                           </div>
                         </div>
+                        <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                          <Skeleton className="h-5 w-20" />
+                          <Skeleton className="h-4 w-14" />
+                          <Skeleton className="h-4 w-8 rounded-full" />
+                        </div>
                       </div>
-                      <div className="space-y-2 flex-shrink-0">
-                        <Skeleton className="h-4 w-20" />
+                      <div className="flex items-center gap-2 pt-3 border-t border-[#dde3f5]">
+                        <div className="flex -space-x-2">
+                          {[0, 1, 2].map((idx) => (
+                            <Skeleton key={idx} className="h-7 w-7 rounded-full border-2 border-white" />
+                          ))}
+                        </div>
                         <Skeleton className="h-3 w-16" />
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
-                      <div className="flex -space-x-2">
-                        {[0, 1, 2].map((idx) => (
-                          <Skeleton key={idx} className="h-7 w-7 rounded-full border-2 border-white" />
-                        ))}
-                      </div>
-                      <Skeleton className="h-3 w-20" />
-                    </div>
+                    <Skeleton className="w-full" style={{ height: 80, borderRadius: 0 }} />
                   </div>
                 ))}
               </div>
@@ -2869,12 +3052,22 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
 
                   // Single card renderer (reused for both single and expanded stack items)
                   const renderCard = (sc, opts = {}) => {
-                    const pnlAvailable = sc.pnl != null;
-                    const isUp = pnlAvailable && sc.pnl >= 0;
+                    // Prefer purple card's computed metrics (identical source) — fall back to per-strategy
+                    const ytdMetrics = purpleCardYtdMetrics
+                      ? { ytdPnlRands: purpleCardYtdMetrics.pnl, ytdPct: purpleCardYtdMetrics.pct }
+                      : strategyYtdMetrics[sc.id];
+                    const ytdPct = ytdMetrics?.ytdPct ?? null;
+                    const ytdPnlRands = ytdMetrics?.ytdPnlRands ?? null;
+                    const ytdAvailable = ytdPct != null && ytdPnlRands != null;
+                    const isUp = ytdAvailable ? ytdPct >= 0 : (sc.pnl != null && sc.pnl >= 0);
                     const isFilling = sc.isFilling;
+                    const sparkPoints = strategySparklines[sc.id];
+                    const hasSparkline = !isFilling && Array.isArray(sparkPoints) && sparkPoints.length >= 2;
+                    const gradId = `strat-grad-${sc.id}`;
+                    const accentColor = isFilling ? "#f59e0b" : isUp ? "#16a34a" : "#dc2626";
                     const cardCls = isFilling
-                      ? "w-full text-left rounded-2xl border border-amber-200 bg-white shadow-md p-4 opacity-70"
-                      : "w-full text-left rounded-2xl border border-slate-200 bg-white shadow-md p-4 hover:border-violet-300 hover:shadow-lg transition active:scale-[0.99]";
+                      ? "w-full text-left rounded-2xl border border-amber-200 shadow-md overflow-hidden opacity-70"
+                      : "w-full text-left rounded-2xl border border-[#e8edf8] shadow-[0_2px_16px_-3px_rgba(109,40,217,0.10)] overflow-hidden hover:border-violet-300 hover:shadow-[0_4px_20px_-4px_rgba(109,40,217,0.18)] transition active:scale-[0.99]";
                     return (
                       <button
                         key={sc.batchKey}
@@ -2882,7 +3075,9 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                         disabled={isFilling}
                         onClick={opts.onClick || (() => !isFilling && setStrategyDetailId(sc.id))}
                         className={cardCls}
+                        style={{ background: isFilling ? "#fff" : "linear-gradient(150deg,#fdfbff 0%,#f3eeff 60%,#ede8ff 100%)" }}
                       >
+                        <div className="px-4 pt-4 pb-3">
                         {/* Purchase date top-right when in expanded stack */}
                         {sc.purchaseDate && opts.showDate && (
                           <p className="text-[10px] font-semibold text-slate-400 text-right mb-1.5">{sc.purchaseDate}</p>
@@ -2894,10 +3089,10 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                               <BarChart3 className="h-5 w-5 text-purple-600" />
                             </div>
                             <div className="min-w-0">
-                              <p className="text-sm font-bold text-slate-900 truncate">{sc.short_name || sc.name}</p>
+                              <p className="text-sm font-bold tracking-[0.18em] uppercase text-slate-900 truncate">{sc.short_name || sc.name}</p>
                               <div className="flex items-center gap-1.5 mt-0.5">
                                 {sc.risk_level && (
-                                  <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-violet-50 text-violet-600 border border-violet-100">{sc.risk_level}</span>
+                                  <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-violet-100 text-violet-700 border border-violet-200">{sc.risk_level}</span>
                                 )}
                                 {isFilling && (
                                   <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-amber-100 text-amber-700 border border-amber-200">Filling</span>
@@ -2905,7 +3100,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                               </div>
                             </div>
                           </div>
-                          <div className="text-right flex-shrink-0">
+                          <div className="flex flex-col items-end flex-shrink-0">
                             {isFilling ? (
                               <>
                                 <p className="text-sm font-bold text-amber-700">Pending</p>
@@ -2913,20 +3108,33 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                               </>
                             ) : (
                               <>
-                                <p className="text-sm font-bold text-slate-900 tabular-nums">{fmt(sc.totalValue)}</p>
-                                {pnlAvailable ? (
-                                  <p className={`text-xs font-semibold tabular-nums ${isUp ? "text-emerald-600" : "text-red-500"}`}>
-                                    {isUp ? "+" : ""}{fmt(sc.pnl)} ({isUp ? "+" : ""}{sc.pnlPct.toFixed(2)}%)
-                                  </p>
+                                {ytdAvailable ? (
+                                  <>
+                                    <p className={`text-base font-bold tabular-nums ${isUp ? "text-emerald-500" : "text-red-500"}`}>
+                                      {isUp ? "+" : "-"}{fmtRands(Math.abs(ytdPnlRands))}
+                                    </p>
+                                    <p className={`text-sm font-bold tabular-nums ${isUp ? "text-emerald-600" : "text-red-500"}`}>
+                                      {isUp ? "+" : "-"}{Math.abs(ytdPct).toFixed(1)}%
+                                    </p>
+                                  </>
+                                ) : sc.pnl != null ? (
+                                  <>
+                                    <p className={`text-base font-bold tabular-nums ${isUp ? "text-emerald-500" : "text-red-500"}`}>
+                                      {isUp ? "+" : ""}{fmt(sc.pnl)}
+                                    </p>
+                                    <p className={`text-sm font-bold tabular-nums mt-0.5 ${isUp ? "text-emerald-600" : "text-red-500"}`}>
+                                      {isUp ? "+" : ""}{sc.pnlPct != null ? Math.abs(sc.pnlPct).toFixed(1) + "%" : "—"}
+                                    </p>
+                                  </>
                                 ) : (
-                                  <p className="text-xs font-semibold tabular-nums text-slate-400">−</p>
+                                  <p className="text-xs font-semibold text-slate-400">—</p>
                                 )}
                               </>
                             )}
                           </div>
                         </div>
                         {sc.holdings.length > 0 && (
-                          <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
+                          <div className="flex items-center gap-2 pt-3 border-t border-[#dde3f5]">
                             <div className="flex -space-x-2">
                               {sc.holdings.slice(0, 4).map(h => (
                                 <div key={h.id} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white shadow-sm">
@@ -2942,6 +3150,13 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                               )}
                             </div>
                             <span className="text-[11px] text-slate-400">{sc.holdings.length} holding{sc.holdings.length !== 1 ? "s" : ""}</span>
+                          </div>
+                        )}
+                        </div>
+                        {/* Full-width area chart — bleeds to card edges */}
+                        {hasSparkline && (
+                          <div style={{ height: 80 }}>
+                            <StrategySparkline points={sparkPoints} isUp={isUp} gradId={gradId} />
                           </div>
                         )}
                       </button>
@@ -3037,7 +3252,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                                       <BarChart3 className="h-5 w-5 text-purple-600" />
                                     </div>
                                     <div className="min-w-0">
-                                      <p className="text-sm font-bold text-slate-900 truncate">{sc.short_name || sc.name}</p>
+                                      <p className="text-sm font-bold tracking-[0.18em] uppercase text-slate-900 truncate">{sc.short_name || sc.name}</p>
                                       <div className="flex items-center gap-1.5 mt-0.5">
                                         {sc.risk_level && (
                                           <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-violet-50 text-violet-600 border border-violet-100">{sc.risk_level}</span>

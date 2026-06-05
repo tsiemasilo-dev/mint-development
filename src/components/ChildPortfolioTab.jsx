@@ -389,6 +389,10 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, livePriceMap
 
   // ── holdings data (for Holdings tab) ──────────────────────────────────────
   const allStrategyHoldings = useMemo(() => {
+    // Build symbol→logo_url lookup from rawHoldings (always enriched from securities_c)
+    const logoBySymbol = {};
+    (rawHoldings || []).forEach(h => { if (h.symbol && h.logo_url) logoBySymbol[h.symbol] = h.logo_url; });
+
     const holdingsMap = new Map();
     const standalone = (rawHoldings || []).filter(h => !h.strategy_id);
     const totalStandaloneVal = standalone.reduce((s, h) => {
@@ -408,13 +412,23 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, livePriceMap
       const sym = s.shortName || s.name || "Strategy";
       if (!holdingsMap.has(sym)) {
         const holdingsArr = s.holdings || [];
-        const topLogos = holdingsArr.sort((a, b) => (b.weight || 0) - (a.weight || 0)).slice(0, 5).map(h => h.logo_url || h.logo || null).filter(Boolean);
+        // Enrich each holding with logo from rawHoldings if strategies_c JSONB doesn't have it
+        const enrichedHoldings = holdingsArr.map(h => ({
+          ...h,
+          logo_url: h.logo_url || logoBySymbol[h.symbol] || logoBySymbol[h.ticker] || null,
+        }));
+        const topLogos = enrichedHoldings
+          .slice()
+          .sort((a, b) => (b.weight || 0) - (a.weight || 0))
+          .slice(0, 5)
+          .map(h => h.logo_url)
+          .filter(Boolean);
         const sCv = s.currentValue || s.investedAmount || 0;
         const sIa = s.investedAmount || 0;
         const sPnlPct = sIa > 0 ? ((sCv - sIa) / sIa) * 100 : 0;
         const stratRaw = (rawHoldings || []).filter(h => h.strategy_id === (s.strategyId || s.id));
         const isPending = stratRaw.length > 0 && stratRaw.every(h => !h.avg_fill);
-        holdingsMap.set(sym, { symbol: sym, name: s.name || "Strategy", strategyId: s.strategyId || s.id, weight: 0, logo: null, isStrategy: true, isPending, topLogos, strategyHoldings: holdingsArr, currentValue: sCv, investedAmount: sIa, change: sPnlPct, ytd_return: s.ytd_pct != null ? s.ytd_pct : s.metrics?.r_ytd });
+        holdingsMap.set(sym, { symbol: sym, name: s.name || "Strategy", strategyId: s.strategyId || s.id, weight: 0, logo: null, isStrategy: true, isPending, topLogos, strategyHoldings: enrichedHoldings, currentValue: sCv, investedAmount: sIa, change: sPnlPct, ytd_return: s.ytd_pct != null ? s.ytd_pct : s.metrics?.r_ytd });
       }
     });
 
@@ -568,16 +582,28 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, livePriceMap
                       const isPending = liveStrategyMetrics.isPending;
                       const livePnl = liveStrategyMetrics.liveValue - liveStrategyMetrics.costBasis;
                       const livePct = ia > 0 ? (livePnl / ia) * 100 : 0;
+                      // True YTD: live value vs earliest snapshot of current year, not inception cost.
+                      // Only applies if the child had investments BEFORE this year — otherwise YTD = ALL.
+                      const currentYear = new Date().getFullYear();
+                      const hasPriorYearData = snapshotRows.some(r => r.as_of_date < `${currentYear}-01-01`);
+                      const yearStartRow = hasPriorYearData ? snapshotRows.find(r => r.as_of_date >= `${currentYear}-01-01`) : null;
+                      const yearStartRands = yearStartRow ? Number(yearStartRow.basket_value || 0) / 100 : null;
+                      const ytdPnl = yearStartRands ? liveStrategyMetrics.liveValue - yearStartRands : livePnl;
+                      const ytdPct = yearStartRands ? (ytdPnl / yearStartRands) * 100 : livePct;
                       const pnl = timeFilter === "D"
                         ? liveStrategyMetrics.todayPnl
-                        : (timeFilter === "all" || timeFilter === "ytd")
-                          ? livePnl
-                          : (periodReturnData?.pnl !== undefined && periodReturnData.pnl !== 0 ? periodReturnData.pnl : (derivedPeriodReturn.pnl !== 0 ? derivedPeriodReturn.pnl : livePnl));
+                        : timeFilter === "ytd"
+                          ? ytdPnl
+                          : timeFilter === "all"
+                            ? livePnl
+                            : (periodReturnData?.pnl !== undefined && periodReturnData.pnl !== 0 ? periodReturnData.pnl : (derivedPeriodReturn.pnl !== 0 ? derivedPeriodReturn.pnl : livePnl));
                       const pnlPct = timeFilter === "D"
                         ? liveStrategyMetrics.todayPct
-                        : (timeFilter === "all" || timeFilter === "ytd")
-                          ? livePct
-                          : (periodReturnData?.pct !== undefined && periodReturnData.pct !== 0 ? periodReturnData.pct : (derivedPeriodReturn.pct !== 0 ? derivedPeriodReturn.pct : (ia > 0 ? (pnl / ia) * 100 : 0)));
+                        : timeFilter === "ytd"
+                          ? ytdPct
+                          : timeFilter === "all"
+                            ? livePct
+                            : (periodReturnData?.pct !== undefined && periodReturnData.pct !== 0 ? periodReturnData.pct : (derivedPeriodReturn.pct !== 0 ? derivedPeriodReturn.pct : (ia > 0 ? (pnl / ia) * 100 : 0)));
                       const isPos = pnl >= 0;
                       if (isPending) return <p className="text-3xl font-bold text-slate-900">R0,00</p>;
                       return (
@@ -669,26 +695,32 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, livePriceMap
                       <div className="space-y-3">
                         {allStrategyHoldings.map((h) => (
                           <div key={h.symbol} className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 overflow-hidden">
-                                {h.isStrategy && h.topLogos?.length > 0 ? (
-                                  <div className="flex -space-x-1.5 items-center justify-center">
-                                    {h.topLogos.slice(0, 5).map((logo, li) => (
-                                      <img key={li} src={logo} className="w-5 h-5 rounded-full object-cover border border-white shadow-sm" referrerPolicy="no-referrer" crossOrigin="anonymous" />
-                                    ))}
-                                  </div>
-                                ) : failedLogos[h.symbol] || !h.logo ? (
-                                  <span className="text-xs font-bold text-slate-600">{h.symbol.slice(0, 3)}</span>
-                                ) : (
-                                  <img src={h.logo} alt={h.name} className="h-8 w-8 object-contain" referrerPolicy="no-referrer" crossOrigin="anonymous" onError={() => setFailedLogos(prev => ({ ...prev, [h.symbol]: true }))} />
-                                )}
+                            {h.isStrategy && h.topLogos?.length > 0 ? (
+                              <div className="flex-1 min-w-0">
+                                <div className="flex -space-x-2 mb-2">
+                                  {h.topLogos.slice(0, 5).map((logo, li) => (
+                                    <img key={li} src={logo} className="w-7 h-7 rounded-full object-cover border-2 border-white shadow-sm" referrerPolicy="no-referrer" crossOrigin="anonymous" />
+                                  ))}
+                                </div>
+                                <p className="text-sm font-bold tracking-[0.18em] uppercase text-slate-900">{h.name}</p>
+                                <p className="text-xs text-slate-500">{(h.strategyHoldings || []).length > 0 ? `${h.strategyHoldings.length} assets` : h.symbol}</p>
                               </div>
-                              <div>
-                                <p className="text-sm font-semibold text-slate-900">{h.symbol}</p>
-                                <p className="text-xs text-slate-500">{h.name}</p>
+                            ) : (
+                              <div className="flex items-center gap-3">
+                                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 overflow-hidden flex-shrink-0">
+                                  {failedLogos[h.symbol] || !h.logo ? (
+                                    <span className="text-xs font-bold text-slate-600">{h.symbol.slice(0, 3)}</span>
+                                  ) : (
+                                    <img src={h.logo} alt={h.name} className="h-8 w-8 object-contain" referrerPolicy="no-referrer" crossOrigin="anonymous" onError={() => setFailedLogos(prev => ({ ...prev, [h.symbol]: true }))} />
+                                  )}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-semibold text-slate-900">{h.symbol}</p>
+                                  <p className="text-xs text-slate-500">{h.name}</p>
+                                </div>
                               </div>
-                            </div>
-                            <div className="text-right">
+                            )}
+                            <div className="text-right flex-shrink-0">
                               <p className={`text-sm font-semibold ${h.change >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
                                 {h.change >= 0 ? "+" : ""}{h.change.toFixed(1)}%
                               </p>
@@ -837,43 +869,58 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, livePriceMap
                               className={`rounded-2xl bg-white/70 backdrop-blur-xl p-4 shadow-sm border transition-all duration-200 cursor-pointer active:scale-[0.98] ${stock.isStrategy ? "border-violet-100/60" : "border-slate-100/50"}`}
                               onClick={() => stock.isStrategy && setExpandedStrategyId(isExpanded ? null : stock.strategyId)}
                             >
-                              <div className="flex items-center gap-3">
-                                {stock.isStrategy && stock.topLogos?.length > 0 ? (
-                                  <div className="flex-shrink-0 flex -space-x-2">
-                                    {stock.topLogos.slice(0, 5).map((logo, li) => (
-                                      <img key={li} src={logo} className="w-7 h-7 rounded-full object-cover border-2 border-white shadow-sm" referrerPolicy="no-referrer" crossOrigin="anonymous" />
-                                    ))}
+                              {stock.isStrategy && stock.topLogos?.length > 0 ? (
+                                <div className="w-full">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div className="flex -space-x-2">
+                                      {stock.topLogos.slice(0, 5).map((logo, li) => (
+                                        <img key={li} src={logo} className="w-7 h-7 rounded-full object-cover border-2 border-white shadow-sm" referrerPolicy="no-referrer" crossOrigin="anonymous" />
+                                      ))}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <div className="text-right flex-shrink-0">
+                                        <p className="text-sm font-bold text-slate-900">{stock.isPending ? "—" : fmt(stock.currentValue)}</p>
+                                        {stock.isPending ? (
+                                          <p className="text-xs text-amber-500 font-semibold">Pending</p>
+                                        ) : (
+                                          <p className={`text-xs font-semibold ${changePnl >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
+                                            {changePnl >= 0 ? "+" : ""}{changePnl.toFixed(1)}% Total Return
+                                          </p>
+                                        )}
+                                        <p className="text-[10px] text-slate-400">{pctValue.toFixed(1)}% of portfolio</p>
+                                      </div>
+                                      <ChevronDown className={`h-4 w-4 text-slate-400 flex-shrink-0 transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`} />
+                                    </div>
                                   </div>
-                                ) : (
+                                  <p className="text-sm font-bold tracking-[0.18em] uppercase text-slate-900">{stock.name}</p>
+                                  <p className="text-xs text-slate-500 font-medium mt-0.5">{(stock.strategyHoldings || []).length} assets</p>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-3 w-full">
                                   <div className="h-11 w-11 rounded-full bg-white border border-slate-200 shadow-sm overflow-hidden flex-shrink-0">
                                     {!stock.logo || failedLogos[stock.symbol] ? (
-                                      <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-100 to-purple-100 text-xs font-bold text-violet-700">{stock.symbol.slice(0, 2)}</div>
+                                      <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-100 to-purple-100 text-xs font-bold text-violet-700">{(stock.symbol || "").slice(0, 2)}</div>
                                     ) : (
                                       <img src={stock.logo} alt={stock.name} className="h-full w-full object-cover" onError={() => setFailedLogos(prev => ({ ...prev, [stock.symbol]: true }))} />
                                     )}
                                   </div>
-                                )}
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-semibold text-slate-900 truncate">{stock.name}</p>
-                                  <p className="text-xs text-slate-500 font-medium">{stock.isStrategy ? `${(stock.strategyHoldings || []).length} assets` : stock.symbol}</p>
-                                </div>
-                                <div className="flex items-center gap-2">
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-semibold text-slate-900 truncate">{stock.name}</p>
+                                    <p className="text-xs text-slate-500 font-medium">{stock.symbol}</p>
+                                  </div>
                                   <div className="text-right flex-shrink-0">
                                     <p className="text-sm font-bold text-slate-900">{stock.isPending ? "—" : fmt(stock.currentValue)}</p>
                                     {stock.isPending ? (
                                       <p className="text-xs text-amber-500 font-semibold">Pending</p>
                                     ) : (
                                       <p className={`text-xs font-semibold ${changePnl >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
-                                        {changePnl >= 0 ? "+" : ""}{changePnl.toFixed(1)}%{stock.isStrategy ? " Total Return" : ""}
+                                        {changePnl >= 0 ? "+" : ""}{changePnl.toFixed(1)}%
                                       </p>
                                     )}
                                     <p className="text-[10px] text-slate-400">{pctValue.toFixed(1)}% of portfolio</p>
                                   </div>
-                                  {stock.isStrategy && (
-                                    <ChevronDown className={`h-4 w-4 text-slate-400 flex-shrink-0 transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`} />
-                                  )}
                                 </div>
-                              </div>
+                              )}
                             </div>
                             {/* Expanded constituent stocks */}
                             {isExpanded && stock.strategyHoldings?.length > 0 && (

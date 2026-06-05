@@ -1025,36 +1025,42 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                         key={holding.symbol}
                         className="flex items-center justify-between"
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 overflow-hidden">
-                            {holding.isStrategy && holding.topLogos?.length > 0 ? (
-                              <div className="flex -space-x-1.5 items-center justify-center">
+                        {holding.isStrategy && holding.topLogos?.length > 0 ? (
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <div className="flex -space-x-2">
                                 {holding.topLogos.slice(0, 5).map((logo, li) => (
-                                  <img key={li} src={logo} className="w-5 h-5 rounded-full object-cover border border-white shadow-sm" referrerPolicy="no-referrer" crossOrigin="anonymous" />
+                                  <img key={li} src={logo} className="w-7 h-7 rounded-full object-cover border-2 border-white shadow-sm" referrerPolicy="no-referrer" crossOrigin="anonymous" />
                                 ))}
                               </div>
-                            ) : failedLogos[holding.symbol] || !holding.logo ? (
-                              <span className="text-xs font-bold text-slate-600">
-                                {holding.symbol.slice(0, 3)}
-                              </span>
-                            ) : (
-                              <img
-                                src={holding.logo}
-                                alt={holding.name}
-                                className="h-8 w-8 object-contain"
-                                referrerPolicy="no-referrer"
-                                crossOrigin="anonymous"
-                                onError={() => setFailedLogos(prev => ({ ...prev, [holding.symbol]: true }))}
-                              />
-                            )}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <p className="text-sm font-semibold text-slate-900">{holding.symbol}</p>
                             </div>
-                            <p className="text-xs text-slate-500">{holding.name}</p>
+                            <p className="text-sm font-bold tracking-[0.18em] uppercase text-slate-900">{holding.name}</p>
+                            <p className="text-xs text-slate-500">{(holding.strategyHoldings || []).length > 0 ? `${holding.strategyHoldings.length} assets` : holding.symbol}</p>
                           </div>
-                        </div>
+                        ) : (
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 overflow-hidden flex-shrink-0">
+                              {failedLogos[holding.symbol] || !holding.logo ? (
+                                <span className="text-xs font-bold text-slate-600">
+                                  {holding.symbol.slice(0, 3)}
+                                </span>
+                              ) : (
+                                <img
+                                  src={holding.logo}
+                                  alt={holding.name}
+                                  className="h-8 w-8 object-contain"
+                                  referrerPolicy="no-referrer"
+                                  crossOrigin="anonymous"
+                                  onError={() => setFailedLogos(prev => ({ ...prev, [holding.symbol]: true }))}
+                                />
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900">{holding.symbol}</p>
+                              <p className="text-xs text-slate-500">{holding.name}</p>
+                            </div>
+                          </div>
+                        )}
                         <div className="text-right">
                           <p className={`text-sm font-semibold ${holding.change >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                             {holding.change >= 0 ? '+' : ''}{holding.change.toFixed(1)}%
@@ -1487,7 +1493,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                                   </div>
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-1.5">
-                                      <p className="text-sm font-semibold text-slate-900 truncate">{stock.name}</p>
+                                      <p className="text-sm font-semibold text-slate-900 leading-snug break-words">{stock.name}</p>
                                     </div>
                                     <p className="text-xs text-slate-500 font-medium">{stockQty > 0 ? `${Math.round(stockQty)} shares` : stock.ticker}</p>
                                   </div>
@@ -1830,20 +1836,47 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                                       }
                                     }}
                                   >
-                                    <div className="flex items-center gap-3">
-                                      {stock.isStrategy && stock.topLogos?.length > 0 ? (
-                                        <div className="flex-shrink-0 flex items-center">
+                                    {stock.isStrategy && stock.topLogos?.length > 0 ? (
+                                      <div className="w-full">
+                                        <div className="flex items-center justify-between mb-2">
                                           <div className="flex -space-x-2">
                                             {stock.topLogos.slice(0, 5).map((logo, li) => (
                                               <img key={li} src={logo} className="w-7 h-7 rounded-full object-cover border-2 border-white shadow-sm" referrerPolicy="no-referrer" crossOrigin="anonymous" />
                                             ))}
                                           </div>
+                                          <div className="flex items-center gap-2">
+                                            <div className="text-right flex-shrink-0">
+                                              <p className="text-sm font-bold text-slate-900">
+                                                {stock.isPending ? "—" : formatCurrency(stock.currentValue)}
+                                              </p>
+                                              {stock.isPending ? (
+                                                <p className="text-xs text-amber-500 font-semibold">Pending</p>
+                                              ) : (
+                                                <div className="flex flex-col items-end">
+                                                  <p className={`text-xs font-semibold ${changePnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                                    {changePnl >= 0 ? '+' : ''}{changePnl.toFixed(1)}% Total Return
+                                                  </p>
+                                                  {stock.ytd_return != null && (
+                                                    <p className={`text-[10px] font-medium mt-0.5 ${stock.ytd_return >= 0 ? 'text-emerald-500/70' : 'text-rose-500/70'}`}>
+                                                      {stock.ytd_return >= 0 ? '+' : ''}{(stock.ytd_return * 100).toFixed(1)}% Strategy YTD
+                                                    </p>
+                                                  )}
+                                                </div>
+                                              )}
+                                              <p className="text-[10px] text-slate-400">{pctValue.toFixed(1)}% of portfolio</p>
+                                            </div>
+                                            <ChevronDown className={`h-4 w-4 text-slate-400 flex-shrink-0 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+                                          </div>
                                         </div>
-                                      ) : (
+                                        <p className="text-sm font-bold tracking-[0.18em] uppercase text-slate-900">{stock.name}</p>
+                                        <p className="text-xs text-slate-500 font-medium mt-0.5">{(stock.strategyHoldings || []).length} assets</p>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-3 w-full">
                                         <div className="h-11 w-11 rounded-full bg-white border border-slate-200 shadow-sm overflow-hidden flex-shrink-0">
                                           {!stock.logo || failedLogos[stock.ticker] ? (
                                             <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-100 to-purple-100 text-xs font-bold text-violet-700">
-                                              {stock.ticker.slice(0, 2)}
+                                              {(stock.ticker || '').slice(0, 2)}
                                             </div>
                                           ) : (
                                             <img
@@ -1854,39 +1887,32 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                                             />
                                           )}
                                         </div>
-                                      )}
-
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-semibold text-slate-900 truncate">{stock.name}</p>
-                                        <p className="text-xs text-slate-500 font-medium">{stock.isStrategy ? `${(stock.strategyHoldings || []).length} assets` : stock.ticker}</p>
-                                      </div>
-
-                                      <div className="flex items-center gap-2">
-                                        <div className="text-right flex-shrink-0">
-                                          <p className="text-sm font-bold text-slate-900">
-                                            {stock.isPending ? "—" : formatCurrency(stock.currentValue)}
-                                          </p>
-                                          {stock.isPending ? (
-                                            <p className="text-xs text-amber-500 font-semibold">Pending</p>
-                                          ) : (
-                                            <div className="flex flex-col items-end">
-                                              <p className={`text-xs font-semibold ${changePnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                                {changePnl >= 0 ? '+' : ''}{changePnl.toFixed(1)}%{stock.isStrategy ? ' Total Return' : ''}
-                                              </p>
-                                              {stock.isStrategy && stock.ytd_return != null && (
-                                                <p className={`text-[10px] font-medium mt-0.5 ${stock.ytd_return >= 0 ? 'text-emerald-500/70' : 'text-rose-500/70'}`}>
-                                                  {stock.ytd_return >= 0 ? '+' : ''}{(stock.ytd_return * 100).toFixed(1)}% Strategy YTD
-                                                </p>
-                                              )}
-                                            </div>
-                                          )}
-                                          <p className="text-[10px] text-slate-400">{pctValue.toFixed(1)}% of portfolio</p>
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-sm font-semibold text-slate-900 truncate">{stock.name}</p>
+                                          <p className="text-xs text-slate-500 font-medium">{stock.isStrategy ? `${(stock.strategyHoldings || []).length} assets` : stock.ticker}</p>
                                         </div>
-                                        {stock.isStrategy && (
-                                          <ChevronDown className={`h-4 w-4 text-slate-400 flex-shrink-0 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
-                                        )}
+                                        <div className="flex items-center gap-2">
+                                          <div className="text-right flex-shrink-0">
+                                            <p className="text-sm font-bold text-slate-900">
+                                              {stock.isPending ? "—" : formatCurrency(stock.currentValue)}
+                                            </p>
+                                            {stock.isPending ? (
+                                              <p className="text-xs text-amber-500 font-semibold">Pending</p>
+                                            ) : (
+                                              <div className="flex flex-col items-end">
+                                                <p className={`text-xs font-semibold ${changePnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                                  {changePnl >= 0 ? '+' : ''}{changePnl.toFixed(1)}%
+                                                </p>
+                                              </div>
+                                            )}
+                                            <p className="text-[10px] text-slate-400">{pctValue.toFixed(1)}% of portfolio</p>
+                                          </div>
+                                          {stock.isStrategy && (
+                                            <ChevronDown className={`h-4 w-4 text-slate-400 flex-shrink-0 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+                                          )}
+                                        </div>
                                       </div>
-                                    </div>
+                                    )}
                                   </div>
 
                                   {/* Expandable constituent stocks */}
@@ -1985,7 +2011,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                                       )}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                      <p className="text-sm font-semibold text-slate-900 truncate">{h.name}</p>
+                                      <p className="text-sm font-semibold text-slate-900 leading-snug break-words">{h.name}</p>
                                       <p className="text-xs text-slate-500">{h.symbol} · Exit: R{exitPriceRands.toFixed(2)}</p>
                                     </div>
                                     <div className="text-right flex-shrink-0">
@@ -2059,7 +2085,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                                         )}
                                       </div>
                                       <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-semibold text-slate-900 truncate">{stock.name}</p>
+                                        <p className="text-sm font-semibold text-slate-900 leading-snug break-words">{stock.name}</p>
                                         <p className="text-xs text-slate-500 font-medium">{stock.ticker}</p>
                                       </div>
                                       <div className="text-right flex-shrink-0">
