@@ -1101,6 +1101,45 @@ const SwipeableBalanceCard = ({
           setPeriodReturn(returnToSet);
         }
 
+        // Badge override for strategy-only holdings (no stocks):
+        // 5D / M / YTD → pre-computed columns from client_strategy_returns_c
+        //                 (5d_pnl, 1m_pnl, ytd_pnl). These are price-based and
+        //                 more accurate than summing 1d_pnl rows.
+        // ALL           → chart-derived value (strategyOnlyPreNormReturn) is correct.
+        if (hasStrategyData && stockHoldings.length === 0 && activeTab !== "all" && userId) {
+          const stratColMap = { "5d": "5d_pnl", "m": "1m_pnl", "ytd": "ytd_pnl" };
+          const stratCol = stratColMap[activeTab];
+          if (stratCol) {
+            const strategyIds = [...new Set(
+              holdingsToChart.filter(h => h.isStrategy && h.strategyId).map(h => h.strategyId)
+            )];
+            let totalCents = 0;
+            let hasStratPreData = false;
+            await Promise.all(strategyIds.map(async (sid) => {
+              try {
+                const { data: sret } = await supabase
+                  .from("client_strategy_returns_c")
+                  .select(stratCol)
+                  .eq("user_id", userId)
+                  .eq("strategy_id", sid)
+                  .is("family_member", null)
+                  .order("as_of_date", { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+                if (sret?.[stratCol] != null) {
+                  totalCents += Number(sret[stratCol]);
+                  hasStratPreData = true;
+                }
+              } catch (e) {
+                console.warn(`[Chart] strategy pre-computed fetch failed for ${sid}:`, e);
+              }
+            }));
+            if (!chartCancelled && hasStratPreData) {
+              setPeriodReturn(parseFloat((totalCents / 100).toFixed(2)));
+            }
+          }
+        }
+
         // Badge override for stock-only holdings (no strategy):
         // 5D / M  → pre-computed columns from stock_returns_c (5d_abs, 1m_abs)
         // YTD     → if bought this calendar year: (last_price − avg_fill) × qty  (= ALL, exact match)
