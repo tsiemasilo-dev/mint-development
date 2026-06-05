@@ -3106,7 +3106,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                                     <p className={`text-sm font-bold tabular-nums ${isUp ? "text-emerald-600" : "text-red-500"}`}>
                                       {isUp ? "+" : ""}{Math.abs(ytdPct).toFixed(1)}%
                                     </p>
-                                    <span className="text-[9px] font-bold uppercase tracking-wider mt-0.5 px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 self-end">YTD</span>
+                                    <p className="text-[10px] font-bold tracking-widest uppercase text-violet-500 mt-0.5">YTD</p>
                                   </>
                                 ) : sc.pnl != null ? (
                                   <>
