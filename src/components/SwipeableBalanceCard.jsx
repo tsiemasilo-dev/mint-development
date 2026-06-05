@@ -1069,6 +1069,15 @@ const SwipeableBalanceCard = ({
           if (hasVal) points.push({ d: dateKey, v: Number(totalPnl.toFixed(2)) });
         }
 
+        // For strategy-only portfolios: capture the correct period P&L BEFORE
+        // normalization. Strategy data is a cumulative sum of 1d_pnl starting
+        // from 0, so points[last].v is already the true period total.
+        // After normalization points[last].v = total − first_day_pnl (wrong),
+        // so we must read it here.
+        const strategyOnlyPreNormReturn = (hasStrategyData && stockHoldings.length === 0 && points.length > 0)
+          ? points[points.length - 1].v
+          : null;
+
         // Normalize chart to start value: subtract first value from all points
         if (points.length > 0) {
           const firstValue = points[0].v;
@@ -1086,11 +1095,10 @@ const SwipeableBalanceCard = ({
         // pre-computed block below, avoiding a flicker (chart value → override).
         const isStockOnlyPeriodTab = stockHoldings.length > 0 && !hasStrategyData && activeTab !== "all";
         if (!isStockOnlyPeriodTab) {
-          if (points.length >= 2) {
-            setPeriodReturn(points[points.length - 1].v);
-          } else {
-            setPeriodReturn(null);
-          }
+          // Strategy-only: use the pre-norm value so the badge shows the true
+          // period total, not total − first_day_pnl.
+          const returnToSet = strategyOnlyPreNormReturn ?? (points.length >= 2 ? points[points.length - 1].v : null);
+          setPeriodReturn(returnToSet);
         }
 
         // Badge override for stock-only holdings (no strategy):
