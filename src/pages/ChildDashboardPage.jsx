@@ -1962,7 +1962,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   const [strategyDetailId, setStrategyDetailId] = useState(null);
   const [expandedStrategyStack, setExpandedStrategyStack] = useState(null);
   const [strategySparklines, setStrategySparklines] = useState({});
-  const [strategyYtdMetrics, setStrategyYtdMetrics] = useState({});
+  const [strategyYearStartBasket, setStrategyYearStartBasket] = useState({});
   const [showAllTransactions, setShowAllTransactions] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [showGoalsModal, setShowGoalsModal] = useState(false);
@@ -2688,25 +2688,69 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
 
 
 
-  // Fetch YTD P&L per strategy from client_strategy_returns_c — same endpoint as purple balance card
+  // Fetch year-start basket per strategy — mirrors purple SwipeableBalanceCard YTD logic exactly
   useEffect(() => {
     if (!child?.id || !holdings.length) return;
     const stratIds = [...new Set(holdings.filter(h => h.strategy_id).map(h => h.strategy_id))];
     if (!stratIds.length) return;
-    const userId = child.user_id || null;
+    const yearStart = `${new Date().getUTCFullYear()}-01-01`;
     Promise.all(stratIds.map(async (sid) => {
+      // Fetch YTD basket rows for this strategy (ascending so first = earliest this year)
       let q = supabase
         .from("client_strategy_returns_c")
-        .select("ytd_pnl, ytd_pct")
+        .select("as_of_date, basket_value")
         .eq("family_member", child.id)
-        .eq("strategy_id", sid);
-      if (userId) q = q.eq("user_id", userId);
-      const { data } = await q.order("as_of_date", { ascending: false }).limit(1).maybeSingle();
-      const ytdPnlCents = data?.ytd_pnl != null ? Number(data.ytd_pnl) : null;
-      const ytdPct = data?.ytd_pct != null ? Number(data.ytd_pct) : null;
-      return [sid, { ytdPnlCents, ytdPct }];
-    })).then(results => setStrategyYtdMetrics(Object.fromEntries(results)));
+        .eq("strategy_id", sid)
+        .gte("as_of_date", yearStart)
+        .order("as_of_date", { ascending: true });
+      const { data: ytdRows } = await q;
+      if (!ytdRows?.length) return [sid, null];
+      const firstBasket = Number(ytdRows[0].basket_value || 0);
+      // Check if prior-year data exists (same check purple card does)
+      const { count: priorCount } = await supabase
+        .from("client_strategy_returns_c")
+        .select("as_of_date", { count: "exact", head: true })
+        .eq("family_member", child.id)
+        .eq("strategy_id", sid)
+        .lt("as_of_date", yearStart);
+      // yearStartBasketCents = firstBasket only when prior-year data exists; otherwise use cost basis
+      return [sid, priorCount > 0 ? firstBasket : null];
+    })).then(results => setStrategyYearStartBasket(Object.fromEntries(results)));
   }, [child?.id, holdings]);
+
+  // Compute live YTD per strategy — exact same formula as purple card's childLiveMetrics
+  const strategyYtdMetrics = useMemo(() => {
+    const result = {};
+    const stratIds = [...new Set(holdings.filter(h => h.strategy_id).map(h => h.strategy_id))];
+    for (const sid of stratIds) {
+      const stratHoldings = holdings.filter(h => h.strategy_id === sid && isHoldingFilled(h));
+      let liveValue = 0;
+      let costBasis = 0;
+      let hasPrices = false;
+      for (const h of stratHoldings) {
+        const qty = Number(h.quantity || 0);
+        if (qty <= 0) continue;
+        const liveCents = childLivePriceMap[h.security_id]?.priceCents;
+        const fallbackCents = qty > 0 ? Math.round(Number(h.market_value || 0) / qty) : 0;
+        const priceCents = liveCents > 0 ? liveCents : fallbackCents;
+        if (priceCents > 0) { liveValue += (priceCents / 100) * qty; hasPrices = true; }
+        costBasis += Number(h.invested_amount || 0) / 100;
+      }
+      if (!hasPrices || costBasis === 0) continue;
+      const yearStartBasketCents = strategyYearStartBasket[sid];
+      let pnl, pct;
+      if (yearStartBasketCents > 0) {
+        const yearStartRands = yearStartBasketCents / 100;
+        pnl = liveValue - yearStartRands;
+        pct = (pnl / yearStartRands) * 100;
+      } else {
+        pnl = liveValue - costBasis;
+        pct = (pnl / costBasis) * 100;
+      }
+      result[sid] = { ytdPnlCents: Math.round(pnl * 100), ytdPct: pct };
+    }
+    return result;
+  }, [holdings, childLivePriceMap, strategyYearStartBasket]);
 
   // Fetch today's intraday 5-min P&L curve per strategy — same logic as ChildPortfolioTab "D" chart
   useEffect(() => {
