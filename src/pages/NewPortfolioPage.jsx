@@ -695,7 +695,8 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       const slice = snapshotRows.slice(snapshotRows.length - count);
       const firstVal = Number(slice[0].basket_value || 0);
       if (!firstVal) return [];
-      const pts = [{ day: null, value: 0, fullDate: null }];
+      // No null anchor needed: first dated point is already value=0 (the reference row)
+      const pts = [];
       slice.forEach(row => {
         const [y, m, d] = row.as_of_date.split("-").map(Number);
         const pnl = Number(((Number(row.basket_value) - firstVal) / 100).toFixed(2));
