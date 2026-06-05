@@ -10376,15 +10376,173 @@ async function saveAllParentReturnsEOD() {
   }
 }
 
+// ── EOD Stock Returns Save ─────────────────────────────────────────────────
+// Saves end-of-day price + period returns for all held securities into stock_returns_c.
+// Runs at 17:30 SAST alongside strategy EOD saves.
+async function saveAllStockReturnsEOD() {
+  const db = supabaseAdmin || supabase;
+  if (!db) return;
+  console.log('[stock-returns-eod] Running end-of-day save...');
+
+  try {
+    // 1. Get all unique active security_ids from held positions
+    const { data: holdingRows, error: hErr } = await db
+      .from('stock_holdings_c')
+      .select('security_id')
+      .eq('is_active', true)
+      .not('security_id', 'is', null);
+
+    if (hErr || !holdingRows?.length) {
+      console.log('[stock-returns-eod] No active holdings found.');
+      return;
+    }
+
+    const securityIds = [...new Set(holdingRows.map(h => h.security_id).filter(Boolean))];
+    console.log(`[stock-returns-eod] Processing ${securityIds.length} held securities...`);
+
+    // 2. Get latest intraday prices for all held securities
+    const { data: intradayRows, error: iErr } = await db
+      .from('stock_intraday_c')
+      .select('security_id, symbol, current_price, 1d_abs, 1d_pct, timestamp')
+      .in('security_id', securityIds)
+      .order('timestamp', { ascending: false });
+
+    if (iErr) { console.error('[stock-returns-eod] Intraday fetch error:', iErr.message); return; }
+
+    // Build latest price map (first row per security = most recent)
+    const priceMap = {};
+    for (const row of (intradayRows || [])) {
+      if (!priceMap[row.security_id]) {
+        priceMap[row.security_id] = {
+          current_price: Number(row.current_price || 0),
+          '1d_abs': Number(row['1d_abs'] || 0),
+          '1d_pct': Number(row['1d_pct'] || 0),
+          symbol: row.symbol,
+        };
+      }
+    }
+
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+
+    // Reference windows (calendar days — we snap to nearest available trading record)
+    const ref5d  = new Date(today); ref5d.setUTCDate(today.getUTCDate() - 9);   // ~5 trading days
+    const ref1m  = new Date(today); ref1m.setUTCDate(today.getUTCDate() - 35);  // ~1 month
+    const ref6m  = new Date(today); ref6m.setUTCDate(today.getUTCDate() - 190); // ~6 months
+    const ref1y  = new Date(today); ref1y.setUTCDate(today.getUTCDate() - 370); // ~1 year
+    const str5d  = ref5d.toISOString().split('T')[0];
+    const str1m  = ref1m.toISOString().split('T')[0];
+    const str6m  = ref6m.toISOString().split('T')[0];
+    const str1y  = ref1y.toISOString().split('T')[0];
+    const strYtd = `${today.getUTCFullYear()}-01-01`;
+
+    // Helper: find the closest record whose as_of_date <= targetStr (binary search on sorted asc array)
+    function closestPriceBefore(rows, targetStr) {
+      if (!rows?.length) return null;
+      let best = null;
+      for (const r of rows) {
+        if (r.as_of_date <= targetStr) best = r;
+        else break;
+      }
+      return best ? Number(best.current_price) : null;
+    }
+
+    function absAndPct(todayCents, refCents) {
+      if (refCents == null || refCents <= 0) return { abs: null, pct: null };
+      const abs = todayCents - refCents;
+      const pct = parseFloat(((abs / refCents) * 100).toFixed(4));
+      return { abs, pct };
+    }
+
+    let saved = 0, failed = 0;
+
+    for (const secId of securityIds) {
+      try {
+        const price = priceMap[secId];
+        if (!price || !price.current_price) { failed++; continue; }
+
+        const todayCents = price.current_price;
+
+        // Fetch historical rows back to ~1 year (for all reference windows)
+        const { data: histRows } = await db
+          .from('stock_returns_c')
+          .select('as_of_date, current_price')
+          .eq('security_id', secId)
+          .gte('as_of_date', str1y)
+          .lt('as_of_date', todayStr)
+          .order('as_of_date', { ascending: true });
+
+        // For ALL-time we need the earliest available record
+        const { data: earliestRows } = await db
+          .from('stock_returns_c')
+          .select('as_of_date, current_price')
+          .eq('security_id', secId)
+          .lt('as_of_date', todayStr)
+          .order('as_of_date', { ascending: true })
+          .limit(1);
+
+        const p5d  = absAndPct(todayCents, closestPriceBefore(histRows, str5d));
+        const p1m  = absAndPct(todayCents, closestPriceBefore(histRows, str1m));
+        const p6m  = absAndPct(todayCents, closestPriceBefore(histRows, str6m));
+        const p1y  = absAndPct(todayCents, closestPriceBefore(histRows, str1y));
+        const pYtd = absAndPct(todayCents, closestPriceBefore(histRows, strYtd));
+        const pAll = earliestRows?.length ? absAndPct(todayCents, Number(earliestRows[0].current_price)) : { abs: null, pct: null };
+
+        const upsertRow = {
+          security_id: secId,
+          symbol: price.symbol,
+          as_of_date: todayStr,
+          fetched_at: today.toISOString(),
+          current_price: todayCents,
+          '1d_abs': price['1d_abs'],
+          '1d_pct': price['1d_pct'],
+          '5d_abs': p5d.abs,
+          '5d_pct': p5d.pct,
+          '1m_abs': p1m.abs,
+          '1m_pct': p1m.pct,
+          '6m_abs': p6m.abs,
+          '6m_pct': p6m.pct,
+          '1y_abs': p1y.abs,
+          '1y_pct': p1y.pct,
+          'ytd_abs': pYtd.abs,
+          'ytd_pct': pYtd.pct,
+          'all_abs': pAll.abs,
+          'all_pct': pAll.pct,
+        };
+
+        const { error: upsertErr } = await db
+          .from('stock_returns_c')
+          .upsert(upsertRow, { onConflict: 'security_id,as_of_date', ignoreDuplicates: false });
+
+        if (upsertErr) {
+          console.error(`[stock-returns-eod] Upsert failed for ${price.symbol}:`, upsertErr.message);
+          failed++;
+        } else {
+          saved++;
+        }
+      } catch (e) {
+        console.error(`[stock-returns-eod] Error for security ${secId}:`, e.message);
+        failed++;
+      }
+    }
+
+    console.log(`[stock-returns-eod] Done — saved: ${saved}, failed: ${failed}`);
+  } catch (err) {
+    console.error('[stock-returns-eod] Unexpected error:', err.message);
+  }
+}
+
 // End-of-day save: runs at 17:30 SAST (15:30 UTC) Mon–Fri
 cron.schedule('30 15 * * 1-5', () => {
-  console.log('[child-returns-eod] Market close cron triggered');
+  console.log('[eod-cron] Market close triggered — saving all EOD returns');
+  saveAllStockReturnsEOD();
   saveAllChildReturnsEOD();
   saveAllParentReturnsEOD();
 });
 
 // Also run at startup (90s delay) to seed any missing today's records
 setTimeout(() => {
+  saveAllStockReturnsEOD();
   saveAllChildReturnsEOD();
   saveAllParentReturnsEOD();
 }, 90 * 1000);

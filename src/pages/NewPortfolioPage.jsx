@@ -119,6 +119,8 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   const [stockTabIntradayLoading, setStockTabIntradayLoading] = useState(false);
   const [modalIntradayData, setModalIntradayData] = useState(null);
   const [modalIntradayLoading, setModalIntradayLoading] = useState(false);
+  const [stockLiveReturns, setStockLiveReturns] = useState(null);
+  const [modalLiveReturns, setModalLiveReturns] = useState(null);
   const [ownLivePriceMap, setOwnLivePriceMap] = useState({});
   const [tabJustChanged, setTabJustChanged] = useState(false);
   const [directStratHoldings, setDirectStratHoldings] = useState([]);
@@ -873,6 +875,154 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     })();
     return () => { cancelled = true; };
   }, [modalHolding, modalTimeFilter, modalSecurityId, rawHoldings]);
+
+  // ── stocks tab: fetch live D/W/M returns per security ────────────────────
+  useEffect(() => {
+    if (!selectedSecurityId) { setStockLiveReturns(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const ref5d = new Date(); ref5d.setUTCDate(ref5d.getUTCDate() - 9);
+        const ref1m = new Date(); ref1m.setUTCDate(ref1m.getUTCDate() - 35);
+        const str5d = ref5d.toISOString().split('T')[0];
+        const str1m = ref1m.toISOString().split('T')[0];
+
+        const [{ data: intradayRows }, { data: histRows }] = await Promise.all([
+          supabase.from('stock_intraday_c')
+            .select('current_price, 1d_abs, 1d_pct')
+            .eq('security_id', selectedSecurityId)
+            .order('timestamp', { ascending: false })
+            .limit(1),
+          supabase.from('stock_returns_c')
+            .select('as_of_date, current_price')
+            .eq('security_id', selectedSecurityId)
+            .gte('as_of_date', str1m)
+            .lt('as_of_date', todayStr)
+            .order('as_of_date', { ascending: true }),
+        ]);
+
+        if (cancelled) return;
+        const latest = intradayRows?.[0];
+        if (!latest) return;
+
+        const liveCents = Number(latest.current_price || 0);
+        const d_abs = Number(latest['1d_abs'] || 0);
+        const d_pct = Number(latest['1d_pct'] || 0);
+
+        function closestBefore(rows, targetStr) {
+          if (!rows?.length) return null;
+          let best = null;
+          for (const r of rows) { if (r.as_of_date <= targetStr) best = r; else break; }
+          return best ? Number(best.current_price) : null;
+        }
+
+        const price5d = closestBefore(histRows, str5d);
+        const price1m = closestBefore(histRows, str1m);
+        const w_abs = price5d != null ? liveCents - price5d : null;
+        const w_pct = price5d > 0 ? ((w_abs / price5d) * 100) : null;
+        const m_abs = price1m != null ? liveCents - price1m : null;
+        const m_pct = price1m > 0 ? ((m_abs / price1m) * 100) : null;
+
+        if (!cancelled) setStockLiveReturns({ current_price: liveCents, d_abs, d_pct, w_abs, w_pct, m_abs, m_pct });
+      } catch (e) {
+        console.error('[stock-live-returns]', e);
+      }
+    })();
+    const interval = setInterval(async () => {
+      if (cancelled) return;
+      try {
+        const { data } = await supabase.from('stock_intraday_c')
+          .select('current_price, 1d_abs, 1d_pct')
+          .eq('security_id', selectedSecurityId)
+          .order('timestamp', { ascending: false })
+          .limit(1);
+        if (cancelled || !data?.[0]) return;
+        const r = data[0];
+        setStockLiveReturns(prev => prev ? {
+          ...prev,
+          current_price: Number(r.current_price || 0),
+          d_abs: Number(r['1d_abs'] || 0),
+          d_pct: Number(r['1d_pct'] || 0),
+        } : prev);
+      } catch {}
+    }, 15000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [selectedSecurityId]);
+
+  // ── modal: fetch live D/W/M returns per security ─────────────────────────
+  useEffect(() => {
+    if (!modalSecurityId) { setModalLiveReturns(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const ref5d = new Date(); ref5d.setUTCDate(ref5d.getUTCDate() - 9);
+        const ref1m = new Date(); ref1m.setUTCDate(ref1m.getUTCDate() - 35);
+        const str5d = ref5d.toISOString().split('T')[0];
+        const str1m = ref1m.toISOString().split('T')[0];
+
+        const [{ data: intradayRows }, { data: histRows }] = await Promise.all([
+          supabase.from('stock_intraday_c')
+            .select('current_price, 1d_abs, 1d_pct')
+            .eq('security_id', modalSecurityId)
+            .order('timestamp', { ascending: false })
+            .limit(1),
+          supabase.from('stock_returns_c')
+            .select('as_of_date, current_price')
+            .eq('security_id', modalSecurityId)
+            .gte('as_of_date', str1m)
+            .lt('as_of_date', todayStr)
+            .order('as_of_date', { ascending: true }),
+        ]);
+
+        if (cancelled) return;
+        const latest = intradayRows?.[0];
+        if (!latest) return;
+
+        const liveCents = Number(latest.current_price || 0);
+        const d_abs = Number(latest['1d_abs'] || 0);
+        const d_pct = Number(latest['1d_pct'] || 0);
+
+        function closestBefore(rows, targetStr) {
+          if (!rows?.length) return null;
+          let best = null;
+          for (const r of rows) { if (r.as_of_date <= targetStr) best = r; else break; }
+          return best ? Number(best.current_price) : null;
+        }
+
+        const price5d = closestBefore(histRows, str5d);
+        const price1m = closestBefore(histRows, str1m);
+        const w_abs = price5d != null ? liveCents - price5d : null;
+        const w_pct = price5d > 0 ? ((w_abs / price5d) * 100) : null;
+        const m_abs = price1m != null ? liveCents - price1m : null;
+        const m_pct = price1m > 0 ? ((m_abs / price1m) * 100) : null;
+
+        if (!cancelled) setModalLiveReturns({ current_price: liveCents, d_abs, d_pct, w_abs, w_pct, m_abs, m_pct });
+      } catch (e) {
+        console.error('[modal-live-returns]', e);
+      }
+    })();
+    const interval = setInterval(async () => {
+      if (cancelled) return;
+      try {
+        const { data } = await supabase.from('stock_intraday_c')
+          .select('current_price, 1d_abs, 1d_pct')
+          .eq('security_id', modalSecurityId)
+          .order('timestamp', { ascending: false })
+          .limit(1);
+        if (cancelled || !data?.[0]) return;
+        const r = data[0];
+        setModalLiveReturns(prev => prev ? {
+          ...prev,
+          current_price: Number(r.current_price || 0),
+          d_abs: Number(r['1d_abs'] || 0),
+          d_pct: Number(r['1d_pct'] || 0),
+        } : prev);
+      } catch {}
+    }, 15000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [modalSecurityId]);
 
   // ── chart data (snapshot-based for non-D filters) ─────────────────────────
   const currentChartData = useMemo(() => {
@@ -1863,8 +2013,21 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                             if (isMyStock && userHolding && userQuantity > 0) {
                               const holdingMarketValue = liveHoldingValue(userHolding);
                               const costBasis = ((userHolding.avg_fill || 0) * userQuantity) / 100;
-                              const pnl = holdingMarketValue - costBasis;
-                              const pnlPct = costBasis > 0 ? ((pnl / costBasis) * 100) : 0;
+                              // Filter-aware P&L: D/W/M from live intraday data; ALL = all-time
+                              let pnl, pnlPct;
+                              if (stockTimeFilter === "D" && stockLiveReturns?.d_abs != null) {
+                                pnl = (stockLiveReturns.d_abs / 100) * userQuantity;
+                                pnlPct = stockLiveReturns.d_pct ?? 0;
+                              } else if (stockTimeFilter === "W" && stockLiveReturns?.w_abs != null) {
+                                pnl = (stockLiveReturns.w_abs / 100) * userQuantity;
+                                pnlPct = stockLiveReturns.w_pct ?? 0;
+                              } else if (stockTimeFilter === "M" && stockLiveReturns?.m_abs != null) {
+                                pnl = (stockLiveReturns.m_abs / 100) * userQuantity;
+                                pnlPct = stockLiveReturns.m_pct ?? 0;
+                              } else {
+                                pnl = holdingMarketValue - costBasis;
+                                pnlPct = costBasis > 0 ? ((pnl / costBasis) * 100) : 0;
+                              }
                               const isPos = pnl >= 0;
                               return (
                                 <>
@@ -2804,8 +2967,21 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           const mCostBasis = mAvgFill * mQty;
           const mShowPnl = mQty > 0 && mAvgFill > 0;
           const mMarketValue = mHolding.currentValue || 0;
-          const mPnl = mShowPnl ? mMarketValue - mCostBasis : 0;
-          const mPnlPct = mShowPnl && mCostBasis > 0 ? (mPnl / mCostBasis) * 100 : 0;
+          // Filter-aware P&L: D/W/M from live intraday data; ALL = all-time
+          let mPnl, mPnlPct;
+          if (modalTimeFilter === "D" && modalLiveReturns?.d_abs != null) {
+            mPnl = (modalLiveReturns.d_abs / 100) * mQty;
+            mPnlPct = modalLiveReturns.d_pct ?? 0;
+          } else if (modalTimeFilter === "W" && modalLiveReturns?.w_abs != null) {
+            mPnl = (modalLiveReturns.w_abs / 100) * mQty;
+            mPnlPct = modalLiveReturns.w_pct ?? 0;
+          } else if (modalTimeFilter === "M" && modalLiveReturns?.m_abs != null) {
+            mPnl = (modalLiveReturns.m_abs / 100) * mQty;
+            mPnlPct = modalLiveReturns.m_pct ?? 0;
+          } else {
+            mPnl = mShowPnl ? mMarketValue - mCostBasis : 0;
+            mPnlPct = mShowPnl && mCostBasis > 0 ? (mPnl / mCostBasis) * 100 : 0;
+          }
           const mLiveChange = liveQuotes[mHolding.ticker]?.changePercent ?? mHolding.change ?? 0;
 
           // Use the date string as-is from the DB (no timezone conversion).
@@ -2915,7 +3091,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                     <>
                       <p className="text-3xl font-bold text-slate-900">{formatCurrency(mMarketValue)}</p>
                       <div className="flex items-center gap-2 mt-1">
-                        {mShowPnl ? (
+                        {(mShowPnl || (modalTimeFilter !== "ALL" && mQty > 0 && mPnl != null)) ? (
                           <>
                             <span className={`text-sm font-semibold ${mPnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
                               {mPnl >= 0 ? '+' : '-'}R{Math.abs(mPnl).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
