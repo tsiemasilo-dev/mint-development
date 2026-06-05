@@ -85,8 +85,21 @@ export default async function handler(req, res) {
     let kycStatus = "in_progress";
     let reviewAnswer = null;
 
+    // The detailed verdicts live nested inside a Success envelope. A "Success"
+    // response only means results were collected — the person can still FAIL
+    // liveness or the DHA face match, so gate "verified" on those when present.
+    const cbResp = collectResult?.return_data?.response?.credit_bureau?.[0]?.response;
+    const livenessPass = cbResp?.liveness_result?.liveness_pass_result; // true | false | undefined
+    const faceMatch = cbResp?.face_result?.is_identical;                // true | false | undefined
+
     if (collectResult?.response_status === "Success") {
-      kycStatus = "verified"; reviewAnswer = "GREEN";
+      if (livenessPass === false || faceMatch === false) {
+        // Collected successfully, but the biometric check did not pass.
+        kycStatus = "not_verified"; reviewAnswer = "RED";
+      } else {
+        // Passed, or verdict fields absent (fall back to envelope success).
+        kycStatus = "verified"; reviewAnswer = "GREEN";
+      }
     } else if (errorCode === "IMN_202") {
       kycStatus = "in_progress"; // workflow not completed yet — keep polling
     } else if (errorCode === "IMN_205" || errorCode === "IMN_208") {
