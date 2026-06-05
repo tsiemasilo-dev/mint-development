@@ -605,9 +605,11 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
         : 0;
 
       if (yearStartCents > 0 && liveStrategyMetrics.hasPrices) {
-        // Cap anchor at cost basis — mid-year deposits must not inflate YTD above All-time.
-        const anchor = Math.max(yearStartCents / 100, liveStrategyMetrics.costBasis);
-        const pnl = liveStrategyMetrics.liveValue - anchor;
+        // Cap YTD at All-time P&L so mid-year deposits never inflate it above All-time.
+        const rawPnl = liveStrategyMetrics.liveValue - yearStartCents / 100;
+        const allTimePnl = liveStrategyMetrics.liveValue - liveStrategyMetrics.costBasis;
+        const pnl = Math.min(rawPnl, allTimePnl);
+        const anchor = liveStrategyMetrics.liveValue - pnl;
         const pct = anchor > 0 ? (pnl / anchor) * 100 : 0;
         return { pnl, pct: parseFloat(pct.toFixed(4)) };
       }

@@ -1284,14 +1284,14 @@ const SwipeableBalanceCard = ({
   // Parent YTD: live computation only (liveMarketValue − yearStartBasket). No stored fallback.
   const useChildLiveYtd = childMode && activeTab === "ytd" && childLiveMetrics != null;
   const useParentLiveYtd = !childMode && activeTab === "ytd" && parentYearStartBasketCents != null && displayMarketValue > 0;
-  // YTD anchor: cap at cost basis so mid-year deposits don't inflate YTD above All-time.
-  const parentYtdAnchor = useParentLiveYtd
-    ? Math.max(parentYearStartBasketCents / 100, displayBigValue)
+  // YTD: raw = liveValue − yearStartBasket; capped at All-time so mid-year deposits never inflate it.
+  const parentYtdReturn = useParentLiveYtd
+    ? Math.min(displayMarketValue - parentYearStartBasketCents / 100, displayReturn)
     : 0;
   const activeReturn = useChildLiveYtd
     ? childLiveMetrics.pnl
     : useParentLiveYtd
-      ? displayMarketValue - parentYtdAnchor
+      ? parentYtdReturn
       : ((isPeriodTab && activeTab !== "all" && periodReturn !== null) ? periodReturn : displayReturn);
   const activeReturnPct = displayBigValue > 0
     ? (useChildLiveYtd
