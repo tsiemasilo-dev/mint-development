@@ -495,7 +495,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     if (!userSelectedStrategy?.strategyId || !profile?.id) return;
     supabase
       .from("client_strategy_returns_c")
-      .select("as_of_date, basket_value, ytd_pct")
+      .select("as_of_date, basket_value, ytd_pct, ytd_pnl")
       .eq("user_id", profile.id)
       .is("family_member", null)
       .eq("strategy_id", userSelectedStrategy.strategyId)
@@ -595,14 +595,12 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     } else if (timeFilter === "m" && snapshotRows.length >= 22) {
       startCents = Number(snapshotRows[snapshotRows.length - 22]?.basket_value || 0);
     } else if (timeFilter === "ytd") {
-      const currentYear = new Date().getFullYear();
-      const hasPriorYearData = snapshotRows.some(r => r.as_of_date < `${currentYear}-01-01`);
-      if (hasPriorYearData) {
-        const yearStartRow = snapshotRows.find(r => r.as_of_date >= `${currentYear}-01-01`);
-        startCents = Number(yearStartRow?.basket_value || 0);
-      } else {
-        startCents = Number(snapshotRows[0]?.basket_value || 0);
-      }
+      // Use the server-computed ytd_pnl column — same source as the purple balance card
+      const ytdCents = Number(last?.ytd_pnl ?? 0);
+      if (!ytdCents) return { pnl: 0, pct: 0 };
+      const pnlYtd = ytdCents / 100;
+      const ytdPct = Number(last?.ytd_pct ?? 0);
+      return { pnl: pnlYtd, pct: ytdPct };
     } else {
       return { pnl: 0, pct: 0 };
     }
@@ -719,20 +717,14 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     }
 
     if (timeFilter === "ytd") {
-      const currentYear = new Date().getFullYear();
-      const hasPriorYearData = snapshotRows.some(r => r.as_of_date < `${currentYear}-01-01`);
-      const startIdx = hasPriorYearData
-        ? snapshotRows.findIndex(r => r.as_of_date >= `${currentYear}-01-01`)
-        : 0;
-      const ytdSlice = startIdx >= 0 ? snapshotRows.slice(startIdx) : snapshotRows;
-      if (!ytdSlice.length) return [];
-      const firstVal = Number(ytdSlice[0].basket_value || 0);
-      if (!firstVal) return [];
+      // Plot server-computed ytd_pnl per row — endpoint always equals the displayed P&L
+      const rows = snapshotRows.filter(r => r.ytd_pnl != null);
+      if (!rows.length) return [];
       const pts = [];
-      ytdSlice.forEach(row => {
+      rows.forEach(row => {
         const [y, m, d] = row.as_of_date.split("-").map(Number);
-        const pnl = Number(((Number(row.basket_value) - firstVal) / 100).toFixed(2));
-        pts.push({ day: `${d} ${MN[m - 1]} '${String(y).slice(-2)}`, value: pnl, fullDate: row.as_of_date });
+        const val = Number((Number(row.ytd_pnl) / 100).toFixed(2));
+        pts.push({ day: `${d} ${MN[m - 1]} '${String(y).slice(-2)}`, value: val, fullDate: row.as_of_date });
       });
       return pts;
     }
