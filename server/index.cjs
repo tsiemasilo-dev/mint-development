@@ -4614,12 +4614,14 @@ app.get("/api/user/strategies", async (req, res) => {
 
     // Also check stock_holdings_c for holdings with strategy_id (fallback when transactions are empty or RLS blocks them).
     // Parent view only includes direct parent investments; child-linked holdings stay on the child dashboard.
+    // Status = active ensures cancelled/exited rows don't inflate cost basis.
     const { data: userStratHoldings } = await db
       .from("stock_holdings_c")
-      .select("id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, created_at")
+      .select("id, family_member_id, security_id, strategy_id, quantity, avg_fill, Expected_fill, market_value, created_at, Status")
       .eq("user_id", userId)
       .is("family_member_id", null)
-      .not("strategy_id", "is", null);
+      .not("strategy_id", "is", null)
+      .eq("Status", "active");
 
     const holdingStrategyIds = [...new Set((userStratHoldings || []).map(h => h.strategy_id).filter(Boolean))];
     console.log("[user/strategies] Holdings with strategy_id found:", (userStratHoldings || []).length, "unique strategy IDs:", holdingStrategyIds);
@@ -4635,51 +4637,50 @@ app.get("/api/user/strategies", async (req, res) => {
       stratHoldingsByStratId[h.strategy_id].push(h);
     }
 
-    // Fetch latest client_strategy_returns_c rows (same source as the ALL tab on the home card)
-    // These give us inception_pnl = basket_value - cost_basis in cents — the authoritative P&L figure.
-    const clientReturnsMap = {};
-    if (holdingStrategyIds.length > 0) {
-      const { data: csr } = await supabaseAdmin
-        .from("client_strategy_returns_c")
-        .select("strategy_id, inception_pnl, basket_value, as_of_date")
-        .eq("user_id", userId)
-        .is("family_member", null)
-        .in("strategy_id", holdingStrategyIds)
-        .order("as_of_date", { ascending: false });
-      for (const row of (csr || [])) {
-        if (!clientReturnsMap[row.strategy_id]) {
-          clientReturnsMap[row.strategy_id] = {
-            inception_pnl: Number(row.inception_pnl || 0),
-            basket_value: Number(row.basket_value || 0),
-          };
-        }
-      }
-    }
-
-    // Fetch live prices for those securities
-    const stratSecIds = (userStratHoldings || []).map(h => h.security_id).filter(Boolean);
-    let stratLivePriceMap = {};
+    // Fetch live prices for those securities.
+    // Priority: stock_intraday_c (refreshed every ~15s) > securities_c.last_price (daily fallback).
+    // This matches the balance card's live price source so P&L figures stay in sync.
+    const stratSecIds = [...new Set((userStratHoldings || []).map(h => h.security_id).filter(Boolean))];
+    let stratLivePriceMap = {}; // security_id → price in rands
     const symbolPnlMap = {};
     if (stratSecIds.length > 0) {
-      const { data: stratSecs } = await db
-        .from("securities_c")
-        .select("id, symbol, last_price")
-        .in("id", stratSecIds);
-      (stratSecs || []).forEach(s => { stratLivePriceMap[s.id] = (s.last_price || 0); }); // Keep as Rands as in DB
+      const [secsResult, intradayResult] = await Promise.all([
+        db.from("securities_c").select("id, symbol, last_price").in("id", stratSecIds),
+        db.from("stock_intraday_c").select("security_id, current_price").in("security_id", stratSecIds).order("timestamp", { ascending: false }),
+      ]);
 
-      // Build per-symbol P&L from actual user holdings (skip pending - no avg_fill)
+      // Build intraday map (current_price is in cents → convert to rands; first-seen = latest)
+      const intradayMap = {};
+      for (const row of (intradayResult.data || [])) {
+        if (!intradayMap[row.security_id]) intradayMap[row.security_id] = Number(row.current_price) / 100;
+      }
+
+      const stratSecs = secsResult.data || [];
+      stratSecs.forEach(s => {
+        stratLivePriceMap[s.id] = intradayMap[s.id] != null ? intradayMap[s.id] : Number(s.last_price || 0);
+      });
+
+      // Build per-symbol P&L using the same cost basis formula as the balance card:
+      // max(Expected_fill, avg_fill/100) with a legacy-cents guard on Expected_fill.
       for (const h of (userStratHoldings || [])) {
-        const sec = (stratSecs || []).find(s => s.id === h.security_id);
+        const sec = stratSecs.find(s => s.id === h.security_id);
         if (!sec) continue;
-        const qty = Number(h.quantity || 0);
-        const avgFill = Number(h.avg_fill || 0);
-        if (!avgFill) continue;
-        const livePrice = (sec.last_price != null) ? (sec.last_price) : (avgFill / 100);
+        const qty = Math.abs(Number(h.quantity || 0));
+        const avgFillCents = Number(h.avg_fill || 0);
+        if (!avgFillCents) continue;
+        const avgFillRands = avgFillCents / 100;
+        const expectedRaw = Number(h.Expected_fill || 0);
+        // Legacy-cents guard: if Expected_fill > 5× avg_fill/100 it was stored in cents — divide by 100
+        const expectedRands = expectedRaw > 0
+          ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw)
+          : 0;
+        const costBasisRands = expectedRands > 0 ? Math.max(expectedRands, avgFillRands) : avgFillRands;
+        const livePrice = stratLivePriceMap[h.security_id] || costBasisRands;
         symbolPnlMap[sec.symbol] = {
-          pnlRands: (livePrice - (avgFill / 100)) * qty,
-          pnlPct: avgFill > 0 ? ((livePrice - (avgFill / 100)) / (avgFill / 100)) * 100 : 0,
-          currentValue: (livePrice * qty) * 100, // Send as cents
-          costBasis: (avgFill * qty), // avgFill is already cents
+          pnlRands: (livePrice - costBasisRands) * qty,
+          pnlPct: costBasisRands > 0 ? ((livePrice - costBasisRands) / costBasisRands) * 100 : 0,
+          currentValue: (livePrice * qty) * 100, // cents
+          costBasis: Math.round(costBasisRands * 100) * qty, // cents
         };
       }
     }
@@ -4806,18 +4807,31 @@ app.get("/api/user/strategies", async (req, res) => {
           };
         });
 
-        // Emits one card per transaction
-        // Use client_strategy_returns_c (same source as ALL tab on purple card) when available.
-        const csrEntry = clientReturnsMap[strategy.id];
-        const csrInvestedRands = csrEntry
-          ? (csrEntry.basket_value - csrEntry.inception_pnl) / 100
-          : null;
-        const csrCurrentRands = csrEntry ? csrEntry.basket_value / 100 : null;
+        // Compute investedAmount and currentMarketValue from live holdings — same method as the
+        // balance card's "All" tab — so this card always agrees with the purple card's figures.
+        // inception_pnl from client_strategy_returns_c is intentionally NOT used here: it was
+        // computed by a background job using a different cost basis which caused sign disagreements.
+        const filledHoldings = (stratHoldingsByStratId[strategy.id] || []).filter(h => Number(h.avg_fill || 0) > 0);
+        let liveInvested = 0;
+        let liveCurrent = 0;
+        for (const h of filledHoldings) {
+          const qty = Math.abs(Number(h.quantity || 0));
+          const avgFillCents = Number(h.avg_fill || 0);
+          const avgFillRands = avgFillCents / 100;
+          const expectedRaw = Number(h.Expected_fill || 0);
+          const expectedRands = expectedRaw > 0
+            ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw)
+            : 0;
+          const costBasisRands = expectedRands > 0 ? Math.max(expectedRands, avgFillRands) : avgFillRands;
+          liveInvested += costBasisRands * qty;
+          liveCurrent += (stratLivePriceMap[h.security_id] || costBasisRands) * qty;
+        }
+        const hasLiveData = filledHoldings.length > 0;
 
         for (const tx of matchingTxs) {
-          // Fall back to performanceFactor only if no client_strategy_returns_c row exists
-          const txInvested = csrInvestedRands != null ? csrInvestedRands : Number(tx.amount || 0) / 100;
-          const currentValue = csrCurrentRands != null ? csrCurrentRands : txInvested * performanceFactor;
+          // Use live holdings P&L when available; fall back to transaction amount + performance factor.
+          const txInvested = hasLiveData ? liveInvested : Number(tx.amount || 0) / 100;
+          const currentValue = hasLiveData ? liveCurrent : txInvested * performanceFactor;
 
           const date = new Date(tx.created_at);
           const pad = (num) => String(num).padStart(2, '0');
