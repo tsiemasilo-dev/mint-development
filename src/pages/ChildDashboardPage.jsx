@@ -3065,7 +3065,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                         disabled={isFilling}
                         onClick={opts.onClick || (() => !isFilling && setStrategyDetailId(sc.id))}
                         className={cardCls}
-                        style={{ background: isFilling ? "#fff" : "linear-gradient(150deg,#fdfbff 0%,#f3eeff 60%,#ede8ff 100%)" }}
+                        style={{ background: isFilling ? "#fff" : "linear-gradient(150deg,#ffffff 0%,#faf7ff 60%,#f5f0ff 100%)" }}
                       >
                         <div className="px-4 pt-4 pb-3">
                         {/* Purchase date top-right when in expanded stack */}
@@ -3106,7 +3106,6 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                                     <p className={`text-sm font-bold tabular-nums ${isUp ? "text-emerald-600" : "text-red-500"}`}>
                                       {isUp ? "+" : ""}{Math.abs(ytdPct).toFixed(1)}%
                                     </p>
-                                    <p className="text-[10px] font-bold tracking-widest uppercase text-violet-500 mt-0.5">YTD</p>
                                   </>
                                 ) : sc.pnl != null ? (
                                   <>
