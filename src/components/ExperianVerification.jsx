@@ -62,8 +62,12 @@ const ExperianVerification = ({ onVerified }) => {
   const [errorCode, setErrorCode] = useState(null);
   const [pollCount, setPollCount] = useState(0);
   const pollTimerRef = useRef(null);
+  const pollAttemptsRef = useRef(0);
   const mountedRef = useRef(true);
   const initRef = useRef(false);
+
+  const AUTO_POLL_INTERVAL_MS = 5000;
+  const AUTO_POLL_MAX_ATTEMPTS = 180; // ~15 min, then fall back to manual check
 
   const getAuthHeader = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -128,18 +132,52 @@ const ExperianVerification = ({ onVerified }) => {
     };
   }, [startWorkflow]);
 
-  const openVerificationUrl = () => {
+  // Auto-poll while the embedded verification (iframe) is open, so the step
+  // advances on its own the moment Experian confirms — no manual "check" click.
+  useEffect(() => {
+    if (stage !== STAGE.AWAITING) return undefined;
+    let cancelled = false;
+    const tick = async () => {
+      if (cancelled || !mountedRef.current) return;
+      pollAttemptsRef.current += 1;
+      if (pollAttemptsRef.current > AUTO_POLL_MAX_ATTEMPTS) {
+        // Give up auto-polling; fall back to the manual "check status" screen.
+        setStage(STAGE.PENDING);
+        return;
+      }
+      await collectResults(true);
+      if (!cancelled && mountedRef.current) {
+        pollTimerRef.current = setTimeout(tick, AUTO_POLL_INTERVAL_MS);
+      }
+    };
+    pollTimerRef.current = setTimeout(tick, AUTO_POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    };
+  }, [stage, collectResults]);
+
+  // Reveal the Experian page embedded in an iframe (stays in-app).
+  const beginVerification = () => {
     if (verificationUrl) {
-      window.open(verificationUrl, "_blank", "noopener,noreferrer");
+      pollAttemptsRef.current = 0;
       setStage(STAGE.AWAITING);
     }
   };
 
-  const collectResults = useCallback(async () => {
+  // Fallback when the iframe is blocked or the user prefers a full page.
+  const openInNewTab = () => {
+    if (verificationUrl) window.open(verificationUrl, "_blank", "noopener,noreferrer");
+  };
+
+  // silent = background auto-poll: don't flip the UI to "checking" or surface
+  // transient errors; only act on a final verified/failed outcome.
+  const collectResults = useCallback(async (silent = false) => {
     try {
-      setStage(STAGE.CHECKING);
+      if (!silent) setStage(STAGE.CHECKING);
       const authToken = await getAuthHeader();
       if (!authToken) {
+        if (silent) return;
         setErrorMessage("Session expired. Please refresh.");
         setStage(STAGE.ERROR);
         return;
@@ -154,6 +192,7 @@ const ExperianVerification = ({ onVerified }) => {
       if (!mountedRef.current) return;
 
       if (!data.success) {
+        if (silent) return; // ignore transient failures during auto-poll
         setErrorMessage(data.error?.message || "Failed to retrieve verification result.");
         setStage(STAGE.ERROR);
         return;
@@ -162,18 +201,21 @@ const ExperianVerification = ({ onVerified }) => {
       if (data.status === "verified") {
         setStage(STAGE.VERIFIED);
         if (onVerified) onVerified();
-      } else if (data.status === "pending") {
-        setErrorCode(null);
-        setStage(STAGE.PENDING);
-        setPollCount((c) => c + 1);
       } else if (data.status === "failed") {
         setErrorCode(data.errorCode);
         setErrorMessage("Verification was unsuccessful. Please try again.");
         setStage(STAGE.FAILED);
-      } else {
+      } else if (data.status === "pending") {
+        setErrorCode(null);
+        setPollCount((c) => c + 1);
+        // Silent poll: stay on the embedded iframe (AWAITING). Manual check:
+        // show the dedicated "in progress" screen.
+        if (!silent) setStage(STAGE.PENDING);
+      } else if (!silent) {
         setStage(STAGE.AWAITING);
       }
     } catch (err) {
+      if (silent) return; // ignore transient network errors during auto-poll
       if (!mountedRef.current) return;
       console.error("[ExperianVerification] Collect error:", err);
       setErrorMessage(err.message || "Failed to retrieve results.");
@@ -198,6 +240,47 @@ const ExperianVerification = ({ onVerified }) => {
         </div>
         <h3 className="text-lg font-medium text-slate-800 mb-2">Setting Up Verification</h3>
         <p className="text-sm text-slate-500">Preparing your identity check…</p>
+      </div>
+    );
+  }
+
+  // ── Embedded verification (iframe) + automatic polling ────────────────────
+  if (stage === STAGE.AWAITING) {
+    return (
+      <div className="w-full max-w-lg mx-auto">
+        <div className="mb-3 text-center">
+          <h3 className="text-lg font-medium text-slate-800 mb-1">Biometric Identity Check</h3>
+          <p className="text-sm text-slate-500">
+            Take a selfie and complete the liveness check below — we'll confirm automatically when you're done.
+          </p>
+        </div>
+
+        <div
+          className="relative w-full rounded-2xl overflow-hidden border border-slate-200 bg-slate-50"
+          style={{ height: "70vh", minHeight: 480 }}
+        >
+          {verificationUrl && (
+            <iframe
+              src={verificationUrl}
+              title="Experian Identity Verification"
+              allow="camera; microphone; fullscreen"
+              className="w-full h-full"
+              style={{ border: 0 }}
+            />
+          )}
+        </div>
+
+        <div className="mt-3 flex items-center justify-center gap-2 text-xs text-slate-400">
+          <LoadingSpinner size="sm" />
+          <span>Waiting for confirmation… this updates automatically.</span>
+        </div>
+
+        <p className="text-xs text-center text-slate-400 mt-2">
+          Page not loading?{" "}
+          <button type="button" onClick={openInNewTab} className="text-violet-600 underline font-medium">
+            Open in a new tab
+          </button>
+        </p>
       </div>
     );
   }
@@ -253,17 +336,17 @@ const ExperianVerification = ({ onVerified }) => {
           {verificationUrl && (
             <button
               type="button"
-              onClick={openVerificationUrl}
+              onClick={() => setStage(STAGE.AWAITING)}
               className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-medium text-white border border-violet-400"
               style={{ background: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)" }}
             >
-              <ExternalLinkIcon className="w-4 h-4" />
-              Re-open Verification Page
+              <ShieldCheckIcon className="w-4 h-4" />
+              Resume Verification
             </button>
           )}
           <button
             type="button"
-            onClick={collectResults}
+            onClick={() => collectResults(false)}
             className="px-5 py-2.5 rounded-xl font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors"
           >
             Check Status Again
@@ -365,7 +448,7 @@ const ExperianVerification = ({ onVerified }) => {
 
         <button
           type="button"
-          onClick={collectResults}
+          onClick={() => collectResults(false)}
           className="w-full inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl font-semibold text-white shadow-lg transition-all active:scale-95"
           style={{ background: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)" }}
         >
@@ -389,7 +472,7 @@ const ExperianVerification = ({ onVerified }) => {
         </div>
         <h3 className="text-lg font-medium text-slate-800 mb-2">Biometric Identity Check</h3>
         <p className="text-sm text-slate-500">
-          You'll be taken to a secure Experian page to complete a quick selfie and liveness check. This verifies your identity against Home Affairs records.
+          Complete a quick selfie and liveness check, right here in the app. This verifies your identity against Home Affairs records.
         </p>
       </div>
 
@@ -398,15 +481,15 @@ const ExperianVerification = ({ onVerified }) => {
         <ul className="space-y-2 text-sm text-slate-600">
           <li className="flex items-start gap-2">
             <span className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center text-xs font-bold">1</span>
-            You'll be redirected to a secure Experian verification page
+            A secure Experian verification panel opens below
           </li>
           <li className="flex items-start gap-2">
             <span className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center text-xs font-bold">2</span>
-            Take a selfie and complete a short liveness check
+            Allow camera access, take a selfie and complete a short liveness check
           </li>
           <li className="flex items-start gap-2">
             <span className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center text-xs font-bold">3</span>
-            Return here and confirm once you're done
+            We confirm automatically — no need to leave this page
           </li>
         </ul>
       </div>
@@ -414,23 +497,13 @@ const ExperianVerification = ({ onVerified }) => {
       <div className="space-y-3">
         <button
           type="button"
-          onClick={openVerificationUrl}
+          onClick={beginVerification}
           className="w-full inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl font-semibold text-white shadow-lg transition-all active:scale-95"
           style={{ background: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)" }}
         >
-          <ExternalLinkIcon className="w-5 h-5" />
+          <FaceIcon className="w-5 h-5" />
           Start Biometric Verification
         </button>
-
-        {stage === STAGE.AWAITING && (
-          <button
-            type="button"
-            onClick={collectResults}
-            className="w-full px-5 py-3 rounded-xl font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition-colors"
-          >
-            I've completed the verification ✓
-          </button>
-        )}
       </div>
 
       <p className="text-xs text-center text-slate-400 mt-4">
