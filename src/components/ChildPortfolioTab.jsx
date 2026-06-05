@@ -695,26 +695,32 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, livePriceMap
                       <div className="space-y-3">
                         {allStrategyHoldings.map((h) => (
                           <div key={h.symbol} className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 overflow-hidden">
-                                {h.isStrategy && h.topLogos?.length > 0 ? (
-                                  <div className="flex -space-x-1.5 items-center justify-center">
-                                    {h.topLogos.slice(0, 5).map((logo, li) => (
-                                      <img key={li} src={logo} className="w-5 h-5 rounded-full object-cover border border-white shadow-sm" referrerPolicy="no-referrer" crossOrigin="anonymous" />
-                                    ))}
-                                  </div>
-                                ) : failedLogos[h.symbol] || !h.logo ? (
-                                  <span className="text-xs font-bold text-slate-600">{h.symbol.slice(0, 3)}</span>
-                                ) : (
-                                  <img src={h.logo} alt={h.name} className="h-8 w-8 object-contain" referrerPolicy="no-referrer" crossOrigin="anonymous" onError={() => setFailedLogos(prev => ({ ...prev, [h.symbol]: true }))} />
-                                )}
+                            {h.isStrategy && h.topLogos?.length > 0 ? (
+                              <div className="flex-1 min-w-0">
+                                <div className="flex -space-x-2 mb-2">
+                                  {h.topLogos.slice(0, 5).map((logo, li) => (
+                                    <img key={li} src={logo} className="w-7 h-7 rounded-full object-cover border-2 border-white shadow-sm" referrerPolicy="no-referrer" crossOrigin="anonymous" />
+                                  ))}
+                                </div>
+                                <p className="text-sm font-bold tracking-wide uppercase text-slate-900">{h.name}</p>
+                                <p className="text-xs text-slate-500">{(h.strategyHoldings || []).length > 0 ? `${h.strategyHoldings.length} assets` : h.symbol}</p>
                               </div>
-                              <div>
-                                <p className="text-sm font-semibold text-slate-900">{h.symbol}</p>
-                                <p className="text-xs text-slate-500">{h.name}</p>
+                            ) : (
+                              <div className="flex items-center gap-3">
+                                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 overflow-hidden flex-shrink-0">
+                                  {failedLogos[h.symbol] || !h.logo ? (
+                                    <span className="text-xs font-bold text-slate-600">{h.symbol.slice(0, 3)}</span>
+                                  ) : (
+                                    <img src={h.logo} alt={h.name} className="h-8 w-8 object-contain" referrerPolicy="no-referrer" crossOrigin="anonymous" onError={() => setFailedLogos(prev => ({ ...prev, [h.symbol]: true }))} />
+                                  )}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-semibold text-slate-900">{h.symbol}</p>
+                                  <p className="text-xs text-slate-500">{h.name}</p>
+                                </div>
                               </div>
-                            </div>
-                            <div className="text-right">
+                            )}
+                            <div className="text-right flex-shrink-0">
                               <p className={`text-sm font-semibold ${h.change >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
                                 {h.change >= 0 ? "+" : ""}{h.change.toFixed(1)}%
                               </p>
@@ -886,7 +892,7 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, livePriceMap
                                       <ChevronDown className={`h-4 w-4 text-slate-400 flex-shrink-0 transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`} />
                                     </div>
                                   </div>
-                                  <p className="text-sm font-semibold text-slate-900">{stock.name}</p>
+                                  <p className="text-sm font-bold tracking-wide uppercase text-slate-900">{stock.name}</p>
                                   <p className="text-xs text-slate-500 font-medium mt-0.5">{(stock.strategyHoldings || []).length} assets</p>
                                 </div>
                               ) : (

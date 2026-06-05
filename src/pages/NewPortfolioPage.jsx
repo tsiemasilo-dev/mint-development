@@ -1034,7 +1034,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                                 ))}
                               </div>
                             </div>
-                            <p className="text-sm font-semibold text-slate-900">{holding.name}</p>
+                            <p className="text-sm font-bold tracking-wide uppercase text-slate-900">{holding.name}</p>
                             <p className="text-xs text-slate-500">{(holding.strategyHoldings || []).length > 0 ? `${holding.strategyHoldings.length} assets` : holding.symbol}</p>
                           </div>
                         ) : (
@@ -1868,7 +1868,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                                             <ChevronDown className={`h-4 w-4 text-slate-400 flex-shrink-0 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
                                           </div>
                                         </div>
-                                        <p className="text-sm font-semibold text-slate-900">{stock.name}</p>
+                                        <p className="text-sm font-bold tracking-wide uppercase text-slate-900">{stock.name}</p>
                                         <p className="text-xs text-slate-500 font-medium mt-0.5">{(stock.strategyHoldings || []).length} assets</p>
                                       </div>
                                     ) : (
