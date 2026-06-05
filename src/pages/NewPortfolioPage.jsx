@@ -120,12 +120,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     }
     if (deepLink.strategyId) {
       setExpandedStrategyId(deepLink.strategyId);
-      const match = strategies.find(s => s.strategyId === deepLink.strategyId || s.id === deepLink.strategyId);
-      if (match) {
-        selectStrategy(match);
-      } else {
-        setPendingStrategyId(deepLink.strategyId);
-      }
+      setPendingStrategyId(deepLink.strategyId);
     }
     if (onDeepLinkConsumed) onDeepLinkConsumed();
   }, [deepLink]);
