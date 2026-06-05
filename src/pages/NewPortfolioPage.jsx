@@ -82,6 +82,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   const [otherStocksPage, setOtherStocksPage] = useState(0);
   const [holdingsPage, setHoldingsPage] = useState(0);
   const [expandedStrategyId, setExpandedStrategyId] = useState(null);
+  const [pendingStrategyId, setPendingStrategyId] = useState(null);
   const [modalHolding, setModalHolding] = useState(null);
   const [modalTimeFilter, setModalTimeFilter] = useState("W");
   const expandedRowRef = useRef(null);
@@ -119,9 +120,24 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     }
     if (deepLink.strategyId) {
       setExpandedStrategyId(deepLink.strategyId);
+      const match = strategies.find(s => s.strategyId === deepLink.strategyId || s.id === deepLink.strategyId);
+      if (match) {
+        selectStrategy(match);
+      } else {
+        setPendingStrategyId(deepLink.strategyId);
+      }
     }
     if (onDeepLinkConsumed) onDeepLinkConsumed();
   }, [deepLink]);
+
+  useEffect(() => {
+    if (!pendingStrategyId || !strategies.length) return;
+    const match = strategies.find(s => s.strategyId === pendingStrategyId || s.id === pendingStrategyId);
+    if (match) {
+      selectStrategy(match);
+      setPendingStrategyId(null);
+    }
+  }, [pendingStrategyId, strategies]);
 
   useEffect(() => {
     if (!expandedStrategyId) return;
