@@ -2705,27 +2705,23 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     })).then(results => setStrategySparklines(Object.fromEntries(results)));
   }, [child?.id, holdings]);
 
-  // Inline SVG sparkline — no extra library needed
-  const MiniSparkline = ({ values, isUp }) => {
+  // Full-width area sparkline using Recharts (matches Markets tab card style)
+  const StrategySparkline = ({ values, isUp, gradId }) => {
     if (!values || values.length < 2) return null;
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const range = max - min || 1;
-    const w = 72, h = 30, pad = 2;
-    const pts = values.map((v, i) => {
-      const x = pad + (i / (values.length - 1)) * (w - pad * 2);
-      const y = h - pad - ((v - min) / range) * (h - pad * 2);
-      return [x.toFixed(1), y.toFixed(1)];
-    });
-    const linePath = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0]},${p[1]}`).join(" ");
-    const areaPath = `${linePath} L${pts[pts.length - 1][0]},${h - pad} L${pts[0][0]},${h - pad} Z`;
     const color = isUp ? "#10b981" : "#ef4444";
+    const chartData = values.map(v => ({ v }));
     return (
-      <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
-        <path d={areaPath} fill={color} fillOpacity="0.12" />
-        <path d={linePath} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        <circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r="2" fill={color} />
-      </svg>
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={chartData} margin={{ top: 6, right: 0, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity={0.22} />
+              <stop offset="100%" stopColor={color} stopOpacity={0.03} />
+            </linearGradient>
+          </defs>
+          <Area type="monotone" dataKey="v" stroke={color} strokeWidth={2} fill={`url(#${gradId})`} dot={false} activeDot={false} isAnimationActive={true} animationBegin={0} animationDuration={600} animationEasing="ease-out" />
+        </ComposedChart>
+      </ResponsiveContainer>
     );
   };
 
@@ -2918,9 +2914,11 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                     const pnlAvailable = sc.pnl != null;
                     const isUp = pnlAvailable && sc.pnl >= 0;
                     const isFilling = sc.isFilling;
+                    const hasSparkline = !isFilling && strategySparklines[sc.id]?.length >= 2;
+                    const gradId = `strat-grad-${sc.id}`;
                     const cardCls = isFilling
-                      ? "w-full text-left rounded-2xl border border-amber-200 bg-white shadow-md p-4 opacity-70"
-                      : "w-full text-left rounded-2xl border border-slate-200 bg-white shadow-md p-4 hover:border-violet-300 hover:shadow-lg transition active:scale-[0.99]";
+                      ? "w-full text-left rounded-2xl border border-amber-200 shadow-md overflow-hidden opacity-70"
+                      : "w-full text-left rounded-2xl border border-[#e8edf8] shadow-[0_2px_12px_-2px_rgba(0,0,0,0.08)] overflow-hidden hover:border-violet-300 hover:shadow-lg transition active:scale-[0.99]";
                     return (
                       <button
                         key={sc.batchKey}
@@ -2928,7 +2926,9 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                         disabled={isFilling}
                         onClick={opts.onClick || (() => !isFilling && setStrategyDetailId(sc.id))}
                         className={cardCls}
+                        style={{ background: isFilling ? "#fff" : "#eef1fa" }}
                       >
+                        <div className="px-4 pt-4 pb-3">
                         {/* Purchase date top-right when in expanded stack */}
                         {sc.purchaseDate && opts.showDate && (
                           <p className="text-[10px] font-semibold text-slate-400 text-right mb-1.5">{sc.purchaseDate}</p>
@@ -2957,31 +2957,20 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                                 <p className="text-sm font-bold text-amber-700">Pending</p>
                                 <p className="text-xs font-semibold text-amber-600">Awaiting fill</p>
                               </>
-                            ) : strategySparklines[sc.id]?.length >= 2 ? (
-                              <>
-                                <MiniSparkline values={strategySparklines[sc.id]} isUp={isUp} />
-                                {pnlAvailable && (
-                                  <p className={`text-xs font-semibold tabular-nums ${isUp ? "text-emerald-600" : "text-red-500"}`}>
-                                    {isUp ? "+" : ""}{fmt(sc.pnl)} ({isUp ? "+" : ""}{sc.pnlPct.toFixed(2)}%)
-                                  </p>
-                                )}
-                              </>
                             ) : (
                               <>
-                                <p className="text-sm font-bold text-slate-900 tabular-nums">{fmt(sc.totalValue)}</p>
                                 {pnlAvailable ? (
-                                  <p className={`text-xs font-semibold tabular-nums ${isUp ? "text-emerald-600" : "text-red-500"}`}>
-                                    {isUp ? "+" : ""}{fmt(sc.pnl)} ({isUp ? "+" : ""}{sc.pnlPct.toFixed(2)}%)
+                                  <p className={`text-base font-bold tabular-nums ${isUp ? "text-emerald-500" : "text-red-500"}`}>
+                                    {isUp ? "+" : ""}{sc.pnlPct.toFixed(2)}%
                                   </p>
-                                ) : (
-                                  <p className="text-xs font-semibold tabular-nums text-slate-400">−</p>
-                                )}
+                                ) : null}
+                                <p className="text-xs font-semibold text-slate-500 tabular-nums mt-0.5">{fmt(sc.totalValue)}</p>
                               </>
                             )}
                           </div>
                         </div>
                         {sc.holdings.length > 0 && (
-                          <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
+                          <div className="flex items-center gap-2 pt-3 border-t border-[#dde3f5]">
                             <div className="flex -space-x-2">
                               {sc.holdings.slice(0, 4).map(h => (
                                 <div key={h.id} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white shadow-sm">
@@ -2997,6 +2986,13 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                               )}
                             </div>
                             <span className="text-[11px] text-slate-400">{sc.holdings.length} holding{sc.holdings.length !== 1 ? "s" : ""}</span>
+                          </div>
+                        )}
+                        </div>
+                        {/* Full-width area chart — bleeds to card edges */}
+                        {hasSparkline && (
+                          <div style={{ height: 58 }}>
+                            <StrategySparkline values={strategySparklines[sc.id]} isUp={isUp} gradId={gradId} />
                           </div>
                         )}
                       </button>
