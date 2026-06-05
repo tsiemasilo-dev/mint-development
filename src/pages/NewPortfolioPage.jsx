@@ -2241,6 +2241,19 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
               value: i === 0 ? 0 : Number((pt.value - offset).toFixed(2)),
             }));
           })();
+
+          // Period-aware P&L: for ALL tab use live total; for D/W/M use the chart's
+          // last point (which is already the change during the selected period).
+          const mPeriodLabels = { D: 'today', W: 'this week', M: 'this month', ALL: 'since purchase' };
+          const mPeriodLabel = mPeriodLabels[modalTimeFilter] ?? 'since purchase';
+          const mPeriodPnl = (() => {
+            if (!mShowPnl) return 0;
+            if (modalTimeFilter === 'ALL') return mPnl;
+            const last = mChartData[mChartData.length - 1];
+            return last != null ? last.value : mPnl;
+          })();
+          const mPeriodPct = mShowPnl && mCostBasis > 0 ? (mPeriodPnl / mCostBasis) * 100 : 0;
+
           const mAxisConfig = computePnlAxisConfig(mChartData);
           return (
             <>
@@ -2308,8 +2321,8 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                   ) : mShowPnl ? (
                     <>
                       <p className="text-3xl font-bold text-slate-900">{formatCurrency(mMarketValue)}</p>
-                      <p className={`text-sm mt-0.5 ${mPnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                        {mPnl >= 0 ? '+' : ''}{formatCurrency(mPnl)} ({mPnlPct >= 0 ? '+' : ''}{mPnlPct.toFixed(2)}%) since purchase
+                      <p className={`text-sm mt-0.5 ${mPeriodPnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                        {mPeriodPnl >= 0 ? '+' : ''}{formatCurrency(mPeriodPnl)} ({mPeriodPct >= 0 ? '+' : ''}{mPeriodPct.toFixed(2)}%) {mPeriodLabel}
                       </p>
                     </>
                   ) : (
