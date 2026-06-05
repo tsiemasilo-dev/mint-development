@@ -685,6 +685,26 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
 
   // ── chart data (snapshot-based for non-D filters) ─────────────────────────
   const currentChartData = useMemo(() => {
+    const MN = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+    // 5D and M: build directly from snapshotRows (same source as derivedPeriodReturn)
+    // so chart endpoints always match the displayed P&L number.
+    if (timeFilter === "5d" || timeFilter === "m") {
+      const count = timeFilter === "5d" ? 5 : 22;
+      if (snapshotRows.length < count) return [];
+      const slice = snapshotRows.slice(snapshotRows.length - count);
+      const firstVal = Number(slice[0].basket_value || 0);
+      if (!firstVal) return [];
+      const pts = [{ day: null, value: 0, fullDate: null }];
+      slice.forEach(row => {
+        const [y, m, d] = row.as_of_date.split("-").map(Number);
+        const pnl = Number(((Number(row.basket_value) - firstVal) / 100).toFixed(2));
+        pts.push({ day: `${d} ${MN[m - 1]} '${String(y).slice(-2)}`, value: pnl, fullDate: row.as_of_date });
+      });
+      return pts;
+    }
+
+    // YTD and ALL: use realChartData (from useStrategyChartData)
     if (realChartData && realChartData.length > 0) {
       if (realChartData[0]?.day === null && realChartData[0]?.value === 0) return realChartData;
       const cv = liveStrategyMetrics.hasPrices ? liveStrategyMetrics.liveValue : (currentStrategy.currentValue || 0);
@@ -699,7 +719,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       }
     }
     return [];
-  }, [realChartData, currentStrategy, liveStrategyMetrics]);
+  }, [realChartData, currentStrategy, liveStrategyMetrics, snapshotRows, timeFilter]);
 
   const isLoadingData = strategiesLoading || chartLoading || (timeFilter === "D" && intradayLoading);
 
