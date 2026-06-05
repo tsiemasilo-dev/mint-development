@@ -701,11 +701,13 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     return [];
   }, [realChartData, currentStrategy, liveStrategyMetrics]);
 
-  const displayChartData = timeFilter === "D"
-    ? (intradayChartData && intradayChartData.length > 1 ? intradayChartData : [])
-    : currentChartData;
-
   const isLoadingData = strategiesLoading || chartLoading || (timeFilter === "D" && intradayLoading);
+
+  const displayChartData = (() => {
+    if (isLoadingData) return [];
+    if (timeFilter === "D") return (intradayChartData && intradayChartData.length > 1 ? intradayChartData : []);
+    return currentChartData;
+  })();
   const strategyAxisConfig = computePnlAxisConfig(displayChartData);
   const _lockedLabels = { "5d": "Available after 5 trading days", m: "Available after 1 month", ytd: "Available after first full year" };
   const lockedMessage = (!availablePeriods[timeFilter] && _lockedLabels[timeFilter]) ? _lockedLabels[timeFilter] : null;
@@ -1158,9 +1160,27 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                             <p className="text-slate-400 text-sm text-center px-6">{lockedMessage}</p>
                           </div>
                         ) : displayChartData.length === 0 ? (
-                          <div style={{ width: '100%', height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <div className="text-slate-400 text-sm">{isLoadingData ? 'Loading chart…' : 'No data available'}</div>
-                          </div>
+                          isLoadingData ? (
+                            <div style={{ width: '100%', height: 220, padding: '8px 0' }}>
+                              <div className="animate-pulse flex flex-col justify-end h-full gap-1 px-1">
+                                <div className="flex items-end gap-[3px] h-36">
+                                  {[55,70,45,80,60,90,50,75,65,85,55,70,60,80,45,75,90,55,65,80].map((h, i) => (
+                                    <div key={i} className="flex-1 rounded-sm bg-slate-100" style={{ height: `${h}%` }} />
+                                  ))}
+                                </div>
+                                <div className="h-[1px] bg-slate-100 rounded-full" />
+                                <div className="flex justify-between mt-2">
+                                  {[1,2,3,4,5].map(i => (
+                                    <div key={i} className="h-2.5 w-8 rounded-full bg-slate-100" />
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{ width: '100%', height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <div className="text-slate-400 text-sm">No data available</div>
+                            </div>
+                          )
                         ) : (
                           <ResponsiveContainer width="100%" height="100%">
                             <ComposedChart
