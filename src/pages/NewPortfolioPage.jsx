@@ -2251,9 +2251,10 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
             if (!mShowPnl) return 0;
             if (modalTimeFilter === 'ALL') return mPnl;
             if (modalTimeFilter === 'D') {
-              // liveQuotes.change = 1d_abs/100 (Rands per share)
-              const dailyChangePerShare = liveQuotes[mHolding.ticker]?.change ?? 0;
-              return dailyChangePerShare * mQty;
+              // Use the intraday chart's normalized last point so the badge
+              // matches exactly what the D chart shows.
+              const last = mChartData[mChartData.length - 1];
+              return last != null ? last.value : mPnl;
             }
             if (modalTimeFilter === 'W') {
               // stock_returns_c.5d_abs is in cents per share
