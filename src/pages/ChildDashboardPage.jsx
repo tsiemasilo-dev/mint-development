@@ -49,7 +49,9 @@ function fmt(cents) {
   return `R\u202F${val.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 function fmtRands(rands) {
-  return `R\u202F${(rands || 0).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const absNum = Math.abs(Number(rands || 0));
+  const truncated = Math.floor(absNum * 100) / 100;
+  return `R\u202F${truncated.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function withTimeout(promise, ms, message) {
