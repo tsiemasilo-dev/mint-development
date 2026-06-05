@@ -10427,7 +10427,7 @@ async function saveAllStockReturnsEOD() {
 
     // Reference windows (calendar days — we snap to nearest available trading record)
     const ref5d  = new Date(today); ref5d.setUTCDate(today.getUTCDate() - 9);   // ~5 trading days
-    const ref1m  = new Date(today); ref1m.setUTCDate(today.getUTCDate() - 35);  // ~1 month
+    const ref1m  = new Date(today); ref1m.setUTCDate(today.getUTCDate() - 31);  // ~1 month
     const ref6m  = new Date(today); ref6m.setUTCDate(today.getUTCDate() - 190); // ~6 months
     const ref1y  = new Date(today); ref1y.setUTCDate(today.getUTCDate() - 370); // ~1 year
     const str5d  = ref5d.toISOString().split('T')[0];
@@ -10510,12 +10510,18 @@ async function saveAllStockReturnsEOD() {
           'all_pct': pAll.pct,
         };
 
-        const { error: upsertErr } = await db
-          .from('stock_returns_c')
-          .upsert(upsertRow, { onConflict: 'security_id,as_of_date', ignoreDuplicates: false });
+        // Delete any existing row for this security + date, then insert fresh
+        await db.from('stock_returns_c')
+          .delete()
+          .eq('security_id', secId)
+          .eq('as_of_date', todayStr);
 
-        if (upsertErr) {
-          console.error(`[stock-returns-eod] Upsert failed for ${price.symbol}:`, upsertErr.message);
+        const { error: insertErr } = await db
+          .from('stock_returns_c')
+          .insert(upsertRow);
+
+        if (insertErr) {
+          console.error(`[stock-returns-eod] Insert failed for ${price.symbol}:`, insertErr.message);
           failed++;
         } else {
           saved++;

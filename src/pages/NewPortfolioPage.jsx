@@ -884,7 +884,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       try {
         const todayStr = new Date().toISOString().split('T')[0];
         const ref5d = new Date(); ref5d.setUTCDate(ref5d.getUTCDate() - 9);
-        const ref1m = new Date(); ref1m.setUTCDate(ref1m.getUTCDate() - 35);
+        const ref1m = new Date(); ref1m.setUTCDate(ref1m.getUTCDate() - 31);
         const str5d = ref5d.toISOString().split('T')[0];
         const str1m = ref1m.toISOString().split('T')[0];
 
@@ -958,7 +958,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       try {
         const todayStr = new Date().toISOString().split('T')[0];
         const ref5d = new Date(); ref5d.setUTCDate(ref5d.getUTCDate() - 9);
-        const ref1m = new Date(); ref1m.setUTCDate(ref1m.getUTCDate() - 35);
+        const ref1m = new Date(); ref1m.setUTCDate(ref1m.getUTCDate() - 31);
         const str5d = ref5d.toISOString().split('T')[0];
         const str1m = ref1m.toISOString().split('T')[0];
 
