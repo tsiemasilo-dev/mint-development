@@ -1,5 +1,20 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import { supabase } from "../lib/supabase";
+
+/* A biometric selfie/liveness check is far better done on a phone than a desktop
+   webcam — and, more importantly, an embedded (iframe) flow runs as a 3rd-party
+   context where browsers block the cookies/storage Experian's page needs (seen
+   as 401s on its internal completion check). So on desktop we show a QR code the
+   user scans to finish on their phone (first-party), while the desktop keeps
+   polling and flips to "verified" the moment the phone is done. */
+const detectDesktop = () => {
+  if (typeof window === "undefined") return false;
+  const coarsePointer = window.matchMedia?.("(pointer: coarse)")?.matches;
+  const hasTouch = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+  const wide = window.innerWidth >= 1024;
+  return !coarsePointer && !hasTouch && wide;
+};
 
 const ShieldCheckIcon = (props) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" {...props}>
@@ -65,6 +80,11 @@ const ExperianVerification = ({ onVerified }) => {
   const pollAttemptsRef = useRef(0);
   const mountedRef = useRef(true);
   const initRef = useRef(false);
+
+  const isDesktop = useMemo(detectDesktop, []);
+  // On desktop the user can choose to do it right here (webcam) instead of phone.
+  const [useEmbedOnDesktop, setUseEmbedOnDesktop] = useState(false);
+  const showQr = isDesktop && !useEmbedOnDesktop;
 
   const AUTO_POLL_INTERVAL_MS = 5000;
   const AUTO_POLL_MAX_ATTEMPTS = 180; // ~15 min, then fall back to manual check
@@ -284,6 +304,46 @@ const ExperianVerification = ({ onVerified }) => {
     );
   }
 
+  // ── Desktop: scan a QR code to finish on your phone (keeps polling here) ───
+  if (stage === STAGE.AWAITING && showQr) {
+    return (
+      <div className="w-full max-w-md mx-auto text-center">
+        <div className="mb-4">
+          <h3 className="text-lg font-medium text-slate-800 mb-1">Continue on your phone</h3>
+          <p className="text-sm text-slate-500">
+            A selfie &amp; liveness check works best on a phone camera. Scan this code with your phone to complete it — this page will update automatically when you're done.
+          </p>
+        </div>
+
+        <div className="inline-flex flex-col items-center gap-3 p-5 rounded-2xl bg-white border border-slate-200 shadow-sm">
+          {verificationUrl ? (
+            <QRCodeSVG value={verificationUrl} size={208} level="M" includeMargin />
+          ) : (
+            <div className="w-52 h-52 flex items-center justify-center"><LoadingSpinner /></div>
+          )}
+          <p className="text-xs text-slate-400 max-w-[13rem]">
+            Open your phone camera and point it at the code
+          </p>
+        </div>
+
+        <div className="mt-5 flex items-center justify-center gap-2 text-xs text-slate-400">
+          <LoadingSpinner size="sm" />
+          <span>Waiting for you to finish on your phone…</span>
+        </div>
+
+        <p className="text-xs text-center text-slate-400 mt-4">
+          <button type="button" onClick={() => setUseEmbedOnDesktop(true)} className="text-violet-600 underline font-medium">
+            Use this computer's camera instead
+          </button>
+          {"  ·  "}
+          <button type="button" onClick={startOver} className="text-violet-600 underline font-medium">
+            Start over
+          </button>
+        </p>
+      </div>
+    );
+  }
+
   // ── Embedded verification (iframe) + automatic polling ────────────────────
   if (stage === STAGE.AWAITING) {
     return (
@@ -320,6 +380,14 @@ const ExperianVerification = ({ onVerified }) => {
           <button type="button" onClick={openInNewTab} className="text-violet-600 underline font-medium">
             Open in a new tab
           </button>
+          {isDesktop && (
+            <>
+              {"  ·  "}
+              <button type="button" onClick={() => setUseEmbedOnDesktop(false)} className="text-violet-600 underline font-medium">
+                Use my phone instead
+              </button>
+            </>
+          )}
           {"  ·  "}
           <button type="button" onClick={startOver} className="text-violet-600 underline font-medium">
             Start over
@@ -523,7 +591,9 @@ const ExperianVerification = ({ onVerified }) => {
         </div>
         <h3 className="text-lg font-medium text-slate-800 mb-2">Biometric Identity Check</h3>
         <p className="text-sm text-slate-500">
-          Complete a quick selfie and liveness check, right here in the app. This verifies your identity against Home Affairs records.
+          {showQr
+            ? "A selfie & liveness check works best on a phone. You'll scan a QR code to finish on your phone — this verifies your identity against Home Affairs records."
+            : "Complete a quick selfie and liveness check, right here in the app. This verifies your identity against Home Affairs records."}
         </p>
       </div>
 
@@ -532,15 +602,15 @@ const ExperianVerification = ({ onVerified }) => {
         <ul className="space-y-2 text-sm text-slate-600">
           <li className="flex items-start gap-2">
             <span className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center text-xs font-bold">1</span>
-            A secure Experian verification panel opens below
+            {showQr ? "A QR code appears — scan it with your phone" : "A secure Experian verification panel opens below"}
           </li>
           <li className="flex items-start gap-2">
             <span className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center text-xs font-bold">2</span>
-            Allow camera access, take a selfie and complete a short liveness check
+            {showQr ? "On your phone, take a selfie and complete a short liveness check" : "Allow camera access, take a selfie and complete a short liveness check"}
           </li>
           <li className="flex items-start gap-2">
             <span className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center text-xs font-bold">3</span>
-            We confirm automatically — no need to leave this page
+            {showQr ? "This page confirms automatically when your phone is done" : "We confirm automatically — no need to leave this page"}
           </li>
         </ul>
       </div>
@@ -553,8 +623,17 @@ const ExperianVerification = ({ onVerified }) => {
           style={{ background: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)" }}
         >
           <FaceIcon className="w-5 h-5" />
-          Start Biometric Verification
+          {showQr ? "Continue on My Phone" : "Start Biometric Verification"}
         </button>
+        {isDesktop && (
+          <button
+            type="button"
+            onClick={() => { setUseEmbedOnDesktop((v) => !v); }}
+            className="w-full text-xs text-slate-400 hover:text-violet-600 transition-colors"
+          >
+            {showQr ? "Or use this computer's camera instead" : "Or scan a QR code to use your phone"}
+          </button>
+        )}
       </div>
 
       <p className="text-xs text-center text-slate-400 mt-4">
