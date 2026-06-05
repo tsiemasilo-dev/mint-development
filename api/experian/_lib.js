@@ -15,10 +15,13 @@ export const EXPERIAN_IDMN_HOSTED_BASE =
 
 /* POST to Experian over HTTPS with a custom agent that tolerates
    self-signed certs on UAT. Resolves with { status, data }. */
-export function experianRequest(url, bodyObj, extraHeaders = {}) {
+export function experianRequest(url, body, extraHeaders = {}) {
   return new Promise((resolve, reject) => {
     const parsedUrl = new URL(url);
-    const postData = JSON.stringify(bodyObj);
+    // Accept a pre-serialized JSON string so callers can preserve the precision
+    // of large integers (e.g. the 20-digit transaction_id) that JSON.stringify
+    // of a JS Number would corrupt past Number.MAX_SAFE_INTEGER.
+    const postData = typeof body === "string" ? body : JSON.stringify(body);
     const options = {
       hostname: parsedUrl.hostname,
       port: Number(parsedUrl.port) || 443,

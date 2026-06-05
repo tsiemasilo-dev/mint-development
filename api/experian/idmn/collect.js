@@ -47,6 +47,11 @@ export default async function handler(req, res) {
       return res.json({ success: true, status: "verified", mockMode: true, message: "Mock verification complete." });
     }
 
+    /* transaction_id is a 19-20 digit integer — too large for a JS Number
+       (loses precision past 16 digits). Build the JSON with a placeholder, then
+       inject the raw digits as an unquoted numeric literal so the exact value
+       reaches Experian (matches the spec's CollectWorkflowResults example). */
+    const txidIsNumeric = /^\d+$/.test(String(transaction_id));
     const collectBody = {
       system_settings: {
         version: "1.0",
@@ -56,15 +61,17 @@ export default async function handler(req, res) {
         request_time: new Date().toISOString().slice(0, 19),
       },
       search_criteria: {
-        transaction_id: Number(transaction_id),
+        transaction_id: txidIsNumeric ? "__TXID__" : String(transaction_id),
         reference: token,
       },
     };
+    let collectBodyStr = JSON.stringify(collectBody);
+    if (txidIsNumeric) collectBodyStr = collectBodyStr.replace('"__TXID__"', String(transaction_id));
 
     console.log(`[Experian IDMN] CollectWorkflowResults for user ${userId}, tx: ${transaction_id}`);
     const { status: httpStatus, data: collectResult } = await experianRequest(
       `${EXPERIAN_IDMN_BASE}/CollectWorkflowResults`,
-      collectBody,
+      collectBodyStr,
       { Authorization: experianBasicAuth() }
     );
     console.log(`[Experian IDMN] CollectWorkflowResults HTTP ${httpStatus}:`, JSON.stringify(collectResult).slice(0, 800));
