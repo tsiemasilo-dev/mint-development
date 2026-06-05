@@ -1127,8 +1127,8 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                             pnl = liveStrategyMetrics.todayPnl;
                             pnlPct = liveStrategyMetrics.todayPct;
                           } else if (timeFilter === "5d" || timeFilter === "m" || timeFilter === "ytd") {
-                            pnl = derivedPeriodReturn.pnl;
-                            pnlPct = derivedPeriodReturn.pct;
+                            pnl = periodReturnData?.pnl ?? 0;
+                            pnlPct = periodReturnData?.pct ?? 0;
                           } else {
                             pnl = cv - ia;
                             pnlPct = ia > 0 ? ((cv - ia) / ia) * 100 : 0;
