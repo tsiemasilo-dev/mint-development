@@ -2710,21 +2710,28 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     })).then(results => setStrategySparklines(Object.fromEntries(results)));
   }, [holdings]);
 
-  // Full-width area sparkline using Recharts (matches Markets tab card style)
+  // Full-width area sparkline — exact same rendering as the strategy detail chart
   const StrategySparkline = ({ values, isUp, gradId }) => {
     if (!values || values.length < 2) return null;
-    const color = isUp ? "#10b981" : "#ef4444";
-    const chartData = values.map(v => ({ v }));
+    const color = isUp ? "#16a34a" : "#dc2626";
+    const chartData = values.map((v, i) => ({ label: i + 1, returnPct: v }));
+    const minVal = Math.min(...values);
+    const maxVal = Math.max(...values);
+    const padding = (maxVal - minVal) * 0.2 || 0.5;
+    const domain = [minVal - padding, maxVal + padding];
     return (
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={chartData} margin={{ top: 6, right: 0, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={color} stopOpacity={0.22} />
-              <stop offset="100%" stopColor={color} stopOpacity={0.03} />
+              <stop offset="0%"   stopColor={color} stopOpacity={0.25} />
+              <stop offset="70%"  stopColor={color} stopOpacity={0.1}  />
+              <stop offset="100%" stopColor="#ffffff" stopOpacity={0}  />
             </linearGradient>
           </defs>
-          <Area type="monotone" dataKey="v" stroke={color} strokeWidth={2} fill={`url(#${gradId})`} dot={false} activeDot={false} isAnimationActive={true} animationBegin={0} animationDuration={600} animationEasing="ease-out" />
+          <YAxis hide domain={domain} />
+          <Area type="monotone" dataKey="returnPct" stroke="transparent" fill={`url(#${gradId})`} dot={false} activeDot={false} isAnimationActive={true} animationBegin={0} animationDuration={600} animationEasing="ease-out" />
+          <Line type="monotone" dataKey="returnPct" stroke={color} strokeWidth={2} dot={false} activeDot={false} isAnimationActive={false} />
         </ComposedChart>
       </ResponsiveContainer>
     );
