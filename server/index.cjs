@@ -10162,24 +10162,33 @@ async function calculateParentPortfolioReturns(userId, strategyId) {
     });
   }
 
-  const inceptionPnlCents = basketValueCents - costBasisCents;
-  const inceptionPct = costBasisCents > 0 ? (inceptionPnlCents / costBasisCents) * 100 : 0;
   const oneDayPct = costBasisCents > 0 ? (oneDayPnlCents / costBasisCents) * 100 : 0;
 
   // 4. Look up historical basket rows to compute 5D / 1M / YTD periods
   const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
   const yearStart = `${today.getUTCFullYear()}-01-01`;
   const oneMonthAgo = new Date(today); oneMonthAgo.setUTCDate(today.getUTCDate() - 31);
   const fiveDaysAgo = new Date(today); fiveDaysAgo.setUTCDate(today.getUTCDate() - 9);
 
   const { data: historyRows } = await db
     .from('client_strategy_returns_c')
-    .select('as_of_date, basket_value')
+    .select('as_of_date, basket_value, inception_pnl')
     .eq('user_id', userId)
     .eq('strategy_id', strategyId)
     .is('family_member', null)
     .gte('as_of_date', yearStart)
     .order('as_of_date', { ascending: true });
+
+  // Cumulative inception P&L: prev row's inception_pnl + today's 1d_pnl.
+  // This matches the external script's approach (running daily P&L total).
+  // If no previous row exists yet (first ever row), inception = today's 1d_pnl.
+  const prevRow = historyRows?.length
+    ? [...historyRows].reverse().find(r => r.as_of_date < todayStr)
+    : null;
+  const prevInceptionPnl = prevRow ? Number(prevRow.inception_pnl || 0) : 0;
+  const inceptionPnlCents = prevInceptionPnl + oneDayPnlCents;
+  const inceptionPct = costBasisCents > 0 ? (inceptionPnlCents / costBasisCents) * 100 : 0;
 
   function closestRecord(rows, targetDate) {
     if (!rows?.length) return null;
