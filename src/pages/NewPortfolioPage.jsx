@@ -595,19 +595,34 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     } else if (timeFilter === "m" && snapshotRows.length >= 22) {
       startCents = Number(snapshotRows[snapshotRows.length - 22]?.basket_value || 0);
     } else if (timeFilter === "ytd") {
-      // Use the server-computed ytd_pnl column — same source as the purple balance card
+      // Live YTD: liveValue (intraday prices) − year-start basket (same formula as balance card child mode).
+      // Keeps this pill in sync with intraday price updates every 15 s.
+      const yearStr = `${new Date().getFullYear()}-01-01`;
+      // Year-start basket = last snapshot row BEFORE Jan 1 (the Dec 31 close).
+      const priorRows = snapshotRows.filter(r => r.as_of_date < yearStr);
+      const yearStartCents = priorRows.length > 0
+        ? Number(priorRows[priorRows.length - 1]?.basket_value || 0)
+        : 0;
+
+      if (yearStartCents > 0 && liveStrategyMetrics.hasPrices) {
+        // Live path: current intraday value minus year-start basket
+        const yearStartRands = yearStartCents / 100;
+        const pnl = liveStrategyMetrics.liveValue - yearStartRands;
+        const pct = yearStartRands > 0 ? (pnl / yearStartRands) * 100 : 0;
+        return { pnl, pct: parseFloat(pct.toFixed(4)) };
+      }
+
+      // Fallback: use stored ytd_pnl if no live data or no prior-year snapshot
       const ytdCents = Number(last?.ytd_pnl ?? 0);
       if (!ytdCents) return { pnl: 0, pct: 0 };
-      const pnlYtd = ytdCents / 100;
-      const ytdPct = Number(last?.ytd_pct ?? 0);
-      return { pnl: pnlYtd, pct: ytdPct };
+      return { pnl: ytdCents / 100, pct: Number(last?.ytd_pct ?? 0) };
     } else {
       return { pnl: 0, pct: 0 };
     }
     if (!startCents) return { pnl: 0, pct: 0 };
     const pnl = (latestCents - startCents) / 100;
     return { pnl, pct: parseFloat((((latestCents - startCents) / startCents) * 100).toFixed(4)) };
-  }, [snapshotRows, timeFilter]);
+  }, [snapshotRows, timeFilter, liveStrategyMetrics]);
 
   // ── intraday D chart (5-min buckets from stock_intraday_c) ────────────────
   useEffect(() => {
@@ -717,15 +732,37 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     }
 
     if (timeFilter === "ytd") {
-      // Plot server-computed ytd_pnl per row — endpoint always equals the displayed P&L
-      const rows = snapshotRows.filter(r => r.ytd_pnl != null);
-      if (!rows.length) return [];
+      // Build YTD chart from stored ytd_pnl history, then cap the last point at the live value
+      // so the chart endpoint always matches the pill (which uses liveValue - yearStartBasket).
+      const yearStr = `${new Date().getFullYear()}-01-01`;
+      const priorRows = snapshotRows.filter(r => r.as_of_date < yearStr);
+      const yearStartCents = priorRows.length > 0 ? Number(priorRows[priorRows.length - 1]?.basket_value || 0) : 0;
+
+      // Use ytd_pnl rows (Jan 1 onwards) for the chart body
+      const rows = snapshotRows.filter(r => r.ytd_pnl != null && r.as_of_date >= yearStr);
       const pts = [];
       rows.forEach(row => {
         const [y, m, d] = row.as_of_date.split("-").map(Number);
         const val = Number((Number(row.ytd_pnl) / 100).toFixed(2));
         pts.push({ day: `${d} ${MN[m - 1]} '${String(y).slice(-2)}`, value: val, fullDate: row.as_of_date });
       });
+
+      // Append live endpoint to keep chart tip in sync with pill (15s poll)
+      if (yearStartCents > 0 && liveStrategyMetrics.hasPrices) {
+        const liveVal = Number((liveStrategyMetrics.liveValue - yearStartCents / 100).toFixed(2));
+        const today = new Date();
+        const todayStr = today.toISOString().slice(0, 10);
+        const [ty, tm, td] = todayStr.split("-").map(Number);
+        const liveDay = `${td} ${MN[tm - 1]} '${String(ty).slice(-2)}`;
+        // Replace last point if it's already today, otherwise append
+        if (pts.length > 0 && pts[pts.length - 1].fullDate === todayStr) {
+          pts[pts.length - 1] = { day: liveDay, value: liveVal, fullDate: todayStr };
+        } else {
+          pts.push({ day: liveDay, value: liveVal, fullDate: todayStr });
+        }
+      }
+
+      if (!pts.length) return [];
       return pts;
     }
 
