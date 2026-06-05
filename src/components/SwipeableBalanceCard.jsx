@@ -1109,6 +1109,37 @@ const SwipeableBalanceCard = ({
         } else {
           setPeriodReturn(null);
         }
+
+        // For stock-only holdings (no strategy) override the badge with pre-computed
+        // stock_returns_c period columns — mirrors how strategies use client_strategy_returns_c
+        // 5d_pnl / 1m_pnl.  Fixes 5D/M = R0 when price history is too sparse.
+        const preComputedAbsCol = { "5d": "5d_abs", "m": "1m_abs", "ytd": "ytd_abs" }[activeTab];
+        if (preComputedAbsCol && stockHoldings.length > 0 && !hasStrategyData) {
+          let totalAbsRands = 0;
+          let hasPreData = false;
+          await Promise.all(stockHoldings.map(async (h) => {
+            try {
+              const { data: ret } = await supabase
+                .from("stock_returns_c")
+                .select(`${preComputedAbsCol}, current_price`)
+                .eq("security_id", h.security_id)
+                .order("as_of_date", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              if (ret && ret[preComputedAbsCol] != null) {
+                const qty = Number(h.quantity || 0);
+                const absCents = Number(ret[preComputedAbsCol] || 0);
+                totalAbsRands += (absCents / 100) * qty;
+                hasPreData = true;
+              }
+            } catch (e) {
+              console.warn(`[Chart] Pre-computed fetch failed for ${h.security_id}:`, e);
+            }
+          }));
+          if (!chartCancelled && hasPreData) {
+            setPeriodReturn(parseFloat(totalAbsRands.toFixed(2)));
+          }
+        }
       } catch (err) {
         console.error("❌ [SwipeableBalanceCard] Chart fetch error:", err);
       } finally {

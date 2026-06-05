@@ -602,7 +602,8 @@ const HomePage = ({
 
         const formatted = Array.from(rowsBySecurity.entries()).map(([secId, batches]) => {
           const sec = securitiesMap[secId];
-          const livePriceCents = sec.last_price != null ? Math.round(Number(sec.last_price) * 100) : 0;
+          // last_price in securities_c is stored in CENTS; live_price_cents from intraday is also cents.
+          const livePriceCents = sec.live_price_cents > 0 ? sec.live_price_cents : Number(sec.last_price || 0);
           const livePriceRands = livePriceCents / 100;
 
           // Aggregate across batches: filled-only quantity drives liveValue/PnL,
@@ -684,9 +685,10 @@ const HomePage = ({
               const qty = Number(h.quantity || 0);
               const avgFill = Number(h.avg_fill || 0);
               const costBasisPerShareRands = costBasisRandsPerShare(h);
-              const livePriceCents = sec.last_price != null
-                ? Math.round(Number(sec.last_price) * 100)
-                : Math.round(costBasisPerShareRands * 100);
+              // last_price in securities_c is in CENTS; use live_price_cents (intraday) first.
+              const livePriceCents = sec.live_price_cents > 0
+                ? sec.live_price_cents
+                : (sec.last_price != null ? Number(sec.last_price) : Math.round(costBasisPerShareRands * 100));
               const marketVal = (livePriceCents * qty) / 100;
               const costBasis = costBasisPerShareRands * qty;
               const pnlRands = marketVal - costBasis;
