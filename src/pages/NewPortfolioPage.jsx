@@ -815,7 +815,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           const hh = String(sast.getUTCHours()).padStart(2, "0");
           const mm = String(sast.getUTCMinutes()).padStart(2, "0");
           const dd = sast.getUTCDate(); const mo = MN[sast.getUTCMonth()]; const yr = sast.getUTCFullYear();
-          points.push({ day: `${hh}:${mm}`, value: pnl, fullDate: `${dd} ${mo} ${yr} ${hh}:${mm}` });
+          points.push({ day: `${hh}:${mm}`, value: pnl, rawCents: priceCents, fullDate: `${dd} ${mo} ${yr} ${hh}:${mm}` });
         }
         if (!cancelled) setStockTabIntradayData(points.length > 1 ? points : []);
       } catch (e) {
@@ -863,7 +863,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           const hh = String(sast.getUTCHours()).padStart(2, "0");
           const mm = String(sast.getUTCMinutes()).padStart(2, "0");
           const dd = sast.getUTCDate(); const mo = MN[sast.getUTCMonth()]; const yr = sast.getUTCFullYear();
-          points.push({ day: `${hh}:${mm}`, value: pnl, fullDate: `${dd} ${mo} ${yr} ${hh}:${mm}` });
+          points.push({ day: `${hh}:${mm}`, value: pnl, rawCents: priceCents, fullDate: `${dd} ${mo} ${yr} ${hh}:${mm}` });
         }
         if (!cancelled) setModalIntradayData(points.length > 1 ? points : []);
       } catch (e) {
@@ -1902,11 +1902,30 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
               const costBasisStock = avgFillRands * userQuantity;
               const showStockPnl = isMyStock && userQuantity > 0 && avgFillRands > 0;
               const stockChartData = (() => {
-                if (stockTimeFilter === "D") return stockTabIntradayData || [];
+                if (stockTimeFilter === "D") {
+                  const raw = stockTabIntradayData || [];
+                  if (!showStockPnl || !raw.length) return raw;
+                  const liveD_abs = stockLiveReturns?.d_abs ?? null;
+                  if (liveD_abs == null) return raw;
+                  const lastReal = [...raw].reverse().find(p => p.rawCents != null);
+                  if (!lastReal) return raw;
+                  const newBaseline = ((lastReal.rawCents - liveD_abs) / 100) * userQuantity;
+                  return raw.map(p => p.rawCents != null
+                    ? { ...p, value: Number(((p.rawCents / 100) * userQuantity - newBaseline).toFixed(2)) }
+                    : p
+                  );
+                }
                 if (liveStockChartData.length > 0) {
                   if (showStockPnl) {
                     if (stockTimeFilter === 'W' || stockTimeFilter === 'M') {
-                      const refPrice = liveStockChartData[0].value;
+                      const daysBack = stockTimeFilter === 'W' ? 9 : 31;
+                      const refMs = Date.now() - daysBack * 24 * 60 * 60 * 1000;
+                      let refPoint = liveStockChartData[0];
+                      for (const d of liveStockChartData) {
+                        if ((d.timestamp || 0) <= refMs) refPoint = d;
+                        else break;
+                      }
+                      const refPrice = refPoint.value;
                       const pts = [{ ...liveStockChartData[0], day: null, value: 0 }];
                       liveStockChartData.forEach(d => {
                         pts.push({ ...d, value: Number(((d.value - refPrice) * userQuantity).toFixed(2)) });
@@ -3022,12 +3041,31 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
 
           const mIsPending = mQty > 0 && mAvgFill === 0;
           const mChartData = (() => {
-            if (modalTimeFilter === "D") return modalIntradayData || [];
+            if (modalTimeFilter === "D") {
+              const raw = modalIntradayData || [];
+              if (!mShowPnl || !raw.length) return raw;
+              const liveD_abs = modalLiveReturns?.d_abs ?? null;
+              if (liveD_abs == null) return raw;
+              const lastReal = [...raw].reverse().find(p => p.rawCents != null);
+              if (!lastReal) return raw;
+              const newBaseline = ((lastReal.rawCents - liveD_abs) / 100) * mQty;
+              return raw.map(p => p.rawCents != null
+                ? { ...p, value: Number(((p.rawCents / 100) * mQty - newBaseline).toFixed(2)) }
+                : p
+              );
+            }
             if (mIsPending) return [{ day: mPurchaseLabel || 'Purchase', value: 0 }, { day: mNowLabel || 'Now', value: 0 }];
             if (mBaseChartData.length > 0) {
               if (mShowPnl) {
                 if (modalTimeFilter === 'W' || modalTimeFilter === 'M') {
-                  const refPrice = mBaseChartData[0].value;
+                  const daysBack = modalTimeFilter === 'W' ? 9 : 31;
+                  const refMs = Date.now() - daysBack * 24 * 60 * 60 * 1000;
+                  let refPoint = mBaseChartData[0];
+                  for (const d of mBaseChartData) {
+                    if ((d.timestamp || 0) <= refMs) refPoint = d;
+                    else break;
+                  }
+                  const refPrice = refPoint.value;
                   return [
                     { ...mBaseChartData[0], day: null, value: 0 },
                     ...mBaseChartData.map(d => ({ ...d, value: Number(((d.value - refPrice) * mQty).toFixed(2)) }))
