@@ -167,6 +167,7 @@ const SwipeableBalanceCard = ({
   const [activeTab, setActiveTab] = useState("ytd");
   const [periodReturn, setPeriodReturn] = useState(null);
   const [periodPct, setPeriodPct] = useState(null);
+  const [parentYtdPnl, setParentYtdPnl] = useState(null);
   const [childSnapshotCount, setChildSnapshotCount] = useState(null);
   const [childLivePriceMap, setChildLivePriceMap] = useState({});
   const [yearStartBasketCents, setYearStartBasketCents] = useState(null);
@@ -937,11 +938,13 @@ const SwipeableBalanceCard = ({
           )];
           // Collect daily 1d_pnl per date (summed across all strategies)
           const strategyDailyPnl = {};
+          let latestYtdPnlCents = null;
+          let latestYtdDate = null;
           await Promise.all(uniqueStrategyIds.map(async (sid) => {
             try {
               let query = supabase
                 .from("client_strategy_returns_c")
-                .select("as_of_date, 1d_pnl")
+                .select("as_of_date, 1d_pnl, ytd_pnl")
                 .eq("user_id", userId)
                 .eq("strategy_id", sid)
                 .is("family_member", null) // parent chart only
@@ -962,12 +965,21 @@ const SwipeableBalanceCard = ({
                   const dateKey = row.as_of_date;
                   const dailyPnlRands = (Number(row["1d_pnl"] || 0)) / 100;
                   strategyDailyPnl[dateKey] = (strategyDailyPnl[dateKey] || 0) + dailyPnlRands;
+                  // Track the latest row's ytd_pnl for the YTD pill
+                  if (latestYtdDate === null || dateKey > latestYtdDate) {
+                    latestYtdDate = dateKey;
+                    latestYtdPnlCents = Number(row["ytd_pnl"] || 0);
+                  }
                 });
               }
             } catch (e) {
               console.warn(`[Chart] Failed to fetch strategy 1d_pnl for ${sid}:`, e);
             }
           }));
+          // Store the stored ytd_pnl for the parent YTD pill (avoids chart-normalization drift)
+          if (!childMode && latestYtdPnlCents !== null) {
+            setParentYtdPnl(latestYtdPnlCents / 100);
+          }
 
           // Build cumulative sum of 1d_pnl across all dates
           const sortedStrategyDates = Object.keys(strategyDailyPnl).sort();
@@ -1249,10 +1261,15 @@ const SwipeableBalanceCard = ({
 
   // PnL pill: for child YTD use live metrics (15s poll); for other period tabs use stored/basket.
   // "all" always uses displayReturn (live market value − cost basis).
+  // Parent YTD uses the stored ytd_pnl from client_strategy_returns_c (same as inception_pnl for
+  // users who invested this year), so YTD and ALL show the same number when there's no prior-year data.
   const useChildLiveYtd = childMode && activeTab === "ytd" && childLiveMetrics != null;
+  const useParentStoredYtd = !childMode && activeTab === "ytd" && parentYtdPnl !== null;
   const activeReturn = useChildLiveYtd
     ? childLiveMetrics.pnl
-    : ((isPeriodTab && activeTab !== "all" && periodReturn !== null) ? periodReturn : displayReturn);
+    : useParentStoredYtd
+      ? parentYtdPnl
+      : ((isPeriodTab && activeTab !== "all" && periodReturn !== null) ? periodReturn : displayReturn);
   const activeReturnPct = displayBigValue > 0
     ? (useChildLiveYtd
         ? Math.abs(childLiveMetrics.pct).toFixed(1)
