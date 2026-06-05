@@ -624,6 +624,38 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     return { pnl: 0, pct: 0 };
   }, [snapshotRows, timeFilter, liveStrategyMetrics, directStratHoldings]);
 
+  // ── period chart from basket_value (5D / M / YTD) ────────────────────────
+  const snapshotChartData = useMemo(() => {
+    if (!snapshotRows.length || !["5d", "m", "ytd"].includes(timeFilter)) return null;
+    const MN = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const fmtDay = (iso) => {
+      const [y, mo, d] = iso.split("-").map(Number);
+      return `${d} ${MN[mo - 1]} '${String(y).slice(2)}`;
+    };
+    const fmtFull = (iso) => {
+      const [y, mo, d] = iso.split("-").map(Number);
+      return `${d} ${MN[mo - 1]} ${y}`;
+    };
+    let slice;
+    if (timeFilter === "5d") {
+      slice = snapshotRows.slice(-5);
+    } else if (timeFilter === "m") {
+      slice = snapshotRows.slice(-22);
+    } else {
+      const yearStr = `${new Date().getFullYear()}-01-01`;
+      slice = snapshotRows.filter(r => r.as_of_date >= yearStr);
+    }
+    if (!slice.length) return null;
+    const startCents = Number(slice[0].basket_value || 0);
+    if (!startCents) return null;
+    const points = [{ day: null, value: 0, fullDate: null }];
+    for (const row of slice) {
+      const val = parseFloat(((Number(row.basket_value || 0) - startCents) / 100).toFixed(2));
+      points.push({ day: fmtDay(row.as_of_date), value: val, fullDate: fmtFull(row.as_of_date) });
+    }
+    return points;
+  }, [snapshotRows, timeFilter]);
+
   // ── intraday D chart (5-min buckets from stock_intraday_c) ────────────────
   useEffect(() => {
     if (timeFilter !== "D") { setIntradayChartData(null); return; }
@@ -734,6 +766,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   const displayChartData = (() => {
     if (isLoadingData) return [];
     if (timeFilter === "D") return (intradayChartData && intradayChartData.length > 1 ? intradayChartData : []);
+    if (["5d", "m", "ytd"].includes(timeFilter) && snapshotChartData && snapshotChartData.length > 1) return snapshotChartData;
     return currentChartData;
   })();
   const strategyAxisConfig = computePnlAxisConfig(displayChartData);
@@ -1127,8 +1160,8 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                             pnl = liveStrategyMetrics.todayPnl;
                             pnlPct = liveStrategyMetrics.todayPct;
                           } else if (timeFilter === "5d" || timeFilter === "m" || timeFilter === "ytd") {
-                            pnl = periodReturnData?.pnl ?? 0;
-                            pnlPct = periodReturnData?.pct ?? 0;
+                            pnl = derivedPeriodReturn.pnl;
+                            pnlPct = derivedPeriodReturn.pct;
                           } else {
                             pnl = cv - ia;
                             pnlPct = ia > 0 ? ((cv - ia) / ia) * 100 : 0;
