@@ -2189,7 +2189,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     try {
       if (!supabase) return;
       const linkedUserId = child?.linked_user_id || null;
-      const holdingsSelect = "id, user_id, family_member_id, security_id, quantity, avg_fill, Expected_fill, market_value, unrealized_pnl, strategy_id, Fill_date, Status, created_at, transaction_id";
+      const holdingsSelect = "id, user_id, family_member_id, security_id, quantity, avg_fill, Expected_fill, market_value, unrealized_pnl, strategy_id, Fill_date, Status, created_at, transaction_id, rebalance_batch_id";
       const familyHoldingsQuery = supabase
         .from("stock_holdings_c")
         .select(holdingsSelect)
@@ -2579,14 +2579,33 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   // Primary key: store_reference (authoritative per-order id stamped on each
   // holdings row by the buy endpoints). Falls back to created_at-minute for
   // legacy rows written before the store_reference column existed.
+  // A rebalance is a position swap, not a new purchase. Rebalance-created
+  // holdings (rebalance_batch_id set) carry no transaction_id, so merge them into
+  // the strategy's earliest ORIGINAL purchase batch (anchor) instead of letting
+  // them form a second batch (which would show "2 purchases / 2x").
+  const anchorByStrategy = {};
+  holdings.forEach((h) => {
+    if (!h.strategy_id || h.rebalance_batch_id) return;
+    const minute = h.created_at ? new Date(h.created_at).toISOString().slice(0, 16) : "unknown";
+    const batchId = h.transaction_id || `legacy:${minute}`;
+    const cur = anchorByStrategy[h.strategy_id];
+    if (!cur || minute < cur.minute) anchorByStrategy[h.strategy_id] = { batchId, minute, transactionId: h.transaction_id || null };
+  });
+
   const purchaseGroups = holdings.reduce((acc, h) => {
     if (!h.strategy_id) return acc;
     const minute = h.created_at
       ? new Date(h.created_at).toISOString().slice(0, 16) // "2026-05-19T14:32"
       : "unknown";
-    const batchId = h.transaction_id || `legacy:${minute}`;
+    const anchor = anchorByStrategy[h.strategy_id];
+    let batchId, txnId, batchMinute;
+    if (h.rebalance_batch_id && anchor) {
+      batchId = anchor.batchId; txnId = anchor.transactionId; batchMinute = anchor.minute;
+    } else {
+      batchId = h.transaction_id || `legacy:${minute}`; txnId = h.transaction_id || null; batchMinute = minute;
+    }
     const key = `${h.strategy_id}__${batchId}`;
-    if (!acc[key]) acc[key] = { strategyId: h.strategy_id, transactionId: h.transaction_id || null, minute, holdings: [] };
+    if (!acc[key]) acc[key] = { strategyId: h.strategy_id, transactionId: txnId, minute: batchMinute, holdings: [] };
     acc[key].holdings.push(h);
     return acc;
   }, {});
