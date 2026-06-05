@@ -153,7 +153,8 @@ export const useUserStrategies = (familyMemberId = null) => {
           const snap = snapshotMap[h.symbol] || snapshotMap[h.ticker];
           if (snap) {
             const qty = snap.qty || snap.quantity || 0;
-            const stockCurrentVal = (snap.current_price * qty) / 100;
+            const currentPriceCents = Number(snap.current_price ?? 0);
+            const stockCurrentVal = (currentPriceCents * qty) / 100;
             const stockCostBasis = costBasisRandsPerShare(snap) * qty;
             const pnlRands = stockCurrentVal - stockCostBasis;
             const pnlPct = stockCostBasis > 0 ? (pnlRands / stockCostBasis) * 100 : 0;

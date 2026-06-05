@@ -2398,9 +2398,9 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                                         const matchedStock = stocksList?.find(s => s.ticker === c.symbol);
                                         const logo = matchedHolding?.logo || matchedStock?.logo || null;
                                         let pnlRands, pnlPct;
-                                        if (c.pnlRands != null) {
+                                        if (c.pnlRands != null && !isNaN(c.pnlRands)) {
                                           pnlRands = c.pnlRands;
-                                          pnlPct = c.pnlPct ?? 0;
+                                          pnlPct = (c.pnlPct != null && !isNaN(c.pnlPct)) ? c.pnlPct : 0;
                                         } else {
                                           const totalW = stock.strategyHoldings.reduce((s, x) => s + (x.weight || 0), 0) || 100;
                                           const fraction = (c.weight || 0) / totalW;
