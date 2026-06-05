@@ -701,8 +701,8 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     return [];
   }, [realChartData, currentStrategy, liveStrategyMetrics]);
 
-  const displayChartData = (timeFilter === "D" && intradayChartData && intradayChartData.length > 1)
-    ? intradayChartData
+  const displayChartData = timeFilter === "D"
+    ? (intradayChartData && intradayChartData.length > 1 ? intradayChartData : [])
     : currentChartData;
 
   const isLoadingData = strategiesLoading || chartLoading || (timeFilter === "D" && intradayLoading);
