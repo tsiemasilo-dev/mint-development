@@ -769,9 +769,21 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     if (["5d", "m", "ytd"].includes(timeFilter) && snapshotChartData && snapshotChartData.length > 1) {
       const targetPnl = periodReturnData?.pnl;
       if (targetPnl != null && targetPnl !== 0) {
+        const dataPts = snapshotChartData.filter(pt => pt.day !== null);
+        const lastVal = dataPts.length > 0 ? (dataPts[dataPts.length - 1].value ?? 0) : 0;
+        if (lastVal !== 0 && Math.sign(lastVal) === Math.sign(targetPnl)) {
+          // Proportionally scale every point so the endpoint equals the badge value
+          // while preserving the shape of intra-period movements
+          const scale = targetPnl / lastVal;
+          return snapshotChartData.map(pt =>
+            pt.day === null
+              ? pt
+              : { ...pt, value: parseFloat((pt.value * scale).toFixed(2)) }
+          );
+        }
+        // Signs differ (e.g. YTD basket vs live pnl) — just anchor the last point
         const pts = [...snapshotChartData];
-        const lastIdx = pts.length - 1;
-        pts[lastIdx] = { ...pts[lastIdx], value: parseFloat(targetPnl.toFixed(2)) };
+        pts[pts.length - 1] = { ...pts[pts.length - 1], value: parseFloat(targetPnl.toFixed(2)) };
         return pts;
       }
       return snapshotChartData;
