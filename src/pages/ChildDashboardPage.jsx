@@ -1962,6 +1962,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   const [strategyDetailId, setStrategyDetailId] = useState(null);
   const [expandedStrategyStack, setExpandedStrategyStack] = useState(null);
   const [strategySparklines, setStrategySparklines] = useState({});
+  const [strategyYtdMetrics, setStrategyYtdMetrics] = useState({});
   const [showAllTransactions, setShowAllTransactions] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [showGoalsModal, setShowGoalsModal] = useState(false);
@@ -2687,6 +2688,26 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
 
 
 
+  // Fetch YTD P&L per strategy from client_strategy_returns_c — same endpoint as purple balance card
+  useEffect(() => {
+    if (!child?.id || !holdings.length) return;
+    const stratIds = [...new Set(holdings.filter(h => h.strategy_id).map(h => h.strategy_id))];
+    if (!stratIds.length) return;
+    const userId = child.user_id || null;
+    Promise.all(stratIds.map(async (sid) => {
+      let q = supabase
+        .from("client_strategy_returns_c")
+        .select("ytd_pnl, ytd_pct")
+        .eq("family_member", child.id)
+        .eq("strategy_id", sid);
+      if (userId) q = q.eq("user_id", userId);
+      const { data } = await q.order("as_of_date", { ascending: false }).limit(1).maybeSingle();
+      const ytdPnlCents = data?.ytd_pnl != null ? Number(data.ytd_pnl) : null;
+      const ytdPct = data?.ytd_pct != null ? Number(data.ytd_pct) : null;
+      return [sid, { ytdPnlCents, ytdPct }];
+    })).then(results => setStrategyYtdMetrics(Object.fromEntries(results)));
+  }, [child?.id, holdings]);
+
   // Fetch today's intraday 5-min P&L curve per strategy — same logic as ChildPortfolioTab "D" chart
   useEffect(() => {
     if (!holdings.length) return;
@@ -2979,8 +3000,11 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
 
                   // Single card renderer (reused for both single and expanded stack items)
                   const renderCard = (sc, opts = {}) => {
-                    const pnlAvailable = sc.pnl != null;
-                    const isUp = pnlAvailable && sc.pnl >= 0;
+                    const ytdMetrics = strategyYtdMetrics[sc.id];
+                    const ytdPct = ytdMetrics?.ytdPct ?? null;
+                    const ytdPnlCents = ytdMetrics?.ytdPnlCents ?? null;
+                    const ytdAvailable = ytdPct != null && ytdPnlCents != null;
+                    const isUp = ytdAvailable ? ytdPct >= 0 : (sc.pnl != null && sc.pnl >= 0);
                     const isFilling = sc.isFilling;
                     const sparkPoints = strategySparklines[sc.id];
                     const hasSparkline = !isFilling && Array.isArray(sparkPoints) && sparkPoints.length >= 2;
@@ -3028,12 +3052,27 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                               </>
                             ) : (
                               <>
-                                {pnlAvailable ? (
-                                  <p className={`text-base font-bold tabular-nums ${isUp ? "text-emerald-500" : "text-red-500"}`}>
-                                    {isUp ? "+" : ""}{sc.pnlPct.toFixed(2)}%
-                                  </p>
-                                ) : null}
-                                <p className="text-xs font-semibold text-slate-500 tabular-nums mt-0.5">{fmt(sc.totalValue)}</p>
+                                {ytdAvailable ? (
+                                  <>
+                                    <p className={`text-base font-bold tabular-nums ${isUp ? "text-emerald-500" : "text-red-500"}`}>
+                                      {isUp ? "+" : ""}{ytdPct.toFixed(2)}%
+                                    </p>
+                                    <p className={`text-xs font-semibold tabular-nums mt-0.5 ${isUp ? "text-emerald-600" : "text-red-500"}`}>
+                                      {isUp ? "+" : ""}{fmt(ytdPnlCents)}
+                                    </p>
+                                  </>
+                                ) : sc.pnl != null ? (
+                                  <>
+                                    <p className={`text-base font-bold tabular-nums ${isUp ? "text-emerald-500" : "text-red-500"}`}>
+                                      {isUp ? "+" : ""}{sc.pnlPct?.toFixed(2)}%
+                                    </p>
+                                    <p className={`text-xs font-semibold tabular-nums mt-0.5 ${isUp ? "text-emerald-600" : "text-red-500"}`}>
+                                      {isUp ? "+" : ""}{fmt(sc.pnl)}
+                                    </p>
+                                  </>
+                                ) : (
+                                  <p className="text-xs font-semibold text-slate-400">—</p>
+                                )}
                               </>
                             )}
                           </div>
