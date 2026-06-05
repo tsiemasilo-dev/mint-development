@@ -766,7 +766,16 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   const displayChartData = (() => {
     if (isLoadingData) return [];
     if (timeFilter === "D") return (intradayChartData && intradayChartData.length > 1 ? intradayChartData : []);
-    if (["5d", "m", "ytd"].includes(timeFilter) && snapshotChartData && snapshotChartData.length > 1) return snapshotChartData;
+    if (["5d", "m", "ytd"].includes(timeFilter) && snapshotChartData && snapshotChartData.length > 1) {
+      const targetPnl = periodReturnData?.pnl;
+      if (targetPnl != null && targetPnl !== 0) {
+        const pts = [...snapshotChartData];
+        const lastIdx = pts.length - 1;
+        pts[lastIdx] = { ...pts[lastIdx], value: parseFloat(targetPnl.toFixed(2)) };
+        return pts;
+      }
+      return snapshotChartData;
+    }
     return currentChartData;
   })();
   const strategyAxisConfig = computePnlAxisConfig(displayChartData);
