@@ -5,8 +5,11 @@ export const EXPERIAN_IDMN_BASE =
     ? "https://apis.experian.co.za:9443/IdMeNow"
     : "https://apis-uat.experian.co.za:9443/IdMeNow";
 
+// UAT 10 = Alternative Liveness Verification (liveness + DHA face match + ID check, no AML)
+// UAT 14 = Full ID Me Now (adds AML/PEP screening — billed extra, add back when ready)
+// PROD equivalents: 6 = Alternative Liveness, 10 = Full ID Me Now
 export const EXPERIAN_IDMN_WORKFLOW_ID =
-  process.env.EXPERIAN_ENV === "production" ? 10 : 14;
+  process.env.EXPERIAN_ENV === "production" ? 6 : 10;
 
 export const EXPERIAN_IDMN_HOSTED_BASE =
   process.env.EXPERIAN_ENV === "production"
