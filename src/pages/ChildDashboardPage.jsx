@@ -3008,31 +3008,32 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             {loading ? (
               <div className="space-y-3">
                 {[0, 1].map((i) => (
-                  <div key={i} className="rounded-2xl border border-slate-200 bg-white shadow-md p-4">
-                    <div className="flex items-start justify-between gap-3 mb-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <Skeleton className="h-10 w-10 rounded-xl flex-shrink-0" />
-                        <div className="space-y-2 min-w-0">
-                          <Skeleton className="h-4 w-32" />
-                          <div className="flex gap-1.5">
-                            <Skeleton className="h-5 w-14 rounded-full" />
+                  <div key={i} className="rounded-2xl border border-slate-200 overflow-hidden shadow-sm" style={{ background: "linear-gradient(150deg,#fdfbff 0%,#f3eeff 60%,#ede8ff 100%)" }}>
+                    <div className="px-4 pt-4 pb-3">
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Skeleton className="h-10 w-10 rounded-xl flex-shrink-0" />
+                          <div className="space-y-2 min-w-0">
+                            <Skeleton className="h-4 w-28" />
                             <Skeleton className="h-5 w-16 rounded-full" />
                           </div>
                         </div>
+                        <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                          <Skeleton className="h-5 w-20" />
+                          <Skeleton className="h-4 w-14" />
+                          <Skeleton className="h-4 w-8 rounded-full" />
+                        </div>
                       </div>
-                      <div className="space-y-2 flex-shrink-0">
-                        <Skeleton className="h-4 w-20" />
+                      <div className="flex items-center gap-2 pt-3 border-t border-[#dde3f5]">
+                        <div className="flex -space-x-2">
+                          {[0, 1, 2].map((idx) => (
+                            <Skeleton key={idx} className="h-7 w-7 rounded-full border-2 border-white" />
+                          ))}
+                        </div>
                         <Skeleton className="h-3 w-16" />
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
-                      <div className="flex -space-x-2">
-                        {[0, 1, 2].map((idx) => (
-                          <Skeleton key={idx} className="h-7 w-7 rounded-full border-2 border-white" />
-                        ))}
-                      </div>
-                      <Skeleton className="h-3 w-20" />
-                    </div>
+                    <Skeleton className="w-full" style={{ height: 80, borderRadius: 0 }} />
                   </div>
                 ))}
               </div>
@@ -3102,12 +3103,10 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                                     <p className={`text-base font-bold tabular-nums ${isUp ? "text-emerald-500" : "text-red-500"}`}>
                                       {isUp ? "+" : ""}{fmt(ytdPnlCents)}
                                     </p>
-                                    <div className="flex items-center justify-end gap-1.5 mt-0.5">
-                                      <p className={`text-sm font-bold tabular-nums ${isUp ? "text-emerald-600" : "text-red-500"}`}>
-                                        {isUp ? "+" : ""}{Math.abs(ytdPct).toFixed(1)}%
-                                      </p>
-                                      <span className="text-[9px] font-bold uppercase tracking-wider px-1 py-0.5 rounded bg-slate-100 text-slate-500">YTD</span>
-                                    </div>
+                                    <p className={`text-sm font-bold tabular-nums ${isUp ? "text-emerald-600" : "text-red-500"}`}>
+                                      {isUp ? "+" : ""}{Math.abs(ytdPct).toFixed(1)}%
+                                    </p>
+                                    <span className="text-[9px] font-bold uppercase tracking-wider mt-0.5 px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 self-end">YTD</span>
                                   </>
                                 ) : sc.pnl != null ? (
                                   <>
