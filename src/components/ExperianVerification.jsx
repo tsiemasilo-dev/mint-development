@@ -110,8 +110,13 @@ const ExperianVerification = ({ onVerified }) => {
         return;
       }
 
+      // Always land on READY — never jump straight into AWAITING (which starts
+      // the auto-poll). Even when resuming an existing transaction, polling must
+      // not begin until the user actively clicks "Start", otherwise an abandoned
+      // prior attempt gets polled to a terminal "unsuccessful" the moment the
+      // page opens, before the user has done anything.
       setVerificationUrl(data.url);
-      setStage(data.existing ? STAGE.AWAITING : STAGE.READY);
+      setStage(STAGE.READY);
     } catch (err) {
       if (!mountedRef.current) return;
       console.error("[ExperianVerification] Start error:", err);
