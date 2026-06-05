@@ -4635,6 +4635,27 @@ app.get("/api/user/strategies", async (req, res) => {
       stratHoldingsByStratId[h.strategy_id].push(h);
     }
 
+    // Fetch latest client_strategy_returns_c rows (same source as the ALL tab on the home card)
+    // These give us inception_pnl = basket_value - cost_basis in cents — the authoritative P&L figure.
+    const clientReturnsMap = {};
+    if (holdingStrategyIds.length > 0) {
+      const { data: csr } = await supabaseAdmin
+        .from("client_strategy_returns_c")
+        .select("strategy_id, inception_pnl, basket_value, as_of_date")
+        .eq("user_id", userId)
+        .is("family_member", null)
+        .in("strategy_id", holdingStrategyIds)
+        .order("as_of_date", { ascending: false });
+      for (const row of (csr || [])) {
+        if (!clientReturnsMap[row.strategy_id]) {
+          clientReturnsMap[row.strategy_id] = {
+            inception_pnl: Number(row.inception_pnl || 0),
+            basket_value: Number(row.basket_value || 0),
+          };
+        }
+      }
+    }
+
     // Fetch live prices for those securities
     const stratSecIds = (userStratHoldings || []).map(h => h.security_id).filter(Boolean);
     let stratLivePriceMap = {};
@@ -4786,9 +4807,17 @@ app.get("/api/user/strategies", async (req, res) => {
         });
 
         // Emits one card per transaction
+        // Use client_strategy_returns_c (same source as ALL tab on purple card) when available.
+        const csrEntry = clientReturnsMap[strategy.id];
+        const csrInvestedRands = csrEntry
+          ? (csrEntry.basket_value - csrEntry.inception_pnl) / 100
+          : null;
+        const csrCurrentRands = csrEntry ? csrEntry.basket_value / 100 : null;
+
         for (const tx of matchingTxs) {
-          const txInvested = Number(tx.amount || 0) / 100; // in Rands
-          const currentValue = txInvested * performanceFactor; // in Rands
+          // Fall back to performanceFactor only if no client_strategy_returns_c row exists
+          const txInvested = csrInvestedRands != null ? csrInvestedRands : Number(tx.amount || 0) / 100;
+          const currentValue = csrCurrentRands != null ? csrCurrentRands : txInvested * performanceFactor;
 
           const date = new Date(tx.created_at);
           const pad = (num) => String(num).padStart(2, '0');
@@ -4807,8 +4836,8 @@ app.get("/api/user/strategies", async (req, res) => {
             imageUrl: strategy.image_url,
             isKidStrategy: !!strategy.is_kid_strategy,
             holdings: enrichedHoldings,
-            investedAmount: txInvested, // Return as Rands
-            currentMarketValue: currentValue, // Return as Rands
+            investedAmount: txInvested, // Return as Rands (cost basis)
+            currentMarketValue: currentValue, // Return as Rands (basket value)
             currentValue: currentValue, // Return as Rands
             metrics: latestMetric ? { ...latestMetric, r_ytd: rytd } : { r_ytd: rytd },
             firstInvestedDate: tx.transaction_date || null,
