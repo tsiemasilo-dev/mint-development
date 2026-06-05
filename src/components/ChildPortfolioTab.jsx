@@ -880,7 +880,7 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, livePriceMap
                                   </div>
                                 )}
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-semibold text-slate-900 truncate">{stock.name}</p>
+                                  <p className="text-sm font-semibold text-slate-900 leading-snug break-words">{stock.name}</p>
                                   <p className="text-xs text-slate-500 font-medium">{stock.isStrategy ? `${(stock.strategyHoldings || []).length} assets` : stock.symbol}</p>
                                 </div>
                                 <div className="flex items-center gap-2">
