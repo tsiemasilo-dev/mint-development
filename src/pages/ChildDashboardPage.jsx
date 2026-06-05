@@ -2841,18 +2841,18 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
       : [-(absMax * 1.15), absMax * 1.15];
     return (
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={points} margin={{ top: 6, right: 0, left: 0, bottom: 0 }}>
+        <ComposedChart data={points} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%"   stopColor={color} stopOpacity={0.25} />
-              <stop offset="70%"  stopColor={color} stopOpacity={0.1}  />
+              <stop offset="0%"   stopColor={color} stopOpacity={0.35} />
+              <stop offset="60%"  stopColor={color} stopOpacity={0.12} />
               <stop offset="100%" stopColor="#ffffff" stopOpacity={0}  />
             </linearGradient>
           </defs>
           <YAxis hide domain={domain} />
-          <ReferenceLine y={0} stroke="#e2e8f0" strokeDasharray="3 3" />
-          <Area type="monotone" dataKey="value" stroke="transparent" fill={`url(#${gradId})`} dot={false} activeDot={false} isAnimationActive={true} animationBegin={0} animationDuration={600} animationEasing="ease-out" />
-          <Line type="monotone" dataKey="value" stroke={color} strokeWidth={2} dot={false} activeDot={false} isAnimationActive={false} />
+          <ReferenceLine y={0} stroke={isUp ? "#bbf7d0" : "#fecaca"} strokeDasharray="4 3" strokeWidth={1.5} />
+          <Area type="monotone" dataKey="value" stroke="transparent" fill={`url(#${gradId})`} dot={false} activeDot={false} isAnimationActive={true} animationBegin={0} animationDuration={700} animationEasing="ease-out" />
+          <Line type="monotone" dataKey="value" stroke={color} strokeWidth={2.5} dot={false} activeDot={false} isAnimationActive={false} />
         </ComposedChart>
       </ResponsiveContainer>
     );
@@ -3053,9 +3053,10 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                     const sparkPoints = strategySparklines[sc.id];
                     const hasSparkline = !isFilling && Array.isArray(sparkPoints) && sparkPoints.length >= 2;
                     const gradId = `strat-grad-${sc.id}`;
+                    const accentColor = isFilling ? "#f59e0b" : isUp ? "#16a34a" : "#dc2626";
                     const cardCls = isFilling
                       ? "w-full text-left rounded-2xl border border-amber-200 shadow-md overflow-hidden opacity-70"
-                      : "w-full text-left rounded-2xl border border-[#e8edf8] shadow-[0_2px_12px_-2px_rgba(0,0,0,0.08)] overflow-hidden hover:border-violet-300 hover:shadow-lg transition active:scale-[0.99]";
+                      : "w-full text-left rounded-2xl border border-[#e8edf8] shadow-[0_2px_16px_-3px_rgba(109,40,217,0.10)] overflow-hidden hover:border-violet-300 hover:shadow-[0_4px_20px_-4px_rgba(109,40,217,0.18)] transition active:scale-[0.99]";
                     return (
                       <button
                         key={sc.batchKey}
@@ -3063,9 +3064,12 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                         disabled={isFilling}
                         onClick={opts.onClick || (() => !isFilling && setStrategyDetailId(sc.id))}
                         className={cardCls}
-                        style={{ background: isFilling ? "#fff" : "linear-gradient(145deg,#fdfbff 0%,#f0eaff 100%)" }}
+                        style={{ background: isFilling ? "#fff" : "linear-gradient(150deg,#fdfbff 0%,#f3eeff 60%,#ede8ff 100%)" }}
                       >
-                        <div className="px-4 pt-4 pb-3">
+                        {/* Accent strip */}
+                        <div style={{ height: 3, background: accentColor, opacity: isFilling ? 0.5 : 1 }} />
+
+                        <div className="px-4 pt-3 pb-3">
                         {/* Purchase date top-right when in expanded stack */}
                         {sc.purchaseDate && opts.showDate && (
                           <p className="text-[10px] font-semibold text-slate-400 text-right mb-1.5">{sc.purchaseDate}</p>
@@ -3080,7 +3084,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                               <p className="text-sm font-bold text-slate-900 truncate">{sc.short_name || sc.name}</p>
                               <div className="flex items-center gap-1.5 mt-0.5">
                                 {sc.risk_level && (
-                                  <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-violet-50 text-violet-600 border border-violet-100">{sc.risk_level}</span>
+                                  <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-violet-100 text-violet-700 border border-violet-200">{sc.risk_level}</span>
                                 )}
                                 {isFilling && (
                                   <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-amber-100 text-amber-700 border border-amber-200">Filling</span>
@@ -3088,62 +3092,74 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                               </div>
                             </div>
                           </div>
-                          <div className="flex flex-col items-end flex-shrink-0">
+                          {/* P&L pill */}
+                          <div className="flex-shrink-0">
                             {isFilling ? (
-                              <>
+                              <div className="rounded-xl px-3 py-1.5 text-right" style={{ background: "rgba(251,191,36,0.12)", border: "1px solid rgba(251,191,36,0.25)" }}>
                                 <p className="text-sm font-bold text-amber-700">Pending</p>
-                                <p className="text-xs font-semibold text-amber-600">Awaiting fill</p>
-                              </>
+                                <p className="text-[10px] font-semibold text-amber-600">Awaiting fill</p>
+                              </div>
                             ) : (
-                              <>
+                              <div className="rounded-xl px-3 py-1.5 text-right"
+                                style={{
+                                  background: isUp ? "rgba(22,163,74,0.08)" : "rgba(220,38,38,0.08)",
+                                  border: `1px solid ${isUp ? "rgba(22,163,74,0.18)" : "rgba(220,38,38,0.18)"}`,
+                                  backdropFilter: "blur(8px)",
+                                }}>
                                 {ytdAvailable ? (
                                   <>
-                                    <p className={`text-base font-bold tabular-nums ${isUp ? "text-emerald-500" : "text-red-500"}`}>
+                                    <p className={`text-base font-bold tabular-nums leading-tight ${isUp ? "text-emerald-600" : "text-red-600"}`}>
                                       {isUp ? "+" : ""}{fmt(ytdPnlCents)}
                                     </p>
-                                    <p className={`text-xs font-semibold tabular-nums mt-0.5 ${isUp ? "text-emerald-600" : "text-red-500"}`}>
-                                      {isUp ? "+" : ""}{Math.abs(ytdPct).toFixed(1)}%
+                                    <p className={`text-[10px] font-semibold tabular-nums mt-0.5 ${isUp ? "text-emerald-500" : "text-red-500"}`}>
+                                      {isUp ? "+" : ""}{Math.abs(ytdPct).toFixed(1)}% <span className="text-slate-400 font-medium">YTD</span>
                                     </p>
                                   </>
                                 ) : sc.pnl != null ? (
                                   <>
-                                    <p className={`text-base font-bold tabular-nums ${isUp ? "text-emerald-500" : "text-red-500"}`}>
+                                    <p className={`text-base font-bold tabular-nums leading-tight ${isUp ? "text-emerald-600" : "text-red-600"}`}>
                                       {isUp ? "+" : ""}{fmt(sc.pnl)}
                                     </p>
-                                    <p className={`text-xs font-semibold tabular-nums mt-0.5 ${isUp ? "text-emerald-600" : "text-red-500"}`}>
-                                      {isUp ? "+" : ""}{sc.pnlPct != null ? Math.abs(sc.pnlPct).toFixed(1) + "%" : ""}
+                                    <p className={`text-[10px] font-semibold tabular-nums mt-0.5 ${isUp ? "text-emerald-500" : "text-red-500"}`}>
+                                      {isUp ? "+" : ""}{sc.pnlPct != null ? Math.abs(sc.pnlPct).toFixed(1) + "%" : "—"}
                                     </p>
                                   </>
                                 ) : (
                                   <p className="text-xs font-semibold text-slate-400">—</p>
                                 )}
-                              </>
+                              </div>
                             )}
                           </div>
                         </div>
+                        {/* Stat row: logos + holdings count + market value */}
                         {sc.holdings.length > 0 && (
-                          <div className="flex items-center gap-2 pt-3 border-t border-[#dde3f5]">
-                            <div className="flex -space-x-2">
-                              {sc.holdings.slice(0, 4).map(h => (
-                                <div key={h.id} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white shadow-sm">
-                                  {h.logo_url
-                                    ? <img src={h.logo_url} alt={h.symbol} className="h-full w-full object-cover" />
-                                    : <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">{h.symbol?.substring(0, 2)}</div>}
-                                </div>
-                              ))}
-                              {sc.holdings.length > 4 && (
-                                <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-slate-100 text-[10px] font-semibold text-slate-500">
-                                  +{sc.holdings.length - 4}
-                                </div>
-                              )}
+                          <div className="flex items-center justify-between pt-2.5 border-t border-[#dde3f5]">
+                            <div className="flex items-center gap-2">
+                              <div className="flex -space-x-2">
+                                {sc.holdings.slice(0, 4).map(h => (
+                                  <div key={h.id} className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white shadow-sm">
+                                    {h.logo_url
+                                      ? <img src={h.logo_url} alt={h.symbol} className="h-full w-full object-cover" />
+                                      : <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[7px] font-bold text-slate-600">{h.symbol?.substring(0, 2)}</div>}
+                                  </div>
+                                ))}
+                                {sc.holdings.length > 4 && (
+                                  <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-slate-100 text-[9px] font-semibold text-slate-500">
+                                    +{sc.holdings.length - 4}
+                                  </div>
+                                )}
+                              </div>
+                              <span className="text-[11px] text-slate-400 font-medium">{sc.holdings.length} holding{sc.holdings.length !== 1 ? "s" : ""}</span>
                             </div>
-                            <span className="text-[11px] text-slate-400">{sc.holdings.length} holding{sc.holdings.length !== 1 ? "s" : ""}</span>
+                            {sc.totalValue > 0 && (
+                              <span className="text-[11px] font-semibold text-slate-500 tabular-nums">{fmt(sc.totalValue)}</span>
+                            )}
                           </div>
                         )}
                         </div>
                         {/* Full-width area chart — bleeds to card edges */}
                         {hasSparkline && (
-                          <div style={{ height: 58 }}>
+                          <div style={{ height: 80 }}>
                             <StrategySparkline points={sparkPoints} isUp={isUp} gradId={gradId} />
                           </div>
                         )}
