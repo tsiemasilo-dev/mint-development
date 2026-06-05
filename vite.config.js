@@ -22,37 +22,13 @@ export default defineConfig({
     },
   },
   build: {
-    rollupOptions: {
-      output: {
-        /* Function form so chart libs are bundled TOGETHER with their transitive
-           deps. The old object form isolated `recharts` alone while its deps
-           (d3-*, react-smooth, victory-vendor, internmap, decimal.js-light) fell
-           into other chunks — that cross-chunk circular reference produced the
-           runtime "Cannot access 'X' before initialization" (TDZ) crash. Keeping
-           them in one chunk fixes it. Unmatched modules return undefined so
-           Rollup keeps its default chunking for everything else. */
-        manualChunks(id) {
-          if (!id.includes('node_modules')) return undefined;
-          if (id.includes('framer-motion')) return 'vendor-framer';
-          if (
-            id.includes('recharts') ||
-            id.includes('d3-') ||
-            id.includes('react-smooth') ||
-            id.includes('victory-vendor') ||
-            id.includes('internmap') ||
-            id.includes('decimal.js-light') ||
-            id.includes('fast-equals')
-          ) return 'vendor-charts';
-          if (id.includes('@supabase')) return 'vendor-supabase';
-          if (id.includes('lucide-react')) return 'vendor-lucide';
-          if (
-            id.includes('/react-dom/') ||
-            id.includes('/react/') ||
-            id.includes('/scheduler/')
-          ) return 'vendor-react';
-          return undefined;
-        },
-      },
-    },
+    /* No manualChunks. Hand-splitting vendors (react / recharts / etc.) into
+       separate chunks created cross-chunk circular references that crashed at
+       runtime with "Cannot access 'X' before initialization" (a TDZ on a module
+       const used before its chunk finished initializing). Letting Rollup do its
+       automatic chunking keeps circularly-dependent modules correctly ordered.
+       Route-level code-splitting (React.lazy/dynamic import) is unaffected, so
+       lazy page loading still works. */
+    rollupOptions: {},
   },
 });
