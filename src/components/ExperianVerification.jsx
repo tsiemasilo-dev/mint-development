@@ -176,15 +176,16 @@ const ExperianVerification = ({ onVerified }) => {
       if (data.status === "verified") {
         setStage(STAGE.VERIFIED);
         if (onVerified) onVerified();
-      } else if (data.status === "failed") {
+      } else if (data.status === "failed" || data.status === "not_verified") {
         setErrorCode(data.errorCode);
         setErrorMessage("Verification was unsuccessful. Please try again.");
         setStage(STAGE.FAILED);
-      } else if (data.status === "pending") {
+      } else if (data.status === "pending" || data.status === "in_progress") {
         setErrorCode(null);
         setPollCount((c) => c + 1);
-        // Silent poll: stay on the embedded iframe (AWAITING). Manual check:
-        // show the dedicated "in progress" screen.
+        // Still in progress — the user hasn't finished the workflow yet. Silent
+        // poll: stay on the embedded iframe (AWAITING). Manual check: show the
+        // dedicated "in progress" screen.
         if (!silent) setStage(STAGE.PENDING);
       } else if (!silent) {
         setStage(STAGE.AWAITING);

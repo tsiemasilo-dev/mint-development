@@ -77,19 +77,36 @@ export default async function handler(req, res) {
     console.log(`[Experian IDMN] CollectWorkflowResults HTTP ${httpStatus}:`, JSON.stringify(collectResult).slice(0, 800));
 
     const errorCode = collectResult?.error_code;
-    let kycStatus = "pending";
+    // Default is "in_progress" — the user simply hasn't finished the workflow
+    // yet (e.g. still typing their ID / taking the selfie). Alternative Liveness
+    // is synchronous, so there is no real "under review" state: an unfinished
+    // poll must NOT flag the account, or the whole app flips to "Under Review"
+    // and the embedded panel gets torn down mid-flow.
+    let kycStatus = "in_progress";
     let reviewAnswer = null;
 
     if (collectResult?.response_status === "Success") {
       kycStatus = "verified"; reviewAnswer = "GREEN";
     } else if (errorCode === "IMN_202") {
-      kycStatus = "pending";
+      kycStatus = "in_progress"; // workflow not completed yet — keep polling
     } else if (errorCode === "IMN_205" || errorCode === "IMN_208") {
       kycStatus = "not_verified";
     } else if (collectResult?.response_status === "Failure") {
       kycStatus = "failed"; reviewAnswer = "RED";
     }
 
+    const terminal = kycStatus === "verified" || kycStatus === "failed" || kycStatus === "not_verified";
+
+    // While in progress: only record that we checked. Do NOT write review status,
+    // kyc_status, or required_actions — leaving the app exactly where it was.
+    if (!terminal) {
+      await db.from("user_onboarding")
+        .update({ kyc_checked_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq("user_id", userId);
+      return res.json({ success: true, status: kycStatus, errorCode: errorCode || null });
+    }
+
+    // ── Terminal outcome — now it's safe to persist the result and flags ──────
     const updatedRaw = { ...raw, experian_idmn_result: collectResult, experian_idmn_collected_at: new Date().toISOString() };
     const onboardingUpdate = {
       sumsub_raw: updatedRaw,
@@ -101,13 +118,13 @@ export default async function handler(req, res) {
     if (kycStatus === "verified") {
       onboardingUpdate.kyc_status = "verified";
       onboardingUpdate.kyc_verified_at = new Date().toISOString();
-    } else if (kycStatus === "failed") {
+    } else {
       onboardingUpdate.kyc_status = "resubmission_required";
     }
 
     await db.from("user_onboarding").update(onboardingUpdate).eq("user_id", userId);
 
-    let raPayload = { kyc_pending: true, kyc_verified: false, kyc_needs_resubmission: false };
+    let raPayload;
     if (kycStatus === "verified") {
       raPayload = { kyc_pending: false, kyc_verified: true, kyc_needs_resubmission: false };
       const { data: existingPack } = await db.from("user_onboarding_pack_details").select("user_id").eq("user_id", userId).maybeSingle();
@@ -118,7 +135,7 @@ export default async function handler(req, res) {
           updated_at: new Date().toISOString(),
         });
       }
-    } else if (kycStatus === "failed") {
+    } else {
       raPayload = { kyc_pending: false, kyc_verified: false, kyc_needs_resubmission: true };
     }
 
