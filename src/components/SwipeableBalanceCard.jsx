@@ -1069,15 +1069,6 @@ const SwipeableBalanceCard = ({
           if (hasVal) points.push({ d: dateKey, v: Number(totalPnl.toFixed(2)) });
         }
 
-        // For strategy-only portfolios: capture the correct period P&L BEFORE
-        // normalization. Strategy data is a cumulative sum of 1d_pnl starting
-        // from 0, so points[last].v is already the true period total.
-        // After normalization points[last].v = total − first_day_pnl (wrong),
-        // so we must read it here.
-        const strategyOnlyPreNormReturn = (hasStrategyData && stockHoldings.length === 0 && points.length > 0)
-          ? points[points.length - 1].v
-          : null;
-
         // Normalize chart to start value: subtract first value from all points
         if (points.length > 0) {
           const firstValue = points[0].v;
@@ -1091,59 +1082,57 @@ const SwipeableBalanceCard = ({
         console.log(`[SwipeableBalanceCard] Final chart points: ${points.length}`);
         setChartData(points);
 
-        // Each code path owns exactly one setPeriodReturn call — no fallback flash.
-        //   isStockOnlyPeriodTab    → stock-only block below owns it (5D/M/YTD)
-        //   isStrategyOnlyPeriodTab → strategy block below owns it  (5D/M/YTD)
-        //   otherwise               → set here from chart (ALL tab or mixed portfolio)
+        // Badge logic — each branch owns exactly one setPeriodReturn call:
+        //   isStockOnlyPeriodTab    → stock-only block below (pre-computed stock_returns_c columns)
+        //   isStrategyOnlyPeriodTab → strategy block below  (pre-computed client_strategy_returns_c columns)
+        //   otherwise               → post-norm chart last point (mixed portfolio / ALL tab)
         const isStockOnlyPeriodTab    = stockHoldings.length > 0 && !hasStrategyData && activeTab !== "all";
         const isStrategyOnlyPeriodTab = hasStrategyData && stockHoldings.length === 0 && activeTab !== "all";
 
         if (!isStockOnlyPeriodTab && !isStrategyOnlyPeriodTab) {
-          const returnToSet = strategyOnlyPreNormReturn ?? (points.length >= 2 ? points[points.length - 1].v : null);
-          setPeriodReturn(returnToSet);
+          if (points.length >= 2) {
+            setPeriodReturn(points[points.length - 1].v);
+          } else {
+            setPeriodReturn(null);
+          }
         }
 
-        // Strategy-only badge — set exactly once, no fallback flash:
-        //   5D  → sum of last 5 rows' 1d_pnl (strategyOnlyPreNormReturn).
-        //         Do NOT use 5d_pnl column — it spans a wider window than 5 trading days.
-        //   M   → pre-computed 1m_pnl column (matches 30-day sum exactly)
-        //   YTD → pre-computed ytd_pnl column (authoritative year-to-date figure)
+        // Strategy-only badge — read pre-computed columns from client_strategy_returns_c.
+        // This matches exactly what the portfolio tab shows via useStrategyPeriodReturns.
+        //   D   → 1d_pnl  (today's P&L)
+        //   5D  → 5d_pnl  (true 5-trading-day return)
+        //   M   → 1m_pnl  (true 1-month return)
+        //   YTD → ytd_pnl (year-to-date return)
         if (isStrategyOnlyPeriodTab && userId) {
-          if (activeTab === "5d") {
-            if (!chartCancelled && strategyOnlyPreNormReturn != null) {
-              setPeriodReturn(strategyOnlyPreNormReturn);
-            }
-          } else {
-            const stratColMap = { "m": "1m_pnl", "ytd": "ytd_pnl" };
-            const stratCol = stratColMap[activeTab];
-            if (stratCol) {
-              const strategyIds = [...new Set(
-                holdingsToChart.filter(h => h.isStrategy && h.strategyId).map(h => h.strategyId)
-              )];
-              let totalCents = 0;
-              let hasStratPreData = false;
-              await Promise.all(strategyIds.map(async (sid) => {
-                try {
-                  const { data: sret } = await supabase
-                    .from("client_strategy_returns_c")
-                    .select(stratCol)
-                    .eq("user_id", userId)
-                    .eq("strategy_id", sid)
-                    .is("family_member", null)
-                    .order("as_of_date", { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
-                  if (sret?.[stratCol] != null) {
-                    totalCents += Number(sret[stratCol]);
-                    hasStratPreData = true;
-                  }
-                } catch (e) {
-                  console.warn(`[Chart] strategy pre-computed fetch failed for ${sid}:`, e);
+          const stratColMap = { "d": "1d_pnl", "5d": "5d_pnl", "m": "1m_pnl", "ytd": "ytd_pnl" };
+          const stratCol = stratColMap[activeTab];
+          if (stratCol) {
+            const strategyIds = [...new Set(
+              holdingsToChart.filter(h => h.isStrategy && h.strategyId).map(h => h.strategyId)
+            )];
+            let totalCents = 0;
+            let hasStratPreData = false;
+            await Promise.all(strategyIds.map(async (sid) => {
+              try {
+                const { data: sret } = await supabase
+                  .from("client_strategy_returns_c")
+                  .select(stratCol)
+                  .eq("user_id", userId)
+                  .eq("strategy_id", sid)
+                  .is("family_member", null)
+                  .order("as_of_date", { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+                if (sret?.[stratCol] != null) {
+                  totalCents += Number(sret[stratCol]);
+                  hasStratPreData = true;
                 }
-              }));
-              if (!chartCancelled && hasStratPreData) {
-                setPeriodReturn(parseFloat((totalCents / 100).toFixed(2)));
+              } catch (e) {
+                console.warn(`[Chart] strategy pre-computed fetch failed for ${sid}:`, e);
               }
+            }));
+            if (!chartCancelled && hasStratPreData) {
+              setPeriodReturn(parseFloat((totalCents / 100).toFixed(2)));
             }
           }
         }
