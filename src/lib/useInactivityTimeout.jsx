@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useRef } from 'react';
 
-const TIMEOUT_MINUTES = 5;
+const TIMEOUT_MINUTES = 15;
 const TIMEOUT_MS = TIMEOUT_MINUTES * 60 * 1000;
 const LAST_ACTIVITY_KEY = 'mint_last_activity';
 

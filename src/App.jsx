@@ -280,8 +280,8 @@ const App = () => {
         const hiddenAt = localStorage.getItem('mint_app_hidden_at');
         if (hiddenAt) {
           const elapsed = Date.now() - parseInt(hiddenAt, 10);
-          const FOUR_MINUTES = 4 * 60 * 1000;
-          if (elapsed >= FOUR_MINUTES && isAuthenticated && !isCheckingAuth) {
+          const FIFTEEN_MINUTES = 15 * 60 * 1000;
+          if (elapsed >= FIFTEEN_MINUTES && isAuthenticated && !isCheckingAuth) {
             if (isPinEnabled()) {
               sessionStorage.removeItem('mint_pin_unlocked');
               setShowPinLock(true);
