@@ -702,7 +702,7 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, livePriceMap
                                     <img key={li} src={logo} className="w-7 h-7 rounded-full object-cover border-2 border-white shadow-sm" referrerPolicy="no-referrer" crossOrigin="anonymous" />
                                   ))}
                                 </div>
-                                <p className="text-sm font-bold tracking-wide uppercase text-slate-900">{h.name}</p>
+                                <p className="text-sm font-bold tracking-[0.18em] uppercase text-slate-900">{h.name}</p>
                                 <p className="text-xs text-slate-500">{(h.strategyHoldings || []).length > 0 ? `${h.strategyHoldings.length} assets` : h.symbol}</p>
                               </div>
                             ) : (
@@ -892,7 +892,7 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, livePriceMap
                                       <ChevronDown className={`h-4 w-4 text-slate-400 flex-shrink-0 transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`} />
                                     </div>
                                   </div>
-                                  <p className="text-sm font-bold tracking-wide uppercase text-slate-900">{stock.name}</p>
+                                  <p className="text-sm font-bold tracking-[0.18em] uppercase text-slate-900">{stock.name}</p>
                                   <p className="text-xs text-slate-500 font-medium mt-0.5">{(stock.strategyHoldings || []).length} assets</p>
                                 </div>
                               ) : (
