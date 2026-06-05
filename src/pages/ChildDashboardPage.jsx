@@ -2521,6 +2521,9 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   // Live price per share in Rands: intraday only (cents / 100).
   // Returns null when no intraday row is available.
   const getHoldingLivePriceRands = (holding) => {
+    // Prefer 15s live poll (same source as balance card) → intraday DB fallback
+    const pollCents = childLivePriceMap[holding.security_id]?.priceCents;
+    if (pollCents > 0) return pollCents / 100;
     const intradayCents = Number(holding.intraday_price_cents);
     if (Number.isFinite(intradayCents) && intradayCents > 0) {
       return intradayCents / 100;
