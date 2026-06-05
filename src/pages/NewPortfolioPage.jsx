@@ -1905,6 +1905,14 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                 if (stockTimeFilter === "D") return stockTabIntradayData || [];
                 if (liveStockChartData.length > 0) {
                   if (showStockPnl) {
+                    if (stockTimeFilter === 'W' || stockTimeFilter === 'M') {
+                      const refPrice = liveStockChartData[0].value;
+                      const pts = [{ ...liveStockChartData[0], day: null, value: 0 }];
+                      liveStockChartData.forEach(d => {
+                        pts.push({ ...d, value: Number(((d.value - refPrice) * userQuantity).toFixed(2)) });
+                      });
+                      return pts;
+                    }
                     const pts = [{ ...liveStockChartData[0], day: null, value: 0 }];
                     liveStockChartData.forEach(d => {
                       pts.push({ ...d, value: Number(((d.value * userQuantity) - costBasisStock).toFixed(2)) });
@@ -3017,9 +3025,17 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
             if (modalTimeFilter === "D") return modalIntradayData || [];
             if (mIsPending) return [{ day: mPurchaseLabel || 'Purchase', value: 0 }, { day: mNowLabel || 'Now', value: 0 }];
             if (mBaseChartData.length > 0) {
-              return mShowPnl
-                ? mBaseChartData.map(d => ({ ...d, value: Number(((d.value * mQty) - mCostBasis).toFixed(2)) }))
-                : mBaseChartData;
+              if (mShowPnl) {
+                if (modalTimeFilter === 'W' || modalTimeFilter === 'M') {
+                  const refPrice = mBaseChartData[0].value;
+                  return [
+                    { ...mBaseChartData[0], day: null, value: 0 },
+                    ...mBaseChartData.map(d => ({ ...d, value: Number(((d.value - refPrice) * mQty).toFixed(2)) }))
+                  ];
+                }
+                return mBaseChartData.map(d => ({ ...d, value: Number(((d.value * mQty) - mCostBasis).toFixed(2)) }));
+              }
+              return mBaseChartData;
             }
             return mShowPnl ? [{ day: mPurchaseLabel, value: 0 }, { day: mNowLabel, value: Number(mPnl.toFixed(2)) }] : [];
           })();
