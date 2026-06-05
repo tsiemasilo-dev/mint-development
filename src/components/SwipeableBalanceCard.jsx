@@ -765,8 +765,17 @@ const SwipeableBalanceCard = ({
         if (dates.length < minRows) { setChartData([]); setPeriodReturn(null); return; }
 
         const firstBasket = basketByDate[dates[0]];
-        // Capture year-start basket for true YTD PnL (live value − Jan 1 value, not inception cost)
-        if (activeTab === "ytd") setYearStartBasketCents(firstBasket);
+        // Capture year-start basket for true YTD PnL — but only if the child had investments
+        // before this year. If all data is from this year, YTD should equal ALL (use cost basis).
+        if (activeTab === "ytd") {
+          const yearStart = `${new Date().getUTCFullYear()}-01-01`;
+          const { count: priorYearCount } = await supabase
+            .from("client_strategy_returns_c")
+            .select("as_of_date", { count: "exact", head: true })
+            .eq("family_member", familyMemberId)
+            .lt("as_of_date", yearStart);
+          setYearStartBasketCents(priorYearCount > 0 ? firstBasket : null);
+        }
         const points = [{ d: null, v: 0 }];
         dates.forEach(d => {
           points.push({ d, v: Number(((basketByDate[d] - firstBasket) / 100).toFixed(2)) });

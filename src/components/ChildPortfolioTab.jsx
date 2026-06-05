@@ -568,9 +568,11 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, livePriceMap
                       const isPending = liveStrategyMetrics.isPending;
                       const livePnl = liveStrategyMetrics.liveValue - liveStrategyMetrics.costBasis;
                       const livePct = ia > 0 ? (livePnl / ia) * 100 : 0;
-                      // True YTD: live value vs earliest snapshot of current year, not inception cost
+                      // True YTD: live value vs earliest snapshot of current year, not inception cost.
+                      // Only applies if the child had investments BEFORE this year — otherwise YTD = ALL.
                       const currentYear = new Date().getFullYear();
-                      const yearStartRow = snapshotRows.find(r => r.as_of_date >= `${currentYear}-01-01`);
+                      const hasPriorYearData = snapshotRows.some(r => r.as_of_date < `${currentYear}-01-01`);
+                      const yearStartRow = hasPriorYearData ? snapshotRows.find(r => r.as_of_date >= `${currentYear}-01-01`) : null;
                       const yearStartRands = yearStartRow ? Number(yearStartRow.basket_value || 0) / 100 : null;
                       const ytdPnl = yearStartRands ? liveStrategyMetrics.liveValue - yearStartRands : livePnl;
                       const ytdPct = yearStartRands ? (ytdPnl / yearStartRands) * 100 : livePct;
