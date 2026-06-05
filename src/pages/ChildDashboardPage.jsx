@@ -2687,41 +2687,96 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
 
 
 
-  // Fetch YTD daily cumulative return curve per strategy (matches strategy portfolio tab Daily chart)
+  // Fetch today's intraday 5-min P&L curve per strategy — same logic as ChildPortfolioTab "D" chart
   useEffect(() => {
     if (!holdings.length) return;
     const stratIds = [...new Set(holdings.filter(h => h.strategy_id).map(h => h.strategy_id))];
     if (!stratIds.length) return;
-    const yearStart = `${new Date().getFullYear()}-01-01`;
+    const todayUTC = new Date().toISOString().slice(0, 10);
+
     Promise.all(stratIds.map(async (sid) => {
-      const { data } = await supabase
-        .from("strategies_returns_c")
-        .select("as_of_date, \"1d_pct\"")
-        .eq("strategy_id", sid)
-        .gte("as_of_date", yearStart)
-        .order("as_of_date", { ascending: true });
-      if (!data || data.length < 2) return [sid, []];
-      let cumulative = 0;
-      const values = data.map(row => {
-        cumulative += row["1d_pct"] ? row["1d_pct"] / 100 : 0;
-        return Number((cumulative * 100).toFixed(2));
-      });
-      return [sid, values];
+      const stratHoldings = holdings.filter(h =>
+        h.strategy_id === sid && Number(h.avg_fill || 0) > 0 && !!h.Fill_date
+      );
+      if (!stratHoldings.length) return [sid, []];
+
+      const secIds = [...new Set(stratHoldings.map(h => h.security_id).filter(Boolean))];
+      const qtyMap = {};
+      stratHoldings.forEach(h => { qtyMap[h.security_id] = Math.abs(Number(h.quantity || 0)); });
+
+      // Paginate intraday rows (same as portfolio tab)
+      const PAGE = 1000;
+      let intradayRows = [];
+      let page = 0;
+      while (true) {
+        const { data: batch } = await supabase
+          .from("stock_intraday_c")
+          .select("security_id, current_price, 1d_abs, timestamp")
+          .in("security_id", secIds)
+          .gte("timestamp", `${todayUTC}T00:00:00Z`)
+          .order("timestamp", { ascending: true })
+          .range(page * PAGE, (page + 1) * PAGE - 1);
+        if (!batch?.length) break;
+        intradayRows = intradayRows.concat(batch);
+        if (batch.length < PAGE) break;
+        page++;
+      }
+      if (!intradayRows.length) return [sid, []];
+
+      // Yesterday's close baseline
+      const latestBySecId = {};
+      for (const row of intradayRows) latestBySecId[row.security_id] = row;
+      const baselineRands = secIds.reduce((sum, id) => {
+        const row = latestBySecId[id];
+        if (!row) return sum;
+        const yClose = Number(row.current_price) - Number(row["1d_abs"] || 0);
+        return sum + (yClose / 100) * (qtyMap[id] || 0);
+      }, 0);
+
+      // 5-min buckets → P&L points
+      const bucketMap = new Map();
+      for (const row of intradayRows) {
+        const d = new Date(row.timestamp);
+        d.setSeconds(0, 0);
+        d.setMinutes(Math.floor(d.getMinutes() / 5) * 5);
+        const key = d.toISOString();
+        if (!bucketMap.has(key)) bucketMap.set(key, {});
+        bucketMap.get(key)[row.security_id] = Number(row.current_price);
+      }
+
+      const sorted = [...bucketMap.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1));
+      const lastKnown = {};
+      const points = [{ value: 0 }];
+      for (const [, prices] of sorted) {
+        for (const id of secIds) {
+          if (prices[id] != null) lastKnown[id] = prices[id];
+        }
+        if (!Object.keys(lastKnown).length) continue;
+        const portfolioRands = secIds.reduce((sum, id) => {
+          const price = lastKnown[id];
+          return price != null ? sum + (price / 100) * (qtyMap[id] || 0) : sum;
+        }, 0);
+        points.push({ value: Number((portfolioRands - baselineRands).toFixed(2)) });
+      }
+      return [sid, points.length > 1 ? points : []];
     })).then(results => setStrategySparklines(Object.fromEntries(results)));
   }, [holdings]);
 
-  // Full-width area sparkline — exact same rendering as the strategy detail chart
-  const StrategySparkline = ({ values, isUp, gradId }) => {
-    if (!values || values.length < 2) return null;
+  // Full-width intraday P&L sparkline — same rendering + domain logic as ChildPortfolioTab "D" chart
+  const StrategySparkline = ({ points, isUp, gradId }) => {
+    if (!points || points.length < 2) return null;
     const color = isUp ? "#16a34a" : "#dc2626";
-    const chartData = values.map((v, i) => ({ label: i + 1, returnPct: v }));
-    const minVal = Math.min(...values);
-    const maxVal = Math.max(...values);
-    const padding = (maxVal - minVal) * 0.2 || 0.5;
-    const domain = [minVal - padding, maxVal + padding];
+    const vals = points.map(p => p.value);
+    let dataMin = Math.min(...vals);
+    let dataMax = Math.max(...vals);
+    if (Math.abs(dataMax - dataMin) < 1) { dataMin = Math.min(dataMin, -5); dataMax = Math.max(dataMax, 5); }
+    const absMax = Math.max(Math.abs(dataMin), Math.abs(dataMax));
+    const domain = dataMin >= 0 ? [0, dataMax * 1.15 || 10]
+      : dataMax <= 0 ? [dataMin * 1.15 || -10, 0]
+      : [-(absMax * 1.15), absMax * 1.15];
     return (
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={chartData} margin={{ top: 6, right: 0, left: 0, bottom: 0 }}>
+        <ComposedChart data={points} margin={{ top: 6, right: 0, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%"   stopColor={color} stopOpacity={0.25} />
@@ -2730,8 +2785,9 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             </linearGradient>
           </defs>
           <YAxis hide domain={domain} />
-          <Area type="monotone" dataKey="returnPct" stroke="transparent" fill={`url(#${gradId})`} dot={false} activeDot={false} isAnimationActive={true} animationBegin={0} animationDuration={600} animationEasing="ease-out" />
-          <Line type="monotone" dataKey="returnPct" stroke={color} strokeWidth={2} dot={false} activeDot={false} isAnimationActive={false} />
+          <ReferenceLine y={0} stroke="#e2e8f0" strokeDasharray="3 3" />
+          <Area type="monotone" dataKey="value" stroke="transparent" fill={`url(#${gradId})`} dot={false} activeDot={false} isAnimationActive={true} animationBegin={0} animationDuration={600} animationEasing="ease-out" />
+          <Line type="monotone" dataKey="value" stroke={color} strokeWidth={2} dot={false} activeDot={false} isAnimationActive={false} />
         </ComposedChart>
       </ResponsiveContainer>
     );
@@ -2926,7 +2982,8 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                     const pnlAvailable = sc.pnl != null;
                     const isUp = pnlAvailable && sc.pnl >= 0;
                     const isFilling = sc.isFilling;
-                    const hasSparkline = !isFilling && strategySparklines[sc.id]?.length >= 2;
+                    const sparkPoints = strategySparklines[sc.id];
+                    const hasSparkline = !isFilling && Array.isArray(sparkPoints) && sparkPoints.length >= 2;
                     const gradId = `strat-grad-${sc.id}`;
                     const cardCls = isFilling
                       ? "w-full text-left rounded-2xl border border-amber-200 shadow-md overflow-hidden opacity-70"
@@ -3004,7 +3061,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                         {/* Full-width area chart — bleeds to card edges */}
                         {hasSparkline && (
                           <div style={{ height: 58 }}>
-                            <StrategySparkline values={strategySparklines[sc.id]} isUp={isUp} gradId={gradId} />
+                            <StrategySparkline points={sparkPoints} isUp={isUp} gradId={gradId} />
                           </div>
                         )}
                       </button>
