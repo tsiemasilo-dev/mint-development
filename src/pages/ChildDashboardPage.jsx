@@ -3102,8 +3102,8 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                                     <p className={`text-base font-bold tabular-nums ${isUp ? "text-emerald-500" : "text-red-500"}`}>
                                       {isUp ? "+" : ""}{fmt(ytdPnlCents)}
                                     </p>
-                                    <p className={`text-[10px] font-semibold tabular-nums mt-0.5 ${isUp ? "text-emerald-600" : "text-red-500"}`}>
-                                      {isUp ? "+" : ""}{Math.abs(ytdPct).toFixed(1)}% <span className="text-slate-400 font-medium">YTD</span>
+                                    <p className={`text-sm font-bold tabular-nums mt-0.5 ${isUp ? "text-emerald-600" : "text-red-500"}`}>
+                                      {isUp ? "+" : ""}{Math.abs(ytdPct).toFixed(1)}% <span className="text-slate-400 font-medium text-xs">YTD</span>
                                     </p>
                                   </>
                                 ) : sc.pnl != null ? (
@@ -3111,7 +3111,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                                     <p className={`text-base font-bold tabular-nums ${isUp ? "text-emerald-500" : "text-red-500"}`}>
                                       {isUp ? "+" : ""}{fmt(sc.pnl)}
                                     </p>
-                                    <p className={`text-[10px] font-semibold tabular-nums mt-0.5 ${isUp ? "text-emerald-600" : "text-red-500"}`}>
+                                    <p className={`text-sm font-bold tabular-nums mt-0.5 ${isUp ? "text-emerald-600" : "text-red-500"}`}>
                                       {isUp ? "+" : ""}{sc.pnlPct != null ? Math.abs(sc.pnlPct).toFixed(1) + "%" : "—"}
                                     </p>
                                   </>
