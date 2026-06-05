@@ -95,48 +95,40 @@ export default async function handler(req, res) {
       kycStatus = "failed"; reviewAnswer = "RED";
     }
 
-    const terminal = kycStatus === "verified" || kycStatus === "failed" || kycStatus === "not_verified";
-
-    // While in progress: only record that we checked. Do NOT write review status,
-    // kyc_status, or required_actions — leaving the app exactly where it was.
-    if (!terminal) {
+    // Only a CONFIRMED success ("verified") is allowed to mutate persistent
+    // state. Every non-success outcome — including "failed"/"not_verified" — is
+    // NOT written here: a freshly started or still-incomplete transaction (and
+    // the 3rd-party-iframe 401 issue) can report failure-like results before the
+    // user has even done anything. Auto-flagging the account "unsuccessful" in
+    // that window is exactly the bug we're killing. Real failures are surfaced
+    // in the UI on a manual status check, where the user can simply retry.
+    if (kycStatus !== "verified") {
       await db.from("user_onboarding")
         .update({ kyc_checked_at: new Date().toISOString(), updated_at: new Date().toISOString() })
         .eq("user_id", userId);
       return res.json({ success: true, status: kycStatus, errorCode: errorCode || null });
     }
 
-    // ── Terminal outcome — now it's safe to persist the result and flags ──────
+    // ── Verified — safe to persist the result and flip the account on ─────────
     const updatedRaw = { ...raw, experian_idmn_result: collectResult, experian_idmn_collected_at: new Date().toISOString() };
-    const onboardingUpdate = {
+    await db.from("user_onboarding").update({
       sumsub_raw: updatedRaw,
       sumsub_review_status: kycStatus,
       sumsub_review_answer: reviewAnswer,
+      kyc_status: "verified",
+      kyc_verified_at: new Date().toISOString(),
       kyc_checked_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-    };
-    if (kycStatus === "verified") {
-      onboardingUpdate.kyc_status = "verified";
-      onboardingUpdate.kyc_verified_at = new Date().toISOString();
-    } else {
-      onboardingUpdate.kyc_status = "resubmission_required";
-    }
+    }).eq("user_id", userId);
 
-    await db.from("user_onboarding").update(onboardingUpdate).eq("user_id", userId);
-
-    let raPayload;
-    if (kycStatus === "verified") {
-      raPayload = { kyc_pending: false, kyc_verified: true, kyc_needs_resubmission: false };
-      const { data: existingPack } = await db.from("user_onboarding_pack_details").select("user_id").eq("user_id", userId).maybeSingle();
-      if (!existingPack) {
-        await db.from("user_onboarding_pack_details").insert({
-          user_id: userId,
-          pack_details: { experian_idmn: collectResult, verified_at: new Date().toISOString() },
-          updated_at: new Date().toISOString(),
-        });
-      }
-    } else {
-      raPayload = { kyc_pending: false, kyc_verified: false, kyc_needs_resubmission: true };
+    const raPayload = { kyc_pending: false, kyc_verified: true, kyc_needs_resubmission: false };
+    const { data: existingPack } = await db.from("user_onboarding_pack_details").select("user_id").eq("user_id", userId).maybeSingle();
+    if (!existingPack) {
+      await db.from("user_onboarding_pack_details").insert({
+        user_id: userId,
+        pack_details: { experian_idmn: collectResult, verified_at: new Date().toISOString() },
+        updated_at: new Date().toISOString(),
+      });
     }
 
     const { data: existingAction } = await db.from("required_actions").select("id").eq("user_id", userId).maybeSingle();

@@ -202,6 +202,11 @@ const ExperianVerification = ({ onVerified }) => {
         setStage(STAGE.VERIFIED);
         if (onVerified) onVerified();
       } else if (data.status === "failed" || data.status === "not_verified") {
+        // Never fail during a background auto-poll: a not-yet-completed (or
+        // 401-affected) transaction reports failure-like results before the user
+        // has even scanned/finished. Keep waiting; a real failure is only shown
+        // when the user explicitly checks status.
+        if (silent) return;
         setErrorCode(data.errorCode);
         setErrorMessage("Verification was unsuccessful. Please try again.");
         setStage(STAGE.FAILED);
