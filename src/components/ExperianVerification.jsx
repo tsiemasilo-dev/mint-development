@@ -232,6 +232,37 @@ const ExperianVerification = ({ onVerified }) => {
     startWorkflow();
   };
 
+  // "Redo" — discard the current Experian transaction and request a brand-new
+  // one (restart:true), then drop straight back into the embedded flow.
+  const startOver = useCallback(async () => {
+    if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    pollAttemptsRef.current = 0;
+    setErrorMessage("");
+    setErrorCode(null);
+    setVerificationUrl(null);
+    setStage(STAGE.INITIALIZING);
+    try {
+      const authToken = await getAuthHeader();
+      if (!authToken) { setErrorMessage("You must be signed in to continue."); setStage(STAGE.ERROR); return; }
+      const res = await fetch("/api/experian/idmn/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: authToken },
+        body: JSON.stringify({ restart: true }),
+      });
+      const data = await res.json();
+      if (!mountedRef.current) return;
+      if (!data.success) { setErrorMessage(data.error?.message || "Failed to restart verification."); setStage(STAGE.ERROR); return; }
+      if (data.mockMode) { setIsMockMode(true); setStage(STAGE.MOCK_READY); return; }
+      setVerificationUrl(data.url);
+      pollAttemptsRef.current = 0;
+      setStage(STAGE.AWAITING);
+    } catch (err) {
+      if (!mountedRef.current) return;
+      setErrorMessage(err.message || "Failed to restart verification.");
+      setStage(STAGE.ERROR);
+    }
+  }, [getAuthHeader]);
+
   if (stage === STAGE.INITIALIZING) {
     return (
       <div className="w-full max-w-md mx-auto text-center py-12">
@@ -279,6 +310,10 @@ const ExperianVerification = ({ onVerified }) => {
           Page not loading?{" "}
           <button type="button" onClick={openInNewTab} className="text-violet-600 underline font-medium">
             Open in a new tab
+          </button>
+          {"  ·  "}
+          <button type="button" onClick={startOver} className="text-violet-600 underline font-medium">
+            Start over
           </button>
         </p>
       </div>
@@ -350,6 +385,13 @@ const ExperianVerification = ({ onVerified }) => {
             className="px-5 py-2.5 rounded-xl font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors"
           >
             Check Status Again
+          </button>
+          <button
+            type="button"
+            onClick={startOver}
+            className="px-5 py-2 rounded-xl font-medium text-slate-500 hover:text-violet-600 transition-colors text-sm"
+          >
+            Didn't complete it? Redo the check
           </button>
         </div>
         {pollCount > 0 && (

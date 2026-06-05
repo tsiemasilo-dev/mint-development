@@ -35,10 +35,21 @@ export default async function handler(req, res) {
     let raw = {};
     try { raw = typeof onboarding?.sumsub_raw === "string" ? JSON.parse(onboarding.sumsub_raw) : (onboarding?.sumsub_raw || {}); } catch {}
 
-    // Return existing URL if workflow already started
-    if (raw?.experian_idmn_transaction_id && raw?.experian_idmn_token) {
+    // "Redo" — caller wants a fresh workflow; drop the stored transaction so a
+    // new StartWorkflow is issued below instead of resuming the old one.
+    const restart = req.body?.restart === true;
+
+    // Return existing URL if a workflow is already in flight (unless restarting)
+    if (!restart && raw?.experian_idmn_transaction_id && raw?.experian_idmn_token) {
       const url = `${EXPERIAN_IDMN_HOSTED_BASE}/${raw.experian_idmn_token}`;
       return res.json({ success: true, url, transaction_id: String(raw.experian_idmn_transaction_id), token: raw.experian_idmn_token, existing: true });
+    }
+    if (restart) {
+      delete raw.experian_idmn_transaction_id;
+      delete raw.experian_idmn_token;
+      delete raw.experian_idmn_started_at;
+      delete raw.experian_idmn_result;
+      delete raw.experian_mock;
     }
 
     const identityNumber = req.body?.identity_number || raw?.identity_details?.identity_number;
@@ -53,11 +64,9 @@ export default async function handler(req, res) {
       const mockTxId = `mock-${Date.now()}`;
       const mockToken = `mock-token-${userId.slice(0, 8)}`;
       const updatedRaw = { ...raw, experian_idmn_transaction_id: mockTxId, experian_idmn_token: mockToken, experian_idmn_started_at: new Date().toISOString(), experian_mock: true };
-      await db.from("user_onboarding").update({ sumsub_raw: updatedRaw, sumsub_applicant_id: mockTxId, kyc_status: "pending", kyc_checked_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("user_id", userId);
-      const { data: existingAction } = await db.from("required_actions").select("id").eq("user_id", userId).maybeSingle();
-      const raPayload = { kyc_pending: true, kyc_verified: false, kyc_needs_resubmission: false };
-      if (existingAction) { await db.from("required_actions").update(raPayload).eq("user_id", userId); }
-      else { await db.from("required_actions").insert({ user_id: userId, ...raPayload }); }
+      // "started" (not "pending") + no kyc_pending flag — the user hasn't
+      // submitted anything yet, so the app must NOT show "Under Review".
+      await db.from("user_onboarding").update({ sumsub_raw: updatedRaw, sumsub_applicant_id: mockTxId, kyc_status: "started", kyc_checked_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("user_id", userId);
       return res.json({ success: true, mockMode: true, url: null, transaction_id: mockTxId, token: mockToken });
     }
 
@@ -105,18 +114,17 @@ export default async function handler(req, res) {
       experian_idmn_started_at: new Date().toISOString(),
     };
 
+    // Status "started" (not "pending") and NO required_actions.kyc_pending flag:
+    // a workflow link has been issued but the user hasn't submitted a selfie yet,
+    // so the app must not show "Under Review". The collect endpoint sets pending /
+    // verified / failed once Experian actually has a result.
     await db.from("user_onboarding").update({
       sumsub_raw: updatedRaw,
       sumsub_applicant_id: String(transaction_id),
-      kyc_status: "pending",
+      kyc_status: "started",
       kyc_checked_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }).eq("user_id", userId);
-
-    const { data: existingAction } = await db.from("required_actions").select("id").eq("user_id", userId).maybeSingle();
-    const raPayload = { kyc_pending: true, kyc_verified: false, kyc_needs_resubmission: false };
-    if (existingAction) { await db.from("required_actions").update(raPayload).eq("user_id", userId); }
-    else { await db.from("required_actions").insert({ user_id: userId, ...raPayload }); }
 
     return res.json({ success: true, url, transaction_id: String(transaction_id), token });
   } catch (err) {
