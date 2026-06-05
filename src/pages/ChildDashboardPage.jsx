@@ -3066,10 +3066,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                         className={cardCls}
                         style={{ background: isFilling ? "#fff" : "linear-gradient(150deg,#fdfbff 0%,#f3eeff 60%,#ede8ff 100%)" }}
                       >
-                        {/* Accent strip */}
-                        <div style={{ height: 3, background: accentColor, opacity: isFilling ? 0.5 : 1 }} />
-
-                        <div className="px-4 pt-3 pb-3">
+                        <div className="px-4 pt-4 pb-3">
                         {/* Purchase date top-right when in expanded stack */}
                         {sc.purchaseDate && opts.showDate && (
                           <p className="text-[10px] font-semibold text-slate-400 text-right mb-1.5">{sc.purchaseDate}</p>
@@ -3092,68 +3089,56 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                               </div>
                             </div>
                           </div>
-                          {/* P&L pill */}
-                          <div className="flex-shrink-0">
+                          <div className="flex flex-col items-end flex-shrink-0">
                             {isFilling ? (
-                              <div className="rounded-xl px-3 py-1.5 text-right" style={{ background: "rgba(251,191,36,0.12)", border: "1px solid rgba(251,191,36,0.25)" }}>
+                              <>
                                 <p className="text-sm font-bold text-amber-700">Pending</p>
-                                <p className="text-[10px] font-semibold text-amber-600">Awaiting fill</p>
-                              </div>
+                                <p className="text-xs font-semibold text-amber-600">Awaiting fill</p>
+                              </>
                             ) : (
-                              <div className="rounded-xl px-3 py-1.5 text-right"
-                                style={{
-                                  background: isUp ? "rgba(22,163,74,0.08)" : "rgba(220,38,38,0.08)",
-                                  border: `1px solid ${isUp ? "rgba(22,163,74,0.18)" : "rgba(220,38,38,0.18)"}`,
-                                  backdropFilter: "blur(8px)",
-                                }}>
+                              <>
                                 {ytdAvailable ? (
                                   <>
-                                    <p className={`text-base font-bold tabular-nums leading-tight ${isUp ? "text-emerald-600" : "text-red-600"}`}>
+                                    <p className={`text-base font-bold tabular-nums ${isUp ? "text-emerald-500" : "text-red-500"}`}>
                                       {isUp ? "+" : ""}{fmt(ytdPnlCents)}
                                     </p>
-                                    <p className={`text-[10px] font-semibold tabular-nums mt-0.5 ${isUp ? "text-emerald-500" : "text-red-500"}`}>
+                                    <p className={`text-[10px] font-semibold tabular-nums mt-0.5 ${isUp ? "text-emerald-600" : "text-red-500"}`}>
                                       {isUp ? "+" : ""}{Math.abs(ytdPct).toFixed(1)}% <span className="text-slate-400 font-medium">YTD</span>
                                     </p>
                                   </>
                                 ) : sc.pnl != null ? (
                                   <>
-                                    <p className={`text-base font-bold tabular-nums leading-tight ${isUp ? "text-emerald-600" : "text-red-600"}`}>
+                                    <p className={`text-base font-bold tabular-nums ${isUp ? "text-emerald-500" : "text-red-500"}`}>
                                       {isUp ? "+" : ""}{fmt(sc.pnl)}
                                     </p>
-                                    <p className={`text-[10px] font-semibold tabular-nums mt-0.5 ${isUp ? "text-emerald-500" : "text-red-500"}`}>
+                                    <p className={`text-[10px] font-semibold tabular-nums mt-0.5 ${isUp ? "text-emerald-600" : "text-red-500"}`}>
                                       {isUp ? "+" : ""}{sc.pnlPct != null ? Math.abs(sc.pnlPct).toFixed(1) + "%" : "—"}
                                     </p>
                                   </>
                                 ) : (
                                   <p className="text-xs font-semibold text-slate-400">—</p>
                                 )}
-                              </div>
+                              </>
                             )}
                           </div>
                         </div>
-                        {/* Stat row: logos + holdings count + market value */}
                         {sc.holdings.length > 0 && (
-                          <div className="flex items-center justify-between pt-2.5 border-t border-[#dde3f5]">
-                            <div className="flex items-center gap-2">
-                              <div className="flex -space-x-2">
-                                {sc.holdings.slice(0, 4).map(h => (
-                                  <div key={h.id} className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white shadow-sm">
-                                    {h.logo_url
-                                      ? <img src={h.logo_url} alt={h.symbol} className="h-full w-full object-cover" />
-                                      : <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[7px] font-bold text-slate-600">{h.symbol?.substring(0, 2)}</div>}
-                                  </div>
-                                ))}
-                                {sc.holdings.length > 4 && (
-                                  <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-slate-100 text-[9px] font-semibold text-slate-500">
-                                    +{sc.holdings.length - 4}
-                                  </div>
-                                )}
-                              </div>
-                              <span className="text-[11px] text-slate-400 font-medium">{sc.holdings.length} holding{sc.holdings.length !== 1 ? "s" : ""}</span>
+                          <div className="flex items-center gap-2 pt-3 border-t border-[#dde3f5]">
+                            <div className="flex -space-x-2">
+                              {sc.holdings.slice(0, 4).map(h => (
+                                <div key={h.id} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white shadow-sm">
+                                  {h.logo_url
+                                    ? <img src={h.logo_url} alt={h.symbol} className="h-full w-full object-cover" />
+                                    : <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">{h.symbol?.substring(0, 2)}</div>}
+                                </div>
+                              ))}
+                              {sc.holdings.length > 4 && (
+                                <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-slate-100 text-[10px] font-semibold text-slate-500">
+                                  +{sc.holdings.length - 4}
+                                </div>
+                              )}
                             </div>
-                            {sc.totalValue > 0 && (
-                              <span className="text-[11px] font-semibold text-slate-500 tabular-nums">{fmt(sc.totalValue)}</span>
-                            )}
+                            <span className="text-[11px] text-slate-400">{sc.holdings.length} holding{sc.holdings.length !== 1 ? "s" : ""}</span>
                           </div>
                         )}
                         </div>
