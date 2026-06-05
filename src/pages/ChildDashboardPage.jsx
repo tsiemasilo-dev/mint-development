@@ -2599,23 +2599,16 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     let totalValueRands = 0;
     let totalCostRands = 0;
     let anyPriceMissing = false;
+    let anyCostMissing = false;
     if (!isFilling) {
       for (const h of hs) {
-        const qty = Math.abs(Number(h.quantity || 0));
-        // Mirror balance card exactly: prefer 15s live poll → intraday_price_cents fallback
-        const liveCents = childLivePriceMap[h.security_id]?.priceCents;
-        const intraCents = Number(h.intraday_price_cents);
-        const priceCents = (liveCents > 0) ? liveCents : (Number.isFinite(intraCents) && intraCents > 0) ? intraCents : 0;
-        if (priceCents > 0 && qty > 0) {
-          totalValueRands += (priceCents / 100) * qty;
-        } else {
-          anyPriceMissing = true;
-        }
-        // Mirror balance card exactly: invested_amount is stored in cents
-        totalCostRands += Number(h.invested_amount || 0) / 100;
+        const mv = getHoldingMarketValueRands(h);
+        const cv = getHoldingCostRands(h);
+        if (mv == null) anyPriceMissing = true; else totalValueRands += mv;
+        if (cv == null) anyCostMissing = true; else totalCostRands += cv;
       }
     }
-    const pnlAvailable = !isFilling && !anyPriceMissing && totalCostRands > 0;
+    const pnlAvailable = !isFilling && !anyPriceMissing && !anyCostMissing;
     const pnlRands = pnlAvailable ? (totalValueRands - totalCostRands) : null;
     const pnlPct = pnlAvailable && totalCostRands > 0
       ? ((totalValueRands - totalCostRands) / totalCostRands) * 100 : null;
