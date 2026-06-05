@@ -1025,36 +1025,42 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                         key={holding.symbol}
                         className="flex items-center justify-between"
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 overflow-hidden">
-                            {holding.isStrategy && holding.topLogos?.length > 0 ? (
-                              <div className="flex -space-x-1.5 items-center justify-center">
+                        {holding.isStrategy && holding.topLogos?.length > 0 ? (
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <div className="flex -space-x-2">
                                 {holding.topLogos.slice(0, 5).map((logo, li) => (
-                                  <img key={li} src={logo} className="w-5 h-5 rounded-full object-cover border border-white shadow-sm" referrerPolicy="no-referrer" crossOrigin="anonymous" />
+                                  <img key={li} src={logo} className="w-7 h-7 rounded-full object-cover border-2 border-white shadow-sm" referrerPolicy="no-referrer" crossOrigin="anonymous" />
                                 ))}
                               </div>
-                            ) : failedLogos[holding.symbol] || !holding.logo ? (
-                              <span className="text-xs font-bold text-slate-600">
-                                {holding.symbol.slice(0, 3)}
-                              </span>
-                            ) : (
-                              <img
-                                src={holding.logo}
-                                alt={holding.name}
-                                className="h-8 w-8 object-contain"
-                                referrerPolicy="no-referrer"
-                                crossOrigin="anonymous"
-                                onError={() => setFailedLogos(prev => ({ ...prev, [holding.symbol]: true }))}
-                              />
-                            )}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <p className="text-sm font-semibold text-slate-900">{holding.symbol}</p>
                             </div>
-                            <p className="text-xs text-slate-500">{holding.name}</p>
+                            <p className="text-sm font-semibold text-slate-900">{holding.name}</p>
+                            <p className="text-xs text-slate-500">{(holding.strategyHoldings || []).length > 0 ? `${holding.strategyHoldings.length} assets` : holding.symbol}</p>
                           </div>
-                        </div>
+                        ) : (
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 overflow-hidden flex-shrink-0">
+                              {failedLogos[holding.symbol] || !holding.logo ? (
+                                <span className="text-xs font-bold text-slate-600">
+                                  {holding.symbol.slice(0, 3)}
+                                </span>
+                              ) : (
+                                <img
+                                  src={holding.logo}
+                                  alt={holding.name}
+                                  className="h-8 w-8 object-contain"
+                                  referrerPolicy="no-referrer"
+                                  crossOrigin="anonymous"
+                                  onError={() => setFailedLogos(prev => ({ ...prev, [holding.symbol]: true }))}
+                                />
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900">{holding.symbol}</p>
+                              <p className="text-xs text-slate-500">{holding.name}</p>
+                            </div>
+                          </div>
+                        )}
                         <div className="text-right">
                           <p className={`text-sm font-semibold ${holding.change >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                             {holding.change >= 0 ? '+' : ''}{holding.change.toFixed(1)}%
