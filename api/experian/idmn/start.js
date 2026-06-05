@@ -50,6 +50,11 @@ export default async function handler(req, res) {
       delete raw.experian_idmn_started_at;
       delete raw.experian_idmn_result;
       delete raw.experian_mock;
+      // Clear any stale "under review" flag so a fresh attempt starts clean
+      // (e.g. if a prior in-progress poll had wrongly marked the account pending).
+      await db.from("required_actions")
+        .update({ kyc_pending: false, kyc_needs_resubmission: false })
+        .eq("user_id", userId);
     }
 
     const identityNumber = req.body?.identity_number || raw?.identity_details?.identity_number;
