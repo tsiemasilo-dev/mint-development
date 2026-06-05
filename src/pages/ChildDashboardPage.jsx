@@ -2687,23 +2687,28 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
 
 
 
-  // Fetch 7-day sparkline basket values per strategy for the card chart
+  // Fetch YTD daily cumulative return curve per strategy (matches strategy portfolio tab Daily chart)
   useEffect(() => {
-    if (!child?.id || !holdings.length) return;
+    if (!holdings.length) return;
     const stratIds = [...new Set(holdings.filter(h => h.strategy_id).map(h => h.strategy_id))];
     if (!stratIds.length) return;
+    const yearStart = `${new Date().getFullYear()}-01-01`;
     Promise.all(stratIds.map(async (sid) => {
       const { data } = await supabase
-        .from("client_strategy_returns_c")
-        .select("as_of_date, basket_value")
-        .eq("family_member", child.id)
+        .from("strategies_returns_c")
+        .select("as_of_date, \"1d_pct\"")
         .eq("strategy_id", sid)
-        .order("as_of_date", { ascending: false })
-        .limit(7);
-      const values = (data || []).reverse().map(r => Number(r.basket_value || 0));
+        .gte("as_of_date", yearStart)
+        .order("as_of_date", { ascending: true });
+      if (!data || data.length < 2) return [sid, []];
+      let cumulative = 0;
+      const values = data.map(row => {
+        cumulative += row["1d_pct"] ? row["1d_pct"] / 100 : 0;
+        return Number((cumulative * 100).toFixed(2));
+      });
       return [sid, values];
     })).then(results => setStrategySparklines(Object.fromEntries(results)));
-  }, [child?.id, holdings]);
+  }, [holdings]);
 
   // Full-width area sparkline using Recharts (matches Markets tab card style)
   const StrategySparkline = ({ values, isUp, gradId }) => {
