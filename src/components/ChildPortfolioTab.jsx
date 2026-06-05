@@ -568,16 +568,26 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, livePriceMap
                       const isPending = liveStrategyMetrics.isPending;
                       const livePnl = liveStrategyMetrics.liveValue - liveStrategyMetrics.costBasis;
                       const livePct = ia > 0 ? (livePnl / ia) * 100 : 0;
+                      // True YTD: live value vs earliest snapshot of current year, not inception cost
+                      const currentYear = new Date().getFullYear();
+                      const yearStartRow = snapshotRows.find(r => r.as_of_date >= `${currentYear}-01-01`);
+                      const yearStartRands = yearStartRow ? Number(yearStartRow.basket_value || 0) / 100 : null;
+                      const ytdPnl = yearStartRands ? liveStrategyMetrics.liveValue - yearStartRands : livePnl;
+                      const ytdPct = yearStartRands ? (ytdPnl / yearStartRands) * 100 : livePct;
                       const pnl = timeFilter === "D"
                         ? liveStrategyMetrics.todayPnl
-                        : (timeFilter === "all" || timeFilter === "ytd")
-                          ? livePnl
-                          : (periodReturnData?.pnl !== undefined && periodReturnData.pnl !== 0 ? periodReturnData.pnl : (derivedPeriodReturn.pnl !== 0 ? derivedPeriodReturn.pnl : livePnl));
+                        : timeFilter === "ytd"
+                          ? ytdPnl
+                          : timeFilter === "all"
+                            ? livePnl
+                            : (periodReturnData?.pnl !== undefined && periodReturnData.pnl !== 0 ? periodReturnData.pnl : (derivedPeriodReturn.pnl !== 0 ? derivedPeriodReturn.pnl : livePnl));
                       const pnlPct = timeFilter === "D"
                         ? liveStrategyMetrics.todayPct
-                        : (timeFilter === "all" || timeFilter === "ytd")
-                          ? livePct
-                          : (periodReturnData?.pct !== undefined && periodReturnData.pct !== 0 ? periodReturnData.pct : (derivedPeriodReturn.pct !== 0 ? derivedPeriodReturn.pct : (ia > 0 ? (pnl / ia) * 100 : 0)));
+                        : timeFilter === "ytd"
+                          ? ytdPct
+                          : timeFilter === "all"
+                            ? livePct
+                            : (periodReturnData?.pct !== undefined && periodReturnData.pct !== 0 ? periodReturnData.pct : (derivedPeriodReturn.pct !== 0 ? derivedPeriodReturn.pct : (ia > 0 ? (pnl / ia) * 100 : 0)));
                       const isPos = pnl >= 0;
                       if (isPending) return <p className="text-3xl font-bold text-slate-900">R0,00</p>;
                       return (
