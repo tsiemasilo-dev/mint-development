@@ -3099,19 +3099,19 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                                 {ytdAvailable ? (
                                   <>
                                     <p className={`text-base font-bold tabular-nums ${isUp ? "text-emerald-500" : "text-red-500"}`}>
-                                      {isUp ? "+" : ""}{ytdPct.toFixed(2)}%
+                                      {isUp ? "+" : ""}{fmt(ytdPnlCents)}
                                     </p>
                                     <p className={`text-xs font-semibold tabular-nums mt-0.5 ${isUp ? "text-emerald-600" : "text-red-500"}`}>
-                                      {isUp ? "+" : ""}{fmt(ytdPnlCents)}
+                                      {isUp ? "+" : ""}{Math.abs(ytdPct).toFixed(1)}%
                                     </p>
                                   </>
                                 ) : sc.pnl != null ? (
                                   <>
                                     <p className={`text-base font-bold tabular-nums ${isUp ? "text-emerald-500" : "text-red-500"}`}>
-                                      {isUp ? "+" : ""}{sc.pnlPct?.toFixed(2)}%
+                                      {isUp ? "+" : ""}{fmt(sc.pnl)}
                                     </p>
                                     <p className={`text-xs font-semibold tabular-nums mt-0.5 ${isUp ? "text-emerald-600" : "text-red-500"}`}>
-                                      {isUp ? "+" : ""}{fmt(sc.pnl)}
+                                      {isUp ? "+" : ""}{sc.pnlPct != null ? Math.abs(sc.pnlPct).toFixed(1) + "%" : ""}
                                     </p>
                                   </>
                                 ) : (
