@@ -126,15 +126,6 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   }, [deepLink]);
 
   useEffect(() => {
-    if (!pendingStrategyId || !strategies.length) return;
-    const match = strategies.find(s => s.strategyId === pendingStrategyId || s.id === pendingStrategyId);
-    if (match) {
-      selectStrategy(match);
-      setPendingStrategyId(null);
-    }
-  }, [pendingStrategyId, strategies]);
-
-  useEffect(() => {
     if (!expandedStrategyId) return;
     let attempts = 0;
     const tryScroll = () => {
@@ -174,6 +165,16 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   const stockDropdownRef = useRef(null);
   const { profile } = useProfile();
   const { strategies, selectedStrategy: userSelectedStrategy, loading: strategiesLoading, selectStrategy, refetch: refetchStrategies } = useUserStrategies();
+
+  useEffect(() => {
+    if (!pendingStrategyId || !strategies.length) return;
+    const match = strategies.find(s => s.strategyId === pendingStrategyId || s.id === pendingStrategyId);
+    if (match) {
+      selectStrategy(match);
+      setPendingStrategyId(null);
+    }
+  }, [pendingStrategyId, strategies]);
+
   const { chartData: realChartData, loading: chartLoading } = useStrategyChartData(userSelectedStrategy?.strategyId, timeFilter, userSelectedStrategy?.firstInvestedDate || null, profile?.id);
   const { returnData: periodReturnData, loading: periodReturnLoading } = useStrategyPeriodReturns(profile?.id, userSelectedStrategy?.strategyId, timeFilter);
 
