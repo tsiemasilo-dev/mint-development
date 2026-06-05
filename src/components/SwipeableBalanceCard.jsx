@@ -1385,10 +1385,11 @@ const SwipeableBalanceCard = ({
   // Parent M/5D: parentSnapshotPeriodReturn from dedicated snapshot query (stored cols or basket diff).
   const useChildLiveYtd = childMode && activeTab === "ytd" && childLiveMetrics != null;
   const useParentLiveYtd = !childMode && activeTab === "ytd" && parentYearStartBasketCents != null && displayMarketValue > 0;
-  // No Math.min cap — the prior-year count check in fetchParentSnapshots prevents inflation.
-  // If parentYearStartBasketCents was set, we have confirmed prior-year history exists.
+  // Cap YTD at all-time (displayReturn) to prevent mid-year deposit inflation.
+  // Prior-year count check already ensures parentYearStartBasketCents is only set when
+  // prior-year rows exist — the cap adds a second safety layer for net-new deposits.
   const parentYtdReturn = useParentLiveYtd
-    ? (displayMarketValue - parentYearStartBasketCents / 100)
+    ? Math.min(displayMarketValue - parentYearStartBasketCents / 100, displayReturn)
     : 0;
 
   // Parent M/5D: compute final P&L from live price (displayMarketValue) − period-start basket.
@@ -1401,6 +1402,8 @@ const SwipeableBalanceCard = ({
     : null;
 
   const useParentMD = !childMode && (activeTab === "m" || activeTab === "5d") && parentMDLivePnl !== null;
+  // Parent M/5D when basket not yet fetched: show R0 explicitly — no stale chart periodReturn fallback.
+  const isParentMDTabWaiting = !childMode && (activeTab === "m" || activeTab === "5d") && parentMDLivePnl === null;
   // For parent YTD: when no prior-year anchor (parentYearStartBasketCents=null → !useParentLiveYtd),
   // user invested entirely this year → YTD = All-time = displayReturn. Never use chart periodReturn for YTD.
   const useParentYtdTab = !childMode && activeTab === "ytd";
@@ -1413,7 +1416,9 @@ const SwipeableBalanceCard = ({
         ? parentMDLivePnl
         : useParentYtdTab
           ? displayReturn            // No prior-year anchor → All-time (never fall through to periodReturn)
-          : ((isPeriodTab && activeTab !== "all" && periodReturn !== null) ? periodReturn : displayReturn);
+          : isParentMDTabWaiting
+            ? 0                      // Basket data not yet fetched — R0, no stale chart fallback
+            : ((isPeriodTab && activeTab !== "all" && periodReturn !== null) ? periodReturn : displayReturn);
 
   // Debug log — fires on every relevant render so values can be compared in console
   if (!childMode && activeTab !== "all" && activeTab !== "d") {

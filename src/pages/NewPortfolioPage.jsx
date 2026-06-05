@@ -592,10 +592,21 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     if (!snapshotRows.length) return { pnl: 0, pct: 0 };
 
     // Use live value as "latest" — matches purple card's displayMarketValue formula.
-    // hasPrices is true when directStratHoldings OR ownLivePriceMap provides prices
-    // (last_price from Supabase holdings also counts, so this is truthy after first holdings load).
-    const liveVal = liveStrategyMetrics.liveValue;
-    const hasLive = liveStrategyMetrics.hasPrices && liveVal > 0;
+    // Explicit initial fallback: when the 15s intraday poll hasn't fired yet, compute
+    // liveValue from directStratHoldings.last_price (stored cents) so YTD/M/5D are never
+    // R0 on first render. liveStrategyMetrics already uses last_price as its internal fallback
+    // (liveCents=0 → lastCents), so liveValue > 0 after holdings load even without the poll.
+    const liveVal = liveStrategyMetrics.liveValue > 0
+      ? liveStrategyMetrics.liveValue
+      : directStratHoldings
+          .filter(h => Number(h.avg_fill || 0) > 0)
+          .reduce((sum, h) => {
+            const qty = Math.abs(Number(h.quantity || 0));
+            const lastCents = Number(h.last_price || 0);
+            return sum + (lastCents > 0 ? (lastCents / 100) * qty : 0);
+          }, 0);
+    // hasLive: true once any holdings are loaded (last_price used as initial value)
+    const hasLive = liveVal > 0;
 
     if (timeFilter === "5d") {
       if (snapshotRows.length < 5 || !hasLive) return { pnl: 0, pct: 0 };
@@ -661,7 +672,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     }
 
     return { pnl: 0, pct: 0 };
-  }, [snapshotRows, timeFilter, liveStrategyMetrics]);
+  }, [snapshotRows, timeFilter, liveStrategyMetrics, directStratHoldings]);
 
   // ── intraday D chart (5-min buckets from stock_intraday_c) ────────────────
   useEffect(() => {
