@@ -132,31 +132,6 @@ const ExperianVerification = ({ onVerified }) => {
     };
   }, [startWorkflow]);
 
-  // Auto-poll while the embedded verification (iframe) is open, so the step
-  // advances on its own the moment Experian confirms — no manual "check" click.
-  useEffect(() => {
-    if (stage !== STAGE.AWAITING) return undefined;
-    let cancelled = false;
-    const tick = async () => {
-      if (cancelled || !mountedRef.current) return;
-      pollAttemptsRef.current += 1;
-      if (pollAttemptsRef.current > AUTO_POLL_MAX_ATTEMPTS) {
-        // Give up auto-polling; fall back to the manual "check status" screen.
-        setStage(STAGE.PENDING);
-        return;
-      }
-      await collectResults(true);
-      if (!cancelled && mountedRef.current) {
-        pollTimerRef.current = setTimeout(tick, AUTO_POLL_INTERVAL_MS);
-      }
-    };
-    pollTimerRef.current = setTimeout(tick, AUTO_POLL_INTERVAL_MS);
-    return () => {
-      cancelled = true;
-      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
-    };
-  }, [stage, collectResults]);
-
   // Reveal the Experian page embedded in an iframe (stays in-app).
   const beginVerification = () => {
     if (verificationUrl) {
@@ -222,6 +197,34 @@ const ExperianVerification = ({ onVerified }) => {
       setStage(STAGE.ERROR);
     }
   }, [getAuthHeader, onVerified]);
+
+  // Auto-poll while the embedded verification (iframe) is open, so the step
+  // advances on its own the moment Experian confirms — no manual "check" click.
+  // NOTE: declared AFTER collectResults — referencing it in the dependency array
+  // before its useCallback initialization triggers a "Cannot access before
+  // initialization" (TDZ) crash during render.
+  useEffect(() => {
+    if (stage !== STAGE.AWAITING) return undefined;
+    let cancelled = false;
+    const tick = async () => {
+      if (cancelled || !mountedRef.current) return;
+      pollAttemptsRef.current += 1;
+      if (pollAttemptsRef.current > AUTO_POLL_MAX_ATTEMPTS) {
+        // Give up auto-polling; fall back to the manual "check status" screen.
+        setStage(STAGE.PENDING);
+        return;
+      }
+      await collectResults(true);
+      if (!cancelled && mountedRef.current) {
+        pollTimerRef.current = setTimeout(tick, AUTO_POLL_INTERVAL_MS);
+      }
+    };
+    pollTimerRef.current = setTimeout(tick, AUTO_POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    };
+  }, [stage, collectResults]);
 
   const handleRetry = () => {
     setErrorMessage("");

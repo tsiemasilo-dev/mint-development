@@ -22,13 +22,16 @@ export default defineConfig({
     },
   },
   build: {
-    /* No manualChunks. Hand-splitting vendors (react / recharts / etc.) into
-       separate chunks created cross-chunk circular references that crashed at
-       runtime with "Cannot access 'X' before initialization" (a TDZ on a module
-       const used before its chunk finished initializing). Letting Rollup do its
-       automatic chunking keeps circularly-dependent modules correctly ordered.
-       Route-level code-splitting (React.lazy/dynamic import) is unaffected, so
-       lazy page loading still works. */
-    rollupOptions: {},
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom'],
+          'vendor-framer': ['framer-motion'],
+          'vendor-recharts': ['recharts'],
+          'vendor-supabase': ['@supabase/supabase-js'],
+          'vendor-lucide': ['lucide-react'],
+        },
+      },
+    },
   },
 });
