@@ -927,16 +927,23 @@ const SwipeableBalanceCard = ({
         const limitValue = activeTab === "5d" ? 5 : undefined;
 
         if (userId) {
-          const strategyHoldings = holdingsToChart.filter(h => h.isStrategy && h.strategyId);
+          // Collect unique strategy IDs from ALL holdings — not just isStrategy entries.
+          // Parent holdings tagged with strategy_id (but isStrategy=false) must also use
+          // client_strategy_returns_c so YTD and ALL share the same data source.
+          const uniqueStrategyIds = [...new Set(
+            holdingsToChart
+              .map(h => h.strategyId || h.strategy_id)
+              .filter(Boolean)
+          )];
           // Collect daily 1d_pnl per date (summed across all strategies)
           const strategyDailyPnl = {};
-          await Promise.all(strategyHoldings.map(async (sh) => {
+          await Promise.all(uniqueStrategyIds.map(async (sid) => {
             try {
               let query = supabase
                 .from("client_strategy_returns_c")
-                .select("*")
+                .select("as_of_date, 1d_pnl")
                 .eq("user_id", userId)
-                .eq("strategy_id", sh.strategyId)
+                .eq("strategy_id", sid)
                 .is("family_member", null) // parent chart only
                 .order("as_of_date", { ascending: true });
 
@@ -958,7 +965,7 @@ const SwipeableBalanceCard = ({
                 });
               }
             } catch (e) {
-              console.warn(`[Chart] Failed to fetch strategy 1d_pnl for ${sh.strategyId}:`, e);
+              console.warn(`[Chart] Failed to fetch strategy 1d_pnl for ${sid}:`, e);
             }
           }));
 
@@ -975,7 +982,9 @@ const SwipeableBalanceCard = ({
         // in client_strategy_returns_c (strategyBasketByDate). Double-counting
         // would add both the per-stock stock_returns_c P&L AND the strategy 1d_pnl.
         const chartedStrategyIds = new Set(
-          holdingsToChart.filter(h => h.isStrategy).map(h => h.strategyId).filter(Boolean)
+          holdingsToChart
+            .map(h => h.strategyId || h.strategy_id)
+            .filter(Boolean)
         );
         const stockHoldings = holdingsToChart.filter(h =>
           h.security_id && !h.isStrategy && !chartedStrategyIds.has(h.strategy_id)
