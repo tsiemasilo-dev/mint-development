@@ -48,6 +48,9 @@ function fmt(cents) {
   const val = (cents || 0) / 100;
   return `R\u202F${val.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
+function fmtRands(rands) {
+  return `R\u202F${(rands || 0).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
 function withTimeout(promise, ms, message) {
   let timeoutId;
@@ -2747,7 +2750,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
         pnl = liveValue - costBasis;
         pct = (pnl / costBasis) * 100;
       }
-      result[sid] = { ytdPnlCents: Math.round(pnl * 100), ytdPct: pct };
+      result[sid] = { ytdPnlRands: pnl, ytdPct: pct };
     }
     return result;
   }, [holdings, childLivePriceMap, strategyYearStartBasket]);
@@ -3047,8 +3050,8 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                   const renderCard = (sc, opts = {}) => {
                     const ytdMetrics = strategyYtdMetrics[sc.id];
                     const ytdPct = ytdMetrics?.ytdPct ?? null;
-                    const ytdPnlCents = ytdMetrics?.ytdPnlCents ?? null;
-                    const ytdAvailable = ytdPct != null && ytdPnlCents != null;
+                    const ytdPnlRands = ytdMetrics?.ytdPnlRands ?? null;
+                    const ytdAvailable = ytdPct != null && ytdPnlRands != null;
                     const isUp = ytdAvailable ? ytdPct >= 0 : (sc.pnl != null && sc.pnl >= 0);
                     const isFilling = sc.isFilling;
                     const sparkPoints = strategySparklines[sc.id];
@@ -3101,7 +3104,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                                 {ytdAvailable ? (
                                   <>
                                     <p className={`text-base font-bold tabular-nums ${isUp ? "text-emerald-500" : "text-red-500"}`}>
-                                      {isUp ? "+" : ""}{fmt(ytdPnlCents)}
+                                      {isUp ? "+" : ""}{fmtRands(ytdPnlRands)}
                                     </p>
                                     <p className={`text-sm font-bold tabular-nums ${isUp ? "text-emerald-600" : "text-red-500"}`}>
                                       {isUp ? "+" : ""}{Math.abs(ytdPct).toFixed(1)}%
