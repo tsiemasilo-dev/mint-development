@@ -189,6 +189,16 @@ const ExperianVerification = ({ onVerified }) => {
       });
       const data = await res.json();
 
+      // Surface the raw Experian payload in the browser console so OCR/liveness
+      // fields (and any image data) can be inspected without Vercel log access.
+      if (data?.collectResult) {
+        try {
+          console.log("[Experian IDMN] CollectWorkflowResults raw:", JSON.stringify(data.collectResult, null, 2));
+        } catch {
+          console.log("[Experian IDMN] CollectWorkflowResults raw:", data.collectResult);
+        }
+      }
+
       if (!mountedRef.current) return;
 
       if (!data.success) {

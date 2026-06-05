@@ -106,7 +106,9 @@ export default async function handler(req, res) {
       await db.from("user_onboarding")
         .update({ kyc_checked_at: new Date().toISOString(), updated_at: new Date().toISOString() })
         .eq("user_id", userId);
-      return res.json({ success: true, status: kycStatus, errorCode: errorCode || null });
+      // collectResult echoed back so the raw Experian payload is visible in the
+      // browser console (helps inspect OCR/liveness fields without Vercel logs).
+      return res.json({ success: true, status: kycStatus, errorCode: errorCode || null, collectResult });
     }
 
     // ── Verified — safe to persist the result and flip the account on ─────────
