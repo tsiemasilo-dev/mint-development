@@ -581,46 +581,86 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       if (abs1d != null) todayPnl += (abs1d / 100) * qty;
     }
     return { liveValue, costBasis, todayPnl, todayPct: costBasis > 0 ? (todayPnl / costBasis) * 100 : 0, isPending: false, hasPrices };
-  }, [rawHoldings, userSelectedStrategy?.strategyId, ownLivePriceMap]);
+  // directStratHoldings included so metrics update when Supabase fetch completes (not just on ownLivePriceMap poll)
+  }, [rawHoldings, userSelectedStrategy?.strategyId, ownLivePriceMap, directStratHoldings]);
 
   // ── derived period return (5D/M/YTD from basket snapshots) ───────────────
+  // Formula: liveValue − periodStartBasket (same as purple card parent mode).
+  // "latest" is always the current live market value (not stored basket), so M/5D stay in sync
+  // with the purple card during market hours.
   const derivedPeriodReturn = useMemo(() => {
     if (!snapshotRows.length) return { pnl: 0, pct: 0 };
-    const last = snapshotRows[snapshotRows.length - 1];
-    const latestCents = Number(last?.basket_value || 0);
-    if (!latestCents) return { pnl: 0, pct: 0 };
-    let startCents = 0;
-    if (timeFilter === "5d" && snapshotRows.length >= 5) {
-      startCents = Number(snapshotRows[snapshotRows.length - 5]?.basket_value || 0);
-    } else if (timeFilter === "m" && snapshotRows.length >= 22) {
-      startCents = Number(snapshotRows[snapshotRows.length - 22]?.basket_value || 0);
-    } else if (timeFilter === "ytd") {
-      // Live YTD — mirrors child balance card logic exactly:
-      // anchor = FIRST basket of the current year, only when prior-year history exists.
+
+    // Use live value as "latest" — matches purple card's displayMarketValue formula.
+    // hasPrices is true when directStratHoldings OR ownLivePriceMap provides prices
+    // (last_price from Supabase holdings also counts, so this is truthy after first holdings load).
+    const liveVal = liveStrategyMetrics.liveValue;
+    const hasLive = liveStrategyMetrics.hasPrices && liveVal > 0;
+
+    if (timeFilter === "5d") {
+      if (snapshotRows.length < 5 || !hasLive) return { pnl: 0, pct: 0 };
+      const startCents = Number(snapshotRows[snapshotRows.length - 5]?.basket_value || 0);
+      if (!startCents) return { pnl: 0, pct: 0 };
+      const startRands = startCents / 100;
+      const pnl = parseFloat((liveVal - startRands).toFixed(2));
+      const pct = parseFloat(((pnl / startRands) * 100).toFixed(4));
+      console.log("[PERIOD_DEBUG portfolio] 5D:", { liveVal, startRands, pnl, pct, snapshotCount: snapshotRows.length });
+      return { pnl, pct };
+    }
+
+    if (timeFilter === "m") {
+      if (snapshotRows.length < 22 || !hasLive) return { pnl: 0, pct: 0 };
+      const startCents = Number(snapshotRows[snapshotRows.length - 22]?.basket_value || 0);
+      if (!startCents) return { pnl: 0, pct: 0 };
+      const startRands = startCents / 100;
+      const pnl = parseFloat((liveVal - startRands).toFixed(2));
+      const pct = parseFloat(((pnl / startRands) * 100).toFixed(4));
+      console.log("[PERIOD_DEBUG portfolio] M:", { liveVal, startRands, pnl, pct, snapshotCount: snapshotRows.length });
+      return { pnl, pct };
+    }
+
+    if (timeFilter === "ytd") {
+      if (!hasLive) {
+        console.log("[PERIOD_DEBUG portfolio] YTD: no live prices yet", { liveVal, hasPrices: liveStrategyMetrics.hasPrices });
+        return { pnl: 0, pct: 0 };
+      }
       const yearStr = `${new Date().getFullYear()}-01-01`;
       const priorRows = snapshotRows.filter(r => r.as_of_date < yearStr);
       const currentYearRows = snapshotRows.filter(r => r.as_of_date >= yearStr);
-      const yearStartCents = (priorRows.length > 0 && currentYearRows.length > 0)
-        ? Number(currentYearRows[0]?.basket_value || 0)
-        : 0;
 
-      if (yearStartCents > 0 && liveStrategyMetrics.hasPrices) {
-        // Cap YTD at All-time P&L so mid-year deposits never inflate it above All-time.
-        const rawPnl = liveStrategyMetrics.liveValue - yearStartCents / 100;
-        const allTimePnl = liveStrategyMetrics.liveValue - liveStrategyMetrics.costBasis;
-        const pnl = Math.min(rawPnl, allTimePnl);
-        const anchor = liveStrategyMetrics.liveValue - pnl;
-        const pct = anchor > 0 ? (pnl / anchor) * 100 : 0;
-        return { pnl, pct: parseFloat(pct.toFixed(4)) };
+      const allTimePnl = parseFloat((liveVal - liveStrategyMetrics.costBasis).toFixed(2));
+      const allTimePct = parseFloat((liveStrategyMetrics.costBasis > 0
+        ? (allTimePnl / liveStrategyMetrics.costBasis) * 100 : 0).toFixed(4));
+
+      // No prior-year rows: user invested entirely this year → YTD = All-time.
+      // Mirrors purple card: useParentYtdTab=true, !useParentLiveYtd → displayReturn.
+      if (priorRows.length === 0) {
+        console.log("[PERIOD_DEBUG portfolio] YTD: no prior-year rows → All-time:", {
+          liveVal, costBasis: liveStrategyMetrics.costBasis, allTimePnl, allTimePct,
+        });
+        return { pnl: allTimePnl, pct: allTimePct };
       }
 
-      return { pnl: 0, pct: 0 };
-    } else {
-      return { pnl: 0, pct: 0 };
+      // Prior-year data exists: anchor = first basket of the current year.
+      const yearStartCents = currentYearRows.length > 0 ? Number(currentYearRows[0]?.basket_value || 0) : 0;
+      if (!yearStartCents) return { pnl: 0, pct: 0 };
+
+      const yearStartRands = yearStartCents / 100;
+      const rawPnl = liveVal - yearStartRands;
+      // Cap at all-time: mid-year deposits inflate rawPnl above actual gains
+      const pnl = parseFloat(Math.min(rawPnl, allTimePnl).toFixed(2));
+      const anchor = liveVal - pnl;
+      const pct = parseFloat((anchor > 0 ? (pnl / anchor) * 100 : 0).toFixed(4));
+
+      console.log("[PERIOD_DEBUG portfolio] YTD:", {
+        liveVal, costBasis: liveStrategyMetrics.costBasis,
+        yearStartRands, rawPnl, allTimePnl, pnl, pct,
+        priorRowsCount: priorRows.length, currentYearRowsCount: currentYearRows.length,
+      });
+      return { pnl, pct };
     }
-    if (!startCents) return { pnl: 0, pct: 0 };
-    const pnl = (latestCents - startCents) / 100;
-    return { pnl, pct: parseFloat((((latestCents - startCents) / startCents) * 100).toFixed(4)) };
+
+    return { pnl: 0, pct: 0 };
   }, [snapshotRows, timeFilter, liveStrategyMetrics]);
 
   // ── intraday D chart (5-min buckets from stock_intraday_c) ────────────────
