@@ -10087,7 +10087,7 @@ async function calculateParentPortfolioReturns(userId, strategyId) {
     .eq('user_id', userId)
     .eq('strategy_id', strategyId)
     .is('family_member_id', null)
-    .eq('is_active', true);
+    .or('is_active.eq.true,Status.eq.active');
 
   if (hErr || !holdings?.length) return null;
 
