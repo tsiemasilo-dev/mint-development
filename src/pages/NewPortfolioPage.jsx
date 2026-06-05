@@ -595,17 +595,16 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     } else if (timeFilter === "m" && snapshotRows.length >= 22) {
       startCents = Number(snapshotRows[snapshotRows.length - 22]?.basket_value || 0);
     } else if (timeFilter === "ytd") {
-      // Live YTD: liveValue (intraday prices) − year-start basket (same formula as balance card child mode).
-      // Keeps this pill in sync with intraday price updates every 15 s.
+      // Live YTD — mirrors child balance card logic exactly:
+      // anchor = FIRST basket of the current year, only when prior-year history exists.
       const yearStr = `${new Date().getFullYear()}-01-01`;
-      // Year-start basket = last snapshot row BEFORE Jan 1 (the Dec 31 close).
       const priorRows = snapshotRows.filter(r => r.as_of_date < yearStr);
-      const yearStartCents = priorRows.length > 0
-        ? Number(priorRows[priorRows.length - 1]?.basket_value || 0)
+      const currentYearRows = snapshotRows.filter(r => r.as_of_date >= yearStr);
+      const yearStartCents = (priorRows.length > 0 && currentYearRows.length > 0)
+        ? Number(currentYearRows[0]?.basket_value || 0)
         : 0;
 
       if (yearStartCents > 0 && liveStrategyMetrics.hasPrices) {
-        // Live path: current intraday value minus year-start basket
         const yearStartRands = yearStartCents / 100;
         const pnl = liveStrategyMetrics.liveValue - yearStartRands;
         const pct = yearStartRands > 0 ? (pnl / yearStartRands) * 100 : 0;
@@ -736,7 +735,11 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       // so the chart endpoint always matches the pill (which uses liveValue - yearStartBasket).
       const yearStr = `${new Date().getFullYear()}-01-01`;
       const priorRows = snapshotRows.filter(r => r.as_of_date < yearStr);
-      const yearStartCents = priorRows.length > 0 ? Number(priorRows[priorRows.length - 1]?.basket_value || 0) : 0;
+      const currentYearRowsForChart = snapshotRows.filter(r => r.as_of_date >= yearStr);
+      // Mirror child mode: anchor = FIRST basket of current year, only when prior-year data exists
+      const yearStartCents = (priorRows.length > 0 && currentYearRowsForChart.length > 0)
+        ? Number(currentYearRowsForChart[0]?.basket_value || 0)
+        : 0;
 
       // Use ytd_pnl rows (Jan 1 onwards) for the chart body
       const rows = snapshotRows.filter(r => r.ytd_pnl != null && r.as_of_date >= yearStr);

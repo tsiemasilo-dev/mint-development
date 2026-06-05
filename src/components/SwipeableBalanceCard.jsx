@@ -984,17 +984,21 @@ const SwipeableBalanceCard = ({
           if (!childMode && latestYtdPnlCents !== null) {
             setParentYtdPnl(latestYtdPnlCents / 100);
           }
-          // Compute year-start basket for live parent YTD (liveMarketValue - yearStartBasket)
+          // Compute year-start basket for live parent YTD — mirrors child mode exactly:
+          // anchor = FIRST basket of the current year, only set when prior-year data exists.
+          // (Child uses gte(yearStart) → dates[0]; we replicate that from our already-fetched rows.)
           if (!childMode && activeTab === "ytd") {
             const yearStr = `${new Date().getFullYear()}-01-01`;
             const allDates = Object.keys(parentBasketByDate).sort();
-            // Prefer last row before Jan 1 (Dec 31 close); fall back to first row of the year
             const priorDates = allDates.filter(d => d < yearStr);
             const currentYearDates = allDates.filter(d => d >= yearStr);
-            const anchorDate = priorDates.length > 0
-              ? priorDates[priorDates.length - 1]
-              : (currentYearDates.length > 0 ? currentYearDates[0] : null);
-            setParentYearStartBasketCents(anchorDate ? parentBasketByDate[anchorDate] : null);
+            // Only activate live YTD when prior-year history exists AND current-year rows are present.
+            // If no prior-year data, fall back to stored ytd_pnl (same as child mode's null path).
+            if (priorDates.length > 0 && currentYearDates.length > 0) {
+              setParentYearStartBasketCents(parentBasketByDate[currentYearDates[0]]);
+            } else {
+              setParentYearStartBasketCents(null);
+            }
           }
 
           // Build cumulative sum of 1d_pnl across all dates
