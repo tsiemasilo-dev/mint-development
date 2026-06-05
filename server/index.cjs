@@ -9953,11 +9953,24 @@ async function calculateChildPortfolioReturns(familyMemberId, strategyId, userId
   // available record so we show a real change instead of storing null.
   const rec5d  = closestRecord(historyRows, fiveDaysAgo) || earliestRecord;
   const rec1m  = closestRecord(historyRows, oneMonthAgo) || earliestRecord;
-  const recYtd = earliestRecord; // earliest record this year
+
+  // Mirror the frontend's logic: if the child has NO rows before Jan 1 (invested this year),
+  // YTD should equal ALL (inception), not the diff from the earliest row this year.
+  const { count: priorYearCount } = await db
+    .from('client_strategy_returns_c')
+    .select('as_of_date', { count: 'exact', head: true })
+    .eq('family_member', familyMemberId)
+    .eq('strategy_id', strategyId)
+    .lt('as_of_date', yearStart);
+
+  const investedThisYearOnly = (priorYearCount || 0) === 0;
 
   const p5d  = periodMetrics(rec5d);
   const p1m  = periodMetrics(rec1m);
-  const pYtd = periodMetrics(recYtd);
+  // If invested this year only → YTD = inception (same as ALL)
+  const pYtd = investedThisYearOnly
+    ? { pnl: inceptionPnlCents, pct: parseFloat(inceptionPct.toFixed(4)) }
+    : periodMetrics(earliestRecord);
 
   return {
     user_id: userId,
@@ -10189,11 +10202,25 @@ async function calculateParentPortfolioReturns(userId, strategyId) {
   const earliestRecord = historyRows?.length ? historyRows[0] : null;
   const rec5d  = closestRecord(historyRows, fiveDaysAgo) || earliestRecord;
   const rec1m  = closestRecord(historyRows, oneMonthAgo) || earliestRecord;
-  const recYtd = earliestRecord;
+
+  // Mirror the child's logic: if the parent has NO rows before Jan 1 (invested this year),
+  // YTD should equal ALL (inception), not the earliest row this year.
+  const { count: priorYearCount } = await db
+    .from('client_strategy_returns_c')
+    .select('as_of_date', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('strategy_id', strategyId)
+    .is('family_member', null)
+    .lt('as_of_date', yearStart);
+
+  const investedThisYearOnly = (priorYearCount || 0) === 0;
 
   const p5d  = periodMetrics(rec5d);
   const p1m  = periodMetrics(rec1m);
-  const pYtd = periodMetrics(recYtd);
+  // If invested this year only → YTD = inception (same as ALL), not earliest-row diff
+  const pYtd = investedThisYearOnly
+    ? { pnl: inceptionPnlCents, pct: parseFloat(inceptionPct.toFixed(4)) }
+    : periodMetrics(earliestRecord);
 
   return {
     user_id: userId,
