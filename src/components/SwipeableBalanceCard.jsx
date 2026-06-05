@@ -521,6 +521,7 @@ const SwipeableBalanceCard = ({
                 security_id: h.security_id,
                 strategy_id: h.strategy_id,
                 last_price: Number(h.last_price || 0),
+                created_at: h.created_at || null,
                 isStrategy: false,
               };
             });
@@ -952,11 +953,17 @@ const SwipeableBalanceCard = ({
         );
         const pricePromises = stockHoldings.map(async (h) => {
           try {
+            // Compute purchase date before querying so we can use it as the query floor.
+            // This prevents the Supabase 1000-row cap from hiding recent data when the
+            // tab window (e.g. ALL = 5 years) would return thousands of stale rows first.
+            const pDateStr = (h.created_at || h.as_of_date || "").split("T")[0];
+            const queryStart = pDateStr && pDateStr > startDateStr ? pDateStr : startDateStr;
+
             let { data, error } = await supabase
               .from("stock_returns_c")
               .select("as_of_date, current_price")
               .eq("security_id", h.security_id)
-              .gte("as_of_date", startDateStr)
+              .gte("as_of_date", queryStart)
               .order("as_of_date", { ascending: true });
 
             if (error || !data || data.length < 2) {
@@ -971,7 +978,6 @@ const SwipeableBalanceCard = ({
               } else if (!data || data.length === 0) return null;
             }
 
-            const pDateStr = (h.created_at || h.as_of_date || "").split("T")[0];
             // Chart's "purchase price" anchor prefers Expected_fill (rands) over avg_fill (cents).
             // Defensive: Expected_fill > 5x avg_fill/100 is legacy cents — divide by 100.
             const expectedFillRaw = Number(h.Expected_fill || 0);
@@ -1075,11 +1081,16 @@ const SwipeableBalanceCard = ({
 
         console.log(`[SwipeableBalanceCard] Final chart points: ${points.length}`);
         setChartData(points);
-        // Period return = last point's v (already normalized to period start by the loop above)
-        if (points.length >= 2) {
-          setPeriodReturn(points[points.length - 1].v);
-        } else {
-          setPeriodReturn(null);
+        // Period return from chart — only set for strategy/mixed holders or ALL tab.
+        // Stock-only holders on 5D/M/YTD get a single setPeriodReturn from the
+        // pre-computed block below, avoiding a flicker (chart value → override).
+        const isStockOnlyPeriodTab = stockHoldings.length > 0 && !hasStrategyData && activeTab !== "all";
+        if (!isStockOnlyPeriodTab) {
+          if (points.length >= 2) {
+            setPeriodReturn(points[points.length - 1].v);
+          } else {
+            setPeriodReturn(null);
+          }
         }
 
         // Badge override for stock-only holdings (no strategy):
