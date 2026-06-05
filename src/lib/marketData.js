@@ -228,19 +228,70 @@ export const getSecurityPrices = async (securityId, timeframe = "1M") => {
   try {
     console.log(`🔍 Fetching price history for ${securityId}, timeframe ${timeframe}...`);
 
-    // ── Step 1: date range for historical query ──────────────────
+    let prices = [];
+
+    // ── 1D: use intraday table (stock_intraday_c) bucketed into 15-min intervals ──
+    if (timeframe === "1D") {
+      const todayStart = new Date();
+      todayStart.setUTCHours(0, 0, 0, 0);
+
+      const { data: intradayRows, error: intradayErr } = await supabase
+        .from("stock_intraday_c")
+        .select("timestamp, current_price")
+        .eq("security_id", securityId)
+        .gte("timestamp", todayStart.toISOString())
+        .order("timestamp", { ascending: true });
+
+      if (!intradayErr && intradayRows && intradayRows.length >= 2) {
+        // Bucket into 15-minute intervals — last price in each bucket wins
+        const buckets = {};
+        for (const row of intradayRows) {
+          const t = new Date(row.timestamp);
+          const h = t.getUTCHours();
+          const m = Math.floor(t.getUTCMinutes() / 15) * 15;
+          const key = `${t.toISOString().slice(0, 10)}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00Z`;
+          buckets[key] = row.current_price;
+        }
+        prices = Object.entries(buckets)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([ts, price]) => ({ ts, close: Number(price) / 100 }));
+        console.log(`✅ Fetched ${prices.length} intraday buckets for 1D`);
+      } else {
+        // Outside trading hours or no data yet — flat line using latest EOD price
+        console.log(`⚠️ No intraday data for today — falling back to latest EOD`);
+        const { data: eod } = await supabase
+          .from("stock_returns_c")
+          .select("as_of_date, current_price")
+          .eq("security_id", securityId)
+          .order("as_of_date", { ascending: false })
+          .limit(1)
+          .single();
+        if (eod?.current_price) {
+          const dateStr = eod.as_of_date.split("T")[0];
+          const p = Number(eod.current_price) / 100;
+          prices = [
+            { ts: `${dateStr}T07:00:00Z`, close: p },
+            { ts: `${dateStr}T15:30:00Z`, close: p },
+          ];
+        }
+      }
+
+      cache.priceHistory.set(cacheKey, { data: prices, timestamp: now });
+      return prices;
+    }
+
+    // ── All other timeframes: query stock_returns_c (daily EOD) ──────────────
     let cutoffDate;
     if (timeframe === "YTD") {
       cutoffDate = `${new Date().getFullYear()}-01-01`;
     } else {
-      const daysMap = { "1D": 30, "1W": 10, "1M": 45, "3M": 110, "6M": 220, "1Y": 420 };
+      const daysMap = { "1W": 10, "1M": 45, "3M": 110, "6M": 220, "1Y": 420 };
       const days = daysMap[timeframe] ?? 45;
       const d = new Date();
       d.setDate(d.getDate() - days);
       cutoffDate = d.toISOString().split("T")[0];
     }
 
-    // Fetch price history from stock_returns_c using current_price
     const { data: returnsRows, error } = await supabase
       .from("stock_returns_c")
       .select("as_of_date, current_price")
@@ -253,19 +304,14 @@ export const getSecurityPrices = async (securityId, timeframe = "1M") => {
       throw error;
     }
 
-    let prices = [];
-
     if (returnsRows && returnsRows.length >= 2) {
-      // ── Use stock returns data adjusted by timeframe ───────────────────
       prices = returnsRows.map(row => ({
         ts: row.as_of_date,
         close: row.current_price != null ? Number(row.current_price) / 100 : null,
       }));
       console.log(`✅ Fetched ${prices.length} price points from stock_returns_c for ${timeframe}`);
     } else {
-      // ── Fallback: Get latest price from stock_returns_c ─
       console.log(`⚠️ Insufficient history (${returnsRows?.length ?? 0} rows) — using latest price`);
-
       const { data: latestReturns, error: latestError } = await supabase
         .from("stock_returns_c")
         .select("as_of_date, current_price")
@@ -273,11 +319,8 @@ export const getSecurityPrices = async (securityId, timeframe = "1M") => {
         .order("as_of_date", { ascending: false })
         .limit(1)
         .single();
-
-      if (!latestError && latestReturns && latestReturns.current_price) {
-        prices = [
-          { ts: latestReturns.as_of_date, close: Number(latestReturns.current_price) / 100 },
-        ];
+      if (!latestError && latestReturns?.current_price) {
+        prices = [{ ts: latestReturns.as_of_date, close: Number(latestReturns.current_price) / 100 }];
         console.log(`✅ Using latest price: ${latestReturns.as_of_date}`);
       } else {
         console.warn(`⚠️ No price data available for ${securityId}`);

@@ -2217,7 +2217,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           })();
 
           const mIsPending = mQty > 0 && mAvgFill === 0;
-          const mChartData = mIsPending
+          const mChartDataRaw = mIsPending
             ? [{ day: mPurchaseLabel || 'Purchase', value: 0 }, { day: mNowLabel || 'Now', value: 0 }]
             : mBaseChartData.length > 0
               ? (mShowPnl
@@ -2228,6 +2228,19 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                 : mBaseChartData)
               // No closes after purchase yet (e.g. bought on weekend): flat line at current P&L.
               : (mShowPnl ? [{ day: mPurchaseLabel, value: 0 }, { day: mNowLabel, value: Number(mPnl.toFixed(2)) }] : []);
+
+          // Normalize: subtract first point's value so the chart line always starts at R0.
+          // This shows "change during the selected period" — the R0 reference line means
+          // "same as start of period", regardless of absolute P&L from cost basis.
+          const mChartData = (() => {
+            if (mChartDataRaw.length < 2) return mChartDataRaw;
+            const offset = mChartDataRaw[0].value;
+            if (offset === 0) return mChartDataRaw;
+            return mChartDataRaw.map((pt, i) => ({
+              ...pt,
+              value: i === 0 ? 0 : Number((pt.value - offset).toFixed(2)),
+            }));
+          })();
           const mAxisConfig = computePnlAxisConfig(mChartData);
           return (
             <>
