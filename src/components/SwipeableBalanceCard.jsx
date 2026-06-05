@@ -855,6 +855,36 @@ const SwipeableBalanceCard = ({
     return () => clearInterval(id);
   }, [childMode, familyMemberId, dbData.holdings, livePriceMapProp]);
 
+  // Trigger parent live-returns on mount / holdings change so client_strategy_returns_c
+  // stays current without depending on an external script — mirrors the child's approach.
+  // NOTE: collect strategy IDs from ALL holdings (including non-isStrategy ones that have
+  // a strategy_id) so this fires even when client_strategy_returns_c has no rows yet.
+  useEffect(() => {
+    if (childMode || !userId) return;
+    const strategyIds = [...new Set(
+      dbData.holdings
+        .map(h => h.strategyId || h.strategy_id)
+        .filter(Boolean)
+    )];
+    if (!strategyIds.length) return;
+
+    const triggerParentReturns = async () => {
+      try {
+        const session = await getSessionWithRetry();
+        const token = session?.access_token;
+        if (!token) return;
+        await Promise.all(strategyIds.map(sid =>
+          fetch(`/api/parent-live-returns?user_id=${encodeURIComponent(userId)}&strategy_id=${encodeURIComponent(sid)}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }).catch(e => console.warn('[SwipeableBalanceCard] parent-live-returns trigger failed:', e.message))
+        ));
+      } catch (e) {
+        console.warn('[SwipeableBalanceCard] parent-live-returns trigger error:', e.message);
+      }
+    };
+    triggerParentReturns();
+  }, [childMode, userId, dbData.holdings]);
+
   useEffect(() => {
     let chartCancelled = false;
     const fetchChartPrices = async () => {

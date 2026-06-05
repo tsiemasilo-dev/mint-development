@@ -10072,14 +10072,251 @@ app.get('/api/child-live-returns', async (req, res) => {
   }
 });
 
+// ── Parent live-returns ───────────────────────────────────────────────────────
+// Mirrors calculateChildPortfolioReturns exactly, but for the primary account
+// holder (family_member_id IS NULL). Reads live intraday prices + historical
+// basket rows to compute 1D / 5D / 1M / YTD period P&L on the fly.
+async function calculateParentPortfolioReturns(userId, strategyId) {
+  const db = supabaseAdmin || supabase;
+  if (!db) return null;
+
+  // 1. Get parent's active holdings for this strategy
+  const { data: holdings, error: hErr } = await db
+    .from('stock_holdings_c')
+    .select('security_id, quantity, Expected_fill, avg_fill, strategy_id')
+    .eq('user_id', userId)
+    .eq('strategy_id', strategyId)
+    .is('family_member_id', null)
+    .eq('is_active', true);
+
+  if (hErr || !holdings?.length) return null;
+
+  const securityIds = [...new Set(holdings.map(h => h.security_id).filter(Boolean))];
+
+  // 2. Get latest intraday prices for those securities
+  const { data: intradayRows, error: iErr } = await db
+    .from('stock_intraday_c')
+    .select('security_id, current_price, 1d_abs, 1d_pct, symbol')
+    .in('security_id', securityIds)
+    .order('timestamp', { ascending: false });
+
+  if (iErr) return null;
+
+  const priceMap = {};
+  (intradayRows || []).forEach(p => {
+    if (!priceMap[p.security_id]) {
+      priceMap[p.security_id] = {
+        current_price: Number(p.current_price || 0),
+        change_abs: Number(p['1d_abs'] || 0),
+        change_pct: Number(p['1d_pct'] || 0),
+        symbol: p.symbol,
+      };
+    }
+  });
+
+  // 3. Calculate portfolio metrics
+  let basketValueCents = 0;
+  let costBasisCents = 0;
+  let oneDayPnlCents = 0;
+  const holdingsSnapshot = [];
+
+  for (const h of holdings) {
+    const qty = Number(h.quantity || 0);
+    const avgFillCents = Number(h.avg_fill || 0);
+    const avgFillRands = avgFillCents / 100;
+    const expectedFillRands = Number(h.Expected_fill || 0);
+    const costBasisRands = expectedFillRands > 0 ? Math.max(expectedFillRands, avgFillRands) : avgFillRands;
+    const costBasisForHolding = Math.round(costBasisRands * 100 * qty);
+
+    const price = priceMap[h.security_id];
+    const livePriceCents = price?.current_price || 0;
+    const liveValueCents = Math.round(livePriceCents * qty);
+    const dayChangeCents = Math.round((price?.change_abs || 0) * qty);
+
+    basketValueCents += liveValueCents;
+    costBasisCents += costBasisForHolding;
+    oneDayPnlCents += dayChangeCents;
+
+    holdingsSnapshot.push({
+      security_id: h.security_id,
+      symbol: price?.symbol || null,
+      qty,
+      avg_fill_rands: costBasisRands,
+      current_price_cents: livePriceCents,
+      live_value_cents: liveValueCents,
+      cost_basis_cents: costBasisForHolding,
+      unrealized_pnl_cents: liveValueCents - costBasisForHolding,
+    });
+  }
+
+  const inceptionPnlCents = basketValueCents - costBasisCents;
+  const inceptionPct = costBasisCents > 0 ? (inceptionPnlCents / costBasisCents) * 100 : 0;
+  const oneDayPct = costBasisCents > 0 ? (oneDayPnlCents / costBasisCents) * 100 : 0;
+
+  // 4. Look up historical basket rows to compute 5D / 1M / YTD periods
+  const today = new Date();
+  const yearStart = `${today.getUTCFullYear()}-01-01`;
+  const oneMonthAgo = new Date(today); oneMonthAgo.setUTCDate(today.getUTCDate() - 31);
+  const fiveDaysAgo = new Date(today); fiveDaysAgo.setUTCDate(today.getUTCDate() - 9);
+
+  const { data: historyRows } = await db
+    .from('client_strategy_returns_c')
+    .select('as_of_date, basket_value')
+    .eq('user_id', userId)
+    .eq('strategy_id', strategyId)
+    .is('family_member', null)
+    .gte('as_of_date', yearStart)
+    .order('as_of_date', { ascending: true });
+
+  function closestRecord(rows, targetDate) {
+    if (!rows?.length) return null;
+    const target = targetDate instanceof Date ? targetDate.toISOString().split('T')[0] : targetDate;
+    let best = null;
+    for (const r of rows) {
+      if (r.as_of_date <= target) best = r;
+      else break;
+    }
+    return best;
+  }
+
+  function periodMetrics(historicRecord) {
+    if (!historicRecord || !historicRecord.basket_value) return { pnl: null, pct: null };
+    const pnl = basketValueCents - Number(historicRecord.basket_value);
+    const pct = costBasisCents > 0 ? (pnl / costBasisCents) * 100 : 0;
+    return { pnl, pct: parseFloat(pct.toFixed(4)) };
+  }
+
+  const earliestRecord = historyRows?.length ? historyRows[0] : null;
+  const rec5d  = closestRecord(historyRows, fiveDaysAgo) || earliestRecord;
+  const rec1m  = closestRecord(historyRows, oneMonthAgo) || earliestRecord;
+  const recYtd = earliestRecord;
+
+  const p5d  = periodMetrics(rec5d);
+  const p1m  = periodMetrics(rec1m);
+  const pYtd = periodMetrics(recYtd);
+
+  return {
+    user_id: userId,
+    strategy_id: strategyId,
+    family_member: null,
+    basket_value: basketValueCents,
+    portfolio_value: basketValueCents,
+    inception_pnl: inceptionPnlCents,
+    inception_pct: parseFloat(inceptionPct.toFixed(4)),
+    '1d_pnl': oneDayPnlCents,
+    '1d_pct': parseFloat(oneDayPct.toFixed(4)),
+    '5d_pnl': p5d.pnl,
+    '5d_pct': p5d.pct,
+    '1m_pnl': p1m.pnl,
+    '1m_pct': p1m.pct,
+    ytd_pnl: pYtd.pnl,
+    ytd_pct: pYtd.pct,
+    holdings_snapshot: JSON.stringify(holdingsSnapshot),
+    as_of_date: today.toISOString().split('T')[0],
+    fetched_at: today.toISOString(),
+  };
+}
+
+// Live endpoint — calculates parent returns on demand and upserts today's row
+// so client_strategy_returns_c history builds up day by day (no external script needed).
+app.get('/api/parent-live-returns', async (req, res) => {
+  const { user_id, strategy_id } = req.query;
+  if (!user_id || !strategy_id) {
+    return res.status(400).json({ error: 'user_id and strategy_id are required' });
+  }
+
+  try {
+    const returns = await calculateParentPortfolioReturns(user_id, strategy_id);
+    if (!returns) {
+      return res.json({ basket_value: 0, portfolio_value: 0, inception_pnl: 0, inception_pct: 0, '1d_pnl': 0, '1d_pct': 0, holdings_snapshot: [] });
+    }
+
+    const db = supabaseAdmin || supabase;
+    if (db) {
+      db.from('client_strategy_returns_c')
+        .upsert(returns, { onConflict: 'user_id,strategy_id,as_of_date,family_member', ignoreDuplicates: false })
+        .then(({ error }) => { if (error) console.warn('[parent-live-returns] upsert warn:', error.message); });
+    }
+
+    return res.json({
+      ...returns,
+      holdings_snapshot: JSON.parse(returns.holdings_snapshot || '[]'),
+    });
+  } catch (err) {
+    console.error('[parent-live-returns] Error:', err.message);
+    return res.status(500).json({ error: 'Failed to calculate parent returns' });
+  }
+});
+
+// Saves end-of-day returns for all parent accounts with active strategy holdings
+async function saveAllParentReturnsEOD() {
+  const db = supabaseAdmin || supabase;
+  if (!db) return;
+
+  console.log('[parent-returns-eod] Running end-of-day save...');
+
+  try {
+    const { data: parentHoldings, error: hErr } = await db
+      .from('stock_holdings_c')
+      .select('user_id, strategy_id')
+      .is('family_member_id', null)
+      .not('strategy_id', 'is', null)
+      .eq('is_active', true);
+
+    if (hErr || !parentHoldings?.length) {
+      console.log('[parent-returns-eod] No active parent strategy holdings found.');
+      return;
+    }
+
+    const seen = new Set();
+    const combos = [];
+    for (const h of parentHoldings) {
+      const key = `${h.user_id}:${h.strategy_id}`;
+      if (!seen.has(key)) { seen.add(key); combos.push(h); }
+    }
+
+    console.log(`[parent-returns-eod] Saving returns for ${combos.length} parent-strategy combination(s)...`);
+    let saved = 0, failed = 0;
+
+    for (const { user_id, strategy_id } of combos) {
+      try {
+        const returns = await calculateParentPortfolioReturns(user_id, strategy_id);
+        if (!returns) { failed++; continue; }
+
+        const { error: upsertErr } = await db
+          .from('client_strategy_returns_c')
+          .upsert(returns, { onConflict: 'user_id,strategy_id,as_of_date,family_member', ignoreDuplicates: false });
+
+        if (upsertErr) {
+          console.error(`[parent-returns-eod] Upsert failed for user ${user_id}:`, upsertErr.message);
+          failed++;
+        } else {
+          saved++;
+        }
+      } catch (e) {
+        console.error(`[parent-returns-eod] Error for user ${user_id}:`, e.message);
+        failed++;
+      }
+    }
+
+    console.log(`[parent-returns-eod] Done — saved: ${saved}, failed: ${failed}`);
+  } catch (err) {
+    console.error('[parent-returns-eod] Unexpected error:', err.message);
+  }
+}
+
 // End-of-day save: runs at 17:30 SAST (15:30 UTC) Mon–Fri
 cron.schedule('30 15 * * 1-5', () => {
   console.log('[child-returns-eod] Market close cron triggered');
   saveAllChildReturnsEOD();
+  saveAllParentReturnsEOD();
 });
 
 // Also run at startup (90s delay) to seed any missing today's records
-setTimeout(saveAllChildReturnsEOD, 90 * 1000);
+setTimeout(() => {
+  saveAllChildReturnsEOD();
+  saveAllParentReturnsEOD();
+}, 90 * 1000);
 
 // Catch-all 404 handler - MUST be after all route definitions
 app.use((req, res) => {
