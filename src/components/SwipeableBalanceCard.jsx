@@ -1281,18 +1281,14 @@ const SwipeableBalanceCard = ({
 
   // PnL pill: for child YTD use live metrics (15s poll); for other period tabs use stored/basket.
   // "all" always uses displayReturn (live market value − cost basis).
-  // Parent YTD: prefer live computation (liveMarketValue − yearStartBasket) so it stays in sync
-  // with the Portfolio tab's YTD pill. Falls back to stored ytd_pnl if no year-start basket available.
+  // Parent YTD: live computation only (liveMarketValue − yearStartBasket). No stored fallback.
   const useChildLiveYtd = childMode && activeTab === "ytd" && childLiveMetrics != null;
   const useParentLiveYtd = !childMode && activeTab === "ytd" && parentYearStartBasketCents != null && displayMarketValue > 0;
-  const useParentStoredYtd = !childMode && activeTab === "ytd" && !useParentLiveYtd && parentYtdPnl !== null;
   const activeReturn = useChildLiveYtd
     ? childLiveMetrics.pnl
     : useParentLiveYtd
       ? displayMarketValue - parentYearStartBasketCents / 100
-      : useParentStoredYtd
-        ? parentYtdPnl
-        : ((isPeriodTab && activeTab !== "all" && periodReturn !== null) ? periodReturn : displayReturn);
+      : ((isPeriodTab && activeTab !== "all" && periodReturn !== null) ? periodReturn : displayReturn);
   const activeReturnPct = displayBigValue > 0
     ? (useChildLiveYtd
         ? Math.abs(childLiveMetrics.pct).toFixed(1)

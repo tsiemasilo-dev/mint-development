@@ -611,10 +611,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
         return { pnl, pct: parseFloat(pct.toFixed(4)) };
       }
 
-      // Fallback: use stored ytd_pnl if no live data or no prior-year snapshot
-      const ytdCents = Number(last?.ytd_pnl ?? 0);
-      if (!ytdCents) return { pnl: 0, pct: 0 };
-      return { pnl: ytdCents / 100, pct: Number(last?.ytd_pct ?? 0) };
+      return { pnl: 0, pct: 0 };
     } else {
       return { pnl: 0, pct: 0 };
     }
