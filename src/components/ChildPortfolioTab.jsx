@@ -389,6 +389,10 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, livePriceMap
 
   // ── holdings data (for Holdings tab) ──────────────────────────────────────
   const allStrategyHoldings = useMemo(() => {
+    // Build symbol→logo_url lookup from rawHoldings (always enriched from securities_c)
+    const logoBySymbol = {};
+    (rawHoldings || []).forEach(h => { if (h.symbol && h.logo_url) logoBySymbol[h.symbol] = h.logo_url; });
+
     const holdingsMap = new Map();
     const standalone = (rawHoldings || []).filter(h => !h.strategy_id);
     const totalStandaloneVal = standalone.reduce((s, h) => {
@@ -408,13 +412,23 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, livePriceMap
       const sym = s.shortName || s.name || "Strategy";
       if (!holdingsMap.has(sym)) {
         const holdingsArr = s.holdings || [];
-        const topLogos = holdingsArr.sort((a, b) => (b.weight || 0) - (a.weight || 0)).slice(0, 5).map(h => h.logo_url || h.logo || null).filter(Boolean);
+        // Enrich each holding with logo from rawHoldings if strategies_c JSONB doesn't have it
+        const enrichedHoldings = holdingsArr.map(h => ({
+          ...h,
+          logo_url: h.logo_url || logoBySymbol[h.symbol] || logoBySymbol[h.ticker] || null,
+        }));
+        const topLogos = enrichedHoldings
+          .slice()
+          .sort((a, b) => (b.weight || 0) - (a.weight || 0))
+          .slice(0, 5)
+          .map(h => h.logo_url)
+          .filter(Boolean);
         const sCv = s.currentValue || s.investedAmount || 0;
         const sIa = s.investedAmount || 0;
         const sPnlPct = sIa > 0 ? ((sCv - sIa) / sIa) * 100 : 0;
         const stratRaw = (rawHoldings || []).filter(h => h.strategy_id === (s.strategyId || s.id));
         const isPending = stratRaw.length > 0 && stratRaw.every(h => !h.avg_fill);
-        holdingsMap.set(sym, { symbol: sym, name: s.name || "Strategy", strategyId: s.strategyId || s.id, weight: 0, logo: null, isStrategy: true, isPending, topLogos, strategyHoldings: holdingsArr, currentValue: sCv, investedAmount: sIa, change: sPnlPct, ytd_return: s.ytd_pct != null ? s.ytd_pct : s.metrics?.r_ytd });
+        holdingsMap.set(sym, { symbol: sym, name: s.name || "Strategy", strategyId: s.strategyId || s.id, weight: 0, logo: null, isStrategy: true, isPending, topLogos, strategyHoldings: enrichedHoldings, currentValue: sCv, investedAmount: sIa, change: sPnlPct, ytd_return: s.ytd_pct != null ? s.ytd_pct : s.metrics?.r_ytd });
       }
     });
 
