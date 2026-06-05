@@ -102,6 +102,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   const [intradayTick, setIntradayTick] = useState(0);
   const [ownLivePriceMap, setOwnLivePriceMap] = useState({});
   const [tabJustChanged, setTabJustChanged] = useState(false);
+  const [directStratHoldings, setDirectStratHoldings] = useState([]);
   const tabOrder = ["strategy", "holdings"];
 
   useEffect(() => {
@@ -472,6 +473,23 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
 
   const holdings = allStrategyHoldings;
 
+  // ── direct strategy holdings (bypasses server-API timeout for metrics/chart) ─
+  useEffect(() => {
+    const stratId = userSelectedStrategy?.strategyId;
+    if (!stratId || !profile?.id) return;
+    supabase
+      .from("stock_holdings_c")
+      .select("security_id, quantity, avg_fill, Expected_fill, strategy_id, last_price, change_price")
+      .eq("user_id", profile.id)
+      .is("family_member_id", null)
+      .eq("strategy_id", stratId)
+      .gt("avg_fill", 0)
+      .eq("Status", "active")
+      .then(({ data }) => {
+        setDirectStratHoldings(data || []);
+      });
+  }, [userSelectedStrategy?.strategyId, profile?.id]);
+
   // ── snapshot rows (period P&L derivation + available period locks) ──────────
   useEffect(() => {
     if (!userSelectedStrategy?.strategyId || !profile?.id) return;
@@ -503,9 +521,11 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   useEffect(() => {
     const stratId = userSelectedStrategy?.strategyId;
     if (!stratId) return;
-    const securityIds = [...new Set(
-      (rawHoldings || []).filter(h => h.strategy_id === stratId && h.security_id).map(h => h.security_id)
-    )];
+    // Use directStratHoldings (direct Supabase fetch) so we're not blocked by server-API timeouts
+    const baseHoldings = directStratHoldings.length
+      ? directStratHoldings
+      : (rawHoldings || []).filter(h => h.strategy_id === stratId);
+    const securityIds = [...new Set(baseHoldings.filter(h => h.security_id).map(h => h.security_id))];
     if (!securityIds.length) return;
     const fetchPrices = async () => {
       const { data } = await supabase
@@ -529,33 +549,36 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     fetchPrices();
     const id = setInterval(fetchPrices, 15000);
     return () => clearInterval(id);
-  }, [userSelectedStrategy?.strategyId, rawHoldings]);
+  }, [userSelectedStrategy?.strategyId, directStratHoldings, rawHoldings]);
 
   // ── live strategy metrics (today P&L, live value, cost basis) ────────────
   const liveStrategyMetrics = useMemo(() => {
     const stratId = userSelectedStrategy?.strategyId;
     const empty = { liveValue: 0, costBasis: 0, todayPnl: 0, todayPct: 0, isPending: true, hasPrices: false };
     if (!stratId) return empty;
-    const stratHoldings = (rawHoldings || []).filter(h =>
-      h.strategy_id === stratId && Number(h.avg_fill || 0) > 0 && !!h.Fill_date
-    );
+    // Prefer direct Supabase fetch (not blocked by server-API timeout); fall back to rawHoldings
+    const stratHoldings = directStratHoldings.length
+      ? directStratHoldings.filter(h => Number(h.avg_fill || 0) > 0)
+      : (rawHoldings || []).filter(h => h.strategy_id === stratId && Number(h.avg_fill || 0) > 0);
     if (!stratHoldings.length) return empty;
     let liveValue = 0, costBasis = 0, todayPnl = 0, hasPrices = false;
     for (const h of stratHoldings) {
       const qty = Math.abs(Number(h.quantity || 0));
       const liveEntry = ownLivePriceMap[h.security_id];
       const liveCents = liveEntry?.priceCents;
-      const intraCents = Number(h.intraday_price_cents);
       const lastCents = Number(h.last_price);
-      const priceCents = (liveCents > 0) ? liveCents : (Number.isFinite(intraCents) && intraCents > 0) ? intraCents : lastCents;
+      const priceCents = (liveCents > 0) ? liveCents : lastCents;
       if (Number.isFinite(priceCents) && priceCents > 0) { liveValue += (priceCents / 100) * qty; hasPrices = true; }
       const avgFillCents = Number(h.avg_fill || 0);
       const avgFillRands = avgFillCents / 100;
       const expectedRaw = Number(h.Expected_fill || 0);
       const expectedRands = expectedRaw > 0 ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw) : 0;
       costBasis += Math.max(expectedRands, avgFillRands) * qty;
-      const abs1d = liveEntry?.abs1dCents ?? Number(h.intraday_1d_abs_cents);
-      if (Number.isFinite(abs1d)) todayPnl += (abs1d / 100) * qty;
+      // Prefer live poll abs1d → fall back to rawHoldings change_price (daily delta cents/share from server)
+      const abs1d = liveEntry?.abs1dCents != null
+        ? liveEntry.abs1dCents
+        : (Number.isFinite(Number(h.change_price)) ? Number(h.change_price) : null);
+      if (abs1d != null) todayPnl += (abs1d / 100) * qty;
     }
     return { liveValue, costBasis, todayPnl, todayPct: costBasis > 0 ? (todayPnl / costBasis) * 100 : 0, isPending: false, hasPrices };
   }, [rawHoldings, userSelectedStrategy?.strategyId, ownLivePriceMap]);
@@ -579,10 +602,11 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   useEffect(() => {
     if (timeFilter !== "D") { setIntradayChartData(null); return; }
     const stratId = userSelectedStrategy?.strategyId;
-    if (!stratId || liveStrategyMetrics.isPending) return;
-    const stratHoldings = (rawHoldings || []).filter(h =>
-      h.strategy_id === stratId && Number(h.avg_fill || 0) > 0 && !!h.Fill_date
-    );
+    if (!stratId) return;
+    // Prefer direct Supabase fetch; fall back to rawHoldings
+    const stratHoldings = directStratHoldings.length
+      ? directStratHoldings.filter(h => Number(h.avg_fill || 0) > 0)
+      : (rawHoldings || []).filter(h => h.strategy_id === stratId && Number(h.avg_fill || 0) > 0);
     if (!stratHoldings.length) return;
     const securityIds = [...new Set(stratHoldings.map(h => h.security_id).filter(Boolean))];
     const qtyMap = {};
@@ -657,7 +681,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       }
     })();
     return () => { cancelled = true; };
-  }, [timeFilter, userSelectedStrategy?.strategyId, rawHoldings, liveStrategyMetrics.costBasis, liveStrategyMetrics.isPending, intradayTick]);
+  }, [timeFilter, userSelectedStrategy?.strategyId, directStratHoldings, rawHoldings, liveStrategyMetrics.costBasis, intradayTick]);
 
   // ── chart data (snapshot-based for non-D filters) ─────────────────────────
   const currentChartData = useMemo(() => {
