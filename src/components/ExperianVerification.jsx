@@ -257,6 +257,38 @@ const ExperianVerification = ({ onVerified }) => {
     };
   }, [stage, collectResults]);
 
+  // Re-check the instant the user returns to this tab/window. Critical for the
+  // QR (phone) flow: while the user is on their phone, this tab is backgrounded
+  // and the browser throttles/freezes the poll timer above — so the phone can
+  // finish without the laptop noticing. Checking on focus/visibility catches it.
+  useEffect(() => {
+    if (stage !== STAGE.AWAITING) return undefined;
+    const recheck = () => {
+      if (document.visibilityState === "visible" && mountedRef.current) {
+        pollAttemptsRef.current = 0; // we're active again; reset the give-up clock
+        collectResults(true);
+      }
+    };
+    document.addEventListener("visibilitychange", recheck);
+    window.addEventListener("focus", recheck);
+    return () => {
+      document.removeEventListener("visibilitychange", recheck);
+      window.removeEventListener("focus", recheck);
+    };
+  }, [stage, collectResults]);
+
+  // QR/phone flow: an explicit "I've finished on my phone" check. Uses the silent
+  // path so a not-yet-propagated result can't throw a false "unsuccessful" — it
+  // either advances (verified) or shows a gentle "not yet" note.
+  const [phoneCheckMsg, setPhoneCheckMsg] = useState("");
+  const checkPhoneDone = useCallback(async () => {
+    setPhoneCheckMsg("Checking…");
+    await collectResults(true);
+    if (mountedRef.current) {
+      setPhoneCheckMsg("Not confirmed yet — give it a few seconds, then try again.");
+    }
+  }, [collectResults]);
+
   const handleRetry = () => {
     setErrorMessage("");
     setErrorCode(null);
@@ -335,6 +367,17 @@ const ExperianVerification = ({ onVerified }) => {
           <LoadingSpinner size="sm" />
           <span>Waiting for you to finish on your phone…</span>
         </div>
+
+        <button
+          type="button"
+          onClick={checkPhoneDone}
+          className="mt-4 inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-medium text-white"
+          style={{ background: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)" }}
+        >
+          <CheckCircleIcon className="w-4 h-4" />
+          I've finished on my phone
+        </button>
+        {phoneCheckMsg && <p className="text-xs text-slate-500 mt-2">{phoneCheckMsg}</p>}
 
         <p className="text-xs text-center text-slate-400 mt-4">
           <button type="button" onClick={() => setUseEmbedOnDesktop(true)} className="text-violet-600 underline font-medium">
