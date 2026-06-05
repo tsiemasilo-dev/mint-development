@@ -863,43 +863,58 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, livePriceMap
                               className={`rounded-2xl bg-white/70 backdrop-blur-xl p-4 shadow-sm border transition-all duration-200 cursor-pointer active:scale-[0.98] ${stock.isStrategy ? "border-violet-100/60" : "border-slate-100/50"}`}
                               onClick={() => stock.isStrategy && setExpandedStrategyId(isExpanded ? null : stock.strategyId)}
                             >
-                              <div className="flex items-center gap-3">
-                                {stock.isStrategy && stock.topLogos?.length > 0 ? (
-                                  <div className="flex-shrink-0 flex -space-x-2">
-                                    {stock.topLogos.slice(0, 5).map((logo, li) => (
-                                      <img key={li} src={logo} className="w-7 h-7 rounded-full object-cover border-2 border-white shadow-sm" referrerPolicy="no-referrer" crossOrigin="anonymous" />
-                                    ))}
+                              {stock.isStrategy && stock.topLogos?.length > 0 ? (
+                                <div className="w-full">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div className="flex -space-x-2">
+                                      {stock.topLogos.slice(0, 5).map((logo, li) => (
+                                        <img key={li} src={logo} className="w-7 h-7 rounded-full object-cover border-2 border-white shadow-sm" referrerPolicy="no-referrer" crossOrigin="anonymous" />
+                                      ))}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <div className="text-right flex-shrink-0">
+                                        <p className="text-sm font-bold text-slate-900">{stock.isPending ? "—" : fmt(stock.currentValue)}</p>
+                                        {stock.isPending ? (
+                                          <p className="text-xs text-amber-500 font-semibold">Pending</p>
+                                        ) : (
+                                          <p className={`text-xs font-semibold ${changePnl >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
+                                            {changePnl >= 0 ? "+" : ""}{changePnl.toFixed(1)}% Total Return
+                                          </p>
+                                        )}
+                                        <p className="text-[10px] text-slate-400">{pctValue.toFixed(1)}% of portfolio</p>
+                                      </div>
+                                      <ChevronDown className={`h-4 w-4 text-slate-400 flex-shrink-0 transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`} />
+                                    </div>
                                   </div>
-                                ) : (
+                                  <p className="text-sm font-semibold text-slate-900">{stock.name}</p>
+                                  <p className="text-xs text-slate-500 font-medium mt-0.5">{(stock.strategyHoldings || []).length} assets</p>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-3 w-full">
                                   <div className="h-11 w-11 rounded-full bg-white border border-slate-200 shadow-sm overflow-hidden flex-shrink-0">
                                     {!stock.logo || failedLogos[stock.symbol] ? (
-                                      <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-100 to-purple-100 text-xs font-bold text-violet-700">{stock.symbol.slice(0, 2)}</div>
+                                      <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-100 to-purple-100 text-xs font-bold text-violet-700">{(stock.symbol || "").slice(0, 2)}</div>
                                     ) : (
                                       <img src={stock.logo} alt={stock.name} className="h-full w-full object-cover" onError={() => setFailedLogos(prev => ({ ...prev, [stock.symbol]: true }))} />
                                     )}
                                   </div>
-                                )}
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-semibold text-slate-900 leading-snug break-words">{stock.name}</p>
-                                  <p className="text-xs text-slate-500 font-medium">{stock.isStrategy ? `${(stock.strategyHoldings || []).length} assets` : stock.symbol}</p>
-                                </div>
-                                <div className="flex items-center gap-2">
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-semibold text-slate-900 truncate">{stock.name}</p>
+                                    <p className="text-xs text-slate-500 font-medium">{stock.symbol}</p>
+                                  </div>
                                   <div className="text-right flex-shrink-0">
                                     <p className="text-sm font-bold text-slate-900">{stock.isPending ? "—" : fmt(stock.currentValue)}</p>
                                     {stock.isPending ? (
                                       <p className="text-xs text-amber-500 font-semibold">Pending</p>
                                     ) : (
                                       <p className={`text-xs font-semibold ${changePnl >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
-                                        {changePnl >= 0 ? "+" : ""}{changePnl.toFixed(1)}%{stock.isStrategy ? " Total Return" : ""}
+                                        {changePnl >= 0 ? "+" : ""}{changePnl.toFixed(1)}%
                                       </p>
                                     )}
                                     <p className="text-[10px] text-slate-400">{pctValue.toFixed(1)}% of portfolio</p>
                                   </div>
-                                  {stock.isStrategy && (
-                                    <ChevronDown className={`h-4 w-4 text-slate-400 flex-shrink-0 transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`} />
-                                  )}
                                 </div>
-                              </div>
+                              )}
                             </div>
                             {/* Expanded constituent stocks */}
                             {isExpanded && stock.strategyHoldings?.length > 0 && (

@@ -1830,20 +1830,47 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                                       }
                                     }}
                                   >
-                                    <div className="flex items-center gap-3">
-                                      {stock.isStrategy && stock.topLogos?.length > 0 ? (
-                                        <div className="flex-shrink-0 flex items-center">
+                                    {stock.isStrategy && stock.topLogos?.length > 0 ? (
+                                      <div className="w-full">
+                                        <div className="flex items-center justify-between mb-2">
                                           <div className="flex -space-x-2">
                                             {stock.topLogos.slice(0, 5).map((logo, li) => (
                                               <img key={li} src={logo} className="w-7 h-7 rounded-full object-cover border-2 border-white shadow-sm" referrerPolicy="no-referrer" crossOrigin="anonymous" />
                                             ))}
                                           </div>
+                                          <div className="flex items-center gap-2">
+                                            <div className="text-right flex-shrink-0">
+                                              <p className="text-sm font-bold text-slate-900">
+                                                {stock.isPending ? "—" : formatCurrency(stock.currentValue)}
+                                              </p>
+                                              {stock.isPending ? (
+                                                <p className="text-xs text-amber-500 font-semibold">Pending</p>
+                                              ) : (
+                                                <div className="flex flex-col items-end">
+                                                  <p className={`text-xs font-semibold ${changePnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                                    {changePnl >= 0 ? '+' : ''}{changePnl.toFixed(1)}% Total Return
+                                                  </p>
+                                                  {stock.ytd_return != null && (
+                                                    <p className={`text-[10px] font-medium mt-0.5 ${stock.ytd_return >= 0 ? 'text-emerald-500/70' : 'text-rose-500/70'}`}>
+                                                      {stock.ytd_return >= 0 ? '+' : ''}{(stock.ytd_return * 100).toFixed(1)}% Strategy YTD
+                                                    </p>
+                                                  )}
+                                                </div>
+                                              )}
+                                              <p className="text-[10px] text-slate-400">{pctValue.toFixed(1)}% of portfolio</p>
+                                            </div>
+                                            <ChevronDown className={`h-4 w-4 text-slate-400 flex-shrink-0 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+                                          </div>
                                         </div>
-                                      ) : (
+                                        <p className="text-sm font-semibold text-slate-900">{stock.name}</p>
+                                        <p className="text-xs text-slate-500 font-medium mt-0.5">{(stock.strategyHoldings || []).length} assets</p>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-3 w-full">
                                         <div className="h-11 w-11 rounded-full bg-white border border-slate-200 shadow-sm overflow-hidden flex-shrink-0">
                                           {!stock.logo || failedLogos[stock.ticker] ? (
                                             <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-100 to-purple-100 text-xs font-bold text-violet-700">
-                                              {stock.ticker.slice(0, 2)}
+                                              {(stock.ticker || '').slice(0, 2)}
                                             </div>
                                           ) : (
                                             <img
@@ -1854,39 +1881,32 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                                             />
                                           )}
                                         </div>
-                                      )}
-
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-semibold text-slate-900 leading-snug break-words">{stock.name}</p>
-                                        <p className="text-xs text-slate-500 font-medium">{stock.isStrategy ? `${(stock.strategyHoldings || []).length} assets` : stock.ticker}</p>
-                                      </div>
-
-                                      <div className="flex items-center gap-2">
-                                        <div className="text-right flex-shrink-0">
-                                          <p className="text-sm font-bold text-slate-900">
-                                            {stock.isPending ? "—" : formatCurrency(stock.currentValue)}
-                                          </p>
-                                          {stock.isPending ? (
-                                            <p className="text-xs text-amber-500 font-semibold">Pending</p>
-                                          ) : (
-                                            <div className="flex flex-col items-end">
-                                              <p className={`text-xs font-semibold ${changePnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                                {changePnl >= 0 ? '+' : ''}{changePnl.toFixed(1)}%{stock.isStrategy ? ' Total Return' : ''}
-                                              </p>
-                                              {stock.isStrategy && stock.ytd_return != null && (
-                                                <p className={`text-[10px] font-medium mt-0.5 ${stock.ytd_return >= 0 ? 'text-emerald-500/70' : 'text-rose-500/70'}`}>
-                                                  {stock.ytd_return >= 0 ? '+' : ''}{(stock.ytd_return * 100).toFixed(1)}% Strategy YTD
-                                                </p>
-                                              )}
-                                            </div>
-                                          )}
-                                          <p className="text-[10px] text-slate-400">{pctValue.toFixed(1)}% of portfolio</p>
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-sm font-semibold text-slate-900 truncate">{stock.name}</p>
+                                          <p className="text-xs text-slate-500 font-medium">{stock.isStrategy ? `${(stock.strategyHoldings || []).length} assets` : stock.ticker}</p>
                                         </div>
-                                        {stock.isStrategy && (
-                                          <ChevronDown className={`h-4 w-4 text-slate-400 flex-shrink-0 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
-                                        )}
+                                        <div className="flex items-center gap-2">
+                                          <div className="text-right flex-shrink-0">
+                                            <p className="text-sm font-bold text-slate-900">
+                                              {stock.isPending ? "—" : formatCurrency(stock.currentValue)}
+                                            </p>
+                                            {stock.isPending ? (
+                                              <p className="text-xs text-amber-500 font-semibold">Pending</p>
+                                            ) : (
+                                              <div className="flex flex-col items-end">
+                                                <p className={`text-xs font-semibold ${changePnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                                  {changePnl >= 0 ? '+' : ''}{changePnl.toFixed(1)}%
+                                                </p>
+                                              </div>
+                                            )}
+                                            <p className="text-[10px] text-slate-400">{pctValue.toFixed(1)}% of portfolio</p>
+                                          </div>
+                                          {stock.isStrategy && (
+                                            <ChevronDown className={`h-4 w-4 text-slate-400 flex-shrink-0 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+                                          )}
+                                        </div>
                                       </div>
-                                    </div>
+                                    )}
                                   </div>
 
                                   {/* Expandable constituent stocks */}
