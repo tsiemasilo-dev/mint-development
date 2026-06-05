@@ -160,6 +160,7 @@ const SwipeableBalanceCard = ({
   overrideWalletBalance, // Rands — replaces the CASH footer value
   managedByLabel,        // For child cards: "Managed by parent · Age X · Independent at Y"
   livePriceMap: livePriceMapProp = null, // Shared from ChildDashboardPage — skips internal poll
+  onChildYtdMetrics = null, // Callback(pnl, pct) fired when childLiveMetrics updates
 }) => {
   const childMode = !!familyMemberId;
   const _cacheKey = `${userId || ''}:${familyMemberId || ''}`;
@@ -1188,6 +1189,13 @@ const SwipeableBalanceCard = ({
     const pct = (pnl / costBasis) * 100;
     return { pnl, pct };
   }, [childMode, dbData.holdings, childLivePriceMap, livePriceMapProp, activeTab, yearStartBasketCents]);
+
+  useEffect(() => {
+    if (childMode && childLiveMetrics && onChildYtdMetrics) {
+      onChildYtdMetrics(childLiveMetrics);
+    }
+  }, [childMode, childLiveMetrics, onChildYtdMetrics]);
+
   const displayBalance = overrideBalance !== undefined
     ? overrideBalance
     : displayMarketValue;

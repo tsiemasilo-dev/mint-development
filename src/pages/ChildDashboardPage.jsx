@@ -1968,6 +1968,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   const [expandedStrategyStack, setExpandedStrategyStack] = useState(null);
   const [strategySparklines, setStrategySparklines] = useState({});
   const [strategyYearStartBasket, setStrategyYearStartBasket] = useState({});
+  const [purpleCardYtdMetrics, setPurpleCardYtdMetrics] = useState(null);
   const [showAllTransactions, setShowAllTransactions] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [showGoalsModal, setShowGoalsModal] = useState(false);
@@ -2921,6 +2922,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                 mintNumber={child?.mint_number || null}
                 overrideWalletBalance={childBalance / 100}
                 livePriceMap={childLivePriceMap}
+                onChildYtdMetrics={setPurpleCardYtdMetrics}
               />
             )}
           </div>
@@ -3050,7 +3052,10 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
 
                   // Single card renderer (reused for both single and expanded stack items)
                   const renderCard = (sc, opts = {}) => {
-                    const ytdMetrics = strategyYtdMetrics[sc.id];
+                    // Prefer purple card's computed metrics (identical source) — fall back to per-strategy
+                    const ytdMetrics = purpleCardYtdMetrics
+                      ? { ytdPnlRands: purpleCardYtdMetrics.pnl, ytdPct: purpleCardYtdMetrics.pct }
+                      : strategyYtdMetrics[sc.id];
                     const ytdPct = ytdMetrics?.ytdPct ?? null;
                     const ytdPnlRands = ytdMetrics?.ytdPnlRands ?? null;
                     const ytdAvailable = ytdPct != null && ytdPnlRands != null;
@@ -3106,10 +3111,10 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                                 {ytdAvailable ? (
                                   <>
                                     <p className={`text-base font-bold tabular-nums ${isUp ? "text-emerald-500" : "text-red-500"}`}>
-                                      {isUp ? "+" : ""}{fmtRands(ytdPnlRands)}
+                                      {isUp ? "+" : "-"}{fmtRands(Math.abs(ytdPnlRands))}
                                     </p>
                                     <p className={`text-sm font-bold tabular-nums ${isUp ? "text-emerald-600" : "text-red-500"}`}>
-                                      {isUp ? "+" : ""}{Math.abs(ytdPct).toFixed(1)}%
+                                      {isUp ? "+" : "-"}{Math.abs(ytdPct).toFixed(1)}%
                                     </p>
                                   </>
                                 ) : sc.pnl != null ? (
