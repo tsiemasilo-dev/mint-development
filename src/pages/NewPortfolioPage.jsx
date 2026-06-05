@@ -7,7 +7,7 @@ import { useRealtimePrices } from "../lib/useRealtimePrices";
 import { useProfile } from "../lib/useProfile";
 import { useUserStrategies, useStrategyChartData, useStrategyPeriodReturns } from "../lib/useUserStrategies";
 import { getMonthlyReturns, getStockMonthlyReturns, getOverallPortfolioMonthlyReturns, getStrategyMonthlyReturnsFromDB } from "../lib/strategyData";
-import { useStockQuotes, useStockChart } from "../lib/useStockData";
+import { useStockQuotes, useStockChart, useStockReturns } from "../lib/useStockData";
 import { clearMarketDataCache } from "../lib/marketData";
 import SwipeBackWrapper from "../components/SwipeBackWrapper.jsx";
 import PortfolioSkeleton from "../components/PortfolioSkeleton";
@@ -273,6 +273,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     return h?.created_at || h?.as_of_date || null;
   }, [modalHolding, modalSecurityId, rawHoldings]);
   const { chartData: modalRawChartData, loading: modalChartLoading } = useStockChart(modalSecurityId, modalTimeFilter, null);
+  const modalStockReturns = useStockReturns(modalSecurityId);
 
   useEffect(() => {
     if (pricesLastUpdated) {
@@ -2249,6 +2250,25 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           const mPeriodPnl = (() => {
             if (!mShowPnl) return 0;
             if (modalTimeFilter === 'ALL') return mPnl;
+            if (modalTimeFilter === 'D') {
+              // liveQuotes.change = 1d_abs/100 (Rands per share)
+              const dailyChangePerShare = liveQuotes[mHolding.ticker]?.change ?? 0;
+              return dailyChangePerShare * mQty;
+            }
+            if (modalTimeFilter === 'W') {
+              // stock_returns_c.5d_abs is in cents per share
+              const abs = modalStockReturns?.['5d_abs'];
+              if (abs != null) return (Number(abs) / 100) * mQty;
+              const last = mChartData[mChartData.length - 1];
+              return last != null ? last.value : mPnl;
+            }
+            if (modalTimeFilter === 'M') {
+              // stock_returns_c.1m_abs is in cents per share
+              const abs = modalStockReturns?.['1m_abs'];
+              if (abs != null) return (Number(abs) / 100) * mQty;
+              const last = mChartData[mChartData.length - 1];
+              return last != null ? last.value : mPnl;
+            }
             const last = mChartData[mChartData.length - 1];
             return last != null ? last.value : mPnl;
           })();
@@ -2322,7 +2342,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                     <>
                       <p className="text-3xl font-bold text-slate-900">{formatCurrency(mMarketValue)}</p>
                       <p className={`text-sm mt-0.5 ${mPeriodPnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                        {mPeriodPnl >= 0 ? '+' : ''}{formatCurrency(mPeriodPnl)} ({mPeriodPct >= 0 ? '+' : ''}{mPeriodPct.toFixed(2)}%) {mPeriodLabel}
+                        {mPeriodPnl >= 0 ? '+' : '-'}{formatCurrency(Math.abs(mPeriodPnl))} ({mPeriodPct >= 0 ? '+' : ''}{mPeriodPct.toFixed(2)}%) {mPeriodLabel}
                       </p>
                     </>
                   ) : (
