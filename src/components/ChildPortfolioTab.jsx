@@ -272,9 +272,19 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, livePriceMap
 
     (async () => {
       try {
-        const todayUTC = new Date().toISOString().slice(0, 10);
+        // Find the most recent trading day that has intraday data (handles weekends/holidays)
+        const { data: latestRow } = await supabase
+          .from("stock_intraday_c")
+          .select("timestamp")
+          .in("security_id", securityIds)
+          .order("timestamp", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (cancelled) return;
+        if (!latestRow) { setIntradayChartData([]); setIntradayLoading(false); return; }
+        const tradingDay = latestRow.timestamp.slice(0, 10);
 
-        // Today's intraday rows — paginate in batches of 1000 to bypass Supabase's server-side row cap
+        // That trading day's intraday rows — paginate in batches of 1000 to bypass Supabase's server-side row cap
         const PAGE = 1000;
         let intradayRows = [];
         let page = 0;
@@ -283,7 +293,8 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, livePriceMap
             .from("stock_intraday_c")
             .select("security_id, current_price, 1d_abs, timestamp")
             .in("security_id", securityIds)
-            .gte("timestamp", `${todayUTC}T00:00:00Z`)
+            .gte("timestamp", `${tradingDay}T00:00:00Z`)
+            .lt("timestamp", `${tradingDay}T23:59:59Z`)
             .order("timestamp", { ascending: true })
             .range(page * PAGE, (page + 1) * PAGE - 1);
           if (!batch?.length) break;
