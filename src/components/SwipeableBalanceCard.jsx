@@ -1547,7 +1547,10 @@ const SwipeableBalanceCard = ({
 
   const useParentMD = !childMode && (activeTab === "m" || activeTab === "5d") && parentMDLivePnl !== null;
   // Parent M/5D when data not yet fetched: show R0 explicitly — no stale chart periodReturn fallback.
-  const isParentMDTabWaiting = !childMode && (activeTab === "m" || activeTab === "5d") && parentMDLivePnl === null;
+  // Only applies to strategy accounts — stock-only accounts never populate parentMDLivePnl
+  // (the snapshot effect exits early when strategyIds is empty), so they must fall through to periodReturn.
+  const parentHasStrategyHoldings = !childMode && dbData.holdings.some(h => h.strategyId || h.strategy_id);
+  const isParentMDTabWaiting = !childMode && parentHasStrategyHoldings && (activeTab === "m" || activeTab === "5d") && parentMDLivePnl === null;
   // For parent YTD: when no prior-year anchor (parentYearStartBasketCents=null → !useParentLiveYtd),
   // user invested entirely this year → YTD = All-time = displayReturn. Never use chart periodReturn for YTD.
   const useParentYtdTab = !childMode && activeTab === "ytd";
