@@ -232,48 +232,42 @@ export const getSecurityPrices = async (securityId, timeframe = "1M") => {
 
     // ── 1D: use intraday table (stock_intraday_c) bucketed into 15-min intervals ──
     if (timeframe === "1D") {
-      const todayStart = new Date();
-      todayStart.setUTCHours(0, 0, 0, 0);
-
-      const { data: intradayRows, error: intradayErr } = await supabase
+      // Find the most recent trading day that has intraday data (handles weekends/holidays)
+      const { data: latestTick } = await supabase
         .from("stock_intraday_c")
-        .select("timestamp, current_price")
+        .select("timestamp")
         .eq("security_id", securityId)
-        .gte("timestamp", todayStart.toISOString())
-        .order("timestamp", { ascending: true });
+        .order("timestamp", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-      if (!intradayErr && intradayRows && intradayRows.length >= 2) {
-        // Bucket into 15-minute intervals — last price in each bucket wins
-        const buckets = {};
-        for (const row of intradayRows) {
-          const t = new Date(row.timestamp);
-          const h = t.getUTCHours();
-          const m = Math.floor(t.getUTCMinutes() / 15) * 15;
-          const key = `${t.toISOString().slice(0, 10)}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00Z`;
-          buckets[key] = row.current_price;
-        }
-        prices = Object.entries(buckets)
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([ts, price]) => ({ ts, close: Number(price) / 100 }));
-        console.log(`✅ Fetched ${prices.length} intraday buckets for 1D`);
-      } else {
-        // Outside trading hours or no data yet — flat line using latest EOD price
-        console.log(`⚠️ No intraday data for today — falling back to latest EOD`);
-        const { data: eod } = await supabase
-          .from("stock_returns_c")
-          .select("as_of_date, current_price")
+      if (latestTick) {
+        const tradingDay = latestTick.timestamp.slice(0, 10);
+        const { data: intradayRows, error: intradayErr } = await supabase
+          .from("stock_intraday_c")
+          .select("timestamp, current_price")
           .eq("security_id", securityId)
-          .order("as_of_date", { ascending: false })
-          .limit(1)
-          .single();
-        if (eod?.current_price) {
-          const dateStr = eod.as_of_date.split("T")[0];
-          const p = Number(eod.current_price) / 100;
-          prices = [
-            { ts: `${dateStr}T07:00:00Z`, close: p },
-            { ts: `${dateStr}T15:30:00Z`, close: p },
-          ];
+          .gte("timestamp", `${tradingDay}T00:00:00Z`)
+          .lt("timestamp", `${tradingDay}T23:59:59Z`)
+          .order("timestamp", { ascending: true });
+
+        if (!intradayErr && intradayRows && intradayRows.length >= 2) {
+          // Bucket into 15-minute intervals — last price in each bucket wins
+          const buckets = {};
+          for (const row of intradayRows) {
+            const t = new Date(row.timestamp);
+            const h = t.getUTCHours();
+            const m = Math.floor(t.getUTCMinutes() / 15) * 15;
+            const key = `${t.toISOString().slice(0, 10)}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00Z`;
+            buckets[key] = row.current_price;
+          }
+          prices = Object.entries(buckets)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([ts, price]) => ({ ts, close: Number(price) / 100 }));
+          console.log(`✅ Fetched ${prices.length} intraday buckets for 1D (${tradingDay})`);
         }
+      } else {
+        console.log(`⚠️ No intraday data found for security ${securityId}`);
       }
 
       cache.priceHistory.set(cacheKey, { data: prices, timestamp: now });

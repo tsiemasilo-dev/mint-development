@@ -1693,9 +1693,34 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
 
                         <div style={{ width: '100%', height: 220, marginBottom: 8 }}>
                           {stockChartData.length === 0 ? (
-                            <div style={{ width: '100%', height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <div className="text-slate-400 text-sm">{stockChartLoading ? 'Loading chart...' : 'No data available'}</div>
-                            </div>
+                            stockChartLoading ? (
+                              <div style={{ width: '100%', height: 220 }}>
+                                <svg width="100%" height="220" viewBox="0 0 400 220" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+                                  <defs>
+                                    <linearGradient id="stockSkeletonFill" x1="0" y1="0" x2="0" y2="1">
+                                      <stop offset="0%" stopColor="#e2e8f0" stopOpacity="0.6" />
+                                      <stop offset="100%" stopColor="#e2e8f0" stopOpacity="0.05" />
+                                    </linearGradient>
+                                    <linearGradient id="stockShimmer" x1="0" y1="0" x2="1" y2="0">
+                                      <stop offset="0%" stopColor="transparent"><animate attributeName="offset" values="-1;0;1" dur="1.6s" repeatCount="indefinite" /></stop>
+                                      <stop offset="50%" stopColor="rgba(255,255,255,0.55)"><animate attributeName="offset" values="-0.5;0.5;1.5" dur="1.6s" repeatCount="indefinite" /></stop>
+                                      <stop offset="100%" stopColor="transparent"><animate attributeName="offset" values="0;1;2" dur="1.6s" repeatCount="indefinite" /></stop>
+                                    </linearGradient>
+                                    <mask id="stockShimmerMask"><rect width="400" height="220" fill="url(#stockShimmer)" /></mask>
+                                  </defs>
+                                  {[40,80,120,160].map((y, i) => <rect key={i} x="0" y={y} width="22" height="8" rx="4" fill="#e2e8f0" />)}
+                                  <path d="M32,160 C55,155 70,130 90,118 C110,106 125,125 145,108 C165,91 180,70 205,65 C230,60 245,80 265,72 C285,64 300,82 320,75 C340,68 360,85 380,78 L380,190 L32,190 Z" fill="url(#stockSkeletonFill)" />
+                                  <path d="M32,160 C55,155 70,130 90,118 C110,106 125,125 145,108 C165,91 180,70 205,65 C230,60 245,80 265,72 C285,64 300,82 320,75 C340,68 360,85 380,78" fill="none" stroke="#cbd5e1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                                  <path d="M32,160 C55,155 70,130 90,118 C110,106 125,125 145,108 C165,91 180,70 205,65 C230,60 245,80 265,72 C285,64 300,82 320,75 C340,68 360,85 380,78 L380,190 L32,190 Z" fill="url(#stockShimmer)" mask="url(#stockShimmerMask)" />
+                                  <line x1="32" y1="190" x2="400" y2="190" stroke="#e2e8f0" strokeWidth="1" />
+                                  {[55,128,200,272,345].map((x, i) => <rect key={i} x={x - 16} y="200" width="32" height="8" rx="4" fill="#e2e8f0" />)}
+                                </svg>
+                              </div>
+                            ) : (
+                              <div style={{ width: '100%', height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <div className="text-slate-400 text-sm">No data available</div>
+                              </div>
+                            )
                           ) : (
                             <ResponsiveContainer width="100%" height={220}>
                               <ComposedChart
