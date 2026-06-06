@@ -329,6 +329,13 @@ const SwipeableBalanceCard = ({
     holdingsCount: 0,
   });
 
+  // Stable key: only changes when the SET of strategy IDs changes, not on every live-price tick.
+  // Prevents the parent snapshot effect from re-running on every price poll (which would flash R0).
+  const parentStrategyKey = useMemo(
+    () => [...new Set(dbData.holdings.map(h => h.strategyId || h.strategy_id).filter(Boolean))].sort().join(","),
+    [dbData.holdings]
+  );
+
   const [isVisible, setIsVisible] = useState(() => {
     try { return localStorage.getItem(VISIBILITY_STORAGE_KEY) !== "false"; } catch { return true; }
   });
@@ -848,66 +855,46 @@ const SwipeableBalanceCard = ({
   // For M/5D: reads stored 1m_pnl/5d_pnl columns, falls back to basket diff.
   useEffect(() => {
     if (childMode || !userId) return;
-    // Reset snapshot-based period return when tab changes so stale values don't linger
     setParentSnapshotPeriodReturn(null);
     setParentSnapshotPeriodPct(null);
     setParentSnapshotStartBasketCents(null);
     setParentStoredMDPnl(null);
     setParentStoredMDPct(null);
-    if (activeTab === "all" || activeTab === "d") return; // handled by chart query / displayReturn
+    if (activeTab === "all" || activeTab === "d") return;
     let cancelled = false;
     const runParentSnapshots = async () => {
-      const strategyIds = [...new Set(
-        dbData.holdings
-          .map(h => h.strategyId || h.strategy_id)
-          .filter(Boolean)
-      )];
+      const strategyIds = parentStrategyKey ? parentStrategyKey.split(",") : [];
       if (!strategyIds.length) return;
       try {
-        const rowLimit = activeTab === "5d" ? 5 : activeTab === "m" ? 22 : undefined;
         const now = new Date();
-        const yearStart = `${now.getUTCFullYear()}-01-01`;
-
-        // Cap queries to the most recent weekday so that EOD rows written on
-        // weekends (server startup job) don't shift the 5D/M rolling window.
-        const dowUtc = now.getUTCDay(); // 0=Sun, 6=Sat
+        const dowUtc = now.getUTCDay();
         const weekendOffset = dowUtc === 6 ? 1 : dowUtc === 0 ? 2 : 0;
         const lastWeekday = new Date(now);
         lastWeekday.setUTCDate(now.getUTCDate() - weekendOffset);
         const lastWeekdayStr = lastWeekday.toISOString().split("T")[0];
 
-        // Accumulate basket_value per date across all strategies (same as child)
-        const basketByDate = {};
-        await Promise.all(strategyIds.map(async (sid) => {
-          let q = supabase
-            .from("client_strategy_returns_c")
-            .select("as_of_date, basket_value")
-            .eq("user_id", userId)
-            .is("family_member", null)
-            .eq("strategy_id", sid)
-            .lte("as_of_date", lastWeekdayStr)
-            .order("as_of_date", { ascending: false });
-          if (activeTab === "ytd") q = q.gte("as_of_date", yearStart);
-          if (rowLimit) q = q.limit(rowLimit);
-          const { data } = await q;
-          (data || []).forEach(r => {
-            basketByDate[r.as_of_date] = (basketByDate[r.as_of_date] || 0) + Number(r.basket_value || 0);
-          });
-        }));
-
-        if (cancelled) return;
-        const dates = Object.keys(basketByDate).sort(); // ascending
-        if (!dates.length) return;
-
-        const minRows = activeTab === "5d" ? 5 : activeTab === "m" ? 22 : 1;
-        if (dates.length < minRows) return;
-
-        const firstBasket = basketByDate[dates[0]];         // oldest date in range
-        const latestBasketCents = basketByDate[dates[dates.length - 1]]; // newest stored basket
-
         if (activeTab === "ytd") {
-          // Prior-year count check — identical to child mode.
-          // If count = 0 (all invested this year), null → falls back to displayReturn (All-time).
+          // YTD: accumulate basket rows to find year-start anchor
+          const yearStart = `${now.getUTCFullYear()}-01-01`;
+          const basketByDate = {};
+          await Promise.all(strategyIds.map(async (sid) => {
+            const { data } = await supabase
+              .from("client_strategy_returns_c")
+              .select("as_of_date, basket_value")
+              .eq("user_id", userId)
+              .is("family_member", null)
+              .eq("strategy_id", sid)
+              .gte("as_of_date", yearStart)
+              .lte("as_of_date", lastWeekdayStr)
+              .order("as_of_date", { ascending: false });
+            (data || []).forEach(r => {
+              basketByDate[r.as_of_date] = (basketByDate[r.as_of_date] || 0) + Number(r.basket_value || 0);
+            });
+          }));
+          if (cancelled) return;
+          const dates = Object.keys(basketByDate).sort();
+          if (!dates.length) return;
+          const firstBasket = basketByDate[dates[0]];
           const { count: priorYearCount } = await supabase
             .from("client_strategy_returns_c")
             .select("as_of_date", { count: "exact", head: true })
@@ -918,17 +905,13 @@ const SwipeableBalanceCard = ({
           const anchor = priorYearCount > 0 ? firstBasket : null;
           setParentYearStartBasketCents(anchor);
           console.log("[PERIOD_DEBUG parent] YTD anchor set:", {
-            priorYearCount,
-            yearStartBasketCents: anchor,
+            priorYearCount, yearStartBasketCents: anchor,
             yearStartRands: anchor != null ? anchor / 100 : null,
-            firstDate: dates[0],
-            lastDate: dates[dates.length - 1],
-            rowsFetched: dates.length,
+            firstDate: dates[0], lastDate: dates[dates.length - 1], rowsFetched: dates.length,
           });
         } else {
-          // M or 5D — prefer stored pre-computed columns (industry standard: computed at
-          // market close by the server, consistent with the portfolio tab and child badge).
-          // Fall back to basket-diff (live price − period-start basket) if columns are absent.
+          // M or 5D — try stored pre-computed columns FIRST (needs only 1 row, not 22/5).
+          // This prevents the minRows check from blocking users with slightly fewer basket rows.
           const storedCol = activeTab === "5d" ? "5d_pnl" : "1m_pnl";
           const storedPctCol = activeTab === "5d" ? "5d_pct" : "1m_pct";
           let totalStoredCents = 0;
@@ -955,17 +938,38 @@ const SwipeableBalanceCard = ({
           if (hasStored) {
             setParentStoredMDPnl(parseFloat((totalStoredCents / 100).toFixed(2)));
             setParentStoredMDPct(parseFloat((totalStoredPct / strategyIds.length).toFixed(4)));
-          } else {
-            // Fallback: live-price basket diff (keeps old behaviour when stored columns absent)
-            setParentSnapshotStartBasketCents(firstBasket);
+            console.log("[PERIOD_DEBUG parent] M/5D set:", {
+              activeTab, hasStored: true,
+              storedPnl: totalStoredCents / 100,
+            });
+            return; // stored columns found — no need for basket-diff fallback
           }
+          // Fallback: basket-diff (when stored columns absent). Needs minRows to be meaningful.
+          const rowLimit = activeTab === "5d" ? 5 : 22;
+          const basketByDate = {};
+          await Promise.all(strategyIds.map(async (sid) => {
+            const { data } = await supabase
+              .from("client_strategy_returns_c")
+              .select("as_of_date, basket_value")
+              .eq("user_id", userId)
+              .is("family_member", null)
+              .eq("strategy_id", sid)
+              .lte("as_of_date", lastWeekdayStr)
+              .order("as_of_date", { ascending: false })
+              .limit(rowLimit);
+            (data || []).forEach(r => {
+              basketByDate[r.as_of_date] = (basketByDate[r.as_of_date] || 0) + Number(r.basket_value || 0);
+            });
+          }));
+          if (cancelled) return;
+          const dates = Object.keys(basketByDate).sort();
+          if (dates.length < rowLimit) return;
+          const firstBasket = basketByDate[dates[0]];
+          setParentSnapshotStartBasketCents(firstBasket);
           console.log("[PERIOD_DEBUG parent] M/5D set:", {
-            activeTab,
-            hasStored,
-            storedPnl: hasStored ? totalStoredCents / 100 : null,
-            fallbackFirstBasketRands: hasStored ? null : firstBasket / 100,
-            dates: [dates[0], dates[dates.length - 1]],
-            rowsFetched: dates.length,
+            activeTab, hasStored: false,
+            fallbackFirstBasketRands: firstBasket / 100,
+            dates: [dates[0], dates[dates.length - 1]], rowsFetched: dates.length,
           });
         }
       } catch (e) {
@@ -974,7 +978,7 @@ const SwipeableBalanceCard = ({
     };
     runParentSnapshots();
     return () => { cancelled = true; };
-  }, [childMode, userId, dbData.holdings, activeTab]);
+  }, [childMode, userId, parentStrategyKey, activeTab]);
 
   // Live price poll for child mode — 15s, only runs when no shared prop from ChildDashboardPage
   useEffect(() => {
