@@ -653,16 +653,30 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, livePriceMap
                         <p className="text-slate-400 text-xs">Check back once more data has been recorded</p>
                       </div>
                     ) : isLoadingData ? (
-                      <div className="h-full flex flex-col justify-end gap-1 px-1 pb-6 pt-2">
-                        <div className="flex items-end gap-[3px] h-full">
-                          {[55, 70, 45, 80, 60, 90, 65, 75, 50, 85, 70, 60].map((h, i) => (
-                            <div
-                              key={i}
-                              className="flex-1 rounded-t-sm bg-slate-200 animate-pulse"
-                              style={{ height: `${h}%`, animationDelay: `${i * 60}ms` }}
-                            />
-                          ))}
-                        </div>
+                      <div className="h-full w-full px-1 pb-6 pt-2">
+                        <svg width="100%" height="100%" viewBox="0 0 300 160" preserveAspectRatio="none">
+                          <defs>
+                            <linearGradient id="skeletonFill" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#e2e8f0" stopOpacity="0.6" />
+                              <stop offset="100%" stopColor="#e2e8f0" stopOpacity="0.05" />
+                            </linearGradient>
+                          </defs>
+                          {/* filled area under the line */}
+                          <path
+                            d="M0 110 C30 100 50 80 80 70 S120 50 150 60 S200 90 230 75 S270 45 300 55 L300 160 L0 160 Z"
+                            fill="url(#skeletonFill)"
+                            className="animate-pulse"
+                          />
+                          {/* the line itself */}
+                          <path
+                            d="M0 110 C30 100 50 80 80 70 S120 50 150 60 S200 90 230 75 S270 45 300 55"
+                            fill="none"
+                            stroke="#cbd5e1"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                            className="animate-pulse"
+                          />
+                        </svg>
                       </div>
                     ) : displayChartData.length === 0 ? (
                       <div className="h-full flex items-center justify-center">
