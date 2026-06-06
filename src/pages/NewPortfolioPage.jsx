@@ -649,15 +649,23 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       return best || snapshotRows[0];
     };
 
-    let refRow;
-    if (timeFilter === "5d") {
-      refRow = closestRowOnOrBefore(offsetDate(9));
-    } else if (timeFilter === "m") {
-      refRow = closestRowOnOrBefore(offsetDate(31));
-    } else {
+    // YTD: use stored ytd_pnl directly — matches the badge value exactly
+    if (timeFilter === "ytd") {
       const yearStr = `${new Date().getFullYear()}-01-01`;
-      refRow = snapshotRows.find(r => r.as_of_date >= yearStr) || snapshotRows[0];
+      const dataRows = snapshotRows.filter(r => r.as_of_date >= yearStr);
+      if (!dataRows.length) return null;
+      const points = [{ day: null, value: 0, fullDate: null }];
+      for (const row of dataRows) {
+        const val = parseFloat((Number(row.ytd_pnl || 0) / 100).toFixed(2));
+        points.push({ day: fmtDay(row.as_of_date), value: val, fullDate: fmtFull(row.as_of_date) });
+      }
+      return points;
     }
+
+    // 5D / M: find the reference row using the same lookback the server uses
+    const refRow = timeFilter === "5d"
+      ? closestRowOnOrBefore(offsetDate(9))
+      : closestRowOnOrBefore(offsetDate(31));
 
     const dataRows = snapshotRows.filter(r => r.as_of_date >= refRow.as_of_date);
     if (!dataRows.length) return null;
