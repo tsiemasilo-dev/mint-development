@@ -636,8 +636,9 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     // Use the latest row's date (not the browser's today) so the reference matches the stored pnl.
     const latestRowDate = snapshotRows[snapshotRows.length - 1]?.as_of_date || new Date().toISOString().split("T")[0];
     const offsetDate = (days) => {
-      const d = new Date(latestRowDate + "T00:00:00");
-      d.setDate(d.getDate() - days);
+      // Use noon UTC to avoid local-timezone midnight-shift bugs (e.g. UTC+2 would roll back a day)
+      const d = new Date(latestRowDate + "T12:00:00Z");
+      d.setUTCDate(d.getUTCDate() - days);
       return d.toISOString().split("T")[0];
     };
     const closestRowOnOrBefore = (targetDateStr) => {
