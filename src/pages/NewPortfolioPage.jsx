@@ -632,9 +632,13 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     const fmtFull = (iso) => { const [y, mo, d] = iso.split("-").map(Number); return `${d} ${MN[mo - 1]} ${y}`; };
 
     // Use the same reference-date lookback the server uses:
-    // 5d → today minus 9 calendar days, 1m → today minus 31 calendar days, ytd → Jan 1
+    // 5d → latestRow - 9 calendar days, 1m → latestRow - 31 calendar days, ytd → Jan 1
+    // Use the latest row's date (not the browser's today) so the reference matches the stored pnl.
+    const latestRowDate = snapshotRows[snapshotRows.length - 1]?.as_of_date || new Date().toISOString().split("T")[0];
     const offsetDate = (days) => {
-      const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split("T")[0];
+      const d = new Date(latestRowDate + "T00:00:00");
+      d.setDate(d.getDate() - days);
+      return d.toISOString().split("T")[0];
     };
     const closestRowOnOrBefore = (targetDateStr) => {
       let best = null;
