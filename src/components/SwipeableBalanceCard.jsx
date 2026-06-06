@@ -171,8 +171,11 @@ const SwipeableBalanceCard = ({
   const [parentYearStartBasketCents, setParentYearStartBasketCents] = useState(null);
   const [parentSnapshotPeriodReturn, setParentSnapshotPeriodReturn] = useState(null);
   const [parentSnapshotPeriodPct, setParentSnapshotPeriodPct] = useState(null);
-  // Start-basket for M/5D — render path uses displayMarketValue - this for live-price accuracy
+  // Start-basket for M/5D — fallback when no stored column available
   const [parentSnapshotStartBasketCents, setParentSnapshotStartBasketCents] = useState(null);
+  // Stored pre-computed P&L from client_strategy_returns_c (5d_pnl / 1m_pnl) in rands
+  const [parentStoredMDPnl, setParentStoredMDPnl] = useState(null);
+  const [parentStoredMDPct, setParentStoredMDPct] = useState(null);
   const [childSnapshotCount, setChildSnapshotCount] = useState(null);
   const [childLivePriceMap, setChildLivePriceMap] = useState({});
   const [yearStartBasketCents, setYearStartBasketCents] = useState(null);
@@ -849,6 +852,8 @@ const SwipeableBalanceCard = ({
     setParentSnapshotPeriodReturn(null);
     setParentSnapshotPeriodPct(null);
     setParentSnapshotStartBasketCents(null);
+    setParentStoredMDPnl(null);
+    setParentStoredMDPct(null);
     if (activeTab === "all" || activeTab === "d") return; // handled by chart query / displayReturn
     let cancelled = false;
     const runParentSnapshots = async () => {
@@ -921,16 +926,44 @@ const SwipeableBalanceCard = ({
             rowsFetched: dates.length,
           });
         } else {
-          // M or 5D — store the period-start basket only.
-          // Final P&L is computed in the render path as: displayMarketValue − startBasket/100
-          // so that live price (not stored basket) is always used as "latest", matching portfolio tab.
-          setParentSnapshotStartBasketCents(firstBasket);
-          console.log("[PERIOD_DEBUG parent] M/5D start basket set:", {
+          // M or 5D — prefer stored pre-computed columns (industry standard: computed at
+          // market close by the server, consistent with the portfolio tab and child badge).
+          // Fall back to basket-diff (live price − period-start basket) if columns are absent.
+          const storedCol = activeTab === "5d" ? "5d_pnl" : "1m_pnl";
+          const storedPctCol = activeTab === "5d" ? "5d_pct" : "1m_pct";
+          let totalStoredCents = 0;
+          let totalStoredPct = 0;
+          let hasStored = false;
+          await Promise.all(strategyIds.map(async (sid) => {
+            const { data: row } = await supabase
+              .from("client_strategy_returns_c")
+              .select(`${storedCol}, ${storedPctCol}`)
+              .eq("user_id", userId)
+              .is("family_member", null)
+              .eq("strategy_id", sid)
+              .lte("as_of_date", lastWeekdayStr)
+              .order("as_of_date", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (row?.[storedCol] != null) {
+              totalStoredCents += Number(row[storedCol]);
+              totalStoredPct += Number(row[storedPctCol] || 0);
+              hasStored = true;
+            }
+          }));
+          if (cancelled) return;
+          if (hasStored) {
+            setParentStoredMDPnl(parseFloat((totalStoredCents / 100).toFixed(2)));
+            setParentStoredMDPct(parseFloat((totalStoredPct / strategyIds.length).toFixed(4)));
+          } else {
+            // Fallback: live-price basket diff (keeps old behaviour when stored columns absent)
+            setParentSnapshotStartBasketCents(firstBasket);
+          }
+          console.log("[PERIOD_DEBUG parent] M/5D set:", {
             activeTab,
-            firstBasketCents: firstBasket,
-            firstBasketRands: firstBasket / 100,
-            latestBasketCents,
-            latestBasketRands: latestBasketCents / 100,
+            hasStored,
+            storedPnl: hasStored ? totalStoredCents / 100 : null,
+            fallbackFirstBasketRands: hasStored ? null : firstBasket / 100,
             dates: [dates[0], dates[dates.length - 1]],
             rowsFetched: dates.length,
           });
@@ -1501,17 +1534,19 @@ const SwipeableBalanceCard = ({
     ? Math.min(displayMarketValue - parentYearStartBasketCents / 100, displayReturn)
     : 0;
 
-  // Parent M/5D: compute final P&L from live price (displayMarketValue) − period-start basket.
-  // This matches portfolio tab's formula exactly: liveVal − snapshotRows[length-N].basket_value/100.
-  const parentMDLivePnl = (!childMode && parentSnapshotStartBasketCents != null && displayMarketValue > 0)
+  // Parent M/5D: prefer stored pre-computed columns (5d_pnl / 1m_pnl) — industry standard.
+  // Fall back to basket-diff (live price − period-start basket) when stored columns absent.
+  const parentMDBasketPnl = (!childMode && parentSnapshotStartBasketCents != null && displayMarketValue > 0)
     ? parseFloat((displayMarketValue - parentSnapshotStartBasketCents / 100).toFixed(2))
     : null;
-  const parentMDLivePct = (parentMDLivePnl !== null && parentSnapshotStartBasketCents > 0)
-    ? parseFloat(((parentMDLivePnl / (parentSnapshotStartBasketCents / 100)) * 100).toFixed(4))
+  const parentMDBasketPct = (parentMDBasketPnl !== null && parentSnapshotStartBasketCents > 0)
+    ? parseFloat(((parentMDBasketPnl / (parentSnapshotStartBasketCents / 100)) * 100).toFixed(4))
     : null;
+  const parentMDLivePnl = parentStoredMDPnl !== null ? parentStoredMDPnl : parentMDBasketPnl;
+  const parentMDLivePct = parentStoredMDPct !== null ? parentStoredMDPct : parentMDBasketPct;
 
   const useParentMD = !childMode && (activeTab === "m" || activeTab === "5d") && parentMDLivePnl !== null;
-  // Parent M/5D when basket not yet fetched: show R0 explicitly — no stale chart periodReturn fallback.
+  // Parent M/5D when data not yet fetched: show R0 explicitly — no stale chart periodReturn fallback.
   const isParentMDTabWaiting = !childMode && (activeTab === "m" || activeTab === "5d") && parentMDLivePnl === null;
   // For parent YTD: when no prior-year anchor (parentYearStartBasketCents=null → !useParentLiveYtd),
   // user invested entirely this year → YTD = All-time = displayReturn. Never use chart periodReturn for YTD.
