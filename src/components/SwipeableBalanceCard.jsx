@@ -527,6 +527,7 @@ const SwipeableBalanceCard = ({
                 security_id: h.security_id,
                 strategy_id: h.strategy_id,
                 last_price: Number(h.last_price || 0),
+                created_at: h.created_at || null,
                 isStrategy: false,
               };
             });
@@ -1122,11 +1123,17 @@ const SwipeableBalanceCard = ({
         );
         const pricePromises = stockHoldings.map(async (h) => {
           try {
+            // Compute purchase date before querying so we can use it as the query floor.
+            // This prevents the Supabase 1000-row cap from hiding recent data when the
+            // tab window (e.g. ALL = 5 years) would return thousands of stale rows first.
+            const pDateStr = (h.created_at || h.as_of_date || "").split("T")[0];
+            const queryStart = pDateStr && pDateStr > startDateStr ? pDateStr : startDateStr;
+
             let { data, error } = await supabase
               .from("stock_returns_c")
               .select("as_of_date, current_price")
               .eq("security_id", h.security_id)
-              .gte("as_of_date", startDateStr)
+              .gte("as_of_date", queryStart)
               .order("as_of_date", { ascending: true });
 
             if (error || !data || data.length < 2) {
@@ -1141,7 +1148,6 @@ const SwipeableBalanceCard = ({
               } else if (!data || data.length === 0) return null;
             }
 
-            const pDateStr = (h.created_at || h.as_of_date || "").split("T")[0];
             // Chart's "purchase price" anchor prefers Expected_fill (rands) over avg_fill (cents).
             // Defensive: Expected_fill > 5x avg_fill/100 is legacy cents — divide by 100.
             const expectedFillRaw = Number(h.Expected_fill || 0);
@@ -1184,36 +1190,8 @@ const SwipeableBalanceCard = ({
         const hasStrategyData = Object.keys(strategyBasketByDate).length > 0;
 
         if (allPriceData.length === 0 && !hasStrategyData) {
-          // No price history in DB — synthesize a 2-point chart from cost basis → current market value
-          const activeHoldings = holdingsToChart.filter(h => !h.isStrategy && Number(h.avg_fill || 0) > 0);
-          // Cost basis prefers Expected_fill (rands → cents) over avg_fill (cents).
-          // Defensive: Expected_fill > 5x avg_fill/100 is legacy cents — divide by 100.
-          const costBasisCents = (h) => {
-            const expectedRaw = Number(h.Expected_fill || 0);
-            const qty = Number(h.quantity || 0);
-            const avgFillCents = Number(h.avg_fill || 0);
-            const avgFillRands = avgFillCents / 100;
-            const expectedRands = expectedRaw > 0
-              ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw)
-              : 0;
-            if (expectedRands > 0) return Math.round(expectedRands * 100 * qty);
-            return avgFillCents * qty;
-          };
-          if (activeHoldings.length > 0) {
-            const totalCostCents = activeHoldings.reduce((s, h) => s + costBasisCents(h), 0);
-            const totalMarketCents = activeHoldings.reduce((s, h) => s + Number(h.market_value || 0), 0);
-            const totalPnl = (totalMarketCents - totalCostCents) / 100;
-            const earliest = activeHoldings
-              .map(h => (h.created_at || h.as_of_date || "").slice(0, 10))
-              .filter(Boolean).sort()[0] || new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-            const today = new Date().toISOString().slice(0, 10);
-            setChartData([
-              { d: earliest, v: 0 },
-              { d: today, v: Number(totalPnl.toFixed(2)) },
-            ]);
-          } else {
-            setChartData([]);
-          }
+          setChartData([]);
+          setPeriodReturn(null);
           return;
         }
 
@@ -1273,11 +1251,133 @@ const SwipeableBalanceCard = ({
 
         console.log(`[SwipeableBalanceCard] Final chart points: ${points.length}`);
         setChartData(points);
-        // Period return = last point's v (already normalized to period start by the loop above)
-        if (points.length >= 2) {
-          setPeriodReturn(points[points.length - 1].v);
-        } else {
-          setPeriodReturn(null);
+
+        // Badge logic — each branch owns exactly one setPeriodReturn call:
+        //   isStockOnlyPeriodTab    → stock-only block below (pre-computed stock_returns_c columns)
+        //   isStrategyOnlyPeriodTab → strategy block below  (pre-computed client_strategy_returns_c columns)
+        //   otherwise               → post-norm chart last point (mixed portfolio / ALL tab)
+        const isStockOnlyPeriodTab    = stockHoldings.length > 0 && !hasStrategyData && activeTab !== "all";
+        const isStrategyOnlyPeriodTab = hasStrategyData && stockHoldings.length === 0 && activeTab !== "all";
+
+        if (!isStockOnlyPeriodTab && !isStrategyOnlyPeriodTab) {
+          if (points.length >= 2) {
+            setPeriodReturn(points[points.length - 1].v);
+          } else {
+            setPeriodReturn(null);
+          }
+        }
+
+        // Strategy-only badge — read pre-computed columns from client_strategy_returns_c.
+        // This matches exactly what the portfolio tab shows via useStrategyPeriodReturns.
+        //   D   → 1d_pnl  (today's P&L)
+        //   5D  → 5d_pnl  (true 5-trading-day return)
+        //   M   → 1m_pnl  (true 1-month return)
+        //   YTD → ytd_pnl (year-to-date return)
+        if (isStrategyOnlyPeriodTab && userId) {
+          const stratColMap = { "d": "1d_pnl", "5d": "5d_pnl", "m": "1m_pnl", "ytd": "ytd_pnl" };
+          const stratCol = stratColMap[activeTab];
+          if (stratCol) {
+            const strategyIds = [...new Set(
+              holdingsToChart.filter(h => h.isStrategy && h.strategyId).map(h => h.strategyId)
+            )];
+            let totalCents = 0;
+            let hasStratPreData = false;
+            await Promise.all(strategyIds.map(async (sid) => {
+              try {
+                const { data: sret } = await supabase
+                  .from("client_strategy_returns_c")
+                  .select(stratCol)
+                  .eq("user_id", userId)
+                  .eq("strategy_id", sid)
+                  .is("family_member", null)
+                  .order("as_of_date", { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+                if (sret?.[stratCol] != null) {
+                  totalCents += Number(sret[stratCol]);
+                  hasStratPreData = true;
+                }
+              } catch (e) {
+                console.warn(`[Chart] strategy pre-computed fetch failed for ${sid}:`, e);
+              }
+            }));
+            if (!chartCancelled && hasStratPreData) {
+              setPeriodReturn(parseFloat((totalCents / 100).toFixed(2)));
+            }
+          }
+        }
+
+        // Badge override for stock-only holdings (no strategy):
+        // 5D / M  → pre-computed columns from stock_returns_c (5d_abs, 1m_abs)
+        // YTD     → if bought this calendar year: (last_price − avg_fill) × qty  (= ALL, exact match)
+        //           if bought a prior year: ytd_abs × qty / 100
+        // ALL     → chart-derived value is correct, no override needed
+        if (stockHoldings.length > 0 && !hasStrategyData && activeTab !== "all") {
+          if (activeTab === "ytd") {
+            const currentYear = new Date().getUTCFullYear();
+            const allBoughtThisYear = stockHoldings.every(h => {
+              const d = h.created_at || h.as_of_date || "";
+              return new Date(d).getUTCFullYear() >= currentYear;
+            });
+            if (allBoughtThisYear) {
+              let totalPnl = 0;
+              stockHoldings.forEach(h => {
+                const qty = Number(h.quantity || 0);
+                const avgFillCents = Number(h.avg_fill || 0);
+                const lastPriceCents = Number(h.last_price || 0);
+                if (lastPriceCents > 0 && avgFillCents > 0) {
+                  totalPnl += ((lastPriceCents - avgFillCents) / 100) * qty;
+                }
+              });
+              if (!chartCancelled) setPeriodReturn(parseFloat(totalPnl.toFixed(2)));
+            } else {
+              let totalAbsRands = 0;
+              let hasPreData = false;
+              await Promise.all(stockHoldings.map(async (h) => {
+                try {
+                  const { data: ret } = await supabase
+                    .from("stock_returns_c")
+                    .select("ytd_abs")
+                    .eq("security_id", h.security_id)
+                    .order("as_of_date", { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+                  if (ret?.ytd_abs != null) {
+                    totalAbsRands += (Number(ret.ytd_abs) / 100) * Number(h.quantity || 0);
+                    hasPreData = true;
+                  }
+                } catch (e) {
+                  console.warn(`[Chart] ytd_abs fetch failed for ${h.security_id}:`, e);
+                }
+              }));
+              if (!chartCancelled && hasPreData) setPeriodReturn(parseFloat(totalAbsRands.toFixed(2)));
+            }
+          } else {
+            const preComputedAbsCol = { "5d": "5d_abs", "m": "1m_abs" }[activeTab];
+            if (preComputedAbsCol) {
+              let totalAbsRands = 0;
+              let hasPreData = false;
+              await Promise.all(stockHoldings.map(async (h) => {
+                try {
+                  const { data: ret } = await supabase
+                    .from("stock_returns_c")
+                    .select(`${preComputedAbsCol}`)
+                    .eq("security_id", h.security_id)
+                    .order("as_of_date", { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+                  if (ret && ret[preComputedAbsCol] != null) {
+                    const qty = Number(h.quantity || 0);
+                    totalAbsRands += (Number(ret[preComputedAbsCol]) / 100) * qty;
+                    hasPreData = true;
+                  }
+                } catch (e) {
+                  console.warn(`[Chart] Pre-computed fetch failed for ${h.security_id}:`, e);
+                }
+              }));
+              if (!chartCancelled && hasPreData) setPeriodReturn(parseFloat(totalAbsRands.toFixed(2)));
+            }
+          }
         }
       } catch (err) {
         console.error("❌ [SwipeableBalanceCard] Chart fetch error:", err);

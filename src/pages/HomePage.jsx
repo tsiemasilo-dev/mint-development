@@ -602,7 +602,8 @@ const HomePage = ({
 
         const formatted = Array.from(rowsBySecurity.entries()).map(([secId, batches]) => {
           const sec = securitiesMap[secId];
-          const livePriceCents = sec.last_price != null ? Math.round(Number(sec.last_price) * 100) : 0;
+          // last_price in securities_c is stored in CENTS; live_price_cents from intraday is also cents.
+          const livePriceCents = sec.live_price_cents > 0 ? sec.live_price_cents : Number(sec.last_price || 0);
           const livePriceRands = livePriceCents / 100;
 
           // Aggregate across batches: filled-only quantity drives liveValue/PnL,
@@ -684,9 +685,10 @@ const HomePage = ({
               const qty = Number(h.quantity || 0);
               const avgFill = Number(h.avg_fill || 0);
               const costBasisPerShareRands = costBasisRandsPerShare(h);
-              const livePriceCents = sec.last_price != null
-                ? Math.round(Number(sec.last_price) * 100)
-                : Math.round(costBasisPerShareRands * 100);
+              // last_price in securities_c is in CENTS; use live_price_cents (intraday) first.
+              const livePriceCents = sec.live_price_cents > 0
+                ? sec.live_price_cents
+                : (sec.last_price != null ? Number(sec.last_price) : Math.round(costBasisPerShareRands * 100));
               const marketVal = (livePriceCents * qty) / 100;
               const costBasis = costBasisPerShareRands * qty;
               const pnlRands = marketVal - costBasis;
@@ -878,15 +880,34 @@ const HomePage = ({
           return;
         }
 
-        const formatted = serverStrategies.map((s) => {
+        // Fetch stored P&L from client_strategy_returns_c to match purple card values
+        const strategyIds = serverStrategies.map(s => s.id).filter(Boolean);
+        const { data: returnsRows } = strategyIds.length
+          ? await supabase
+              .from("client_strategy_returns_c")
+              .select("strategy_id, ytd_pnl, ytd_pct")
+              .eq("user_id", profile.id)
+              .is("family_member", null)
+              .in("strategy_id", strategyIds)
+              .order("as_of_date", { ascending: false })
+          : { data: [] };
+        const returnsByStrategy = {};
+        for (const row of (returnsRows || [])) {
+          if (!returnsByStrategy[row.strategy_id]) returnsByStrategy[row.strategy_id] = row;
+        }
+
+        const formatted = serverStrategies
+          .map((s) => {
           const invested = Number(s.investedAmount) || 0;
           const rawCurrent = s.currentMarketValue;
           const currentValue = rawCurrent != null && Number.isFinite(Number(rawCurrent))
             ? Number(Number(rawCurrent).toFixed(2))
             : invested;
           const isPending = s.isPending === true || (invested === 0 && currentValue === 0);
-          const stratPnlRands = currentValue - invested;
-          const changePctVal = invested > 0 ? (stratPnlRands / invested) * 100 : 0;
+          const ret = returnsByStrategy[s.id];
+          const stratPnlRands = ret?.ytd_pnl != null ? Number(ret.ytd_pnl) / 100 : (currentValue - invested);
+          const stratPnlPct = ret?.ytd_pct != null ? Number(ret.ytd_pct) : (invested > 0 ? ((currentValue - invested) / invested) * 100 : 0);
+          const changePctVal = stratPnlPct;
           return {
             id: s.id,
             purchaseKey: s.purchaseKey || s.id,

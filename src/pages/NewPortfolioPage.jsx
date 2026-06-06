@@ -7,20 +7,19 @@ import { useRealtimePrices } from "../lib/useRealtimePrices";
 import { useProfile } from "../lib/useProfile";
 import { useUserStrategies, useStrategyChartData, useStrategyPeriodReturns } from "../lib/useUserStrategies";
 import { getMonthlyReturns, getStockMonthlyReturns, getOverallPortfolioMonthlyReturns, getStrategyMonthlyReturnsFromDB } from "../lib/strategyData";
-import { useStockQuotes, useStockChart } from "../lib/useStockData";
+import { useStockQuotes, useStockChart, useStockReturns } from "../lib/useStockData";
 import { clearMarketDataCache } from "../lib/marketData";
 import { supabase } from "../lib/supabase";
 import SwipeBackWrapper from "../components/SwipeBackWrapper.jsx";
 import PortfolioSkeleton from "../components/PortfolioSkeleton";
 import SettlementBadge from "../components/PendingBadge";
 import FamilyDropdown from "../components/FamilyDropdown";
+import { supabase } from "../lib/supabase";
 
 
 
 const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-// Returns the first data point of each month — used as YTD X-axis ticks so
-// only one label per month appears, labeled as just the month name ("Mar").
 const computeYtdMonthTicks = (chartData) => {
   const seen = new Set();
   return chartData
@@ -115,14 +114,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   const [intradayChartData, setIntradayChartData] = useState(null);
   const [intradayLoading, setIntradayLoading] = useState(false);
   const [intradayTick, setIntradayTick] = useState(0);
-  const [stockTabIntradayData, setStockTabIntradayData] = useState(null);
-  const [stockTabIntradayLoading, setStockTabIntradayLoading] = useState(false);
-  const [modalIntradayData, setModalIntradayData] = useState(null);
-  const [modalIntradayLoading, setModalIntradayLoading] = useState(false);
-  const [stockLiveReturns, setStockLiveReturns] = useState(null);
-  const [modalLiveReturns, setModalLiveReturns] = useState(null);
   const [ownLivePriceMap, setOwnLivePriceMap] = useState({});
-  const [tabJustChanged, setTabJustChanged] = useState(false);
   const [directStratHoldings, setDirectStratHoldings] = useState([]);
   const tabOrder = ["strategy", "holdings"];
 
@@ -316,6 +308,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     return h?.created_at || h?.as_of_date || null;
   }, [modalHolding, modalSecurityId, rawHoldings]);
   const { chartData: modalRawChartData, loading: modalChartLoading } = useStockChart(modalSecurityId, modalTimeFilter, null);
+  const modalStockReturns = useStockReturns(modalSecurityId);
 
   useEffect(() => {
     if (pricesLastUpdated) {
@@ -494,7 +487,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
 
   const holdings = allStrategyHoldings;
 
-  // ── direct strategy holdings (bypasses server-API timeout for metrics/chart) ─
+  // ── direct strategy holdings ──────────────────────────────────────────────
   useEffect(() => {
     const stratId = userSelectedStrategy?.strategyId;
     if (!stratId || !profile?.id) return;
@@ -506,12 +499,10 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       .eq("strategy_id", stratId)
       .gt("avg_fill", 0)
       .eq("Status", "active")
-      .then(({ data }) => {
-        setDirectStratHoldings(data || []);
-      });
+      .then(({ data }) => { setDirectStratHoldings(data || []); });
   }, [userSelectedStrategy?.strategyId, profile?.id]);
 
-  // ── snapshot rows (period P&L derivation + available period locks) ──────────
+  // ── snapshot rows (period P&L + available period locks) ───────────────────
   useEffect(() => {
     if (!userSelectedStrategy?.strategyId || !profile?.id) return;
     supabase
@@ -531,7 +522,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       });
   }, [userSelectedStrategy?.strategyId, profile?.id]);
 
-  // ── intraday tick (60s refresh while on D view) ───────────────────────────
+  // ── intraday tick (60s refresh while on D tab) ────────────────────────────
   useEffect(() => {
     if (timeFilter !== "D") return;
     const id = setInterval(() => setIntradayTick(t => t + 1), 60000);
@@ -542,7 +533,6 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   useEffect(() => {
     const stratId = userSelectedStrategy?.strategyId;
     if (!stratId) return;
-    // Use directStratHoldings (direct Supabase fetch) so we're not blocked by server-API timeouts
     const baseHoldings = directStratHoldings.length
       ? directStratHoldings
       : (rawHoldings || []).filter(h => h.strategy_id === stratId);
@@ -572,12 +562,11 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     return () => clearInterval(id);
   }, [userSelectedStrategy?.strategyId, directStratHoldings, rawHoldings]);
 
-  // ── live strategy metrics (today P&L, live value, cost basis) ────────────
+  // ── live strategy metrics (live value, today P&L, cost basis) ────────────
   const liveStrategyMetrics = useMemo(() => {
     const stratId = userSelectedStrategy?.strategyId;
     const empty = { liveValue: 0, costBasis: 0, todayPnl: 0, todayPct: 0, isPending: true, hasPrices: false };
     if (!stratId) return empty;
-    // Prefer direct Supabase fetch (not blocked by server-API timeout); fall back to rawHoldings
     const stratHoldings = directStratHoldings.length
       ? directStratHoldings.filter(h => Number(h.avg_fill || 0) > 0)
       : (rawHoldings || []).filter(h => h.strategy_id === stratId && Number(h.avg_fill || 0) > 0);
@@ -595,112 +584,121 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       const expectedRaw = Number(h.Expected_fill || 0);
       const expectedRands = expectedRaw > 0 ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw) : 0;
       costBasis += Math.max(expectedRands, avgFillRands) * qty;
-      // Prefer live poll abs1d → fall back to rawHoldings change_price (daily delta cents/share from server)
       const abs1d = liveEntry?.abs1dCents != null
         ? liveEntry.abs1dCents
         : (Number.isFinite(Number(h.change_price)) ? Number(h.change_price) : null);
       if (abs1d != null) todayPnl += (abs1d / 100) * qty;
     }
     return { liveValue, costBasis, todayPnl, todayPct: costBasis > 0 ? (todayPnl / costBasis) * 100 : 0, isPending: false, hasPrices };
-  // directStratHoldings included so metrics update when Supabase fetch completes (not just on ownLivePriceMap poll)
   }, [rawHoldings, userSelectedStrategy?.strategyId, ownLivePriceMap, directStratHoldings]);
 
-  // ── derived period return (5D/M/YTD from basket snapshots) ───────────────
-  // Formula: liveValue − periodStartBasket (same as purple card parent mode).
-  // "latest" is always the current live market value (not stored basket), so M/5D stay in sync
-  // with the purple card during market hours.
+  // ── derived period return (5D / M / YTD from basket snapshots) ───────────
   const derivedPeriodReturn = useMemo(() => {
     if (!snapshotRows.length) return { pnl: 0, pct: 0 };
-
-    // Use live value as "latest" — matches purple card's displayMarketValue formula.
-    // Explicit initial fallback: when the 15s intraday poll hasn't fired yet, compute
-    // liveValue from directStratHoldings.last_price (stored cents) so YTD/M/5D are never
-    // R0 on first render. liveStrategyMetrics already uses last_price as its internal fallback
-    // (liveCents=0 → lastCents), so liveValue > 0 after holdings load even without the poll.
     const liveVal = liveStrategyMetrics.liveValue > 0
       ? liveStrategyMetrics.liveValue
-      : directStratHoldings
-          .filter(h => Number(h.avg_fill || 0) > 0)
-          .reduce((sum, h) => {
-            const qty = Math.abs(Number(h.quantity || 0));
-            const lastCents = Number(h.last_price || 0);
-            return sum + (lastCents > 0 ? (lastCents / 100) * qty : 0);
-          }, 0);
-    // hasLive: true once any holdings are loaded (last_price used as initial value)
-    const hasLive = liveVal > 0;
-
+      : directStratHoldings.reduce((sum, h) => {
+          const qty = Math.abs(Number(h.quantity || 0));
+          const lastCents = Number(h.last_price || 0);
+          return sum + (lastCents > 0 ? (lastCents / 100) * qty : 0);
+        }, 0);
     if (timeFilter === "5d") {
-      if (snapshotRows.length < 5 || !hasLive) return { pnl: 0, pct: 0 };
+      if (snapshotRows.length < 5 || !liveVal) return { pnl: 0, pct: 0 };
       const startCents = Number(snapshotRows[snapshotRows.length - 5]?.basket_value || 0);
       if (!startCents) return { pnl: 0, pct: 0 };
       const startRands = startCents / 100;
       const pnl = parseFloat((liveVal - startRands).toFixed(2));
-      const pct = parseFloat(((pnl / startRands) * 100).toFixed(4));
-      console.log("[PERIOD_DEBUG portfolio] 5D:", { liveVal, startRands, pnl, pct, snapshotCount: snapshotRows.length });
-      return { pnl, pct };
+      return { pnl, pct: parseFloat(((pnl / startRands) * 100).toFixed(4)) };
     }
-
     if (timeFilter === "m") {
-      if (snapshotRows.length < 22 || !hasLive) return { pnl: 0, pct: 0 };
+      if (snapshotRows.length < 22 || !liveVal) return { pnl: 0, pct: 0 };
       const startCents = Number(snapshotRows[snapshotRows.length - 22]?.basket_value || 0);
       if (!startCents) return { pnl: 0, pct: 0 };
       const startRands = startCents / 100;
       const pnl = parseFloat((liveVal - startRands).toFixed(2));
-      const pct = parseFloat(((pnl / startRands) * 100).toFixed(4));
-      console.log("[PERIOD_DEBUG portfolio] M:", { liveVal, startRands, pnl, pct, snapshotCount: snapshotRows.length });
-      return { pnl, pct };
+      return { pnl, pct: parseFloat(((pnl / startRands) * 100).toFixed(4)) };
     }
-
     if (timeFilter === "ytd") {
-      if (!hasLive) {
-        console.log("[PERIOD_DEBUG portfolio] YTD: no live prices yet", { liveVal, hasPrices: liveStrategyMetrics.hasPrices });
-        return { pnl: 0, pct: 0 };
-      }
+      if (!liveVal) return { pnl: 0, pct: 0 };
       const yearStr = `${new Date().getFullYear()}-01-01`;
       const priorRows = snapshotRows.filter(r => r.as_of_date < yearStr);
       const currentYearRows = snapshotRows.filter(r => r.as_of_date >= yearStr);
-
       const allTimePnl = parseFloat((liveVal - liveStrategyMetrics.costBasis).toFixed(2));
       const allTimePct = parseFloat((liveStrategyMetrics.costBasis > 0
         ? (allTimePnl / liveStrategyMetrics.costBasis) * 100 : 0).toFixed(4));
-
-      // No prior-year rows: user invested entirely this year → YTD = All-time.
-      // Mirrors purple card: useParentYtdTab=true, !useParentLiveYtd → displayReturn.
-      if (priorRows.length === 0) {
-        console.log("[PERIOD_DEBUG portfolio] YTD: no prior-year rows → All-time:", {
-          liveVal, costBasis: liveStrategyMetrics.costBasis, allTimePnl, allTimePct,
-        });
-        return { pnl: allTimePnl, pct: allTimePct };
-      }
-
-      // Prior-year data exists: anchor = first basket of the current year.
+      if (priorRows.length === 0) return { pnl: allTimePnl, pct: allTimePct };
       const yearStartCents = currentYearRows.length > 0 ? Number(currentYearRows[0]?.basket_value || 0) : 0;
       if (!yearStartCents) return { pnl: 0, pct: 0 };
-
       const yearStartRands = yearStartCents / 100;
       const rawPnl = liveVal - yearStartRands;
-      // Cap at all-time: mid-year deposits inflate rawPnl above actual gains
       const pnl = parseFloat(Math.min(rawPnl, allTimePnl).toFixed(2));
       const anchor = liveVal - pnl;
-      const pct = parseFloat((anchor > 0 ? (pnl / anchor) * 100 : 0).toFixed(4));
-
-      console.log("[PERIOD_DEBUG portfolio] YTD:", {
-        liveVal, costBasis: liveStrategyMetrics.costBasis,
-        yearStartRands, rawPnl, allTimePnl, pnl, pct,
-        priorRowsCount: priorRows.length, currentYearRowsCount: currentYearRows.length,
-      });
-      return { pnl, pct };
+      return { pnl, pct: parseFloat((anchor > 0 ? (pnl / anchor) * 100 : 0).toFixed(4)) };
     }
-
     return { pnl: 0, pct: 0 };
   }, [snapshotRows, timeFilter, liveStrategyMetrics, directStratHoldings]);
+
+  // ── period chart from basket_value (5D / M / YTD) ────────────────────────
+  const snapshotChartData = useMemo(() => {
+    if (!snapshotRows.length || !["5d", "m", "ytd"].includes(timeFilter)) return null;
+    const MN = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const fmtDay = (iso) => { const [, mo, d] = iso.split("-").map(Number); return `${d} ${MN[mo - 1]}`; };
+    const fmtFull = (iso) => { const [y, mo, d] = iso.split("-").map(Number); return `${d} ${MN[mo - 1]} ${y}`; };
+
+    // Use the same reference-date lookback the server uses:
+    // 5d → latestRow - 9 calendar days, 1m → latestRow - 31 calendar days, ytd → Jan 1
+    // Use the latest row's date (not the browser's today) so the reference matches the stored pnl.
+    const latestRowDate = snapshotRows[snapshotRows.length - 1]?.as_of_date || new Date().toISOString().split("T")[0];
+    const offsetDate = (days) => {
+      // Use noon UTC to avoid local-timezone midnight-shift bugs (e.g. UTC+2 would roll back a day)
+      const d = new Date(latestRowDate + "T12:00:00Z");
+      d.setUTCDate(d.getUTCDate() - days);
+      return d.toISOString().split("T")[0];
+    };
+    const closestRowOnOrBefore = (targetDateStr) => {
+      let best = null;
+      for (const r of snapshotRows) {
+        if (r.as_of_date <= targetDateStr) best = r; else break;
+      }
+      return best || snapshotRows[0];
+    };
+
+    // YTD: use stored ytd_pnl directly — matches the badge value exactly
+    if (timeFilter === "ytd") {
+      const yearStr = `${new Date().getFullYear()}-01-01`;
+      const dataRows = snapshotRows.filter(r => r.as_of_date >= yearStr);
+      if (!dataRows.length) return null;
+      const points = [{ day: null, value: 0, fullDate: null }];
+      for (const row of dataRows) {
+        const val = parseFloat((Number(row.ytd_pnl || 0) / 100).toFixed(2));
+        points.push({ day: fmtDay(row.as_of_date), value: val, fullDate: fmtFull(row.as_of_date) });
+      }
+      return points;
+    }
+
+    // 5D / M: find the reference row using the same lookback the server uses
+    const refRow = timeFilter === "5d"
+      ? closestRowOnOrBefore(offsetDate(9))
+      : closestRowOnOrBefore(offsetDate(31));
+
+    const dataRows = snapshotRows.filter(r => r.as_of_date >= refRow.as_of_date);
+    if (!dataRows.length) return null;
+    const startCents = Number(refRow.basket_value || 0);
+    if (!startCents) return null;
+
+    const points = [{ day: null, value: 0, fullDate: null }];
+    for (const row of dataRows) {
+      const val = parseFloat(((Number(row.basket_value || 0) - startCents) / 100).toFixed(2));
+      points.push({ day: fmtDay(row.as_of_date), value: val, fullDate: fmtFull(row.as_of_date) });
+    }
+    return points;
+  }, [snapshotRows, timeFilter]);
 
   // ── intraday D chart (5-min buckets from stock_intraday_c) ────────────────
   useEffect(() => {
     if (timeFilter !== "D") { setIntradayChartData(null); return; }
     const stratId = userSelectedStrategy?.strategyId;
     if (!stratId) return;
-    // Prefer direct Supabase fetch; fall back to rawHoldings
     const stratHoldings = directStratHoldings.length
       ? directStratHoldings.filter(h => Number(h.avg_fill || 0) > 0)
       : (rawHoldings || []).filter(h => h.strategy_id === stratId && Number(h.avg_fill || 0) > 0);
@@ -712,7 +710,17 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     setIntradayLoading(true);
     (async () => {
       try {
-        const todayUTC = new Date().toISOString().slice(0, 10);
+        // Find the most recent trading day that has intraday data (handles weekends/holidays)
+        const { data: latestRow } = await supabase
+          .from("stock_intraday_c")
+          .select("timestamp")
+          .in("security_id", securityIds)
+          .order("timestamp", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (cancelled) return;
+        if (!latestRow) { setIntradayChartData([]); setIntradayLoading(false); return; }
+        const tradingDay = latestRow.timestamp.slice(0, 10);
         const PAGE = 1000;
         let intradayRows = [];
         let page = 0;
@@ -721,7 +729,8 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
             .from("stock_intraday_c")
             .select("security_id, current_price, 1d_abs, timestamp")
             .in("security_id", securityIds)
-            .gte("timestamp", `${todayUTC}T00:00:00Z`)
+            .gte("timestamp", `${tradingDay}T00:00:00Z`)
+            .lt("timestamp", `${tradingDay}T23:59:59Z`)
             .order("timestamp", { ascending: true })
             .range(page * PAGE, (page + 1) * PAGE - 1);
           if (!batch?.length) break;
@@ -764,10 +773,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           const sast = new Date(d.getTime() + 2 * 60 * 60 * 1000);
           const hh = String(sast.getUTCHours()).padStart(2, "0");
           const mm = String(sast.getUTCMinutes()).padStart(2, "0");
-          const dd = sast.getUTCDate();
-          const mo = MN[sast.getUTCMonth()];
-          const yr = sast.getUTCFullYear();
-          points.push({ day: `${hh}:${mm}`, value: pnl, fullDate: `${dd} ${mo} ${yr} ${hh}:${mm}` });
+          points.push({ day: `${hh}:${mm}`, value: pnl, fullDate: `${sast.getUTCDate()} ${MN[sast.getUTCMonth()]} ${sast.getUTCFullYear()} ${hh}:${mm}` });
         }
         if (!cancelled) setIntradayChartData(points.length > 1 ? points : []);
       } catch (e) {
@@ -780,317 +786,14 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     return () => { cancelled = true; };
   }, [timeFilter, userSelectedStrategy?.strategyId, directStratHoldings, rawHoldings, liveStrategyMetrics.costBasis, intradayTick]);
 
-  // ── individual stock tab intraday D chart ─────────────────────────────────
-  useEffect(() => {
-    if (stockTimeFilter !== "D" || !selectedSecurityId) { setStockTabIntradayData(null); return; }
-    const rawH = (rawHoldings || []).find(h => String(h.security_id) === String(selectedSecurityId) && !h.strategy_id);
-    const qty = rawH ? Math.abs(Number(rawH.quantity || 0)) : 0;
-    let cancelled = false;
-    setStockTabIntradayLoading(true);
-    (async () => {
-      try {
-        const todayUTC = new Date().toISOString().slice(0, 10);
-        const { data: rows } = await supabase
-          .from("stock_intraday_c")
-          .select("security_id, current_price, 1d_abs, timestamp")
-          .eq("security_id", selectedSecurityId)
-          .gte("timestamp", `${todayUTC}T00:00:00Z`)
-          .order("timestamp", { ascending: true });
-        if (cancelled) return;
-        if (!rows?.length) { setStockTabIntradayData([]); setStockTabIntradayLoading(false); return; }
-        const latestRow = rows[rows.length - 1];
-        const baselineRands = ((Number(latestRow.current_price) - Number(latestRow["1d_abs"] || 0)) / 100) * qty;
-        const bucketMap = new Map();
-        for (const row of rows) {
-          const d = new Date(row.timestamp);
-          d.setSeconds(0, 0); d.setMinutes(Math.floor(d.getMinutes() / 5) * 5);
-          bucketMap.set(d.toISOString(), Number(row.current_price));
-        }
-        const MN = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-        const points = [{ day: null, value: 0, fullDate: null }];
-        for (const [isoKey, priceCents] of [...bucketMap.entries()].sort()) {
-          const pnl = Number(((priceCents / 100) * qty - baselineRands).toFixed(2));
-          const d = new Date(isoKey);
-          const sast = new Date(d.getTime() + 2 * 60 * 60 * 1000);
-          const hh = String(sast.getUTCHours()).padStart(2, "0");
-          const mm = String(sast.getUTCMinutes()).padStart(2, "0");
-          const dd = sast.getUTCDate(); const mo = MN[sast.getUTCMonth()]; const yr = sast.getUTCFullYear();
-          points.push({ day: `${hh}:${mm}`, value: pnl, rawCents: priceCents, fullDate: `${dd} ${mo} ${yr} ${hh}:${mm}` });
-        }
-        if (!cancelled) setStockTabIntradayData(points.length > 1 ? points : []);
-      } catch (e) {
-        console.error("[stock-tab-intraday]", e);
-        if (!cancelled) setStockTabIntradayData([]);
-      } finally {
-        if (!cancelled) setStockTabIntradayLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [stockTimeFilter, selectedSecurityId, rawHoldings]);
-
-  // ── individual stock modal intraday D chart ───────────────────────────────
-  useEffect(() => {
-    if (!modalHolding || modalTimeFilter !== "D" || !modalSecurityId) { setModalIntradayData(null); return; }
-    const rawH = (rawHoldings || []).find(h => String(h.security_id) === String(modalSecurityId));
-    const qty = rawH ? Math.abs(Number(rawH.quantity || 0)) : 0;
-    let cancelled = false;
-    setModalIntradayLoading(true);
-    (async () => {
-      try {
-        const todayUTC = new Date().toISOString().slice(0, 10);
-        const { data: rows } = await supabase
-          .from("stock_intraday_c")
-          .select("security_id, current_price, 1d_abs, timestamp")
-          .eq("security_id", modalSecurityId)
-          .gte("timestamp", `${todayUTC}T00:00:00Z`)
-          .order("timestamp", { ascending: true });
-        if (cancelled) return;
-        if (!rows?.length) { setModalIntradayData([]); setModalIntradayLoading(false); return; }
-        const latestRow = rows[rows.length - 1];
-        const baselineRands = ((Number(latestRow.current_price) - Number(latestRow["1d_abs"] || 0)) / 100) * qty;
-        const bucketMap = new Map();
-        for (const row of rows) {
-          const d = new Date(row.timestamp);
-          d.setSeconds(0, 0); d.setMinutes(Math.floor(d.getMinutes() / 5) * 5);
-          bucketMap.set(d.toISOString(), Number(row.current_price));
-        }
-        const MN = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-        const points = [{ day: null, value: 0, fullDate: null }];
-        for (const [isoKey, priceCents] of [...bucketMap.entries()].sort()) {
-          const pnl = Number(((priceCents / 100) * qty - baselineRands).toFixed(2));
-          const d = new Date(isoKey);
-          const sast = new Date(d.getTime() + 2 * 60 * 60 * 1000);
-          const hh = String(sast.getUTCHours()).padStart(2, "0");
-          const mm = String(sast.getUTCMinutes()).padStart(2, "0");
-          const dd = sast.getUTCDate(); const mo = MN[sast.getUTCMonth()]; const yr = sast.getUTCFullYear();
-          points.push({ day: `${hh}:${mm}`, value: pnl, rawCents: priceCents, fullDate: `${dd} ${mo} ${yr} ${hh}:${mm}` });
-        }
-        if (!cancelled) setModalIntradayData(points.length > 1 ? points : []);
-      } catch (e) {
-        console.error("[modal-intraday]", e);
-        if (!cancelled) setModalIntradayData([]);
-      } finally {
-        if (!cancelled) setModalIntradayLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [modalHolding, modalTimeFilter, modalSecurityId, rawHoldings]);
-
-  // ── stocks tab: fetch live D/W/M returns per security ────────────────────
-  useEffect(() => {
-    if (!selectedSecurityId) { setStockLiveReturns(null); return; }
-    let cancelled = false;
-    (async () => {
-      try {
-        const todayStr = new Date().toISOString().split('T')[0];
-        const ref5d = new Date(); ref5d.setUTCDate(ref5d.getUTCDate() - 9);
-        const ref1m = new Date(); ref1m.setUTCDate(ref1m.getUTCDate() - 31);
-        const str5d = ref5d.toISOString().split('T')[0];
-        const str1m = ref1m.toISOString().split('T')[0];
-
-        const [{ data: intradayRows }, { data: histRows }] = await Promise.all([
-          supabase.from('stock_intraday_c')
-            .select('current_price, 1d_abs, 1d_pct')
-            .eq('security_id', selectedSecurityId)
-            .order('timestamp', { ascending: false })
-            .limit(1),
-          supabase.from('stock_returns_c')
-            .select('as_of_date, current_price')
-            .eq('security_id', selectedSecurityId)
-            .gte('as_of_date', str1m)
-            .lt('as_of_date', todayStr)
-            .order('as_of_date', { ascending: true }),
-        ]);
-
-        if (cancelled) return;
-        const latest = intradayRows?.[0];
-        if (!latest) return;
-
-        const liveCents = Number(latest.current_price || 0);
-        const d_abs = Number(latest['1d_abs'] || 0);
-        const d_pct = Number(latest['1d_pct'] || 0);
-
-        function closestBefore(rows, targetStr) {
-          if (!rows?.length) return null;
-          let best = null;
-          for (const r of rows) { if (r.as_of_date <= targetStr) best = r; else break; }
-          return best ? Number(best.current_price) : null;
-        }
-
-        const price5d = closestBefore(histRows, str5d);
-        const price1m = closestBefore(histRows, str1m);
-        const w_abs = price5d != null ? liveCents - price5d : null;
-        const w_pct = price5d > 0 ? ((w_abs / price5d) * 100) : null;
-        const m_abs = price1m != null ? liveCents - price1m : null;
-        const m_pct = price1m > 0 ? ((m_abs / price1m) * 100) : null;
-
-        if (!cancelled) setStockLiveReturns({ current_price: liveCents, d_abs, d_pct, w_abs, w_pct, m_abs, m_pct });
-      } catch (e) {
-        console.error('[stock-live-returns]', e);
-      }
-    })();
-    const interval = setInterval(async () => {
-      if (cancelled) return;
-      try {
-        const { data } = await supabase.from('stock_intraday_c')
-          .select('current_price, 1d_abs, 1d_pct')
-          .eq('security_id', selectedSecurityId)
-          .order('timestamp', { ascending: false })
-          .limit(1);
-        if (cancelled || !data?.[0]) return;
-        const r = data[0];
-        setStockLiveReturns(prev => prev ? {
-          ...prev,
-          current_price: Number(r.current_price || 0),
-          d_abs: Number(r['1d_abs'] || 0),
-          d_pct: Number(r['1d_pct'] || 0),
-        } : prev);
-      } catch {}
-    }, 15000);
-    return () => { cancelled = true; clearInterval(interval); };
-  }, [selectedSecurityId]);
-
-  // ── modal: fetch live D/W/M returns per security ─────────────────────────
-  useEffect(() => {
-    if (!modalSecurityId) { setModalLiveReturns(null); return; }
-    let cancelled = false;
-    (async () => {
-      try {
-        const todayStr = new Date().toISOString().split('T')[0];
-        const ref5d = new Date(); ref5d.setUTCDate(ref5d.getUTCDate() - 9);
-        const ref1m = new Date(); ref1m.setUTCDate(ref1m.getUTCDate() - 31);
-        const str5d = ref5d.toISOString().split('T')[0];
-        const str1m = ref1m.toISOString().split('T')[0];
-
-        const [{ data: intradayRows }, { data: histRows }] = await Promise.all([
-          supabase.from('stock_intraday_c')
-            .select('current_price, 1d_abs, 1d_pct')
-            .eq('security_id', modalSecurityId)
-            .order('timestamp', { ascending: false })
-            .limit(1),
-          supabase.from('stock_returns_c')
-            .select('as_of_date, current_price')
-            .eq('security_id', modalSecurityId)
-            .gte('as_of_date', str1m)
-            .lt('as_of_date', todayStr)
-            .order('as_of_date', { ascending: true }),
-        ]);
-
-        if (cancelled) return;
-        const latest = intradayRows?.[0];
-        if (!latest) return;
-
-        const liveCents = Number(latest.current_price || 0);
-        const d_abs = Number(latest['1d_abs'] || 0);
-        const d_pct = Number(latest['1d_pct'] || 0);
-
-        function closestBefore(rows, targetStr) {
-          if (!rows?.length) return null;
-          let best = null;
-          for (const r of rows) { if (r.as_of_date <= targetStr) best = r; else break; }
-          return best ? Number(best.current_price) : null;
-        }
-
-        const price5d = closestBefore(histRows, str5d);
-        const price1m = closestBefore(histRows, str1m);
-        const w_abs = price5d != null ? liveCents - price5d : null;
-        const w_pct = price5d > 0 ? ((w_abs / price5d) * 100) : null;
-        const m_abs = price1m != null ? liveCents - price1m : null;
-        const m_pct = price1m > 0 ? ((m_abs / price1m) * 100) : null;
-
-        if (!cancelled) setModalLiveReturns({ current_price: liveCents, d_abs, d_pct, w_abs, w_pct, m_abs, m_pct });
-      } catch (e) {
-        console.error('[modal-live-returns]', e);
-      }
-    })();
-    const interval = setInterval(async () => {
-      if (cancelled) return;
-      try {
-        const { data } = await supabase.from('stock_intraday_c')
-          .select('current_price, 1d_abs, 1d_pct')
-          .eq('security_id', modalSecurityId)
-          .order('timestamp', { ascending: false })
-          .limit(1);
-        if (cancelled || !data?.[0]) return;
-        const r = data[0];
-        setModalLiveReturns(prev => prev ? {
-          ...prev,
-          current_price: Number(r.current_price || 0),
-          d_abs: Number(r['1d_abs'] || 0),
-          d_pct: Number(r['1d_pct'] || 0),
-        } : prev);
-      } catch {}
-    }, 15000);
-    return () => { cancelled = true; clearInterval(interval); };
-  }, [modalSecurityId]);
-
-  // ── chart data (snapshot-based for non-D filters) ─────────────────────────
-  const currentChartData = useMemo(() => {
-    const MN = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-
-    // 5D, M, YTD: build directly from snapshotRows (same source as derivedPeriodReturn)
-    // so chart endpoints always match the displayed P&L number.
-    if (timeFilter === "5d" || timeFilter === "m") {
-      const count = timeFilter === "5d" ? 5 : 22;
-      if (snapshotRows.length < count) return [];
-      const slice = snapshotRows.slice(snapshotRows.length - count);
-      const firstVal = Number(slice[0].basket_value || 0);
-      if (!firstVal) return [];
-      // No null anchor needed: first dated point is already value=0 (the reference row)
-      const pts = [];
-      slice.forEach(row => {
-        const [y, m, d] = row.as_of_date.split("-").map(Number);
-        const pnl = Number(((Number(row.basket_value) - firstVal) / 100).toFixed(2));
-        pts.push({ day: `${d} ${MN[m - 1]}`, value: pnl, fullDate: row.as_of_date });
-      });
-      return pts;
-    }
-
-    if (timeFilter === "ytd") {
-      // Build YTD chart from stored ytd_pnl history, then cap the last point at the live value
-      // so the chart endpoint always matches the pill (which uses liveValue - yearStartBasket).
-      const yearStr = `${new Date().getFullYear()}-01-01`;
-      const priorRows = snapshotRows.filter(r => r.as_of_date < yearStr);
-      const currentYearRowsForChart = snapshotRows.filter(r => r.as_of_date >= yearStr);
-      // Mirror child mode: anchor = FIRST basket of current year, only when prior-year data exists
-      const yearStartCents = (priorRows.length > 0 && currentYearRowsForChart.length > 0)
-        ? Number(currentYearRowsForChart[0]?.basket_value || 0)
-        : 0;
-
-      // Use ytd_pnl rows (Jan 1 onwards) for the chart body
-      const rows = snapshotRows.filter(r => r.ytd_pnl != null && r.as_of_date >= yearStr);
-      const pts = [];
-      rows.forEach(row => {
-        const [y, m, d] = row.as_of_date.split("-").map(Number);
-        const val = Number((Number(row.ytd_pnl) / 100).toFixed(2));
-        pts.push({ day: `${d} ${MN[m - 1]}`, value: val, fullDate: row.as_of_date });
-      });
-
-      // Append live endpoint to keep chart tip in sync with pill (15s poll)
-      if (yearStartCents > 0 && liveStrategyMetrics.hasPrices) {
-        const liveVal = Number((liveStrategyMetrics.liveValue - yearStartCents / 100).toFixed(2));
-        const today = new Date();
-        const todayStr = today.toISOString().slice(0, 10);
-        const [ty, tm, td] = todayStr.split("-").map(Number);
-        const liveDay = `${td} ${MN[tm - 1]}`;
-        // Replace last point if it's already today, otherwise append
-        if (pts.length > 0 && pts[pts.length - 1].fullDate === todayStr) {
-          pts[pts.length - 1] = { day: liveDay, value: liveVal, fullDate: todayStr };
-        } else {
-          pts.push({ day: liveDay, value: liveVal, fullDate: todayStr });
-        }
-      }
-
-      if (!pts.length) return [];
-      return pts;
-    }
-
-    // ALL: use realChartData (from useStrategyChartData)
+  const getChartData = () => {
     if (realChartData && realChartData.length > 0) {
-      if (realChartData[0]?.day === null && realChartData[0]?.value === 0) return realChartData;
-      const cv = liveStrategyMetrics.hasPrices ? liveStrategyMetrics.liveValue : (currentStrategy.currentValue || 0);
-      const ia = liveStrategyMetrics.costBasis || currentStrategy.investedAmount || 0;
-      if (cv > 0 && realChartData.length > 0) {
+      if (realChartData[0]?.day === null && realChartData[0]?.value === 0) {
+        return realChartData;
+      }
+      const currentValue = liveStrategyMetrics.hasPrices ? liveStrategyMetrics.liveValue : (currentStrategy.currentValue || 0);
+      const costBasis = liveStrategyMetrics.costBasis || currentStrategy.investedAmount || 0;
+      if (currentValue > 0 && realChartData.length > 0) {
         const latestNav = realChartData[realChartData.length - 1].value;
         if (!latestNav || latestNav <= 0) return [];
         const scale = cv / latestNav;
@@ -1102,11 +805,14 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     return [];
   }, [realChartData, currentStrategy, liveStrategyMetrics, snapshotRows, timeFilter]);
 
+  const currentChartData = getChartData();
   const isLoadingData = strategiesLoading || chartLoading || (timeFilter === "D" && intradayLoading);
-
   const displayChartData = (() => {
     if (isLoadingData) return [];
     if (timeFilter === "D") return (intradayChartData && intradayChartData.length > 1 ? intradayChartData : []);
+    if (["5d", "m", "ytd"].includes(timeFilter) && snapshotChartData && snapshotChartData.length > 1) {
+      return snapshotChartData;
+    }
     return currentChartData;
   })();
   const strategyAxisConfig = computePnlAxisConfig(displayChartData);
@@ -1495,22 +1201,18 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                           const cv = liveStrategyMetrics.hasPrices ? liveStrategyMetrics.liveValue : (currentStrategy.currentValue || 0);
                           const ia = liveStrategyMetrics.costBasis || currentStrategy.investedAmount || 0;
                           const isStratPending = liveStrategyMetrics.isPending && (currentStrategy.currentValue || 0) === 0 && ia === 0;
-                          // Filter-aware P&L: D=today, YTD=ytd, 5D/M=derivedPeriodReturn, ALL=live total P&L
                           let pnl, pnlPct;
                           if (timeFilter === "D") {
                             pnl = liveStrategyMetrics.todayPnl;
                             pnlPct = liveStrategyMetrics.todayPct;
-                          } else if (timeFilter === "ytd") {
-                            pnl = derivedPeriodReturn.pnl;
-                            pnlPct = derivedPeriodReturn.pct;
-                          } else if (timeFilter === "5d" || timeFilter === "m") {
-                            pnl = derivedPeriodReturn.pnl;
-                            pnlPct = derivedPeriodReturn.pct;
+                          } else if (timeFilter === "5d" || timeFilter === "m" || timeFilter === "ytd") {
+                            pnl = periodReturnData?.pnl ?? 0;
+                            pnlPct = periodReturnData?.pct ?? 0;
                           } else {
                             pnl = cv - ia;
                             pnlPct = ia > 0 ? ((cv - ia) / ia) * 100 : 0;
                           }
-                          const isPos = pnl >= 0;
+                          const isPos = (pnl ?? 0) >= 0;
                           if (isStratPending) {
                             return (
                               <>
@@ -1527,23 +1229,15 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                               <p className="text-3xl font-bold text-slate-900">R{cv.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                               <div className="flex items-center gap-2 mt-1">
                                 <span className={`text-sm font-semibold ${isPos ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                  {isPos ? '+' : '-'}R{Math.abs(pnl).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  {isPos ? '+' : '-'}R{Math.abs(pnl ?? 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </span>
                                 <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${isPos ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-500'}`}>
-                                  {isPos ? '+' : ''}{pnlPct.toFixed(1)}%
+                                  {isPos ? '+' : ''}{(pnlPct ?? 0).toFixed(1)}%
                                 </span>
-                                {timeFilter === "D" && (
-                                  <span className="text-[10px] text-slate-400 font-medium">Today</span>
-                                )}
-                                {timeFilter === "ytd" && (
-                                  <span className="text-[10px] text-slate-400 font-medium">YTD</span>
-                                )}
-                                {timeFilter === "5d" && (
-                                  <span className="text-[10px] text-slate-400 font-medium">5 days</span>
-                                )}
-                                {timeFilter === "m" && (
-                                  <span className="text-[10px] text-slate-400 font-medium">1 month</span>
-                                )}
+                                {timeFilter === "D" && <span className="text-[10px] text-slate-400 font-medium">Today</span>}
+                                {timeFilter === "5d" && <span className="text-[10px] text-slate-400 font-medium">5 days</span>}
+                                {timeFilter === "m" && <span className="text-[10px] text-slate-400 font-medium">1 month</span>}
+                                {timeFilter === "ytd" && <span className="text-[10px] text-slate-400 font-medium">YTD</span>}
                               </div>
                             </>
                           );
@@ -1569,50 +1263,18 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                                     <stop offset="100%" stopColor="#e2e8f0" stopOpacity="0.05" />
                                   </linearGradient>
                                   <linearGradient id="shimmer" x1="0" y1="0" x2="1" y2="0">
-                                    <stop offset="0%" stopColor="transparent">
-                                      <animate attributeName="offset" values="-1;0;1" dur="1.6s" repeatCount="indefinite" />
-                                    </stop>
-                                    <stop offset="50%" stopColor="rgba(255,255,255,0.55)">
-                                      <animate attributeName="offset" values="-0.5;0.5;1.5" dur="1.6s" repeatCount="indefinite" />
-                                    </stop>
-                                    <stop offset="100%" stopColor="transparent">
-                                      <animate attributeName="offset" values="0;1;2" dur="1.6s" repeatCount="indefinite" />
-                                    </stop>
+                                    <stop offset="0%" stopColor="transparent"><animate attributeName="offset" values="-1;0;1" dur="1.6s" repeatCount="indefinite" /></stop>
+                                    <stop offset="50%" stopColor="rgba(255,255,255,0.55)"><animate attributeName="offset" values="-0.5;0.5;1.5" dur="1.6s" repeatCount="indefinite" /></stop>
+                                    <stop offset="100%" stopColor="transparent"><animate attributeName="offset" values="0;1;2" dur="1.6s" repeatCount="indefinite" /></stop>
                                   </linearGradient>
-                                  <mask id="shimmerMask">
-                                    <rect width="400" height="220" fill="url(#shimmer)" />
-                                  </mask>
+                                  <mask id="shimmerMask"><rect width="400" height="220" fill="url(#shimmer)" /></mask>
                                 </defs>
-                                {/* Y-axis ticks */}
-                                {[40,80,120,160].map((y, i) => (
-                                  <rect key={i} x="0" y={y} width="22" height="8" rx="4" fill="#e2e8f0" />
-                                ))}
-                                {/* Filled area under the line */}
-                                <path
-                                  d="M32,160 C55,155 70,130 90,118 C110,106 125,125 145,108 C165,91 180,70 205,65 C230,60 245,80 265,72 C285,64 300,82 320,75 C340,68 360,85 380,78 L380,190 L32,190 Z"
-                                  fill="url(#skeletonFill)"
-                                />
-                                {/* Main line */}
-                                <path
-                                  d="M32,160 C55,155 70,130 90,118 C110,106 125,125 145,108 C165,91 180,70 205,65 C230,60 245,80 265,72 C285,64 300,82 320,75 C340,68 360,85 380,78"
-                                  fill="none"
-                                  stroke="#cbd5e1"
-                                  strokeWidth="2.5"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                />
-                                {/* Shimmer overlay */}
-                                <path
-                                  d="M32,160 C55,155 70,130 90,118 C110,106 125,125 145,108 C165,91 180,70 205,65 C230,60 245,80 265,72 C285,64 300,82 320,75 C340,68 360,85 380,78 L380,190 L32,190 Z"
-                                  fill="url(#shimmer)"
-                                  mask="url(#shimmerMask)"
-                                />
-                                {/* Baseline */}
+                                {[40,80,120,160].map((y, i) => <rect key={i} x="0" y={y} width="22" height="8" rx="4" fill="#e2e8f0" />)}
+                                <path d="M32,160 C55,155 70,130 90,118 C110,106 125,125 145,108 C165,91 180,70 205,65 C230,60 245,80 265,72 C285,64 300,82 320,75 C340,68 360,85 380,78 L380,190 L32,190 Z" fill="url(#skeletonFill)" />
+                                <path d="M32,160 C55,155 70,130 90,118 C110,106 125,125 145,108 C165,91 180,70 205,65 C230,60 245,80 265,72 C285,64 300,82 320,75 C340,68 360,85 380,78" fill="none" stroke="#cbd5e1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                                <path d="M32,160 C55,155 70,130 90,118 C110,106 125,125 145,108 C165,91 180,70 205,65 C230,60 245,80 265,72 C285,64 300,82 320,75 C340,68 360,85 380,78 L380,190 L32,190 Z" fill="url(#shimmer)" mask="url(#shimmerMask)" />
                                 <line x1="32" y1="190" x2="400" y2="190" stroke="#e2e8f0" strokeWidth="1" />
-                                {/* X-axis tick placeholders */}
-                                {[55,128,200,272,345].map((x, i) => (
-                                  <rect key={i} x={x - 16} y="200" width="32" height="8" rx="4" fill="#e2e8f0" />
-                                ))}
+                                {[55,128,200,272,345].map((x, i) => <rect key={i} x={x - 16} y="200" width="32" height="8" rx="4" fill="#e2e8f0" />)}
                               </svg>
                             </div>
                           ) : (
@@ -1640,7 +1302,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                                 tickLine={false}
                                 tickMargin={8}
                                 ticks={timeFilter === 'ytd' ? computeYtdMonthTicks(displayChartData) : undefined}
-                                interval={timeFilter === 'ytd' ? 0 : (displayChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(displayChartData.length / 4) - 1))}
+                                interval={timeFilter === 'ytd' ? 0 : (displayChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(displayChartData.length / 6) - 1))}
                                 tick={({ x, y, payload }) => {
                                   if (!payload.value) return null;
                                   const label = timeFilter === 'ytd'
@@ -2093,7 +1755,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
 
                         <div style={{ width: '100%', height: 220, marginBottom: 8, minWidth: 0 }}>
                           {stockChartData.length === 0 ? (
-                            (stockTimeFilter === "D" ? stockTabIntradayLoading : stockChartLoading) ? (
+                            stockChartLoading ? (
                               <div style={{ width: '100%', height: 220 }}>
                                 <svg width="100%" height="220" viewBox="0 0 400 220" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
                                   <defs>
@@ -2724,26 +2386,27 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                                         const matchedHolding = (rawHoldings || []).find(h => h.symbol === c.symbol);
                                         const matchedStock = stocksList?.find(s => s.ticker === c.symbol);
                                         const logo = matchedHolding?.logo || matchedStock?.logo || null;
-                                        // Use live price from liveQuotes (rands) + rawHoldings cost basis
                                         const cQty = matchedHolding ? Math.abs(Number(matchedHolding.quantity || 0)) : 0;
                                         const cAvgFillRands = matchedHolding ? Number(matchedHolding.avg_fill || 0) / 100 : 0;
                                         const cLivePriceRands = liveQuotes[c.symbol]?.price ?? 0;
-                                        const cHasLive = cQty > 0 && cLivePriceRands > 0;
+                                        const cHasLive = cQty > 0 && cLivePriceRands > 0 && cAvgFillRands > 0;
                                         let pnlRands, pnlPct;
                                         if (cHasLive) {
-                                          pnlRands = (cLivePriceRands * cQty) - (cAvgFillRands * cQty);
-                                          pnlPct = cAvgFillRands > 0 ? (pnlRands / (cAvgFillRands * cQty)) * 100 : 0;
+                                          pnlRands = (cLivePriceRands - cAvgFillRands) * cQty;
+                                          pnlPct = (pnlRands / (cAvgFillRands * cQty)) * 100;
                                         } else if (c.pnlRands != null && !isNaN(c.pnlRands)) {
                                           pnlRands = c.pnlRands;
                                           pnlPct = (c.pnlPct != null && !isNaN(c.pnlPct)) ? c.pnlPct : 0;
                                         } else {
-                                          const totalW = stock.strategyHoldings.reduce((s, x) => s + (x.weight || 0), 0) || 100;
-                                          const fraction = (c.weight || 0) / totalW;
-                                          const constituentCurrentVal = stock.currentValue * fraction;
-                                          const constituentCostBasis = (stock.investedAmount || stock.currentValue) * fraction;
+                                          const totalW = stock.strategyHoldings.reduce((s, x) => s + Number(x.weight || 0), 0) || 100;
+                                          const fraction = Number(c.weight || 0) / totalW;
+                                          const constituentCurrentVal = (stock.currentValue || 0) * fraction;
+                                          const constituentCostBasis = (Number(stock.investedAmount) || Number(stock.currentValue) || 0) * fraction;
                                           pnlRands = constituentCurrentVal - constituentCostBasis;
                                           pnlPct = constituentCostBasis > 0 ? (pnlRands / constituentCostBasis) * 100 : 0;
                                         }
+                                        pnlRands = isNaN(pnlRands) ? 0 : pnlRands;
+                                        pnlPct = isNaN(pnlPct) ? 0 : pnlPct;
                                         const isGain = pnlRands >= 0;
                                         const onOpenConstituent = () => {
                                           if (!matchedStock) return;
@@ -3040,43 +2703,63 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           })();
 
           const mIsPending = mQty > 0 && mAvgFill === 0;
+          const mChartDataRaw = mIsPending
+            ? [{ day: mPurchaseLabel || 'Purchase', value: 0 }, { day: mNowLabel || 'Now', value: 0 }]
+            : mBaseChartData.length > 0
+              ? (mShowPnl
+                ? mBaseChartData.map(d => ({
+                  ...d,
+                  value: Number(((d.value * mQty) - mCostBasis).toFixed(2)),
+                }))
+                : mBaseChartData)
+              // No closes after purchase yet (e.g. bought on weekend): flat line at current P&L.
+              : (mShowPnl ? [{ day: mPurchaseLabel, value: 0 }, { day: mNowLabel, value: Number(mPnl.toFixed(2)) }] : []);
+
+          // Normalize: subtract first point's value so the chart line always starts at R0.
+          // This shows "change during the selected period" — the R0 reference line means
+          // "same as start of period", regardless of absolute P&L from cost basis.
           const mChartData = (() => {
-            if (modalTimeFilter === "D") {
-              const raw = modalIntradayData || [];
-              if (!mShowPnl || !raw.length) return raw;
-              const liveD_abs = modalLiveReturns?.d_abs ?? null;
-              if (liveD_abs == null) return raw;
-              const lastReal = [...raw].reverse().find(p => p.rawCents != null);
-              if (!lastReal) return raw;
-              const newBaseline = ((lastReal.rawCents - liveD_abs) / 100) * mQty;
-              return raw.map(p => p.rawCents != null
-                ? { ...p, value: Number(((p.rawCents / 100) * mQty - newBaseline).toFixed(2)) }
-                : p
-              );
-            }
-            if (mIsPending) return [{ day: mPurchaseLabel || 'Purchase', value: 0 }, { day: mNowLabel || 'Now', value: 0 }];
-            if (mBaseChartData.length > 0) {
-              if (mShowPnl) {
-                if (modalTimeFilter === 'W' || modalTimeFilter === 'M') {
-                  const daysBack = modalTimeFilter === 'W' ? 9 : 31;
-                  const refMs = Date.now() - daysBack * 24 * 60 * 60 * 1000;
-                  let refPoint = mBaseChartData[0];
-                  for (const d of mBaseChartData) {
-                    if ((d.timestamp || 0) <= refMs) refPoint = d;
-                    else break;
-                  }
-                  const refPrice = refPoint.value;
-                  return [
-                    { ...mBaseChartData[0], day: null, value: 0 },
-                    ...mBaseChartData.map(d => ({ ...d, value: Number(((d.value - refPrice) * mQty).toFixed(2)) }))
-                  ];
-                }
-                return mBaseChartData.map(d => ({ ...d, value: Number(((d.value * mQty) - mCostBasis).toFixed(2)) }));
-              }
-              return mBaseChartData;
-            }
-            return mShowPnl ? [{ day: mPurchaseLabel, value: 0 }, { day: mNowLabel, value: Number(mPnl.toFixed(2)) }] : [];
+            if (mChartDataRaw.length < 2) return mChartDataRaw;
+            const offset = mChartDataRaw[0].value;
+            if (offset === 0) return mChartDataRaw;
+            return mChartDataRaw.map((pt, i) => ({
+              ...pt,
+              value: i === 0 ? 0 : Number((pt.value - offset).toFixed(2)),
+            }));
           })();
+
+          // Period-aware P&L: for ALL tab use live total; for D/W/M use the chart's
+          // last point (which is already the change during the selected period).
+          const mPeriodLabels = { D: 'today', W: 'this week', M: 'this month', ALL: 'since purchase' };
+          const mPeriodLabel = mPeriodLabels[modalTimeFilter] ?? 'since purchase';
+          const mPeriodPnl = (() => {
+            if (!mShowPnl) return 0;
+            if (modalTimeFilter === 'ALL') return mPnl;
+            if (modalTimeFilter === 'D') {
+              // Use the intraday chart's normalized last point so the badge
+              // matches exactly what the D chart shows.
+              const last = mChartData[mChartData.length - 1];
+              return last != null ? last.value : mPnl;
+            }
+            if (modalTimeFilter === 'W') {
+              // stock_returns_c.5d_abs is in cents per share
+              const abs = modalStockReturns?.['5d_abs'];
+              if (abs != null) return (Number(abs) / 100) * mQty;
+              const last = mChartData[mChartData.length - 1];
+              return last != null ? last.value : mPnl;
+            }
+            if (modalTimeFilter === 'M') {
+              // stock_returns_c.1m_abs is in cents per share
+              const abs = modalStockReturns?.['1m_abs'];
+              if (abs != null) return (Number(abs) / 100) * mQty;
+              const last = mChartData[mChartData.length - 1];
+              return last != null ? last.value : mPnl;
+            }
+            const last = mChartData[mChartData.length - 1];
+            return last != null ? last.value : mPnl;
+          })();
+          const mPeriodPct = mShowPnl && mCostBasis > 0 ? (mPeriodPnl / mCostBasis) * 100 : 0;
+
           const mAxisConfig = computePnlAxisConfig(mChartData);
           return (
             <>
@@ -3140,6 +2823,13 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                     <>
                       <p className="text-3xl font-bold text-amber-500">Pending</p>
                       <p className="text-sm mt-0.5 text-slate-400">Awaiting broker fill — value not yet settled</p>
+                    </>
+                  ) : mShowPnl ? (
+                    <>
+                      <p className="text-3xl font-bold text-slate-900">{formatCurrency(mMarketValue)}</p>
+                      <p className={`text-sm mt-0.5 ${mPeriodPnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                        {mPeriodPnl >= 0 ? '+' : '-'}{formatCurrency(Math.abs(mPeriodPnl))} ({mPeriodPct >= 0 ? '+' : ''}{mPeriodPct.toFixed(2)}%) {mPeriodLabel}
+                      </p>
                     </>
                   ) : (
                     <>

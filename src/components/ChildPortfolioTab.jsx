@@ -289,9 +289,19 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, livePriceMap
 
     (async () => {
       try {
-        const todayUTC = new Date().toISOString().slice(0, 10);
+        // Find the most recent trading day that has intraday data (handles weekends/holidays)
+        const { data: latestRow } = await supabase
+          .from("stock_intraday_c")
+          .select("timestamp")
+          .in("security_id", securityIds)
+          .order("timestamp", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (cancelled) return;
+        if (!latestRow) { setIntradayChartData([]); setIntradayLoading(false); return; }
+        const tradingDay = latestRow.timestamp.slice(0, 10);
 
-        // Today's intraday rows — paginate in batches of 1000 to bypass Supabase's server-side row cap
+        // That trading day's intraday rows — paginate in batches of 1000 to bypass Supabase's server-side row cap
         const PAGE = 1000;
         let intradayRows = [];
         let page = 0;
@@ -300,7 +310,8 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, livePriceMap
             .from("stock_intraday_c")
             .select("security_id, current_price, 1d_abs, timestamp")
             .in("security_id", securityIds)
-            .gte("timestamp", `${todayUTC}T00:00:00Z`)
+            .gte("timestamp", `${tradingDay}T00:00:00Z`)
+            .lt("timestamp", `${tradingDay}T23:59:59Z`)
             .order("timestamp", { ascending: true })
             .range(page * PAGE, (page + 1) * PAGE - 1);
           if (!batch?.length) break;
@@ -396,13 +407,16 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, livePriceMap
     return [];
   }, [realChartData, currentStrategy, liveStrategyMetrics]);
 
-  // Use intraday buckets for D, otherwise the snapshot-based curve
-  const displayChartData = (timeFilter === "D" && intradayChartData && intradayChartData.length > 1)
-    ? intradayChartData
-    : currentChartData;
+  const isLoadingData = strategiesLoading || chartLoading || (timeFilter === "D" && intradayLoading);
+
+  // Use intraday buckets for D; return [] while loading so the skeleton shows instead of a flat line
+  const displayChartData = (() => {
+    if (isLoadingData) return [];
+    if (timeFilter === "D") return (intradayChartData && intradayChartData.length > 1 ? intradayChartData : []);
+    return currentChartData;
+  })();
 
   const stratAxisConfig = computePnlAxisConfig(displayChartData);
-  const isLoadingData = strategiesLoading || chartLoading || (timeFilter === "D" && intradayLoading);
 
   // ── holdings data (for Holdings tab) ──────────────────────────────────────
   const allStrategyHoldings = useMemo(() => {
@@ -655,9 +669,35 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, livePriceMap
                         <p className="text-slate-500 text-sm font-medium">{lockedMessage}</p>
                         <p className="text-slate-400 text-xs">Check back once more data has been recorded</p>
                       </div>
+                    ) : isLoadingData ? (
+                      <div className="h-full w-full px-1 pb-6 pt-2">
+                        <svg width="100%" height="100%" viewBox="0 0 300 160" preserveAspectRatio="none">
+                          <defs>
+                            <linearGradient id="skeletonFill" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#e2e8f0" stopOpacity="0.6" />
+                              <stop offset="100%" stopColor="#e2e8f0" stopOpacity="0.05" />
+                            </linearGradient>
+                          </defs>
+                          {/* filled area under the line */}
+                          <path
+                            d="M0 110 C30 100 50 80 80 70 S120 50 150 60 S200 90 230 75 S270 45 300 55 L300 160 L0 160 Z"
+                            fill="url(#skeletonFill)"
+                            className="animate-pulse"
+                          />
+                          {/* the line itself */}
+                          <path
+                            d="M0 110 C30 100 50 80 80 70 S120 50 150 60 S200 90 230 75 S270 45 300 55"
+                            fill="none"
+                            stroke="#cbd5e1"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                            className="animate-pulse"
+                          />
+                        </svg>
+                      </div>
                     ) : displayChartData.length === 0 ? (
                       <div className="h-full flex items-center justify-center">
-                        <p className="text-slate-400 text-sm">{isLoadingData ? "Loading chart..." : "No data available"}</p>
+                        <p className="text-slate-400 text-sm">No data available</p>
                       </div>
                     ) : (
                       <ResponsiveContainer width="100%" height="100%">

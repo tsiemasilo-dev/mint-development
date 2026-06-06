@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getMarketsSecuritiesWithMetrics, getSecurityPrices } from './marketData';
+import { supabase } from './supabase';
 
 export function useStockQuotes(enabled = true) {
   const [securities, setSecurities] = useState([]);
@@ -130,4 +131,26 @@ export function useStockChart(securityId, timeFilter, purchaseDate = null) {
   }, [securityId, timeFilter, purchaseDate]);
 
   return { chartData, loading, error };
+}
+
+/**
+ * Fetches the latest pre-computed absolute return values for a security
+ * from stock_returns_c (5d_abs, 1m_abs in cents).
+ */
+export function useStockReturns(securityId) {
+  const [returns, setReturns] = useState(null);
+
+  useEffect(() => {
+    if (!securityId || !supabase) { setReturns(null); return; }
+    supabase
+      .from('stock_returns_c')
+      .select('5d_abs, 1m_abs')
+      .eq('security_id', securityId)
+      .order('as_of_date', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => setReturns(data ?? null));
+  }, [securityId]);
+
+  return returns;
 }
