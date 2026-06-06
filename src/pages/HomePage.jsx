@@ -879,23 +879,6 @@ const HomePage = ({
           return;
         }
 
-        // Fetch YTD P&L from client_strategy_returns_c so the card matches the purple card
-        const strategyIds = serverStrategies.map(s => s.id).filter(Boolean);
-        const { data: ytdRows } = strategyIds.length
-          ? await supabase
-              .from("client_strategy_returns_c")
-              .select("strategy_id, ytd_pnl, ytd_pct")
-              .eq("user_id", profile.id)
-              .is("family_member", null)
-              .in("strategy_id", strategyIds)
-              .order("as_of_date", { ascending: false })
-          : { data: [] };
-        // Keep only the latest row per strategy
-        const ytdByStrategy = {};
-        for (const row of (ytdRows || [])) {
-          if (!ytdByStrategy[row.strategy_id]) ytdByStrategy[row.strategy_id] = row;
-        }
-
         const formatted = serverStrategies
           .map((s) => {
           const invested = Number(s.investedAmount) || 0;
@@ -904,11 +887,9 @@ const HomePage = ({
             ? Number(Number(rawCurrent).toFixed(2))
             : invested;
           const isPending = s.isPending === true || (invested === 0 && currentValue === 0);
-          // Use stored ytd_pnl/ytd_pct if available — matches the purple card exactly
-          const ytd = ytdByStrategy[s.id];
-          const stratPnlRands = ytd?.ytd_pnl != null ? Number(ytd.ytd_pnl) / 100 : (currentValue - invested);
-          const stratPnlPct = ytd?.ytd_pct != null ? Number(ytd.ytd_pct) : (invested > 0 ? ((currentValue - invested) / invested) * 100 : 0);
-          const changePctVal = stratPnlPct;
+          const stratPnlRands = currentValue - invested;
+          const changePctVal = invested > 0 ? (stratPnlRands / invested) * 100 : 0;
+          const stratPnlPct = changePctVal;
           return {
             id: s.id,
             purchaseKey: s.purchaseKey || s.id,
