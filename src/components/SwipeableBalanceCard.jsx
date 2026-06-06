@@ -863,6 +863,14 @@ const SwipeableBalanceCard = ({
         const now = new Date();
         const yearStart = `${now.getUTCFullYear()}-01-01`;
 
+        // Cap queries to the most recent weekday so that EOD rows written on
+        // weekends (server startup job) don't shift the 5D/M rolling window.
+        const dowUtc = now.getUTCDay(); // 0=Sun, 6=Sat
+        const weekendOffset = dowUtc === 6 ? 1 : dowUtc === 0 ? 2 : 0;
+        const lastWeekday = new Date(now);
+        lastWeekday.setUTCDate(now.getUTCDate() - weekendOffset);
+        const lastWeekdayStr = lastWeekday.toISOString().split("T")[0];
+
         // Accumulate basket_value per date across all strategies (same as child)
         const basketByDate = {};
         await Promise.all(strategyIds.map(async (sid) => {
@@ -872,6 +880,7 @@ const SwipeableBalanceCard = ({
             .eq("user_id", userId)
             .is("family_member", null)
             .eq("strategy_id", sid)
+            .lte("as_of_date", lastWeekdayStr)
             .order("as_of_date", { ascending: false });
           if (activeTab === "ytd") q = q.gte("as_of_date", yearStart);
           if (rowLimit) q = q.limit(rowLimit);
