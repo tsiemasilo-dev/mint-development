@@ -308,6 +308,31 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   }, [modalHolding, modalSecurityId, rawHoldings]);
   const { chartData: modalRawChartData, loading: modalChartLoading } = useStockChart(modalSecurityId, modalTimeFilter, null);
   const modalStockReturns = useStockReturns(modalSecurityId);
+  const selectedStockReturns = useStockReturns(selectedSecurityId);
+
+  const stockLiveReturns = useMemo(() => {
+    const q = selectedStock?.ticker ? liveQuotes[selectedStock.ticker] : null;
+    return {
+      d_abs: q?.change != null ? Math.round(q.change * 100) : null,
+      d_pct: q?.changePercent ?? null,
+      w_abs: selectedStockReturns?.['5d_abs'] ?? null,
+      w_pct: q?.returns?.w1 ?? null,
+      m_abs: selectedStockReturns?.['1m_abs'] ?? null,
+      m_pct: q?.returns?.m1 ?? null,
+    };
+  }, [selectedStock?.ticker, liveQuotes, selectedStockReturns]);
+
+  const modalLiveReturns = useMemo(() => {
+    const q = modalHolding?.ticker ? liveQuotes[modalHolding.ticker] : null;
+    return {
+      d_abs: q?.change != null ? Math.round(q.change * 100) : null,
+      d_pct: q?.changePercent ?? null,
+      w_abs: modalStockReturns?.['5d_abs'] ?? null,
+      w_pct: q?.returns?.w1 ?? null,
+      m_abs: modalStockReturns?.['1m_abs'] ?? null,
+      m_pct: q?.returns?.m1 ?? null,
+    };
+  }, [modalHolding?.ticker, liveQuotes, modalStockReturns]);
 
   useEffect(() => {
     if (pricesLastUpdated) {
