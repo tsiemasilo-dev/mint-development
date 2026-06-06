@@ -14,7 +14,6 @@ import SwipeBackWrapper from "../components/SwipeBackWrapper.jsx";
 import PortfolioSkeleton from "../components/PortfolioSkeleton";
 import SettlementBadge from "../components/PendingBadge";
 import FamilyDropdown from "../components/FamilyDropdown";
-import { supabase } from "../lib/supabase";
 
 
 
@@ -796,14 +795,14 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       if (currentValue > 0 && realChartData.length > 0) {
         const latestNav = realChartData[realChartData.length - 1].value;
         if (!latestNav || latestNav <= 0) return [];
-        const scale = cv / latestNav;
+        const scale = currentValue / latestNav;
         const pts = [{ ...realChartData[0], day: null, value: 0 }];
-        realChartData.forEach(d => pts.push({ ...d, value: Number(((d.value * scale) - ia).toFixed(2)) }));
+        realChartData.forEach(d => pts.push({ ...d, value: Number(((d.value * scale) - costBasis).toFixed(2)) }));
         return pts;
       }
     }
     return [];
-  }, [realChartData, currentStrategy, liveStrategyMetrics, snapshotRows, timeFilter]);
+  };
 
   const currentChartData = getChartData();
   const isLoadingData = strategiesLoading || chartLoading || (timeFilter === "D" && intradayLoading);
