@@ -390,13 +390,16 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, livePriceMap
     return [];
   }, [realChartData, currentStrategy, liveStrategyMetrics]);
 
-  // Use intraday buckets for D, otherwise the snapshot-based curve
-  const displayChartData = (timeFilter === "D" && intradayChartData && intradayChartData.length > 1)
-    ? intradayChartData
-    : currentChartData;
+  const isLoadingData = strategiesLoading || chartLoading || (timeFilter === "D" && intradayLoading);
+
+  // Use intraday buckets for D; return [] while loading so the skeleton shows instead of a flat line
+  const displayChartData = (() => {
+    if (isLoadingData) return [];
+    if (timeFilter === "D") return (intradayChartData && intradayChartData.length > 1 ? intradayChartData : []);
+    return currentChartData;
+  })();
 
   const stratAxisConfig = computePnlAxisConfig(displayChartData);
-  const isLoadingData = strategiesLoading || chartLoading || (timeFilter === "D" && intradayLoading);
 
   // ── holdings data (for Holdings tab) ──────────────────────────────────────
   const allStrategyHoldings = useMemo(() => {
@@ -649,9 +652,21 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, livePriceMap
                         <p className="text-slate-500 text-sm font-medium">{lockedMessage}</p>
                         <p className="text-slate-400 text-xs">Check back once more data has been recorded</p>
                       </div>
+                    ) : isLoadingData ? (
+                      <div className="h-full flex flex-col justify-end gap-1 px-1 pb-6 pt-2">
+                        <div className="flex items-end gap-[3px] h-full">
+                          {[55, 70, 45, 80, 60, 90, 65, 75, 50, 85, 70, 60].map((h, i) => (
+                            <div
+                              key={i}
+                              className="flex-1 rounded-t-sm bg-slate-200 animate-pulse"
+                              style={{ height: `${h}%`, animationDelay: `${i * 60}ms` }}
+                            />
+                          ))}
+                        </div>
+                      </div>
                     ) : displayChartData.length === 0 ? (
                       <div className="h-full flex items-center justify-center">
-                        <p className="text-slate-400 text-sm">{isLoadingData ? "Loading chart..." : "No data available"}</p>
+                        <p className="text-slate-400 text-sm">No data available</p>
                       </div>
                     ) : (
                       <ResponsiveContainer width="100%" height="100%">
