@@ -286,11 +286,20 @@ export const getSecurityPrices = async (securityId, timeframe = "1M") => {
       cutoffDate = d.toISOString().split("T")[0];
     }
 
+    // Cap to the most recent weekday so Saturday/Sunday EOD rows don't appear on the chart.
+    const _now2 = new Date();
+    const _dow2 = _now2.getUTCDay(); // 0=Sun, 6=Sat
+    const _offset2 = _dow2 === 6 ? 1 : _dow2 === 0 ? 2 : 0;
+    const _wd2 = new Date(_now2);
+    _wd2.setUTCDate(_now2.getUTCDate() - _offset2);
+    const lastWeekdayStr2 = _wd2.toISOString().split("T")[0];
+
     const { data: returnsRows, error } = await supabase
       .from("stock_returns_c")
       .select("as_of_date, current_price")
       .eq("security_id", securityId)
       .gte("as_of_date", cutoffDate)
+      .lte("as_of_date", lastWeekdayStr2)
       .order("as_of_date", { ascending: true });
 
     if (error) {
