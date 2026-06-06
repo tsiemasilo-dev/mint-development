@@ -517,7 +517,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     if (!stratId || !profile?.id) return;
     supabase
       .from("stock_holdings_c")
-      .select("security_id, quantity, avg_fill, Expected_fill, strategy_id, last_price, change_price")
+      .select("security_id, quantity, avg_fill, Expected_fill, strategy_id, last_price")
       .eq("user_id", profile.id)
       .is("family_member_id", null)
       .eq("strategy_id", stratId)
@@ -608,9 +608,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       const expectedRaw = Number(h.Expected_fill || 0);
       const expectedRands = expectedRaw > 0 ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw) : 0;
       costBasis += Math.max(expectedRands, avgFillRands) * qty;
-      const abs1d = liveEntry?.abs1dCents != null
-        ? liveEntry.abs1dCents
-        : (Number.isFinite(Number(h.change_price)) ? Number(h.change_price) : null);
+      const abs1d = liveEntry?.abs1dCents != null ? liveEntry.abs1dCents : null;
       if (abs1d != null) todayPnl += (abs1d / 100) * qty;
     }
     return { liveValue, costBasis, todayPnl, todayPct: costBasis > 0 ? (todayPnl / costBasis) * 100 : 0, isPending: false, hasPrices };
