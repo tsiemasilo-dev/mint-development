@@ -628,28 +628,39 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   const snapshotChartData = useMemo(() => {
     if (!snapshotRows.length || !["5d", "m", "ytd"].includes(timeFilter)) return null;
     const MN = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-    const fmtDay = (iso) => {
-      const [y, mo, d] = iso.split("-").map(Number);
-      return `${d} ${MN[mo - 1]} '${String(y).slice(2)}`;
+    const fmtDay = (iso) => { const [, mo, d] = iso.split("-").map(Number); return `${d} ${MN[mo - 1]}`; };
+    const fmtFull = (iso) => { const [y, mo, d] = iso.split("-").map(Number); return `${d} ${MN[mo - 1]} ${y}`; };
+
+    // Use the same reference-date lookback the server uses:
+    // 5d → today minus 9 calendar days, 1m → today minus 31 calendar days, ytd → Jan 1
+    const offsetDate = (days) => {
+      const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split("T")[0];
     };
-    const fmtFull = (iso) => {
-      const [y, mo, d] = iso.split("-").map(Number);
-      return `${d} ${MN[mo - 1]} ${y}`;
+    const closestRowOnOrBefore = (targetDateStr) => {
+      let best = null;
+      for (const r of snapshotRows) {
+        if (r.as_of_date <= targetDateStr) best = r; else break;
+      }
+      return best || snapshotRows[0];
     };
-    let slice;
+
+    let refRow;
     if (timeFilter === "5d") {
-      slice = snapshotRows.slice(-5);
+      refRow = closestRowOnOrBefore(offsetDate(9));
     } else if (timeFilter === "m") {
-      slice = snapshotRows.slice(-22);
+      refRow = closestRowOnOrBefore(offsetDate(31));
     } else {
       const yearStr = `${new Date().getFullYear()}-01-01`;
-      slice = snapshotRows.filter(r => r.as_of_date >= yearStr);
+      refRow = snapshotRows.find(r => r.as_of_date >= yearStr) || snapshotRows[0];
     }
-    if (!slice.length) return null;
-    const startCents = Number(slice[0].basket_value || 0);
+
+    const dataRows = snapshotRows.filter(r => r.as_of_date >= refRow.as_of_date);
+    if (!dataRows.length) return null;
+    const startCents = Number(refRow.basket_value || 0);
     if (!startCents) return null;
+
     const points = [{ day: null, value: 0, fullDate: null }];
-    for (const row of slice) {
+    for (const row of dataRows) {
       const val = parseFloat(((Number(row.basket_value || 0) - startCents) / 100).toFixed(2));
       points.push({ day: fmtDay(row.as_of_date), value: val, fullDate: fmtFull(row.as_of_date) });
     }
@@ -767,25 +778,6 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     if (isLoadingData) return [];
     if (timeFilter === "D") return (intradayChartData && intradayChartData.length > 1 ? intradayChartData : []);
     if (["5d", "m", "ytd"].includes(timeFilter) && snapshotChartData && snapshotChartData.length > 1) {
-      const targetPnl = periodReturnData?.pnl;
-      if (targetPnl != null && targetPnl !== 0) {
-        const dataPts = snapshotChartData.filter(pt => pt.day !== null);
-        const lastVal = dataPts.length > 0 ? (dataPts[dataPts.length - 1].value ?? 0) : 0;
-        if (lastVal !== 0 && Math.sign(lastVal) === Math.sign(targetPnl)) {
-          // Proportionally scale every point so the endpoint equals the badge value
-          // while preserving the shape of intra-period movements
-          const scale = targetPnl / lastVal;
-          return snapshotChartData.map(pt =>
-            pt.day === null
-              ? pt
-              : { ...pt, value: parseFloat((pt.value * scale).toFixed(2)) }
-          );
-        }
-        // Signs differ (e.g. YTD basket vs live pnl) — just anchor the last point
-        const pts = [...snapshotChartData];
-        pts[pts.length - 1] = { ...pts[pts.length - 1], value: parseFloat(targetPnl.toFixed(2)) };
-        return pts;
-      }
       return snapshotChartData;
     }
     return currentChartData;
@@ -1277,7 +1269,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                                 tickLine={false}
                                 tickMargin={8}
                                 ticks={timeFilter === 'ytd' ? computeYtdMonthTicks(displayChartData) : undefined}
-                                interval={timeFilter === 'ytd' ? 0 : (displayChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(displayChartData.length / 4) - 1))}
+                                interval={timeFilter === 'ytd' ? 0 : (displayChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(displayChartData.length / 6) - 1))}
                                 tick={({ x, y, payload }) => {
                                   if (!payload.value) return null;
                                   const label = timeFilter === 'ytd'
