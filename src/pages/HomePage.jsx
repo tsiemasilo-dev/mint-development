@@ -849,15 +849,16 @@ const HomePage = ({
   }, [showGoalsModal, profile?.id, fetchGoals]);
 
   useEffect(() => {
-    const fetchStrategies = async () => {
+    // isRefresh=true → silent update (no loading spinner, keeps existing data visible)
+    const fetchStrategies = async (isRefresh = false) => {
       try {
         if (!profile?.id) return;
-        setLoadingBestStrategies(true);
+        if (!isRefresh) setLoadingBestStrategies(true);
 
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
         if (!token) {
-          setBestStrategies([]);
+          if (!isRefresh) setBestStrategies([]);
           return;
         }
 
@@ -867,7 +868,7 @@ const HomePage = ({
 
         if (!res.ok) {
           console.error("[HomePage] Failed to fetch user strategies:", res.status);
-          setBestStrategies([]);
+          if (!isRefresh) setBestStrategies([]);
           return;
         }
 
@@ -925,7 +926,7 @@ const HomePage = ({
             isPending,
             change_pct: changePctVal,
             pnlRands: stratPnlRands,
-            pnlPct: stratPnlPct,
+            pnlPct: changePctVal,
             strategy_metrics: s.metrics ? [s.metrics] : [],
           };
         });
@@ -937,13 +938,17 @@ const HomePage = ({
         setBestStrategies(sorted);
       } catch (error) {
         console.error("Failed to load strategies", error);
-        setBestStrategies((prev) => prev.length > 0 ? prev : []);
+        if (!isRefresh) setBestStrategies((prev) => prev.length > 0 ? prev : []);
       } finally {
-        setLoadingBestStrategies(false);
+        if (!isRefresh) setLoadingBestStrategies(false);
       }
     };
+
     fetchStrategies();
-  }, [profile?.id, pricesLastUpdated]);
+    // Poll every 15 seconds (in sync with intraday price updates) — silent refresh, no spinner
+    const pollInterval = setInterval(() => fetchStrategies(true), 15000);
+    return () => clearInterval(pollInterval);
+  }, [profile?.id]);
 
   const holdingsBySymbol = useMemo(() => buildHoldingsBySymbol(holdingsSecurities), [holdingsSecurities]);
 

@@ -167,6 +167,12 @@ const SwipeableBalanceCard = ({
   const [activeTab, setActiveTab] = useState("ytd");
   const [periodReturn, setPeriodReturn] = useState(null);
   const [periodPct, setPeriodPct] = useState(null);
+  const [parentYtdPnl, setParentYtdPnl] = useState(null);
+  const [parentYearStartBasketCents, setParentYearStartBasketCents] = useState(null);
+  const [parentSnapshotPeriodReturn, setParentSnapshotPeriodReturn] = useState(null);
+  const [parentSnapshotPeriodPct, setParentSnapshotPeriodPct] = useState(null);
+  // Start-basket for M/5D — render path uses displayMarketValue - this for live-price accuracy
+  const [parentSnapshotStartBasketCents, setParentSnapshotStartBasketCents] = useState(null);
   const [childSnapshotCount, setChildSnapshotCount] = useState(null);
   const [childLivePriceMap, setChildLivePriceMap] = useState({});
   const [yearStartBasketCents, setYearStartBasketCents] = useState(null);
@@ -833,6 +839,101 @@ const SwipeableBalanceCard = ({
     return () => { cancelled = true; };
   }, [childMode, familyMemberId, dbData.holdings, activeTab, userId]);
 
+  // Parent snapshot fetch — dedicated effect that mirrors fetchChildSnapshots exactly.
+  // Runs on tab change, NOT on every live-price tick (unlike the chart query).
+  // For YTD: queries current-year basket rows + prior-year count check (same as child).
+  // For M/5D: reads stored 1m_pnl/5d_pnl columns, falls back to basket diff.
+  useEffect(() => {
+    if (childMode || !userId) return;
+    // Reset snapshot-based period return when tab changes so stale values don't linger
+    setParentSnapshotPeriodReturn(null);
+    setParentSnapshotPeriodPct(null);
+    setParentSnapshotStartBasketCents(null);
+    if (activeTab === "all" || activeTab === "d") return; // handled by chart query / displayReturn
+    let cancelled = false;
+    const runParentSnapshots = async () => {
+      const strategyIds = [...new Set(
+        dbData.holdings
+          .map(h => h.strategyId || h.strategy_id)
+          .filter(Boolean)
+      )];
+      if (!strategyIds.length) return;
+      try {
+        const rowLimit = activeTab === "5d" ? 5 : activeTab === "m" ? 22 : undefined;
+        const now = new Date();
+        const yearStart = `${now.getUTCFullYear()}-01-01`;
+
+        // Accumulate basket_value per date across all strategies (same as child)
+        const basketByDate = {};
+        await Promise.all(strategyIds.map(async (sid) => {
+          let q = supabase
+            .from("client_strategy_returns_c")
+            .select("as_of_date, basket_value")
+            .eq("user_id", userId)
+            .is("family_member", null)
+            .eq("strategy_id", sid)
+            .order("as_of_date", { ascending: false });
+          if (activeTab === "ytd") q = q.gte("as_of_date", yearStart);
+          if (rowLimit) q = q.limit(rowLimit);
+          const { data } = await q;
+          (data || []).forEach(r => {
+            basketByDate[r.as_of_date] = (basketByDate[r.as_of_date] || 0) + Number(r.basket_value || 0);
+          });
+        }));
+
+        if (cancelled) return;
+        const dates = Object.keys(basketByDate).sort(); // ascending
+        if (!dates.length) return;
+
+        const minRows = activeTab === "5d" ? 5 : activeTab === "m" ? 22 : 1;
+        if (dates.length < minRows) return;
+
+        const firstBasket = basketByDate[dates[0]];         // oldest date in range
+        const latestBasketCents = basketByDate[dates[dates.length - 1]]; // newest stored basket
+
+        if (activeTab === "ytd") {
+          // Prior-year count check — identical to child mode.
+          // If count = 0 (all invested this year), null → falls back to displayReturn (All-time).
+          const { count: priorYearCount } = await supabase
+            .from("client_strategy_returns_c")
+            .select("as_of_date", { count: "exact", head: true })
+            .eq("user_id", userId)
+            .is("family_member", null)
+            .lt("as_of_date", yearStart);
+          if (cancelled) return;
+          const anchor = priorYearCount > 0 ? firstBasket : null;
+          setParentYearStartBasketCents(anchor);
+          console.log("[PERIOD_DEBUG parent] YTD anchor set:", {
+            priorYearCount,
+            yearStartBasketCents: anchor,
+            yearStartRands: anchor != null ? anchor / 100 : null,
+            firstDate: dates[0],
+            lastDate: dates[dates.length - 1],
+            rowsFetched: dates.length,
+          });
+        } else {
+          // M or 5D — store the period-start basket only.
+          // Final P&L is computed in the render path as: displayMarketValue − startBasket/100
+          // so that live price (not stored basket) is always used as "latest", matching portfolio tab.
+          setParentSnapshotStartBasketCents(firstBasket);
+          console.log("[PERIOD_DEBUG parent] M/5D start basket set:", {
+            activeTab,
+            firstBasketCents: firstBasket,
+            firstBasketRands: firstBasket / 100,
+            latestBasketCents,
+            latestBasketRands: latestBasketCents / 100,
+            dates: [dates[0], dates[dates.length - 1]],
+            rowsFetched: dates.length,
+          });
+        }
+      } catch (e) {
+        console.warn("[SwipeableBalanceCard] parentMode snapshot error:", e.message);
+      }
+    };
+    runParentSnapshots();
+    return () => { cancelled = true; };
+  }, [childMode, userId, dbData.holdings, activeTab]);
+
   // Live price poll for child mode — 15s, only runs when no shared prop from ChildDashboardPage
   useEffect(() => {
     if (!childMode || !familyMemberId || !dbData.holdings.length || livePriceMapProp) return;
@@ -855,6 +956,36 @@ const SwipeableBalanceCard = ({
     const id = setInterval(fetchLive, 15000);
     return () => clearInterval(id);
   }, [childMode, familyMemberId, dbData.holdings, livePriceMapProp]);
+
+  // Trigger parent live-returns on mount / holdings change so client_strategy_returns_c
+  // stays current without depending on an external script — mirrors the child's approach.
+  // NOTE: collect strategy IDs from ALL holdings (including non-isStrategy ones that have
+  // a strategy_id) so this fires even when client_strategy_returns_c has no rows yet.
+  useEffect(() => {
+    if (childMode || !userId) return;
+    const strategyIds = [...new Set(
+      dbData.holdings
+        .map(h => h.strategyId || h.strategy_id)
+        .filter(Boolean)
+    )];
+    if (!strategyIds.length) return;
+
+    const triggerParentReturns = async () => {
+      try {
+        const session = await getSessionWithRetry();
+        const token = session?.access_token;
+        if (!token) return;
+        await Promise.all(strategyIds.map(sid =>
+          fetch(`/api/parent-live-returns?user_id=${encodeURIComponent(userId)}&strategy_id=${encodeURIComponent(sid)}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }).catch(e => console.warn('[SwipeableBalanceCard] parent-live-returns trigger failed:', e.message))
+        ));
+      } catch (e) {
+        console.warn('[SwipeableBalanceCard] parent-live-returns trigger error:', e.message);
+      }
+    };
+    triggerParentReturns();
+  }, [childMode, userId, dbData.holdings]);
 
   useEffect(() => {
     let chartCancelled = false;
@@ -898,16 +1029,26 @@ const SwipeableBalanceCard = ({
         const limitValue = activeTab === "5d" ? 5 : undefined;
 
         if (userId) {
-          const strategyHoldings = holdingsToChart.filter(h => h.isStrategy && h.strategyId);
+          // Collect unique strategy IDs from ALL holdings — not just isStrategy entries.
+          // Parent holdings tagged with strategy_id (but isStrategy=false) must also use
+          // client_strategy_returns_c so YTD and ALL share the same data source.
+          const uniqueStrategyIds = [...new Set(
+            holdingsToChart
+              .map(h => h.strategyId || h.strategy_id)
+              .filter(Boolean)
+          )];
           // Collect daily 1d_pnl per date (summed across all strategies)
           const strategyDailyPnl = {};
-          await Promise.all(strategyHoldings.map(async (sh) => {
+          const parentBasketByDate = {}; // for computing year-start anchor (live parent YTD)
+          let latestYtdPnlCents = null;
+          let latestYtdDate = null;
+          await Promise.all(uniqueStrategyIds.map(async (sid) => {
             try {
               let query = supabase
                 .from("client_strategy_returns_c")
-                .select("*")
+                .select("as_of_date, 1d_pnl, ytd_pnl, basket_value")
                 .eq("user_id", userId)
-                .eq("strategy_id", sh.strategyId)
+                .eq("strategy_id", sid)
                 .is("family_member", null) // parent chart only
                 .order("as_of_date", { ascending: true });
 
@@ -926,12 +1067,39 @@ const SwipeableBalanceCard = ({
                   const dateKey = row.as_of_date;
                   const dailyPnlRands = (Number(row["1d_pnl"] || 0)) / 100;
                   strategyDailyPnl[dateKey] = (strategyDailyPnl[dateKey] || 0) + dailyPnlRands;
+                  // Sum basket_value across strategies per date (for live YTD anchor)
+                  parentBasketByDate[dateKey] = (parentBasketByDate[dateKey] || 0) + Number(row["basket_value"] || 0);
+                  // Track the latest row's ytd_pnl (fallback when no prior-year basket available)
+                  if (latestYtdDate === null || dateKey > latestYtdDate) {
+                    latestYtdDate = dateKey;
+                    latestYtdPnlCents = Number(row["ytd_pnl"] || 0);
+                  }
                 });
               }
             } catch (e) {
-              console.warn(`[Chart] Failed to fetch strategy 1d_pnl for ${sh.strategyId}:`, e);
+              console.warn(`[Chart] Failed to fetch strategy 1d_pnl for ${sid}:`, e);
             }
           }));
+          // Store the stored ytd_pnl as fallback
+          if (!childMode && latestYtdPnlCents !== null) {
+            setParentYtdPnl(latestYtdPnlCents / 100);
+          }
+          // Compute year-start basket for live parent YTD — mirrors child mode exactly:
+          // anchor = FIRST basket of the current year, only set when prior-year data exists.
+          // (Child uses gte(yearStart) → dates[0]; we replicate that from our already-fetched rows.)
+          if (!childMode && activeTab === "ytd") {
+            const yearStr = `${new Date().getFullYear()}-01-01`;
+            const allDates = Object.keys(parentBasketByDate).sort();
+            const priorDates = allDates.filter(d => d < yearStr);
+            const currentYearDates = allDates.filter(d => d >= yearStr);
+            // Only activate live YTD when prior-year history exists AND current-year rows are present.
+            // If no prior-year data, fall back to stored ytd_pnl (same as child mode's null path).
+            if (priorDates.length > 0 && currentYearDates.length > 0) {
+              setParentYearStartBasketCents(parentBasketByDate[currentYearDates[0]]);
+            } else {
+              setParentYearStartBasketCents(null);
+            }
+          }
 
           // Build cumulative sum of 1d_pnl across all dates
           const sortedStrategyDates = Object.keys(strategyDailyPnl).sort();
@@ -946,7 +1114,9 @@ const SwipeableBalanceCard = ({
         // in client_strategy_returns_c (strategyBasketByDate). Double-counting
         // would add both the per-stock stock_returns_c P&L AND the strategy 1d_pnl.
         const chartedStrategyIds = new Set(
-          holdingsToChart.filter(h => h.isStrategy).map(h => h.strategyId).filter(Boolean)
+          holdingsToChart
+            .map(h => h.strategyId || h.strategy_id)
+            .filter(Boolean)
         );
         const stockHoldings = holdingsToChart.filter(h =>
           h.security_id && !h.isStrategy && !chartedStrategyIds.has(h.strategy_id)
@@ -1310,16 +1480,74 @@ const SwipeableBalanceCard = ({
 
   // PnL pill: for child YTD use live metrics (15s poll); for other period tabs use stored/basket.
   // "all" always uses displayReturn (live market value − cost basis).
+  // Parent YTD: liveMarketValue − yearStartBasket. Prior-year count check (in fetchParentSnapshots)
+  //   sets parentYearStartBasketCents=null when all invested this year → falls back to displayReturn.
+  // Parent M/5D: parentSnapshotPeriodReturn from dedicated snapshot query (stored cols or basket diff).
   const useChildLiveYtd = childMode && activeTab === "ytd" && childLiveMetrics != null;
+  const useParentLiveYtd = !childMode && activeTab === "ytd" && parentYearStartBasketCents != null && displayMarketValue > 0;
+  // Cap YTD at all-time (displayReturn) to prevent mid-year deposit inflation.
+  // Prior-year count check already ensures parentYearStartBasketCents is only set when
+  // prior-year rows exist — the cap adds a second safety layer for net-new deposits.
+  const parentYtdReturn = useParentLiveYtd
+    ? Math.min(displayMarketValue - parentYearStartBasketCents / 100, displayReturn)
+    : 0;
+
+  // Parent M/5D: compute final P&L from live price (displayMarketValue) − period-start basket.
+  // This matches portfolio tab's formula exactly: liveVal − snapshotRows[length-N].basket_value/100.
+  const parentMDLivePnl = (!childMode && parentSnapshotStartBasketCents != null && displayMarketValue > 0)
+    ? parseFloat((displayMarketValue - parentSnapshotStartBasketCents / 100).toFixed(2))
+    : null;
+  const parentMDLivePct = (parentMDLivePnl !== null && parentSnapshotStartBasketCents > 0)
+    ? parseFloat(((parentMDLivePnl / (parentSnapshotStartBasketCents / 100)) * 100).toFixed(4))
+    : null;
+
+  const useParentMD = !childMode && (activeTab === "m" || activeTab === "5d") && parentMDLivePnl !== null;
+  // Parent M/5D when basket not yet fetched: show R0 explicitly — no stale chart periodReturn fallback.
+  const isParentMDTabWaiting = !childMode && (activeTab === "m" || activeTab === "5d") && parentMDLivePnl === null;
+  // For parent YTD: when no prior-year anchor (parentYearStartBasketCents=null → !useParentLiveYtd),
+  // user invested entirely this year → YTD = All-time = displayReturn. Never use chart periodReturn for YTD.
+  const useParentYtdTab = !childMode && activeTab === "ytd";
+
   const activeReturn = useChildLiveYtd
     ? childLiveMetrics.pnl
-    : ((isPeriodTab && activeTab !== "all" && periodReturn !== null) ? periodReturn : displayReturn);
+    : useParentLiveYtd
+      ? parentYtdReturn
+      : useParentMD
+        ? parentMDLivePnl
+        : useParentYtdTab
+          ? displayReturn            // No prior-year anchor → All-time (never fall through to periodReturn)
+          : isParentMDTabWaiting
+            ? 0                      // Basket data not yet fetched — R0, no stale chart fallback
+            : ((isPeriodTab && activeTab !== "all" && periodReturn !== null) ? periodReturn : displayReturn);
+
+  // Debug log — fires on every relevant render so values can be compared in console
+  if (!childMode && activeTab !== "all" && activeTab !== "d") {
+    console.log("[PERIOD_DEBUG parent] RENDER:", {
+      activeTab,
+      parentYearStartBasketCents,
+      yearStartRands: parentYearStartBasketCents != null ? parentYearStartBasketCents / 100 : null,
+      parentSnapshotStartBasketCents,
+      startBasketRands: parentSnapshotStartBasketCents != null ? parentSnapshotStartBasketCents / 100 : null,
+      displayMarketValue,
+      displayBigValue,
+      displayReturn,
+      parentYtdReturn: useParentLiveYtd ? parentYtdReturn : "n/a (no prior-year anchor)",
+      parentMDLivePnl,
+      useParentLiveYtd,
+      useParentMD,
+      useParentYtdTab,
+      activeReturn,
+    });
+  }
+
   const activeReturnPct = displayBigValue > 0
     ? (useChildLiveYtd
         ? Math.abs(childLiveMetrics.pct).toFixed(1)
-        : ((childMode && isPeriodTab && activeTab !== "all" && periodPct !== null)
-            ? Math.abs(periodPct).toFixed(1)
-            : ((Math.abs(activeReturn) / displayBigValue) * 100).toFixed(1)))
+        : (useParentMD && parentMDLivePct !== null
+            ? Math.abs(parentMDLivePct).toFixed(1)
+            : ((childMode && isPeriodTab && activeTab !== "all" && periodPct !== null)
+                ? Math.abs(periodPct).toFixed(1)
+                : ((Math.abs(activeReturn) / displayBigValue) * 100).toFixed(1))))
     : "0.0";
 
   const isLoss = activeReturn < 0;

@@ -1993,6 +1993,11 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     return () => document.body.classList.remove("child-article-open");
   }, [childNewsArticleId]);
 
+  useEffect(() => {
+    document.body.style.overflow = strategyDetailId ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [strategyDetailId]);
+
   const childName = [child?.first_name, child?.last_name].filter(Boolean).join(" ") || "Child";
   const age = getAge(child?.date_of_birth);
   const parentName = [profile?.firstName, profile?.lastName].filter(Boolean).join(" ") || "Parent";
