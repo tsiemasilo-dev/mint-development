@@ -879,6 +879,22 @@ const HomePage = ({
           return;
         }
 
+        // Fetch stored P&L from client_strategy_returns_c to match purple card values
+        const strategyIds = serverStrategies.map(s => s.id).filter(Boolean);
+        const { data: returnsRows } = strategyIds.length
+          ? await supabase
+              .from("client_strategy_returns_c")
+              .select("strategy_id, ytd_pnl, ytd_pct")
+              .eq("user_id", profile.id)
+              .is("family_member", null)
+              .in("strategy_id", strategyIds)
+              .order("as_of_date", { ascending: false })
+          : { data: [] };
+        const returnsByStrategy = {};
+        for (const row of (returnsRows || [])) {
+          if (!returnsByStrategy[row.strategy_id]) returnsByStrategy[row.strategy_id] = row;
+        }
+
         const formatted = serverStrategies
           .map((s) => {
           const invested = Number(s.investedAmount) || 0;
@@ -887,9 +903,10 @@ const HomePage = ({
             ? Number(Number(rawCurrent).toFixed(2))
             : invested;
           const isPending = s.isPending === true || (invested === 0 && currentValue === 0);
-          const stratPnlRands = currentValue - invested;
-          const changePctVal = invested > 0 ? (stratPnlRands / invested) * 100 : 0;
-          const stratPnlPct = changePctVal;
+          const ret = returnsByStrategy[s.id];
+          const stratPnlRands = ret?.ytd_pnl != null ? Number(ret.ytd_pnl) / 100 : (currentValue - invested);
+          const stratPnlPct = ret?.ytd_pct != null ? Number(ret.ytd_pct) : (invested > 0 ? ((currentValue - invested) / invested) * 100 : 0);
+          const changePctVal = stratPnlPct;
           return {
             id: s.id,
             purchaseKey: s.purchaseKey || s.id,
