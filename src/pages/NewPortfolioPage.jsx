@@ -517,7 +517,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     if (!stratId || !profile?.id) return;
     supabase
       .from("stock_holdings_c")
-      .select("security_id, quantity, avg_fill, Expected_fill, strategy_id, last_price, change_price")
+      .select("security_id, quantity, avg_fill, Expected_fill, strategy_id, last_price")
       .eq("user_id", profile.id)
       .is("family_member_id", null)
       .eq("strategy_id", stratId)
@@ -526,15 +526,23 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       .then(({ data }) => { setDirectStratHoldings(data || []); });
   }, [userSelectedStrategy?.strategyId, profile?.id]);
 
-  // ── snapshot rows (period P&L + available period locks) ───────────────────
+  // ── snapshot rows (period chart + available period locks) ─────────────────
   useEffect(() => {
     if (!userSelectedStrategy?.strategyId || !profile?.id) return;
+    // Cap to last weekday so weekend EOD rows don't skew the chart anchor.
+    const _now = new Date();
+    const _dow = _now.getUTCDay();
+    const _offset = _dow === 6 ? 1 : _dow === 0 ? 2 : 0;
+    const _d = new Date(_now);
+    _d.setUTCDate(_now.getUTCDate() - _offset);
+    const lastWeekdayStr = _d.toISOString().split("T")[0];
     supabase
       .from("client_strategy_returns_c")
       .select("as_of_date, basket_value, ytd_pct, ytd_pnl")
       .eq("user_id", profile.id)
       .is("family_member", null)
       .eq("strategy_id", userSelectedStrategy.strategyId)
+      .lte("as_of_date", lastWeekdayStr)
       .order("as_of_date", { ascending: true })
       .then(({ data }) => {
         if (data && data.length > 0) {
@@ -608,9 +616,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       const expectedRaw = Number(h.Expected_fill || 0);
       const expectedRands = expectedRaw > 0 ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw) : 0;
       costBasis += Math.max(expectedRands, avgFillRands) * qty;
-      const abs1d = liveEntry?.abs1dCents != null
-        ? liveEntry.abs1dCents
-        : (Number.isFinite(Number(h.change_price)) ? Number(h.change_price) : null);
+      const abs1d = liveEntry?.abs1dCents != null ? liveEntry.abs1dCents : null;
       if (abs1d != null) todayPnl += (abs1d / 100) * qty;
     }
     return { liveValue, costBasis, todayPnl, todayPct: costBasis > 0 ? (todayPnl / costBasis) * 100 : 0, isPending: false, hasPrices };
