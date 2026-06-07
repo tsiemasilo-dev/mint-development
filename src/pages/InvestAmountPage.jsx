@@ -147,7 +147,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWi
               </p>
               <p className="text-xs font-semibold text-slate-600 mt-1">
                 {minimumInvestment
-                  ? `Min. ${formatCurrency(minimumInvestment, currency)}`
+                  ? `Min. ${formatCurrency(minimumInvestment * (1 + CASH_BUFFER_RATE), currency)}`
                   : "Calculating..."}
               </p>
             </div>

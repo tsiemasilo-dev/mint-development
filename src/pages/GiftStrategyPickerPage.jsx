@@ -70,7 +70,7 @@ function MiniSparkline({ strategyId, positive }) {
 function StrategyCard({ strategy, ytd, holdingsBySymbol, onGift, featured }) {
   const currency = strategy.base_currency || "R";
   const calcMin = calculateMinInvestmentSync(strategy, holdingsBySymbol);
-  const minInvest = calcMin ? formatCurrency(calcMin, currency) : null;
+  const minInvest = calcMin ? formatCurrency(calcMin * 1.08, currency) : null;
 
   const holdings = Array.isArray(strategy.holdings) ? strategy.holdings : [];
   const holdingLogos = holdings.slice(0, 4).map(h => {
