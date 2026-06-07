@@ -9210,7 +9210,7 @@ app.post("/api/gift/create-v2", async (req, res) => {
             user_id: recipientProfile.id,
             title: `You've been gifted ${asset_name}! 🎁`,
             body: `${senderName} gifted you ${asset_name} on Mint. Ask them for your 6-digit claim code to claim it.`,
-            type: "investment",
+            type: "system",
             payload: { action: "gift_received", gift_id: gift.id, asset_name },
           });
         }
