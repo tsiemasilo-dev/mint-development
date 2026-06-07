@@ -9384,7 +9384,7 @@ app.post("/api/gift/create-v2", async (req, res) => {
       <table style="width:100%;border-collapse:collapse">${emailSteps}</table>
     </div>
 
-    <a href="${APP_URL}/gift/${gift.id}" style="display:block;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#ffffff;text-decoration:none;text-align:center;padding:16px 24px;border-radius:14px;font-size:16px;font-weight:700;margin-bottom:20px">${emailCta}</a>
+    <a href="${APP_URL}?gift=${gift.id}" style="display:block;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#ffffff;text-decoration:none;text-align:center;padding:16px 24px;border-radius:14px;font-size:16px;font-weight:700;margin-bottom:20px">${emailCta}</a>
 
     <p style="font-size:12px;color:#94a3b8;text-align:center;line-height:1.5;margin:0">This gift expires in 4 hours.<br>Mint (Pty) Ltd is a registered FSP (55118).</p>
   </div>

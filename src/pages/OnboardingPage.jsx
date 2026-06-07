@@ -5,6 +5,8 @@ import { supabase } from "../lib/supabase.js";
 const OnboardingPage = ({ onCreateAccount, onLogin }) => {
   const [imageUrl, setImageUrl] = useState(null);
   const [imageLoading, setImageLoading] = useState(true);
+  const [pendingGift, setPendingGift] = useState(null);
+  const [giftLoading, setGiftLoading] = useState(false);
 
   useEffect(() => {
     const fetchLandingImage = async () => {
@@ -39,12 +41,34 @@ const OnboardingPage = ({ onCreateAccount, onLogin }) => {
         console.warn("Failed to load dynamic auth image:", err.message);
       }
       
-      // Fallback to default image
       setImageUrl("/assets/images/onboarding-hero.png");
     };
 
     fetchLandingImage();
   }, []);
+
+  useEffect(() => {
+    const giftId = localStorage.getItem('mint_pending_gift_id');
+    if (!giftId) return;
+
+    setGiftLoading(true);
+    fetch(`/api/gift/by-id/${giftId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.gift && !['claimed', 'cancelled', 'expired'].includes(data.gift.status)) {
+          setPendingGift(data.gift);
+        } else {
+          localStorage.removeItem('mint_pending_gift_id');
+        }
+      })
+      .catch(() => {})
+      .finally(() => setGiftLoading(false));
+  }, []);
+
+  const formatAmount = (cents) => {
+    if (!cents) return '';
+    return `R${(cents / 100).toLocaleString('en-ZA', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  };
 
   return (
     <div className="h-screen overflow-hidden bg-white">
@@ -66,6 +90,27 @@ const OnboardingPage = ({ onCreateAccount, onLogin }) => {
                 Your money tools are ready when you are.
               </p>
             </div>
+
+            {(pendingGift || giftLoading) && (
+              <div className="animate-on-load delay-3 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3.5 flex items-start gap-3">
+                <span className="text-2xl leading-none mt-0.5">🎁</span>
+                <div className="flex-1 min-w-0">
+                  {giftLoading ? (
+                    <p className="text-sm font-medium text-violet-700">Loading your gift…</p>
+                  ) : (
+                    <>
+                      <p className="text-sm font-semibold text-violet-900">
+                        You have an investment gift waiting
+                        {pendingGift?.amount_rand_cents ? ` — ${formatAmount(pendingGift.amount_rand_cents)}` : ''}
+                      </p>
+                      <p className="text-xs text-violet-600 mt-0.5">
+                        Log in or create an account to claim it
+                      </p>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="flex flex-col gap-4 animate-on-load delay-3 sm:items-start">
               <OriginButton

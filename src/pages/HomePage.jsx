@@ -485,6 +485,7 @@ const HomePage = ({
   onOpenFamily,
   onOpenInsure,
   onSelectMember,
+  onOpenGiftClaim,
   onNavigate,
 }) => {
   const { profile, loading } = useProfile();
@@ -516,6 +517,7 @@ const HomePage = ({
   const [loadingNews, setLoadingNews] = useState(false);
   const [homeTab, setHomeTab] = useState("balance");
   const [userId, setUserId] = useState(null);
+  const [pendingGiftId, setPendingGiftId] = useState(() => localStorage.getItem('mint_pending_gift_id'));
   const [localBestAssets, setLocalBestAssets] = useState(() => _cachedBestAssets);
   const [hasAnyHoldings, setHasAnyHoldings] = useState(() => _cachedHasAnyHoldings);
   const [loadingBestAssets, setLoadingBestAssets] = useState(() => _cachedBestAssets.length === 0);
@@ -1309,6 +1311,35 @@ const HomePage = ({
       </div>
 
       <div className="mx-auto -mt-10 flex w-full max-w-sm flex-col gap-6 px-4 pb-10 md:max-w-md md:px-8">
+
+        {pendingGiftId && (
+          <button
+            type="button"
+            className="flex w-full items-center gap-3 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-left shadow-sm active:scale-[0.98] transition-transform"
+            onClick={() => {
+              if (onOpenGiftClaim) onOpenGiftClaim();
+              else if (onNavigate) onNavigate("giftClaim");
+            }}
+          >
+            <span className="text-2xl leading-none shrink-0">🎁</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-violet-900 leading-tight">You have an investment gift to claim</p>
+              <p className="text-xs text-violet-600 mt-0.5">Tap to enter your 6-digit gift code</p>
+            </div>
+            <button
+              type="button"
+              className="p-1 text-violet-400 hover:text-violet-600 shrink-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                localStorage.removeItem('mint_pending_gift_id');
+                setPendingGiftId(null);
+              }}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </button>
+        )}
+
         <section className="flex flex-col gap-3">
           {/* Row 1 — primary actions */}
           <div className="grid grid-cols-4 gap-2 text-[11px] font-medium">
