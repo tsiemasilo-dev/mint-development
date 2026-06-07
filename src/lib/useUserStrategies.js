@@ -296,9 +296,13 @@ export const useUserStrategies = (familyMemberId = null) => {
       }
       // ── end live price override ────────────────────────────────────────────
 
+      // Pending-only strategies are hidden from the portfolio strategies tab
+      // and dropdown — they appear only on the home tab via the purple
+      // SettlementBadge, matching the behaviour of a normal pending purchase.
+      const visibleStrategies = formattedStrategies.filter(s => !s.isPending);
       const nextData = {
-        strategies: formattedStrategies,
-        selectedStrategy: formattedStrategies[0] || null,
+        strategies: visibleStrategies,
+        selectedStrategy: visibleStrategies[0] || null,
         loading: false,
         error: null,
       };
