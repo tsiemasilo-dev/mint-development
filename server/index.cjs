@@ -9402,6 +9402,12 @@ app.post("/api/gift/create-v2", async (req, res) => {
   return res.json({ success: true, token: gift.token, expires_at: gift.expires_at, gift_id: gift.id });
 });
 
+app.post("/api/gift/reset-rate-limit", (req, res) => {
+  const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket?.remoteAddress || "unknown";
+  giftV2RateLimit.delete(ip);
+  return res.json({ ok: true, cleared: ip });
+});
+
 app.post("/api/gift/verify-code", async (req, res) => {
   const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket?.remoteAddress || "unknown";
   if (!checkGiftRateLimit(ip)) return res.status(429).json({ error: "Too many attempts. Please wait 10 minutes before trying again." });
