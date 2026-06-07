@@ -156,7 +156,10 @@ export default async function handler(req, res) {
       const ocrRaw = { ...raw, [K.result]: slimResult, [K.status]: "verified", [K.collected]: new Date().toISOString() };
       await db.from("user_onboarding").update({ sumsub_raw: ocrRaw, updated_at: new Date().toISOString() }).eq("user_id", userId);
       console.log(`[Experian OCR] user ${userId} verified — archived ${archivedCount} document(s)`);
-      return res.json({ success: true, status: kycStatus, workflow, archived: archivedCount, collectResult: slimResult });
+      // Echo the FULL (un-slimmed) result here so the OCR structure — including the
+      // ID-document image field we haven't mapped yet — is fully visible in the
+      // browser console during testing. Storage still keeps the slimmed copy.
+      return res.json({ success: true, status: kycStatus, workflow, archived: archivedCount, collectResult });
     }
 
     const updatedRaw = { ...raw, experian_idmn_result: slimResult, experian_idmn_collected_at: new Date().toISOString() };

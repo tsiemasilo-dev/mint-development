@@ -201,10 +201,12 @@ const ExperianVerification = ({ onVerified }) => {
       // Surface the raw Experian payload in the browser console so OCR/liveness
       // fields (and any image data) can be inspected without Vercel log access.
       if (data?.collectResult) {
+        const wfLabel = (data.workflow || phaseRef.current || "?").toUpperCase();
         try {
-          console.log("[Experian IDMN] CollectWorkflowResults raw:", JSON.stringify(data.collectResult, null, 2));
+          console.log(`[Experian ${wfLabel}] CollectWorkflowResults raw:`, JSON.stringify(data.collectResult, null, 2));
+          console.log(`[Experian ${wfLabel}] top-level keys:`, Object.keys(data.collectResult || {}));
         } catch {
-          console.log("[Experian IDMN] CollectWorkflowResults raw:", data.collectResult);
+          console.log(`[Experian ${wfLabel}] CollectWorkflowResults raw:`, data.collectResult);
         }
       }
 
