@@ -107,22 +107,22 @@ export default async function handler(req, res) {
 
   const { code, id_number } = req.body || {};
   if (!code) return res.status(400).json({ error: "code is required." });
-  if (!id_number?.trim()) return res.status(400).json({ error: "id_number is required." });
 
   const cleanCode = String(code).replace(/\D/g, "");
-  const cleanId = String(id_number).replace(/\D/g, "");
 
-  // Verify the authenticated user's profile matches the supplied ID
+  // Fetch the authenticated user's profile
   const { data: claimantProfile } = await db
     .from("profiles").select("id, id_number, first_name, last_name, mint_number")
     .eq("id", user.id).maybeSingle();
 
   if (!claimantProfile) return res.status(400).json({ error: "Profile not found." });
-  if (claimantProfile.id_number !== cleanId) {
-    return res.status(403).json({ error: "SA ID number does not match your account." });
-  }
-  if (!claimantProfile.mint_number) {
-    return res.status(403).json({ error: "Please complete your Mint account setup before claiming.", mint_number_required: true });
+
+  // If id_number is provided, verify it matches the profile (for non-logged-in flows)
+  if (id_number?.trim()) {
+    const cleanId = String(id_number).replace(/\D/g, "");
+    if (claimantProfile.id_number !== cleanId) {
+      return res.status(403).json({ error: "SA ID number does not match your account." });
+    }
   }
 
   // KYC check

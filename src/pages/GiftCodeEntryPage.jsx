@@ -227,7 +227,7 @@ export default function GiftCodeEntryPage({ onBack, onNavigate }) {
     );
   }
 
-  // ── Logged in + KYC verified → direct claim (no ID/code needed) ─────────────
+  // ── Logged in + KYC verified → code-only entry (no SA ID needed) ───────────
   if (sessionStatus === "verified") {
     if (claimed) {
       return (
@@ -253,6 +253,38 @@ export default function GiftCodeEntryPage({ onBack, onNavigate }) {
       );
     }
 
+    async function handleCodeClaim() {
+      if (code.replace(/\D/g, "").length !== 6) return;
+      setClaiming(true);
+      setError(null);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch("/api/gift/claim-v2", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ code: code.replace(/\D/g, "") }),
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          if (data.kyc_required) { setSessionStatus("incomplete"); return; }
+          if (data.mint_number_required) { setSessionStatus("incomplete"); return; }
+          setError(data.error || "Failed to claim gift.");
+          return;
+        }
+        localStorage.removeItem('mint_pending_gift_id');
+        setClaimed(true);
+      } catch {
+        setError("Something went wrong. Please try again.");
+      } finally {
+        setClaiming(false);
+      }
+    }
+
+    const codeReady = code.replace(/\D/g, "").length === 6;
+
     return (
       <div className="min-h-screen flex flex-col" style={HOME_BG}>
         <header className="rounded-b-[36px] bg-gradient-to-b from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-4 pb-8 pt-12 text-white">
@@ -266,64 +298,55 @@ export default function GiftCodeEntryPage({ onBack, onNavigate }) {
             <div className="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-sm flex items-center justify-center mb-3 border border-white/20">
               <Gift size={24} className="text-white" />
             </div>
-            <p className="text-violet-200 text-sm text-center">
-              {loggedInGift
-                ? "Your investment gift is ready to claim"
-                : "No pending gift found"}
+            <p className="text-violet-200 text-sm text-center leading-relaxed max-w-[260px]">
+              Enter the 6-digit code from the gift sender.
             </p>
           </div>
         </header>
 
         <div className="flex-1 px-4 pt-6 pb-10 max-w-sm mx-auto w-full space-y-4">
-          {loggedInGift ? (
-            <>
-              <GiftPreviewCard preview={loggedInGift} />
+          {loggedInGift && <GiftPreviewCard preview={loggedInGift} />}
 
-              <div className="bg-white rounded-2xl p-4 shadow-sm">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0 mt-0.5">
-                    <ShieldCheck size={14} className="text-emerald-600" />
-                  </div>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    <span className="font-semibold text-slate-700">Identity verified.</span> Your FICA verification is complete — you can claim this gift instantly.
-                  </p>
-                </div>
+          <div className="bg-white rounded-2xl p-4 shadow-sm space-y-4">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-5 h-5 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
+                <ShieldCheck size={11} className="text-emerald-600" />
               </div>
+              <p className="text-xs text-slate-500">Identity verified — no ID number needed</p>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-500 mb-1.5 block">6-Digit Gift Code</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                value={code}
+                onChange={e => setCode(e.target.value.replace(/\D/g, ""))}
+                placeholder="000000"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-2xl font-bold tracking-[0.4em] text-slate-900 placeholder:text-slate-300 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors"
+              />
+            </div>
+          </div>
 
-              {error && (
-                <div className="bg-red-50 rounded-2xl px-4 py-3">
-                  <p className="text-red-600 text-sm">{error}</p>
-                </div>
-              )}
-
-              <div className="pt-2 space-y-3">
-                <button
-                  type="button"
-                  onClick={handleDirectClaim}
-                  disabled={claiming}
-                  className="w-full py-4 rounded-2xl bg-gradient-to-r from-[#1a1a2e] to-[#44296b] text-white font-bold text-sm disabled:opacity-60 active:scale-[0.98] transition-all shadow-lg"
-                >
-                  {claiming ? "Claiming…" : "Claim My Gift"}
-                </button>
-                <p className="text-[11px] text-slate-400 text-center leading-relaxed">
-                  Your investment will appear as pending in your portfolio after claiming.
-                </p>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="bg-white rounded-2xl p-5 shadow-sm text-center">
-                <p className="text-slate-500 text-sm">No pending gift found. Check that you used the correct gift link.</p>
-              </div>
-              <button
-                type="button"
-                onClick={onBack}
-                className="w-full py-3 rounded-2xl bg-white border border-slate-200 text-slate-600 font-semibold text-sm shadow-sm"
-              >
-                Back
-              </button>
-            </>
+          {error && (
+            <div className="bg-red-50 rounded-2xl px-4 py-3">
+              <p className="text-red-600 text-sm">{error}</p>
+            </div>
           )}
+
+          <div className="pt-1 space-y-3">
+            <button
+              type="button"
+              onClick={handleCodeClaim}
+              disabled={!codeReady || claiming}
+              className={`w-full py-4 rounded-2xl text-sm font-bold text-white transition-all active:scale-[0.98] shadow-lg ${codeReady && !claiming ? "bg-gradient-to-r from-[#1a1a2e] to-[#44296b]" : "bg-slate-300 shadow-none cursor-not-allowed"}`}
+            >
+              {claiming ? "Claiming…" : "Claim My Gift"}
+            </button>
+            <p className="text-[11px] text-slate-400 text-center leading-relaxed">
+              Your investment will appear as pending in your portfolio after claiming.
+            </p>
+          </div>
         </div>
       </div>
     );
