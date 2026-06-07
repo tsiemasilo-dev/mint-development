@@ -81,15 +81,6 @@ const OnboardingPage = ({ onCreateAccount, onLogin }) => {
           </div>
 
           <div className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center space-y-8">
-            <div className="space-y-3 animate-on-load delay-2">
-              <h1 className="text-4xl font-semibold text-slate-900 sm:text-5xl">
-                Welcome to <span className="mint-brand">Mint</span>
-              </h1>
-              <p className="text-lg text-slate-600">
-                Your money tools are ready when you are.
-              </p>
-            </div>
-
             {giftId && (
               <>
                 <style>{`
@@ -164,6 +155,15 @@ const OnboardingPage = ({ onCreateAccount, onLogin }) => {
                 </div>
               </>
             )}
+
+            <div className="space-y-3 animate-on-load delay-2">
+              <h1 className="text-4xl font-semibold text-slate-900 sm:text-5xl">
+                Welcome to <span className="mint-brand">Mint</span>
+              </h1>
+              <p className="text-lg text-slate-600">
+                Your money tools are ready when you are.
+              </p>
+            </div>
 
             <div className="flex flex-col gap-4 animate-on-load delay-3 sm:items-start">
               <OriginButton
