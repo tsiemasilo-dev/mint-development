@@ -84,43 +84,74 @@ function b64ToBuffer(s) {
   return Buffer.from(String(s).replace(/^data:[^,]+,/, ""), "base64");
 }
 
-// Pull archivable assets out of an Experian CollectWorkflowResults payload.
-// Each asset: { kind, idDocType, fileName, ext, mime, b64? , url? }
+function creditBureauServices(collectResult) {
+  const cb = collectResult?.return_data?.response?.credit_bureau;
+  return Array.isArray(cb) ? cb : [];
+}
+
+// Pull archivable assets out of an Experian CollectWorkflowResults payload —
+// across ALL credit_bureau services, so both Alternative Liveness (wf6) and OCR
+// Liveness (wf8) are handled. Each asset: { kind, idDocType, fileName, ext, mime, b64?, url? }
 export function extractExperianAssets(collectResult) {
   const rd = collectResult?.return_data || {};
-  const cb = rd?.response?.credit_bureau?.[0]?.response || {};
   const assets = [];
+
+  // Liveness selfie (wf6) lives at the return_data level.
   if (rd.customer_image_base_64)
     assets.push({ kind: "selfie", idDocType: "SELFIE", b64: rd.customer_image_base_64, fileName: "liveness_selfie.png", ext: "png", mime: "image/png" });
-  if (cb.facial_image)
-    assets.push({ kind: "dha_portrait", idDocType: "DHA_PORTRAIT", b64: cb.facial_image, fileName: "dha_portrait.jpg", ext: "jpg", mime: "image/jpeg" });
-  if (cb.pdf_report?.url_link)
-    assets.push({ kind: "idv_report", idDocType: "IDV_REPORT", url: cb.pdf_report.url_link, fileName: "idv_report.pdf", ext: "pdf", mime: "application/pdf" });
-  if (cb.response_doc)
-    assets.push({ kind: "liveness_report", idDocType: "LIVENESS_REPORT", url: cb.response_doc, fileName: "rsa_id_liveness_report.pdf", ext: "pdf", mime: "application/pdf" });
-  // OCR (workflow 8): when wired, push the captured ID-document image(s) here
-  // (kind 'id_front'/'id_back', idDocType 'ID_CARD') and the OCR-extracted fields
-  // ride along in resource_metadata via extractExperianIdentity().
+
+  for (const svc of creditBureauServices(collectResult)) {
+    const r = svc?.response || {};
+    // ── Alternative Liveness (wf6) ──
+    if (r.facial_image)
+      assets.push({ kind: "dha_portrait", idDocType: "DHA_PORTRAIT", b64: r.facial_image, fileName: "dha_portrait.jpg", ext: "jpg", mime: "image/jpeg" });
+    if (r.pdf_report?.url_link)
+      assets.push({ kind: "idv_report", idDocType: "IDV_REPORT", url: r.pdf_report.url_link, fileName: "idv_report.pdf", ext: "pdf", mime: "application/pdf" });
+    if (r.response_doc)
+      assets.push({ kind: "liveness_report", idDocType: "LIVENESS_REPORT", url: r.response_doc, fileName: "rsa_id_liveness_report.pdf", ext: "pdf", mime: "application/pdf" });
+    // ── OCR Liveness (wf8): captured ID document images (base64 JPEG) ──
+    const di = r.document_images;
+    if (di) {
+      if (di.document_front_side) assets.push({ kind: "id_front", idDocType: "ID_CARD", b64: di.document_front_side, fileName: "id_front.jpg", ext: "jpg", mime: "image/jpeg" });
+      if (di.document_back_side)  assets.push({ kind: "id_back",  idDocType: "ID_CARD", b64: di.document_back_side,  fileName: "id_back.jpg",  ext: "jpg", mime: "image/jpeg" });
+      if (di.portrait)            assets.push({ kind: "id_portrait", idDocType: "ID_PORTRAIT", b64: di.portrait, fileName: "id_portrait.jpg", ext: "jpg", mime: "image/jpeg" });
+      if (di.signature)           assets.push({ kind: "signature", idDocType: "SIGNATURE", b64: di.signature, fileName: "signature.jpg", ext: "jpg", mime: "image/jpeg" });
+    }
+  }
   return assets;
 }
 
-// Normalised identity + scores from the result (also stored in resource_metadata).
+// Normalised identity + scores, merged across services (wf6 DHA fields + wf8 OCR
+// document_details). Stored in resource_metadata for the CRM/app to read.
 export function extractExperianIdentity(collectResult) {
-  const cb = collectResult?.return_data?.response?.credit_bureau?.[0]?.response || {};
-  return {
-    identity: {
-      first_name: cb.first_name || null,
-      last_name: cb.last_name || null,
-      id_number: cb.id_number || null,
-      id_issue_date: cb.id_issue_date || null,
-      country: cb.birth_place_country || null,
-    },
-    scores: {
-      liveness_pass: cb.liveness_result?.liveness_pass_result ?? null,
-      face_match: cb.face_result?.is_identical ?? null,
-      face_confidence: cb.face_result?.confidence ?? null,
-    },
-  };
+  const identity = {};
+  const scores = {};
+  const set = (k, v) => { if (identity[k] == null && v != null) identity[k] = v; };
+
+  for (const svc of creditBureauServices(collectResult)) {
+    const r = svc?.response || {};
+    // Alternative Liveness (wf6)
+    set("first_name", r.first_name);
+    set("last_name", r.last_name);
+    set("id_number", r.id_number);
+    set("id_issue_date", r.id_issue_date);
+    set("country", r.birth_place_country);
+    if (r.liveness_result?.liveness_pass_result != null) scores.liveness_pass = r.liveness_result.liveness_pass_result;
+    if (r.face_result?.is_identical != null) scores.face_match = r.face_result.is_identical;
+    if (r.face_result?.confidence != null) scores.face_confidence = r.face_result.confidence;
+    // OCR document_details (wf8)
+    const dd = r.document_details;
+    if (dd) {
+      set("first_name", dd.given_names);
+      set("last_name", dd.surname);
+      set("id_number", dd.personal_number);
+      set("dob", dd.date_of_birth);
+      set("sex", dd.sex);
+      set("citizenship_status", dd.citizenship_status);
+      set("nationality", dd.nationality);
+    }
+  }
+  return { identity, scores };
 }
 
 // Remove the big base64 blobs before persisting the result in JSONB (images now
@@ -129,8 +160,13 @@ export function stripExperianImages(collectResult) {
   try {
     const c = JSON.parse(JSON.stringify(collectResult));
     if (c?.return_data) delete c.return_data.customer_image_base_64;
-    const cb = c?.return_data?.response?.credit_bureau?.[0]?.response;
-    if (cb) delete cb.facial_image;
+    const services = c?.return_data?.response?.credit_bureau;
+    if (Array.isArray(services)) {
+      for (const svc of services) {
+        const r = svc?.response;
+        if (r) { delete r.facial_image; delete r.document_images; }
+      }
+    }
     return c;
   } catch {
     return collectResult;
