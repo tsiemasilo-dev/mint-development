@@ -8656,13 +8656,14 @@ async function giftAllocateStrategyHoldings(db, userId, strategyId, strategyHold
   const secMap = {};
   (securities || []).forEach(s => { secMap[s.symbol] = s; });
 
-  let totalBasketCost = 0;
+  // last_price in securities_c is in CENTS — convert to rands for basket cost
+  let totalBasketCostRands = 0;
   for (const h of strategyHoldings) {
-    if (secMap[h.symbol]?.last_price) totalBasketCost += secMap[h.symbol].last_price * (h.weight || 1);
+    if (secMap[h.symbol]?.last_price) totalBasketCostRands += (secMap[h.symbol].last_price / 100) * (h.weight || 1);
   }
 
-  if (totalBasketCost > 0) {
-    const scale = investAmountRands / totalBasketCost;
+  if (totalBasketCostRands > 0) {
+    const scale = investAmountRands / totalBasketCostRands;
     for (const h of strategyHoldings) {
       const sec = secMap[h.symbol];
       if (!sec?.last_price) continue;
@@ -8675,8 +8676,7 @@ async function giftAllocateStrategyHoldings(db, userId, strategyId, strategyHold
           await db.from("stock_holdings_c").update({
             quantity: Number(existing.quantity || 0) + qty,
             avg_fill: null, market_value: 0, unrealized_pnl: 0,
-            as_of_date: null, settlement_status: "pending",
-            updated_at: new Date().toISOString(),
+            as_of_date: null, updated_at: new Date().toISOString(),
           }).eq("id", existing.id);
         } else {
           await db.from("stock_holdings_c").insert({
@@ -8684,7 +8684,6 @@ async function giftAllocateStrategyHoldings(db, userId, strategyId, strategyHold
             avg_fill: null, market_value: 0,
             unrealized_pnl: 0, as_of_date: null,
             strategy_id: strategyId, Status: "active",
-            settlement_status: "pending",
           });
         }
         holdingsCreated++;
@@ -8696,13 +8695,14 @@ async function giftAllocateStrategyHoldings(db, userId, strategyId, strategyHold
     const sorted = [...strategyHoldings].sort((a, b) => (b.weight || 0) - (a.weight || 0));
     const fallback = secMap[sorted[0]?.symbol];
     if (fallback?.id) {
-      const qty = Math.max(1, Math.floor((investAmountRands / (fallback.last_price || 1))));
+      // last_price is in cents — divide to get rands, then calculate qty
+      const fallbackPriceRands = (fallback.last_price || 1) / 100;
+      const qty = Math.max(1, Math.floor(investAmountRands / fallbackPriceRands));
       try {
         await db.from("stock_holdings_c").insert({
           user_id: userId, security_id: fallback.id, quantity: qty,
           avg_fill: null, market_value: 0, unrealized_pnl: 0,
           as_of_date: null, strategy_id: strategyId, Status: "active",
-          settlement_status: "pending",
         });
         holdingsCreated = 1;
       } catch (e) { console.warn("[gift] strategy fallback holding:", e.message); }
@@ -8714,7 +8714,8 @@ async function giftAllocateStrategyHoldings(db, userId, strategyId, strategyHold
 async function giftAllocateStockHolding(db, userId, securityId, amountCents) {
   const { data: sec } = await db.from("securities_c").select("id, symbol, last_price").eq("id", securityId).maybeSingle();
   if (!sec?.last_price) return 0;
-  const qty = Math.max(1, Math.floor((amountCents / 100) / sec.last_price));
+  // last_price is in CENTS — divide amountCents by last_price_cents = share count
+  const qty = Math.max(1, Math.floor(amountCents / sec.last_price));
   try {
     // Always insert a NEW row per gift-claimed stock so each claim is a
     // discrete pending position. Mirrors the strategy-gift pattern.
@@ -9508,8 +9509,6 @@ app.post("/api/gift/claim-v2", async (req, res) => {
   }
 
   if (holdingsCreated === 0) {
-    // Rollback sender wallet debit
-    await db.from("wallets").update({ balance: senderBalance }).eq("user_id", gift.sender_user_id);
     return res.status(500).json({ error: "Failed to allocate holdings. Please try again." });
   }
 
