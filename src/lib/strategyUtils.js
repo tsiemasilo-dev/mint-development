@@ -110,7 +110,7 @@ export const calculateMinInvestmentSync = (strategy, holdingsBySymbol) => {
     if (!rawSymbol) continue;
     const normalizedSym = normalizeSymbol(rawSymbol);
     const security = holdingsBySymbol.get(rawSymbol) || holdingsBySymbol.get(normalizedSym);
-    const pricePerShare = security?.intradayPrice ?? (security?.last_price ? Number(security.last_price) : null);
+    const pricePerShare = security?.intradayPrice ?? (security?.last_price ? Number(security.last_price) / 100 : null);
     if (!pricePerShare) continue;
     foundAny = true;
     const shares = Number(holding.shares || holding.quantity || 1);
