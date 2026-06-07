@@ -1315,7 +1315,7 @@ const HomePage = ({
             {[
               { label: "Invest", icon: LayoutGrid, onClick: onOpenStrategies || onOpenInvest },
               { label: "Deposit", icon: ArrowDownToLine, onClick: onOpenDeposit },
-              { label: "Gifting", icon: Gift, onClick: null, comingSoon: true },
+              { label: "Gifting", icon: Gift, onClick: () => onNavigate("sentGifts") },
               { label: "Goals", icon: Target, onClick: () => setShowGoalsModal(true) },
             ].map((item, index) => {
               const Icon = item.icon;
