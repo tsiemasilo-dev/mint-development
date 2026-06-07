@@ -277,7 +277,7 @@ export default function AdultInvestModal({
                 {feeExpanded && (
                   <div className="px-4 pb-3 space-y-2.5 border-t border-slate-50">
                     <div className="pt-3 flex justify-between">
-                      <p className="text-xs text-slate-500">Investment + 8% reserve</p>
+                      <p className="text-xs text-slate-500">Investment</p>
                       <p className="text-xs font-semibold text-slate-800">R{fmt(fees.bufferedBase)}</p>
                     </div>
                     <div className="flex justify-between">
