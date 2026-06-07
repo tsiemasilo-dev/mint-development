@@ -1378,7 +1378,7 @@ const HomePage = ({
 
               <div className="flex-1 min-w-0 pr-6">
                 <p className="text-sm font-semibold text-white leading-snug">You have an investment gift to claim</p>
-                <p className="text-xs mt-0.5" style={{ color: 'rgba(196,181,253,0.85)' }}>Tap to enter your 6-digit gift code</p>
+                <p className="text-xs mt-0.5" style={{ color: 'rgba(196,181,253,0.85)' }}>Tap to claim your gift</p>
               </div>
 
               <button

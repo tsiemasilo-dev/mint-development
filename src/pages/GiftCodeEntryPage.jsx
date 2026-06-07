@@ -1,5 +1,6 @@
-import React, { useState } from "react";
-import { ArrowLeft, ShieldCheck, UserPlus, Gift } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { ArrowLeft, ShieldCheck, UserPlus, Gift, CheckCircle2 } from "lucide-react";
+import { supabase } from "../lib/supabase";
 
 const HOME_BG = {
   backgroundColor: '#f8f6fa',
@@ -8,6 +9,33 @@ const HOME_BG = {
   backgroundSize: '100% 100vh',
 };
 
+function fmt(cents) {
+  if (!cents) return '';
+  return `R${(Number(cents) / 100).toLocaleString('en-ZA', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+}
+
+function GiftPreviewCard({ preview }) {
+  if (!preview) return null;
+  return (
+    <div className="bg-white rounded-2xl p-5 shadow-sm">
+      <div className="flex items-center gap-4">
+        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shrink-0">
+          <Gift size={20} className="text-white" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-slate-500 text-xs">
+            <span className="font-medium text-slate-700">{preview.sender_name || "Someone"}</span> gifted you
+          </p>
+          <p className="text-base font-bold text-slate-900 mt-0.5 truncate">{preview.asset_name}</p>
+          {preview.amount && (
+            <p className="text-sm font-semibold text-violet-700 mt-0.5">{fmt(preview.amount)}</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function GiftCodeEntryPage({ onBack, onNavigate }) {
   const [idNumber, setIdNumber] = useState("");
   const [code, setCode] = useState("");
@@ -15,6 +43,79 @@ export default function GiftCodeEntryPage({ onBack, onNavigate }) {
   const [error, setError] = useState(null);
   const [ficaGate, setFicaGate] = useState(null);
   const [signupGate, setSignupGate] = useState(null);
+
+  // Logged-in user flow
+  const [sessionStatus, setSessionStatus] = useState("checking"); // checking | verified | incomplete | none
+  const [loggedInGift, setLoggedInGift] = useState(null);
+  const [claiming, setClaiming] = useState(false);
+  const [claimed, setClaimed] = useState(false);
+
+  useEffect(() => {
+    async function checkSession() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) { setSessionStatus("none"); return; }
+
+        const pendingGiftId = localStorage.getItem('mint_pending_gift_id');
+
+        const { data: onboarding } = await supabase
+          .from("user_onboarding")
+          .select("kyc_status")
+          .eq("user_id", session.user.id)
+          .maybeSingle();
+
+        const kycStatus = onboarding?.kyc_status;
+        const kycDone = kycStatus === "verified" || kycStatus === "onboarding_complete";
+
+        if (!kycDone) { setSessionStatus("incomplete"); return; }
+
+        // KYC verified — fetch gift details if there's a pending gift ID
+        if (pendingGiftId) {
+          const res = await fetch(`/api/gift/by-id/${pendingGiftId}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data && !['claimed','cancelled','expired'].includes(data.status)) {
+              setLoggedInGift({ ...data, gift_id: pendingGiftId });
+            }
+          }
+        }
+
+        setSessionStatus("verified");
+      } catch {
+        setSessionStatus("none");
+      }
+    }
+    checkSession();
+  }, []);
+
+  async function handleDirectClaim() {
+    if (!loggedInGift?.gift_id) return;
+    setClaiming(true);
+    setError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch("/api/gift/claim", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ gift_id: loggedInGift.gift_id }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        if (data.kyc_required) { setSessionStatus("incomplete"); return; }
+        setError(data.error || "Failed to claim gift.");
+        return;
+      }
+      localStorage.removeItem('mint_pending_gift_id');
+      setClaimed(true);
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setClaiming(false);
+    }
+  }
 
   const canSubmit = idNumber.replace(/\D/g, "").length === 13 && code.replace(/\D/g, "").length === 6;
 
@@ -66,25 +167,169 @@ export default function GiftCodeEntryPage({ onBack, onNavigate }) {
     }
   }
 
-  function GiftPreviewCard({ preview }) {
-    if (!preview) return null;
+  // ── Loading while checking session ──────────────────────────────────────────
+  if (sessionStatus === "checking") {
     return (
-      <div className="bg-white rounded-2xl p-5 shadow-sm">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shrink-0">
-            <Gift size={20} className="text-white" />
+      <div className="min-h-screen flex items-center justify-center" style={HOME_BG}>
+        <div className="w-10 h-10 rounded-full border-4 border-violet-200 border-t-violet-600 animate-spin" />
+      </div>
+    );
+  }
+
+  // ── Logged in + NOT KYC verified → complete onboarding first ────────────────
+  if (sessionStatus === "incomplete") {
+    return (
+      <div className="min-h-screen flex flex-col" style={HOME_BG}>
+        <header className="rounded-b-[36px] bg-gradient-to-b from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-4 pb-6 pt-12 text-white">
+          <div className="flex items-center gap-3">
+            <button onClick={onBack} className="p-2 -ml-2 rounded-xl hover:bg-white/10 transition-colors">
+              <ArrowLeft size={20} />
+            </button>
+            <h1 className="text-lg font-bold">Claim Your Gift</h1>
           </div>
-          <div className="min-w-0">
-            <p className="text-slate-500 text-xs">
-              <span className="font-medium text-slate-700">{preview.sender_name || "Someone"}</span> gifted you
-            </p>
-            <p className="text-base font-bold text-slate-900 mt-0.5 truncate">{preview.asset_name}</p>
+        </header>
+
+        <div className="flex-1 px-4 pt-6 pb-10 max-w-sm mx-auto w-full space-y-4">
+          {loggedInGift && <GiftPreviewCard preview={loggedInGift} />}
+
+          <div className="bg-white rounded-2xl p-4 shadow-sm">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center shrink-0 mt-0.5">
+                <ShieldCheck size={16} className="text-amber-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Complete your account setup first</p>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  To claim an investment gift, you need to complete your full FICA verification and Mint account setup. It only takes a few minutes.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-2 space-y-3">
+            <button
+              type="button"
+              onClick={() => onNavigate?.("userOnboarding")}
+              className="w-full py-4 rounded-2xl bg-gradient-to-r from-[#1a1a2e] to-[#44296b] text-white font-bold text-sm active:scale-[0.98] transition-all shadow-lg"
+            >
+              Complete My Account Setup
+            </button>
+            <button
+              type="button"
+              onClick={onBack}
+              className="w-full py-3 rounded-2xl bg-white border border-slate-200 text-slate-600 font-semibold text-sm shadow-sm"
+            >
+              Back
+            </button>
           </div>
         </div>
       </div>
     );
   }
 
+  // ── Logged in + KYC verified → direct claim (no ID/code needed) ─────────────
+  if (sessionStatus === "verified") {
+    if (claimed) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center px-6" style={HOME_BG}>
+          <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-sm text-center">
+            <div className="w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center mx-auto mb-4">
+              <CheckCircle2 size={32} className="text-emerald-500" />
+            </div>
+            <h2 className="text-xl font-bold text-slate-800 mb-2">Gift claimed! 🎉</h2>
+            <p className="text-slate-500 text-sm leading-relaxed mb-6">
+              {loggedInGift?.asset_name
+                ? `${loggedInGift.asset_name} has been added to your portfolio.`
+                : "Your gift has been added to your portfolio."}
+            </p>
+            <button
+              onClick={() => onNavigate?.("investments")}
+              className="w-full py-4 rounded-2xl bg-gradient-to-r from-[#1a1a2e] to-[#44296b] text-white font-bold text-sm shadow-lg"
+            >
+              View My Portfolio
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="min-h-screen flex flex-col" style={HOME_BG}>
+        <header className="rounded-b-[36px] bg-gradient-to-b from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-4 pb-8 pt-12 text-white">
+          <div className="flex items-center gap-3 mb-6">
+            <button onClick={onBack} className="p-2 -ml-2 rounded-xl hover:bg-white/10 transition-colors">
+              <ArrowLeft size={20} />
+            </button>
+            <h1 className="text-lg font-bold">Claim Your Gift</h1>
+          </div>
+          <div className="flex flex-col items-center">
+            <div className="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-sm flex items-center justify-center mb-3 border border-white/20">
+              <Gift size={24} className="text-white" />
+            </div>
+            <p className="text-violet-200 text-sm text-center">
+              {loggedInGift
+                ? "Your investment gift is ready to claim"
+                : "No pending gift found"}
+            </p>
+          </div>
+        </header>
+
+        <div className="flex-1 px-4 pt-6 pb-10 max-w-sm mx-auto w-full space-y-4">
+          {loggedInGift ? (
+            <>
+              <GiftPreviewCard preview={loggedInGift} />
+
+              <div className="bg-white rounded-2xl p-4 shadow-sm">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0 mt-0.5">
+                    <ShieldCheck size={14} className="text-emerald-600" />
+                  </div>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    <span className="font-semibold text-slate-700">Identity verified.</span> Your FICA verification is complete — you can claim this gift instantly.
+                  </p>
+                </div>
+              </div>
+
+              {error && (
+                <div className="bg-red-50 rounded-2xl px-4 py-3">
+                  <p className="text-red-600 text-sm">{error}</p>
+                </div>
+              )}
+
+              <div className="pt-2 space-y-3">
+                <button
+                  type="button"
+                  onClick={handleDirectClaim}
+                  disabled={claiming}
+                  className="w-full py-4 rounded-2xl bg-gradient-to-r from-[#1a1a2e] to-[#44296b] text-white font-bold text-sm disabled:opacity-60 active:scale-[0.98] transition-all shadow-lg"
+                >
+                  {claiming ? "Claiming…" : "Claim My Gift"}
+                </button>
+                <p className="text-[11px] text-slate-400 text-center leading-relaxed">
+                  Your investment will appear as pending in your portfolio after claiming.
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="bg-white rounded-2xl p-5 shadow-sm text-center">
+                <p className="text-slate-500 text-sm">No pending gift found. Check that you used the correct gift link.</p>
+              </div>
+              <button
+                type="button"
+                onClick={onBack}
+                className="w-full py-3 rounded-2xl bg-white border border-slate-200 text-slate-600 font-semibold text-sm shadow-sm"
+              >
+                Back
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Not logged in → ID + code entry (for email recipients) ─────────────────
   if (signupGate) {
     return (
       <div className="min-h-screen flex flex-col" style={HOME_BG}>
@@ -126,7 +371,6 @@ export default function GiftCodeEntryPage({ onBack, onNavigate }) {
             >
               Sign Up & Claim Gift
             </button>
-
             <button
               type="button"
               onClick={() => setSignupGate(null)}
@@ -183,7 +427,6 @@ export default function GiftCodeEntryPage({ onBack, onNavigate }) {
             >
               Complete Verification
             </button>
-
             <button
               type="button"
               onClick={() => setFicaGate(null)}

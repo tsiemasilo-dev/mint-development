@@ -188,14 +188,13 @@ export default async function handler(req, res) {
   const { user, error: authError } = await authenticateUser(req);
   if (authError || !user) return res.status(401).json({ error: "Unauthorized" });
 
-  const { token } = req.body || {};
-  if (!token) return res.status(400).json({ error: "Token is required." });
+  const { token, gift_id } = req.body || {};
+  if (!token && !gift_id) return res.status(400).json({ error: "Token or gift_id is required." });
 
-  const { data: gift, error: giftErr } = await db
-    .from("gift_claims")
-    .select("*")
-    .eq("token", token)
-    .maybeSingle();
+  const query = db.from("gift_claims").select("*");
+  const { data: gift, error: giftErr } = await (gift_id
+    ? query.eq("id", gift_id).maybeSingle()
+    : query.eq("token", token).maybeSingle());
 
   if (giftErr || !gift) return res.status(404).json({ error: "Gift not found." });
 
