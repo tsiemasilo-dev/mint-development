@@ -9537,7 +9537,7 @@ app.post("/api/gift/claim-v2", async (req, res) => {
   } catch (e) { console.warn("[gift/claim-v2] tx:", e.message); }
 
   await db.from("gift_claims").update({
-    status: "claimed", recipient_user_id: user.id, recipient_identifier: cleanId, claimed_at: now,
+    status: "claimed", recipient_user_id: user.id, recipient_identifier: claimantProfile.id_number || null, claimed_at: now,
   }).eq("id", gift.id);
 
   const recipientName = [claimantProfile.first_name, claimantProfile.last_name].filter(Boolean).join(" ") || "Your recipient";
