@@ -9044,6 +9044,29 @@ app.get("/api/gift/sent", async (req, res) => {
   });
 });
 
+app.get("/api/gift/by-id/:id", async (req, res) => {
+  const db = supabaseAdmin || supabase;
+  if (!db) return res.status(500).json({ error: "Database not available" });
+  const { id } = req.params;
+  if (!id) return res.status(400).json({ error: "ID is required." });
+  const { data: gift, error } = await db.from("gift_claims")
+    .select("id, amount, asset_type, asset_name, status, message, expires_at, sender_user_id")
+    .eq("id", id).maybeSingle();
+  if (error) return res.status(500).json({ error: "Failed to load gift." });
+  if (!gift) return res.status(404).json({ error: "Gift not found." });
+  let senderName = "Someone";
+  let personalMessage = null;
+  try {
+    const { data: sender } = await db.from("profiles").select("first_name, last_name").eq("id", gift.sender_user_id).maybeSingle();
+    if (sender) senderName = [sender.first_name, sender.last_name].filter(Boolean).join(" ") || "Someone";
+  } catch (_) {}
+  try { personalMessage = JSON.parse(gift.message || "{}").msg || null; } catch (_) {}
+  return res.json({
+    id: gift.id, amount: gift.amount, asset_type: gift.asset_type, asset_name: gift.asset_name,
+    status: gift.status, message: personalMessage, expires_at: gift.expires_at, sender_name: senderName,
+  });
+});
+
 app.get("/api/gift/:token", async (req, res) => {
   const db = supabaseAdmin || supabase;
   if (!db) return res.status(500).json({ error: "Database not available" });
@@ -9361,7 +9384,7 @@ app.post("/api/gift/create-v2", async (req, res) => {
       <table style="width:100%;border-collapse:collapse">${emailSteps}</table>
     </div>
 
-    <a href="${APP_URL}" style="display:block;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#ffffff;text-decoration:none;text-align:center;padding:16px 24px;border-radius:14px;font-size:16px;font-weight:700;margin-bottom:20px">${emailCta}</a>
+    <a href="${APP_URL}/gift/${gift.id}" style="display:block;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#ffffff;text-decoration:none;text-align:center;padding:16px 24px;border-radius:14px;font-size:16px;font-weight:700;margin-bottom:20px">${emailCta}</a>
 
     <p style="font-size:12px;color:#94a3b8;text-align:center;line-height:1.5;margin:0">This gift expires in 4 hours.<br>Mint (Pty) Ltd is a registered FSP (55118).</p>
   </div>

@@ -48,6 +48,7 @@ const GiftCodeEntryPage = lazy(() => import("./pages/GiftCodeEntryPage.jsx"));
 const GiftPreviewPage = lazy(() => import("./pages/GiftPreviewPage.jsx"));
 const SentGiftsPageV2 = lazy(() => import("./pages/SentGiftsPageV2.jsx"));
 const GiftStrategyPickerPage = lazy(() => import("./pages/GiftStrategyPickerPage.jsx"));
+const GiftLandingPage = lazy(() => import("./pages/GiftLandingPage.jsx"));
 const NewsArticlePage = lazy(() => import("./pages/NewsArticlePage.jsx"));
 const ActivityPage = lazy(() => import("./pages/ActivityPage.jsx"));
 const ActionsPage = lazy(() => import("./pages/ActionsPage.jsx"));
@@ -105,6 +106,12 @@ const isRecoveryMode = initialHash.includes('type=recovery');
 // Detect /gift/claim/:token deep link
 const initialGiftToken = (() => {
   const match = window.location.pathname.match(/^\/gift\/claim\/([a-f0-9]+)$/i);
+  return match ? match[1] : null;
+})();
+
+// Detect /gift/:uuid landing page deep link
+const initialGiftLandingId = (() => {
+  const match = window.location.pathname.match(/^\/gift\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i);
   return match ? match[1] : null;
 })();
 
