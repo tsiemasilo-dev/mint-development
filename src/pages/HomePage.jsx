@@ -519,8 +519,21 @@ const HomePage = ({
   const [homeTab, setHomeTab] = useState("balance");
   const [userId, setUserId] = useState(null);
   const [pendingGiftId, setPendingGiftId] = useState(() => localStorage.getItem('mint_pending_gift_id'));
+  const [pendingGiftExpiry, setPendingGiftExpiry] = useState(() => localStorage.getItem('mint_pending_gift_expires'));
+  const [giftCountdown, setGiftCountdown] = useState(null);
   const { notifications: _homeNotifs, markAsRead: _markGiftNotifRead } = useNotificationsContext();
   const [_pendingGiftNotifId, _setPendingGiftNotifId] = useState(null);
+
+  function _fmtGiftCountdown(expiresAt) {
+    const ms = new Date(expiresAt) - Date.now();
+    if (ms <= 0) return null;
+    const totalSec = Math.floor(ms / 1000);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    if (h > 0) return `${h}h ${m}m ${String(s).padStart(2, '0')}s`;
+    return `${m}m ${String(s).padStart(2, '0')}s`;
+  }
 
   useEffect(() => {
     const giftNotif = _homeNotifs.find(n => !n.read_at && n.payload?.action === 'gift_received');
@@ -535,6 +548,44 @@ const HomePage = ({
       setPendingGiftId(null);
     }
   }, [_homeNotifs]);
+
+  // Fetch expires_at for the pending gift and store in localStorage
+  useEffect(() => {
+    if (!pendingGiftId) { setPendingGiftExpiry(null); return; }
+    const stored = localStorage.getItem('mint_pending_gift_expires');
+    if (stored) { setPendingGiftExpiry(stored); return; }
+    supabase
+      .from('gift_claims')
+      .select('expires_at')
+      .eq('id', pendingGiftId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.expires_at) {
+          localStorage.setItem('mint_pending_gift_expires', data.expires_at);
+          setPendingGiftExpiry(data.expires_at);
+        }
+      });
+  }, [pendingGiftId]);
+
+  // Countdown ticker
+  useEffect(() => {
+    if (!pendingGiftExpiry) return;
+    const tick = () => {
+      const label = _fmtGiftCountdown(pendingGiftExpiry);
+      if (!label) {
+        localStorage.removeItem('mint_pending_gift_id');
+        localStorage.removeItem('mint_pending_gift_expires');
+        setPendingGiftId(null);
+        setPendingGiftExpiry(null);
+        setGiftCountdown(null);
+      } else {
+        setGiftCountdown(label);
+      }
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [pendingGiftExpiry]);
 
   const [localBestAssets, setLocalBestAssets] = useState(() => _cachedBestAssets);
   const [hasAnyHoldings, setHasAnyHoldings] = useState(() => _cachedHasAnyHoldings);
@@ -1397,6 +1448,11 @@ const HomePage = ({
               <div className="flex-1 min-w-0 pr-6">
                 <p className="text-sm font-semibold text-white leading-snug">You have an investment gift to claim</p>
                 <p className="text-xs mt-0.5" style={{ color: 'rgba(196,181,253,0.85)' }}>Tap to claim your gift</p>
+                {giftCountdown && (
+                  <p className="text-xs mt-1 font-medium" style={{ color: 'rgba(250,204,21,0.9)' }}>
+                    ⏱ Expires in {giftCountdown}
+                  </p>
+                )}
               </div>
 
               <button
@@ -1406,7 +1462,9 @@ const HomePage = ({
                 onClick={(e) => {
                   e.stopPropagation();
                   localStorage.removeItem('mint_pending_gift_id');
+                  localStorage.removeItem('mint_pending_gift_expires');
                   setPendingGiftId(null);
+                  setPendingGiftExpiry(null);
                   if (_pendingGiftNotifId) _markGiftNotifRead(_pendingGiftNotifId);
                 }}
               >

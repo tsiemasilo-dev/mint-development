@@ -16,6 +16,35 @@ const OnboardingPage = ({ onCreateAccount, onLogin }) => {
     return null;
   });
   const [giftDetails, setGiftDetails] = useState(null);
+  const [giftCountdown, setGiftCountdown] = useState(null);
+
+  function fmtCountdown(expiresAt) {
+    const ms = new Date(expiresAt) - Date.now();
+    if (ms <= 0) return null;
+    const totalSec = Math.floor(ms / 1000);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    if (h > 0) return `${h}h ${m}m ${String(s).padStart(2, '0')}s`;
+    return `${m}m ${String(s).padStart(2, '0')}s`;
+  }
+
+  useEffect(() => {
+    const exp = giftDetails?.expires_at;
+    if (!exp) return;
+    const tick = () => {
+      const label = fmtCountdown(exp);
+      if (!label) {
+        localStorage.removeItem('mint_pending_gift_id');
+        setGiftId(null);
+      } else {
+        setGiftCountdown(label);
+      }
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [giftDetails?.expires_at]);
 
   useEffect(() => {
     const fetchLandingImage = async () => {
@@ -154,6 +183,11 @@ const OnboardingPage = ({ onCreateAccount, onLogin }) => {
                     <p className="text-xs mt-0.5" style={{ color: 'rgba(196,181,253,0.85)' }}>
                       Log in or create an account to claim it
                     </p>
+                    {giftCountdown && (
+                      <p className="text-xs mt-1 font-medium" style={{ color: 'rgba(250,204,21,0.9)' }}>
+                        ⏱ Expires in {giftCountdown}
+                      </p>
+                    )}
                   </div>
 
                   {/* Dismiss */}
