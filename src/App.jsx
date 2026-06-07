@@ -1264,7 +1264,7 @@ const App = () => {
       <Suspense fallback={<HomeSkeleton />}>
         <>
           {showOpenStrategiesMaintenance && <MaintenanceModal onClose={() => setShowOpenStrategiesMaintenance(false)} />}
-          <GiftReceivedPopup onClaim={() => navigateTo("giftCodeEntry")} />
+
           {/* Home tab – mount on first visit */}
           <div style={{ display: currentPage === 'home' ? 'block' : 'none' }}>
             {mountedTabs.has('home') && (
