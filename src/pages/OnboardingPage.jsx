@@ -5,7 +5,16 @@ import { supabase } from "../lib/supabase.js";
 const OnboardingPage = ({ onCreateAccount, onLogin }) => {
   const [imageUrl, setImageUrl] = useState(null);
   const [imageLoading, setImageLoading] = useState(true);
-  const [giftId, setGiftId] = useState(() => localStorage.getItem('mint_pending_gift_id'));
+  const [giftId, setGiftId] = useState(() => {
+    const fromStorage = localStorage.getItem('mint_pending_gift_id');
+    if (fromStorage) return fromStorage;
+    const urlParam = new URLSearchParams(window.location.search).get('gift');
+    if (urlParam && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(urlParam)) {
+      localStorage.setItem('mint_pending_gift_id', urlParam);
+      return urlParam;
+    }
+    return null;
+  });
   const [giftDetails, setGiftDetails] = useState(null);
 
   useEffect(() => {
