@@ -480,11 +480,11 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           .slice(0, 5)
           .map(h => h.logo_url || h.logo || logoBySymbol[h.symbol] || logoBySymbol[h.ticker] || null)
           .filter(Boolean);
-        const sCv = s.currentValue || s.investedAmount || 0;
-        const sIa = s.investedAmount || 0;
-        const sPnlPct = sIa > 0 ? ((sCv - sIa) / sIa) * 100 : 0;
         const stratRawHoldings = (rawHoldings || []).filter(h => h.strategy_id === (s.strategyId || s.id));
-        const isStrategyPending = stratRawHoldings.length > 0 && stratRawHoldings.every(h => !h.avg_fill);
+        const isStrategyPending = s.isPending || (stratRawHoldings.length > 0 && stratRawHoldings.every(h => !h.avg_fill));
+        const sCv = isStrategyPending ? 0 : (s.currentValue || s.investedAmount || 0);
+        const sIa = isStrategyPending ? 0 : (s.investedAmount || 0);
+        const sPnlPct = sIa > 0 ? ((sCv - sIa) / sIa) * 100 : 0;
         holdingsMap.set(sym, {
           symbol: sym,
           name: s.name || "Strategy",

@@ -198,6 +198,7 @@ export const useUserStrategies = (familyMemberId = null) => {
       try {
         // Child mode: filter only by family_member_id (no user_id) — matches ChildDashboardPage.fetchHoldings()
         // Parent mode: filter by user_id + family_member IS NULL
+        // Fetch ALL strategy holdings (pending + filled) so we can detect pending-only strategies.
         let holdingsQuery;
         if (familyMemberId) {
           holdingsQuery = supabase
@@ -205,7 +206,6 @@ export const useUserStrategies = (familyMemberId = null) => {
             .select("security_id, quantity, avg_fill, Expected_fill, strategy_id, Fill_date")
             .eq("family_member_id", familyMemberId)
             .not("strategy_id", "is", null)
-            .gt("avg_fill", 0)
             .eq("Status", "active");
         } else {
           holdingsQuery = supabase
@@ -214,13 +214,21 @@ export const useUserStrategies = (familyMemberId = null) => {
             .eq("user_id", userId)
             .is("family_member_id", null)
             .not("strategy_id", "is", null)
-            .gt("avg_fill", 0)
             .eq("Status", "active");
         }
 
-        const { data: liveHoldings } = await holdingsQuery;
-        // Also require Fill_date to match ChildPortfolioTab's liveStrategyMetrics filter
-        const allLiveHoldings = (liveHoldings || []).filter(h => h.Fill_date != null);
+        const { data: allStratHoldings } = await holdingsQuery;
+        // Filled = avg_fill > 0 AND Fill_date set (matches ChildPortfolioTab filter)
+        const allLiveHoldings = (allStratHoldings || []).filter(h => Number(h.avg_fill) > 0 && h.Fill_date != null);
+        // Pending-only = strategy has holdings but NONE are filled
+        const filledStrategyIds = new Set(allLiveHoldings.map(h => h.strategy_id));
+        const pendingOnlyStrategyIds = new Set(
+          (allStratHoldings || [])
+            .filter(h => !(Number(h.avg_fill) > 0))
+            .map(h => h.strategy_id)
+            .filter(id => !filledStrategyIds.has(id))
+        );
+
         const secIds = [...new Set(allLiveHoldings.map(h => h.security_id).filter(Boolean))];
 
         let livePriceMap = {};
@@ -239,6 +247,16 @@ export const useUserStrategies = (familyMemberId = null) => {
 
         for (const strat of formattedStrategies) {
           const stratHoldings = allLiveHoldings.filter(h => h.strategy_id === strat.strategyId);
+
+          // Strategy has only pending holdings — show R0 until admin fills the order
+          if (stratHoldings.length === 0 && pendingOnlyStrategyIds.has(strat.strategyId)) {
+            strat.currentValue = 0;
+            strat.positionsValue = 0;
+            strat.investedAmount = 0;
+            strat.isPending = true;
+            continue;
+          }
+
           if (stratHoldings.length === 0) continue;
 
           let liveVal = 0;
