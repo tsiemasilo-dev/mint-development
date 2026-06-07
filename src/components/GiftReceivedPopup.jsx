@@ -9,7 +9,7 @@ export default function GiftReceivedPopup({ onClaim }) {
   useEffect(() => {
     if (visible) return;
     const gift = notifications.find(
-      n => !n.read_at && n.type === "investment" && n.payload?.action === "gift_received"
+      n => !n.read_at && n.payload?.action === "gift_received"
     );
     if (gift) setVisible(gift);
   }, [notifications, visible]);
