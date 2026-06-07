@@ -100,76 +100,7 @@ export const useUserStrategies = (familyMemberId = null) => {
       });
 
       if (allReturns.length === 0) {
-        // No returns rows yet — but there might be pending-only holdings
-        // (e.g. a just-claimed gift strategy awaiting admin fill). Check for
-        // those so the home tab can show the purple SettlementBadge.
-        try {
-          let pendingQuery;
-          if (familyMemberId) {
-            pendingQuery = supabase
-              .from("stock_holdings_c")
-              .select("strategy_id, avg_fill")
-              .eq("family_member_id", familyMemberId)
-              .not("strategy_id", "is", null)
-              .eq("Status", "active");
-          } else {
-            pendingQuery = supabase
-              .from("stock_holdings_c")
-              .select("strategy_id, avg_fill")
-              .eq("user_id", userId)
-              .is("family_member_id", null)
-              .not("strategy_id", "is", null)
-              .eq("Status", "active");
-          }
-          const { data: pendingHoldings } = await pendingQuery;
-          const filledIds = new Set(
-            (pendingHoldings || []).filter(h => Number(h.avg_fill) > 0).map(h => h.strategy_id)
-          );
-          const pendingOnlyIds = [
-            ...new Set(
-              (pendingHoldings || [])
-                .filter(h => !(Number(h.avg_fill) > 0) && !filledIds.has(h.strategy_id))
-                .map(h => h.strategy_id)
-            ),
-          ];
-          if (pendingOnlyIds.length === 0) {
-            setData({ strategies: [], selectedStrategy: null, loading: false, error: null });
-            return;
-          }
-          const strategiesMapEarly = {};
-          for (const s of (strategiesResult.data || [])) strategiesMapEarly[s.id] = s;
-          const syntheticStrategies = pendingOnlyIds.map(id => {
-            const meta = strategiesMapEarly[id] || {};
-            return {
-              id,
-              strategyId: id,
-              name: meta.name || "Strategy",
-              shortName: meta.short_name || meta.name || "Strategy",
-              description: meta.description || "",
-              riskLevel: meta.risk_level || "Moderate",
-              sector: meta.sector || "",
-              iconUrl: meta.icon_url || null,
-              imageUrl: meta.image_url || null,
-              holdings: meta.holdings || [],
-              investedAmount: 0,
-              currentValue: 0,
-              positionsValue: 0,
-              residualCash: 0,
-              unitsHeld: 0,
-              entryDate: null,
-              lastUpdated: null,
-              previousMonthChange: 0,
-              metrics: null,
-              firstInvestedDate: null,
-              ytd_pct: null,
-              hasReturnsData: false,
-              isPending: true,
-            };
-          });
-          setData({ strategies: syntheticStrategies, selectedStrategy: null, loading: false, error: null });
-        } catch (_e) {
-          setData({ strategies: [], selectedStrategy: null, loading: false, error: null });
-        }
+        setData({ strategies: [], selectedStrategy: null, loading: false, error: null });
         return;
       }
 
@@ -365,12 +296,13 @@ export const useUserStrategies = (familyMemberId = null) => {
       }
       // ── end live price override ────────────────────────────────────────────
 
-      // Pending-only strategies are included so the home tab can show the
-      // purple SettlementBadge (asset.isPending). The portfolio tab and dropdown
-      // skip them via their own isPending / isStrategyPending guards.
+      // Pending-only strategies are hidden from the portfolio strategies tab
+      // and dropdown — they appear only on the home tab via the purple
+      // SettlementBadge, matching the behaviour of a normal pending purchase.
+      const visibleStrategies = formattedStrategies.filter(s => !s.isPending);
       const nextData = {
-        strategies: formattedStrategies,
-        selectedStrategy: formattedStrategies.find(s => !s.isPending) || null,
+        strategies: visibleStrategies,
+        selectedStrategy: visibleStrategies[0] || null,
         loading: false,
         error: null,
       };
