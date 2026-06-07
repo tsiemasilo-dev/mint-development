@@ -8912,10 +8912,13 @@ app.post("/api/gift/claim", async (req, res) => {
   const { data: { user }, error: authErr } = await db.auth.getUser(token);
   if (authErr || !user) return res.status(401).json({ error: "Unauthorized" });
 
-  const { token: giftToken } = req.body || {};
-  if (!giftToken) return res.status(400).json({ error: "Token is required." });
+  const { token: giftToken, gift_id } = req.body || {};
+  if (!giftToken && !gift_id) return res.status(400).json({ error: "Token or gift_id is required." });
 
-  const { data: gift, error: giftErr } = await db.from("gift_claims").select("*").eq("token", giftToken).maybeSingle();
+  const giftQuery = db.from("gift_claims").select("*");
+  const { data: gift, error: giftErr } = await (gift_id
+    ? giftQuery.eq("id", gift_id).maybeSingle()
+    : giftQuery.eq("token", giftToken).maybeSingle());
   if (giftErr || !gift) return res.status(404).json({ error: "Gift not found." });
 
   if (gift.status === "claimed") return res.status(400).json({ error: "This gift has already been claimed." });
