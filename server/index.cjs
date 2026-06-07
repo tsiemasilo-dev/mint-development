@@ -9494,16 +9494,7 @@ app.post("/api/gift/claim-v2", async (req, res) => {
   if (new Date(gift.expires_at) < new Date()) return res.status(400).json({ error: "This gift has expired." });
   if (gift.sender_user_id === user.id) return res.status(400).json({ error: "You cannot claim your own gift." });
 
-  // Debit sender's wallet now that gift is being claimed
-  const giftAmountRands = gift.amount / 100;
-  const { data: senderWallet } = await db.from("wallets").select("balance").eq("user_id", gift.sender_user_id).maybeSingle();
-  if (!senderWallet) return res.status(500).json({ error: "Sender wallet not found." });
-  const senderBalance = Number(senderWallet.balance);
-  if (senderBalance < giftAmountRands) return res.status(400).json({ error: "Sender has insufficient funds. The gift cannot be claimed." });
-
-  const { error: debitErr } = await db.from("wallets").update({ balance: senderBalance - giftAmountRands })
-    .eq("user_id", gift.sender_user_id).eq("balance", senderBalance);
-  if (debitErr) return res.status(500).json({ error: "Failed to process gift payment." });
+  // Sender's wallet was already debited at gift creation time — nothing to deduct here.
 
   let holdingsCreated = 0;
   let holdingId = null;
