@@ -586,6 +586,42 @@ const SwipeableBalanceCard = ({
               }
             }
           }
+
+          // Inject synthetic "pending" strategy rows for gift-claimed or pending
+          // holdings (avg_fill=null) that have a strategy_id but no corresponding
+          // client_strategy_returns_c row yet. Without this, the purple badge
+          // never appears after a gift is claimed.
+          const pendingStratHoldings = apiHoldings.filter(
+            h => Number(h.avg_fill || 0) === 0 && h.strategy_id
+          );
+          if (pendingStratHoldings.length > 0) {
+            const coveredStratIds = new Set(
+              enrichedHoldings.filter(h => h.isStrategy).map(h => h.strategy_id)
+            );
+            const uncoveredIds = [
+              ...new Set(pendingStratHoldings.map(h => h.strategy_id))
+            ].filter(id => !coveredStratIds.has(id));
+            if (uncoveredIds.length > 0) {
+              const { data: pendingStratMeta } = await supabase
+                .from("strategies_c")
+                .select("id, name, short_name, icon_url")
+                .in("id", uncoveredIds);
+              (pendingStratMeta || []).forEach(meta => {
+                enrichedHoldings.push({
+                  symbol: meta.short_name || meta.name || "Strategy",
+                  name: meta.name || "Strategy",
+                  market_value: 0,
+                  invested_amount: 0,
+                  avg_fill: 0, Expected_fill: 0, quantity: 1,
+                  logo_url: meta.icon_url || null,
+                  security_id: null,
+                  strategy_id: meta.id,
+                  isStrategy: true, strategyId: meta.id,
+                  topLogos: [], changePct: 0, holdings: [], firstInvestedDate: null,
+                });
+              });
+            }
+          }
         }
 
         // Portfolio value: sum market_value (cents → rands) for real holdings only
