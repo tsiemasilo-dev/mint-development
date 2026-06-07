@@ -40,14 +40,21 @@ export default async function handler(req, res) {
       .eq("user_id", userId)
       .maybeSingle();
 
-    // Liveness only: if already verified there's nothing to start. The OCR step
-    // deliberately runs AFTER kyc_status is "verified", so it must not short-circuit.
-    if (!isOcr && (onboarding?.kyc_status === "verified" || onboarding?.kyc_status === "onboarding_complete")) {
-      return res.json({ success: true, alreadyVerified: true, status: onboarding.kyc_status });
-    }
-
     let raw = {};
     try { raw = typeof onboarding?.sumsub_raw === "string" ? JSON.parse(onboarding.sumsub_raw) : (onboarding?.sumsub_raw || {}); } catch {}
+
+    // Liveness only: if already verified there's nothing new to start. But report
+    // whether the OCR step is still outstanding so the client can route into it
+    // instead of finishing onboarding. The OCR step itself runs AFTER kyc_status
+    // is "verified", so it must never short-circuit here.
+    if (!isOcr && (onboarding?.kyc_status === "verified" || onboarding?.kyc_status === "onboarding_complete")) {
+      return res.json({
+        success: true,
+        alreadyVerified: true,
+        status: onboarding.kyc_status,
+        ocrComplete: raw?.experian_ocr_status === "verified",
+      });
+    }
 
     // "Redo" — caller wants a fresh workflow; drop the stored transaction so a
     // new StartWorkflow is issued below instead of resuming the old one.

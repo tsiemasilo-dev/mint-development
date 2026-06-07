@@ -121,6 +121,20 @@ const ExperianVerification = ({ onVerified }) => {
       if (!mountedRef.current) return;
 
       if (data.success && data.alreadyVerified) {
+        // Liveness is already verified. If the OCR document step is still
+        // outstanding, route straight into it instead of finishing onboarding —
+        // otherwise the user skips OCR and jumps to the next onboarding step.
+        if (phaseRef.current === "liveness" && OCR_ENABLED && !data.ocrComplete) {
+          phaseRef.current = "ocr";
+          setPhase("ocr");
+          pollAttemptsRef.current = 0;
+          setPollCount(0);
+          setErrorMessage("");
+          setErrorCode(null);
+          setVerificationUrl(null);
+          startWorkflow("ocr");
+          return;
+        }
         setStage(STAGE.VERIFIED);
         if (onVerified) onVerified();
         return;
