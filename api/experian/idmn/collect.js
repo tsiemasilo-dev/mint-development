@@ -4,6 +4,8 @@ import {
   experianRequest,
   experianBasicAuth,
   isMockMode,
+  archiveExperianAssets,
+  stripExperianImages,
 } from "../_lib.js";
 
 export default async function handler(req, res) {
@@ -124,8 +126,17 @@ export default async function handler(req, res) {
       return res.json({ success: true, status: kycStatus, errorCode: errorCode || null, collectResult });
     }
 
-    // ── Verified — safe to persist the result and flip the account on ─────────
-    const updatedRaw = { ...raw, experian_idmn_result: collectResult, experian_idmn_collected_at: new Date().toISOString() };
+    // ── Verified — archive the documents, then persist a slimmed result ───────
+    // Copy selfie + DHA portrait + PDF reports into our storage + the shared
+    // sumsub_document_archive table (same shape the CRM reads) BEFORE storing the
+    // JSON, so the heavy base64 blobs can be stripped from what we keep in the DB.
+    const archivedCount = await archiveExperianAssets(db, userId, collectResult, {
+      transactionId: transaction_id,
+      reviewAnswer,
+    });
+    const slimResult = stripExperianImages(collectResult);
+
+    const updatedRaw = { ...raw, experian_idmn_result: slimResult, experian_idmn_collected_at: new Date().toISOString() };
     await db.from("user_onboarding").update({
       sumsub_raw: updatedRaw,
       sumsub_review_status: kycStatus,
@@ -141,7 +152,7 @@ export default async function handler(req, res) {
     if (!existingPack) {
       await db.from("user_onboarding_pack_details").insert({
         user_id: userId,
-        pack_details: { experian_idmn: collectResult, verified_at: new Date().toISOString() },
+        pack_details: { experian_idmn: slimResult, verified_at: new Date().toISOString() },
         updated_at: new Date().toISOString(),
       });
     }
@@ -150,7 +161,8 @@ export default async function handler(req, res) {
     if (existingAction) { await db.from("required_actions").update(raPayload).eq("user_id", userId); }
     else { await db.from("required_actions").insert({ user_id: userId, ...raPayload }); }
 
-    return res.json({ success: true, status: kycStatus, errorCode: errorCode || null, collectResult });
+    console.log(`[Experian IDMN] user ${userId} verified — archived ${archivedCount} document(s)`);
+    return res.json({ success: true, status: kycStatus, errorCode: errorCode || null, archived: archivedCount, collectResult: slimResult });
   } catch (err) {
     console.error("[Experian IDMN Collect]", err);
     return res.status(500).json({ success: false, error: { message: err.message } });
