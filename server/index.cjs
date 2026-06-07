@@ -9162,7 +9162,7 @@ app.post("/api/gift/create-v2", async (req, res) => {
 
   // Post-creation: emails + in-app notification
   const recipientEmail = recipient_identifier?.trim().toLowerCase();
-  const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://mymint.co.za";
+  const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.mymint.co.za";
 
   // Fetch sender name + use auth email (more reliable than profiles.email)
   const senderAuthEmail = user.email;

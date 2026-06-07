@@ -7,7 +7,7 @@ function getResend() {
   return new Resend(process.env.RESEND_API_KEY);
 }
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://mymint.co.za";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.mymint.co.za";
 
 function buildGiftSentHtml({ senderName, recipientIdentifier, assetName, amountRands, message, claimUrl, isRegistration }) {
   const fmt = (v) => `R${Number(v).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
