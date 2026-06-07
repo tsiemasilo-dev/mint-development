@@ -25,6 +25,7 @@ import {
   Clock3,
 } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
+import { useNotificationsContext } from "../lib/NotificationsContext.jsx";
 import NavigationPill from "../components/NavigationPill";
 import { useRequiredActions } from "../lib/useRequiredActions";
 import { useSumsubStatus } from "../lib/useSumsubStatus";
@@ -518,6 +519,23 @@ const HomePage = ({
   const [homeTab, setHomeTab] = useState("balance");
   const [userId, setUserId] = useState(null);
   const [pendingGiftId, setPendingGiftId] = useState(() => localStorage.getItem('mint_pending_gift_id'));
+  const { notifications: _homeNotifs, markAsRead: _markGiftNotifRead } = useNotificationsContext();
+  const [_pendingGiftNotifId, _setPendingGiftNotifId] = useState(null);
+
+  useEffect(() => {
+    const giftNotif = _homeNotifs.find(n => !n.read_at && n.payload?.action === 'gift_received');
+    if (giftNotif) {
+      const giftId = giftNotif.payload?.gift_id;
+      if (giftId) {
+        localStorage.setItem('mint_pending_gift_id', giftId);
+        setPendingGiftId(giftId);
+        _setPendingGiftNotifId(giftNotif.id);
+      }
+    } else if (!localStorage.getItem('mint_pending_gift_id')) {
+      setPendingGiftId(null);
+    }
+  }, [_homeNotifs]);
+
   const [localBestAssets, setLocalBestAssets] = useState(() => _cachedBestAssets);
   const [hasAnyHoldings, setHasAnyHoldings] = useState(() => _cachedHasAnyHoldings);
   const [loadingBestAssets, setLoadingBestAssets] = useState(() => _cachedBestAssets.length === 0);
@@ -1389,6 +1407,7 @@ const HomePage = ({
                   e.stopPropagation();
                   localStorage.removeItem('mint_pending_gift_id');
                   setPendingGiftId(null);
+                  if (_pendingGiftNotifId) _markGiftNotifRead(_pendingGiftNotifId);
                 }}
               >
                 <X className="h-3.5 w-3.5" />
