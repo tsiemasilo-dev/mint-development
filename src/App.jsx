@@ -74,7 +74,6 @@ import { useOnboardingStatus } from "./lib/useOnboardingStatus.js";
 import { checkOnboardingComplete } from "./lib/checkOnboardingComplete.js";
 import MaintenanceModal from "./components/MaintenanceModal.jsx";
 import HomeSkeleton from "./components/HomeSkeleton.jsx";
-import GiftReceivedPopup from "./components/GiftReceivedPopup.jsx";
 
 const PERSISTENT_KEYS = [
   'mint_device_id',

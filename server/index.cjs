@@ -9490,7 +9490,8 @@ app.post("/api/gift/claim-v2", async (req, res) => {
     return res.status(403).json({ error: "FICA verification required to claim this gift.", kyc_required: true });
   }
 
-  const { data: gift } = await db.from("gift_claims").select("*").eq("token", cleanCode).eq("status", "pending_claim").maybeSingle();
+  const { data: gift, error: giftLookupErr } = await db.from("gift_claims").select("*").eq("token", cleanCode).eq("status", "pending_claim").maybeSingle();
+  console.log(`[gift/claim-v2] code="${cleanCode}" gift=${gift?.id || "null"} err=${giftLookupErr?.message || "none"}`);
   if (!gift) return res.status(404).json({ error: "Gift not found or already claimed." });
   if (new Date(gift.expires_at) < new Date()) return res.status(400).json({ error: "This gift has expired." });
   if (gift.sender_user_id === user.id) return res.status(400).json({ error: "You cannot claim your own gift." });
