@@ -1313,31 +1313,88 @@ const HomePage = ({
       <div className="mx-auto -mt-10 flex w-full max-w-sm flex-col gap-6 px-4 pb-10 md:max-w-md md:px-8">
 
         {pendingGiftId && (
-          <button
-            type="button"
-            className="flex w-full items-center gap-3 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-left shadow-sm active:scale-[0.98] transition-transform"
-            onClick={() => {
-              if (onOpenGiftClaim) onOpenGiftClaim();
-              else if (onNavigate) onNavigate("giftClaim");
-            }}
-          >
-            <span className="text-2xl leading-none shrink-0">🎁</span>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-violet-900 leading-tight">You have an investment gift to claim</p>
-              <p className="text-xs text-violet-600 mt-0.5">Tap to enter your 6-digit gift code</p>
-            </div>
+          <>
+            <style>{`
+              @keyframes hgift-slide-up {
+                from { opacity: 0; transform: translateY(12px); }
+                to   { opacity: 1; transform: translateY(0); }
+              }
+              @keyframes hgift-shimmer {
+                0%   { transform: translateX(-100%) skewX(-12deg); }
+                100% { transform: translateX(300%) skewX(-12deg); }
+              }
+              @keyframes hgift-glow-pulse {
+                0%, 100% { box-shadow: 0 0 0 0 rgba(167,139,250,0), 0 0 18px 2px rgba(139,92,246,0.15); }
+                50%      { box-shadow: 0 0 0 3px rgba(167,139,250,0.15), 0 0 28px 6px rgba(139,92,246,0.28); }
+              }
+              @keyframes hgift-float {
+                0%, 100% { transform: translateY(0); }
+                50%      { transform: translateY(-3px); }
+              }
+              @keyframes hgift-ping {
+                0%        { transform: scale(1); opacity: 1; }
+                75%, 100% { transform: scale(2.2); opacity: 0; }
+              }
+              .hgift-banner {
+                animation: hgift-slide-up 0.5s cubic-bezier(0.16,1,0.3,1) both,
+                           hgift-glow-pulse 2.8s ease-in-out 0.5s infinite;
+              }
+              .hgift-shimmer::after {
+                content: '';
+                position: absolute;
+                inset: 0;
+                background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.09) 50%, transparent 70%);
+                animation: hgift-shimmer 2.6s ease-in-out 0.7s infinite;
+              }
+              .hgift-icon { animation: hgift-float 2.4s ease-in-out 0.4s infinite; }
+              .hgift-ping { animation: hgift-ping 1.4s cubic-bezier(0,0,0.2,1) 0.5s infinite; }
+            `}</style>
+
             <button
               type="button"
-              className="p-1 text-violet-400 hover:text-violet-600 shrink-0"
-              onClick={(e) => {
-                e.stopPropagation();
-                localStorage.removeItem('mint_pending_gift_id');
-                setPendingGiftId(null);
+              className="hgift-banner relative overflow-hidden w-full rounded-2xl px-4 py-4 flex items-center gap-3.5 text-left active:scale-[0.98] transition-transform"
+              style={{
+                background: 'linear-gradient(135deg, #1e0d3a 0%, #3b1a6b 45%, #2a1050 100%)',
+                border: '1px solid rgba(167,139,250,0.3)',
+              }}
+              onClick={() => {
+                if (onOpenGiftClaim) onOpenGiftClaim();
+                else if (onNavigate) onNavigate("giftClaim");
               }}
             >
-              <X className="h-4 w-4" />
+              <div className="hgift-shimmer absolute inset-0 rounded-2xl pointer-events-none" />
+
+              <span className="absolute top-3 right-3 flex h-2 w-2">
+                <span className="hgift-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-violet-300" />
+              </span>
+
+              <span
+                className="hgift-icon shrink-0 flex h-10 w-10 items-center justify-center rounded-xl text-2xl"
+                style={{ background: 'rgba(255,255,255,0.07)', boxShadow: '0 0 14px 2px rgba(250,204,21,0.18)' }}
+              >
+                🎁
+              </span>
+
+              <div className="flex-1 min-w-0 pr-6">
+                <p className="text-sm font-semibold text-white leading-snug">You have an investment gift to claim</p>
+                <p className="text-xs mt-0.5" style={{ color: 'rgba(196,181,253,0.85)' }}>Tap to enter your 6-digit gift code</p>
+              </div>
+
+              <button
+                type="button"
+                className="absolute top-3 right-7 p-1 shrink-0"
+                style={{ color: 'rgba(196,181,253,0.6)' }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  localStorage.removeItem('mint_pending_gift_id');
+                  setPendingGiftId(null);
+                }}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
             </button>
-          </button>
+          </>
         )}
 
         <section className="flex flex-col gap-3">
