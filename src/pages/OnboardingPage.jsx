@@ -129,12 +129,6 @@ const OnboardingPage = ({ onCreateAccount, onLogin }) => {
                   {/* Shimmer overlay */}
                   <div className="gift-shimmer absolute inset-0 rounded-2xl pointer-events-none" />
 
-                  {/* Live indicator dot */}
-                  <span className="absolute top-3 right-3 flex h-2 w-2">
-                    <span className="gift-dot absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75" />
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-violet-300" />
-                  </span>
-
                   {/* Gift icon */}
                   <span className="gift-icon shrink-0 flex h-10 w-10 items-center justify-center rounded-xl text-2xl"
                     style={{ background: 'rgba(255,255,255,0.07)', boxShadow: '0 0 14px 2px rgba(250,204,21,0.18)' }}>
@@ -142,7 +136,7 @@ const OnboardingPage = ({ onCreateAccount, onLogin }) => {
                   </span>
 
                   {/* Text */}
-                  <div className="flex-1 min-w-0 pr-4">
+                  <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-white leading-snug">
                       {giftDetails?.amount
                         ? `${formatAmount(giftDetails.amount)} investment gift waiting`
@@ -152,6 +146,18 @@ const OnboardingPage = ({ onCreateAccount, onLogin }) => {
                       Log in or create an account to claim it
                     </p>
                   </div>
+
+                  {/* Dismiss */}
+                  <button
+                    onClick={() => { localStorage.removeItem('mint_pending_gift_id'); setGiftId(null); }}
+                    className="shrink-0 flex items-center justify-center rounded-full w-6 h-6 ml-1"
+                    style={{ background: 'rgba(255,255,255,0.10)' }}
+                    aria-label="Dismiss gift banner"
+                  >
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                      <path d="M1 1l8 8M9 1L1 9" stroke="rgba(196,181,253,0.85)" strokeWidth="1.5" strokeLinecap="round"/>
+                    </svg>
+                  </button>
                 </div>
               </>
             )}
