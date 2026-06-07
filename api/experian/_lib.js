@@ -11,6 +11,13 @@ export const EXPERIAN_IDMN_BASE =
 export const EXPERIAN_IDMN_WORKFLOW_ID =
   process.env.EXPERIAN_ENV === "production" ? 6 : 10;
 
+// OCR Liveness Verification (liveness + ID-document OCR + selfie↔document match).
+// UAT 12 / PROD 8. Runs as a SECOND workflow right after Alternative Liveness to
+// capture the ID document image + OCR-extracted fields. Override via env.
+export const EXPERIAN_OCR_WORKFLOW_ID =
+  Number(process.env.EXPERIAN_OCR_WORKFLOW_ID) ||
+  (process.env.EXPERIAN_ENV === "production" ? 8 : 12);
+
 export const EXPERIAN_IDMN_HOSTED_BASE =
   process.env.EXPERIAN_ENV === "production"
     ? "https://experian.tgpdc.com/anonymous_workflow"
@@ -134,7 +141,7 @@ export function stripExperianImages(collectResult) {
 // the CRM's row shape. Idempotent (upsert on profile_id,image_id). Never throws —
 // archiving must not break verification. Returns count archived.
 export async function archiveExperianAssets(db, userId, collectResult, opts = {}) {
-  const { transactionId, provider = "experian", reviewAnswer = null } = opts;
+  const { transactionId, provider = "experian", reviewAnswer = null, workflow = "liveness" } = opts;
   const txid = String(transactionId || collectResult?.return_data?.transaction_id || Date.now());
   const { scores } = extractExperianIdentity(collectResult);
   let archived = 0;
@@ -166,7 +173,7 @@ export async function archiveExperianAssets(db, userId, collectResult, opts = {}
         content_size_bytes: buf.length,
         storage_bucket: KYC_ARCHIVE_BUCKET,
         storage_path: storagePath,
-        resource_metadata: { provider, kind: a.kind, idDocDef: { idDocType: a.idDocType }, source: "experian_idmn", scores },
+        resource_metadata: { provider, workflow, kind: a.kind, idDocDef: { idDocType: a.idDocType }, source: "experian_idmn", scores },
         review_status: "completed",
         review_answer: reviewAnswer,
         archived_at: new Date().toISOString(),

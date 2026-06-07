@@ -86,6 +86,12 @@ const ExperianVerification = ({ onVerified }) => {
   const [useEmbedOnDesktop, setUseEmbedOnDesktop] = useState(false);
   const showQr = isDesktop && !useEmbedOnDesktop;
 
+  // Two-step KYC: Alternative Liveness ("liveness") then, the moment it verifies,
+  // OCR document capture ("ocr") — both run in this same embedded UI/QR flow.
+  const OCR_ENABLED = import.meta.env?.VITE_EXPERIAN_OCR !== "false";
+  const [phase, setPhase] = useState("liveness");
+  const phaseRef = useRef("liveness");
+
   const AUTO_POLL_INTERVAL_MS = 5000;
   const AUTO_POLL_MAX_ATTEMPTS = 180; // ~15 min, then fall back to manual check
 
@@ -94,7 +100,8 @@ const ExperianVerification = ({ onVerified }) => {
     return session?.access_token ? `Bearer ${session.access_token}` : null;
   }, []);
 
-  const startWorkflow = useCallback(async () => {
+  const startWorkflow = useCallback(async (wf) => {
+    const workflow = wf || phaseRef.current;
     try {
       setStage(STAGE.INITIALIZING);
       const authToken = await getAuthHeader();
@@ -107,6 +114,7 @@ const ExperianVerification = ({ onVerified }) => {
       const res = await fetch("/api/experian/idmn/start", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: authToken },
+        body: JSON.stringify({ workflow }),
       });
       const data = await res.json();
 
@@ -186,6 +194,7 @@ const ExperianVerification = ({ onVerified }) => {
       const res = await fetch("/api/experian/idmn/collect", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: authToken },
+        body: JSON.stringify({ workflow: phaseRef.current }),
       });
       const data = await res.json();
 
@@ -209,6 +218,20 @@ const ExperianVerification = ({ onVerified }) => {
       }
 
       if (data.status === "verified") {
+        // Liveness passed → kick off the OCR document step in the same UI. OCR
+        // passed (or disabled) → finish and advance onboarding.
+        if (phaseRef.current === "liveness" && OCR_ENABLED) {
+          phaseRef.current = "ocr";
+          setPhase("ocr");
+          pollAttemptsRef.current = 0;
+          setPollCount(0);
+          setErrorMessage("");
+          setErrorCode(null);
+          setVerificationUrl(null);
+          setStage(STAGE.INITIALIZING);
+          startWorkflow("ocr");
+          return;
+        }
         setStage(STAGE.VERIFIED);
         if (onVerified) onVerified();
       } else if (data.status === "failed" || data.status === "not_verified") {
@@ -237,7 +260,11 @@ const ExperianVerification = ({ onVerified }) => {
       setErrorMessage(err.message || "Failed to retrieve results.");
       setStage(STAGE.ERROR);
     }
-  }, [getAuthHeader, onVerified]);
+  }, [getAuthHeader, onVerified, startWorkflow, OCR_ENABLED]);
+
+  // After liveness, OCR is a nice-to-have document capture — never let an OCR
+  // problem (e.g. workflow not provisioned) trap a user whose KYC already passed.
+  const skipOcr = () => { if (onVerified) onVerified(); };
 
   // Auto-poll while the embedded verification (iframe) is open, so the step
   // advances on its own the moment Experian confirms — no manual "check" click.
@@ -323,7 +350,7 @@ const ExperianVerification = ({ onVerified }) => {
       const res = await fetch("/api/experian/idmn/start", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: authToken },
-        body: JSON.stringify({ restart: true }),
+        body: JSON.stringify({ restart: true, workflow: phaseRef.current }),
       });
       const data = await res.json();
       if (!mountedRef.current) return;
@@ -338,6 +365,9 @@ const ExperianVerification = ({ onVerified }) => {
       setStage(STAGE.ERROR);
     }
   }, [getAuthHeader]);
+
+  const ocrPhase = phase === "ocr";
+  const stepBadge = ocrPhase ? "Step 2 of 2 · ID document" : "Step 1 of 2 · Liveness";
 
   if (stage === STAGE.INITIALIZING) {
     return (
@@ -356,9 +386,12 @@ const ExperianVerification = ({ onVerified }) => {
     return (
       <div className="w-full max-w-md mx-auto text-center">
         <div className="mb-4">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-violet-600 mb-1">{stepBadge}</p>
           <h3 className="text-lg font-medium text-slate-800 mb-1">Continue on your phone</h3>
           <p className="text-sm text-slate-500">
-            A selfie &amp; liveness check works best on a phone camera. Scan this code with your phone to complete it — this page will update automatically when you're done.
+            {ocrPhase
+              ? "Photographing your ID works best on a phone camera. Scan this code to capture your ID document — this page updates automatically when you're done."
+              : "A selfie & liveness check works best on a phone camera. Scan this code with your phone to complete it — this page will update automatically when you're done."}
           </p>
         </div>
 
@@ -407,9 +440,12 @@ const ExperianVerification = ({ onVerified }) => {
     return (
       <div className="w-full max-w-lg mx-auto">
         <div className="mb-3 text-center">
-          <h3 className="text-lg font-medium text-slate-800 mb-1">Biometric Identity Check</h3>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-violet-600 mb-1">{stepBadge}</p>
+          <h3 className="text-lg font-medium text-slate-800 mb-1">{ocrPhase ? "Capture Your ID Document" : "Biometric Identity Check"}</h3>
           <p className="text-sm text-slate-500">
-            Take a selfie and complete the liveness check below — we'll confirm automatically when you're done.
+            {ocrPhase
+              ? "Photograph your ID document below — we'll confirm automatically when you're done."
+              : "Take a selfie and complete the liveness check below — we'll confirm automatically when you're done."}
           </p>
         </div>
 
@@ -561,6 +597,15 @@ const ExperianVerification = ({ onVerified }) => {
           >
             Contact Support
           </button>
+          {ocrPhase && (
+            <button
+              type="button"
+              onClick={skipOcr}
+              className="px-6 py-2 rounded-xl font-medium text-slate-500 hover:text-violet-600 transition-colors text-sm"
+            >
+              Skip document scan &amp; continue
+            </button>
+          )}
         </div>
       </div>
     );
@@ -574,14 +619,25 @@ const ExperianVerification = ({ onVerified }) => {
         </div>
         <h3 className="text-lg font-medium text-slate-800 mb-2">Something Went Wrong</h3>
         <p className="text-sm text-slate-500 mb-6">{errorMessage || "Could not connect to the verification service."}</p>
-        <button
-          type="button"
-          onClick={handleRetry}
-          className="px-6 py-2.5 rounded-xl font-medium text-white transition-all"
-          style={{ background: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)" }}
-        >
-          Try Again
-        </button>
+        <div className="flex flex-col gap-3">
+          <button
+            type="button"
+            onClick={handleRetry}
+            className="px-6 py-2.5 rounded-xl font-medium text-white transition-all"
+            style={{ background: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)" }}
+          >
+            Try Again
+          </button>
+          {ocrPhase && (
+            <button
+              type="button"
+              onClick={skipOcr}
+              className="px-6 py-2 rounded-xl font-medium text-slate-500 hover:text-violet-600 transition-colors text-sm"
+            >
+              Skip document scan &amp; continue
+            </button>
+          )}
+        </div>
       </div>
     );
   }
@@ -647,11 +703,16 @@ const ExperianVerification = ({ onVerified }) => {
         <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
           <FaceIcon className="w-8 h-8 text-white" />
         </div>
-        <h3 className="text-lg font-medium text-slate-800 mb-2">Biometric Identity Check</h3>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-violet-600 mb-1">{stepBadge}</p>
+        <h3 className="text-lg font-medium text-slate-800 mb-2">{ocrPhase ? "Capture Your ID Document" : "Biometric Identity Check"}</h3>
         <p className="text-sm text-slate-500">
-          {showQr
-            ? "A selfie & liveness check works best on a phone. You'll scan a QR code to finish on your phone — this verifies your identity against Home Affairs records."
-            : "Complete a quick selfie and liveness check, right here in the app. This verifies your identity against Home Affairs records."}
+          {ocrPhase
+            ? (showQr
+                ? "Last step — scan the QR code to photograph your ID document on your phone."
+                : "Last step — photograph your ID document. We'll read it and match it to your verified identity.")
+            : (showQr
+                ? "A selfie & liveness check works best on a phone. You'll scan a QR code to finish on your phone — this verifies your identity against Home Affairs records."
+                : "Complete a quick selfie and liveness check, right here in the app. This verifies your identity against Home Affairs records.")}
         </p>
       </div>
 
@@ -681,7 +742,9 @@ const ExperianVerification = ({ onVerified }) => {
           style={{ background: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)" }}
         >
           <FaceIcon className="w-5 h-5" />
-          {showQr ? "Continue on My Phone" : "Start Biometric Verification"}
+          {ocrPhase
+            ? (showQr ? "Scan ID on My Phone" : "Capture ID Document")
+            : (showQr ? "Continue on My Phone" : "Start Biometric Verification")}
         </button>
         {isDesktop && (
           <button

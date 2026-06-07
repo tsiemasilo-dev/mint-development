@@ -2,6 +2,7 @@ import { supabaseAdmin, supabase as supabaseAnon, authenticateUser } from "../..
 import {
   EXPERIAN_IDMN_BASE,
   EXPERIAN_IDMN_WORKFLOW_ID,
+  EXPERIAN_OCR_WORKFLOW_ID,
   EXPERIAN_IDMN_HOSTED_BASE,
   experianRequest,
   experianBasicAuth,
@@ -22,13 +23,26 @@ export default async function handler(req, res) {
     const userId = user.id;
     const db = supabaseAdmin || supabaseAnon;
 
+    // Two workflows share this endpoint:
+    //   "liveness" (default) = Alternative Liveness (DHA face match + ID), step 1
+    //   "ocr"                = OCR Liveness (ID-document capture + OCR), step 2
+    // They use separate transaction keys so both can be in flight independently.
+    const workflow = req.body?.workflow === "ocr" ? "ocr" : "liveness";
+    const isOcr = workflow === "ocr";
+    const K = isOcr
+      ? { tx: "experian_ocr_transaction_id", token: "experian_ocr_token", started: "experian_ocr_started_at", result: "experian_ocr_result", mock: "experian_ocr_mock" }
+      : { tx: "experian_idmn_transaction_id", token: "experian_idmn_token", started: "experian_idmn_started_at", result: "experian_idmn_result", mock: "experian_mock" };
+    const workflowId = isOcr ? EXPERIAN_OCR_WORKFLOW_ID : EXPERIAN_IDMN_WORKFLOW_ID;
+
     const { data: onboarding } = await db
       .from("user_onboarding")
       .select("sumsub_raw, kyc_status, sumsub_applicant_id")
       .eq("user_id", userId)
       .maybeSingle();
 
-    if (onboarding?.kyc_status === "verified" || onboarding?.kyc_status === "onboarding_complete") {
+    // Liveness only: if already verified there's nothing to start. The OCR step
+    // deliberately runs AFTER kyc_status is "verified", so it must not short-circuit.
+    if (!isOcr && (onboarding?.kyc_status === "verified" || onboarding?.kyc_status === "onboarding_complete")) {
       return res.json({ success: true, alreadyVerified: true, status: onboarding.kyc_status });
     }
 
@@ -40,21 +54,23 @@ export default async function handler(req, res) {
     const restart = req.body?.restart === true;
 
     // Return existing URL if a workflow is already in flight (unless restarting)
-    if (!restart && raw?.experian_idmn_transaction_id && raw?.experian_idmn_token) {
-      const url = `${EXPERIAN_IDMN_HOSTED_BASE}/${raw.experian_idmn_token}`;
-      return res.json({ success: true, url, transaction_id: String(raw.experian_idmn_transaction_id), token: raw.experian_idmn_token, existing: true });
+    if (!restart && raw?.[K.tx] && raw?.[K.token]) {
+      const url = `${EXPERIAN_IDMN_HOSTED_BASE}/${raw[K.token]}`;
+      return res.json({ success: true, url, transaction_id: String(raw[K.tx]), token: raw[K.token], existing: true, workflow });
     }
     if (restart) {
-      delete raw.experian_idmn_transaction_id;
-      delete raw.experian_idmn_token;
-      delete raw.experian_idmn_started_at;
-      delete raw.experian_idmn_result;
-      delete raw.experian_mock;
+      delete raw[K.tx];
+      delete raw[K.token];
+      delete raw[K.started];
+      delete raw[K.result];
+      delete raw[K.mock];
       // Clear any stale "under review" flag so a fresh attempt starts clean
-      // (e.g. if a prior in-progress poll had wrongly marked the account pending).
-      await db.from("required_actions")
-        .update({ kyc_pending: false, kyc_needs_resubmission: false })
-        .eq("user_id", userId);
+      // (liveness only — OCR doesn't drive that flag).
+      if (!isOcr) {
+        await db.from("required_actions")
+          .update({ kyc_pending: false, kyc_needs_resubmission: false })
+          .eq("user_id", userId);
+      }
     }
 
     const identityNumber = req.body?.identity_number || raw?.identity_details?.identity_number;
@@ -65,14 +81,15 @@ export default async function handler(req, res) {
     const MOCK = isMockMode();
 
     if (MOCK) {
-      console.log(`[Experian IDMN] MOCK MODE — StartWorkflow for user ${userId}`);
-      const mockTxId = `mock-${Date.now()}`;
+      console.log(`[Experian IDMN] MOCK MODE — StartWorkflow (${workflow}) for user ${userId}`);
+      const mockTxId = `mock-${workflow}-${Date.now()}`;
       const mockToken = `mock-token-${userId.slice(0, 8)}`;
-      const updatedRaw = { ...raw, experian_idmn_transaction_id: mockTxId, experian_idmn_token: mockToken, experian_idmn_started_at: new Date().toISOString(), experian_mock: true };
-      // "started" (not "pending") + no kyc_pending flag — the user hasn't
-      // submitted anything yet, so the app must NOT show "Under Review".
-      await db.from("user_onboarding").update({ sumsub_raw: updatedRaw, sumsub_applicant_id: mockTxId, kyc_status: "started", kyc_checked_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("user_id", userId);
-      return res.json({ success: true, mockMode: true, url: null, transaction_id: mockTxId, token: mockToken });
+      const updatedRaw = { ...raw, [K.tx]: mockTxId, [K.token]: mockToken, [K.started]: new Date().toISOString(), [K.mock]: true };
+      const update = { sumsub_raw: updatedRaw, kyc_checked_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      // Liveness only touches applicant_id / kyc_status ("started", not "pending").
+      if (!isOcr) { update.sumsub_applicant_id = mockTxId; update.kyc_status = "started"; }
+      await db.from("user_onboarding").update(update).eq("user_id", userId);
+      return res.json({ success: true, mockMode: true, url: null, transaction_id: mockTxId, token: mockToken, workflow });
     }
 
     const { data: profile } = await db.from("profiles").select("first_name, last_name").eq("id", userId).maybeSingle();
@@ -93,11 +110,11 @@ export default async function handler(req, res) {
         name,
         surname,
         client_consent: "Y",
-        workflow_id: EXPERIAN_IDMN_WORKFLOW_ID,
+        workflow_id: workflowId,
       },
     };
 
-    console.log(`[Experian IDMN] StartWorkflow for user ${userId}`);
+    console.log(`[Experian IDMN] StartWorkflow (${workflow}, wf=${workflowId}) for user ${userId}`);
     const { status: httpStatus, data: idmnResult } = await experianRequest(
       `${EXPERIAN_IDMN_BASE}/StartWorkflow`,
       idmnBody,
@@ -114,24 +131,19 @@ export default async function handler(req, res) {
 
     const updatedRaw = {
       ...raw,
-      experian_idmn_transaction_id: String(transaction_id),
-      experian_idmn_token: token,
-      experian_idmn_started_at: new Date().toISOString(),
+      [K.tx]: String(transaction_id),
+      [K.token]: token,
+      [K.started]: new Date().toISOString(),
     };
 
-    // Status "started" (not "pending") and NO required_actions.kyc_pending flag:
-    // a workflow link has been issued but the user hasn't submitted a selfie yet,
-    // so the app must not show "Under Review". The collect endpoint sets pending /
-    // verified / failed once Experian actually has a result.
-    await db.from("user_onboarding").update({
-      sumsub_raw: updatedRaw,
-      sumsub_applicant_id: String(transaction_id),
-      kyc_status: "started",
-      kyc_checked_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }).eq("user_id", userId);
+    // Liveness: status "started" (not "pending") + no kyc_pending flag — a link
+    // was issued but nothing submitted yet, so the app must not show "Under Review".
+    // OCR runs after verification, so it leaves kyc_status/applicant_id untouched.
+    const update = { sumsub_raw: updatedRaw, kyc_checked_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    if (!isOcr) { update.sumsub_applicant_id = String(transaction_id); update.kyc_status = "started"; }
+    await db.from("user_onboarding").update(update).eq("user_id", userId);
 
-    return res.json({ success: true, url, transaction_id: String(transaction_id), token });
+    return res.json({ success: true, url, transaction_id: String(transaction_id), token, workflow });
   } catch (err) {
     console.error("[Experian IDMN Start]", err);
     return res.status(500).json({ success: false, error: { message: err.message } });

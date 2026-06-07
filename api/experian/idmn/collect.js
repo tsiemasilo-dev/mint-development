@@ -31,22 +31,34 @@ export default async function handler(req, res) {
     let raw = {};
     try { raw = typeof onboarding?.sumsub_raw === "string" ? JSON.parse(onboarding.sumsub_raw) : (onboarding?.sumsub_raw || {}); } catch {}
 
-    const transaction_id = raw?.experian_idmn_transaction_id;
-    const token = raw?.experian_idmn_token;
+    // "liveness" (default) = Alternative Liveness; "ocr" = OCR Liveness (step 2).
+    const workflow = req.body?.workflow === "ocr" ? "ocr" : "liveness";
+    const isOcr = workflow === "ocr";
+    const K = isOcr
+      ? { tx: "experian_ocr_transaction_id", token: "experian_ocr_token", result: "experian_ocr_result", status: "experian_ocr_status", collected: "experian_ocr_collected_at", mock: "experian_ocr_mock" }
+      : { tx: "experian_idmn_transaction_id", token: "experian_idmn_token", result: "experian_idmn_result", status: "experian_idmn_status", collected: "experian_idmn_collected_at", mock: "experian_mock" };
+
+    const transaction_id = raw?.[K.tx];
+    const token = raw?.[K.token];
     if (!transaction_id || !token) {
       return res.status(400).json({ success: false, error: { message: "No pending verification found. Please start the verification first." } });
     }
 
-    const MOCK = isMockMode() || raw?.experian_mock;
+    const MOCK = isMockMode() || raw?.[K.mock];
 
     if (MOCK) {
-      console.log(`[Experian IDMN] MOCK MODE — CollectWorkflowResults for user ${userId}`);
-      const verifiedRaw = { ...raw, experian_idmn_status: "verified", experian_idmn_completed_at: new Date().toISOString(), experian_mock: true };
+      console.log(`[Experian IDMN] MOCK MODE — CollectWorkflowResults (${workflow}) for user ${userId}`);
+      const verifiedRaw = { ...raw, [K.status]: "verified", [K.collected]: new Date().toISOString(), [K.mock]: true };
+      if (isOcr) {
+        // OCR is a follow-on step — KYC is already verified, so just record it.
+        await db.from("user_onboarding").update({ sumsub_raw: verifiedRaw, updated_at: new Date().toISOString() }).eq("user_id", userId);
+        return res.json({ success: true, status: "verified", mockMode: true, workflow, message: "Mock OCR complete." });
+      }
       await db.from("user_onboarding").update({ sumsub_raw: verifiedRaw, kyc_status: "onboarding_complete", kyc_verified_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("user_id", userId);
       await db.from("required_actions").update({ kyc_verified: true, kyc_pending: false, kyc_needs_resubmission: false, kyc_verified_at: new Date().toISOString() }).eq("user_id", userId);
       const { data: packCheck } = await db.from("user_onboarding_pack_details").select("user_id").eq("user_id", userId).maybeSingle();
       if (!packCheck) { await db.from("user_onboarding_pack_details").insert({ user_id: userId, created_at: new Date().toISOString() }); }
-      return res.json({ success: true, status: "verified", mockMode: true, message: "Mock verification complete." });
+      return res.json({ success: true, status: "verified", mockMode: true, workflow, message: "Mock verification complete." });
     }
 
     /* transaction_id is a 19-20 digit integer — too large for a JS Number
@@ -123,18 +135,29 @@ export default async function handler(req, res) {
         .eq("user_id", userId);
       // collectResult echoed back so the raw Experian payload is visible in the
       // browser console (helps inspect OCR/liveness fields without Vercel logs).
-      return res.json({ success: true, status: kycStatus, errorCode: errorCode || null, collectResult });
+      return res.json({ success: true, status: kycStatus, errorCode: errorCode || null, workflow, collectResult });
     }
 
     // ── Verified — archive the documents, then persist a slimmed result ───────
-    // Copy selfie + DHA portrait + PDF reports into our storage + the shared
-    // sumsub_document_archive table (same shape the CRM reads) BEFORE storing the
-    // JSON, so the heavy base64 blobs can be stripped from what we keep in the DB.
+    // Copy the workflow's assets (selfie/DHA portrait/PDFs; OCR document images
+    // once wired) into our storage + the shared sumsub_document_archive table
+    // (same shape the CRM reads) BEFORE storing the JSON, so the heavy base64
+    // blobs can be stripped from what we keep in the DB.
     const archivedCount = await archiveExperianAssets(db, userId, collectResult, {
       transactionId: transaction_id,
       reviewAnswer,
+      workflow,
     });
     const slimResult = stripExperianImages(collectResult);
+
+    // OCR is a follow-on step that runs AFTER KYC is already verified — record
+    // its result + archived docs, but don't re-touch kyc_status / required_actions.
+    if (isOcr) {
+      const ocrRaw = { ...raw, [K.result]: slimResult, [K.status]: "verified", [K.collected]: new Date().toISOString() };
+      await db.from("user_onboarding").update({ sumsub_raw: ocrRaw, updated_at: new Date().toISOString() }).eq("user_id", userId);
+      console.log(`[Experian OCR] user ${userId} verified — archived ${archivedCount} document(s)`);
+      return res.json({ success: true, status: kycStatus, workflow, archived: archivedCount, collectResult: slimResult });
+    }
 
     const updatedRaw = { ...raw, experian_idmn_result: slimResult, experian_idmn_collected_at: new Date().toISOString() };
     await db.from("user_onboarding").update({
@@ -162,7 +185,7 @@ export default async function handler(req, res) {
     else { await db.from("required_actions").insert({ user_id: userId, ...raPayload }); }
 
     console.log(`[Experian IDMN] user ${userId} verified — archived ${archivedCount} document(s)`);
-    return res.json({ success: true, status: kycStatus, errorCode: errorCode || null, archived: archivedCount, collectResult: slimResult });
+    return res.json({ success: true, status: kycStatus, errorCode: errorCode || null, workflow, archived: archivedCount, collectResult: slimResult });
   } catch (err) {
     console.error("[Experian IDMN Collect]", err);
     return res.status(500).json({ success: false, error: { message: err.message } });
