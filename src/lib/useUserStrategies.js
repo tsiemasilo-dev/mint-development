@@ -76,13 +76,26 @@ export const useUserStrategies = (familyMemberId = null) => {
         ? residualQuery.eq("family_member_id", familyMemberId)
         : residualQuery.is("family_member_id", null);
 
-      const [allReturnsResult, strategiesResult, residualResult] = await Promise.all([
+      /* Closed positions (rebalance sells / replacements) carry the REALISED P&L.
+         Same basis as the returns job's inception_pnl: (avg_exit − avg_fill) × qty,
+         both in cents. Lets us split total P&L into realised vs unrealised. */
+      let closedQuery = supabase
+        .from("stock_holdings_c")
+        .select("strategy_id, quantity, avg_fill, avg_exit")
+        .eq("user_id", userId)
+        .eq("is_active", false);
+      closedQuery = familyMemberId
+        ? closedQuery.eq("family_member_id", familyMemberId)
+        : closedQuery.is("family_member_id", null);
+
+      const [allReturnsResult, strategiesResult, residualResult, closedResult] = await Promise.all([
         returnsQuery.order("as_of_date", { ascending: false }),
         supabase
           .from("strategies_c")
           .select("id, name, short_name, description, risk_level, sector, icon_url, image_url, holdings")
           .eq("status", "active"),
         residualQuery,
+        closedQuery,
       ]);
 
       if (allReturnsResult.error) {
@@ -97,6 +110,18 @@ export const useUserStrategies = (familyMemberId = null) => {
       (residualResult?.data || []).forEach((row) => {
         if (!row?.strategy_id) return;
         residualRandsByStrategy[row.strategy_id] = Number(row.balance_cents || 0) / 100;
+      });
+
+      // Accumulated realised P&L per strategy from closed positions (rands).
+      const realizedRandsByStrategy = {};
+      (closedResult?.data || []).forEach((row) => {
+        if (!row?.strategy_id) return;
+        const fill = Number(row.avg_fill || 0);
+        const exit = Number(row.avg_exit || 0);
+        const qty = Number(row.quantity || 0);
+        if (!fill || !exit || !qty) return;
+        realizedRandsByStrategy[row.strategy_id] =
+          (realizedRandsByStrategy[row.strategy_id] || 0) + ((exit - fill) / 100) * qty;
       });
 
       if (allReturns.length === 0) {
@@ -149,14 +174,22 @@ export const useUserStrategies = (familyMemberId = null) => {
            % return drift after every rebalance). Falls back to the legacy
            recompute for older rows that predate inception_pnl. */
         const inceptionPnlRands = returnsRow.inception_pnl != null ? Number(returnsRow.inception_pnl) / 100 : null;
-        let invested, changePct;
+        let invested, changePct, totalPnl;
         if (inceptionPnlRands != null && currentVal - inceptionPnlRands > 0) {
           invested = Number((currentVal - inceptionPnlRands).toFixed(2));
           changePct = invested > 0 ? (inceptionPnlRands / invested) * 100 : 0;
+          totalPnl = inceptionPnlRands;
         } else {
           invested = snapshot.reduce((sum, h) => sum + costBasisRandsPerShare(h) * (h.qty || h.quantity || 0), 0);
           changePct = invested > 0 ? ((currentVal - invested) / invested) * 100 : 0;
+          totalPnl = currentVal - invested;
         }
+
+        /* Split total P&L into realised (locked in from sells) and unrealised
+           (paper gains on open positions). Realised comes from closed positions;
+           unrealised is the remainder, so the two always sum to the headline. */
+        const realizedPnl = Number((realizedRandsByStrategy[strategyId] || 0).toFixed(2));
+        const unrealizedPnl = Number((totalPnl - realizedPnl).toFixed(2));
         const ytdPctDecimal = returnsRow.ytd_pct != null ? returnsRow.ytd_pct / 100 : null;
 
         // Build snapshot lookup by symbol for augmenting base holdings
@@ -191,6 +224,11 @@ export const useUserStrategies = (familyMemberId = null) => {
           holdings: augmentedHoldings,
           investedAmount: Number(invested.toFixed(2)),
           currentValue: currentVal,
+          /* Realised vs unrealised P&L (rands). realised + unrealised = total P&L
+             shown by the headline (changePct). */
+          totalPnl: Number(totalPnl.toFixed(2)),
+          realizedPnl,
+          unrealizedPnl,
           /* Cash component (rebalance residual) surfaced separately so the
              UI can show "Positions R890 + Cash R104.61" if it wants to. */
           positionsValue: positionsVal,
