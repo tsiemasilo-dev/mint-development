@@ -1,5 +1,5 @@
 import { supabaseAdmin, supabase as supabaseAnon, authenticateUser } from "../_lib/supabase.js";
-import { EXPERIAN_KYC_URL, experianKycAuth, experianRequest, isMockMode } from "./_lib.js";
+import { EXPERIAN_KYC_URL, experianKycAuth, experianRequest } from "./_lib.js";
 
 const TYPE_LABEL = { R: "Residential", W: "Work", P: "Postal", O: "Other" };
 
@@ -54,8 +54,10 @@ export default async function handler(req, res) {
 
     const { data: profile } = await db.from("profiles").select("first_name, last_name").eq("id", userId).maybeSingle();
 
-    // Mock mode (creds not configured): return sample addresses so the flow works in dev.
-    if (isMockMode()) {
+    const kycAuth = experianKycAuth();
+
+    // Mock mode (KYC creds not configured): return sample addresses so the flow works in dev.
+    if (!kycAuth.username || !kycAuth.password) {
       return res.json({
         success: true,
         mockMode: true,
@@ -67,7 +69,7 @@ export default async function handler(req, res) {
     }
 
     const kycBody = {
-      auth: experianKycAuth(),
+      auth: kycAuth,
       search_criteria: {
         identity_number: identityNumber,
         identity_type: "SID",
