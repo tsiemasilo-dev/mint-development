@@ -83,17 +83,28 @@ export default async function handler(req, res) {
       },
     };
 
-    console.log(`[Experian KYC] Address lookup for user ${userId}`);
+    console.log(`[Experian KYC] Address lookup for user ${userId} (id ${String(identityNumber).slice(0, 6)}…)`);
     const { status: httpStatus, data: kycResult } = await experianRequest(EXPERIAN_KYC_URL, kycBody);
-    console.log(`[Experian KYC] HTTP ${httpStatus}:`, JSON.stringify(kycResult).slice(0, 500));
 
     const rd = kycResult?.return_data || kycResult?.ReturnData || kycResult?.BureauResponse?.return_data || kycResult?.BureauResponse?.ReturnData || {};
     const rawAddrs = rd?.address_data || rd?.AddressData || [];
     const status = kycResult?.response_status || kycResult?.ResponseStatus || kycResult?.BureauResponse?.ResponseStatus;
+    const stats = rd?.stats || {};
+    console.log(
+      `[Experian KYC] HTTP ${httpStatus} · status=${status} · person_found=${stats.person_found ?? "?"} · address_count=${stats.address_count ?? (Array.isArray(rawAddrs) ? rawAddrs.length : 0)} · error=${kycResult?.error_code || "none"}`
+    );
 
     if (!Array.isArray(rawAddrs) || rawAddrs.length === 0) {
-      const note = kycResult?.error_description || kycResult?.ErrorDescription || (status === "Failure" ? "No address data returned." : null);
-      return res.json({ success: true, addresses: [], note });
+      const note =
+        kycResult?.error_description ||
+        kycResult?.ErrorDescription ||
+        (stats.person_found === "Y"
+          ? "No addresses are held by the bureau for this ID."
+          : status === "Failure"
+          ? "Bureau lookup failed."
+          : "No address data returned.");
+      console.log(`[Experian KYC] No addresses for user ${userId} → manual entry. note="${note}"`);
+      return res.json({ success: true, addresses: [], note, personFound: stats.person_found === "Y" });
     }
 
     // Residential first, then most-recently-updated; cap at 10.
@@ -110,6 +121,7 @@ export default async function handler(req, res) {
     const updatedRaw = { ...raw, experian_kyc_addresses: addresses, experian_kyc_checked_at: new Date().toISOString() };
     await db.from("user_onboarding").update({ sumsub_raw: updatedRaw, updated_at: new Date().toISOString() }).eq("user_id", userId);
 
+    console.log(`[Experian KYC] Returning ${addresses.length} address(es) for user ${userId}`);
     return res.json({ success: true, addresses });
   } catch (err) {
     console.error("[Experian KYC addresses]", err);

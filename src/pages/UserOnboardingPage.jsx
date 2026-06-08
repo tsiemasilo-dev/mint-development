@@ -710,12 +710,23 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
         const token = session?.access_token;
         if (!token) return;
         setExperianAddrLoading(true);
+        console.log("[Onboarding] Fetching Experian bureau addresses…");
         const res = await fetch("/api/experian/kyc-addresses", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         });
         const data = await res.json();
-        setExperianAddresses(data?.success && Array.isArray(data.addresses) ? data.addresses : []);
+        const list = data?.success && Array.isArray(data.addresses) ? data.addresses : [];
+        console.log(
+          `[Onboarding] Experian address lookup → HTTP ${res.status}, ${list.length} address(es)` +
+            (data?.note ? `, note: "${data.note}"` : "") +
+            (data?.personFound != null ? `, personFound: ${data.personFound}` : ""),
+          data
+        );
+        if (list.length === 0) {
+          console.log("[Onboarding] No bureau addresses → showing manual entry fallback.");
+        }
+        setExperianAddresses(list);
       } catch (err) {
         console.warn("[Onboarding] Experian address lookup failed:", err);
         setExperianAddresses([]);
