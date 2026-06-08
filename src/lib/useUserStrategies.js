@@ -81,7 +81,7 @@ export const useUserStrategies = (familyMemberId = null) => {
          both in cents. Lets us split total P&L into realised vs unrealised. */
       let closedQuery = supabase
         .from("stock_holdings_c")
-        .select("strategy_id, quantity, avg_fill, avg_exit")
+        .select("strategy_id, quantity, avg_fill, avg_exit, transaction_id")
         .eq("user_id", userId)
         .eq("is_active", false);
       closedQuery = familyMemberId
@@ -92,7 +92,7 @@ export const useUserStrategies = (familyMemberId = null) => {
          (more accurate than the EOD basket_value snapshot, and matches the CRM). */
       let activeQuery = supabase
         .from("stock_holdings_c")
-        .select("strategy_id, security_id, quantity")
+        .select("strategy_id, security_id, quantity, transaction_id")
         .eq("user_id", userId)
         .eq("is_active", true)
         .eq("trade_side", "BUY");
@@ -130,6 +130,35 @@ export const useUserStrategies = (familyMemberId = null) => {
         if (px <= 0) return;
         livePositionsByStrategy[r.strategy_id] =
           (livePositionsByStrategy[r.strategy_id] || 0) + (px * Number(r.quantity || 0)) / 100;
+      });
+
+      /* Held 8% buffer (reserve) per strategy = remaining buffer (charged −
+         slippage consumed) on the transactions that funded the strategy's
+         holdings. Holdings carry strategy_id + transaction_id; transactions carry
+         the buffer. Each transaction counted once. This is the strategy's "cash". */
+      const txnIdsByStrategy = {};
+      const addTxn = (sid, tid) => {
+        if (!sid || !tid) return;
+        (txnIdsByStrategy[sid] = txnIdsByStrategy[sid] || new Set()).add(tid);
+      };
+      activeRows.forEach((r) => addTxn(r.strategy_id, r.transaction_id));
+      (closedResult?.data || []).forEach((r) => addTxn(r.strategy_id, r.transaction_id));
+      const allTxnIds = [...new Set(Object.values(txnIdsByStrategy).flatMap((s) => [...s]))];
+      const bufferByTxn = {};
+      if (allTxnIds.length > 0) {
+        const { data: bufTxns } = await supabase
+          .from("transactions")
+          .select("id, buffer_cents, buffer_consumed_cents")
+          .in("id", allTxnIds);
+        (bufTxns || []).forEach((t) => {
+          bufferByTxn[t.id] = (Number(t.buffer_cents || 0) - Number(t.buffer_consumed_cents || 0)) / 100;
+        });
+      }
+      const bufferRandsByStrategy = {};
+      Object.entries(txnIdsByStrategy).forEach(([sid, set]) => {
+        let sum = 0;
+        set.forEach((tid) => { sum += bufferByTxn[tid] || 0; });
+        bufferRandsByStrategy[sid] = sum;
       });
 
       if (allReturnsResult.error) {
@@ -192,36 +221,37 @@ export const useUserStrategies = (familyMemberId = null) => {
         })();
 
         const residualVal = Number((residualRandsByStrategy[strategyId] || 0).toFixed(2));
+        const bufferVal = Number((bufferRandsByStrategy[strategyId] || 0).toFixed(2));
+        /* Cash element of the strategy for THIS user = rebalance residual + the
+           held 8% buffer (reserve). It's the user's money sitting as cash in the
+           strategy, so it counts toward portfolio value. */
+        const cashElement = Number((residualVal + bufferVal).toFixed(2));
 
         /* Positions value: prefer LIVE (open qty × live price) for accuracy and
            to match the CRM; fall back to the EOD basket_value snapshot. */
         const eodPositions = Number((returnsRow.basket_value / 100).toFixed(2));
         const livePositions = livePositionsByStrategy[strategyId];
         const positionsVal = Number(((livePositions > 0 ? livePositions : eodPositions)).toFixed(2));
-        /* Residual cash from rebalances counts toward the strategy's value —
-           the cash hasn't been redeployed yet but it's still part of the
-           strategy's capital. Without this, a rebalance would look like the
-           portfolio shrank. */
-        const currentVal = Number((positionsVal + residualVal).toFixed(2));
+        /* Portfolio value = live positions + cash element (residual + buffer). */
+        const currentVal = Number((positionsVal + cashElement).toFixed(2));
 
-        /* "Money in" must be STABLE — anchor it to the EOD snapshot, NOT the live
-           current value (otherwise invested would wobble intraday with price).
-           The returns job accumulates total P&L (daily price moves + realised
-           gains booked on rebalance sell-days) into inception_pnl, so it never
-           loses the cost of sold shares: invested = EOD worth − inception_pnl.
-           Total P&L is then measured against the LIVE current value, so the
-           headline reflects intraday moves. Falls back to the legacy recompute
-           for older rows that predate inception_pnl. */
+        /* "Money in" must be STABLE — anchor the deployed portion to the EOD
+           snapshot (positions + residual), NOT the live value (which would make
+           invested wobble intraday). invested = EOD worth − inception_pnl, then
+           + the buffer the user also paid. The buffer is a PASS-THROUGH cash
+           element: it adds to both invested AND current value, so it never shows
+           as profit/loss, and slippage already consumed stays netted out. */
         const eodWorth = Number((eodPositions + residualVal).toFixed(2));
         const inceptionPnlRands = returnsRow.inception_pnl != null ? Number(returnsRow.inception_pnl) / 100 : null;
-        let invested, changePct, totalPnl;
+        let investedBase;
         if (inceptionPnlRands != null && eodWorth - inceptionPnlRands > 0) {
-          invested = Number((eodWorth - inceptionPnlRands).toFixed(2));
+          investedBase = Number((eodWorth - inceptionPnlRands).toFixed(2));
         } else {
-          invested = Number(snapshot.reduce((sum, h) => sum + costBasisRandsPerShare(h) * (h.qty || h.quantity || 0), 0).toFixed(2));
+          investedBase = Number(snapshot.reduce((sum, h) => sum + costBasisRandsPerShare(h) * (h.qty || h.quantity || 0), 0).toFixed(2));
         }
-        totalPnl = Number((currentVal - invested).toFixed(2));
-        changePct = invested > 0 ? (totalPnl / invested) * 100 : 0;
+        const invested = Number((investedBase + bufferVal).toFixed(2));
+        const totalPnl = Number((currentVal - invested).toFixed(2));
+        const changePct = invested > 0 ? (totalPnl / invested) * 100 : 0;
 
         /* Split total P&L into realised (locked in from sells) and unrealised
            (paper gains on open positions). Realised comes from closed positions;
@@ -267,10 +297,12 @@ export const useUserStrategies = (familyMemberId = null) => {
           totalPnl: Number(totalPnl.toFixed(2)),
           realizedPnl,
           unrealizedPnl,
-          /* Cash component (rebalance residual) surfaced separately so the
-             UI can show "Positions R890 + Cash R104.61" if it wants to. */
+          /* Cash component surfaced separately so the UI can show
+             "Positions R890 + Cash R104.61". cashElement = residual + buffer. */
           positionsValue: positionsVal,
           residualCash: residualVal,
+          bufferCash: bufferVal,
+          cashElement,
           unitsHeld: 0,
           entryDate: null,
           lastUpdated: returnsRow.as_of_date,

@@ -561,6 +561,11 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                   <p className="text-3xl font-bold text-slate-900">
                     {formatCurrency(currentStrategy.currentValue || 0)}
                   </p>
+                  {isStrategyReady && (currentStrategy.cashElement || 0) > 0 && (
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Positions {formatCurrency(currentStrategy.positionsValue || 0)} · Cash {formatCurrency(currentStrategy.cashElement || 0)}
+                    </p>
+                  )}
                 </div>
                 <div className="text-right">
                   <p className="text-xs text-slate-500 mb-1">Period Return</p>
