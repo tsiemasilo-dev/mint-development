@@ -766,6 +766,40 @@ async function migrateGiftClaimsColumns() {
 }
 migrateGiftClaimsColumns();
 
+// ── IT Incidents table ────────────────────────────────────────────────────────
+async function ensureItIncidentsTable() {
+  if (!pgPool) return;
+  const client = await pgPool.connect();
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS it_incidents (
+        id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        title         text NOT NULL,
+        affected_service text NOT NULL,
+        severity      text NOT NULL CHECK (severity IN ('low','medium','high','critical')),
+        status        text NOT NULL DEFAULT 'open' CHECK (status IN ('open','investigating','resolved')),
+        start_time    timestamptz NOT NULL DEFAULT now(),
+        resolved_time timestamptz,
+        downtime_duration_minutes integer,
+        description   text,
+        root_cause    text,
+        resolution_notes text,
+        created_by    text,
+        created_at    timestamptz NOT NULL DEFAULT now(),
+        updated_at    timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS it_incidents_status_idx ON it_incidents (status)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS it_incidents_start_time_idx ON it_incidents (start_time DESC)`);
+    console.log('[it-incidents] it_incidents table ready');
+  } catch (e) {
+    console.error('[it-incidents] Failed to create table:', e.message);
+  } finally {
+    client.release();
+  }
+}
+ensureItIncidentsTable();
+
 async function ensureUserSessionsTable() {
   if (!pgPool) return;
   const client = await pgPool.connect();
@@ -6830,12 +6864,29 @@ app.get("/api/health", async (req, res) => {
     const db = supabaseAdmin || supabase;
     const { error } = await db.from('profiles').select('id').limit(1);
 
+    // Fetch open incident summary for admin dashboards
+    let openIncidents = 0;
+    let lastIncidentDate = null;
+    try {
+      const { data: incidents } = await db
+        .from('it_incidents')
+        .select('id, status, created_at')
+        .neq('status', 'resolved')
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (incidents) {
+        openIncidents = incidents.length;
+        if (incidents[0]) lastIncidentDate = incidents[0].created_at;
+      }
+    } catch (_) {}
+
     res.json({
       status: 'ok',
       database: error ? 'disconnected' : 'connected',
       version: packageJson.version,
       uptime: process.uptime(),
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      incidents: { open: openIncidents, last_incident_at: lastIncidentDate }
     });
   } catch (err) {
     res.status(503).json({
@@ -10665,6 +10716,131 @@ setTimeout(() => {
   saveAllChildReturnsEOD();
   saveAllParentReturnsEOD();
 }, 90 * 1000);
+
+// ── IT Incident Register API ──────────────────────────────────────────────────
+// Uses pgPool directly to avoid Supabase PostgREST schema-cache delay on new tables.
+
+const IT_CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+function setItCors(res) { Object.entries(IT_CORS).forEach(([k, v]) => res.setHeader(k, v)); }
+
+// OPTIONS preflight for CORS
+app.options('/api/incidents', (req, res) => { setItCors(res); res.sendStatus(204); });
+app.options('/api/incidents/:id', (req, res) => { setItCors(res); res.sendStatus(204); });
+
+// GET /api/incidents — list all incidents, filterable by status and severity
+app.get('/api/incidents', async (req, res) => {
+  setItCors(res);
+  if (!pgPool) return res.status(503).json({ error: 'Database not configured' });
+  const client = await pgPool.connect();
+  try {
+    const params = [];
+    const conditions = [];
+    if (req.query.status) { params.push(req.query.status); conditions.push(`status = $${params.length}`); }
+    if (req.query.severity) { params.push(req.query.severity); conditions.push(`severity = $${params.length}`); }
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const { rows } = await client.query(
+      `SELECT * FROM it_incidents ${where} ORDER BY start_time DESC`,
+      params
+    );
+    res.json({ incidents: rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+// POST /api/incidents — log a new incident
+app.post('/api/incidents', async (req, res) => {
+  setItCors(res);
+  if (!pgPool) return res.status(503).json({ error: 'Database not configured' });
+  try {
+    const { title, affected_service, severity, start_time, description, created_by } = req.body || {};
+    if (!title || !affected_service || !severity) {
+      return res.status(400).json({ error: 'title, affected_service, and severity are required' });
+    }
+    const validSeverities = ['low', 'medium', 'high', 'critical'];
+    if (!validSeverities.includes(severity)) {
+      return res.status(400).json({ error: `severity must be one of: ${validSeverities.join(', ')}` });
+    }
+    const client = await pgPool.connect();
+    try {
+      const { rows } = await client.query(
+        `INSERT INTO it_incidents (title, affected_service, severity, status, start_time, description, created_by)
+         VALUES ($1, $2, $3, 'open', $4, $5, $6)
+         RETURNING *`,
+        [
+          title.trim(),
+          affected_service.trim(),
+          severity,
+          start_time || new Date().toISOString(),
+          description || null,
+          created_by || null,
+        ]
+      );
+      console.log(`[it-incidents] New incident logged: "${title}" (${severity})`);
+      res.status(201).json({ incident: rows[0] });
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PATCH /api/incidents/:id — update or resolve an incident
+app.patch('/api/incidents/:id', async (req, res) => {
+  setItCors(res);
+  if (!pgPool) return res.status(503).json({ error: 'Database not configured' });
+  const client = await pgPool.connect();
+  try {
+    const { id } = req.params;
+    const { status, root_cause, resolution_notes, resolved_time } = req.body || {};
+    const validStatuses = ['open', 'investigating', 'resolved'];
+    if (status && !validStatuses.includes(status)) {
+      return res.status(400).json({ error: `status must be one of: ${validStatuses.join(', ')}` });
+    }
+
+    // Fetch existing incident to calculate downtime
+    const existing = await client.query('SELECT * FROM it_incidents WHERE id = $1', [id]);
+    if (!existing.rows.length) return res.status(404).json({ error: 'Incident not found' });
+    const inc = existing.rows[0];
+
+    // Build dynamic SET clause
+    const sets = ['updated_at = NOW()'];
+    const params = [];
+    if (status) { params.push(status); sets.push(`status = $${params.length}`); }
+    if (root_cause !== undefined) { params.push(root_cause); sets.push(`root_cause = $${params.length}`); }
+    if (resolution_notes !== undefined) { params.push(resolution_notes); sets.push(`resolution_notes = $${params.length}`); }
+
+    // Auto-calculate downtime when resolving
+    if (status === 'resolved') {
+      const resolvedAt = resolved_time ? new Date(resolved_time) : new Date();
+      const startedAt = new Date(inc.start_time);
+      const durationMins = Math.round((resolvedAt - startedAt) / 60000);
+      params.push(resolvedAt.toISOString());
+      sets.push(`resolved_time = $${params.length}`);
+      params.push(durationMins);
+      sets.push(`downtime_duration_minutes = $${params.length}`);
+    }
+
+    params.push(id);
+    const { rows } = await client.query(
+      `UPDATE it_incidents SET ${sets.join(', ')} WHERE id = $${params.length} RETURNING *`,
+      params
+    );
+    console.log(`[it-incidents] Incident ${id} updated to status: ${status || inc.status}`);
+    res.json({ incident: rows[0] });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
 
 // Catch-all 404 handler - MUST be after all route definitions
 app.use((req, res) => {
