@@ -66,6 +66,119 @@ function getResendClient() {
   return _resendClient;
 }
 
+/**
+ * Send an IT incident alert email to the configured IT admin list.
+ * Only fires for "critical" or "high" severity incidents.
+ * Recipients are read from IT_ALERT_EMAILS (comma-separated).
+ */
+async function sendItIncidentAlert(incident) {
+  try {
+    const resend = getResendClient();
+    if (!resend) {
+      console.warn('[it-incidents] Resend not configured — skipping alert email');
+      return;
+    }
+    const rawEmails = process.env.IT_ALERT_EMAILS || '';
+    const recipients = rawEmails.split(',').map(e => e.trim()).filter(Boolean);
+    if (!recipients.length) {
+      console.warn('[it-incidents] IT_ALERT_EMAILS not set — skipping alert email');
+      return;
+    }
+
+    const severityColor = incident.severity === 'critical' ? '#dc2626' : '#ea580c';
+    const severityLabel = incident.severity.toUpperCase();
+    const startFormatted = new Date(incident.start_time).toLocaleString('en-ZA', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Johannesburg'
+    }) + ' SAST';
+    const adminPanelUrl = 'https://my-mint-admin.vercel.app/it-register.html';
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"/></head>
+<body style="margin:0;padding:0;background:#0f0b1e;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0f0b1e;padding:32px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#1a1030;border-radius:12px;border:1px solid #4c1d95;overflow:hidden;">
+        <!-- Header -->
+        <tr>
+          <td style="background:#160d2e;padding:24px 32px;border-bottom:1px solid #2d1b5e;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td><span style="font-size:20px;font-weight:700;color:#ffffff;">Mint <span style="color:#a78bfa;">IT Alerts</span></span></td>
+                <td align="right">
+                  <span style="background:${severityColor};color:#ffffff;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;">⚠ ${severityLabel}</span>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <!-- Body -->
+        <tr>
+          <td style="padding:32px;">
+            <p style="color:#94a3b8;font-size:13px;margin:0 0 8px 0;">NEW INCIDENT LOGGED</p>
+            <h2 style="color:#ffffff;font-size:22px;margin:0 0 24px 0;">${incident.title}</h2>
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#160d2e;border-radius:8px;border:1px solid #2d1b5e;">
+              <tr>
+                <td style="padding:12px 16px;border-bottom:1px solid #2d1b5e;">
+                  <span style="color:#6b7280;font-size:12px;display:block;margin-bottom:4px;">AFFECTED SERVICE</span>
+                  <span style="color:#e2e8f0;font-size:15px;font-weight:600;">${incident.affected_service}</span>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:12px 16px;border-bottom:1px solid #2d1b5e;">
+                  <span style="color:#6b7280;font-size:12px;display:block;margin-bottom:4px;">SEVERITY</span>
+                  <span style="color:${severityColor};font-size:15px;font-weight:700;">${severityLabel}</span>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:12px 16px;border-bottom:1px solid #2d1b5e;">
+                  <span style="color:#6b7280;font-size:12px;display:block;margin-bottom:4px;">START TIME</span>
+                  <span style="color:#e2e8f0;font-size:15px;">${startFormatted}</span>
+                </td>
+              </tr>
+              ${incident.description ? `
+              <tr>
+                <td style="padding:12px 16px;">
+                  <span style="color:#6b7280;font-size:12px;display:block;margin-bottom:4px;">DESCRIPTION</span>
+                  <span style="color:#cbd5e1;font-size:14px;">${incident.description}</span>
+                </td>
+              </tr>` : ''}
+            </table>
+            <div style="margin-top:28px;text-align:center;">
+              <a href="${adminPanelUrl}" style="display:inline-block;background:#7C3AED;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:600;font-size:14px;">View in IT Register →</a>
+            </div>
+            <p style="color:#4b5563;font-size:12px;margin:24px 0 0 0;text-align:center;">
+              This alert was sent because the incident severity is <strong style="color:${severityColor};">${severityLabel}</strong>.<br/>
+              Alerts are sent for Critical and High severity incidents only.
+            </p>
+          </td>
+        </tr>
+        <!-- Footer -->
+        <tr>
+          <td style="padding:16px 32px;border-top:1px solid #2d1b5e;text-align:center;">
+            <span style="color:#374151;font-size:11px;">Mint Platforms · IT Governance &amp; Compliance</span>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+    await resend.emails.send({
+      from: 'Mint IT Alerts <alerts@thealgohive.com>',
+      to: recipients,
+      subject: `[${severityLabel}] IT Incident: ${incident.title} — ${incident.affected_service}`,
+      html,
+    });
+    console.log(`[it-incidents] Alert email sent to ${recipients.length} recipient(s) for incident "${incident.title}"`);
+  } catch (err) {
+    console.error('[it-incidents] Failed to send alert email:', err.message);
+  }
+}
+
 async function sendOrderFillEmail(db, { transactionId, holdingId }) {
   try {
     const resend = getResendClient();
@@ -10820,8 +10933,13 @@ app.post('/api/incidents', async (req, res) => {
           created_by || null,
         ]
       );
+      const incident = rows[0];
       console.log(`[it-incidents] New incident logged: "${title}" (${severity})`);
-      res.status(201).json({ incident: rows[0] });
+      res.status(201).json({ incident });
+      // Fire alert email asynchronously — does not block the response
+      if (severity === 'critical' || severity === 'high') {
+        sendItIncidentAlert(incident);
+      }
     } finally {
       client.release();
     }
