@@ -88,7 +88,19 @@ export const useUserStrategies = (familyMemberId = null) => {
         ? closedQuery.eq("family_member_id", familyMemberId)
         : closedQuery.is("family_member_id", null);
 
-      const [allReturnsResult, strategiesResult, residualResult, closedResult] = await Promise.all([
+      /* Open positions — used to value the strategy at LIVE intraday prices
+         (more accurate than the EOD basket_value snapshot, and matches the CRM). */
+      let activeQuery = supabase
+        .from("stock_holdings_c")
+        .select("strategy_id, security_id, quantity")
+        .eq("user_id", userId)
+        .eq("is_active", true)
+        .eq("trade_side", "BUY");
+      activeQuery = familyMemberId
+        ? activeQuery.eq("family_member_id", familyMemberId)
+        : activeQuery.is("family_member_id", null);
+
+      const [allReturnsResult, strategiesResult, residualResult, closedResult, activeResult] = await Promise.all([
         returnsQuery.order("as_of_date", { ascending: false }),
         supabase
           .from("strategies_c")
@@ -96,7 +108,29 @@ export const useUserStrategies = (familyMemberId = null) => {
           .eq("status", "active"),
         residualQuery,
         closedQuery,
+        activeQuery,
       ]);
+
+      /* Live positions value per strategy: open qty × live last_price (rands).
+         Falls back to the EOD basket_value when a live price is missing. */
+      const activeRows = activeResult?.data || [];
+      const liveSecIds = [...new Set(activeRows.map((r) => r.security_id).filter(Boolean))];
+      const livePxById = {};
+      if (liveSecIds.length > 0) {
+        const { data: secRows } = await supabase
+          .from("securities_c")
+          .select("id, last_price")
+          .in("id", liveSecIds);
+        (secRows || []).forEach((s) => { livePxById[s.id] = Number(s.last_price) || 0; });
+      }
+      const livePositionsByStrategy = {};
+      activeRows.forEach((r) => {
+        if (!r?.strategy_id) return;
+        const px = livePxById[r.security_id] || 0;
+        if (px <= 0) return;
+        livePositionsByStrategy[r.strategy_id] =
+          (livePositionsByStrategy[r.strategy_id] || 0) + (px * Number(r.quantity || 0)) / 100;
+      });
 
       if (allReturnsResult.error) {
         console.error("[useUserStrategies] Error fetching returns:", allReturnsResult.error);
@@ -157,33 +191,37 @@ export const useUserStrategies = (familyMemberId = null) => {
           } catch { return []; }
         })();
 
-        const positionsVal = Number((returnsRow.basket_value / 100).toFixed(2));
+        const residualVal = Number((residualRandsByStrategy[strategyId] || 0).toFixed(2));
+
+        /* Positions value: prefer LIVE (open qty × live price) for accuracy and
+           to match the CRM; fall back to the EOD basket_value snapshot. */
+        const eodPositions = Number((returnsRow.basket_value / 100).toFixed(2));
+        const livePositions = livePositionsByStrategy[strategyId];
+        const positionsVal = Number(((livePositions > 0 ? livePositions : eodPositions)).toFixed(2));
         /* Residual cash from rebalances counts toward the strategy's value —
            the cash hasn't been redeployed yet but it's still part of the
            strategy's capital. Without this, a rebalance would look like the
            portfolio shrank. */
-        const residualVal = Number((residualRandsByStrategy[strategyId] || 0).toFixed(2));
         const currentVal = Number((positionsVal + residualVal).toFixed(2));
 
-        /* "Money in" must be STABLE across rebalances. The returns job already
-           accumulates total P&L (daily price moves + realised gains booked on
-           rebalance sell-days) into inception_pnl — so it never loses the cost
-           of sold shares. Deriving invested from it (current worth − total P&L)
-           keeps the cost basis anchored, instead of re-summing the cost of only
-           the shares still held (which silently drops sold shares and makes the
-           % return drift after every rebalance). Falls back to the legacy
-           recompute for older rows that predate inception_pnl. */
+        /* "Money in" must be STABLE — anchor it to the EOD snapshot, NOT the live
+           current value (otherwise invested would wobble intraday with price).
+           The returns job accumulates total P&L (daily price moves + realised
+           gains booked on rebalance sell-days) into inception_pnl, so it never
+           loses the cost of sold shares: invested = EOD worth − inception_pnl.
+           Total P&L is then measured against the LIVE current value, so the
+           headline reflects intraday moves. Falls back to the legacy recompute
+           for older rows that predate inception_pnl. */
+        const eodWorth = Number((eodPositions + residualVal).toFixed(2));
         const inceptionPnlRands = returnsRow.inception_pnl != null ? Number(returnsRow.inception_pnl) / 100 : null;
         let invested, changePct, totalPnl;
-        if (inceptionPnlRands != null && currentVal - inceptionPnlRands > 0) {
-          invested = Number((currentVal - inceptionPnlRands).toFixed(2));
-          changePct = invested > 0 ? (inceptionPnlRands / invested) * 100 : 0;
-          totalPnl = inceptionPnlRands;
+        if (inceptionPnlRands != null && eodWorth - inceptionPnlRands > 0) {
+          invested = Number((eodWorth - inceptionPnlRands).toFixed(2));
         } else {
-          invested = snapshot.reduce((sum, h) => sum + costBasisRandsPerShare(h) * (h.qty || h.quantity || 0), 0);
-          changePct = invested > 0 ? ((currentVal - invested) / invested) * 100 : 0;
-          totalPnl = currentVal - invested;
+          invested = Number(snapshot.reduce((sum, h) => sum + costBasisRandsPerShare(h) * (h.qty || h.quantity || 0), 0).toFixed(2));
         }
+        totalPnl = Number((currentVal - invested).toFixed(2));
+        changePct = invested > 0 ? (totalPnl / invested) * 100 : 0;
 
         /* Split total P&L into realised (locked in from sells) and unrealised
            (paper gains on open positions). Realised comes from closed positions;
