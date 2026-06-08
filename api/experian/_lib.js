@@ -114,9 +114,13 @@ export function extractExperianAssets(collectResult) {
   const rd = collectResult?.return_data || {};
   const assets = [];
 
-  // Liveness selfie (wf6) lives at the return_data level.
+  // Liveness selfie (wf6) lives at the return_data level. Prefer the inline
+  // base64; fall back to the (short-lived) S3 URL so we still grab it before it
+  // expires. Some cached re-polls omit the selfie entirely — that's logged later.
   if (rd.customer_image_base_64)
     assets.push({ kind: "selfie", idDocType: "SELFIE", b64: rd.customer_image_base_64, fileName: "liveness_selfie.png", ext: "png", mime: "image/png" });
+  else if (rd.customer_image)
+    assets.push({ kind: "selfie", idDocType: "SELFIE", url: rd.customer_image, fileName: "liveness_selfie.jpg", ext: "jpg", mime: "image/jpeg" });
 
   for (const svc of creditBureauServices(collectResult)) {
     const r = svc?.response || {};
@@ -198,8 +202,14 @@ export async function archiveExperianAssets(db, userId, collectResult, opts = {}
   const { transactionId, provider = "experian", reviewAnswer = null, workflow = "liveness" } = opts;
   const txid = String(transactionId || collectResult?.return_data?.transaction_id || Date.now());
   const { scores } = extractExperianIdentity(collectResult);
+  const assets = extractExperianAssets(collectResult);
+  const kindsFound = assets.map((a) => a.kind);
+  console.log(
+    `[Experian archive] user ${userId}: ${kindsFound.length} asset(s) [${kindsFound.join(", ")}]` +
+      (kindsFound.includes("selfie") ? "" : " — NO live selfie in this payload")
+  );
   let archived = 0;
-  for (const a of extractExperianAssets(collectResult)) {
+  for (const a of assets) {
     try {
       let buf = null;
       if (a.b64) buf = b64ToBuffer(a.b64);
@@ -210,8 +220,10 @@ export async function archiveExperianAssets(db, userId, collectResult, opts = {}
       }
       if (!buf || !buf.length) continue;
 
-      const imageId = `${txid}-${a.kind}`;
-      const storagePath = `${userId}/${provider}/${txid}/${imageId}-${a.fileName}`;
+      // Stable per-asset id/path (no transaction id) so re-running verification
+      // UPDATES the same row/object instead of piling up a fresh set every time.
+      const imageId = a.kind;
+      const storagePath = `${userId}/${provider}/${imageId}-${a.fileName}`;
       const up = await db.storage.from(KYC_ARCHIVE_BUCKET).upload(storagePath, buf, { contentType: a.mime, upsert: true });
       if (up.error) { console.error(`[Experian archive] upload ${a.kind}: ${up.error.message}`); continue; }
 
@@ -241,4 +253,54 @@ export async function archiveExperianAssets(db, userId, collectResult, opts = {}
     }
   }
   return archived;
+}
+
+// Persist a KYC V2 bureau result (addresses + stats + any identity) into the
+// SAME archive table the CRM reads, as one JSON "document" per user. Stable
+// image_id ("kyc_bureau") → re-checks UPDATE in place. The address list/stats
+// also go in resource_metadata so the CRM can show them without a download.
+// Never throws. Returns true on success.
+export async function archiveKycSnapshot(db, userId, snapshot, provider = "experian") {
+  try {
+    const buf = Buffer.from(JSON.stringify(snapshot, null, 2));
+    const imageId = "kyc_bureau";
+    const fileName = "experian_kyc_bureau.json";
+    const storagePath = `${userId}/${provider}/${imageId}-${fileName}`;
+    const up = await db.storage.from(KYC_ARCHIVE_BUCKET).upload(storagePath, buf, { contentType: "application/json", upsert: true });
+    if (up.error) { console.error(`[Experian KYC archive] upload: ${up.error.message}`); return false; }
+
+    const row = {
+      profile_id: userId,
+      external_user_id: userId,
+      applicant_id: String(snapshot?.enquiry_id || Date.now()),
+      inspection_id: String(snapshot?.enquiry_id || ""),
+      image_id: imageId,
+      file_name: fileName,
+      file_type: "json",
+      mime_type: "application/json",
+      content_size_bytes: buf.length,
+      storage_bucket: KYC_ARCHIVE_BUCKET,
+      storage_path: storagePath,
+      resource_metadata: {
+        provider,
+        workflow: "kyc_v2",
+        kind: "kyc_bureau",
+        idDocDef: { idDocType: "KYC_BUREAU" },
+        source: "experian_kyc",
+        addresses: snapshot?.addresses || [],
+        stats: snapshot?.stats || {},
+        identity: snapshot?.identity || {},
+      },
+      review_status: "completed",
+      archived_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    const ins = await db.from("sumsub_document_archive").upsert(row, { onConflict: "profile_id,image_id" });
+    if (ins.error) { console.error(`[Experian KYC archive] db: ${ins.error.message}`); return false; }
+    console.log(`[Experian KYC archive] user ${userId}: snapshot stored (${(snapshot?.addresses || []).length} address(es))`);
+    return true;
+  } catch (e) {
+    console.error(`[Experian KYC archive] ${e.message}`);
+    return false;
+  }
 }

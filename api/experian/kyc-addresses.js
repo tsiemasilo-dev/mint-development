@@ -1,5 +1,5 @@
 import { supabaseAdmin, supabase as supabaseAnon, authenticateUser } from "../_lib/supabase.js";
-import { EXPERIAN_KYC_URL, experianKycAuth, experianRequest } from "./_lib.js";
+import { EXPERIAN_KYC_URL, experianKycAuth, experianRequest, archiveKycSnapshot } from "./_lib.js";
 
 const TYPE_LABEL = { R: "Residential address", W: "Work address", P: "Postal address", O: "Other address" };
 
@@ -94,7 +94,31 @@ export default async function handler(req, res) {
       `[Experian KYC] HTTP ${httpStatus} · status=${status} · person_found=${stats.person_found ?? "?"} · address_count=${stats.address_count ?? (Array.isArray(rawAddrs) ? rawAddrs.length : 0)} · error=${kycResult?.error_code || "none"}`
     );
 
-    if (!Array.isArray(rawAddrs) || rawAddrs.length === 0) {
+    // Residential first, then most-recently-updated; cap at 10.
+    const addresses = (Array.isArray(rawAddrs) ? rawAddrs : [])
+      .map(normAddress)
+      .filter((a) => a.formatted)
+      .sort((a, b) => {
+        if ((a.type === "R") !== (b.type === "R")) return a.type === "R" ? -1 : 1;
+        return String(b.lastUpdated || "").localeCompare(String(a.lastUpdated || ""));
+      })
+      .slice(0, 10);
+
+    // Bureau identity fields, if the response carries them.
+    const identity = {
+      first_name: rd?.first_name || rd?.forename || null,
+      last_name: rd?.last_name || rd?.surname || null,
+      id_number: identityNumber,
+    };
+
+    // Persist once: durable archive snapshot (never lose it, CRM-visible) +
+    // audit copy in sumsub_raw. Both update in place on re-checks.
+    await archiveKycSnapshot(db, userId, { enquiry_id: rd?.enquiry_id, stats, addresses, identity, checked_at: new Date().toISOString() });
+    const checkedAt = new Date().toISOString();
+    const updatedRaw = { ...raw, experian_kyc_addresses: addresses, experian_kyc_stats: stats, experian_kyc_checked_at: checkedAt };
+    await db.from("user_onboarding").update({ sumsub_raw: updatedRaw, updated_at: checkedAt }).eq("user_id", userId);
+
+    if (addresses.length === 0) {
       const note =
         kycResult?.error_description ||
         kycResult?.ErrorDescription ||
@@ -106,20 +130,6 @@ export default async function handler(req, res) {
       console.log(`[Experian KYC] No addresses for user ${userId} → manual entry. note="${note}"`);
       return res.json({ success: true, addresses: [], note, personFound: stats.person_found === "Y" });
     }
-
-    // Residential first, then most-recently-updated; cap at 10.
-    const addresses = rawAddrs
-      .map(normAddress)
-      .filter((a) => a.formatted)
-      .sort((a, b) => {
-        if ((a.type === "R") !== (b.type === "R")) return a.type === "R" ? -1 : 1;
-        return String(b.lastUpdated || "").localeCompare(String(a.lastUpdated || ""));
-      })
-      .slice(0, 10);
-
-    // Stash for audit / reuse (no PII beyond what's already on file).
-    const updatedRaw = { ...raw, experian_kyc_addresses: addresses, experian_kyc_checked_at: new Date().toISOString() };
-    await db.from("user_onboarding").update({ sumsub_raw: updatedRaw, updated_at: new Date().toISOString() }).eq("user_id", userId);
 
     console.log(`[Experian KYC] Returning ${addresses.length} address(es) for user ${userId}`);
     return res.json({ success: true, addresses });
