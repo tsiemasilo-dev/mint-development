@@ -1087,7 +1087,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                         <option value={-1}>Choose an address…</option>
                         {experianAddresses.map((a, i) => (
                           <option key={i} value={i}>
-                            {a.typeLabel ? `${a.typeLabel}: ` : ""}{a.formatted}
+                            {a.typeLabel ? `${a.typeLabel} — ` : ""}{a.formatted}
                           </option>
                         ))}
                       </select>

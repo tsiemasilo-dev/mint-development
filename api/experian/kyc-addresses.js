@@ -1,7 +1,7 @@
 import { supabaseAdmin, supabase as supabaseAnon, authenticateUser } from "../_lib/supabase.js";
 import { EXPERIAN_KYC_URL, experianKycAuth, experianRequest } from "./_lib.js";
 
-const TYPE_LABEL = { R: "Residential", W: "Work", P: "Postal", O: "Other" };
+const TYPE_LABEL = { R: "Residential address", W: "Work address", P: "Postal address", O: "Other address" };
 
 // Normalise one address record (REST JSON is lowercase; tolerate XML-cased keys too).
 function normAddress(a) {
@@ -15,7 +15,7 @@ function normAddress(a) {
   return {
     formatted,
     type,
-    typeLabel: get("address_type_description", "AddressTypeDescription") || TYPE_LABEL[type] || "Address",
+    typeLabel: TYPE_LABEL[type] || get("address_type_description", "AddressTypeDescription") || "Address",
     postalCode: postal,
     lastUpdated: get("last_date_updated", "LastDateUpdated") || null,
     lines,
