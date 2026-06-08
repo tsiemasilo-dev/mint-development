@@ -57,7 +57,7 @@ export const useUserStrategies = (familyMemberId = null) => {
       // avoids /api/user/strategies which joins the deleted strategy_metrics table.
       let returnsQuery = supabase
         .from("client_strategy_returns_c")
-        .select("strategy_id, basket_value, holdings_snapshot, as_of_date, ytd_pct")
+        .select("strategy_id, basket_value, holdings_snapshot, as_of_date, ytd_pct, inception_pnl")
         .eq("user_id", userId);
       returnsQuery = familyMemberId
         ? returnsQuery.eq("family_member", familyMemberId)
@@ -139,8 +139,24 @@ export const useUserStrategies = (familyMemberId = null) => {
            portfolio shrank. */
         const residualVal = Number((residualRandsByStrategy[strategyId] || 0).toFixed(2));
         const currentVal = Number((positionsVal + residualVal).toFixed(2));
-        const invested = snapshot.reduce((sum, h) => sum + costBasisRandsPerShare(h) * (h.qty || h.quantity || 0), 0);
-        const changePct = invested > 0 ? ((currentVal - invested) / invested) * 100 : 0;
+
+        /* "Money in" must be STABLE across rebalances. The returns job already
+           accumulates total P&L (daily price moves + realised gains booked on
+           rebalance sell-days) into inception_pnl — so it never loses the cost
+           of sold shares. Deriving invested from it (current worth − total P&L)
+           keeps the cost basis anchored, instead of re-summing the cost of only
+           the shares still held (which silently drops sold shares and makes the
+           % return drift after every rebalance). Falls back to the legacy
+           recompute for older rows that predate inception_pnl. */
+        const inceptionPnlRands = returnsRow.inception_pnl != null ? Number(returnsRow.inception_pnl) / 100 : null;
+        let invested, changePct;
+        if (inceptionPnlRands != null && currentVal - inceptionPnlRands > 0) {
+          invested = Number((currentVal - inceptionPnlRands).toFixed(2));
+          changePct = invested > 0 ? (inceptionPnlRands / invested) * 100 : 0;
+        } else {
+          invested = snapshot.reduce((sum, h) => sum + costBasisRandsPerShare(h) * (h.qty || h.quantity || 0), 0);
+          changePct = invested > 0 ? ((currentVal - invested) / invested) * 100 : 0;
+        }
         const ytdPctDecimal = returnsRow.ytd_pct != null ? returnsRow.ytd_pct / 100 : null;
 
         // Build snapshot lookup by symbol for augmenting base holdings
