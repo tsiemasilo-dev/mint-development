@@ -133,12 +133,12 @@
         <table class="w-full text-sm">
           <thead>
             <tr style="background:#160d2e; border-bottom:1px solid #2d1b5e;">
-              <th class="text-left px-4 py-3 text-xs uppercase tracking-wider text-slate-400 font-medium">Incident</th>
-              <th class="text-left px-4 py-3 text-xs uppercase tracking-wider text-slate-400 font-medium">Service</th>
-              <th class="text-left px-4 py-3 text-xs uppercase tracking-wider text-slate-400 font-medium">Severity</th>
-              <th class="text-left px-4 py-3 text-xs uppercase tracking-wider text-slate-400 font-medium">Status</th>
-              <th class="text-left px-4 py-3 text-xs uppercase tracking-wider text-slate-400 font-medium">Started</th>
-              <th class="text-left px-4 py-3 text-xs uppercase tracking-wider text-slate-400 font-medium">Downtime</th>
+              <th class="text-left px-4 py-3 text-xs uppercase tracking-wider text-slate-400 font-medium cursor-pointer select-none hover:text-purple-300 transition" onclick="sortBy('title')"><span class="flex items-center gap-1">Incident <span id="sort-title" class="opacity-40">↕</span></span></th>
+              <th class="text-left px-4 py-3 text-xs uppercase tracking-wider text-slate-400 font-medium cursor-pointer select-none hover:text-purple-300 transition" onclick="sortBy('affected_service')"><span class="flex items-center gap-1">Service <span id="sort-affected_service" class="opacity-40">↕</span></span></th>
+              <th class="text-left px-4 py-3 text-xs uppercase tracking-wider text-slate-400 font-medium cursor-pointer select-none hover:text-purple-300 transition" onclick="sortBy('severity')"><span class="flex items-center gap-1">Severity <span id="sort-severity" class="opacity-40">↕</span></span></th>
+              <th class="text-left px-4 py-3 text-xs uppercase tracking-wider text-slate-400 font-medium cursor-pointer select-none hover:text-purple-300 transition" onclick="sortBy('status')"><span class="flex items-center gap-1">Status <span id="sort-status" class="opacity-40">↕</span></span></th>
+              <th class="text-left px-4 py-3 text-xs uppercase tracking-wider text-slate-400 font-medium cursor-pointer select-none hover:text-purple-300 transition" onclick="sortBy('start_time')"><span class="flex items-center gap-1">Started <span id="sort-start_time" class="opacity-40">↕</span></span></th>
+              <th class="text-left px-4 py-3 text-xs uppercase tracking-wider text-slate-400 font-medium cursor-pointer select-none hover:text-purple-300 transition" onclick="sortBy('downtime_duration_minutes')"><span class="flex items-center gap-1">Downtime <span id="sort-downtime_duration_minutes" class="opacity-40">↕</span></span></th>
               <th class="text-left px-4 py-3 text-xs uppercase tracking-wider text-slate-400 font-medium">Actions</th>
             </tr>
           </thead>
@@ -268,6 +268,8 @@
     }
 
     let allIncidents = [];
+    let sortCol = 'start_time';
+    let sortDir = 'desc';
 
     // ── Bootstrap ───────────────────────────────────────────────────────────────
     document.addEventListener('DOMContentLoaded', () => {
@@ -336,7 +338,8 @@
         const data = await res.json();
         allIncidents = data.incidents || [];
         updateCards(allIncidents);
-        renderTable(allIncidents);
+        updateSortIndicators();
+        renderTable(sortedIncidents(allIncidents));
       } catch (e) {
         tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-red-400">Could not load incidents: ${e.message}. Check the MINT_API URL at the top of this file.</td></tr>`;
       }
@@ -356,19 +359,76 @@
       }
     }
 
+    // ── Sorting ──────────────────────────────────────────────────────────────────
+    const SEVERITY_ORDER = { critical: 4, high: 3, medium: 2, low: 1 };
+    const STATUS_ORDER = { open: 3, investigating: 2, resolved: 1 };
+
+    function sortBy(col) {
+      if (sortCol === col) {
+        sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortCol = col;
+        sortDir = col === 'start_time' ? 'desc' : 'asc';
+      }
+      updateSortIndicators();
+      applyFilters();
+    }
+
+    function updateSortIndicators() {
+      const cols = ['title','affected_service','severity','status','start_time','downtime_duration_minutes'];
+      cols.forEach(c => {
+        const el = document.getElementById('sort-' + c);
+        if (!el) return;
+        if (c === sortCol) {
+          el.textContent = sortDir === 'asc' ? '↑' : '↓';
+          el.classList.remove('opacity-40');
+          el.classList.add('text-purple-400');
+        } else {
+          el.textContent = '↕';
+          el.classList.add('opacity-40');
+          el.classList.remove('text-purple-400');
+        }
+      });
+    }
+
+    function sortedIncidents(list) {
+      return [...list].sort((a, b) => {
+        let va, vb;
+        if (sortCol === 'severity') {
+          va = SEVERITY_ORDER[a.severity] || 0;
+          vb = SEVERITY_ORDER[b.severity] || 0;
+        } else if (sortCol === 'status') {
+          va = STATUS_ORDER[a.status] || 0;
+          vb = STATUS_ORDER[b.status] || 0;
+        } else if (sortCol === 'start_time') {
+          va = new Date(a.start_time).getTime();
+          vb = new Date(b.start_time).getTime();
+        } else if (sortCol === 'downtime_duration_minutes') {
+          va = a.downtime_duration_minutes ?? (a.status !== 'resolved' ? (Date.now() - new Date(a.start_time)) / 60000 : -1);
+          vb = b.downtime_duration_minutes ?? (b.status !== 'resolved' ? (Date.now() - new Date(b.start_time)) / 60000 : -1);
+        } else {
+          va = (a[sortCol] || '').toLowerCase();
+          vb = (b[sortCol] || '').toLowerCase();
+        }
+        if (va < vb) return sortDir === 'asc' ? -1 : 1;
+        if (va > vb) return sortDir === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
     function applyFilters() {
       const status = document.getElementById('filter-status').value;
       const severity = document.getElementById('filter-severity').value;
       let filtered = allIncidents;
       if (status) filtered = filtered.filter(i => i.status === status);
       if (severity) filtered = filtered.filter(i => i.severity === severity);
-      renderTable(filtered);
+      renderTable(sortedIncidents(filtered));
     }
 
     function clearFilters() {
       document.getElementById('filter-status').value = '';
       document.getElementById('filter-severity').value = '';
-      renderTable(allIncidents);
+      renderTable(sortedIncidents(allIncidents));
     }
 
     function renderTable(incidents) {

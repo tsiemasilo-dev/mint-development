@@ -42,11 +42,18 @@ CREATE POLICY "service_role_all" ON it_incidents
   USING (true)
   WITH CHECK (true);
 
--- Authenticated users can only read
-CREATE POLICY "authenticated_read" ON it_incidents
+-- Admin users only can read (requires a role column on profiles; adjust predicate to match your schema)
+-- If your profiles table uses a different admin indicator, update the sub-select below.
+CREATE POLICY "admin_read" ON it_incidents
   FOR SELECT
   TO authenticated
-  USING (true);
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles p
+      WHERE p.id = auth.uid()
+        AND p.role = 'admin'
+    )
+  );
 
 -- Index for common queries
 CREATE INDEX IF NOT EXISTS it_incidents_status_idx ON it_incidents (status);
