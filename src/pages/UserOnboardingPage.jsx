@@ -196,6 +196,10 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const [address, setAddress] = useState("");
   const [addressDone, setAddressDone] = useState(false);
   const [addressLoading, setAddressLoading] = useState(false);
+  // Experian KYC V2 address lookup (bureau addresses for the dropdown on step 3)
+  const [experianAddresses, setExperianAddresses] = useState(null); // null = not fetched, [] = none found
+  const [experianAddrLoading, setExperianAddrLoading] = useState(false);
+  const experianAddrFetchedRef = useRef(false);
   const [termsDone, setTermsDone] = useState(false);
   const [agreementSignedDone, setAgreementSignedDone] = useState(false);
   const [authStatus, setAuthStatus] = useState({
@@ -693,6 +697,34 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
     checkKycStatus();
   }, [step]);
 
+  // On the address step, fetch the user's bureau addresses from Experian KYC V2
+  // once, so they can pick from a dropdown instead of typing it. Falls back to
+  // manual entry if none are returned. Fetched once (it's a billable lookup).
+  useEffect(() => {
+    if (step !== 3 || experianAddrFetchedRef.current) return;
+    experianAddrFetchedRef.current = true;
+    (async () => {
+      try {
+        if (!supabase) return;
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        if (!token) return;
+        setExperianAddrLoading(true);
+        const res = await fetch("/api/experian/kyc-addresses", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        setExperianAddresses(data?.success && Array.isArray(data.addresses) ? data.addresses : []);
+      } catch (err) {
+        console.warn("[Onboarding] Experian address lookup failed:", err);
+        setExperianAddresses([]);
+      } finally {
+        setExperianAddrLoading(false);
+      }
+    })();
+  }, [step]);
+
   const showEmployedSection =
     employmentStatus === "employed" ||
     employmentStatus === "self-employed" ||
@@ -1023,8 +1055,40 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               </div>
 
               <div className="space-y-6">
+                {/* Experian KYC V2 — pick a known address from the bureau */}
+                {experianAddrLoading ? (
+                  <div className="animate-fade-in delay-2 text-sm" style={{ color: "hsl(270 20% 50%)" }}>
+                    Looking up your addresses…
+                  </div>
+                ) : (experianAddresses && experianAddresses.length > 0) ? (
+                  <div className="animate-fade-in delay-2">
+                    <label htmlFor="experian-address">Select your address</label>
+                    <div className="glass-field">
+                      <select
+                        id="experian-address"
+                        className="w-full"
+                        value={experianAddresses.findIndex((a) => a.formatted === address)}
+                        onChange={(e) => {
+                          const idx = Number(e.target.value);
+                          if (idx >= 0 && experianAddresses[idx]) setAddress(experianAddresses[idx].formatted);
+                        }}
+                      >
+                        <option value={-1}>Choose an address…</option>
+                        {experianAddresses.map((a, i) => (
+                          <option key={i} value={i}>
+                            {a.typeLabel ? `${a.typeLabel}: ` : ""}{a.formatted}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <p className="text-xs mt-2" style={{ color: "hsl(270 15% 60%)" }}>
+                      These are the addresses Experian has on record for you. Pick one, or enter a different one below.
+                    </p>
+                  </div>
+                ) : null}
+
                 <div className="animate-fade-in delay-2">
-                  <label htmlFor="residential-address">Street Address</label>
+                  <label htmlFor="residential-address">{experianAddresses && experianAddresses.length > 0 ? "Or enter your address" : "Street Address"}</label>
                   <div className="glass-field">
                     <AddressAutocomplete
                       value={address}

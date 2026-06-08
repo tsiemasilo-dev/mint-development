@@ -86,9 +86,12 @@ const ExperianVerification = ({ onVerified }) => {
   const [useEmbedOnDesktop, setUseEmbedOnDesktop] = useState(false);
   const showQr = isDesktop && !useEmbedOnDesktop;
 
-  // Two-step KYC: Alternative Liveness ("liveness") then, the moment it verifies,
-  // OCR document capture ("ocr") — both run in this same embedded UI/QR flow.
-  const OCR_ENABLED = import.meta.env?.VITE_EXPERIAN_OCR !== "false";
+  // OCR document capture is intentionally NOT part of onboarding. It's been moved
+  // to trigger later (on withdrawal or buying a secondary strategy). The OCR
+  // machinery (workflow "ocr" in start/collect + the 'ocr' phase below) is kept
+  // intact so that flow can reuse it; onboarding runs liveness only.
+  // Re-enable for onboarding by flipping this (or setting VITE_EXPERIAN_OCR).
+  const OCR_ENABLED = import.meta.env?.VITE_EXPERIAN_OCR === "true";
   const [phase, setPhase] = useState("liveness");
   const phaseRef = useRef("liveness");
 

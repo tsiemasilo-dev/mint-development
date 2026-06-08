@@ -5,6 +5,24 @@ export const EXPERIAN_IDMN_BASE =
     ? "https://apis.experian.co.za:9443/IdMeNow"
     : "https://apis-uat.experian.co.za:9443/IdMeNow";
 
+// KYC V2 bureau service (separate from IDMN). Returns bureau Address/Contact/
+// Employment data by ID number. Auth goes in the request BODY (not a Basic
+// header). Same Experian account/branch — reuses the IDMN creds when dedicated
+// KYC creds aren't set.
+export const EXPERIAN_KYC_URL =
+  process.env.EXPERIAN_ENV === "production"
+    ? "https://apis.experian.co.za:9443/KycService/RequestNewKYC"
+    : "https://apis-uat.experian.co.za:9443/KycService/RequestNewKYC";
+
+export function experianKycAuth() {
+  return {
+    username: process.env.EXPERIAN_KYC_USERNAME || process.env.EXPERIAN_IDMN_USERNAME || "",
+    password: process.env.EXPERIAN_KYC_PASSWORD || process.env.EXPERIAN_IDMN_PASSWORD || "",
+    version: "1.0",
+    origin: "MINT",
+  };
+}
+
 // UAT 10 = Alternative Liveness Verification (liveness + DHA face match + ID check, no AML)
 // UAT 14 = Full ID Me Now (adds AML/PEP screening — billed extra, add back when ready)
 // PROD equivalents: 6 = Alternative Liveness, 10 = Full ID Me Now
