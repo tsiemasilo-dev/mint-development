@@ -130,9 +130,22 @@ export default async function handler(req, res) {
     // that window is exactly the bug we're killing. Real failures are surfaced
     // in the UI on a manual status check, where the user can simply retry.
     if (kycStatus !== "verified") {
-      await db.from("user_onboarding")
-        .update({ kyc_checked_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-        .eq("user_id", userId);
+      const update = { kyc_checked_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      // Dead/expired reference (IMN_205 "No records found" / IMN_208): the stored
+      // transaction is unusable, so drop it. Otherwise start.js would keep
+      // RESUMING this dead transaction (it returns the existing one when tx+token
+      // are present) and every poll loops on IMN_205. Clearing the tx keys lets
+      // the next start issue a fresh StartWorkflow. We still DON'T flag the
+      // account failed — the no-mutation rule for kyc_status/required_actions holds.
+      if (errorCode === "IMN_205" || errorCode === "IMN_208") {
+        const cleared = { ...raw };
+        delete cleared[K.tx];
+        delete cleared[K.token];
+        delete cleared[K.started];
+        update.sumsub_raw = cleared;
+        console.log(`[Experian IDMN] ${errorCode} for user ${userId} — cleared dead ${workflow} transaction so next start is fresh`);
+      }
+      await db.from("user_onboarding").update(update).eq("user_id", userId);
       // collectResult echoed back so the raw Experian payload is visible in the
       // browser console (helps inspect OCR/liveness fields without Vercel logs).
       return res.json({ success: true, status: kycStatus, errorCode: errorCode || null, workflow, collectResult });
