@@ -80,6 +80,7 @@ const ExperianVerification = ({ onVerified }) => {
   const pollAttemptsRef = useRef(0);
   const mountedRef = useRef(true);
   const initRef = useRef(false);
+  const autoRestartRef = useRef(0); // self-heal a wiped/missing transaction (capped)
 
   const isDesktop = useMemo(detectDesktop, []);
   // On desktop the user can choose to do it right here (webcam) instead of phone.
@@ -103,7 +104,7 @@ const ExperianVerification = ({ onVerified }) => {
     return session?.access_token ? `Bearer ${session.access_token}` : null;
   }, []);
 
-  const startWorkflow = useCallback(async (wf) => {
+  const startWorkflow = useCallback(async (wf, opts = {}) => {
     const workflow = wf || phaseRef.current;
     try {
       setStage(STAGE.INITIALIZING);
@@ -117,7 +118,7 @@ const ExperianVerification = ({ onVerified }) => {
       const res = await fetch("/api/experian/idmn/start", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: authToken },
-        body: JSON.stringify({ workflow }),
+        body: JSON.stringify({ workflow, restart: opts.restart === true }),
       });
       const data = await res.json();
 
@@ -230,10 +231,27 @@ const ExperianVerification = ({ onVerified }) => {
       if (!mountedRef.current) return;
 
       if (!data.success) {
+        // The transaction went missing (wiped/torn write/expired). Don't 400-loop
+        // — issue ONE fresh StartWorkflow so the user can continue, then stop
+        // auto-restarting to avoid a loop if the backend keeps failing.
+        if (data.error?.code === "NO_TRANSACTION" && autoRestartRef.current < 1) {
+          autoRestartRef.current += 1;
+          console.warn("[ExperianVerification] No transaction on collect — restarting verification fresh.");
+          if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+          pollAttemptsRef.current = 0;
+          setPollCount(0);
+          startWorkflow(phaseRef.current, { restart: true });
+          return;
+        }
         if (silent) return; // ignore transient failures during auto-poll
         setErrorMessage(data.error?.message || "Failed to retrieve verification result.");
         setStage(STAGE.ERROR);
         return;
+      }
+
+      // A good poll means the transaction is alive again — re-arm the self-heal.
+      if (data.status === "verified" || data.status === "in_progress" || data.status === "pending") {
+        autoRestartRef.current = 0;
       }
 
       if (data.status === "verified") {

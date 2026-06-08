@@ -58,9 +58,22 @@ export default async function handler(req, res) {
 
     // "Redo" — caller wants a fresh workflow; drop the stored transaction so a
     // new StartWorkflow is issued below instead of resuming the old one.
-    const restart = req.body?.restart === true;
+    let restart = req.body?.restart === true;
 
-    // Return existing URL if a workflow is already in flight (unless restarting)
+    // A stored transaction older than this is treated as dead: Experian liveness
+    // sessions expire, and resuming an abandoned one makes every collect loop on
+    // IMN_205 "No records found". Older than the window → force a fresh start.
+    // (Detected HERE, in start — never in the collect poll loop, which must not
+    // mutate sumsub_raw.) 15 min comfortably covers a legitimate resume/reload.
+    const STALE_MS = 15 * 60 * 1000;
+    const startedAt = raw?.[K.started] ? Date.parse(raw[K.started]) : 0;
+    const isStale = !startedAt || Date.now() - startedAt > STALE_MS;
+    if (!restart && raw?.[K.tx] && raw?.[K.token] && isStale) {
+      console.log(`[Experian IDMN] stored ${workflow} tx is stale (${raw[K.started]}) — issuing fresh StartWorkflow`);
+      restart = true;
+    }
+
+    // Return existing URL if a fresh workflow is already in flight (unless restarting)
     if (!restart && raw?.[K.tx] && raw?.[K.token]) {
       const url = `${EXPERIAN_IDMN_HOSTED_BASE}/${raw[K.token]}`;
       return res.json({ success: true, url, transaction_id: String(raw[K.tx]), token: raw[K.token], existing: true, workflow });
