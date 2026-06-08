@@ -147,7 +147,7 @@ export default async function handler(req, res) {
     // once wired) into our storage + the shared sumsub_document_archive table
     // (same shape the CRM reads) BEFORE storing the JSON, so the heavy base64
     // blobs can be stripped from what we keep in the DB.
-    const archivedCount = await archiveExperianAssets(db, userId, collectResult, {
+    const archiveResult = await archiveExperianAssets(db, userId, collectResult, {
       transactionId: transaction_id,
       reviewAnswer,
       workflow,
@@ -159,11 +159,11 @@ export default async function handler(req, res) {
     if (isOcr) {
       const ocrRaw = { ...raw, [K.result]: slimResult, [K.status]: "verified", [K.collected]: new Date().toISOString() };
       await db.from("user_onboarding").update({ sumsub_raw: ocrRaw, updated_at: new Date().toISOString() }).eq("user_id", userId);
-      console.log(`[Experian OCR] user ${userId} verified — archived ${archivedCount} document(s)`);
+      console.log(`[Experian OCR] user ${userId} verified — archived ${archiveResult.archived} document(s)`);
       // Echo the FULL (un-slimmed) result here so the OCR structure — including the
       // ID-document image field we haven't mapped yet — is fully visible in the
       // browser console during testing. Storage still keeps the slimmed copy.
-      return res.json({ success: true, status: kycStatus, workflow, archived: archivedCount, collectResult });
+      return res.json({ success: true, status: kycStatus, workflow, archive: archiveResult, collectResult });
     }
 
     const updatedRaw = { ...raw, experian_idmn_result: slimResult, experian_idmn_collected_at: new Date().toISOString() };
@@ -191,8 +191,8 @@ export default async function handler(req, res) {
     if (existingAction) { await db.from("required_actions").update(raPayload).eq("user_id", userId); }
     else { await db.from("required_actions").insert({ user_id: userId, ...raPayload }); }
 
-    console.log(`[Experian IDMN] user ${userId} verified — archived ${archivedCount} document(s)`);
-    return res.json({ success: true, status: kycStatus, errorCode: errorCode || null, workflow, archived: archivedCount, collectResult: slimResult });
+    console.log(`[Experian IDMN] user ${userId} verified — archived ${archiveResult.archived} document(s)`);
+    return res.json({ success: true, status: kycStatus, errorCode: errorCode || null, workflow, archive: archiveResult, collectResult: slimResult });
   } catch (err) {
     console.error("[Experian IDMN Collect]", err);
     return res.status(500).json({ success: false, error: { message: err.message } });

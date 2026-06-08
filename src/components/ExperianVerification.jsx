@@ -227,6 +227,16 @@ const ExperianVerification = ({ onVerified }) => {
           console.log(`[Experian ${wfLabel}] CollectWorkflowResults raw:`, data.collectResult);
         }
       }
+      // Archive summary (what was stored / what failed) — confirms selfie capture.
+      if (data?.archive) {
+        const a = data.archive;
+        console.log(
+          `[Experian archive] found [${(a.found || []).join(", ")}] → stored [${(a.kinds || []).join(", ")}]` +
+            (a.failed?.length ? ` | FAILED: ${a.failed.map((f) => `${f.kind}(${f.error})`).join(", ")}` : "") +
+            (a.kinds?.includes("selfie") ? "  ✅ selfie captured" : "  ⚠️ no selfie stored"),
+          a
+        );
+      }
 
       if (!mountedRef.current) return;
 

@@ -208,24 +208,24 @@ export async function archiveExperianAssets(db, userId, collectResult, opts = {}
     `[Experian archive] user ${userId}: ${kindsFound.length} asset(s) [${kindsFound.join(", ")}]` +
       (kindsFound.includes("selfie") ? "" : " — NO live selfie in this payload")
   );
-  let archived = 0;
+  const result = { archived: 0, found: kindsFound, kinds: [], failed: [] };
   for (const a of assets) {
     try {
       let buf = null;
       if (a.b64) buf = b64ToBuffer(a.b64);
       else if (a.url) {
         const r = await fetch(a.url);
-        if (!r.ok) { console.error(`[Experian archive] fetch ${a.kind} ${r.status}`); continue; }
+        if (!r.ok) { const e = `fetch ${r.status}`; console.error(`[Experian archive] ${a.kind} ${e}`); result.failed.push({ kind: a.kind, error: e }); continue; }
         buf = Buffer.from(await r.arrayBuffer());
       }
-      if (!buf || !buf.length) continue;
+      if (!buf || !buf.length) { console.error(`[Experian archive] ${a.kind}: empty buffer`); result.failed.push({ kind: a.kind, error: "empty buffer" }); continue; }
 
       // Stable per-asset id/path (no transaction id) so re-running verification
       // UPDATES the same row/object instead of piling up a fresh set every time.
       const imageId = a.kind;
       const storagePath = `${userId}/${provider}/${imageId}-${a.fileName}`;
       const up = await db.storage.from(KYC_ARCHIVE_BUCKET).upload(storagePath, buf, { contentType: a.mime, upsert: true });
-      if (up.error) { console.error(`[Experian archive] upload ${a.kind}: ${up.error.message}`); continue; }
+      if (up.error) { console.error(`[Experian archive] upload ${a.kind}: ${up.error.message}`); result.failed.push({ kind: a.kind, error: `upload: ${up.error.message}` }); continue; }
 
       const row = {
         profile_id: userId,
@@ -246,13 +246,16 @@ export async function archiveExperianAssets(db, userId, collectResult, opts = {}
         updated_at: new Date().toISOString(),
       };
       const ins = await db.from("sumsub_document_archive").upsert(row, { onConflict: "profile_id,image_id" });
-      if (ins.error) { console.error(`[Experian archive] db ${a.kind}: ${ins.error.message}`); continue; }
-      archived++;
+      if (ins.error) { console.error(`[Experian archive] db ${a.kind}: ${ins.error.message}`); result.failed.push({ kind: a.kind, error: `db: ${ins.error.message}` }); continue; }
+      result.archived++;
+      result.kinds.push(a.kind);
     } catch (e) {
       console.error(`[Experian archive] ${a.kind}: ${e.message}`);
+      result.failed.push({ kind: a.kind, error: e.message });
     }
   }
-  return archived;
+  console.log(`[Experian archive] user ${userId}: archived ${result.archived} [${result.kinds.join(", ")}]` + (result.failed.length ? ` | FAILED: ${result.failed.map((f) => `${f.kind}(${f.error})`).join(", ")}` : ""));
+  return result;
 }
 
 // Persist a KYC V2 bureau result (addresses + stats + any identity) into the
