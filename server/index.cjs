@@ -6864,19 +6864,26 @@ app.get("/api/health", async (req, res) => {
     const db = supabaseAdmin || supabase;
     const { error } = await db.from('profiles').select('id').limit(1);
 
-    // Fetch open incident summary for admin dashboards
+    // Fetch open incident count + last incident date across ALL statuses
     let openIncidents = 0;
     let lastIncidentDate = null;
     try {
-      const { data: incidents } = await db
-        .from('it_incidents')
-        .select('id, status, created_at')
-        .neq('status', 'resolved')
-        .order('created_at', { ascending: false })
-        .limit(50);
-      if (incidents) {
-        openIncidents = incidents.length;
-        if (incidents[0]) lastIncidentDate = incidents[0].created_at;
+      if (pgPool) {
+        const pgClient = await pgPool.connect();
+        try {
+          const { rows } = await pgClient.query(
+            `SELECT
+               COUNT(*) FILTER (WHERE status != 'resolved') AS open_count,
+               MAX(start_time) AS last_incident_at
+             FROM it_incidents`
+          );
+          if (rows[0]) {
+            openIncidents = parseInt(rows[0].open_count, 10) || 0;
+            lastIncidentDate = rows[0].last_incident_at || null;
+          }
+        } finally {
+          pgClient.release();
+        }
       }
     } catch (_) {}
 
@@ -10720,20 +10727,49 @@ setTimeout(() => {
 // ── IT Incident Register API ──────────────────────────────────────────────────
 // Uses pgPool directly to avoid Supabase PostgREST schema-cache delay on new tables.
 
-const IT_CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
-function setItCors(res) { Object.entries(IT_CORS).forEach(([k, v]) => res.setHeader(k, v)); }
+// Allowed origins for the IT Incident Register endpoints (admin panel + local dev)
+const IT_ALLOWED_ORIGINS = [
+  'https://my-mint-admin.vercel.app',
+  'http://localhost:5000',
+  'http://localhost:3001',
+  'http://127.0.0.1:5000',
+];
+const IT_REPLIT_ORIGIN_RE = /^https:\/\/[a-z0-9-]+(\.replit\.dev|\.spock\.replit\.dev|\.repl\.co)$/;
+
+function setItCors(req, res) {
+  const origin = req.headers.origin || '';
+  const allowed = IT_ALLOWED_ORIGINS.includes(origin) || IT_REPLIT_ORIGIN_RE.test(origin);
+  if (allowed) res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Vary', 'Origin');
+}
+
+/**
+ * Verify the request carries a valid admin API key.
+ * Accepts: Authorization: Bearer <key>
+ * Key is read from ADMIN_API_KEY env var, falling back to CRON_SECRET.
+ * Returns null on success, or an error message string on failure.
+ */
+function checkAdminKey(req) {
+  const adminKey = process.env.ADMIN_API_KEY || process.env.CRON_SECRET;
+  if (!adminKey) return 'ADMIN_API_KEY not configured on this server';
+  const auth = req.headers.authorization || '';
+  if (!auth.startsWith('Bearer ')) return 'Missing Authorization: Bearer <key> header';
+  const supplied = auth.slice(7).trim();
+  if (supplied !== adminKey) return 'Invalid admin key';
+  return null;
+}
 
 // OPTIONS preflight for CORS
-app.options('/api/incidents', (req, res) => { setItCors(res); res.sendStatus(204); });
-app.options('/api/incidents/:id', (req, res) => { setItCors(res); res.sendStatus(204); });
+app.options('/api/incidents', (req, res) => { setItCors(req, res); res.sendStatus(204); });
+app.options('/api/incidents/:id', (req, res) => { setItCors(req, res); res.sendStatus(204); });
 
 // GET /api/incidents — list all incidents, filterable by status and severity
 app.get('/api/incidents', async (req, res) => {
-  setItCors(res);
+  setItCors(req, res);
+  const authErr = checkAdminKey(req);
+  if (authErr) return res.status(401).json({ error: authErr });
   if (!pgPool) return res.status(503).json({ error: 'Database not configured' });
   const client = await pgPool.connect();
   try {
@@ -10756,7 +10792,9 @@ app.get('/api/incidents', async (req, res) => {
 
 // POST /api/incidents — log a new incident
 app.post('/api/incidents', async (req, res) => {
-  setItCors(res);
+  setItCors(req, res);
+  const authErr = checkAdminKey(req);
+  if (authErr) return res.status(401).json({ error: authErr });
   if (!pgPool) return res.status(503).json({ error: 'Database not configured' });
   try {
     const { title, affected_service, severity, start_time, description, created_by } = req.body || {};
@@ -10794,7 +10832,9 @@ app.post('/api/incidents', async (req, res) => {
 
 // PATCH /api/incidents/:id — update or resolve an incident
 app.patch('/api/incidents/:id', async (req, res) => {
-  setItCors(res);
+  setItCors(req, res);
+  const authErr = checkAdminKey(req);
+  if (authErr) return res.status(401).json({ error: authErr });
   if (!pgPool) return res.status(503).json({ error: 'Database not configured' });
   const client = await pgPool.connect();
   try {

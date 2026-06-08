@@ -242,6 +242,31 @@
       ? ''   // relative — Vite proxy handles /api/*
       : 'https://98c53c65-2d21-45be-85d9-9955243bdc05-00-345u4hugvanos.spock.replit.dev'; // deployed backend
 
+    // ── Admin API key (ADMIN_API_KEY / CRON_SECRET from the Mint backend) ────────
+    // Stored in sessionStorage so it clears on tab close. Prompts on first load.
+    const ADMIN_KEY_STORE = 'mint_it_admin_key';
+
+    function getAdminKey() {
+      return sessionStorage.getItem(ADMIN_KEY_STORE) || '';
+    }
+
+    function promptAdminKey() {
+      const existing = getAdminKey();
+      const key = window.prompt(
+        'Enter the Mint Admin API Key (ADMIN_API_KEY or CRON_SECRET from the server):\n\nThis is stored only for this browser tab session.',
+        existing
+      );
+      if (key !== null && key.trim()) {
+        sessionStorage.setItem(ADMIN_KEY_STORE, key.trim());
+      }
+      return getAdminKey();
+    }
+
+    function authHeaders() {
+      const key = getAdminKey();
+      return key ? { 'Authorization': `Bearer ${key}` } : {};
+    }
+
     let allIncidents = [];
 
     // ── Bootstrap ───────────────────────────────────────────────────────────────
@@ -250,6 +275,9 @@
       const now = new Date();
       now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
       document.getElementById('f-start').value = now.toISOString().slice(0,16);
+
+      // Prompt for admin key on first load if not already set
+      if (!getAdminKey()) promptAdminKey();
 
       loadHealth();
       loadIncidents();
@@ -300,8 +328,11 @@
       const tbody = document.getElementById('incidents-tbody');
       tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">Loading...</td></tr>';
       try {
-        const res = await fetch(`${MINT_API}/api/incidents`);
-        if (!res.ok) throw new Error(`${res.status}`);
+        const res = await fetch(`${MINT_API}/api/incidents`, { headers: authHeaders() });
+        if (!res.ok) {
+          if (res.status === 401) { promptAdminKey(); return loadIncidents(); }
+          throw new Error(`${res.status}`);
+        }
         const data = await res.json();
         allIncidents = data.incidents || [];
         updateCards(allIncidents);
@@ -385,7 +416,7 @@
           created_by: document.getElementById('f-by').value.trim() || null,
         };
         const res = await fetch(`${MINT_API}/api/incidents`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+          method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(body)
         });
         if (!res.ok) { const d = await res.json(); throw new Error(d.error || res.status); }
         closeLogModal();
@@ -433,7 +464,7 @@
           if (rt) body.resolved_time = new Date(rt).toISOString();
         }
         const res = await fetch(`${MINT_API}/api/incidents/${id}`, {
-          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+          method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(body)
         });
         if (!res.ok) { const d = await res.json(); throw new Error(d.error || res.status); }
         closeResolveModal();
