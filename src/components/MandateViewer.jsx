@@ -164,7 +164,7 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
   const requiredFieldsFilled = !!(firstName.trim() && lastName.trim() && email.trim() && idFilled && postalFilled);
 
   const sec3Done      = allGroupsValid() && discretionType !== null;
-  const signComplete  = initialsDone && idFilled && postalFilled && countryFilled && agreedDone;
+  const signComplete  = initialsDone && idFilled && postalFilled && phoneFilled && agreedDone;
   const isMandateValid = sec3Done && signComplete && firstName.trim() && lastName.trim() && email.trim();
 
   useEffect(() => { if (onValidChange) onValidChange(isMandateValid); }, [isMandateValid, onValidChange]);
@@ -185,14 +185,14 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
     if (!discretionType) { setSignExtras(null); return; }
     if (signKey === "initials") {
       const ex = [];
-      if (!idFilled)      ex.push("idNumber");
-      if (!postalFilled)  ex.push("postalCode");
-      // No usable country code: ask for the whole phone if none on record,
-      // otherwise just the country code (phone present but code not derivable).
-      if (!countryFilled) ex.push(phoneNumber.trim() ? "countryCode" : "phoneNumber");
+      if (!idFilled)     ex.push("idNumber");
+      if (!postalFilled) ex.push("postalCode");
+      // Phone is always confirmed in the sign-off: prefilled from the number on
+      // record (profile / Experian) so the user can keep it or use another.
+      ex.push("phone");
       setSignExtras(ex);
     }
-  }, [discretionType, signKey, idFilled, postalFilled, countryFilled, phoneNumber]);
+  }, [discretionType, signKey, idFilled, postalFilled]);
 
   // Ordered slides: initials → missing required fields → agreement.
   const signSeq = ["initials", ...(signExtras || []), "agreement"];
@@ -787,45 +787,37 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
                 </div>
               )}
 
-              {signKey === "phoneNumber" && (
-                <div>
-                  {backBtn(() => goSign("back"))}
-                  <div style={{fontSize:"12px",fontWeight:"600",color:"hsl(270 25% 35%)",margin:"8px 0"}}>Enter your contact number</div>
-                  <div style={{display:"flex",gap:"8px",alignItems:"center",maxWidth:"320px"}}>
-                    <select value={countryCode || "+27"} onChange={e => updatePhone(e.target.value, editableFields.phoneLocal || "")}
-                      style={{ padding:"9px 8px", fontSize:"13px", border:"2px solid hsl(270 20% 82%)", borderRadius:"10px", outline:"none", background:"hsl(270 30% 98%)", color:"hsl(270 30% 20%)", cursor:"pointer", width:"104px" }}>
-                      {COUNTRY_CODES.map(({code,flag}) => <option key={code} value={code}>{flag} {code}</option>)}
-                    </select>
-                    <input
-                      type="tel" value={editableFields.phoneLocal || ""} autoFocus
-                      onChange={e => updatePhone(countryCode || "+27", e.target.value)}
-                      onKeyDown={e => { if (e.key === "Enter" && phoneFilled) goSign("fwd"); }}
-                      placeholder="82 123 4567"
-                      style={{ flex:1, padding:"9px 12px", fontSize:"14px", fontWeight:"600", border:"2px solid hsl(270 20% 82%)", borderRadius:"10px", outline:"none", background:"hsl(270 30% 98%)", color:"hsl(270 30% 20%)", transition:"border-color 0.2s ease" }}
-                    />
+              {signKey === "phone" && (() => {
+                // Prefill from the number on record (profile / Experian) until the
+                // user edits it. Confirming as-is keeps the saved bureau number.
+                const edited = editableFields.phoneLocal !== undefined;
+                const localDisplay = edited ? editableFields.phoneLocal : (ph.cell + ph.num);
+                const ccDisplay = countryCode || ph.cc || "+27";
+                const onRecord = !edited && (ph.cell + ph.num).length >= 7;
+                return (
+                  <div>
+                    {backBtn(() => goSign("back"))}
+                    <div style={{fontSize:"12px",fontWeight:"600",color:"hsl(270 25% 35%)",margin:"8px 0"}}>{onRecord ? "Is this the number you'd like to use?" : "Enter your contact number"}</div>
+                    <div style={{display:"flex",gap:"8px",alignItems:"center",maxWidth:"320px"}}>
+                      <select value={ccDisplay} onChange={e => updatePhone(e.target.value, localDisplay)}
+                        style={{ padding:"9px 8px", fontSize:"13px", border:"2px solid hsl(270 20% 82%)", borderRadius:"10px", outline:"none", background:"hsl(270 30% 98%)", color:"hsl(270 30% 20%)", cursor:"pointer", width:"104px" }}>
+                        {COUNTRY_CODES.map(({code,flag}) => <option key={code} value={code}>{flag} {code}</option>)}
+                      </select>
+                      <input
+                        type="tel" value={localDisplay}
+                        onChange={e => updatePhone(ccDisplay, e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter" && phoneFilled) goSign("fwd"); }}
+                        placeholder="82 123 4567"
+                        style={{ flex:1, padding:"9px 12px", fontSize:"14px", fontWeight:"600", border:"2px solid hsl(270 20% 82%)", borderRadius:"10px", outline:"none", background:"hsl(270 30% 98%)", color:"hsl(270 30% 20%)", transition:"border-color 0.2s ease" }}
+                      />
+                    </div>
+                    <p style={{fontSize:"10.5px",color:"hsl(270 15% 60%)",margin:"8px 0 0"}}>{onRecord ? "This is the number we have on record. Keep it, or type a different one to use instead." : "We couldn't find a number on record — please add one."}</p>
+                    <div style={{display:"flex",justifyContent:"flex-end",marginTop:"6px"}}>
+                      {nextBtn(phoneFilled, () => goSign("fwd"))}
+                    </div>
                   </div>
-                  <p style={{fontSize:"10.5px",color:"hsl(270 15% 60%)",margin:"8px 0 0"}}>We couldn't find a number on record — please add one.</p>
-                  <div style={{display:"flex",justifyContent:"flex-end",marginTop:"6px"}}>
-                    {nextBtn(phoneFilled, () => goSign("fwd"))}
-                  </div>
-                </div>
-              )}
-
-              {signKey === "countryCode" && (
-                <div>
-                  {backBtn(() => goSign("back"))}
-                  <div style={{fontSize:"12px",fontWeight:"600",color:"hsl(270 25% 35%)",margin:"8px 0"}}>Select your country code</div>
-                  <select value={countryCode} onChange={e => setCountryCode(e.target.value)}
-                    style={{ padding:"9px 12px", fontSize:"13px", border:"2px solid hsl(270 20% 82%)", borderRadius:"10px", outline:"none", background:"hsl(270 30% 98%)", color: countryCode ? "hsl(270 30% 20%)" : "hsl(270 15% 60%)", cursor:"pointer", width:"100%", maxWidth:"260px" }}>
-                    <option value="">Select your country code…</option>
-                    {COUNTRY_CODES.map(({code,label,flag}) => <option key={code} value={code}>{flag} {label}</option>)}
-                  </select>
-                  <p style={{fontSize:"10.5px",color:"hsl(270 15% 60%)",margin:"8px 0 0"}}>We couldn't read this from your phone number — please confirm it.</p>
-                  <div style={{display:"flex",justifyContent:"flex-end",marginTop:"6px"}}>
-                    {nextBtn(countryFilled, () => goSign("fwd"))}
-                  </div>
-                </div>
-              )}
+                );
+              })()}
 
               {signKey === "agreement" && (
                 <div>
