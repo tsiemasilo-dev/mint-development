@@ -562,17 +562,15 @@ const HomePage = ({
     if (!pendingGiftId) { setPendingGiftExpiry(null); return; }
     const stored = localStorage.getItem('mint_pending_gift_expires');
     if (stored) { setPendingGiftExpiry(stored); return; }
-    supabase
-      .from('gift_claims')
-      .select('expires_at')
-      .eq('id', pendingGiftId)
-      .maybeSingle()
-      .then(({ data }) => {
+    fetch(`/api/gift/by-id/${pendingGiftId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
         if (data?.expires_at) {
           localStorage.setItem('mint_pending_gift_expires', data.expires_at);
           setPendingGiftExpiry(data.expires_at);
         }
-      });
+      })
+      .catch(() => {});
   }, [pendingGiftId]);
 
   // Countdown ticker
