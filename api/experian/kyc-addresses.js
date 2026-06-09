@@ -15,31 +15,61 @@ function normPhoneSA(raw) {
   return String(raw).trim().startsWith("+") ? String(raw).trim() : "+" + d;
 }
 
-// Pull phone numbers + email out of the bureau contact block. The exact shape
-// isn't documented, so walk it recursively and classify by key-name hints —
-// tolerant of arrays, nested objects, and XML- vs REST-cased keys.
+// Pull phone numbers + email out of the bureau contact block. Confirmed shape
+// (production, 2026-06-09): return_data.contact_data is an array of
+//   { contact_number, area_code, country_code, contact_type, contact_type_description, … }
+// where contact_type_description is CELL / HOME / WORK / FAX / EMAIL. A recursive
+// walk is kept as a fallback in case the shape ever differs.
+function classifyType(desc) {
+  const d = String(desc || "").toUpperCase();
+  if (/CELL|MOBILE/.test(d)) return "cell";
+  if (/WORK|BUS/.test(d)) return "work";
+  if (/HOME|RES/.test(d)) return "home";
+  return "other";
+}
+function buildNumber(contactNumber, countryCode, areaCode) {
+  const cc = digits(countryCode);
+  const local = digits(areaCode) + digits(contactNumber); // area_code is usually null for cells
+  if (!local) return "";
+  if (cc && cc !== "27") return "+" + cc + local.replace(/^0/, "");
+  return normPhoneSA(local);
+}
 function normContact(rd) {
   const cd = rd?.contact_data ?? rd?.ContactData ?? rd?.contact ?? rd?.Contact ?? null;
   const phones = [];
   let email = "";
-  const consider = (key, val) => {
-    const v = String(val ?? "").trim();
-    if (!v) return;
-    if (/@/.test(v)) { if (!email) email = v; return; }
-    const d = digits(v);
-    if (d.length >= 9 && d.length <= 13) {
-      const k = String(key || "").toLowerCase();
-      const type = /cell|mobile|msisdn/.test(k) ? "cell" : /work|bus|employ/.test(k) ? "work" : /home|res|tel|phone/.test(k) ? "home" : "other";
-      phones.push({ type, value: normPhoneSA(v) });
+
+  if (Array.isArray(cd)) {
+    for (const c of cd) {
+      const desc = c?.contact_type_description ?? c?.contact_type ?? "";
+      const num = c?.contact_number ?? c?.ContactNumber ?? c?.number ?? c?.contact_value ?? "";
+      const s = String(num).trim();
+      if (!s) continue;
+      if (/@/.test(s) || /MAIL/i.test(String(desc))) { if (!email) email = s; continue; }
+      const value = buildNumber(s, c?.country_code, c?.area_code);
+      if (digits(value).length >= 9) phones.push({ type: classifyType(desc), value });
     }
-  };
-  const walk = (node, key) => {
-    if (node == null) return;
-    if (Array.isArray(node)) return node.forEach((n) => walk(n, key));
-    if (typeof node === "object") return Object.entries(node).forEach(([k, v]) => walk(v, k));
-    consider(key, node);
-  };
-  walk(cd, "");
+  }
+
+  // Fallback: walk an unexpected shape and grab phone-like leaf values.
+  if (!phones.length && cd && !Array.isArray(cd)) {
+    const walk = (node, key) => {
+      if (node == null) return;
+      if (Array.isArray(node)) return node.forEach((n) => walk(n, key));
+      if (typeof node === "object") return Object.entries(node).forEach(([k, v]) => walk(v, k));
+      const v = String(node ?? "").trim();
+      if (!v) return;
+      if (/@/.test(v)) { if (!email) email = v; return; }
+      const d = digits(v);
+      if (d.length >= 9 && d.length <= 13) {
+        const k = String(key || "").toLowerCase();
+        const type = /cell|mobile|msisdn/.test(k) ? "cell" : /work|bus/.test(k) ? "work" : /home|res|tel|phone/.test(k) ? "home" : "other";
+        phones.push({ type, value: normPhoneSA(v) });
+      }
+    };
+    walk(cd, "");
+  }
+
   const cell = phones.find((p) => p.type === "cell") || phones.find((p) => p.type === "home") || phones[0] || null;
   return { cell: cell?.value || "", email, phones };
 }
