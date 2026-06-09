@@ -310,7 +310,7 @@ export const useUserStrategies = (familyMemberId = null) => {
       // Pending-only strategies are hidden from the portfolio strategies tab
       // and dropdown — they appear only on the home tab via the purple
       // SettlementBadge, matching the behaviour of a normal pending purchase.
-      const visibleStrategies = formattedStrategies.filter(s => !s.isPending);
+      const visibleStrategies = formattedStrategies.filter(s => !s.isPending && !s.hasPendingBatch);
       const nextData = {
         strategies: visibleStrategies,
         selectedStrategy: visibleStrategies[0] || null,

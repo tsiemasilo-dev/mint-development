@@ -1008,7 +1008,36 @@ const HomePage = ({
           };
         });
 
-        const sorted = formatted
+        // Deduplicate by id — server can return multiple rows for the same
+        // strategy (e.g. a re-buy on top of filled holdings).  When one entry
+        // is pending and another is filled, merge them into a single
+        // hasPendingBatch entry so the pending section shows the new batch
+        // while the strategies carousel hides it until it's settled.
+        const stratMap = new Map();
+        for (const s of formatted) {
+          if (stratMap.has(s.id)) {
+            const existing = stratMap.get(s.id);
+            if (s.isPending && !existing.isPending) {
+              // existing is filled, s is the new pending batch → flag mixed
+              existing.hasPendingBatch = true;
+            } else if (!s.isPending && existing.isPending) {
+              // existing was marked pending but s has filled data → keep filled values
+              existing.isPending = false;
+              existing.hasPendingBatch = true;
+              existing.investedAmount = s.investedAmount || existing.investedAmount;
+              existing.currentValue = s.currentValue || existing.currentValue;
+              existing.change_pct = s.change_pct;
+              existing.pnlRands = s.pnlRands;
+              existing.pnlPct = s.pnlPct;
+            }
+            // Otherwise both are the same state — ignore the duplicate
+          } else {
+            stratMap.set(s.id, { ...s });
+          }
+        }
+        const deduped = [...stratMap.values()];
+
+        const sorted = deduped
           .sort((a, b) => (b.change_pct || 0) - (a.change_pct || 0))
           .slice(0, 5);
         _cachedBestStrategies = sorted;
@@ -1751,10 +1780,17 @@ const HomePage = ({
           const safeAssets = Array.isArray(assetsToDisplay) ? assetsToDisplay : [];
           const safeStrategies = Array.isArray(bestStrategies) ? bestStrategies : [];
           const pendingAssets = safeAssets.filter(a => a && a.isPending);
-          // Strategies where ALL batches are pending — those with mixed state show up
-          // inside the filled-strategies carousel as a stack instead.
-          // isPending = ALL holdings pending (first-ever buy); hasPendingBatch = re-buy on top of filled holdings
-          const pendingStrategies = safeStrategies.filter(s => s && (s.isPending || s.hasPendingBatch));
+          // A strategy goes in the pending section if:
+          //   (a) isPending flag = all holdings are unfilled (first-ever buy), OR
+          //   (b) purchaseBatchesByStrategy has at least one unfilled batch (re-buy on filled strategy)
+          // Using purchaseBatchesByStrategy is authoritative because it's computed
+          // client-side from real holdings data, independent of server response flags.
+          const pendingStrategies = safeStrategies.filter(s => {
+            if (!s) return false;
+            if (s.isPending) return true;
+            const batches = purchaseBatchesByStrategy[s.id] || [];
+            return batches.some(b => !b.filled);
+          });
 
           // Build one entry per TRANSACTION for strategies so duplicate purchases show separately.
           // Each transaction "Strategy Investment: X" = one purchase event.
@@ -1781,16 +1817,13 @@ const HomePage = ({
             if (!stratTxMap[key]) stratTxMap[key] = { strat: s, txs: [null] };
           });
 
-          // For re-buy (hasPendingBatch) strategies, old filled transactions are also
-          // matched above — trim to only the single most-recent one so we don't show
-          // a misleading stack of already-settled purchases.
-          Object.entries(stratTxMap).forEach(([key, entry]) => {
-            if (entry.strat.hasPendingBatch && !entry.strat.isPending && entry.txs.length > 1) {
+          // Sort all txs per group newest-first so "Purchase 1 of N" = most recent
+          Object.entries(stratTxMap).forEach(([, entry]) => {
+            if (entry.txs.length > 1) {
               entry.txs.sort((a, b) =>
                 new Date(b?.transaction_date || b?.created_at || 0) -
                 new Date(a?.transaction_date || a?.created_at || 0)
               );
-              entry.txs = [entry.txs[0]];
             }
           });
 
@@ -2260,7 +2293,11 @@ const HomePage = ({
             </div>
           ) : hasStrategies ? (
             <div className="-mx-4 flex gap-3 overflow-x-auto overflow-y-visible px-4 pb-1 pt-2 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {bestStrategies.filter(s => !s.isPending).slice(0, 5).map((strategy) => {
+              {bestStrategies.filter(s => {
+                if (!s || s.isPending) return false;
+                const batches = purchaseBatchesByStrategy[s.id] || [];
+                return !batches.some(b => !b.filled);
+              }).slice(0, 5).map((strategy) => {
                 const holdingsSnapshot = getStrategyHoldingsSnapshot(strategy, holdingsBySymbol);
                 const pct = strategy.change_pct || 0;
 
