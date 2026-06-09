@@ -92,6 +92,14 @@ export default function GiftToggleV2({
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
+
+      // Block self-gifting before hitting the server
+      const senderEmail = sessionData?.session?.user?.email?.toLowerCase() || "";
+      if (senderEmail && recipientEmail.trim().toLowerCase() === senderEmail) {
+        setError("You cannot gift to yourself.");
+        setStep("confirming");
+        return;
+      }
       const res = await fetch("/api/gift/create-v2", {
         method: "POST",
         headers: {

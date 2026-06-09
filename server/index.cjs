@@ -8816,6 +8816,11 @@ app.post("/api/gift/create", async (req, res) => {
     if (rp) { recipientUserId = rp.id; recipientEmail = rp.email; }
   }
 
+  // Secondary guard: if the resolved recipient is the sender themselves, block it
+  if (recipientUserId && recipientUserId === user.id) {
+    return res.status(400).json({ error: "You cannot gift to yourself." });
+  }
+
   const status = recipientUserId ? "pending_claim" : "pending_registration";
   const giftToken = crypto.randomBytes(24).toString("hex");
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -9136,6 +9141,22 @@ app.post("/api/gift/create-v2", async (req, res) => {
   if (!["strategy", "stock"].includes(asset_type)) return res.status(400).json({ error: "asset_type must be 'strategy' or 'stock'." });
   if (!recipient_first_name?.trim()) return res.status(400).json({ error: "recipient_first_name is required." });
   if (!recipient_last_name?.trim()) return res.status(400).json({ error: "recipient_last_name is required." });
+
+  // Block self-gifting: compare recipient email against sender's auth email and profile email
+  if (recipient_identifier?.trim()) {
+    const recipId = recipient_identifier.trim().toLowerCase();
+    const senderAuthEmail = user.email?.toLowerCase() || "";
+    const { data: senderProf } = await db.from("profiles").select("email").eq("id", user.id).maybeSingle();
+    const senderProfileEmail = senderProf?.email?.toLowerCase() || "";
+    if (recipId === senderAuthEmail || recipId === senderProfileEmail) {
+      return res.status(400).json({ error: "You cannot gift to yourself." });
+    }
+    // Also block by resolved user ID in case email was looked up differently
+    const { data: recipProf } = await db.from("profiles").select("id").eq("email", recipId).maybeSingle();
+    if (recipProf?.id === user.id) {
+      return res.status(400).json({ error: "You cannot gift to yourself." });
+    }
+  }
 
   const { data: wallet, error: walletErr } = await db.from("wallets").select("balance").eq("user_id", user.id).maybeSingle();
   if (walletErr || !wallet) return res.status(400).json({ error: "Wallet not found." });
