@@ -112,15 +112,17 @@ function creditBureauServices(collectResult) {
 // Liveness (wf8) are handled. Each asset: { kind, idDocType, fileName, ext, mime, b64?, url? }
 export function extractExperianAssets(collectResult) {
   const rd = collectResult?.return_data || {};
+  // Selfie lives at return_data.response, NOT return_data directly.
+  // return_data.response also holds credit_bureau[]; the top-level return_data
+  // only has transaction_id / status / status_msg.
+  const rdResp = rd.response || {};
   const assets = [];
 
-  // Liveness selfie (wf6) lives at the return_data level. Prefer the inline
-  // base64; fall back to the (short-lived) S3 URL so we still grab it before it
-  // expires. Some cached re-polls omit the selfie entirely — that's logged later.
-  if (rd.customer_image_base_64)
-    assets.push({ kind: "selfie", idDocType: "SELFIE", b64: rd.customer_image_base_64, fileName: "liveness_selfie.png", ext: "png", mime: "image/png" });
-  else if (rd.customer_image)
-    assets.push({ kind: "selfie", idDocType: "SELFIE", url: rd.customer_image, fileName: "liveness_selfie.jpg", ext: "jpg", mime: "image/jpeg" });
+  // Liveness selfie (wf6): prefer inline base64; fall back to expiring S3 URL.
+  if (rdResp.customer_image_base_64)
+    assets.push({ kind: "selfie", idDocType: "SELFIE", b64: rdResp.customer_image_base_64, fileName: "liveness_selfie.png", ext: "png", mime: "image/png" });
+  else if (rdResp.customer_image)
+    assets.push({ kind: "selfie", idDocType: "SELFIE", url: rdResp.customer_image, fileName: "liveness_selfie.jpg", ext: "jpg", mime: "image/jpeg" });
 
   for (const svc of creditBureauServices(collectResult)) {
     const r = svc?.response || {};
@@ -181,7 +183,8 @@ export function extractExperianIdentity(collectResult) {
 export function stripExperianImages(collectResult) {
   try {
     const c = JSON.parse(JSON.stringify(collectResult));
-    if (c?.return_data) delete c.return_data.customer_image_base_64;
+    // Selfie lives at return_data.response, not return_data directly
+    if (c?.return_data?.response) delete c.return_data.response.customer_image_base_64;
     const services = c?.return_data?.response?.credit_bureau;
     if (Array.isArray(services)) {
       for (const svc of services) {
