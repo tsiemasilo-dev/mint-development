@@ -821,7 +821,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
       const token = session?.access_token;
       if (token) {
         if (mandateDataRef.current) {
-          const savePayload = { ...mandateDataRef.current, agreedMandate };
+          const savePayload = { ...mandateDataRef.current };
           try {
             const mandateRes = await fetch("/api/onboarding/save-mandate", {
               method: "POST",
@@ -1574,13 +1574,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               <div className="animate-fade-in delay-2" style={{ borderRadius: '16px', overflow: 'hidden', border: '1px solid hsl(270 20% 90%)', boxShadow: '0 4px 20px rgba(100, 60, 140, 0.08)', background: 'white' }}>
                 <MandateViewer profile={profile} onValidChange={setMandateValid} onDataChange={(data) => { mandateDataRef.current = data; }} requestTab={mandateRequestTab} />
               </div>
-              <div className="checkbox-container animate-fade-in delay-3" style={{ display: 'block' }}>
-                <label className="checkbox-item">
-                  <input type="checkbox" checked={agreedMandate} onChange={(e) => setAgreedMandate(e.target.checked)} />
-                  <span className="checkbox-label">I have read and agree to the Discretionary FSP Mandate and authorise ALGOHIVE to manage my investments as described</span>
-                </label>
-              </div>
-              {!mandateValid && agreedMandate && (
+              {!mandateValid && (
                 <div className="animate-fade-in" style={{ marginTop: "10px" }}>
                   {(() => {
                     const missing = [
@@ -1602,8 +1596,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               <div className="text-center mt-8 animate-fade-in delay-4">
                 <button
                   type="button"
-                  className={`continue-button agreement-continue ${agreedMandate && mandateValid ? "enabled" : ""}`}
-                  disabled={!agreedMandate || !mandateValid}
+                  className={`continue-button agreement-continue ${mandateValid ? "enabled" : ""}`}
+                  disabled={!mandateValid}
                   onClick={async () => { await saveProgressFlag("mandate_accepted"); setMandateDone(true); goToStep(getNextIncompleteStep(5, 5)); }}
                 >
                   Continue
