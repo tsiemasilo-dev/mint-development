@@ -4345,12 +4345,15 @@ app.get("/api/user/holdings", async (req, res) => {
     const filterValue = familyMemberId || userId;
 
     // Attempt queries with progressively fewer optional columns to handle missing DB columns
+    // Only return officially filled holdings (avg_fill > 0) — pending/gift holdings must not
+    // appear in portfolio, holdings tab, or strategy charts until the broker fills the order.
     const holdingsFull = await db
       .from("stock_holdings_c")
       .select("id, user_id, family_member_id, security_id, strategy_id, quantity, avg_fill, Expected_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status, settlement_status, is_active, exit_price")
       .eq("user_id", userId)
       .is("family_member_id", null)
-      .eq("Status", "active");
+      .eq("Status", "active")
+      .gt("avg_fill", 0);
 
     if (!holdingsFull.error) {
       holdings = holdingsFull.data;
@@ -4362,7 +4365,8 @@ app.get("/api/user/holdings", async (req, res) => {
         .select("id, user_id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status, is_active, exit_price")
         .eq("user_id", userId)
         .is("family_member_id", null)
-        .eq("Status", "active");
+        .eq("Status", "active")
+        .gt("avg_fill", 0);
 
       if (!noSettlement.error) {
         holdings = noSettlement.data;
@@ -4374,7 +4378,8 @@ app.get("/api/user/holdings", async (req, res) => {
           .select("id, user_id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status")
           .eq("user_id", userId)
           .is("family_member_id", null)
-          .eq("Status", "active");
+          .eq("Status", "active")
+          .gt("avg_fill", 0);
         holdings = (noExtras.data || []).map(h => ({ ...h, is_active: true, exit_price: null }));
         holdingsError = noExtras.error;
       } else {
