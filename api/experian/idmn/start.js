@@ -30,8 +30,8 @@ export default async function handler(req, res) {
     const workflow = req.body?.workflow === "ocr" ? "ocr" : "liveness";
     const isOcr = workflow === "ocr";
     const K = isOcr
-      ? { tx: "experian_ocr_transaction_id", token: "experian_ocr_token", started: "experian_ocr_started_at", result: "experian_ocr_result", mock: "experian_ocr_mock" }
-      : { tx: "experian_idmn_transaction_id", token: "experian_idmn_token", started: "experian_idmn_started_at", result: "experian_idmn_result", mock: "experian_mock" };
+      ? { tx: "experian_ocr_transaction_id", token: "experian_ocr_token", started: "experian_ocr_started_at", result: "experian_ocr_result", mock: "experian_ocr_mock", url: "experian_ocr_url" }
+      : { tx: "experian_idmn_transaction_id", token: "experian_idmn_token", started: "experian_idmn_started_at", result: "experian_idmn_result", mock: "experian_mock", url: "experian_idmn_url" };
     const workflowId = isOcr ? EXPERIAN_OCR_WORKFLOW_ID : EXPERIAN_IDMN_WORKFLOW_ID;
 
     const { data: onboarding } = await db
@@ -73,9 +73,14 @@ export default async function handler(req, res) {
       restart = true;
     }
 
-    // Return existing URL if a fresh workflow is already in flight (unless restarting)
+    // Return existing URL if a fresh workflow is already in flight (unless restarting).
+    // Use the EXACT url Experian returned at StartWorkflow (stored) — never
+    // reconstruct it from a hardcoded base, since Experian's hosted domain
+    // (experian.flex.tgpdc.com/anonymous_workflow) differs from EXPERIAN_IDMN_HOSTED_BASE;
+    // a reconstructed URL points at the wrong page and the liveness never registers
+    // against this transaction (→ IMN_205 "no records").
     if (!restart && raw?.[K.tx] && raw?.[K.token]) {
-      const url = `${EXPERIAN_IDMN_HOSTED_BASE}/${raw[K.token]}`;
+      const url = raw?.[K.url] || `${EXPERIAN_IDMN_HOSTED_BASE}/${raw[K.token]}`;
       return res.json({ success: true, url, transaction_id: String(raw[K.tx]), token: raw[K.token], existing: true, workflow });
     }
     if (restart) {
@@ -84,6 +89,7 @@ export default async function handler(req, res) {
       delete raw[K.started];
       delete raw[K.result];
       delete raw[K.mock];
+      delete raw[K.url];
       // Clear any stale "under review" flag so a fresh attempt starts clean
       // (liveness only — OCR doesn't drive that flag).
       if (!isOcr) {
@@ -154,6 +160,7 @@ export default async function handler(req, res) {
       [K.tx]: String(transaction_id),
       [K.token]: token,
       [K.started]: new Date().toISOString(),
+      [K.url]: url, // store Experian's exact hosted URL so resume returns the same one
     };
 
     // Liveness: status "started" (not "pending") + no kyc_pending flag — a link
