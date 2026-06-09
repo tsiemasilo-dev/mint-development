@@ -280,7 +280,7 @@ export default function GiftCodeEntryPage({ onBack, onNavigate }) {
         const pendingId = localStorage.getItem('mint_pending_gift_id');
         localStorage.removeItem('mint_pending_gift_id');
         localStorage.removeItem('mint_pending_gift_expires');
-        localStorage.setItem('mint_gift_claimed', pendingId || 'claimed');
+        if (pendingId) localStorage.setItem('mint_gift_claimed', pendingId);
         setClaimed(true);
       } catch {
         setError("Something went wrong. Please try again.");

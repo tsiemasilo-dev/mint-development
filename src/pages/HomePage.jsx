@@ -538,15 +538,16 @@ const HomePage = ({
   useEffect(() => {
     const alreadyClaimed = localStorage.getItem('mint_gift_claimed');
     const giftNotif = _homeNotifs.find(n => !n.read_at && n.payload?.action === 'gift_received');
-    if (alreadyClaimed) {
-      // Gift already claimed — always hide banner and mark notification read
-      if (giftNotif) _markGiftNotifRead(giftNotif.id);
-      localStorage.removeItem('mint_pending_gift_id');
-      localStorage.removeItem('mint_pending_gift_expires');
-      setPendingGiftId(null);
-    } else if (giftNotif) {
+    if (giftNotif) {
       const giftId = giftNotif.payload?.gift_id;
-      if (giftId) {
+      if (giftId && giftId === alreadyClaimed) {
+        // This specific gift was already claimed — hide and mark notification read
+        _markGiftNotifRead(giftNotif.id);
+        localStorage.removeItem('mint_pending_gift_id');
+        localStorage.removeItem('mint_pending_gift_expires');
+        setPendingGiftId(null);
+      } else if (giftId) {
+        // New unclaimed gift — show the banner
         localStorage.setItem('mint_pending_gift_id', giftId);
         setPendingGiftId(giftId);
         _setPendingGiftNotifId(giftNotif.id);
@@ -560,7 +561,7 @@ const HomePage = ({
   useEffect(() => {
     if (!pendingGiftId) { setPendingGiftExpiry(null); return; }
     const stored = localStorage.getItem('mint_pending_gift_expires');
-    if (stored && localStorage.getItem('mint_gift_claimed')) { setPendingGiftExpiry(stored); return; }
+    if (stored && localStorage.getItem('mint_gift_claimed') === pendingGiftId) { setPendingGiftExpiry(stored); return; }
     if (stored) setPendingGiftExpiry(stored);
     fetch(`/api/gift/by-id/${pendingGiftId}`)
       .then(r => r.ok ? r.json() : null)
