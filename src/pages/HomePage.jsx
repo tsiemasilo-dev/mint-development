@@ -538,16 +538,18 @@ const HomePage = ({
   useEffect(() => {
     const alreadyClaimed = localStorage.getItem('mint_gift_claimed');
     const giftNotif = _homeNotifs.find(n => !n.read_at && n.payload?.action === 'gift_received');
-    if (giftNotif) {
+    if (alreadyClaimed) {
+      // Gift already claimed — always hide banner and mark notification read
+      if (giftNotif) _markGiftNotifRead(giftNotif.id);
+      localStorage.removeItem('mint_pending_gift_id');
+      localStorage.removeItem('mint_pending_gift_expires');
+      setPendingGiftId(null);
+    } else if (giftNotif) {
       const giftId = giftNotif.payload?.gift_id;
-      if (giftId && giftId !== alreadyClaimed) {
+      if (giftId) {
         localStorage.setItem('mint_pending_gift_id', giftId);
         setPendingGiftId(giftId);
         _setPendingGiftNotifId(giftNotif.id);
-      } else if (giftId === alreadyClaimed) {
-        // Gift already claimed — mark the notification read so banner stays gone
-        _markGiftNotifRead(giftNotif.id);
-        setPendingGiftId(null);
       }
     } else if (!localStorage.getItem('mint_pending_gift_id')) {
       setPendingGiftId(null);
@@ -558,11 +560,21 @@ const HomePage = ({
   useEffect(() => {
     if (!pendingGiftId) { setPendingGiftExpiry(null); return; }
     const stored = localStorage.getItem('mint_pending_gift_expires');
-    if (stored) { setPendingGiftExpiry(stored); return; }
+    if (stored && localStorage.getItem('mint_gift_claimed')) { setPendingGiftExpiry(stored); return; }
+    if (stored) setPendingGiftExpiry(stored);
     fetch(`/api/gift/by-id/${pendingGiftId}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
-        if (data?.expires_at) {
+        if (!data) return;
+        if (data.status === 'claimed' || data.status === 'completed') {
+          localStorage.removeItem('mint_pending_gift_id');
+          localStorage.removeItem('mint_pending_gift_expires');
+          localStorage.setItem('mint_gift_claimed', pendingGiftId);
+          setPendingGiftId(null);
+          setPendingGiftExpiry(null);
+          return;
+        }
+        if (data.expires_at) {
           localStorage.setItem('mint_pending_gift_expires', data.expires_at);
           setPendingGiftExpiry(data.expires_at);
         }
