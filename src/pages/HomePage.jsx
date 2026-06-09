@@ -1448,12 +1448,13 @@ const HomePage = ({
               <div className="flex-1 min-w-0 pr-6">
                 <p className="text-sm font-semibold text-white leading-snug">You have an investment gift to claim</p>
                 <p className="text-xs mt-0.5" style={{ color: 'rgba(196,181,253,0.85)' }}>Tap to claim your gift</p>
-                {giftCountdown && (
-                  <p className="text-xs mt-1 font-medium" style={{ color: 'rgba(250,204,21,0.9)' }}>
-                    ⏱ Expires in {giftCountdown}
-                  </p>
-                )}
               </div>
+
+              {giftCountdown && (
+                <p className="absolute bottom-2.5 right-10 text-[10px] font-medium tabular-nums" style={{ color: 'rgba(250,204,21,0.9)' }}>
+                  ⏱ {giftCountdown}
+                </p>
+              )}
 
               <button
                 type="button"
