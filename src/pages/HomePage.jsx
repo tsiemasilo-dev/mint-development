@@ -1800,6 +1800,7 @@ const HomePage = ({
             let stratName = null;
             if (name.startsWith("Strategy Investment: ")) stratName = name.replace("Strategy Investment: ", "").trim();
             else if (name.startsWith("Purchased ")) stratName = name.replace("Purchased ", "").trim();
+            else if (name.startsWith("Gift Received — ")) stratName = name.replace("Gift Received — ", "").trim();
             if (!stratName) return;
             const strat = pendingStrategies.find(s =>
               (s.name || "").toLowerCase() === stratName.toLowerCase() ||
