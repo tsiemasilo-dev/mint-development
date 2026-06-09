@@ -1753,7 +1753,8 @@ const HomePage = ({
           const pendingAssets = safeAssets.filter(a => a && a.isPending);
           // Strategies where ALL batches are pending — those with mixed state show up
           // inside the filled-strategies carousel as a stack instead.
-          const pendingStrategies = safeStrategies.filter(s => s && s.isPending);
+          // isPending = ALL holdings pending (first-ever buy); hasPendingBatch = re-buy on top of filled holdings
+          const pendingStrategies = safeStrategies.filter(s => s && (s.isPending || s.hasPendingBatch));
 
           // Build one entry per TRANSACTION for strategies so duplicate purchases show separately.
           // Each transaction "Strategy Investment: X" = one purchase event.
@@ -1778,6 +1779,19 @@ const HomePage = ({
           pendingStrategies.forEach(s => {
             const key = s.id || s.name;
             if (!stratTxMap[key]) stratTxMap[key] = { strat: s, txs: [null] };
+          });
+
+          // For re-buy (hasPendingBatch) strategies, old filled transactions are also
+          // matched above — trim to only the single most-recent one so we don't show
+          // a misleading stack of already-settled purchases.
+          Object.entries(stratTxMap).forEach(([key, entry]) => {
+            if (entry.strat.hasPendingBatch && !entry.strat.isPending && entry.txs.length > 1) {
+              entry.txs.sort((a, b) =>
+                new Date(b?.transaction_date || b?.created_at || 0) -
+                new Date(a?.transaction_date || a?.created_at || 0)
+              );
+              entry.txs = [entry.txs[0]];
+            }
           });
 
           // Groups: [{key, strat, txs}]

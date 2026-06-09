@@ -228,6 +228,13 @@ export const useUserStrategies = (familyMemberId = null) => {
             .map(h => h.strategy_id)
             .filter(id => !filledStrategyIds.has(id))
         );
+        // Mixed = strategy has BOTH filled holdings AND new pending ones (re-buy scenario)
+        const mixedPendingStrategyIds = new Set(
+          (allStratHoldings || [])
+            .filter(h => !(Number(h.avg_fill) > 0))
+            .map(h => h.strategy_id)
+            .filter(id => filledStrategyIds.has(id))
+        );
 
         const secIds = [...new Set(allLiveHoldings.map(h => h.security_id).filter(Boolean))];
 
@@ -289,6 +296,10 @@ export const useUserStrategies = (familyMemberId = null) => {
             strat.previousMonthChange = costBasisR > 0
               ? parseFloat(((liveValR - costBasisR) / costBasisR * 100).toFixed(1))
               : 0;
+          }
+          // Strategy has a new pending batch on top of existing filled holdings
+          if (mixedPendingStrategyIds.has(strat.strategyId)) {
+            strat.hasPendingBatch = true;
           }
         }
       } catch (liveErr) {
