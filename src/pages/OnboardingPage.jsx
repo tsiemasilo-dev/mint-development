@@ -175,12 +175,15 @@ const OnboardingPage = ({ onCreateAccount, onLogin }) => {
 
                   {/* Text */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-white leading-snug">
-                      {giftDetails?.amount
-                        ? `${formatAmount(giftDetails.amount)} investment gift waiting`
-                        : 'You have an investment gift waiting'}
+                    <p className="text-base font-bold tracking-wide leading-tight" style={{
+                      background: 'linear-gradient(90deg, #ffffff 0%, #e9d5ff 60%, #fde68a 100%)',
+                      WebkitBackgroundClip: 'text',
+                      WebkitTextFillColor: 'transparent',
+                      backgroundClip: 'text',
+                    }}>
+                      You have an investment gift waiting
                     </p>
-                    <p className="text-xs mt-0.5" style={{ color: 'rgba(196,181,253,0.85)' }}>
+                    <p className="text-xs mt-1" style={{ color: 'rgba(196,181,253,0.85)' }}>
                       Log in or create an account to claim it
                     </p>
                     {giftCountdown && (
