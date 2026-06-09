@@ -521,6 +521,9 @@ const HomePage = ({
   const [pendingGiftId, setPendingGiftId] = useState(() => localStorage.getItem('mint_pending_gift_id'));
   const [pendingGiftExpiry, setPendingGiftExpiry] = useState(() => localStorage.getItem('mint_pending_gift_expires'));
   const [giftCountdown, setGiftCountdown] = useState(null);
+  const [claimedGiftPending, setClaimedGiftPending] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('mint_claimed_gift_pending') || 'null'); } catch { return null; }
+  });
   const { notifications: _homeNotifs, markAsRead: _markGiftNotifRead } = useNotificationsContext();
   const [_pendingGiftNotifId, _setPendingGiftNotifId] = useState(null);
 
@@ -536,13 +539,18 @@ const HomePage = ({
   }
 
   useEffect(() => {
+    const alreadyClaimed = localStorage.getItem('mint_gift_claimed');
     const giftNotif = _homeNotifs.find(n => !n.read_at && n.payload?.action === 'gift_received');
     if (giftNotif) {
       const giftId = giftNotif.payload?.gift_id;
-      if (giftId) {
+      if (giftId && giftId !== alreadyClaimed) {
         localStorage.setItem('mint_pending_gift_id', giftId);
         setPendingGiftId(giftId);
         _setPendingGiftNotifId(giftNotif.id);
+      } else if (giftId === alreadyClaimed) {
+        // Gift already claimed — mark the notification read so banner stays gone
+        _markGiftNotifRead(giftNotif.id);
+        setPendingGiftId(null);
       }
     } else if (!localStorage.getItem('mint_pending_gift_id')) {
       setPendingGiftId(null);
@@ -1473,6 +1481,47 @@ const HomePage = ({
               </button>
             </button>
           </>
+        )}
+
+        {/* ── Claimed-gift pending banner ─────────────────────────────── */}
+        {claimedGiftPending && (
+          <div
+            className="relative overflow-hidden w-full rounded-3xl shadow-[0_10px_32px_-10px_rgba(76,29,149,0.45)]"
+            style={{ background: "linear-gradient(135deg,#5b21b6 0%,#7c3aed 55%,#a855f7 100%)" }}
+          >
+            <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+            <div className="flex items-center gap-3 px-4 py-3.5">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25 flex-shrink-0 text-xl">
+                🎁
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="truncate text-sm font-bold text-white">{claimedGiftPending.name}</p>
+                <p className="text-[11px] font-medium text-white/70">Investment gift · awaiting fill</p>
+              </div>
+              <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                {claimedGiftPending.date && (
+                  <p className="text-[10px] font-semibold text-white/50 whitespace-nowrap">
+                    {new Date(claimedGiftPending.date).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })}
+                  </p>
+                )}
+                <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white ring-1 ring-white/25">
+                  <Clock3 className="h-2.5 w-2.5" />
+                  Pending
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="absolute top-3 right-3 p-1"
+              style={{ color: 'rgba(255,255,255,0.5)' }}
+              onClick={() => {
+                localStorage.removeItem('mint_claimed_gift_pending');
+                setClaimedGiftPending(null);
+              }}
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
         )}
 
         <section className="flex flex-col gap-3">

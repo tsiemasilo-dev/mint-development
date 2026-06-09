@@ -108,7 +108,11 @@ export default function GiftCodeEntryPage({ onBack, onNavigate }) {
         setError(data.error || "Failed to claim gift.");
         return;
       }
+      const assetName = data.asset_name || loggedInGift?.asset_name;
       localStorage.removeItem('mint_pending_gift_id');
+      localStorage.removeItem('mint_pending_gift_expires');
+      if (loggedInGift?.gift_id) localStorage.setItem('mint_gift_claimed', loggedInGift.gift_id);
+      if (assetName) localStorage.setItem('mint_claimed_gift_pending', JSON.stringify({ name: assetName, date: new Date().toISOString() }));
       setClaimed(true);
     } catch {
       setError("Something went wrong. Please try again.");
@@ -243,10 +247,10 @@ export default function GiftCodeEntryPage({ onBack, onNavigate }) {
                 : "Your gift has been added to your portfolio."}
             </p>
             <button
-              onClick={() => onNavigate?.("investments")}
+              onClick={() => onNavigate?.("home")}
               className="w-full py-4 rounded-2xl bg-gradient-to-r from-[#1a1a2e] to-[#44296b] text-white font-bold text-sm shadow-lg"
             >
-              View My Portfolio
+              Go to Home
             </button>
           </div>
         </div>
@@ -274,7 +278,11 @@ export default function GiftCodeEntryPage({ onBack, onNavigate }) {
           setError(data.error || "Failed to claim gift.");
           return;
         }
+        const pendingId = localStorage.getItem('mint_pending_gift_id');
         localStorage.removeItem('mint_pending_gift_id');
+        localStorage.removeItem('mint_pending_gift_expires');
+        if (pendingId) localStorage.setItem('mint_gift_claimed', pendingId);
+        if (data.asset_name) localStorage.setItem('mint_claimed_gift_pending', JSON.stringify({ name: data.asset_name, date: new Date().toISOString() }));
         setClaimed(true);
       } catch {
         setError("Something went wrong. Please try again.");
