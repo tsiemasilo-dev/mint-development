@@ -201,6 +201,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const [experianAddrLoading, setExperianAddrLoading] = useState(false);
   const [experianPhones, setExperianPhones] = useState([]); // bureau contact numbers (for multi-number dropdown)
   const [selectedPhone, setSelectedPhone] = useState("");
+  const [bureauPostalCode, setBureauPostalCode] = useState(""); // postal code from the chosen/known bureau address
   const experianAddrFetchedRef = useRef(false);
   const [termsDone, setTermsDone] = useState(false);
   const [agreementSignedDone, setAgreementSignedDone] = useState(false);
@@ -730,6 +731,13 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
         }
         setExperianAddresses(list);
 
+        // Default the postal code to the first bureau address that has one.
+        const firstPostal = list.find((a) => a.postalCode)?.postalCode;
+        if (firstPostal) {
+          setBureauPostalCode(firstPostal);
+          console.log("[Onboarding] Bureau postal code:", firstPostal);
+        }
+
         // Bureau contact numbers. One number → save it silently (if the profile
         // has none). Multiple → expose them so the user can pick in a dropdown.
         const rawPhones = Array.isArray(data?.contact?.phones) ? data.contact.phones.filter((p) => p?.value) : [];
@@ -1107,7 +1115,10 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                         value={experianAddresses.findIndex((a) => a.formatted === address)}
                         onChange={(e) => {
                           const idx = Number(e.target.value);
-                          if (idx >= 0 && experianAddresses[idx]) setAddress(experianAddresses[idx].formatted);
+                          if (idx >= 0 && experianAddresses[idx]) {
+                            setAddress(experianAddresses[idx].formatted);
+                            if (experianAddresses[idx].postalCode) setBureauPostalCode(experianAddresses[idx].postalCode);
+                          }
                         }}
                       >
                         <option value={-1}>Choose an address…</option>
@@ -1637,7 +1648,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 );
               })()}
               <div className="animate-fade-in delay-2" style={{ borderRadius: '16px', overflow: 'hidden', border: '1px solid hsl(270 20% 90%)', boxShadow: '0 4px 20px rgba(100, 60, 140, 0.08)', background: 'white' }}>
-                <MandateViewer profile={profile} onValidChange={setMandateValid} onDataChange={(data) => { mandateDataRef.current = data; }} requestTab={mandateRequestTab} />
+                <MandateViewer profile={profile} onValidChange={setMandateValid} onDataChange={(data) => { mandateDataRef.current = data; }} requestTab={mandateRequestTab} bureauPostalCode={bureauPostalCode} />
               </div>
               {!mandateValid && (
                 <div className="animate-fade-in" style={{ marginTop: "10px" }}>

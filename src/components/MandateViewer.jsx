@@ -42,7 +42,7 @@ const InitialsStamp = ({ value }) => (
   </div>
 );
 
-const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, requestTab }) => {
+const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, requestTab, bureauPostalCode = "" }) => {
   const [sec3Open, setSec3Open]       = useState(false);
   const [docViewer, setDocViewer]     = useState(null); // null | "mandate" | "terms"
   const [initials, setInitials]       = useState(savedData?.initials    || "");
@@ -150,7 +150,7 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
   // Effective required values: profile/Experian first, sign-off fallback second.
   // Postal code comes from the address; country code is derived from the phone
   // number — neither is asked in the sign-off unless it can't be resolved.
-  const postalCode     = ad.code || editableFields.postalCode || "";
+  const postalCode     = editableFields.postalCode !== undefined ? editableFields.postalCode : (ad.code || bureauPostalCode || "");
   const effCountryCode = ph.cc || countryCode || "";
 
   const idFilled      = !!idNumber.trim();
@@ -185,10 +185,10 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
     if (!discretionType) { setSignExtras(null); return; }
     if (signKey === "initials") {
       const ex = [];
-      if (!idFilled)     ex.push("idNumber");
-      if (!postalFilled) ex.push("postalCode");
-      // Phone is always confirmed in the sign-off: prefilled from the number on
-      // record (profile / Experian) so the user can keep it or use another.
+      if (!idFilled) ex.push("idNumber");
+      // Postal code + phone are always confirmed in the sign-off: prefilled from
+      // the bureau/address on record so the user can keep them or enter others.
+      ex.push("postalCode");
       ex.push("phone");
       setSignExtras(ex);
     }
@@ -769,23 +769,30 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
                 </div>
               )}
 
-              {signKey === "postalCode" && (
-                <div>
-                  {backBtn(() => goSign("back"))}
-                  <div style={{fontSize:"12px",fontWeight:"600",color:"hsl(270 25% 35%)",margin:"8px 0"}}>Enter your postal code</div>
-                  <input
-                    type="text" value={editableFields.postalCode || ""} autoFocus
-                    onChange={e => updateEditableField("postalCode", e.target.value.replace(/\D/g, ""))}
-                    onKeyDown={e => { if (e.key === "Enter" && postalFilled) goSign("fwd"); }}
-                    maxLength={5} placeholder="0000"
-                    style={{ width:"110px", padding:"9px 12px", fontSize:"15px", fontWeight:"600", letterSpacing:"2px", border:"2px solid hsl(270 20% 82%)", borderRadius:"10px", outline:"none", background:"hsl(270 30% 98%)", color:"hsl(270 30% 20%)", transition:"border-color 0.2s ease" }}
-                  />
-                  <p style={{fontSize:"10.5px",color:"hsl(270 15% 60%)",margin:"8px 0 0"}}>Required — this populates your mandate document.</p>
-                  <div style={{display:"flex",justifyContent:"flex-end",marginTop:"6px"}}>
-                    {nextBtn(postalFilled, () => goSign("fwd"))}
+              {signKey === "postalCode" && (() => {
+                // Prefill from the postal code on record (selected address / bureau)
+                // until the user edits it. Confirming as-is keeps the extracted one.
+                const edited = editableFields.postalCode !== undefined;
+                const display = edited ? editableFields.postalCode : (ad.code || bureauPostalCode || "");
+                const onRecord = !edited && !!(ad.code || bureauPostalCode);
+                return (
+                  <div>
+                    {backBtn(() => goSign("back"))}
+                    <div style={{fontSize:"12px",fontWeight:"600",color:"hsl(270 25% 35%)",margin:"8px 0"}}>{onRecord ? "Is this your postal code?" : "Enter your postal code"}</div>
+                    <input
+                      type="text" value={display}
+                      onChange={e => updateEditableField("postalCode", e.target.value.replace(/\D/g, ""))}
+                      onKeyDown={e => { if (e.key === "Enter" && postalFilled) goSign("fwd"); }}
+                      maxLength={5} placeholder="0000"
+                      style={{ width:"110px", padding:"9px 12px", fontSize:"15px", fontWeight:"600", letterSpacing:"2px", border:"2px solid hsl(270 20% 82%)", borderRadius:"10px", outline:"none", background:"hsl(270 30% 98%)", color:"hsl(270 30% 20%)", transition:"border-color 0.2s ease" }}
+                    />
+                    <p style={{fontSize:"10.5px",color:"hsl(270 15% 60%)",margin:"8px 0 0"}}>{onRecord ? "From your address on record. Keep it, or type a different one." : "Required — this populates your mandate document."}</p>
+                    <div style={{display:"flex",justifyContent:"flex-end",marginTop:"6px"}}>
+                      {nextBtn(postalFilled, () => goSign("fwd"))}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {signKey === "phone" && (() => {
                 // Prefill from the number on record (profile / Experian) until the
