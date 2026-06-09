@@ -112,7 +112,6 @@ export default function GiftCodeEntryPage({ onBack, onNavigate }) {
       localStorage.removeItem('mint_pending_gift_id');
       localStorage.removeItem('mint_pending_gift_expires');
       if (loggedInGift?.gift_id) localStorage.setItem('mint_gift_claimed', loggedInGift.gift_id);
-      if (assetName) localStorage.setItem('mint_claimed_gift_pending', JSON.stringify({ name: assetName, date: new Date().toISOString() }));
       setClaimed(true);
     } catch {
       setError("Something went wrong. Please try again.");
@@ -282,7 +281,6 @@ export default function GiftCodeEntryPage({ onBack, onNavigate }) {
         localStorage.removeItem('mint_pending_gift_id');
         localStorage.removeItem('mint_pending_gift_expires');
         if (pendingId) localStorage.setItem('mint_gift_claimed', pendingId);
-        if (data.asset_name) localStorage.setItem('mint_claimed_gift_pending', JSON.stringify({ name: data.asset_name, date: new Date().toISOString() }));
         setClaimed(true);
       } catch {
         setError("Something went wrong. Please try again.");

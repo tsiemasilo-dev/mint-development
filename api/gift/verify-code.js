@@ -52,7 +52,7 @@ export default async function handler(req, res) {
     .maybeSingle();
 
   if (giftErr) return res.status(500).json({ error: "Failed to look up gift." });
-  if (!gift) return res.status(404).json({ error: "Gift not found. Check the code and try again." });
+  if (!gift) return res.status(404).json({ error: "Invalid code." });
   if (new Date(gift.expires_at) < new Date()) {
     return res.status(400).json({ error: "This gift has expired." });
   }

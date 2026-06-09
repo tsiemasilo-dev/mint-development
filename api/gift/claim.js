@@ -230,12 +230,18 @@ export default async function handler(req, res) {
   let holdingsAllocated = 0;
 
   // Insert transaction first so we can stamp its UUID on every holdings row.
+  // Use the same format as record-investment.js (debit, "Strategy Investment: X")
+  // so the gift flows through the exact same pending-orders code path as a
+  // regular strategy purchase — no separate UI branch needed.
   let giftTxId = null;
   try {
+    const txName = gift.asset_type === "strategy"
+      ? `Strategy Investment: ${gift.asset_name}`
+      : `Purchased ${gift.asset_name}`;
     const txInsert = await db.from("transactions").insert({
       user_id: user.id,
-      direction: "credit",
-      name: `Gift Received — ${gift.asset_name}`,
+      direction: "debit",
+      name: txName,
       description: `Investment gift from sender`,
       amount: gift.amount,
       store_reference: `GIFT-CLAIM-${gift.id}`,
