@@ -48,6 +48,7 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
   const [initials, setInitials]       = useState(savedData?.initials    || "");
   const [countryCode, setCountryCode] = useState(savedData?.countryCode || "+27");
   const [agreedRead, setAgreedRead]   = useState(savedData?.agreedRead  || false);
+  const [signStep, setSignStep]       = useState(1);
   const [checkedBoxes, setCheckedBoxes]   = useState(savedData?.checkedBoxes   || {});
   const [showErrors, setShowErrors]       = useState(false);
   const [discretionType, setDiscretionType] = useState(savedData?.discretionType || null);
@@ -57,6 +58,7 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
   const manualOverrideRef = useRef(false);
   const fullRef           = useRef(null);
   const limitedRef        = useRef(null);
+  const signDirRef        = useRef("fwd");
 
   // Restore saved data
   useEffect(() => {
@@ -562,6 +564,21 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
 
   const purpleLink = { color:"hsl(270 60% 52%)", fontWeight:"600", textDecoration:"underline", background:"none", border:"none", padding:"0 1px", cursor:"pointer", fontSize:"inherit", display:"inline" };
 
+  const nextBtn = (enabled, onClick) => (
+    <button type="button" onClick={onClick} disabled={!enabled}
+      style={{ display:"inline-flex", alignItems:"center", gap:"6px", padding:"8px 16px", fontSize:"12px", fontWeight:"600", color:"white", background: enabled ? "hsl(270 55% 52%)" : "hsl(270 15% 82%)", border:"none", borderRadius:"9px", cursor: enabled ? "pointer" : "not-allowed", transition:"background 0.2s ease" }}>
+      Next
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>
+    </button>
+  );
+  const backBtn = (onClick) => (
+    <button type="button" onClick={onClick}
+      style={{ display:"inline-flex", alignItems:"center", gap:"4px", background:"none", border:"none", color:"hsl(270 30% 55%)", fontSize:"11px", fontWeight:"600", cursor:"pointer", padding:"0" }}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="13" height="13"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
+      Back
+    </button>
+  );
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:"12px" }}>
@@ -615,67 +632,95 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
         </div>
       </div>
 
-      {/* ── Single sign-off ── */}
-      <div style={{ background:"white", borderRadius:"16px", border: step3Done ? "1px solid #86efac" : "1px solid hsl(270 20% 90%)", boxShadow:"0 2px 12px rgba(100,60,140,0.06)", padding:"24px", transition:"border-color 0.3s ease" }}>
-        <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"24px"}}>
-          <div style={circle(step3Done)}>{step3Done ? tick : <span style={{color:"white",fontSize:"12px",fontWeight:"600"}}>2</span>}</div>
-          <div>
-            <div style={{fontSize:"14px",fontWeight:"600",color:"hsl(270 30% 25%)"}}>Sign Off</div>
-            <div style={{fontSize:"12px",color:"hsl(270 15% 60%)"}}>Three quick steps</div>
+      {/* ── Limited discretion warning ── */}
+      {discretionType === "limited" && (
+        <div style={{ display:"flex", alignItems:"flex-start", gap:"10px", background:"hsl(38 92% 95%)", border:"1px solid hsl(38 80% 72%)", borderRadius:"12px", padding:"12px 16px" }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="hsl(30 90% 45%)" strokeWidth="2" width="18" height="18" style={{flexShrink:0,marginTop:"1px"}}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+          <div style={{fontSize:"12px",lineHeight:"1.6",color:"hsl(28 70% 30%)"}}>
+            <strong>Please note:</strong> with limited discretion you will not be able to trade or interact with our strategies.
           </div>
         </div>
+      )}
 
-        {/* Step 1 — initials */}
-        <div>
-          <div style={{fontSize:"12px",fontWeight:"600",color:"hsl(270 25% 35%)",marginBottom:"10px"}}>Step 1 — Enter your initials</div>
-          <div style={{display:"flex",alignItems:"center",gap:"14px"}}>
-            <input
-              type="text" value={initials}
-              onChange={e => setInitials(e.target.value.toUpperCase())}
-              maxLength={5} placeholder="e.g. MM"
-              style={{ width:"96px", padding:"10px 14px", fontSize:"17px", fontWeight:"700", letterSpacing:"5px", textTransform:"uppercase", textAlign:"center", border: showErrors && !initials.trim() ? "2px solid #ef4444" : "2px solid hsl(270 20% 82%)", borderRadius:"10px", outline:"none", background:"hsl(270 30% 98%)", color:"hsl(270 30% 20%)", transition:"border-color 0.2s ease" }}
-            />
-            {step1Done && (
-              <div style={{display:"flex",alignItems:"center",gap:"6px",color:"#16a34a",fontSize:"12px",fontWeight:"600"}}>
-                {tick} Initials saved — populates all pages
-              </div>
-            )}
+      {/* ── Sign-off (appears once a discretion type is chosen) — one step at a time ── */}
+      {discretionType && (
+        <div style={{ background:"white", borderRadius:"16px", border: step3Done ? "1px solid #86efac" : "1px solid hsl(270 20% 90%)", boxShadow:"0 2px 12px rgba(100,60,140,0.06)", padding:"18px 20px", transition:"border-color 0.3s ease", overflow:"hidden" }}>
+          {/* header: title + progress dots */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"16px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:"9px"}}>
+              <div style={{...circle(step3Done), width:"24px", height:"24px"}}>{step3Done ? tick : <span style={{color:"white",fontSize:"11px",fontWeight:"700"}}>{signStep}</span>}</div>
+              <span style={{fontSize:"13px",fontWeight:"600",color:"hsl(270 30% 25%)"}}>Sign Off</span>
+            </div>
+            <div style={{display:"flex",gap:"5px",alignItems:"center"}}>
+              {[1,2,3].map(n => (
+                <span key={n} style={{ height:"6px", borderRadius:"3px", width: n===signStep ? "20px" : "6px", background: (step3Done || n < signStep) ? "#22c55e" : n===signStep ? "hsl(270 60% 55%)" : "hsl(270 20% 88%)", transition:"all 0.3s ease" }} />
+              ))}
+            </div>
           </div>
-        </div>
 
-        {/* Step 2 — country code (slides in) */}
-        <div style={{ display:"grid", gridTemplateRows: step1Done ? "1fr" : "0fr", transition:"grid-template-rows 0.4s ease" }}>
-          <div style={{overflow:"hidden"}}>
-            <div style={{paddingTop:"20px"}}>
-              <div style={{fontSize:"12px",fontWeight:"600",color:"hsl(270 25% 35%)",marginBottom:"10px"}}>Step 2 — Select your country code</div>
-              <div style={{display:"flex",alignItems:"center",gap:"14px"}}>
-                <select value={countryCode} onChange={e => setCountryCode(e.target.value)}
-                  style={{ padding:"10px 14px", fontSize:"13px", border:"2px solid hsl(270 20% 82%)", borderRadius:"10px", outline:"none", background:"hsl(270 30% 98%)", color:"hsl(270 30% 20%)", cursor:"pointer", minWidth:"240px" }}>
-                  {COUNTRY_CODES.map(({code,label,flag}) => <option key={code} value={code}>{flag} {label}</option>)}
-                </select>
-                {step2Done && <div style={{display:"flex",alignItems:"center",gap:"6px",color:"#16a34a",fontSize:"12px",fontWeight:"600"}}>{tick} Confirmed</div>}
-              </div>
+          {/* swipe viewport */}
+          <div style={{minHeight:"96px"}}>
+            <div key={signStep} style={{ animation: `${signDirRef.current === "back" ? "mintSwipeL" : "mintSwipeR"} 0.35s cubic-bezier(0.22,1,0.36,1)` }}>
+
+              {signStep === 1 && (
+                <div>
+                  <div style={{fontSize:"12px",fontWeight:"600",color:"hsl(270 25% 35%)",marginBottom:"8px"}}>Enter your initials</div>
+                  <input
+                    type="text" value={initials} autoFocus
+                    onChange={e => setInitials(e.target.value.toUpperCase())}
+                    onKeyDown={e => { if (e.key === "Enter" && step1Done) { signDirRef.current = "fwd"; setSignStep(2); } }}
+                    maxLength={5} placeholder="MM"
+                    style={{ width:"88px", padding:"9px 12px", fontSize:"16px", fontWeight:"700", letterSpacing:"5px", textTransform:"uppercase", textAlign:"center", border: showErrors && !initials.trim() ? "2px solid #ef4444" : "2px solid hsl(270 20% 82%)", borderRadius:"10px", outline:"none", background:"hsl(270 30% 98%)", color:"hsl(270 30% 20%)", transition:"border-color 0.2s ease" }}
+                  />
+                  <p style={{fontSize:"10.5px",color:"hsl(270 15% 60%)",margin:"8px 0 0"}}>These appear on every page of your mandate.</p>
+                  <div style={{display:"flex",justifyContent:"flex-end",marginTop:"6px"}}>
+                    {nextBtn(step1Done, () => { signDirRef.current = "fwd"; setSignStep(2); })}
+                  </div>
+                </div>
+              )}
+
+              {signStep === 2 && (
+                <div>
+                  {backBtn(() => { signDirRef.current = "back"; setSignStep(1); })}
+                  <div style={{fontSize:"12px",fontWeight:"600",color:"hsl(270 25% 35%)",margin:"8px 0"}}>Select your country code</div>
+                  <select value={countryCode} onChange={e => setCountryCode(e.target.value)}
+                    style={{ padding:"9px 12px", fontSize:"13px", border:"2px solid hsl(270 20% 82%)", borderRadius:"10px", outline:"none", background:"hsl(270 30% 98%)", color:"hsl(270 30% 20%)", cursor:"pointer", width:"100%", maxWidth:"260px" }}>
+                    {COUNTRY_CODES.map(({code,label,flag}) => <option key={code} value={code}>{flag} {label}</option>)}
+                  </select>
+                  <div style={{display:"flex",justifyContent:"flex-end",marginTop:"12px"}}>
+                    {nextBtn(step2Done, () => { signDirRef.current = "fwd"; setSignStep(3); })}
+                  </div>
+                </div>
+              )}
+
+              {signStep === 3 && (
+                <div>
+                  {backBtn(() => { signDirRef.current = "back"; setSignStep(2); })}
+                  <div style={{fontSize:"12px",fontWeight:"600",color:"hsl(270 25% 35%)",margin:"8px 0"}}>Confirm your agreement</div>
+                  <label style={{ display:"flex", alignItems:"flex-start", gap:"10px", cursor:"pointer", padding:"12px 14px", background: agreedRead ? "hsl(143 50% 97%)" : "hsl(270 30% 98%)", border: agreedRead ? "2px solid #86efac" : "2px solid hsl(270 20% 88%)", borderRadius:"12px", transition:"all 0.25s ease" }}>
+                    <input type="checkbox" checked={agreedRead} onChange={e => setAgreedRead(e.target.checked)} style={{width:"17px",height:"17px",marginTop:"1px",cursor:"pointer",accentColor:"hsl(270 60% 50%)",flexShrink:0}} />
+                    <span style={{fontSize:"11.5px",lineHeight:"1.6",color:"hsl(270 15% 28%)"}}>
+                      I have read and agree to the <strong>MINT Platforms</strong> Discretionary FSP Mandate, the Introduction &amp; Terms, and all attached Schedules and Annexures. I confirm the information I have provided is true and accurate.
+                    </span>
+                  </label>
+                  {step3Done && (
+                    <div style={{display:"flex",alignItems:"center",gap:"6px",color:"#16a34a",fontSize:"11.5px",fontWeight:"600",marginTop:"10px"}}>
+                      {tick} All set — you can continue below.
+                    </div>
+                  )}
+                </div>
+              )}
+
             </div>
           </div>
         </div>
+      )}
 
-        {/* Step 3 — agreement (slides in) */}
-        <div style={{ display:"grid", gridTemplateRows: step2Done ? "1fr" : "0fr", transition:"grid-template-rows 0.4s ease" }}>
-          <div style={{overflow:"hidden"}}>
-            <div style={{paddingTop:"20px"}}>
-              <div style={{fontSize:"12px",fontWeight:"600",color:"hsl(270 25% 35%)",marginBottom:"10px"}}>Step 3 — Confirm your agreement</div>
-              <label style={{ display:"flex", alignItems:"flex-start", gap:"12px", cursor:"pointer", padding:"16px", background: agreedRead ? "hsl(143 50% 97%)" : "hsl(270 30% 98%)", border: agreedRead ? "2px solid #86efac" : "2px solid hsl(270 20% 88%)", borderRadius:"12px", transition:"all 0.25s ease" }}>
-                <input type="checkbox" checked={agreedRead} onChange={e => setAgreedRead(e.target.checked)} style={{width:"18px",height:"18px",marginTop:"2px",cursor:"pointer",accentColor:"hsl(270 60% 50%)",flexShrink:0}} />
-                <span style={{fontSize:"12px",lineHeight:"1.7",color:"hsl(270 15% 28%)"}}>
-                  I have read and agree to the <strong>MINT Platforms</strong> Discretionary FSP Mandate, the Introduction &amp; Terms, and all attached Schedules and Annexures. I confirm that the information I have provided is true and accurate.
-                </span>
-              </label>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <style>{`@keyframes mintSlideUp{from{transform:translateY(60px);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
+      <style>{`
+        @keyframes mintSlideUp{from{transform:translateY(60px);opacity:0}to{transform:translateY(0);opacity:1}}
+        @keyframes mintSwipeR{from{transform:translateX(22px);opacity:0}to{transform:translateX(0);opacity:1}}
+        @keyframes mintSwipeL{from{transform:translateX(-22px);opacity:0}to{transform:translateX(0);opacity:1}}
+      `}</style>
     </div>
   );
 };
