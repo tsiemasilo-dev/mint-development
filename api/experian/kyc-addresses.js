@@ -3,6 +3,47 @@ import { EXPERIAN_KYC_URL, experianKycAuth, experianRequest, archiveKycSnapshot 
 
 const TYPE_LABEL = { R: "Residential address", W: "Work address", P: "Postal address", O: "Other address" };
 
+const digits = (s) => String(s ?? "").replace(/[^\d]/g, "");
+
+// Normalise a SA phone number to +27… so the mandate can derive the country code.
+function normPhoneSA(raw) {
+  const d = digits(raw);
+  if (!d) return "";
+  if (d.length === 10 && d.startsWith("0")) return "+27" + d.slice(1);
+  if (d.length === 11 && d.startsWith("27")) return "+" + d;
+  if (d.length === 9) return "+27" + d; // assume a SA number missing its leading 0
+  return String(raw).trim().startsWith("+") ? String(raw).trim() : "+" + d;
+}
+
+// Pull phone numbers + email out of the bureau contact block. The exact shape
+// isn't documented, so walk it recursively and classify by key-name hints —
+// tolerant of arrays, nested objects, and XML- vs REST-cased keys.
+function normContact(rd) {
+  const cd = rd?.contact_data ?? rd?.ContactData ?? rd?.contact ?? rd?.Contact ?? null;
+  const phones = [];
+  let email = "";
+  const consider = (key, val) => {
+    const v = String(val ?? "").trim();
+    if (!v) return;
+    if (/@/.test(v)) { if (!email) email = v; return; }
+    const d = digits(v);
+    if (d.length >= 9 && d.length <= 13) {
+      const k = String(key || "").toLowerCase();
+      const type = /cell|mobile|msisdn/.test(k) ? "cell" : /work|bus|employ/.test(k) ? "work" : /home|res|tel|phone/.test(k) ? "home" : "other";
+      phones.push({ type, value: normPhoneSA(v) });
+    }
+  };
+  const walk = (node, key) => {
+    if (node == null) return;
+    if (Array.isArray(node)) return node.forEach((n) => walk(n, key));
+    if (typeof node === "object") return Object.entries(node).forEach(([k, v]) => walk(v, k));
+    consider(key, node);
+  };
+  walk(cd, "");
+  const cell = phones.find((p) => p.type === "cell") || phones.find((p) => p.type === "home") || phones[0] || null;
+  return { cell: cell?.value || "", email, phones };
+}
+
 // Normalise one address record (REST JSON is lowercase; tolerate XML-cased keys too).
 function normAddress(a) {
   const get = (lc, uc) => a[lc] ?? a[uc] ?? "";
@@ -65,6 +106,7 @@ export default async function handler(req, res) {
           { formatted: "12 Loop Street, Cape Town City Centre, 8001", type: "R", typeLabel: "Residential", postalCode: "8001", lastUpdated: "2024-01-01", lines: ["12 Loop Street", "Cape Town City Centre"] },
           { formatted: "47 Rivonia Road, Sandton, 2196", type: "R", typeLabel: "Residential", postalCode: "2196", lastUpdated: "2022-06-01", lines: ["47 Rivonia Road", "Sandton"] },
         ],
+        contact: { cell: "+27821234567", email: "", phones: [{ type: "cell", value: "+27821234567" }] },
       });
     }
 
@@ -77,7 +119,7 @@ export default async function handler(req, res) {
         surname: profile?.last_name || req.body?.surname || "",
         want_search_criteria: "Y",
         want_addresses: "Y",
-        want_contact: "N",
+        want_contact: "Y",
         want_employment: "N",
         want_safps: "N",
       },
@@ -111,11 +153,15 @@ export default async function handler(req, res) {
       id_number: identityNumber,
     };
 
+    // Bureau contact (phone/email). Shape is undocumented — parsed tolerantly.
+    const contact = normContact(rd);
+    console.log(`[Experian KYC] contact → cell=${contact.cell ? contact.cell.slice(0, 6) + "…" : "none"} · email=${contact.email ? "yes" : "no"} · phones=${contact.phones.length}`);
+
     // Persist once: durable archive snapshot (never lose it, CRM-visible) +
     // audit copy in sumsub_raw. Both update in place on re-checks.
-    await archiveKycSnapshot(db, userId, { enquiry_id: rd?.enquiry_id, stats, addresses, identity, checked_at: new Date().toISOString() });
+    await archiveKycSnapshot(db, userId, { enquiry_id: rd?.enquiry_id, stats, addresses, identity, contact, checked_at: new Date().toISOString() });
     const checkedAt = new Date().toISOString();
-    const updatedRaw = { ...raw, experian_kyc_addresses: addresses, experian_kyc_stats: stats, experian_kyc_checked_at: checkedAt };
+    const updatedRaw = { ...raw, experian_kyc_addresses: addresses, experian_kyc_contact: contact, experian_kyc_stats: stats, experian_kyc_checked_at: checkedAt };
     await db.from("user_onboarding").update({ sumsub_raw: updatedRaw, updated_at: checkedAt }).eq("user_id", userId);
 
     if (addresses.length === 0) {
@@ -128,11 +174,11 @@ export default async function handler(req, res) {
           ? "Bureau lookup failed."
           : "No address data returned.");
       console.log(`[Experian KYC] No addresses for user ${userId} → manual entry. note="${note}"`);
-      return res.json({ success: true, addresses: [], note, personFound: stats.person_found === "Y" });
+      return res.json({ success: true, addresses: [], contact, note, personFound: stats.person_found === "Y" });
     }
 
     console.log(`[Experian KYC] Returning ${addresses.length} address(es) for user ${userId}`);
-    return res.json({ success: true, addresses });
+    return res.json({ success: true, addresses, contact });
   } catch (err) {
     console.error("[Experian KYC addresses]", err);
     return res.status(500).json({ success: false, error: { message: err.message } });

@@ -727,6 +727,26 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
           console.log("[Onboarding] No bureau addresses → showing manual entry fallback.");
         }
         setExperianAddresses(list);
+
+        // Bureau contact number: if the profile has no phone yet, save the cell
+        // number so the mandate (and the rest of the app) can use it — this also
+        // lets the mandate derive the country code automatically.
+        const bureauCell = data?.contact?.cell;
+        if (bureauCell) {
+          try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+              const { data: prow } = await supabase.from("profiles").select("phone_number").eq("id", user.id).maybeSingle();
+              if (!prow?.phone_number?.trim()) {
+                await supabase.from("profiles").update({ phone_number: bureauCell }).eq("id", user.id);
+                window.dispatchEvent(new Event("profile-updated"));
+                console.log("[Onboarding] Saved bureau cell number to profile:", bureauCell);
+              }
+            }
+          } catch (e) {
+            console.warn("[Onboarding] Could not save bureau contact number:", e);
+          }
+        }
       } catch (err) {
         console.warn("[Onboarding] Experian address lookup failed:", err);
         setExperianAddresses([]);

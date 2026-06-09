@@ -52,6 +52,7 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
   const [signExtras, setSignExtras]   = useState(null);       // frozen list of missing required fields
   const [showLimitedPopup, setShowLimitedPopup] = useState(false);
   const [addendumOpen, setAddendumOpen] = useState(false);
+  const [annexureOpen, setAnnexureOpen] = useState(false);
   const [checkedBoxes, setCheckedBoxes]   = useState(savedData?.checkedBoxes   || {});
   const [showErrors, setShowErrors]       = useState(false);
   const [discretionType, setDiscretionType] = useState(savedData?.discretionType || null);
@@ -587,21 +588,30 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
         </div>
 
         <hr style={{margin:"30px 0",border:"none",borderTop:"2px solid #ccc"}} />
-        <div style={h2}>Annexure A</div>
-        <div style={h3}>Bank account details</div>
-        <div style={p}>This account is the MINT Platforms Client Account. You are required to pay your funds into this account and MINT Platforms will execute transaction/s to invest these funds in Securities which will constitute your Portfolio in accordance with this Mandate.</div>
-        <div style={{fontWeight:"bold",marginTop:"20px"}}>Local Bank Account</div>
-        <table style={{...itbl,marginTop:"15px"}}>
-          <tbody>
-            <tr><td style={itdB}>Name of account</td><td style={itd}>TBA</td></tr>
-            <tr><td style={itdB}>Bank</td><td style={itd}>TBA</td></tr>
-            <tr><td style={itdB}>Type of account</td><td style={itd}>Business Current Account</td></tr>
-            <tr><td style={itdB}>Account number</td><td style={itd}>000 000 000</td></tr>
-            <tr><td style={itdB}>Branch opened</td><td style={itd}>TBA</td></tr>
-            <tr><td style={itdB}>Branch code</td><td style={itd}>000000</td></tr>
-          </tbody>
-        </table>
-        <InitialsStamp value={initials} />
+        <button type="button" onClick={() => setAnnexureOpen(o => !o)} style={{...purpleLink, display:"inline-flex", alignItems:"center", gap:"6px", fontSize:"13px", textDecoration:"none"}}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="14" height="14" style={{transition:"transform 0.3s ease", transform: annexureOpen ? "rotate(90deg)" : "rotate(0deg)"}}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>
+          <span style={{textDecoration:"underline"}}>{annexureOpen ? "Hide Annexure A (Bank account details)" : "Expand to see Annexure A (Bank account details)"}</span>
+        </button>
+        <div style={{ display:"grid", gridTemplateRows: annexureOpen ? "1fr" : "0fr", transition:"grid-template-rows 0.4s ease" }}>
+          <div style={{overflow:"hidden"}}>
+            <div style={{paddingTop:"16px"}}>
+              <div style={h3}>Bank account details</div>
+              <div style={p}>This account is the MINT Platforms Client Account. You are required to pay your funds into this account and MINT Platforms will execute transaction/s to invest these funds in Securities which will constitute your Portfolio in accordance with this Mandate.</div>
+              <div style={{fontWeight:"bold",marginTop:"20px"}}>Local Bank Account</div>
+              <table style={{...itbl,marginTop:"15px"}}>
+                <tbody>
+                  <tr><td style={itdB}>Name of account</td><td style={itd}>TBA</td></tr>
+                  <tr><td style={itdB}>Bank</td><td style={itd}>TBA</td></tr>
+                  <tr><td style={itdB}>Type of account</td><td style={itd}>Business Current Account</td></tr>
+                  <tr><td style={itdB}>Account number</td><td style={itd}>000 000 000</td></tr>
+                  <tr><td style={itdB}>Branch opened</td><td style={itd}>TBA</td></tr>
+                  <tr><td style={itdB}>Branch code</td><td style={itd}>000000</td></tr>
+                </tbody>
+              </table>
+              <InitialsStamp value={initials} />
+            </div>
+          </div>
+        </div>
       </>)}
     </div>
   );
