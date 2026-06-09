@@ -1576,20 +1576,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               </div>
               {!mandateValid && (
                 <div className="animate-fade-in" style={{ marginTop: "10px" }}>
-                  {(() => {
-                    const missing = [
-                      !(profile?.firstName?.trim() || profile?.first_name?.trim()) && "First Name",
-                      !(profile?.lastName?.trim() || profile?.last_name?.trim()) && "Surname",
-                      !profile?.idNumber?.trim() && "ID Number",
-                      !profile?.address?.trim() && "Address",
-                      !profile?.phoneNumber?.trim() && "Cell Number",
-                      !profile?.email?.trim() && "Email Address",
-                    ].filter(Boolean);
-                    if (missing.length > 0) {
-                      return <p style={{ color: "#ef4444", fontSize: "12px", textAlign: "center" }}>Cannot continue — the following required fields are still empty in the mandate: <strong>{missing.join(", ")}</strong>. <button type="button" onClick={() => { setMandateRequestTab(null); setTimeout(() => setMandateRequestTab(0), 0); }} style={{ color: "#ef4444", textDecoration: "underline", background: "none", border: "none", cursor: "pointer", fontSize: "12px", fontWeight: "600", padding: 0 }}>Go to Tab 1 to fill them in.</button></p>;
-                    }
-                    return <p style={{ color: "#ef4444", fontSize: "12px", textAlign: "center" }}>Please enter your initials and complete all checkbox selections on the Schedules tab before continuing.</p>;
-                  })()}
+                  <p style={{ color: "#ef4444", fontSize: "12px", textAlign: "center" }}>Select your discretion type, complete the Schedules selections, then finish the Sign Off below before continuing.</p>
                 </div>
               )}
               {submitError && <p className="text-center animate-fade-in" style={{ color: "#ef4444", fontSize: "12px", marginTop: "8px" }}>{submitError}</p>}

@@ -46,9 +46,12 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
   const [sec3Open, setSec3Open]       = useState(false);
   const [docViewer, setDocViewer]     = useState(null); // null | "mandate" | "terms"
   const [initials, setInitials]       = useState(savedData?.initials    || "");
-  const [countryCode, setCountryCode] = useState(savedData?.countryCode || "+27");
+  const [countryCode, setCountryCode] = useState(savedData?.countryCode || "");
   const [agreedRead, setAgreedRead]   = useState(savedData?.agreedRead  || false);
-  const [signStep, setSignStep]       = useState(1);
+  const [signKey, setSignKey]         = useState("initials"); // current sign-off slide
+  const [signExtras, setSignExtras]   = useState(null);       // frozen list of missing required fields
+  const [showLimitedPopup, setShowLimitedPopup] = useState(false);
+  const [addendumOpen, setAddendumOpen] = useState(false);
   const [checkedBoxes, setCheckedBoxes]   = useState(savedData?.checkedBoxes   || {});
   const [showErrors, setShowErrors]       = useState(false);
   const [discretionType, setDiscretionType] = useState(savedData?.discretionType || null);
@@ -86,15 +89,6 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
   const updateEditableField = (key, val) => setEditableFields(p => ({ ...p, [key]: val }));
   const toggleCheckbox      = (id)        => setCheckedBoxes(p  => ({ ...p, [id]: !p[id] }));
 
-  const getMandateData = useCallback(() => ({
-    initials, checkedBoxes, discretionType, editableFields,
-    countryCode, agreedRead, agreedMandate: agreedRead,
-    savedAt: new Date().toISOString(),
-  }), [initials, checkedBoxes, discretionType, editableFields, countryCode, agreedRead]);
-
-  useEffect(() => { if (onDataChange) onDataChange(getMandateData()); },
-    [initials, checkedBoxes, discretionType, editableFields, countryCode, agreedRead]);
-
   const REQUIRE_ALL_GROUPS = ["lim_exercise"];
 
   const activeGroups = useCallback(() => {
@@ -129,25 +123,14 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
   const email       = getField("email",      pEmail);
   const phoneNumber = getField("phoneNumber", pPhone);
 
-  const requiredFieldsFilled = !!(firstName.trim() && lastName.trim() && idNumber.trim() && address.trim() && email.trim() && phoneNumber.trim());
-
-  // Sign-off steps
-  const step1Done = initials.trim().length >= 1;
-  const step2Done = step1Done && countryCode.trim().length > 0;
-  const step3Done = step2Done && agreedRead;
-
-  const sec3Done      = allGroupsValid() && discretionType !== null;
-  const isMandateValid = step3Done && sec3Done && requiredFieldsFilled;
-
-  useEffect(() => { if (onValidChange) onValidChange(isMandateValid); }, [isMandateValid, onValidChange]);
-
   // Phone / address helpers
-  const parsePhone = (ph) => {
-    if (!ph) return { cc: "", cell: "", num: "" };
-    const c = ph.replace(/[\s()-]/g, "");
+  const parsePhone = (val) => {
+    if (!val) return { cc: "", cell: "", num: "" };
+    const c = String(val).replace(/[\s()-]/g, "");
     if (c.startsWith("+27")) return { cc: "+27", cell: c.slice(3,5), num: c.slice(5) };
     if (c.startsWith("0"))   return { cc: "+27", cell: c.slice(1,3), num: c.slice(3) };
-    return { cc: "", cell: "", num: c };
+    const m = c.match(/^\+(\d{1,3})/);
+    return { cc: m ? `+${m[1]}` : "", cell: "", num: c };
   };
   const parseAddr = (a) => {
     if (!a) return { addr: "", code: "" };
@@ -156,6 +139,63 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
   };
   const ph = parsePhone(phoneNumber);
   const ad = parseAddr(address);
+
+  // Effective required values: profile/Experian first, sign-off fallback second.
+  // Postal code comes from the address; country code is derived from the phone
+  // number — neither is asked in the sign-off unless it can't be resolved.
+  const postalCode     = ad.code || editableFields.postalCode || "";
+  const effCountryCode = ph.cc || countryCode || "";
+
+  const idFilled      = !!idNumber.trim();
+  const postalFilled  = !!postalCode.trim();
+  const countryFilled = !!effCountryCode.trim();
+  const initialsDone  = initials.trim().length >= 1;
+  const agreedDone    = !!agreedRead;
+
+  // Cover-page prompt only when something the doc shows is still missing.
+  const requiredFieldsFilled = !!(firstName.trim() && lastName.trim() && email.trim() && idFilled && postalFilled);
+
+  const sec3Done      = allGroupsValid() && discretionType !== null;
+  const signComplete  = initialsDone && idFilled && postalFilled && countryFilled && agreedDone;
+  const isMandateValid = sec3Done && signComplete && firstName.trim() && lastName.trim() && email.trim();
+
+  useEffect(() => { if (onValidChange) onValidChange(isMandateValid); }, [isMandateValid, onValidChange]);
+
+  // Persist mandate state upward (country code reported as the effective value).
+  const getMandateData = useCallback(() => ({
+    initials, checkedBoxes, discretionType, editableFields,
+    countryCode: effCountryCode, agreedRead, agreedMandate: agreedRead,
+    savedAt: new Date().toISOString(),
+  }), [initials, checkedBoxes, discretionType, editableFields, effCountryCode, agreedRead]);
+
+  useEffect(() => { if (onDataChange) onDataChange(getMandateData()); },
+    [initials, checkedBoxes, discretionType, editableFields, effCountryCode, agreedRead]);
+
+  // Freeze which extra required fields the sign-off must collect, computed while
+  // the user is still on the initials step (so late-loading profile data counts).
+  useEffect(() => {
+    if (!discretionType) { setSignExtras(null); return; }
+    if (signKey === "initials") {
+      const ex = [];
+      if (!idFilled)      ex.push("idNumber");
+      if (!postalFilled)  ex.push("postalCode");
+      if (!countryFilled) ex.push("countryCode");
+      setSignExtras(ex);
+    }
+  }, [discretionType, signKey, idFilled, postalFilled, countryFilled]);
+
+  // Ordered slides: initials → missing required fields → agreement.
+  const signSeq = ["initials", ...(signExtras || []), "agreement"];
+  const goSign = (dir) => {
+    const i = signSeq.indexOf(signKey);
+    const ni = dir === "back" ? i - 1 : i + 1;
+    if (ni >= 0 && ni < signSeq.length) { signDirRef.current = dir; setSignKey(signSeq[ni]); }
+  };
+  // Keep the active slide valid if the sequence changes underneath it.
+  useEffect(() => { if (discretionType && !signSeq.includes(signKey)) setSignKey("initials"); }, [signSeq, signKey, discretionType]);
+
+  // Red severity popup when limited discretion is chosen.
+  useEffect(() => { setShowLimitedPopup(discretionType === "limited"); }, [discretionType]);
 
   // ── Shared styles ────────────────────────────────────────────────────────
   const pg  = { background:"white", padding:"24px", fontSize:"11px", lineHeight:"1.6", fontFamily:"Arial,sans-serif", color:"#222" };
@@ -273,9 +313,9 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
             </td>
           </tr>
           <tr><td style={itdB}></td>
-            <td style={itd}>Code: {fromProfile(pAddr)
-              ? <input type="text" style={{...inp,width:"100px"}} value={ad.code} readOnly />
-              : <input type="text" style={{...einp,width:"100px"}} value={editableFields.postalCode||""} onChange={e=>updateEditableField("postalCode",e.target.value)} placeholder="Code" />}
+            <td style={itd}>Code: {fromProfile(pAddr) && ad.code
+              ? <input type="text" style={{...inp,width:"100px"}} value={postalCode} readOnly />
+              : <input type="text" style={{...einp,width:"100px",...miss(postalCode)}} value={editableFields.postalCode||""} onChange={e=>updateEditableField("postalCode",e.target.value)} placeholder="Code" />}
             </td>
           </tr>
           <tr><td style={itdB}>Residential Address</td>
@@ -519,22 +559,32 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
         </div>
 
         <hr style={{margin:"30px 0",border:"none",borderTop:"2px solid #ccc"}} />
-        <div style={h2}>ADDENDUM TO MANDATE</div>
-        <div style={p}>Any amendment of any provision of this mandate shall be in writing and shall be by means of a supplementary or new record of advice between the Provider and the Client.</div>
-        <div style={{...p,marginTop:"15px"}}>By signing this addendum, I hereby notify MINT Platforms of my change in investment objectives and risk profile.</div>
-        <table style={{width:"100%",marginTop:"20px",borderCollapse:"collapse"}}>
-          <tbody>
-            {[{header:"Long Term (5 years or longer)",items:["Capital Growth","Income Generation"]},{header:"Medium Term (2 to 5 years)",items:["Capital Growth","Income Generation"]},{header:"Short Term (3 months to 2 years)",items:["Capital Growth","Income Generation"]},{header:"Risk Preference",items:["Very Conservative","Conservative","Moderate","Aggressive","Very Aggressive"]}].map((sec,si) => (
-              <React.Fragment key={si}>
-                <tr style={{background:"#e0e0e0"}}><td colSpan="2" style={{padding:"5px",textAlign:"center",fontWeight:"bold",border:"1px solid #333"}}>{sec.header}</td></tr>
-                {sec.items.map((item,ii) => (
-                  <tr key={ii}><td style={{border:"1px solid #333",padding:"5px"}}>{item}</td><td style={{border:"1px solid #333",padding:"5px",width:"30px",textAlign:"center"}}><input type="checkbox" checked={getAddendumChecked(si,ii)} readOnly style={{pointerEvents:"none"}} /></td></tr>
-                ))}
-              </React.Fragment>
-            ))}
-          </tbody>
-        </table>
-        <InitialsStamp value={initials} />
+        <button type="button" onClick={() => setAddendumOpen(o => !o)} style={{...purpleLink, display:"inline-flex", alignItems:"center", gap:"6px", fontSize:"13px", textDecoration:"none"}}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="14" height="14" style={{transition:"transform 0.3s ease", transform: addendumOpen ? "rotate(90deg)" : "rotate(0deg)"}}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>
+          <span style={{textDecoration:"underline"}}>{addendumOpen ? "Hide the Addendum to Mandate" : "Expand to see the Addendum to Mandate"}</span>
+        </button>
+        <div style={{ display:"grid", gridTemplateRows: addendumOpen ? "1fr" : "0fr", transition:"grid-template-rows 0.4s ease" }}>
+          <div style={{overflow:"hidden"}}>
+            <div style={{paddingTop:"16px"}}>
+              <div style={h3}>ADDENDUM TO MANDATE</div>
+              <div style={p}>Any amendment of any provision of this mandate shall be in writing and shall be by means of a supplementary or new record of advice between the Provider and the Client.</div>
+              <div style={{...p,marginTop:"15px"}}>By signing this addendum, I hereby notify MINT Platforms of my change in investment objectives and risk profile.</div>
+              <table style={{width:"100%",marginTop:"20px",borderCollapse:"collapse"}}>
+                <tbody>
+                  {[{header:"Long Term (5 years or longer)",items:["Capital Growth","Income Generation"]},{header:"Medium Term (2 to 5 years)",items:["Capital Growth","Income Generation"]},{header:"Short Term (3 months to 2 years)",items:["Capital Growth","Income Generation"]},{header:"Risk Preference",items:["Very Conservative","Conservative","Moderate","Aggressive","Very Aggressive"]}].map((sec,si) => (
+                    <React.Fragment key={si}>
+                      <tr style={{background:"#e0e0e0"}}><td colSpan="2" style={{padding:"5px",textAlign:"center",fontWeight:"bold",border:"1px solid #333"}}>{sec.header}</td></tr>
+                      {sec.items.map((item,ii) => (
+                        <tr key={ii}><td style={{border:"1px solid #333",padding:"5px"}}>{item}</td><td style={{border:"1px solid #333",padding:"5px",width:"30px",textAlign:"center"}}><input type="checkbox" checked={getAddendumChecked(si,ii)} readOnly style={{pointerEvents:"none"}} /></td></tr>
+                      ))}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+              <InitialsStamp value={initials} />
+            </div>
+          </div>
+        </div>
 
         <hr style={{margin:"30px 0",border:"none",borderTop:"2px solid #ccc"}} />
         <div style={h2}>Annexure A</div>
@@ -582,6 +632,17 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:"12px" }}>
+
+      {/* ── Limited discretion severity popup (fixed, top of screen) ── */}
+      {showLimitedPopup && discretionType === "limited" && (
+        <div style={{ position:"fixed", top:"16px", left:"50%", transform:"translate(-50%,0)", zIndex:1200, width:"calc(100% - 32px)", maxWidth:"540px", background:"hsl(0 74% 48%)", color:"white", borderRadius:"12px", padding:"14px 16px", boxShadow:"0 12px 34px rgba(180,0,0,0.4)", display:"flex", alignItems:"flex-start", gap:"12px", animation:"mintDropIn 0.35s cubic-bezier(0.22,1,0.36,1)" }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" width="20" height="20" style={{flexShrink:0,marginTop:"1px"}}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+          <div style={{flex:1, fontSize:"13px", lineHeight:"1.5", fontWeight:"600"}}>
+            Important: with limited discretion you will <u>not</u> be able to trade or interact with our strategies.
+          </div>
+          <button type="button" onClick={() => setShowLimitedPopup(false)} aria-label="Dismiss" style={{ background:"none", border:"none", color:"white", cursor:"pointer", fontSize:"20px", lineHeight:"1", padding:"0 2px", opacity:0.9 }}>×</button>
+        </div>
+      )}
 
       {/* ── Document viewer overlay ── */}
       {docViewer && (
@@ -632,70 +693,100 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
         </div>
       </div>
 
-      {/* ── Limited discretion warning ── */}
-      {discretionType === "limited" && (
-        <div style={{ display:"flex", alignItems:"flex-start", gap:"10px", background:"hsl(38 92% 95%)", border:"1px solid hsl(38 80% 72%)", borderRadius:"12px", padding:"12px 16px" }}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="hsl(30 90% 45%)" strokeWidth="2" width="18" height="18" style={{flexShrink:0,marginTop:"1px"}}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
-          <div style={{fontSize:"12px",lineHeight:"1.6",color:"hsl(28 70% 30%)"}}>
-            <strong>Please note:</strong> with limited discretion you will not be able to trade or interact with our strategies.
-          </div>
-        </div>
-      )}
-
       {/* ── Sign-off (appears once a discretion type is chosen) — one step at a time ── */}
       {discretionType && (
-        <div style={{ background:"white", borderRadius:"16px", border: step3Done ? "1px solid #86efac" : "1px solid hsl(270 20% 90%)", boxShadow:"0 2px 12px rgba(100,60,140,0.06)", padding:"18px 20px", transition:"border-color 0.3s ease", overflow:"hidden" }}>
+        <div style={{ background:"white", borderRadius:"16px", border: signComplete ? "1px solid #86efac" : "1px solid hsl(270 20% 90%)", boxShadow:"0 2px 12px rgba(100,60,140,0.06)", padding:"18px 20px", transition:"border-color 0.3s ease", overflow:"hidden" }}>
           {/* header: title + progress dots */}
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"16px"}}>
             <div style={{display:"flex",alignItems:"center",gap:"9px"}}>
-              <div style={{...circle(step3Done), width:"24px", height:"24px"}}>{step3Done ? tick : <span style={{color:"white",fontSize:"11px",fontWeight:"700"}}>{signStep}</span>}</div>
+              <div style={{...circle(signComplete), width:"24px", height:"24px"}}>{signComplete ? tick : <span style={{color:"white",fontSize:"11px",fontWeight:"700"}}>{Math.max(1, signSeq.indexOf(signKey) + 1)}</span>}</div>
               <span style={{fontSize:"13px",fontWeight:"600",color:"hsl(270 30% 25%)"}}>Sign Off</span>
             </div>
             <div style={{display:"flex",gap:"5px",alignItems:"center"}}>
-              {[1,2,3].map(n => (
-                <span key={n} style={{ height:"6px", borderRadius:"3px", width: n===signStep ? "20px" : "6px", background: (step3Done || n < signStep) ? "#22c55e" : n===signStep ? "hsl(270 60% 55%)" : "hsl(270 20% 88%)", transition:"all 0.3s ease" }} />
-              ))}
+              {signSeq.map((k, i) => {
+                const active = k === signKey;
+                const done = signComplete || i < signSeq.indexOf(signKey);
+                return <span key={k} style={{ height:"6px", borderRadius:"3px", width: active ? "20px" : "6px", background: done ? "#22c55e" : active ? "hsl(270 60% 55%)" : "hsl(270 20% 88%)", transition:"all 0.3s ease" }} />;
+              })}
             </div>
           </div>
 
-          {/* swipe viewport */}
-          <div style={{minHeight:"96px"}}>
-            <div key={signStep} style={{ animation: `${signDirRef.current === "back" ? "mintSwipeL" : "mintSwipeR"} 0.35s cubic-bezier(0.22,1,0.36,1)` }}>
+          {/* swipe viewport — one field at a time */}
+          <div style={{minHeight:"104px"}}>
+            <div key={signKey} style={{ animation: `${signDirRef.current === "back" ? "mintSwipeL" : "mintSwipeR"} 0.35s cubic-bezier(0.22,1,0.36,1)` }}>
 
-              {signStep === 1 && (
+              {signKey === "initials" && (
                 <div>
                   <div style={{fontSize:"12px",fontWeight:"600",color:"hsl(270 25% 35%)",marginBottom:"8px"}}>Enter your initials</div>
                   <input
                     type="text" value={initials} autoFocus
                     onChange={e => setInitials(e.target.value.toUpperCase())}
-                    onKeyDown={e => { if (e.key === "Enter" && step1Done) { signDirRef.current = "fwd"; setSignStep(2); } }}
+                    onKeyDown={e => { if (e.key === "Enter" && initialsDone) goSign("fwd"); }}
                     maxLength={5} placeholder="MM"
                     style={{ width:"88px", padding:"9px 12px", fontSize:"16px", fontWeight:"700", letterSpacing:"5px", textTransform:"uppercase", textAlign:"center", border: showErrors && !initials.trim() ? "2px solid #ef4444" : "2px solid hsl(270 20% 82%)", borderRadius:"10px", outline:"none", background:"hsl(270 30% 98%)", color:"hsl(270 30% 20%)", transition:"border-color 0.2s ease" }}
                   />
                   <p style={{fontSize:"10.5px",color:"hsl(270 15% 60%)",margin:"8px 0 0"}}>These appear on every page of your mandate.</p>
                   <div style={{display:"flex",justifyContent:"flex-end",marginTop:"6px"}}>
-                    {nextBtn(step1Done, () => { signDirRef.current = "fwd"; setSignStep(2); })}
+                    {nextBtn(initialsDone, () => goSign("fwd"))}
                   </div>
                 </div>
               )}
 
-              {signStep === 2 && (
+              {signKey === "idNumber" && (
                 <div>
-                  {backBtn(() => { signDirRef.current = "back"; setSignStep(1); })}
+                  {backBtn(() => goSign("back"))}
+                  <div style={{fontSize:"12px",fontWeight:"600",color:"hsl(270 25% 35%)",margin:"8px 0"}}>Enter your ID / passport number</div>
+                  <input
+                    type="text" value={idNumber} autoFocus
+                    onChange={e => updateEditableField("idNumber", e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter" && idFilled) goSign("fwd"); }}
+                    placeholder="e.g. 9001015800087"
+                    style={{ width:"100%", maxWidth:"280px", padding:"9px 12px", fontSize:"14px", fontWeight:"600", border:"2px solid hsl(270 20% 82%)", borderRadius:"10px", outline:"none", background:"hsl(270 30% 98%)", color:"hsl(270 30% 20%)", transition:"border-color 0.2s ease" }}
+                  />
+                  <p style={{fontSize:"10.5px",color:"hsl(270 15% 60%)",margin:"8px 0 0"}}>Required — this populates your mandate document.</p>
+                  <div style={{display:"flex",justifyContent:"flex-end",marginTop:"6px"}}>
+                    {nextBtn(idFilled, () => goSign("fwd"))}
+                  </div>
+                </div>
+              )}
+
+              {signKey === "postalCode" && (
+                <div>
+                  {backBtn(() => goSign("back"))}
+                  <div style={{fontSize:"12px",fontWeight:"600",color:"hsl(270 25% 35%)",margin:"8px 0"}}>Enter your postal code</div>
+                  <input
+                    type="text" value={editableFields.postalCode || ""} autoFocus
+                    onChange={e => updateEditableField("postalCode", e.target.value.replace(/\D/g, ""))}
+                    onKeyDown={e => { if (e.key === "Enter" && postalFilled) goSign("fwd"); }}
+                    maxLength={5} placeholder="0000"
+                    style={{ width:"110px", padding:"9px 12px", fontSize:"15px", fontWeight:"600", letterSpacing:"2px", border:"2px solid hsl(270 20% 82%)", borderRadius:"10px", outline:"none", background:"hsl(270 30% 98%)", color:"hsl(270 30% 20%)", transition:"border-color 0.2s ease" }}
+                  />
+                  <p style={{fontSize:"10.5px",color:"hsl(270 15% 60%)",margin:"8px 0 0"}}>Required — this populates your mandate document.</p>
+                  <div style={{display:"flex",justifyContent:"flex-end",marginTop:"6px"}}>
+                    {nextBtn(postalFilled, () => goSign("fwd"))}
+                  </div>
+                </div>
+              )}
+
+              {signKey === "countryCode" && (
+                <div>
+                  {backBtn(() => goSign("back"))}
                   <div style={{fontSize:"12px",fontWeight:"600",color:"hsl(270 25% 35%)",margin:"8px 0"}}>Select your country code</div>
                   <select value={countryCode} onChange={e => setCountryCode(e.target.value)}
-                    style={{ padding:"9px 12px", fontSize:"13px", border:"2px solid hsl(270 20% 82%)", borderRadius:"10px", outline:"none", background:"hsl(270 30% 98%)", color:"hsl(270 30% 20%)", cursor:"pointer", width:"100%", maxWidth:"260px" }}>
+                    style={{ padding:"9px 12px", fontSize:"13px", border:"2px solid hsl(270 20% 82%)", borderRadius:"10px", outline:"none", background:"hsl(270 30% 98%)", color: countryCode ? "hsl(270 30% 20%)" : "hsl(270 15% 60%)", cursor:"pointer", width:"100%", maxWidth:"260px" }}>
+                    <option value="">Select your country code…</option>
                     {COUNTRY_CODES.map(({code,label,flag}) => <option key={code} value={code}>{flag} {label}</option>)}
                   </select>
-                  <div style={{display:"flex",justifyContent:"flex-end",marginTop:"12px"}}>
-                    {nextBtn(step2Done, () => { signDirRef.current = "fwd"; setSignStep(3); })}
+                  <p style={{fontSize:"10.5px",color:"hsl(270 15% 60%)",margin:"8px 0 0"}}>We couldn't read this from your phone number — please confirm it.</p>
+                  <div style={{display:"flex",justifyContent:"flex-end",marginTop:"6px"}}>
+                    {nextBtn(countryFilled, () => goSign("fwd"))}
                   </div>
                 </div>
               )}
 
-              {signStep === 3 && (
+              {signKey === "agreement" && (
                 <div>
-                  {backBtn(() => { signDirRef.current = "back"; setSignStep(2); })}
+                  {backBtn(() => goSign("back"))}
                   <div style={{fontSize:"12px",fontWeight:"600",color:"hsl(270 25% 35%)",margin:"8px 0"}}>Confirm your agreement</div>
                   <label style={{ display:"flex", alignItems:"flex-start", gap:"10px", cursor:"pointer", padding:"12px 14px", background: agreedRead ? "hsl(143 50% 97%)" : "hsl(270 30% 98%)", border: agreedRead ? "2px solid #86efac" : "2px solid hsl(270 20% 88%)", borderRadius:"12px", transition:"all 0.25s ease" }}>
                     <input type="checkbox" checked={agreedRead} onChange={e => setAgreedRead(e.target.checked)} style={{width:"17px",height:"17px",marginTop:"1px",cursor:"pointer",accentColor:"hsl(270 60% 50%)",flexShrink:0}} />
@@ -703,7 +794,7 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
                       I have read and agree to the <strong>MINT Platforms</strong> Discretionary FSP Mandate, the Introduction &amp; Terms, and all attached Schedules and Annexures. I confirm the information I have provided is true and accurate.
                     </span>
                   </label>
-                  {step3Done && (
+                  {signComplete && (
                     <div style={{display:"flex",alignItems:"center",gap:"6px",color:"#16a34a",fontSize:"11.5px",fontWeight:"600",marginTop:"10px"}}>
                       {tick} All set — you can continue below.
                     </div>
@@ -720,6 +811,7 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
         @keyframes mintSlideUp{from{transform:translateY(60px);opacity:0}to{transform:translateY(0);opacity:1}}
         @keyframes mintSwipeR{from{transform:translateX(22px);opacity:0}to{transform:translateX(0);opacity:1}}
         @keyframes mintSwipeL{from{transform:translateX(-22px);opacity:0}to{transform:translateX(0);opacity:1}}
+        @keyframes mintDropIn{from{transform:translate(-50%,-24px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
       `}</style>
     </div>
   );
