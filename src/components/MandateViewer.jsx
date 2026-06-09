@@ -88,6 +88,12 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
   }, [requestTab]);
 
   const updateEditableField = (key, val) => setEditableFields(p => ({ ...p, [key]: val }));
+  // Compose a full phone from a country code + local digits (strip a leading 0).
+  const updatePhone = (cc, localRaw) => {
+    const local = String(localRaw).replace(/\D/g, "");
+    setCountryCode(cc);
+    setEditableFields(p => ({ ...p, phoneLocal: local, phoneNumber: local ? `${cc}${local.replace(/^0/, "")}` : "" }));
+  };
   const toggleCheckbox      = (id)        => setCheckedBoxes(p  => ({ ...p, [id]: !p[id] }));
 
   const REQUIRE_ALL_GROUPS = ["lim_exercise"];
@@ -150,6 +156,7 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
   const idFilled      = !!idNumber.trim();
   const postalFilled  = !!postalCode.trim();
   const countryFilled = !!effCountryCode.trim();
+  const phoneFilled   = !!ph.cc && String(phoneNumber).replace(/\D/g, "").length >= 10;
   const initialsDone  = initials.trim().length >= 1;
   const agreedDone    = !!agreedRead;
 
@@ -180,10 +187,12 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
       const ex = [];
       if (!idFilled)      ex.push("idNumber");
       if (!postalFilled)  ex.push("postalCode");
-      if (!countryFilled) ex.push("countryCode");
+      // No usable country code: ask for the whole phone if none on record,
+      // otherwise just the country code (phone present but code not derivable).
+      if (!countryFilled) ex.push(phoneNumber.trim() ? "countryCode" : "phoneNumber");
       setSignExtras(ex);
     }
-  }, [discretionType, signKey, idFilled, postalFilled, countryFilled]);
+  }, [discretionType, signKey, idFilled, postalFilled, countryFilled, phoneNumber]);
 
   // Ordered slides: initials → missing required fields → agreement.
   const signSeq = ["initials", ...(signExtras || []), "agreement"];
@@ -774,6 +783,30 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
                   <p style={{fontSize:"10.5px",color:"hsl(270 15% 60%)",margin:"8px 0 0"}}>Required — this populates your mandate document.</p>
                   <div style={{display:"flex",justifyContent:"flex-end",marginTop:"6px"}}>
                     {nextBtn(postalFilled, () => goSign("fwd"))}
+                  </div>
+                </div>
+              )}
+
+              {signKey === "phoneNumber" && (
+                <div>
+                  {backBtn(() => goSign("back"))}
+                  <div style={{fontSize:"12px",fontWeight:"600",color:"hsl(270 25% 35%)",margin:"8px 0"}}>Enter your contact number</div>
+                  <div style={{display:"flex",gap:"8px",alignItems:"center",maxWidth:"320px"}}>
+                    <select value={countryCode || "+27"} onChange={e => updatePhone(e.target.value, editableFields.phoneLocal || "")}
+                      style={{ padding:"9px 8px", fontSize:"13px", border:"2px solid hsl(270 20% 82%)", borderRadius:"10px", outline:"none", background:"hsl(270 30% 98%)", color:"hsl(270 30% 20%)", cursor:"pointer", width:"104px" }}>
+                      {COUNTRY_CODES.map(({code,flag}) => <option key={code} value={code}>{flag} {code}</option>)}
+                    </select>
+                    <input
+                      type="tel" value={editableFields.phoneLocal || ""} autoFocus
+                      onChange={e => updatePhone(countryCode || "+27", e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter" && phoneFilled) goSign("fwd"); }}
+                      placeholder="82 123 4567"
+                      style={{ flex:1, padding:"9px 12px", fontSize:"14px", fontWeight:"600", border:"2px solid hsl(270 20% 82%)", borderRadius:"10px", outline:"none", background:"hsl(270 30% 98%)", color:"hsl(270 30% 20%)", transition:"border-color 0.2s ease" }}
+                    />
+                  </div>
+                  <p style={{fontSize:"10.5px",color:"hsl(270 15% 60%)",margin:"8px 0 0"}}>We couldn't find a number on record — please add one.</p>
+                  <div style={{display:"flex",justifyContent:"flex-end",marginTop:"6px"}}>
+                    {nextBtn(phoneFilled, () => goSign("fwd"))}
                   </div>
                 </div>
               )}

@@ -199,6 +199,8 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   // Experian KYC V2 address lookup (bureau addresses for the dropdown on step 3)
   const [experianAddresses, setExperianAddresses] = useState(null); // null = not fetched, [] = none found
   const [experianAddrLoading, setExperianAddrLoading] = useState(false);
+  const [experianPhones, setExperianPhones] = useState([]); // bureau contact numbers (for multi-number dropdown)
+  const [selectedPhone, setSelectedPhone] = useState("");
   const experianAddrFetchedRef = useRef(false);
   const [termsDone, setTermsDone] = useState(false);
   const [agreementSignedDone, setAgreementSignedDone] = useState(false);
@@ -728,19 +730,23 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
         }
         setExperianAddresses(list);
 
-        // Bureau contact number: if the profile has no phone yet, save the cell
-        // number so the mandate (and the rest of the app) can use it — this also
-        // lets the mandate derive the country code automatically.
-        const bureauCell = data?.contact?.cell;
-        if (bureauCell) {
+        // Bureau contact numbers. One number → save it silently (if the profile
+        // has none). Multiple → expose them so the user can pick in a dropdown.
+        const rawPhones = Array.isArray(data?.contact?.phones) ? data.contact.phones.filter((p) => p?.value) : [];
+        const uniqPhones = [...new Map(rawPhones.map((p) => [p.value, p])).values()];
+        setExperianPhones(uniqPhones);
+        console.log(`[Onboarding] Experian contact → ${uniqPhones.length} number(s)`);
+        if (uniqPhones.length === 1) {
+          const cell = uniqPhones[0].value;
           try {
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
               const { data: prow } = await supabase.from("profiles").select("phone_number").eq("id", user.id).maybeSingle();
               if (!prow?.phone_number?.trim()) {
-                await supabase.from("profiles").update({ phone_number: bureauCell }).eq("id", user.id);
+                await supabase.from("profiles").update({ phone_number: cell }).eq("id", user.id);
+                setSelectedPhone(cell);
                 window.dispatchEvent(new Event("profile-updated"));
-                console.log("[Onboarding] Saved bureau cell number to profile:", bureauCell);
+                console.log("[Onboarding] Saved bureau cell number to profile:", cell);
               }
             }
           } catch (e) {
@@ -1133,6 +1139,45 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                     Your address is required for regulatory compliance and credit assessment.
                   </p>
                 </div>
+
+                {/* Experian KYC V2 — pick a contact number when several are on record */}
+                {experianPhones && experianPhones.length > 1 && (
+                  <div className="animate-fade-in delay-2">
+                    <label htmlFor="experian-phone">Select your contact number</label>
+                    <div className="glass-field">
+                      <select
+                        id="experian-phone"
+                        className="w-full"
+                        value={selectedPhone}
+                        onChange={async (e) => {
+                          const val = e.target.value;
+                          setSelectedPhone(val);
+                          if (!val) return;
+                          try {
+                            const { data: { user } } = await supabase.auth.getUser();
+                            if (user) {
+                              await supabase.from("profiles").update({ phone_number: val }).eq("id", user.id);
+                              window.dispatchEvent(new Event("profile-updated"));
+                              console.log("[Onboarding] Saved selected bureau number to profile:", val);
+                            }
+                          } catch (err) {
+                            console.warn("[Onboarding] Could not save selected number:", err);
+                          }
+                        }}
+                      >
+                        <option value="">Choose a number…</option>
+                        {experianPhones.map((p, i) => (
+                          <option key={i} value={p.value}>
+                            {p.value}{p.type && p.type !== "other" ? ` (${p.type})` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <p className="text-xs mt-2" style={{ color: "hsl(270 15% 60%)" }}>
+                      These are the contact numbers Experian has on record for you.
+                    </p>
+                  </div>
+                )}
 
                 <div className="pt-4 text-center animate-fade-in delay-3">
                   <button
