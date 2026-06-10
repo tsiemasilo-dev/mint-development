@@ -9641,16 +9641,7 @@ app.post("/api/gift/create-v2", async (req, res) => {
       <table style="width:100%;border-collapse:collapse">${emailSteps}</table>
     </div>
 
-    <table style="width:100%;border-collapse:collapse;margin-bottom:12px">
-      <tr>
-        <td style="padding-right:6px">
-          <a href="https://app.mymint.co.za?gift=${gift.id}" style="display:block;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#ffffff;text-decoration:none;text-align:center;padding:14px 10px;border-radius:14px;font-size:15px;font-weight:700">🎁 Claim Gift</a>
-        </td>
-        <td style="padding-left:6px">
-          <a href="https://${process.env.REPLIT_DEV_DOMAIN || '9e35f470-812b-4858-8ba9-77cfee7f3bfd-00-vruurphun7eo.picard.replit.dev'}?gift=${gift.id}" style="display:block;background:linear-gradient(135deg,#1e293b,#334155);color:#ffffff;text-decoration:none;text-align:center;padding:14px 10px;border-radius:14px;font-size:15px;font-weight:700">🧪 Claim Gift (Dev)</a>
-        </td>
-      </tr>
-    </table>
+    <a href="https://mint-development.vercel.app/?gift=${gift.id}" style="display:block;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#ffffff;text-decoration:none;text-align:center;padding:16px 24px;border-radius:14px;font-size:15px;font-weight:700;margin-bottom:12px">🎁 Claim Gift</a>
 
     <p style="font-size:12px;color:#94a3b8;text-align:center;line-height:1.5;margin:0">This gift expires in 4 hours.<br>Mint (Pty) Ltd is a registered FSP (55118).</p>
   </div>
