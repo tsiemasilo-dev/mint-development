@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { ArrowLeft, Gift, Copy, Check, Clock, CheckCircle2, XCircle, Timer } from "lucide-react";
+import { ArrowLeft, Gift, Copy, Check, Clock, CheckCircle2, XCircle, Timer, ChevronDown } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
 const HOME_BG = {
@@ -42,6 +42,64 @@ function CountdownBadge({ expiresAt }) {
     <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5 ${isLow ? "text-red-600 bg-red-50" : "text-slate-600 bg-slate-100"}`}>
       <Timer size={10} />{label}
     </span>
+  );
+}
+
+const AUDIT_META = {
+  created:   { label: () => "Gift sent",                        dot: "bg-violet-400",  text: "text-violet-700"  },
+  extended:  { label: (e) => `+${e.ext === "10h" ? "10 hours" : "24 hours"} extended`, dot: "bg-amber-400", text: "text-amber-700" },
+  cancelled: { label: () => "Gift cancelled",                   dot: "bg-red-400",     text: "text-red-600"    },
+  claimed:   { label: () => "Gift claimed by recipient",        dot: "bg-emerald-400", text: "text-emerald-700" },
+  expired:   { label: () => "Gift expired",                     dot: "bg-slate-300",   text: "text-slate-500"  },
+};
+
+function fmtEventTime(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-ZA", { day: "numeric", month: "short" }) +
+    " · " + d.toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" });
+}
+
+function GiftAuditTrail({ events }) {
+  const [open, setOpen] = useState(false);
+  if (!events || events.length <= 1) return null;
+  return (
+    <div className="border-t border-slate-100">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors"
+      >
+        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">
+          Activity <span className="font-normal normal-case">({events.length} events)</span>
+        </span>
+        <ChevronDown size={12} className={`text-slate-400 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="px-4 pb-4">
+          {events.map((e, i) => {
+            const meta = AUDIT_META[e.type] || AUDIT_META.created;
+            const label = meta.label(e);
+            const time = fmtEventTime(e.at);
+            const isLast = i === events.length - 1;
+            return (
+              <div key={i} className="flex gap-3">
+                <div className="flex flex-col items-center w-3 shrink-0">
+                  <div className={`w-2 h-2 rounded-full mt-0.5 shrink-0 ${meta.dot}`} />
+                  {!isLast && <div className="w-px flex-1 bg-slate-100 my-1" />}
+                </div>
+                <div className={`pb-3 min-w-0 ${isLast ? "" : ""}`}>
+                  <p className={`text-xs font-semibold ${meta.text}`}>{label}</p>
+                  {e.type === "extended" && e.fee != null && (
+                    <p className="text-[11px] text-slate-400 mt-0.5">Fee: {fmt(e.fee)}</p>
+                  )}
+                  {time && <p className="text-[11px] text-slate-400 mt-0.5">{time}</p>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -270,7 +328,9 @@ function ActiveGiftCard({ gift, onExtend, onCancel }) {
           </div>
         )}
 
-        <div className="border-t border-slate-100 px-4 py-2.5">
+        <GiftAuditTrail events={gift.events} />
+
+      <div className="border-t border-slate-100 px-4 py-2.5">
           {showCancelConfirm ? (
             <div className="flex items-center gap-2">
               <p className="text-xs text-slate-500 flex-1">Cancel this gift?</p>
@@ -359,6 +419,7 @@ function HistoryCard({ gift, onClaimToSelf }) {
           </div>
         )}
       </div>
+      <GiftAuditTrail events={gift.events} />
     </div>
   );
 }
@@ -461,15 +522,51 @@ export default function SentGiftsPageV2({ onBack, onNavigate }) {
   const fetchGiftData = useCallback(async () => {
     const { data: sessionData } = await supabase.auth.getSession();
     const accessToken = sessionData?.session?.access_token;
+    const userId = sessionData?.session?.user?.id;
     const headers = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+
     const [sentRes, receivedRes] = await Promise.all([
       fetch("/api/gift/sent", { headers }),
       fetch("/api/gift/received", { headers }),
     ]);
     const [sentData, receivedData] = await Promise.all([sentRes.json(), receivedRes.json()]);
     if (sentData.error) throw new Error(sentData.error);
-    setSentActive(sentData.active || []);
-    setSentHistory(sentData.history || []);
+
+    const allSent = [...(sentData.active || []), ...(sentData.history || [])];
+    let extMap = {};
+    if (userId && allSent.length > 0) {
+      try {
+        const { data: extTxns } = await supabase
+          .from("transactions")
+          .select("store_reference, transaction_date, amount")
+          .eq("user_id", userId)
+          .like("store_reference", "GIFT2-EXT-%")
+          .order("transaction_date", { ascending: true });
+        const giftIdSet = new Set(allSent.map(g => g.id));
+        (extTxns || []).forEach(tx => {
+          for (const giftId of giftIdSet) {
+            if (tx.store_reference === `GIFT2-EXT-${giftId}-10h` || tx.store_reference === `GIFT2-EXT-${giftId}-24h`) {
+              const ext = tx.store_reference.endsWith("-10h") ? "10h" : "24h";
+              if (!extMap[giftId]) extMap[giftId] = [];
+              extMap[giftId].push({ type: "extended", ext, at: tx.transaction_date, fee: tx.amount });
+              break;
+            }
+          }
+        });
+      } catch { /* degrade gracefully */ }
+    }
+
+    const attachEvents = (g) => {
+      const events = [{ type: "created", at: g.created_at }];
+      (extMap[g.id] || []).forEach(e => events.push(e));
+      if (g.cancelled_at) events.push({ type: "cancelled", at: g.cancelled_at });
+      else if (g.claimed_at) events.push({ type: "claimed", at: g.claimed_at });
+      else if (g.status === "expired") events.push({ type: "expired", at: g.expires_at });
+      return { ...g, events };
+    };
+
+    setSentActive((sentData.active || []).map(attachEvents));
+    setSentHistory((sentData.history || []).map(attachEvents));
     setReceivedActive(receivedData.active || []);
     setReceivedHistory(receivedData.history || []);
   }, []);
@@ -503,10 +600,13 @@ export default function SentGiftsPageV2({ onBack, onNavigate }) {
       });
       const data = await res.json();
       if (!res.ok || data.error) { alert(data.error || "Failed to extend."); return false; }
+      const now = new Date().toISOString();
       setSentActive(prev => prev.map(g => {
         if (g.id !== giftId) return g;
         const feeAdded = extension === "10h" ? Math.round((g.amount || 0) * 0.05) : Math.round((g.amount || 0) * 0.09);
-        return { ...g, expires_at: data.new_expires_at, extension_fees: (g.extension_fees || 0) + feeAdded };
+        const newEvent = { type: "extended", ext: extension, at: now, fee: feeAdded };
+        const prevEvents = g.events || [{ type: "created", at: g.created_at }];
+        return { ...g, expires_at: data.new_expires_at, extension_fees: (g.extension_fees || 0) + feeAdded, events: [...prevEvents, newEvent] };
       }));
       return true;
     } catch { alert("Something went wrong. Please try again."); return false; }
@@ -525,8 +625,16 @@ export default function SentGiftsPageV2({ onBack, onNavigate }) {
       if (!res.ok || data.error) { alert(data.error || "Failed to cancel."); return; }
       const cancelled = sentActive.find(g => g.id === giftId);
       if (cancelled) {
+        const cancelledAt = new Date().toISOString();
+        const prevEvents = cancelled.events || [{ type: "created", at: cancelled.created_at }];
+        const cancelledGift = {
+          ...cancelled,
+          status: "cancelled",
+          cancelled_at: cancelledAt,
+          events: [...prevEvents, { type: "cancelled", at: cancelledAt }],
+        };
         setSentActive(prev => prev.filter(g => g.id !== giftId));
-        setSentHistory(prev => [{ ...cancelled, status: "cancelled" }, ...prev]);
+        setSentHistory(prev => [cancelledGift, ...prev]);
       }
     } catch { alert("Something went wrong."); }
   }
