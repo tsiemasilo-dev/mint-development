@@ -56,6 +56,9 @@ const OfferCard = ({ offer, rank, onAccept, accepting }) => {
           <p className="text-[13px] font-semibold text-slate-900 leading-tight truncate">
             {offer.lenderName}
           </p>
+          <p className="text-[10px] text-violet-500 font-semibold mt-0.5">
+            Unsecured personal loan
+          </p>
           {offer.tagline && (
             <p className="text-[11px] text-slate-400 mt-0.5 truncate">{offer.tagline}</p>
           )}
