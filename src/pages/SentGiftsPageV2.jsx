@@ -48,7 +48,13 @@ function CountdownBadge({ expiresAt }) {
 function ActiveGiftCard({ gift, onExtend, onCancel }) {
   const [copied, setCopied] = useState(false);
   const [extending, setExtending] = useState(null);
+  const [extendedKey, setExtendedKey] = useState(null);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const { isLow, isExpired } = useCountdown(gift.expires_at);
+
+  const fee10 = Math.round((gift.amount || 0) * 0.05);
+  const fee24 = Math.round((gift.amount || 0) * 0.09);
 
   function handleCopy() {
     navigator.clipboard.writeText(gift.token).then(() => {
@@ -59,8 +65,18 @@ function ActiveGiftCard({ gift, onExtend, onCancel }) {
 
   async function handleExtend(ext) {
     setExtending(ext);
+    setExtendedKey(null);
     await onExtend(gift.id, ext);
     setExtending(null);
+    setExtendedKey(ext);
+    setTimeout(() => setExtendedKey(null), 2500);
+  }
+
+  async function handleCancelConfirm() {
+    setCancelling(true);
+    await onCancel(gift.id);
+    setCancelling(false);
+    setShowCancelConfirm(false);
   }
 
   return (
@@ -86,10 +102,13 @@ function ActiveGiftCard({ gift, onExtend, onCancel }) {
           <p className="text-xs text-slate-400 italic line-clamp-1 pl-[52px]">"{gift.personal_message}"</p>
         )}
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold text-amber-700 bg-amber-50">
             <Clock size={10} />Waiting to be claimed
           </span>
+          {gift.extension_fees > 0 && (
+            <span className="text-[11px] text-slate-400">Fees paid: {fmt(gift.extension_fees)}</span>
+          )}
         </div>
 
         <div className="bg-slate-50 rounded-xl p-3 flex items-center justify-between gap-3">
@@ -113,28 +132,50 @@ function ActiveGiftCard({ gift, onExtend, onCancel }) {
             <button
               onClick={() => handleExtend("10h")}
               disabled={!!extending}
-              className="flex-1 rounded-xl border border-slate-200 bg-slate-50 py-2.5 text-xs font-semibold text-slate-700 active:scale-95 transition-all disabled:opacity-60"
+              className={`flex-1 rounded-xl border py-2.5 text-xs font-semibold active:scale-95 transition-all disabled:opacity-60 ${extendedKey === "10h" ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-700"}`}
             >
-              {extending === "10h" ? "…" : "+10 hours (5% fee)"}
+              {extending === "10h" ? "Extending…" : extendedKey === "10h" ? "✓ Extended" : `+10 hours (${fmt(fee10)})`}
             </button>
             <button
               onClick={() => handleExtend("24h")}
               disabled={!!extending}
-              className="flex-1 rounded-xl border border-slate-200 bg-slate-50 py-2.5 text-xs font-semibold text-slate-700 active:scale-95 transition-all disabled:opacity-60"
+              className={`flex-1 rounded-xl border py-2.5 text-xs font-semibold active:scale-95 transition-all disabled:opacity-60 ${extendedKey === "24h" ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-700"}`}
             >
-              {extending === "24h" ? "…" : "+24 hours (9% fee)"}
+              {extending === "24h" ? "Extending…" : extendedKey === "24h" ? "✓ Extended" : `+24 hours (${fmt(fee24)})`}
             </button>
           </div>
         </div>
       )}
 
-      <div className="border-t border-slate-100 px-4 py-2.5 flex justify-end">
-        <button
-          onClick={() => onCancel(gift.id)}
-          className="text-xs font-semibold text-red-500 hover:text-red-700 transition-colors"
-        >
-          Cancel gift
-        </button>
+      <div className="border-t border-slate-100 px-4 py-2.5">
+        {showCancelConfirm ? (
+          <div className="flex items-center gap-2">
+            <p className="text-xs text-slate-500 flex-1">Cancel this gift?</p>
+            <button
+              onClick={() => setShowCancelConfirm(false)}
+              disabled={cancelling}
+              className="text-xs font-semibold text-slate-500 px-3 py-1.5 rounded-lg bg-slate-100 active:scale-95 transition-all"
+            >
+              Keep
+            </button>
+            <button
+              onClick={handleCancelConfirm}
+              disabled={cancelling}
+              className="text-xs font-semibold text-white px-3 py-1.5 rounded-lg bg-red-500 active:scale-95 transition-all disabled:opacity-60"
+            >
+              {cancelling ? "Cancelling…" : "Yes, cancel"}
+            </button>
+          </div>
+        ) : (
+          <div className="flex justify-end">
+            <button
+              onClick={() => setShowCancelConfirm(true)}
+              className="text-xs font-semibold text-red-500 hover:text-red-700 transition-colors"
+            >
+              Cancel gift
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -239,9 +280,17 @@ function ReceivedActiveCard({ gift, onClaim }) {
   );
 }
 
+const RECEIVED_HISTORY_META = {
+  claimed: { label: "Claimed", color: "text-emerald-700 bg-emerald-50", icon: CheckCircle2 },
+  cancelled: { label: "Cancelled", color: "text-red-600 bg-red-50", icon: XCircle },
+  expired: { label: "Expired", color: "text-slate-500 bg-slate-100", icon: Clock },
+};
+
 function ReceivedHistoryCard({ gift }) {
   const claimedDate = gift.claimed_at ? new Date(gift.claimed_at).toLocaleDateString("en-ZA") : null;
   const isClaimed = gift.status === "claimed";
+  const meta = RECEIVED_HISTORY_META[gift.status] || RECEIVED_HISTORY_META.expired;
+  const Icon = meta.icon;
   return (
     <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
       <div className="p-4">
@@ -257,9 +306,8 @@ function ReceivedHistoryCard({ gift }) {
           </div>
           <div className="text-right shrink-0">
             <p className="text-sm font-bold text-slate-800">{fmt(gift.amount)}</p>
-            <div className={`inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium ${isClaimed ? "text-emerald-700 bg-emerald-50" : "text-slate-500 bg-slate-100"}`}>
-              {isClaimed ? <CheckCircle2 size={10} /> : <Clock size={10} />}
-              {isClaimed ? "Claimed" : gift.status}
+            <div className={`inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium ${meta.color}`}>
+              <Icon size={10} />{meta.label}
             </div>
           </div>
         </div>
@@ -331,12 +379,15 @@ export default function SentGiftsPageV2({ onBack, onNavigate }) {
       });
       const data = await res.json();
       if (!res.ok || data.error) { alert(data.error || "Failed to extend."); return; }
-      setSentActive(prev => prev.map(g => g.id === giftId ? { ...g, expires_at: data.new_expires_at } : g));
+      setSentActive(prev => prev.map(g => {
+        if (g.id !== giftId) return g;
+        const feeAdded = extension === "10h" ? Math.round((g.amount || 0) * 0.05) : Math.round((g.amount || 0) * 0.09);
+        return { ...g, expires_at: data.new_expires_at, extension_fees: (g.extension_fees || 0) + feeAdded };
+      }));
     } catch { alert("Something went wrong. Please try again."); }
   }
 
   async function handleCancel(giftId) {
-    if (!window.confirm("Cancel this gift? No refund will be issued.")) return;
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;

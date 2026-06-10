@@ -274,7 +274,14 @@ export default function GiftCodeEntryPage({ onBack, onNavigate }) {
         if (!res.ok || data.error) {
           if (data.kyc_required) { setSessionStatus("incomplete"); return; }
           if (data.mint_number_required) { setSessionStatus("incomplete"); return; }
-          setError(data.error || "Failed to claim gift.");
+          const errMsg = data.error || "";
+          if (/cancel/i.test(errMsg)) {
+            setError("This gift has been cancelled by the sender.");
+          } else if (/expired/i.test(errMsg)) {
+            setError("This gift has expired and can no longer be claimed.");
+          } else {
+            setError(errMsg || "Failed to claim gift.");
+          }
           return;
         }
         const pendingId = localStorage.getItem('mint_pending_gift_id');
