@@ -147,7 +147,7 @@ export default async function handler(req, res) {
 
   const now = new Date().toISOString();
 
-  // Insert transaction first so we can stamp its UUID on every holdings row.
+  // Insert transaction for recipient first so we can stamp its UUID on holdings rows.
   // Use the same format as record-investment.js (debit, "Strategy Investment: X")
   // so the gift flows through the exact same pending-orders code path as a
   // regular strategy purchase — no separate UI branch needed.
@@ -163,8 +163,10 @@ export default async function handler(req, res) {
       description: "Investment gift claimed",
       amount: gift.amount,
       store_reference: `GIFT2-CLAIM-${gift.id}`,
+      currency: "ZAR",
       status: "posted",
       transaction_date: now,
+      created_at: now,
     }).select("id").single();
     giftTxId = txInsert.data?.id || null;
   } catch (e) { console.warn("[gift/claim-v2] tx insert:", e.message); }
@@ -185,14 +187,38 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Failed to allocate holdings. Please try again." });
   }
 
-  // Mark gift claimed
+  // Deduct from sender's wallet — funds were held at create time, now settle the debit.
+  try {
+    const { data: senderWallet } = await db.from("wallets").select("balance").eq("user_id", gift.sender_user_id).maybeSingle();
+    if (senderWallet) {
+      const amountRands = Number(gift.amount) / 100;
+      const newBalance = Math.max(0, Number(senderWallet.balance) - amountRands);
+      await db.from("wallets").update({ balance: newBalance }).eq("user_id", gift.sender_user_id);
+      // Settle the hold transaction to "posted" so it appears in the sender's history
+      await db.from("transactions")
+        .update({ status: "posted", description: "Gift claimed — investment transferred" })
+        .eq("store_reference", `GIFT2-HOLD-${gift.id}`)
+        .eq("user_id", gift.sender_user_id);
+    }
+  } catch (e) { console.warn("[gift/claim-v2] sender wallet debit:", e.message); }
+
+  // Mark gift claimed — also store recipient_identifier if we have it
   const claimUpdate = {
     status: "claimed",
     recipient_user_id: user.id,
     claimed_at: now,
   };
-  if (typeof cleanId !== "undefined") claimUpdate.recipient_identifier = cleanId;
+  if (id_number?.trim()) claimUpdate.recipient_identifier = String(id_number).replace(/\D/g, "");
   await db.from("gift_claims").update(claimUpdate).eq("id", gift.id);
+
+  // Mark the recipient's gift_received notification as read so the banner dismisses
+  try {
+    await db.from("notifications")
+      .update({ read_at: now })
+      .eq("user_id", user.id)
+      .eq("type", "system")
+      .is("read_at", null);
+  } catch (e) { console.warn("[gift/claim-v2] mark notification read:", e.message); }
 
   // Notify sender
   const recipientName = [claimantProfile.first_name, claimantProfile.last_name].filter(Boolean).join(" ") || "Your recipient";

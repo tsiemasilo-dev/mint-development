@@ -288,6 +288,18 @@ export default function GiftCodeEntryPage({ onBack, onNavigate }) {
         localStorage.removeItem('mint_pending_gift_id');
         localStorage.removeItem('mint_pending_gift_expires');
         if (pendingId) localStorage.setItem('mint_gift_claimed', pendingId);
+        // Mark the gift_received notification as read immediately so the banner
+        // doesn't re-appear when the user lands on the home page.
+        try {
+          const userId = session?.user?.id;
+          if (userId) {
+            await supabase.from("notifications")
+              .update({ read_at: new Date().toISOString() })
+              .eq("user_id", userId)
+              .eq("type", "system")
+              .is("read_at", null);
+          }
+        } catch (_) { /* non-critical */ }
         setClaimed(true);
       } catch {
         setError("Something went wrong. Please try again.");
