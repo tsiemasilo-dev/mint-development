@@ -45,16 +45,103 @@ function CountdownBadge({ expiresAt }) {
   );
 }
 
+function ExtendConfirmSheet({ gift, extension, fee, walletBalance, walletLoading, extending, onConfirm, onClose }) {
+  const feeRands = fee / 100;
+  const balanceRands = walletBalance;
+  const newBalanceRands = balanceRands !== null ? balanceRands - feeRands : null;
+  const insufficient = balanceRands !== null && balanceRands < feeRands;
+  const label = extension === "10h" ? "+10 hours" : "+24 hours";
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col justify-end" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/50" />
+      <div
+        className="relative bg-white rounded-t-3xl px-5 pt-5 pb-8 shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-5" />
+
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shrink-0">
+            <Clock size={16} className="text-white" />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-slate-800">Extend gift expiry</p>
+            <p className="text-xs text-slate-400 mt-0.5">{gift.asset_name} · To {gift.recipient_name || "Recipient"}</p>
+          </div>
+        </div>
+
+        <div className="bg-slate-50 rounded-2xl divide-y divide-slate-100 mb-4">
+          <div className="flex items-center justify-between px-4 py-3">
+            <p className="text-sm text-slate-600">Extension</p>
+            <p className="text-sm font-semibold text-violet-700">{label}</p>
+          </div>
+          <div className="flex items-center justify-between px-4 py-3">
+            <p className="text-sm text-slate-600">Extension fee</p>
+            <p className="text-sm font-bold text-red-600">− {fmt(fee)}</p>
+          </div>
+          <div className="flex items-center justify-between px-4 py-3">
+            <p className="text-sm text-slate-600">Wallet balance</p>
+            {walletLoading ? (
+              <div className="w-16 h-4 bg-slate-200 rounded animate-pulse" />
+            ) : (
+              <p className={`text-sm font-semibold ${insufficient ? "text-red-600" : "text-slate-800"}`}>
+                {balanceRands !== null ? fmt(Math.round(balanceRands * 100)) : "—"}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center justify-between px-4 py-3">
+            <p className="text-sm text-slate-600">Balance after</p>
+            {walletLoading ? (
+              <div className="w-16 h-4 bg-slate-200 rounded animate-pulse" />
+            ) : (
+              <p className={`text-sm font-bold ${insufficient ? "text-red-600" : "text-emerald-700"}`}>
+                {newBalanceRands !== null ? fmt(Math.round(newBalanceRands * 100)) : "—"}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {insufficient && (
+          <div className="bg-red-50 rounded-xl px-4 py-3 mb-4">
+            <p className="text-xs text-red-600 font-medium">Insufficient wallet balance. Please top up before extending.</p>
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 py-3.5 rounded-2xl border border-slate-200 text-sm font-semibold text-slate-600 bg-white active:scale-95 transition-all"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={insufficient || walletLoading || extending}
+            className="flex-1 py-3.5 rounded-2xl text-sm font-bold text-white bg-gradient-to-r from-[#1a1a2e] to-[#44296b] shadow-lg active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {extending ? "Extending…" : `Confirm ${label}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ActiveGiftCard({ gift, onExtend, onCancel }) {
   const [copied, setCopied] = useState(false);
   const [extending, setExtending] = useState(null);
   const [extendedKey, setExtendedKey] = useState(null);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [pendingExtend, setPendingExtend] = useState(null);
+  const [walletBalance, setWalletBalance] = useState(null);
+  const [walletLoading, setWalletLoading] = useState(false);
   const { isLow, isExpired } = useCountdown(gift.expires_at);
 
   const fee10 = Math.round((gift.amount || 0) * 0.05);
   const fee24 = Math.round((gift.amount || 0) * 0.09);
+  const pendingFee = pendingExtend === "10h" ? fee10 : fee24;
 
   function handleCopy() {
     navigator.clipboard.writeText(gift.token).then(() => {
@@ -63,9 +150,29 @@ function ActiveGiftCard({ gift, onExtend, onCancel }) {
     });
   }
 
-  async function handleExtend(ext) {
-    setExtending(ext);
-    setExtendedKey(null);
+  async function openExtendSheet(ext) {
+    setPendingExtend(ext);
+    setWalletBalance(null);
+    setWalletLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const { data } = await supabase
+          .from("wallets")
+          .select("balance")
+          .eq("user_id", session.user.id)
+          .maybeSingle();
+        setWalletBalance(data?.balance ?? 0);
+      }
+    } catch { /* show sheet anyway, balance stays null */ }
+    finally { setWalletLoading(false); }
+  }
+
+  async function handleExtendConfirm() {
+    if (!pendingExtend) return;
+    setExtending(pendingExtend);
+    const ext = pendingExtend;
+    setPendingExtend(null);
     const success = await onExtend(gift.id, ext);
     setExtending(null);
     if (success) {
@@ -82,104 +189,119 @@ function ActiveGiftCard({ gift, onExtend, onCancel }) {
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-      <div className="p-4 space-y-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shrink-0">
-              <Gift size={16} className="text-white" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-slate-800 truncate">{gift.asset_name}</p>
-              <p className="text-xs text-slate-400 mt-0.5">To: {gift.recipient_name || "Recipient"}</p>
-            </div>
-          </div>
-          <div className="text-right shrink-0">
-            <p className="text-sm font-bold text-slate-800">{fmt(gift.amount)}</p>
-            <div className="mt-1"><CountdownBadge expiresAt={gift.expires_at} /></div>
-          </div>
-        </div>
-
-        {gift.personal_message && (
-          <p className="text-xs text-slate-400 italic line-clamp-1 pl-[52px]">"{gift.personal_message}"</p>
-        )}
-
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold text-amber-700 bg-amber-50">
-            <Clock size={10} />Waiting to be claimed
-          </span>
-          {gift.extension_fees > 0 && (
-            <span className="text-[11px] text-slate-400">Fees paid: {fmt(gift.extension_fees)}</span>
-          )}
-        </div>
-
-        <div className="bg-slate-50 rounded-xl p-3 flex items-center justify-between gap-3">
-          <p className="text-lg font-black tracking-[0.3em] text-slate-900 font-mono">{gift.token}</p>
-          <button
-            onClick={handleCopy}
-            className="flex items-center gap-1.5 bg-slate-900 text-white text-xs font-semibold px-3.5 py-2 rounded-lg active:scale-95 transition-all shrink-0"
-          >
-            {copied ? <Check size={12} /> : <Copy size={12} />}
-            {copied ? "Copied" : "Copy"}
-          </button>
-        </div>
-      </div>
-
-      {!isExpired && (
-        <div className="px-4 pb-4 space-y-2">
-          {isLow && (
-            <p className="text-[11px] font-semibold text-amber-700 text-center">Expiring soon — extend to keep active</p>
-          )}
-          <div className="flex gap-2">
-            <button
-              onClick={() => handleExtend("10h")}
-              disabled={!!extending}
-              className={`flex-1 rounded-xl border py-2.5 text-xs font-semibold active:scale-95 transition-all disabled:opacity-60 ${extendedKey === "10h" ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-700"}`}
-            >
-              {extending === "10h" ? "Extending…" : extendedKey === "10h" ? "✓ Extended" : `+10 hours (${fmt(fee10)})`}
-            </button>
-            <button
-              onClick={() => handleExtend("24h")}
-              disabled={!!extending}
-              className={`flex-1 rounded-xl border py-2.5 text-xs font-semibold active:scale-95 transition-all disabled:opacity-60 ${extendedKey === "24h" ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-700"}`}
-            >
-              {extending === "24h" ? "Extending…" : extendedKey === "24h" ? "✓ Extended" : `+24 hours (${fmt(fee24)})`}
-            </button>
-          </div>
-        </div>
+    <>
+      {pendingExtend && (
+        <ExtendConfirmSheet
+          gift={gift}
+          extension={pendingExtend}
+          fee={pendingFee}
+          walletBalance={walletBalance}
+          walletLoading={walletLoading}
+          extending={!!extending}
+          onConfirm={handleExtendConfirm}
+          onClose={() => setPendingExtend(null)}
+        />
       )}
 
-      <div className="border-t border-slate-100 px-4 py-2.5">
-        {showCancelConfirm ? (
-          <div className="flex items-center gap-2">
-            <p className="text-xs text-slate-500 flex-1">Cancel this gift?</p>
+      <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div className="p-4 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shrink-0">
+                <Gift size={16} className="text-white" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-slate-800 truncate">{gift.asset_name}</p>
+                <p className="text-xs text-slate-400 mt-0.5">To: {gift.recipient_name || "Recipient"}</p>
+              </div>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="text-sm font-bold text-slate-800">{fmt(gift.amount)}</p>
+              <div className="mt-1"><CountdownBadge expiresAt={gift.expires_at} /></div>
+            </div>
+          </div>
+
+          {gift.personal_message && (
+            <p className="text-xs text-slate-400 italic line-clamp-1 pl-[52px]">"{gift.personal_message}"</p>
+          )}
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold text-amber-700 bg-amber-50">
+              <Clock size={10} />Waiting to be claimed
+            </span>
+            {gift.extension_fees > 0 && (
+              <span className="text-[11px] text-slate-400">Fees paid: {fmt(gift.extension_fees)}</span>
+            )}
+          </div>
+
+          <div className="bg-slate-50 rounded-xl p-3 flex items-center justify-between gap-3">
+            <p className="text-lg font-black tracking-[0.3em] text-slate-900 font-mono">{gift.token}</p>
             <button
-              onClick={() => setShowCancelConfirm(false)}
-              disabled={cancelling}
-              className="text-xs font-semibold text-slate-500 px-3 py-1.5 rounded-lg bg-slate-100 active:scale-95 transition-all"
+              onClick={handleCopy}
+              className="flex items-center gap-1.5 bg-slate-900 text-white text-xs font-semibold px-3.5 py-2 rounded-lg active:scale-95 transition-all shrink-0"
             >
-              Keep
-            </button>
-            <button
-              onClick={handleCancelConfirm}
-              disabled={cancelling}
-              className="text-xs font-semibold text-white px-3 py-1.5 rounded-lg bg-red-500 active:scale-95 transition-all disabled:opacity-60"
-            >
-              {cancelling ? "Cancelling…" : "Yes, cancel"}
+              {copied ? <Check size={12} /> : <Copy size={12} />}
+              {copied ? "Copied" : "Copy"}
             </button>
           </div>
-        ) : (
-          <div className="flex justify-end">
-            <button
-              onClick={() => setShowCancelConfirm(true)}
-              className="text-xs font-semibold text-red-500 hover:text-red-700 transition-colors"
-            >
-              Cancel gift
-            </button>
+        </div>
+
+        {!isExpired && (
+          <div className="px-4 pb-4 space-y-2">
+            {isLow && (
+              <p className="text-[11px] font-semibold text-amber-700 text-center">Expiring soon — extend to keep active</p>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={() => openExtendSheet("10h")}
+                disabled={!!extending}
+                className={`flex-1 rounded-xl border py-2.5 text-xs font-semibold active:scale-95 transition-all disabled:opacity-60 ${extendedKey === "10h" ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-700"}`}
+              >
+                {extending === "10h" ? "Extending…" : extendedKey === "10h" ? "✓ Extended" : `+10 hours (${fmt(fee10)})`}
+              </button>
+              <button
+                onClick={() => openExtendSheet("24h")}
+                disabled={!!extending}
+                className={`flex-1 rounded-xl border py-2.5 text-xs font-semibold active:scale-95 transition-all disabled:opacity-60 ${extendedKey === "24h" ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-700"}`}
+              >
+                {extending === "24h" ? "Extending…" : extendedKey === "24h" ? "✓ Extended" : `+24 hours (${fmt(fee24)})`}
+              </button>
+            </div>
           </div>
         )}
+
+        <div className="border-t border-slate-100 px-4 py-2.5">
+          {showCancelConfirm ? (
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-slate-500 flex-1">Cancel this gift?</p>
+              <button
+                onClick={() => setShowCancelConfirm(false)}
+                disabled={cancelling}
+                className="text-xs font-semibold text-slate-500 px-3 py-1.5 rounded-lg bg-slate-100 active:scale-95 transition-all"
+              >
+                Keep
+              </button>
+              <button
+                onClick={handleCancelConfirm}
+                disabled={cancelling}
+                className="text-xs font-semibold text-white px-3 py-1.5 rounded-lg bg-red-500 active:scale-95 transition-all disabled:opacity-60"
+              >
+                {cancelling ? "Cancelling…" : "Yes, cancel"}
+              </button>
+            </div>
+          ) : (
+            <div className="flex justify-end">
+              <button
+                onClick={() => setShowCancelConfirm(true)}
+                className="text-xs font-semibold text-red-500 hover:text-red-700 transition-colors"
+              >
+                Cancel gift
+              </button>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
