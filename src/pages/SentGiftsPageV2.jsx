@@ -348,6 +348,12 @@ export default function SentGiftsPageV2({ onBack }) {
 
   const hasAnything = sentActive.length > 0 || sentHistory.length > 0 || receivedActive.length > 0 || receivedHistory.length > 0;
 
+  const HISTORY_PAGE_SIZE = 5;
+  const [historyPage, setHistoryPage] = useState(1);
+  const allHistory = [...receivedHistory, ...sentHistory];
+  const visibleHistory = allHistory.slice(0, historyPage * HISTORY_PAGE_SIZE);
+  const hasMoreHistory = visibleHistory.length < allHistory.length;
+
   return (
     <div className="min-h-screen" style={HOME_BG}>
       <header className="rounded-b-[36px] bg-gradient-to-b from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-4 pb-6 pt-12 text-white">
@@ -404,11 +410,24 @@ export default function SentGiftsPageV2({ onBack }) {
           </div>
         )}
 
-        {!loading && !error && (sentHistory.length > 0 || receivedHistory.length > 0) && (
+        {!loading && !error && allHistory.length > 0 && (
           <div className="space-y-3">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">History</p>
-            {receivedHistory.map(g => <ReceivedHistoryCard key={g.id} gift={g} />)}
-            {sentHistory.map(g => <HistoryCard key={g.id} gift={g} />)}
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+              History <span className="text-slate-400 normal-case font-normal">({allHistory.length})</span>
+            </p>
+            {visibleHistory.map(g =>
+              g.sender_name !== undefined
+                ? <ReceivedHistoryCard key={g.id} gift={g} />
+                : <HistoryCard key={g.id} gift={g} />
+            )}
+            {hasMoreHistory && (
+              <button
+                onClick={() => setHistoryPage(p => p + 1)}
+                className="w-full py-3 rounded-2xl bg-white border border-slate-200 text-xs font-semibold text-slate-600 shadow-sm active:scale-95 transition-all"
+              >
+                Show more ({allHistory.length - visibleHistory.length} remaining)
+              </button>
+            )}
           </div>
         )}
       </div>
