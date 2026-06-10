@@ -9353,6 +9353,7 @@ async function generateUniqueGiftCode(db) {
 }
 
 app.post("/api/gift/create-v2", async (req, res) => {
+  console.log("[gift/create-v2] incoming request from", req.headers["x-forwarded-for"] || req.socket?.remoteAddress);
   try {
   const authHeader = req.headers.authorization || "";
   const token = authHeader.replace("Bearer ", "");
@@ -10996,6 +10997,12 @@ app.patch('/api/incidents/:id', async (req, res) => {
   } finally {
     client.release();
   }
+});
+
+// Global Express error middleware — catches any next(err) or async throws
+app.use((err, req, res, next) => {
+  console.error("[GLOBAL_ERROR]", req.method, req.path, err?.message, err?.stack?.split("\n")[1]);
+  if (!res.headersSent) res.status(500).json({ error: err?.message || "Internal server error" });
 });
 
 // Catch-all 404 handler - MUST be after all route definitions
