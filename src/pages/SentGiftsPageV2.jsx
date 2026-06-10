@@ -198,7 +198,7 @@ function HistoryCard({ gift, onClaimToSelf }) {
   );
 }
 
-function ReceivedActiveCard({ gift }) {
+function ReceivedActiveCard({ gift, onClaim }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
       <div className="p-4">
@@ -223,9 +223,18 @@ function ReceivedActiveCard({ gift }) {
           </div>
         </div>
       </div>
-      <div className="border-t border-violet-100 px-4 py-2.5 bg-violet-50/50">
-        <p className="text-[11px] text-violet-600 font-medium">Investment pending in your portfolio</p>
-      </div>
+      {gift.unclaimed ? (
+        <button
+          onClick={() => onClaim?.()}
+          className="w-full border-t border-violet-100 px-4 py-3 bg-gradient-to-r from-violet-600 to-purple-600 text-white text-xs font-bold text-center active:opacity-80 transition-opacity"
+        >
+          Claim Gift →
+        </button>
+      ) : (
+        <div className="border-t border-violet-100 px-4 py-2.5 bg-violet-50/50">
+          <p className="text-[11px] text-violet-600 font-medium">Investment pending in your portfolio</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -268,7 +277,7 @@ function ReceivedHistoryCard({ gift }) {
   );
 }
 
-export default function SentGiftsPageV2({ onBack }) {
+export default function SentGiftsPageV2({ onBack, onNavigate }) {
   const [sentActive, setSentActive] = useState([]);
   const [sentHistory, setSentHistory] = useState([]);
   const [receivedActive, setReceivedActive] = useState([]);
@@ -397,7 +406,13 @@ export default function SentGiftsPageV2({ onBack }) {
         {!loading && !error && receivedActive.length > 0 && (
           <div className="space-y-3">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Received</p>
-            {receivedActive.map(g => <ReceivedActiveCard key={g.id} gift={g} />)}
+            {receivedActive.map(g => (
+              <ReceivedActiveCard
+                key={g.id}
+                gift={g}
+                onClaim={() => onNavigate?.("giftClaim")}
+              />
+            ))}
           </div>
         )}
 

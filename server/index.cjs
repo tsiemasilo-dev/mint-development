@@ -9067,15 +9067,36 @@ app.get("/api/gift/received", async (req, res) => {
   const { data: { user }, error: authErr } = await db.auth.getUser(token);
   if (authErr || !user) return res.status(401).json({ error: "Unauthorized" });
 
-  const { data: gifts, error } = await db.from("gift_claims")
-    .select("id, amount, asset_type, asset_name, status, message, expires_at, created_at, claimed_at, sender_user_id")
-    .eq("recipient_user_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(100);
+  const userEmail = (user.email || "").trim().toLowerCase();
 
-  if (error) return res.status(500).json({ error: "Failed to load received gifts." });
+  // Query gifts matched by recipient_user_id (already claimed) OR by email (pending claim sent to this email)
+  const [byUserId, byEmail] = await Promise.all([
+    db.from("gift_claims")
+      .select("id, amount, asset_type, asset_name, status, message, expires_at, created_at, claimed_at, sender_user_id, recipient_user_id, recipient_identifier")
+      .eq("recipient_user_id", user.id)
+      .neq("status", "cancelled")
+      .order("created_at", { ascending: false })
+      .limit(100),
+    userEmail ? db.from("gift_claims")
+      .select("id, amount, asset_type, asset_name, status, message, expires_at, created_at, claimed_at, sender_user_id, recipient_user_id, recipient_identifier")
+      .eq("recipient_identifier", userEmail)
+      .is("recipient_user_id", null)
+      .neq("status", "cancelled")
+      .order("created_at", { ascending: false })
+      .limit(100) : Promise.resolve({ data: [] }),
+  ]);
 
-  const formatted = await Promise.all((gifts || []).map(async (g) => {
+  if (byUserId.error) return res.status(500).json({ error: "Failed to load received gifts." });
+
+  // Merge and deduplicate by id
+  const seen = new Set();
+  const gifts = [];
+  for (const g of [...(byUserId.data || []), ...(byEmail.data || [])]) {
+    if (!seen.has(g.id)) { seen.add(g.id); gifts.push(g); }
+  }
+  gifts.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  const formatted = await Promise.all(gifts.map(async (g) => {
     let sender_name = "Someone";
     try {
       const { data: sender } = await db.from("profiles").select("first_name, last_name").eq("id", g.sender_user_id).maybeSingle();
@@ -9083,7 +9104,8 @@ app.get("/api/gift/received", async (req, res) => {
     } catch (_) {}
     let personal_message = null;
     try { personal_message = JSON.parse(g.message || "{}").msg || null; } catch (_) {}
-    return { ...g, sender_name, personal_message };
+    const unclaimed = g.status === "pending_claim" && !g.recipient_user_id;
+    return { ...g, sender_name, personal_message, unclaimed };
   }));
 
   return res.json({

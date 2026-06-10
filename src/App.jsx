@@ -2529,7 +2529,7 @@ const App = () => {
     return (
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <Suspense fallback={<div className="min-h-screen bg-[#f8f6fa]" />}>
-          <SentGiftsPageV2 onBack={goBack} />
+          <SentGiftsPageV2 onBack={goBack} onNavigate={navigateTo} />
         </Suspense>
       </SwipeBackWrapper>
     );
