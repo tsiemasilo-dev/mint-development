@@ -146,5 +146,44 @@ export default async function handler(req, res) {
 
   console.log(`[algolend-offers] user=${user.id} creditScore=${scoreRow.experian_score} offers=${data.offersCount ?? 0}`);
 
-  return res.status(200).json(data);
+  // Append MINT's own direct offer so borrowers can compare it alongside partner lenders.
+  // lenderId 'mint-direct' is handled client-side — it never calls AlgoLend's accept endpoint.
+  const mintDirectOffer = buildMintDirectOffer(scoreRow.experian_score, requestedAmount, termMonths);
+  const offers = [...(data.offers ?? []), mintDirectOffer];
+
+  return res.status(200).json({
+    ...data,
+    offers,
+    offersCount: offers.length,
+    totalLenders: (data.totalLenders ?? 0) + 1,
+  });
+}
+
+function buildMintDirectOffer(creditScore, requestedAmount, termMonths) {
+  // MINT's own rate — simplified flat rate, reduced for higher scores
+  const baseRate = creditScore >= 700 ? 24.5 : creditScore >= 650 ? 27 : 29.5;
+  const annualRate = baseRate / 100;
+  const monthlyRate = annualRate / 12;
+  const initiationFee = Math.min(Math.round(requestedAmount * 0.015), 1500);
+  const monthlyInstallment = monthlyRate === 0
+    ? Math.round((requestedAmount + initiationFee) / termMonths)
+    : Math.round(((requestedAmount + initiationFee) * monthlyRate * Math.pow(1 + monthlyRate, termMonths)) / (Math.pow(1 + monthlyRate, termMonths) - 1));
+  const totalRepayment = monthlyInstallment * termMonths;
+
+  return {
+    lenderId:           "mint-direct",
+    lenderName:         "MINT Finance",
+    logoUrl:            null,
+    tagline:            "Our own — no middleman",
+    avgTurnaroundDays:  1,
+    offeredAmount:      requestedAmount,
+    offeredRatePct:     baseRate,
+    termMonths,
+    monthlyInstallment,
+    totalRepayment,
+    initiationFee,
+    effectiveCost:      totalRepayment,
+    loanType:           "unsecured",
+    isMintDirect:       true,
+  };
 }

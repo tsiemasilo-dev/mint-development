@@ -1497,6 +1497,12 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
    };
 
    const handleAcceptOffer = async (offer) => {
+      // MINT Direct offer — close sheet and proceed to MINT's own loan calculator
+      if (offer.lenderId === "mint-direct" || offer.isMintDirect) {
+         setOffersSheetOpen(false);
+         setStep(4);
+         return;
+      }
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated.");
       await acceptAlgoLendOffer(session.access_token, { requestId: offersData.requestId, lenderId: offer.lenderId });
