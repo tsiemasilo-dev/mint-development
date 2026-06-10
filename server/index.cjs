@@ -9548,26 +9548,19 @@ app.post("/api/gift/claim-v2", async (req, res) => {
     return res.status(500).json({ error: "Failed to allocate holdings. Please try again." });
   }
 
-  const totalExtFees = Number(gift.extension_fees || 0);
-  const totalChargedCents = gift.amount + totalExtFees;
   const now = new Date().toISOString();
 
-  // Sender debit transaction (mark the held amount as posted)
-  try {
-    // Update the held transaction to posted
-    await db.from("transactions")
-      .update({ status: "posted", description: `Gift to recipient — claimed and settled` })
-      .eq("store_reference", `GIFT2-HOLD-${gift.id}`);
-  } catch (e) { console.warn("[gift/claim-v2] update hold tx:", e.message); }
-
-  // Recipient credit transaction
+  // Recipient debit transaction — same format as record-investment.js so the
+  // pending-orders card appears on the home screen exactly like a normal purchase.
+  const txName = gift.asset_type === "strategy"
+    ? `Strategy Investment: ${gift.asset_name}`
+    : `Purchased ${gift.asset_name}`;
   try {
     await db.from("transactions").insert({
-      user_id: user.id, direction: "credit",
-      name: `Gift Received — ${gift.asset_name}`, description: "Investment gift claimed",
+      user_id: user.id, direction: "debit",
+      name: txName, description: "Investment gift claimed",
       amount: gift.amount, store_reference: `GIFT2-CLAIM-${gift.id}`,
-      currency: "ZAR", status: "posted", settlement_status: "pending",
-      transaction_date: now, created_at: now,
+      status: "posted", transaction_date: now,
     });
   } catch (e) { console.warn("[gift/claim-v2] tx:", e.message); }
 
