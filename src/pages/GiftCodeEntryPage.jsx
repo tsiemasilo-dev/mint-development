@@ -11,7 +11,7 @@ const HOME_BG = {
 
 function fmt(cents) {
   if (!cents) return '';
-  return `R${(Number(cents) / 100).toLocaleString('en-ZA', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  return `R${(Number(cents) / 100).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function GiftPreviewCard({ preview }) {

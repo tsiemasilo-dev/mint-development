@@ -9598,9 +9598,9 @@ app.post("/api/gift/claim-v2", async (req, res) => {
     });
   } catch (e) { console.warn("[gift/claim-v2] tx:", e.message); }
 
-  const { error: updateErr } = await db.from("gift_claims").update({
-    status: "claimed", recipient_user_id: user.id, recipient_identifier: claimantProfile.id_number || null, claimed_at: now,
-  }).eq("id", gift.id);
+  const claimUpdate = { status: "claimed", recipient_user_id: user.id, claimed_at: now };
+  if (claimantProfile.id_number) claimUpdate.recipient_identifier = claimantProfile.id_number;
+  const { error: updateErr } = await db.from("gift_claims").update(claimUpdate).eq("id", gift.id);
 
   if (updateErr) {
     console.error(`[gift/claim-v2] FAILED to update gift_claims status for gift ${gift.id}:`, updateErr.message);
