@@ -517,6 +517,8 @@ const HomePage = ({
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [loadingNews, setLoadingNews] = useState(false);
   const [homeTab, setHomeTab] = useState("balance");
+  const [showGiftingIntro, setShowGiftingIntro] = useState(false);
+  const [giftingIntroSeen, setGiftingIntroSeen] = useState(() => !!localStorage.getItem('mint_gifting_intro_seen'));
   const [userId, setUserId] = useState(null);
   const [pendingGiftId, setPendingGiftId] = useState(() => localStorage.getItem('mint_pending_gift_id'));
   const [pendingGiftExpiry, setPendingGiftExpiry] = useState(() => localStorage.getItem('mint_pending_gift_expires'));
@@ -1535,7 +1537,7 @@ const HomePage = ({
             {[
               { label: "Invest", icon: LayoutGrid, onClick: onOpenStrategies || onOpenInvest },
               { label: "Deposit", icon: ArrowDownToLine, onClick: onOpenDeposit },
-              { label: "Gifting", icon: Gift, onClick: () => onNavigate("giftStrategies") },
+              { label: "Gifting", icon: Gift, isNew: !giftingIntroSeen, onClick: () => { if (!giftingIntroSeen) { setShowGiftingIntro(true); } else { onNavigate("giftStrategies"); } } },
               { label: "Goals", icon: Target, onClick: () => setShowGoalsModal(true) },
             ].map((item, index) => {
               const Icon = item.icon;
@@ -1552,8 +1554,19 @@ const HomePage = ({
                       Soon
                     </span>
                   )}
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-50 text-violet-700">
+                  {item.isNew && (
+                    <span className="absolute -top-1.5 -right-1 whitespace-nowrap rounded-full bg-gradient-to-r from-violet-600 to-purple-500 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white shadow-sm">
+                      New
+                    </span>
+                  )}
+                  <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-violet-50 text-violet-700">
                     <Icon className="h-4 w-4" />
+                    {item.isNew && (
+                      <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-400 opacity-75" />
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-violet-500" />
+                      </span>
+                    )}
                   </span>
                   <span className="text-center leading-tight">{item.label}</span>
                 </button>
@@ -2726,6 +2739,111 @@ const HomePage = ({
         data={expandedStockStack}
         onClose={() => setExpandedStockStack(null)}
       />
+    )}
+
+    {/* Gifting intro modal — shown only on first tap of Gifting */}
+    {showGiftingIntro && (
+      <div
+        className="fixed inset-0 z-[999] flex items-end justify-center"
+        style={{ background: 'rgba(10,6,20,0.55)', backdropFilter: 'blur(4px)' }}
+        onClick={(e) => { if (e.target === e.currentTarget) { setShowGiftingIntro(false); localStorage.setItem('mint_gifting_intro_seen','1'); setGiftingIntroSeen(true); } }}
+      >
+        <style>{`
+          @keyframes gift-intro-slide {
+            from { opacity: 0; transform: translateY(100%); }
+            to   { opacity: 1; transform: translateY(0); }
+          }
+          @keyframes gift-intro-float {
+            0%, 100% { transform: translateY(0) rotate(-3deg); }
+            50%       { transform: translateY(-8px) rotate(3deg); }
+          }
+          @keyframes gift-intro-step-in {
+            from { opacity: 0; transform: translateX(-12px); }
+            to   { opacity: 1; transform: translateX(0); }
+          }
+          .gift-intro-sheet {
+            animation: gift-intro-slide 0.45s cubic-bezier(0.16,1,0.3,1) both;
+          }
+          .gift-intro-emoji {
+            animation: gift-intro-float 3s ease-in-out infinite;
+            display: inline-block;
+          }
+          .gift-intro-step-1 { animation: gift-intro-step-in 0.4s cubic-bezier(0.16,1,0.3,1) 0.25s both; }
+          .gift-intro-step-2 { animation: gift-intro-step-in 0.4s cubic-bezier(0.16,1,0.3,1) 0.38s both; }
+          .gift-intro-step-3 { animation: gift-intro-step-in 0.4s cubic-bezier(0.16,1,0.3,1) 0.51s both; }
+          .gift-intro-step-4 { animation: gift-intro-step-in 0.4s cubic-bezier(0.16,1,0.3,1) 0.64s both; }
+          .gift-intro-btn    { animation: gift-intro-step-in 0.4s cubic-bezier(0.16,1,0.3,1) 0.78s both; }
+        `}</style>
+
+        <div className="gift-intro-sheet w-full max-w-sm mx-4 mb-6 rounded-3xl overflow-hidden shadow-2xl"
+          style={{ background: 'linear-gradient(170deg, #1a0d2e 0%, #2d1554 40%, #1e0d3a 100%)', border: '1px solid rgba(167,139,250,0.25)' }}
+        >
+          {/* Header */}
+          <div className="relative px-6 pt-7 pb-5 text-center"
+            style={{ background: 'linear-gradient(135deg, rgba(109,40,217,0.35) 0%, rgba(124,58,237,0.15) 100%)' }}
+          >
+            <div className="text-5xl mb-3">
+              <span className="gift-intro-emoji">🎁</span>
+            </div>
+            <h2 className="text-xl font-extrabold text-white tracking-tight">How Gifting Works</h2>
+            <p className="text-sm mt-1.5" style={{ color: 'rgba(196,181,253,0.8)' }}>Send real investments to anyone — it takes 30 seconds</p>
+
+            {/* Close pill */}
+            <button
+              onClick={() => { setShowGiftingIntro(false); localStorage.setItem('mint_gifting_intro_seen','1'); setGiftingIntroSeen(true); }}
+              className="absolute top-4 right-4 flex h-7 w-7 items-center justify-center rounded-full"
+              style={{ background: 'rgba(255,255,255,0.1)' }}
+            >
+              <X className="h-3.5 w-3.5 text-white/70" />
+            </button>
+          </div>
+
+          {/* Steps */}
+          <div className="px-6 py-5 space-y-4">
+            {[
+              { step: '1', emoji: '📈', title: 'Pick an investment', desc: 'Choose any stock, ETF or basket from the Mint catalogue', cls: 'gift-intro-step-1' },
+              { step: '2', emoji: '💸', title: 'Set the amount', desc: 'You decide how much to gift — starts from R100', cls: 'gift-intro-step-2' },
+              { step: '3', emoji: '📲', title: 'Send via email or SMS', desc: 'Enter the recipient\'s email or phone — we handle the rest', cls: 'gift-intro-step-3' },
+              { step: '4', emoji: '🎉', title: 'They claim & invest', desc: 'Your gift lands in their Mint portfolio once claimed', cls: 'gift-intro-step-4' },
+            ].map(({ step, emoji, title, desc, cls }) => (
+              <div key={step} className={`${cls} flex items-start gap-3.5`}>
+                <div className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold text-violet-200"
+                  style={{ background: 'rgba(139,92,246,0.25)', border: '1px solid rgba(139,92,246,0.35)' }}
+                >
+                  {step}
+                </div>
+                <div className="flex-1 pt-0.5">
+                  <p className="text-sm font-semibold text-white leading-snug">{emoji} {title}</p>
+                  <p className="text-xs mt-0.5 leading-relaxed" style={{ color: 'rgba(196,181,253,0.7)' }}>{desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* CTA */}
+          <div className="gift-intro-btn px-6 pb-7">
+            <button
+              onClick={() => {
+                setShowGiftingIntro(false);
+                localStorage.setItem('mint_gifting_intro_seen', '1');
+                setGiftingIntroSeen(true);
+                onNavigate('giftStrategies');
+              }}
+              className="w-full py-4 rounded-2xl font-bold text-sm text-white active:scale-[0.98] transition-transform"
+              style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)', boxShadow: '0 4px 20px rgba(124,58,237,0.45)' }}
+            >
+              🎁 Send a Gift
+            </button>
+            <button
+              onClick={() => { setShowGiftingIntro(false); localStorage.setItem('mint_gifting_intro_seen','1'); setGiftingIntroSeen(true); }}
+              className="w-full mt-2.5 py-2.5 text-xs font-medium text-center"
+              style={{ color: 'rgba(196,181,253,0.65)' }}
+            >
+              Maybe later
+            </button>
+          </div>
+        </div>
+      </div>
     )}
     </>
   );
