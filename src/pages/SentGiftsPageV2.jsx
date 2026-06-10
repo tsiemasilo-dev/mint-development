@@ -77,15 +77,25 @@ function GiftAuditTrail({ events, variant = "light" }) {
   const dark = variant === "dark";
   return (
     <div className={`border-t ${dark ? "border-white/[0.07]" : "border-slate-100"}`}>
-      <button
-        onClick={() => setOpen(o => !o)}
-        className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${dark ? "hover:bg-white/[0.04]" : "hover:bg-slate-50"}`}
-      >
-        <span className={`text-[11px] font-semibold uppercase tracking-wide ${dark ? "text-white/30" : "text-slate-400"}`}>
-          Activity <span className="font-normal normal-case">({events.length} events)</span>
-        </span>
-        <ChevronDown size={12} className={`transition-transform duration-200 ${open ? "rotate-180" : ""} ${dark ? "text-white/30" : "text-slate-400"}`} />
-      </button>
+      <div className="px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <p className={`text-[11px] font-bold uppercase tracking-wider ${dark ? "text-white/30" : "text-slate-400"}`}>Activity</p>
+          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${dark ? "bg-white/10 text-white/35" : "bg-slate-100 text-slate-500"}`}>
+            {events.length}
+          </span>
+        </div>
+        <button
+          onClick={() => setOpen(o => !o)}
+          className={`flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-full transition-all active:scale-95 ${
+            dark
+              ? open ? "bg-white/15 text-white/60" : "bg-white/[0.08] text-white/40 hover:bg-white/[0.12]"
+              : open ? "bg-slate-100 text-slate-600" : "bg-slate-50 text-slate-400 hover:bg-slate-100"
+          }`}
+        >
+          {open ? "Hide" : "Show"}
+          <ChevronDown size={11} className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+        </button>
+      </div>
       {open && (
         <div className="px-4 pb-4">
           {events.map((e, i) => {
@@ -273,41 +283,49 @@ function ActiveGiftCard({ gift, onExtend, onCancel }) {
         />
       )}
 
-      <div className="rounded-3xl overflow-hidden shadow-2xl" style={{ background: "linear-gradient(135deg, #16102a 0%, #221445 55%, #2e1a63 100%)", border: "1px solid rgba(255,255,255,0.07)" }}>
+      <div className="bg-white rounded-3xl overflow-hidden shadow-sm" style={{ border: "1px solid rgba(0,0,0,0.07)" }}>
+        <div className="h-[3px] bg-gradient-to-r from-violet-500 to-purple-500" />
         <div className="p-5">
-          {/* Header */}
-          <div className="flex items-start justify-between gap-3 mb-4">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 mb-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
-                <span className="text-[10px] font-bold text-amber-400/70 uppercase tracking-widest">Active Gift</span>
-              </div>
-              <p className="text-base font-bold text-white leading-snug truncate">{gift.asset_name}</p>
-              <p className="text-xs text-white/40 mt-0.5">To {gift.recipient_name || "Recipient"}</p>
+          {/* Status row */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Active Gift</span>
             </div>
-            <div className="text-right shrink-0">
-              <p className="text-xl font-black text-white">{fmt(gift.amount)}</p>
-              <div className="mt-1.5"><CountdownBadge expiresAt={gift.expires_at} dark /></div>
-            </div>
+            <CountdownBadge expiresAt={gift.expires_at} />
           </div>
 
-          {gift.personal_message && (
-            <p className="text-xs text-white/30 italic mb-4 line-clamp-1">"{gift.personal_message}"</p>
-          )}
+          {/* Main info */}
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <div className="min-w-0">
+              <p className="text-lg font-black text-slate-900 leading-snug truncate">{gift.asset_name}</p>
+              <p className="text-xs text-slate-400 mt-0.5">To {gift.recipient_name || "Recipient"}</p>
+              {gift.personal_message && (
+                <p className="text-xs text-slate-400 italic mt-1.5 line-clamp-1">"{gift.personal_message}"</p>
+              )}
+            </div>
+            <p className="text-2xl font-black text-slate-900 shrink-0">{fmt(gift.amount)}</p>
+          </div>
 
-          {gift.extension_fees > 0 && (
-            <p className="text-[11px] text-amber-400/50 mb-3">Extension fees paid: {fmt(gift.extension_fees)}</p>
-          )}
+          {/* Awaiting + fees row */}
+          <div className="flex items-center gap-2 flex-wrap mb-4">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-100">
+              <Clock size={10} />Awaiting claim
+            </span>
+            {gift.extension_fees > 0 && (
+              <span className="text-[11px] text-slate-400">Fees: {fmt(gift.extension_fees)}</span>
+            )}
+          </div>
 
           {/* Token box */}
-          <div className="rounded-2xl p-4 flex items-center justify-between gap-3 mb-1" style={{ background: "rgba(0,0,0,0.35)", border: "1px solid rgba(255,255,255,0.06)" }}>
+          <div className="bg-slate-900 rounded-2xl px-4 py-3.5 flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[10px] text-white/25 font-semibold uppercase tracking-widest mb-1.5">Gift Code</p>
-              <p className="text-2xl font-black tracking-[0.32em] text-white font-mono">{gift.token}</p>
+              <p className="text-[10px] text-white/40 font-semibold uppercase tracking-widest mb-1.5">Gift Code</p>
+              <p className="text-xl font-black tracking-[0.3em] text-white font-mono">{gift.token}</p>
             </div>
             <button
               onClick={handleCopy}
-              className={`flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl transition-all active:scale-95 shrink-0 border ${copied ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/25" : "bg-white/10 text-white/60 border-white/10 hover:bg-white/[0.15]"}`}
+              className={`flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl transition-all active:scale-95 shrink-0 ${copied ? "bg-emerald-500 text-white" : "bg-white/[0.12] text-white/70 hover:bg-white/20"}`}
             >
               {copied ? <Check size={12} /> : <Copy size={12} />}
               {copied ? "Copied!" : "Copy"}
@@ -317,22 +335,22 @@ function ActiveGiftCard({ gift, onExtend, onCancel }) {
 
         {/* Extend buttons */}
         {!isExpired && (
-          <div className="px-5 pb-5 space-y-2.5">
+          <div className="px-5 pb-5 space-y-2">
             {isLow && (
-              <p className="text-[11px] font-semibold text-amber-300/70 text-center">⚡ Expiring soon — extend to keep active</p>
+              <p className="text-[11px] font-semibold text-amber-600 text-center bg-amber-50 rounded-xl py-2 border border-amber-100">⚡ Expiring soon — extend to keep active</p>
             )}
             <div className="flex gap-2.5">
               <button
                 onClick={() => openExtendSheet("10h")}
                 disabled={!!extending}
-                className={`flex-1 rounded-2xl py-3 text-xs font-bold transition-all active:scale-95 disabled:opacity-50 border ${extendedKey === "10h" ? "bg-emerald-500/20 border-emerald-400/30 text-emerald-300" : "bg-white/[0.07] border-white/10 text-white/75 hover:bg-white/[0.12]"}`}
+                className={`flex-1 rounded-2xl py-3 text-xs font-bold transition-all active:scale-95 disabled:opacity-50 ${extendedKey === "10h" ? "bg-emerald-500 text-white shadow-sm" : "bg-violet-50 text-violet-700 border border-violet-100 hover:bg-violet-100"}`}
               >
                 {extending === "10h" ? "Extending…" : extendedKey === "10h" ? "✓ Extended" : `+10h · ${fmt(fee10)}`}
               </button>
               <button
                 onClick={() => openExtendSheet("24h")}
                 disabled={!!extending}
-                className={`flex-1 rounded-2xl py-3 text-xs font-bold transition-all active:scale-95 disabled:opacity-50 border ${extendedKey === "24h" ? "bg-emerald-500/20 border-emerald-400/30 text-emerald-300" : "bg-white/[0.07] border-white/10 text-white/75 hover:bg-white/[0.12]"}`}
+                className={`flex-1 rounded-2xl py-3 text-xs font-bold transition-all active:scale-95 disabled:opacity-50 ${extendedKey === "24h" ? "bg-emerald-500 text-white shadow-sm" : "bg-violet-50 text-violet-700 border border-violet-100 hover:bg-violet-100"}`}
               >
                 {extending === "24h" ? "Extending…" : extendedKey === "24h" ? "✓ Extended" : `+24h · ${fmt(fee24)}`}
               </button>
@@ -340,24 +358,24 @@ function ActiveGiftCard({ gift, onExtend, onCancel }) {
           </div>
         )}
 
-        <GiftAuditTrail events={gift.events} variant="dark" />
+        <GiftAuditTrail events={gift.events} variant="light" />
 
         {/* Cancel footer */}
-        <div className="border-t px-5 py-3" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+        <div className="border-t border-slate-100 px-5 py-3">
           {showCancelConfirm ? (
             <div className="flex items-center gap-2">
-              <p className="text-xs text-white/35 flex-1">Cancel this gift?</p>
+              <p className="text-xs text-slate-500 flex-1">Cancel this gift?</p>
               <button
                 onClick={() => setShowCancelConfirm(false)}
                 disabled={cancelling}
-                className="text-xs font-semibold text-white/50 px-3 py-1.5 rounded-xl bg-white/10 active:scale-95 transition-all"
+                className="text-xs font-semibold text-slate-500 px-3 py-1.5 rounded-xl bg-slate-100 active:scale-95 transition-all"
               >
                 Keep
               </button>
               <button
                 onClick={handleCancelConfirm}
                 disabled={cancelling}
-                className="text-xs font-semibold text-white px-3 py-1.5 rounded-xl bg-red-500/75 active:scale-95 transition-all disabled:opacity-60"
+                className="text-xs font-semibold text-white px-3 py-1.5 rounded-xl bg-red-500 active:scale-95 transition-all disabled:opacity-60"
               >
                 {cancelling ? "Cancelling…" : "Yes, cancel"}
               </button>
@@ -366,7 +384,7 @@ function ActiveGiftCard({ gift, onExtend, onCancel }) {
             <div className="flex justify-end">
               <button
                 onClick={() => setShowCancelConfirm(true)}
-                className="text-xs font-semibold text-white/25 hover:text-red-400 transition-colors"
+                className="text-xs font-semibold text-slate-400 hover:text-red-500 transition-colors"
               >
                 Cancel gift
               </button>
@@ -446,37 +464,37 @@ function HistoryCard({ gift, onClaimToSelf }) {
 
 function ReceivedActiveCard({ gift, onClaim }) {
   return (
-    <div className="rounded-3xl overflow-hidden shadow-2xl" style={{ background: "linear-gradient(135deg, #0f0c1f 0%, #1c1545 50%, #2d1f6e 100%)", border: "1px solid rgba(167,139,250,0.12)" }}>
+    <div className="bg-white rounded-3xl overflow-hidden shadow-sm" style={{ border: "1px solid rgba(0,0,0,0.07)" }}>
+      <div className="h-[3px] bg-gradient-to-r from-violet-500 to-purple-500" />
       <div className="p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse shrink-0" />
-          <span className="text-[10px] font-bold text-violet-300/60 uppercase tracking-widest">Gift for you</span>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse shrink-0" />
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Gift for you</span>
+          </div>
+          <CountdownBadge expiresAt={gift.expires_at} />
         </div>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-base font-bold text-white leading-snug truncate">{gift.asset_name}</p>
-            <p className="text-xs text-white/40 mt-0.5">From {gift.sender_name || "Someone"}</p>
+            <p className="text-lg font-black text-slate-900 leading-snug truncate">{gift.asset_name}</p>
+            <p className="text-xs text-slate-400 mt-0.5">From {gift.sender_name || "Someone"}</p>
             {gift.personal_message && (
-              <p className="text-xs text-violet-200/40 mt-2 italic line-clamp-2">"{gift.personal_message}"</p>
+              <p className="text-xs text-slate-400 italic mt-2 line-clamp-2">"{gift.personal_message}"</p>
             )}
           </div>
-          <div className="text-right shrink-0">
-            <p className="text-xl font-black text-white">{fmt(gift.amount)}</p>
-            <div className="mt-1.5"><CountdownBadge expiresAt={gift.expires_at} dark /></div>
-          </div>
+          <p className="text-2xl font-black text-slate-900 shrink-0">{fmt(gift.amount)}</p>
         </div>
       </div>
       {gift.unclaimed ? (
         <button
           onClick={() => onClaim?.()}
-          className="w-full py-4 text-sm font-bold text-white text-center active:opacity-80 transition-all flex items-center justify-center gap-2"
-          style={{ background: "linear-gradient(90deg, #7c3aed, #6d28d9)" }}
+          className="w-full py-4 text-sm font-bold text-white text-center active:opacity-80 transition-all flex items-center justify-center gap-2 bg-gradient-to-r from-violet-600 to-purple-600"
         >
           <Gift size={15} />Claim Gift →
         </button>
       ) : (
-        <div className="px-5 py-3" style={{ borderTop: "1px solid rgba(167,139,250,0.12)", background: "rgba(124,58,237,0.08)" }}>
-          <p className="text-[11px] text-violet-300/50 font-medium text-center">Investment pending in your portfolio</p>
+        <div className="border-t border-violet-50 px-5 py-3 bg-violet-50/60">
+          <p className="text-[11px] text-violet-600 font-medium text-center">Investment pending in your portfolio</p>
         </div>
       )}
     </div>
