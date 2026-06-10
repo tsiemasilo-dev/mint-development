@@ -27,7 +27,7 @@ const timeframeOptions = [
 
 const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding }) => {
+const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding, onUpdateMandate }) => {
   const { onboardingComplete, loading: onboardingLoading } = useOnboardingStatus();
   const { isLimited: isLimitedDiscretion } = useDiscretionType();
   const [timeframe, setTimeframe] = useState("YTD");
@@ -1165,7 +1165,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
               You selected <span className="font-semibold text-slate-900">limited discretion</span>, which doesn&rsquo;t allow trading our strategies. Please{" "}
               <button
                 type="button"
-                onClick={() => { setShowDiscretionModal(false); if (onNavigateToOnboarding) onNavigateToOnboarding(); }}
+                onClick={() => { setShowDiscretionModal(false); if (onUpdateMandate) onUpdateMandate(); else if (onNavigateToOnboarding) onNavigateToOnboarding(); }}
                 className="font-semibold text-violet-600 underline"
               >
                 update your discretionary

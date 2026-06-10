@@ -133,9 +133,9 @@ const accountTypeOptions = [
   { value: "other", label: "Other" },
 ];
 
-const OnboardingProcessPage = ({ onBack, onComplete }) => {
+const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
   const { profile, loading: profileLoading } = useProfile();
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(editMandate ? 5 : 0);
   const [isFading, setIsFading] = useState(false);
   const [employmentStatus, setEmploymentStatus] = useState("");
   const [employerName, setEmployerName] = useState("");
@@ -1661,7 +1661,27 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   type="button"
                   className={`continue-button agreement-continue ${mandateValid ? "enabled" : ""}`}
                   disabled={!mandateValid}
-                  onClick={async () => { await saveProgressFlag("mandate_accepted"); setMandateDone(true); goToStep(getNextIncompleteStep(5, 5)); }}
+                  onClick={async () => {
+                    await saveProgressFlag("mandate_accepted");
+                    setMandateDone(true);
+                    if (editMandate) {
+                      // Updating discretionary only: persist the mandate and return.
+                      try {
+                        const { data: { session } } = await supabase.auth.getSession();
+                        const token = session?.access_token;
+                        if (token && mandateDataRef.current) {
+                          await fetch("/api/onboarding/save-mandate", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                            body: JSON.stringify({ mandate_data: { ...mandateDataRef.current }, existing_onboarding_id: existingOnboardingId || null }),
+                          });
+                        }
+                      } catch (e) { console.error("Mandate update save error:", e); }
+                      if (onComplete) onComplete();
+                      return;
+                    }
+                    goToStep(getNextIncompleteStep(5, 5));
+                  }}
                 >
                   Continue
                 </button>

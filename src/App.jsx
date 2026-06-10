@@ -1156,7 +1156,7 @@ const App = () => {
     if (!previousPageName || mainTabs.includes(currentPage)) return null;
 
     // Skip background rendering for SDK-heavy pages to prevent duplicate listeners
-    const sdkPages = ["identityCheck", "userOnboarding", "bankLink", "creditApply"];
+    const sdkPages = ["identityCheck", "userOnboarding", "updateMandate", "bankLink", "creditApply"];
     if (sdkPages.includes(previousPageName)) return null;
 
     return renderPageContent(previousPageName, true);
@@ -1418,7 +1418,7 @@ const App = () => {
               navigateTo("investAmount");
             }}
             onGiftDone={() => { setShowAdultInvestModal(false); navigateTo("home"); }}
-            onUpdateMandate={() => { setShowAdultInvestModal(false); navigateTo("identityCheck"); }}
+            onUpdateMandate={() => { setShowAdultInvestModal(false); navigateTo("updateMandate"); }}
           />
         </>
       </Suspense>
@@ -1881,6 +1881,7 @@ const App = () => {
               }
             }}
             onNavigateToOnboarding={() => navigateTo("identityCheck")}
+            onUpdateMandate={() => navigateTo("updateMandate")}
           />
         </SwipeBackWrapper>
         {showChildInvestModal && marketsChildFilter && selectedStrategy && (
@@ -1889,7 +1890,7 @@ const App = () => {
             strategy={selectedStrategy}
             initialStep="amount"
             onClose={() => setShowChildInvestModal(false)}
-            onUpdateMandate={() => { setShowChildInvestModal(false); navigateTo("identityCheck"); }}
+            onUpdateMandate={() => { setShowChildInvestModal(false); navigateTo("updateMandate"); }}
           />
         )}
         <AdultInvestModal
@@ -1923,7 +1924,7 @@ const App = () => {
             navigateTo("investAmount");
           }}
           onGiftDone={() => { setShowAdultInvestModal(false); navigateTo("home"); }}
-          onUpdateMandate={() => { setShowAdultInvestModal(false); navigateTo("identityCheck"); }}
+          onUpdateMandate={() => { setShowAdultInvestModal(false); navigateTo("updateMandate"); }}
         />
       </>
     );
@@ -2466,6 +2467,10 @@ const App = () => {
 
   if (currentPage === "userOnboarding") {
     return <UserOnboardingPage onComplete={() => setCurrentPage("home")} />;
+  }
+
+  if (currentPage === "updateMandate") {
+    return <UserOnboardingPage onComplete={() => setCurrentPage("home")} editMandate />;
   }
 
   if (currentPage === "giftClaim" || currentPage === "giftCodeEntry") {
