@@ -9353,12 +9353,15 @@ async function generateUniqueGiftCode(db) {
 }
 
 app.post("/api/gift/create-v2", async (req, res) => {
+  try {
   const authHeader = req.headers.authorization || "";
   const token = authHeader.replace("Bearer ", "");
   const db = supabaseAdmin || supabase;
   if (!db) return res.status(500).json({ error: "Database not available" });
 
-  const { data: { user }, error: authErr } = await db.auth.getUser(token);
+  const authResult = await db.auth.getUser(token);
+  const user = authResult?.data?.user;
+  const authErr = authResult?.error;
   if (authErr || !user) return res.status(401).json({ error: "Unauthorized" });
 
   const { asset_type, strategy_id, security_id, security_symbol, asset_name, amount, recipient_identifier, recipient_first_name, recipient_last_name, message } = req.body || {};
@@ -9657,6 +9660,10 @@ app.post("/api/gift/create-v2", async (req, res) => {
   }
 
   return res.json({ success: true, token: gift.token, expires_at: gift.expires_at, gift_id: gift.id });
+  } catch (e) {
+    console.error("[gift/create-v2] unhandled exception:", e?.message, e?.stack);
+    if (!res.headersSent) res.status(500).json({ error: "Failed to create gift.", detail: e?.message });
+  }
 });
 
 app.post("/api/gift/reset-rate-limit", (req, res) => {
