@@ -8,6 +8,8 @@ import { supabase } from "../lib/supabase";
 import { useCreditCheck } from "../lib/useCreditCheck";
 import NotificationBell from "../components/NotificationBell";
 import CreditApplySkeleton from "../components/CreditApplySkeleton";
+import LoanOffersSheet from "../components/credit/LoanOffersSheet";
+import { fetchAlgoLendOffers, acceptAlgoLendOffer } from "../services/algolendService";
 
 const normalizeLoanType = (value, fallback = "unsecured") => {
    const normalized = String(value || "").trim().toLowerCase();
@@ -1469,6 +1471,37 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
    const [autoAdvanceFromExistingScore, setAutoAdvanceFromExistingScore] = useState(false);
    const autoAdvanceTimerRef = useRef(null);
 
+   // ── AlgoLend marketplace offers ─────────────────────────────────────────
+   const [offersSheetOpen,  setOffersSheetOpen]  = useState(false);
+   const [offersLoading,    setOffersLoading]    = useState(false);
+   const [offersError,      setOffersError]      = useState(null);
+   const [offersData,       setOffersData]       = useState({ offers: [], declines: [], totalLenders: 0, requestId: null });
+
+   const handleOpenOffers = async () => {
+      setOffersSheetOpen(true);
+      setOffersLoading(true);
+      setOffersError(null);
+      try {
+         const { data: { session } } = await supabase.auth.getSession();
+         if (!session) throw new Error("Please sign in to view offers.");
+         const loanApp = loanApplications[0];
+         const requestedAmount = Number(loanApp?.principal_amount) > 0 ? loanApp.principal_amount : 50000;
+         const termMonths      = Number(loanApp?.number_of_months) > 0 ? loanApp.number_of_months : 24;
+         const result = await fetchAlgoLendOffers(session.access_token, { requestedAmount, termMonths });
+         setOffersData({ offers: result.offers || [], declines: result.declines || [], totalLenders: result.totalLenders || 0, requestId: result.requestId });
+      } catch (err) {
+         setOffersError(err.message || "Could not load offers at this time.");
+      } finally {
+         setOffersLoading(false);
+      }
+   };
+
+   const handleAcceptOffer = async (offer) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated.");
+      await acceptAlgoLendOffer(session.access_token, { requestId: offersData.requestId, lenderId: offer.lenderId });
+   };
+
    // Real Hook Integration
    const {
       form: checkForm,
@@ -2177,7 +2210,7 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
                breakdown={engineResult?.breakdown}
                engineResult={engineResult}
                onRunAssessment={handleRunAssessment}
-               onContinue={() => setStep(4)}
+               onContinue={handleOpenOffers}
                isPrefetching={isPrefetchingAssessment}
                onReapply={() => {
                   setStep(1);
@@ -2223,19 +2256,38 @@ const CreditApplyWizard = ({ onBack, onComplete, onTabChange, onOpenNotification
       );
    }
 
+   // ── AlgoLend offers sheet — rendered at wizard root so it sits above everything ──
+   const offersSheet = (
+      <LoanOffersSheet
+         isOpen={offersSheetOpen}
+         onClose={() => { setOffersSheetOpen(false); setStep(4); }}
+         offers={offersData.offers}
+         declines={offersData.declines}
+         totalLenders={offersData.totalLenders}
+         requestId={offersData.requestId}
+         creditScore={engineResult?.creditScore}
+         isLoading={offersLoading}
+         error={offersError}
+         onAccept={handleAcceptOffer}
+      />
+   );
+
    if (step === 0 || step === "bank_success") {
-      return renderContent();
+      return <>{renderContent()}{offersSheet}</>;
    }
 
    return (
-      <MintGradientLayout
-         title={getTitle()}
-         subtitle={step === 1 ? "We need to verify your income via your primary bank account." : step === 2 ? "Review the details we found." : step === 4 ? "Configure your loan and sign your agreement." : ""}
-         stepInfo={getStepInfo()}
-         onBack={handleWizardBack}
-      >
-         {renderContent()}
-      </MintGradientLayout>
+      <>
+         <MintGradientLayout
+            title={getTitle()}
+            subtitle={step === 1 ? "We need to verify your income via your primary bank account." : step === 2 ? "Review the details we found." : step === 4 ? "Configure your loan and sign your agreement." : ""}
+            stepInfo={getStepInfo()}
+            onBack={handleWizardBack}
+         >
+            {renderContent()}
+         </MintGradientLayout>
+         {offersSheet}
+      </>
    );
 };
 
