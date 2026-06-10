@@ -86,6 +86,12 @@ function ActiveGiftCard({ gift, onExtend, onCancel }) {
           <p className="text-xs text-slate-400 italic line-clamp-1 pl-[52px]">"{gift.personal_message}"</p>
         )}
 
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold text-amber-700 bg-amber-50">
+            <Clock size={10} />Waiting to be claimed
+          </span>
+        </div>
+
         <div className="bg-slate-50 rounded-xl p-3 flex items-center justify-between gap-3">
           <p className="text-lg font-black tracking-[0.3em] text-slate-900 font-mono">{gift.token}</p>
           <button
@@ -144,8 +150,10 @@ function HistoryCard({ gift, onClaimToSelf }) {
   const meta = HISTORY_META[gift.status] || HISTORY_META.expired;
   const Icon = meta.icon;
   const sentDate = gift.created_at ? new Date(gift.created_at).toLocaleDateString("en-ZA") : null;
+  const claimedDate = gift.claimed_at ? new Date(gift.claimed_at).toLocaleDateString("en-ZA") : null;
   const [claiming, setClaiming] = useState(false);
   const canClaimToSelf = gift.status === "expired" || gift.status === "cancelled";
+  const isClaimed = gift.status === "claimed";
 
   async function handleClaimToSelf() {
     if (!window.confirm(`Add ${gift.asset_name} to your own portfolio? R${(gift.amount / 100).toFixed(2)} will be deducted from your wallet.`)) return;
@@ -159,13 +167,13 @@ function HistoryCard({ gift, onClaimToSelf }) {
       <div className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
-              <Gift size={16} className="text-slate-400" />
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isClaimed ? "bg-emerald-50" : "bg-slate-100"}`}>
+              <Gift size={16} className={isClaimed ? "text-emerald-500" : "text-slate-400"} />
             </div>
             <div className="min-w-0">
               <p className="text-sm font-semibold text-slate-800 truncate">{gift.asset_name}</p>
               <p className="text-xs text-slate-400 mt-0.5">To: {gift.recipient_name || "Recipient"}</p>
-              {sentDate && <p className="text-[11px] text-slate-300 mt-0.5">{sentDate}</p>}
+              {sentDate && <p className="text-[11px] text-slate-300 mt-0.5">Sent {sentDate}</p>}
             </div>
           </div>
           <div className="text-right shrink-0">
@@ -175,6 +183,16 @@ function HistoryCard({ gift, onClaimToSelf }) {
             </div>
           </div>
         </div>
+
+        {isClaimed && (
+          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2">
+            <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
+            <p className="text-xs text-slate-600">
+              <span className="font-semibold">{gift.recipient_name || "Recipient"}</span> claimed this gift
+              {claimedDate && <span className="text-slate-400"> · {claimedDate}</span>}
+            </p>
+          </div>
+        )}
       </div>
       {canClaimToSelf && (
         <div className="border-t border-slate-100 px-4 py-3">
@@ -280,7 +298,7 @@ export default function SentGiftsPageV2({ onBack }) {
             <ArrowLeft size={20} />
           </button>
           <div className="flex-1">
-            <h1 className="text-lg font-bold">Sent Gifts</h1>
+            <h1 className="text-lg font-bold">Gifts</h1>
           </div>
           <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
             <Send size={16} className="text-white/80" />
