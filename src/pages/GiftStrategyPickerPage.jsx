@@ -4,7 +4,7 @@ import { AreaChart, Area, LineChart, Line, ResponsiveContainer } from "recharts"
 import { motion, AnimatePresence } from "framer-motion";
 import { SparklesText } from "../components/ui/sparkles-text";
 import { getPublicStrategies, formatChangePct } from "../lib/strategyData";
-import { calculateMinInvestmentSync } from "../lib/strategyUtils";
+import { calculateMinInvestmentSync, enrichSecuritiesWithIntradayPrices, buildHoldingsBySymbol } from "../lib/strategyUtils";
 import { supabase } from "../lib/supabase";
 import { formatCurrency } from "../lib/formatCurrency";
 
@@ -70,7 +70,7 @@ function MiniSparkline({ strategyId, positive }) {
 function StrategyCard({ strategy, ytd, holdingsBySymbol, onGift, featured }) {
   const currency = strategy.base_currency || "R";
   const calcMin = calculateMinInvestmentSync(strategy, holdingsBySymbol);
-  const minInvest = calcMin ? formatCurrency(calcMin, currency) : null;
+  const minInvest = calcMin ? formatCurrency(calcMin * 1.08, currency) : null;
 
   const holdings = Array.isArray(strategy.holdings) ? strategy.holdings : [];
   const holdingLogos = holdings.slice(0, 4).map(h => {
@@ -219,11 +219,10 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate }) {
         if (tickers.length) {
           const { data: secs } = await supabase
             .from("securities_c")
-            .select("symbol, logo_url, last_price")
+            .select("id, symbol, logo_url, last_price")
             .in("symbol", tickers);
-          const secMap = new Map();
-          (secs || []).forEach(s => secMap.set(s.symbol, s));
-          if (!cancelled) setSecuritiesMap(secMap);
+          const enriched = await enrichSecuritiesWithIntradayPrices(secs || []);
+          if (!cancelled) setSecuritiesMap(buildHoldingsBySymbol(enriched));
         }
       } catch (e) {
         console.error("[GiftStrategyPicker] load error:", e);

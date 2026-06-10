@@ -107,22 +107,22 @@ export default async function handler(req, res) {
 
   const { code, id_number } = req.body || {};
   if (!code) return res.status(400).json({ error: "code is required." });
-  if (!id_number?.trim()) return res.status(400).json({ error: "id_number is required." });
 
   const cleanCode = String(code).replace(/\D/g, "");
-  const cleanId = String(id_number).replace(/\D/g, "");
 
-  // Verify the authenticated user's profile matches the supplied ID
+  // Fetch the authenticated user's profile
   const { data: claimantProfile } = await db
     .from("profiles").select("id, id_number, first_name, last_name, mint_number")
     .eq("id", user.id).maybeSingle();
 
   if (!claimantProfile) return res.status(400).json({ error: "Profile not found." });
-  if (claimantProfile.id_number !== cleanId) {
-    return res.status(403).json({ error: "SA ID number does not match your account." });
-  }
-  if (!claimantProfile.mint_number) {
-    return res.status(403).json({ error: "Please complete your Mint account setup before claiming.", mint_number_required: true });
+
+  // If id_number is provided, verify it matches the profile (for non-logged-in flows)
+  if (id_number?.trim()) {
+    const cleanId = String(id_number).replace(/\D/g, "");
+    if (claimantProfile.id_number !== cleanId) {
+      return res.status(403).json({ error: "SA ID number does not match your account." });
+    }
   }
 
   // KYC check
@@ -148,19 +148,23 @@ export default async function handler(req, res) {
   const now = new Date().toISOString();
 
   // Insert transaction first so we can stamp its UUID on every holdings row.
+  // Use the same format as record-investment.js (debit, "Strategy Investment: X")
+  // so the gift flows through the exact same pending-orders code path as a
+  // regular strategy purchase — no separate UI branch needed.
   let giftTxId = null;
   try {
+    const txName = gift.asset_type === "strategy"
+      ? `Strategy Investment: ${gift.asset_name}`
+      : `Purchased ${gift.asset_name}`;
     const txInsert = await db.from("transactions").insert({
       user_id: user.id,
-      direction: "credit",
-      name: `Gift Received — ${gift.asset_name}`,
+      direction: "debit",
+      name: txName,
       description: "Investment gift claimed",
       amount: gift.amount,
       store_reference: `GIFT2-CLAIM-${gift.id}`,
-      currency: "ZAR",
       status: "posted",
       transaction_date: now,
-      created_at: now,
     }).select("id").single();
     giftTxId = txInsert.data?.id || null;
   } catch (e) { console.warn("[gift/claim-v2] tx insert:", e.message); }
@@ -181,13 +185,14 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Failed to allocate holdings. Please try again." });
   }
 
-  // Mark gift claimed — store the ID number so it can be verified
-  await db.from("gift_claims").update({
+  // Mark gift claimed
+  const claimUpdate = {
     status: "claimed",
     recipient_user_id: user.id,
-    recipient_identifier: cleanId,
     claimed_at: now,
-  }).eq("id", gift.id);
+  };
+  if (typeof cleanId !== "undefined") claimUpdate.recipient_identifier = cleanId;
+  await db.from("gift_claims").update(claimUpdate).eq("id", gift.id);
 
   // Notify sender
   const recipientName = [claimantProfile.first_name, claimantProfile.last_name].filter(Boolean).join(" ") || "Your recipient";

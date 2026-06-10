@@ -586,6 +586,9 @@ const SwipeableBalanceCard = ({
               }
             }
           }
+
+          // Pending/gift holdings (avg_fill=0) are intentionally excluded here.
+          // Holdings only appear once officially filled by the broker (avg_fill > 0).
         }
 
         // Portfolio value: sum market_value (cents → rands) for real holdings only

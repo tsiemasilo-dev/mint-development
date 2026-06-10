@@ -80,17 +80,18 @@ async function allocateStrategyHoldings(db, userId, strategyId, strategyHoldings
       const qty = Math.floor((h.weight || 1) * scale);
       if (qty <= 0) continue;
 
-      const avgFillCents = Math.round(sec.last_price * 100);
       const marketValueCents = Math.round(qty * sec.last_price * 100);
 
       try {
         // Always insert a NEW row per gift-claimed strategy purchase so duplicate
         // buys remain distinguishable in stock_holdings_c.
+        // avg_fill starts as null (pending) — same as regular purchases — so the
+        // purple "Pending orders" card shows on the home screen until admin fills.
         await db.from("stock_holdings_c").insert({
           user_id: userId,
           security_id: sec.id,
           quantity: qty,
-          avg_fill: avgFillCents,
+          avg_fill: null,
           market_value: marketValueCents,
           unrealized_pnl: 0,
           as_of_date: new Date().toISOString().split("T")[0],
@@ -116,7 +117,7 @@ async function allocateStrategyHoldings(db, userId, strategyId, strategyHoldings
           user_id: userId,
           security_id: fallbackSec.id,
           quantity: 1,
-          avg_fill: priceCents,
+          avg_fill: null,
           market_value: priceCents,
           unrealized_pnl: 0,
           as_of_date: new Date().toISOString().split("T")[0],
@@ -147,7 +148,6 @@ async function allocateStockHolding(db, userId, securityId, amountCents, transac
   const amountRands = amountCents / 100;
   const qty = Math.floor(amountRands / sec.last_price);
   const finalQty = qty > 0 ? qty : 1;
-  const avgFillCents = Math.round(sec.last_price * 100);
   const marketValueCents = Math.round(finalQty * sec.last_price * 100);
 
   const intradayPrices = await fetchLatestIntradayPrices(db, [sec.id]);
@@ -156,11 +156,13 @@ async function allocateStockHolding(db, userId, securityId, amountCents, transac
     // Always insert a NEW row per gift-claimed stock so duplicate stock buys
     // remain distinguishable in stock_holdings_c (mirrors the strategy-claim
     // pattern; the stacked-card UI groups them by created_at minute).
+    // avg_fill starts as null (pending) so the purple "Pending orders" card
+    // shows on the home screen until admin fills, matching regular purchases.
     await db.from("stock_holdings_c").insert({
       user_id: userId,
       security_id: sec.id,
       quantity: finalQty,
-      avg_fill: avgFillCents,
+      avg_fill: null,
       market_value: marketValueCents,
       unrealized_pnl: 0,
       as_of_date: new Date().toISOString().split("T")[0],
@@ -188,14 +190,13 @@ export default async function handler(req, res) {
   const { user, error: authError } = await authenticateUser(req);
   if (authError || !user) return res.status(401).json({ error: "Unauthorized" });
 
-  const { token } = req.body || {};
-  if (!token) return res.status(400).json({ error: "Token is required." });
+  const { token, gift_id } = req.body || {};
+  if (!token && !gift_id) return res.status(400).json({ error: "Token or gift_id is required." });
 
-  const { data: gift, error: giftErr } = await db
-    .from("gift_claims")
-    .select("*")
-    .eq("token", token)
-    .maybeSingle();
+  const query = db.from("gift_claims").select("*");
+  const { data: gift, error: giftErr } = await (gift_id
+    ? query.eq("id", gift_id).maybeSingle()
+    : query.eq("token", token).maybeSingle());
 
   if (giftErr || !gift) return res.status(404).json({ error: "Gift not found." });
 
@@ -229,12 +230,18 @@ export default async function handler(req, res) {
   let holdingsAllocated = 0;
 
   // Insert transaction first so we can stamp its UUID on every holdings row.
+  // Use the same format as record-investment.js (debit, "Strategy Investment: X")
+  // so the gift flows through the exact same pending-orders code path as a
+  // regular strategy purchase — no separate UI branch needed.
   let giftTxId = null;
   try {
+    const txName = gift.asset_type === "strategy"
+      ? `Strategy Investment: ${gift.asset_name}`
+      : `Purchased ${gift.asset_name}`;
     const txInsert = await db.from("transactions").insert({
       user_id: user.id,
-      direction: "credit",
-      name: `Gift Received — ${gift.asset_name}`,
+      direction: "debit",
+      name: txName,
       description: `Investment gift from sender`,
       amount: gift.amount,
       store_reference: `GIFT-CLAIM-${gift.id}`,

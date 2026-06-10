@@ -1,0 +1,63 @@
+index-klhrVdKC.js:7 [realtime-prices] Setting up singleton subscription
+index-klhrVdKC.js:2 Setting up SINGLETON notifications subscription
+index-klhrVdKC.js:7 Setting up SINGLETON real-time subscription: required-actions-singleton
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 KYC status check: stored="verified" current="verified"
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [realtime-prices] Subscription status: SUBSCRIBED
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:2 Notifications singleton status: SUBSCRIBED
+index-klhrVdKC.js:7 Singleton subscription status: SUBSCRIBED
+index-klhrVdKC.js:7 [useOnboardingStatus] Total Onboarding Status: COMPLETE ✅ Object
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [useFinancialData] Updated balance from DB: 99980972.05
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:2 🔍 Fetching latest intraday data from stock_intraday_c...
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [SwipeableBalanceCard] Loaded holdings: Object
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:2 ✅ Fetched 241 securities with intraday metrics
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [SwipeableBalanceCard] Loaded holdings: Object
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [realtime-prices] Tearing down subscription
+index-klhrVdKC.js:7 [realtime-prices] Subscription status: CLOSED
+/api/gift/verify-code:1  Failed to load resource: the server responded with a status of 404 ()
+/api/gift/verify-code:1  Failed to load resource: the server responded with a status of 404 ()
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [realtime-prices] Setting up singleton subscription
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [realtime-prices] Subscription status: SUBSCRIBED
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 KYC status check: stored="verified" current="verified"
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [useFinancialData] Updated balance from DB: 99980972.05
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-klhrVdKC.js:7 [realtime-prices] Tearing down subscription
+index-klhrVdKC.js:7 [realtime-prices] Subscription status: CLOSED
+/api/gift/verify-code:1  Failed to load resource: the server responded with a status of 404 ()

@@ -61,13 +61,16 @@ export default async function handler(req, res) {
       console.error("[user/strategies] Error fetching user holdings:", holdingsError);
     }
 
-    // 2. Also check transactions for strategy names (fallback / first-invested-date tracking)
+    // 2. Also check transactions for strategy names (fallback / first-invested-date tracking).
+    // Include debit transactions (regular purchases) AND credit transactions that are
+    // gift receipts ("Gift Received — <strategy name>") so gift-claimed strategies
+    // surface correctly while their holdings are still pending.
     const { data: transactions } = await db
       .from("transactions")
       .select("id, name, amount, direction, transaction_date, family_member_id")
       .eq("user_id", userId)
       .is("family_member_id", null)
-      .eq("direction", "debit");
+      .or("direction.eq.debit,name.ilike.Gift Received%");
 
     const strategyFirstDate = {};
     const strategyTxNames = new Set();
@@ -78,6 +81,8 @@ export default async function handler(req, res) {
         strategyName = txName.replace("Strategy Investment: ", "").trim();
       } else if (txName.startsWith("Purchased ")) {
         strategyName = txName.replace("Purchased ", "").trim();
+      } else if (txName.startsWith("Gift Received — ")) {
+        strategyName = txName.replace("Gift Received — ", "").trim();
       }
       if (strategyName) {
         strategyTxNames.add(strategyName);
@@ -240,6 +245,7 @@ export default async function handler(req, res) {
           let txStratName = null;
           if (txName.startsWith("Strategy Investment: ")) txStratName = txName.replace("Strategy Investment: ", "").trim();
           else if (txName.startsWith("Purchased ")) txStratName = txName.replace("Purchased ", "").trim();
+          else if (txName.startsWith("Gift Received — ")) txStratName = txName.replace("Gift Received — ", "").trim();
           if (txStratName && (
             txStratName.toLowerCase() === (strategy.name || "").toLowerCase() ||
             txStratName.toLowerCase() === (strategy.short_name || "").toLowerCase()

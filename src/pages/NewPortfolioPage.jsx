@@ -474,6 +474,12 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     strategies.forEach(s => {
       const sym = s.shortName || s.name || "Strategy";
       if (!holdingsMap.has(sym)) {
+        const stratRawHoldings = (rawHoldings || []).filter(h => h.strategy_id === (s.strategyId || s.id));
+        const isStrategyPending = s.isPending || (stratRawHoldings.length > 0 && stratRawHoldings.every(h => !h.avg_fill));
+        // Pending strategies are not shown on the portfolio tab at all —
+        // they appear on the home tab with the purple pending indicator instead,
+        // matching the behaviour of a normal pending strategy purchase.
+        if (isStrategyPending) return;
         const holdingsArr = s.holdings || [];
         const topLogos = holdingsArr
           .sort((a, b) => (b.weight || 0) - (a.weight || 0))
@@ -483,8 +489,6 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
         const sCv = s.currentValue || s.investedAmount || 0;
         const sIa = s.investedAmount || 0;
         const sPnlPct = sIa > 0 ? ((sCv - sIa) / sIa) * 100 : 0;
-        const stratRawHoldings = (rawHoldings || []).filter(h => h.strategy_id === (s.strategyId || s.id));
-        const isStrategyPending = stratRawHoldings.length > 0 && stratRawHoldings.every(h => !h.avg_fill);
         holdingsMap.set(sym, {
           symbol: sym,
           name: s.name || "Strategy",
@@ -492,7 +496,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           weight: 0,
           logo: null,
           isStrategy: true,
-          isPending: isStrategyPending,
+          isPending: false,
           topLogos,
           strategyHoldings: holdingsArr,
           currentValue: sCv,

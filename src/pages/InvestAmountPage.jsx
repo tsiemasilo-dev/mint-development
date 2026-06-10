@@ -147,7 +147,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWi
               </p>
               <p className="text-xs font-semibold text-slate-600 mt-1">
                 {minimumInvestment
-                  ? `Min. ${formatCurrency(minimumInvestment, currency)}`
+                  ? `Min. ${formatCurrency(minimumInvestment * (1 + CASH_BUFFER_RATE), currency)}`
                   : "Calculating..."}
               </p>
             </div>
@@ -254,7 +254,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWi
             <div className="px-4 pb-4 space-y-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1">
-                  <p className="text-xs text-slate-600">Investment + 8% reserve</p>
+                  <p className="text-xs text-slate-600">Investment</p>
                 </div>
                 <p className="text-xs font-semibold text-slate-900">
                   {formatCurrency(fees.bufferedBase, currency)}

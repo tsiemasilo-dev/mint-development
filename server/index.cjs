@@ -4345,12 +4345,15 @@ app.get("/api/user/holdings", async (req, res) => {
     const filterValue = familyMemberId || userId;
 
     // Attempt queries with progressively fewer optional columns to handle missing DB columns
+    // Only return officially filled holdings (avg_fill > 0) — pending/gift holdings must not
+    // appear in portfolio, holdings tab, or strategy charts until the broker fills the order.
     const holdingsFull = await db
       .from("stock_holdings_c")
       .select("id, user_id, family_member_id, security_id, strategy_id, quantity, avg_fill, Expected_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status, settlement_status, is_active, exit_price")
       .eq("user_id", userId)
       .is("family_member_id", null)
-      .eq("Status", "active");
+      .eq("Status", "active")
+      .gt("avg_fill", 0);
 
     if (!holdingsFull.error) {
       holdings = holdingsFull.data;
@@ -4362,7 +4365,8 @@ app.get("/api/user/holdings", async (req, res) => {
         .select("id, user_id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status, is_active, exit_price")
         .eq("user_id", userId)
         .is("family_member_id", null)
-        .eq("Status", "active");
+        .eq("Status", "active")
+        .gt("avg_fill", 0);
 
       if (!noSettlement.error) {
         holdings = noSettlement.data;
@@ -4374,7 +4378,8 @@ app.get("/api/user/holdings", async (req, res) => {
           .select("id, user_id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status")
           .eq("user_id", userId)
           .is("family_member_id", null)
-          .eq("Status", "active");
+          .eq("Status", "active")
+          .gt("avg_fill", 0);
         holdings = (noExtras.data || []).map(h => ({ ...h, is_active: true, exit_price: null }));
         holdingsError = noExtras.error;
       } else {
@@ -8656,13 +8661,14 @@ async function giftAllocateStrategyHoldings(db, userId, strategyId, strategyHold
   const secMap = {};
   (securities || []).forEach(s => { secMap[s.symbol] = s; });
 
-  let totalBasketCost = 0;
+  // last_price in securities_c is in CENTS — convert to rands for basket cost
+  let totalBasketCostRands = 0;
   for (const h of strategyHoldings) {
-    if (secMap[h.symbol]?.last_price) totalBasketCost += secMap[h.symbol].last_price * (h.weight || 1);
+    if (secMap[h.symbol]?.last_price) totalBasketCostRands += (secMap[h.symbol].last_price / 100) * (h.weight || 1);
   }
 
-  if (totalBasketCost > 0) {
-    const scale = investAmountRands / totalBasketCost;
+  if (totalBasketCostRands > 0) {
+    const scale = investAmountRands / totalBasketCostRands;
     for (const h of strategyHoldings) {
       const sec = secMap[h.symbol];
       if (!sec?.last_price) continue;
@@ -8675,8 +8681,7 @@ async function giftAllocateStrategyHoldings(db, userId, strategyId, strategyHold
           await db.from("stock_holdings_c").update({
             quantity: Number(existing.quantity || 0) + qty,
             avg_fill: null, market_value: 0, unrealized_pnl: 0,
-            as_of_date: null, settlement_status: "pending",
-            updated_at: new Date().toISOString(),
+            as_of_date: null, updated_at: new Date().toISOString(),
           }).eq("id", existing.id);
         } else {
           await db.from("stock_holdings_c").insert({
@@ -8684,7 +8689,6 @@ async function giftAllocateStrategyHoldings(db, userId, strategyId, strategyHold
             avg_fill: null, market_value: 0,
             unrealized_pnl: 0, as_of_date: null,
             strategy_id: strategyId, Status: "active",
-            settlement_status: "pending",
           });
         }
         holdingsCreated++;
@@ -8696,13 +8700,14 @@ async function giftAllocateStrategyHoldings(db, userId, strategyId, strategyHold
     const sorted = [...strategyHoldings].sort((a, b) => (b.weight || 0) - (a.weight || 0));
     const fallback = secMap[sorted[0]?.symbol];
     if (fallback?.id) {
-      const qty = Math.max(1, Math.floor((investAmountRands / (fallback.last_price || 1))));
+      // last_price is in cents — divide to get rands, then calculate qty
+      const fallbackPriceRands = (fallback.last_price || 1) / 100;
+      const qty = Math.max(1, Math.floor(investAmountRands / fallbackPriceRands));
       try {
         await db.from("stock_holdings_c").insert({
           user_id: userId, security_id: fallback.id, quantity: qty,
           avg_fill: null, market_value: 0, unrealized_pnl: 0,
           as_of_date: null, strategy_id: strategyId, Status: "active",
-          settlement_status: "pending",
         });
         holdingsCreated = 1;
       } catch (e) { console.warn("[gift] strategy fallback holding:", e.message); }
@@ -8714,7 +8719,8 @@ async function giftAllocateStrategyHoldings(db, userId, strategyId, strategyHold
 async function giftAllocateStockHolding(db, userId, securityId, amountCents) {
   const { data: sec } = await db.from("securities_c").select("id, symbol, last_price").eq("id", securityId).maybeSingle();
   if (!sec?.last_price) return 0;
-  const qty = Math.max(1, Math.floor((amountCents / 100) / sec.last_price));
+  // last_price is in CENTS — divide amountCents by last_price_cents = share count
+  const qty = Math.max(1, Math.floor(amountCents / sec.last_price));
   try {
     // Always insert a NEW row per gift-claimed stock so each claim is a
     // discrete pending position. Mirrors the strategy-gift pattern.
@@ -8808,6 +8814,11 @@ app.post("/api/gift/create", async (req, res) => {
   } else {
     const { data: rp } = await db.from("profiles").select("id, email").eq("phone", identifier).maybeSingle();
     if (rp) { recipientUserId = rp.id; recipientEmail = rp.email; }
+  }
+
+  // Secondary guard: if the resolved recipient is the sender themselves, block it
+  if (recipientUserId && recipientUserId === user.id) {
+    return res.status(400).json({ error: "You cannot gift to yourself." });
   }
 
   const status = recipientUserId ? "pending_claim" : "pending_registration";
@@ -8912,10 +8923,13 @@ app.post("/api/gift/claim", async (req, res) => {
   const { data: { user }, error: authErr } = await db.auth.getUser(token);
   if (authErr || !user) return res.status(401).json({ error: "Unauthorized" });
 
-  const { token: giftToken } = req.body || {};
-  if (!giftToken) return res.status(400).json({ error: "Token is required." });
+  const { token: giftToken, gift_id } = req.body || {};
+  if (!giftToken && !gift_id) return res.status(400).json({ error: "Token or gift_id is required." });
 
-  const { data: gift, error: giftErr } = await db.from("gift_claims").select("*").eq("token", giftToken).maybeSingle();
+  const giftQuery = db.from("gift_claims").select("*");
+  const { data: gift, error: giftErr } = await (gift_id
+    ? giftQuery.eq("id", gift_id).maybeSingle()
+    : giftQuery.eq("token", giftToken).maybeSingle());
   if (giftErr || !gift) return res.status(404).json({ error: "Gift not found." });
 
   if (gift.status === "claimed") return res.status(400).json({ error: "This gift has already been claimed." });
@@ -9044,6 +9058,85 @@ app.get("/api/gift/sent", async (req, res) => {
   });
 });
 
+app.get("/api/gift/received", async (req, res) => {
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.replace("Bearer ", "");
+  const db = supabaseAdmin || supabase;
+  if (!db) return res.status(500).json({ error: "Database not available" });
+
+  const { data: { user }, error: authErr } = await db.auth.getUser(token);
+  if (authErr || !user) return res.status(401).json({ error: "Unauthorized" });
+
+  const userEmail = (user.email || "").trim().toLowerCase();
+
+  // Query gifts matched by recipient_user_id (already claimed) OR by email (pending claim sent to this email)
+  const [byUserId, byEmail] = await Promise.all([
+    db.from("gift_claims")
+      .select("id, amount, asset_type, asset_name, status, message, expires_at, created_at, claimed_at, sender_user_id, recipient_user_id, recipient_identifier")
+      .eq("recipient_user_id", user.id)
+      .neq("status", "cancelled")
+      .order("created_at", { ascending: false })
+      .limit(100),
+    userEmail ? db.from("gift_claims")
+      .select("id, amount, asset_type, asset_name, status, message, expires_at, created_at, claimed_at, sender_user_id, recipient_user_id, recipient_identifier")
+      .eq("recipient_identifier", userEmail)
+      .is("recipient_user_id", null)
+      .neq("status", "cancelled")
+      .order("created_at", { ascending: false })
+      .limit(100) : Promise.resolve({ data: [] }),
+  ]);
+
+  if (byUserId.error) return res.status(500).json({ error: "Failed to load received gifts." });
+
+  // Merge and deduplicate by id
+  const seen = new Set();
+  const gifts = [];
+  for (const g of [...(byUserId.data || []), ...(byEmail.data || [])]) {
+    if (!seen.has(g.id)) { seen.add(g.id); gifts.push(g); }
+  }
+  gifts.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  const formatted = await Promise.all(gifts.map(async (g) => {
+    let sender_name = "Someone";
+    try {
+      const { data: sender } = await db.from("profiles").select("first_name, last_name").eq("id", g.sender_user_id).maybeSingle();
+      if (sender) sender_name = [sender.first_name, sender.last_name].filter(Boolean).join(" ") || "Someone";
+    } catch (_) {}
+    let personal_message = null;
+    try { personal_message = JSON.parse(g.message || "{}").msg || null; } catch (_) {}
+    const unclaimed = g.status === "pending_claim" && !g.recipient_user_id;
+    return { ...g, sender_name, personal_message, unclaimed };
+  }));
+
+  return res.json({
+    active: formatted.filter(g => g.status === "pending_claim"),
+    history: formatted.filter(g => g.status !== "pending_claim"),
+  });
+});
+
+app.get("/api/gift/by-id/:id", async (req, res) => {
+  const db = supabaseAdmin || supabase;
+  if (!db) return res.status(500).json({ error: "Database not available" });
+  const { id } = req.params;
+  if (!id) return res.status(400).json({ error: "ID is required." });
+  const { data: gift, error } = await db.from("gift_claims")
+    .select("id, amount, asset_type, asset_name, status, message, expires_at, sender_user_id")
+    .eq("id", id).maybeSingle();
+  if (error) return res.status(500).json({ error: "Failed to load gift." });
+  if (!gift) return res.status(404).json({ error: "Gift not found." });
+  let senderName = "Someone";
+  let personalMessage = null;
+  try {
+    const { data: sender } = await db.from("profiles").select("first_name, last_name").eq("id", gift.sender_user_id).maybeSingle();
+    if (sender) senderName = [sender.first_name, sender.last_name].filter(Boolean).join(" ") || "Someone";
+  } catch (_) {}
+  try { personalMessage = JSON.parse(gift.message || "{}").msg || null; } catch (_) {}
+  return res.json({
+    id: gift.id, amount: gift.amount, asset_type: gift.asset_type, asset_name: gift.asset_name,
+    status: gift.status, message: personalMessage, expires_at: gift.expires_at, sender_name: senderName,
+  });
+});
+
 app.get("/api/gift/:token", async (req, res) => {
   const db = supabaseAdmin || supabase;
   if (!db) return res.status(500).json({ error: "Database not available" });
@@ -9105,6 +9198,22 @@ app.post("/api/gift/create-v2", async (req, res) => {
   if (!recipient_first_name?.trim()) return res.status(400).json({ error: "recipient_first_name is required." });
   if (!recipient_last_name?.trim()) return res.status(400).json({ error: "recipient_last_name is required." });
 
+  // Block self-gifting: compare recipient email against sender's auth email and profile email
+  if (recipient_identifier?.trim()) {
+    const recipId = recipient_identifier.trim().toLowerCase();
+    const senderAuthEmail = user.email?.toLowerCase() || "";
+    const { data: senderProf } = await db.from("profiles").select("email").eq("id", user.id).maybeSingle();
+    const senderProfileEmail = senderProf?.email?.toLowerCase() || "";
+    if (recipId === senderAuthEmail || recipId === senderProfileEmail) {
+      return res.status(400).json({ error: "You cannot gift to yourself." });
+    }
+    // Also block by resolved user ID in case email was looked up differently
+    const { data: recipProf } = await db.from("profiles").select("id").eq("email", recipId).maybeSingle();
+    if (recipProf?.id === user.id) {
+      return res.status(400).json({ error: "You cannot gift to yourself." });
+    }
+  }
+
   const { data: wallet, error: walletErr } = await db.from("wallets").select("balance").eq("user_id", user.id).maybeSingle();
   if (walletErr || !wallet) return res.status(400).json({ error: "Wallet not found." });
 
@@ -9162,7 +9271,7 @@ app.post("/api/gift/create-v2", async (req, res) => {
 
   // Post-creation: emails + in-app notification
   const recipientEmail = recipient_identifier?.trim().toLowerCase();
-  const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://mymint.co.za";
+  const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.mymint.co.za";
 
   // Fetch sender name + use auth email (more reliable than profiles.email)
   const senderAuthEmail = user.email;
@@ -9183,7 +9292,7 @@ app.post("/api/gift/create-v2", async (req, res) => {
             user_id: recipientProfile.id,
             title: `You've been gifted ${asset_name}! 🎁`,
             body: `${senderName} gifted you ${asset_name} on Mint. Ask them for your 6-digit claim code to claim it.`,
-            type: "investment",
+            type: "system",
             payload: { action: "gift_received", gift_id: gift.id, asset_name },
           });
         }
@@ -9361,7 +9470,16 @@ app.post("/api/gift/create-v2", async (req, res) => {
       <table style="width:100%;border-collapse:collapse">${emailSteps}</table>
     </div>
 
-    <a href="${APP_URL}" style="display:block;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#ffffff;text-decoration:none;text-align:center;padding:16px 24px;border-radius:14px;font-size:16px;font-weight:700;margin-bottom:20px">${emailCta}</a>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:12px">
+      <tr>
+        <td style="padding-right:6px">
+          <a href="https://app.mymint.co.za?gift=${gift.id}" style="display:block;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#ffffff;text-decoration:none;text-align:center;padding:14px 10px;border-radius:14px;font-size:15px;font-weight:700">🎁 Claim Gift</a>
+        </td>
+        <td style="padding-left:6px">
+          <a href="https://${process.env.REPLIT_DEV_DOMAIN || '9e35f470-812b-4858-8ba9-77cfee7f3bfd-00-vruurphun7eo.picard.replit.dev'}?gift=${gift.id}" style="display:block;background:linear-gradient(135deg,#1e293b,#334155);color:#ffffff;text-decoration:none;text-align:center;padding:14px 10px;border-radius:14px;font-size:15px;font-weight:700">🧪 Claim Gift (Dev)</a>
+        </td>
+      </tr>
+    </table>
 
     <p style="font-size:12px;color:#94a3b8;text-align:center;line-height:1.5;margin:0">This gift expires in 4 hours.<br>Mint (Pty) Ltd is a registered FSP (55118).</p>
   </div>
@@ -9377,6 +9495,12 @@ app.post("/api/gift/create-v2", async (req, res) => {
   }
 
   return res.json({ success: true, token: gift.token, expires_at: gift.expires_at, gift_id: gift.id });
+});
+
+app.post("/api/gift/reset-rate-limit", (req, res) => {
+  const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket?.remoteAddress || "unknown";
+  giftV2RateLimit.delete(ip);
+  return res.json({ ok: true, cleared: ip });
 });
 
 app.post("/api/gift/verify-code", async (req, res) => {
@@ -9440,16 +9564,16 @@ app.post("/api/gift/claim-v2", async (req, res) => {
 
   const { code, id_number } = req.body || {};
   if (!code) return res.status(400).json({ error: "code is required." });
-  if (!id_number?.trim()) return res.status(400).json({ error: "id_number is required." });
 
   const cleanCode = String(code).replace(/\D/g, "");
-  const cleanId = String(id_number).replace(/\D/g, "");
 
   const { data: claimantProfile } = await db.from("profiles").select("id, id_number, first_name, last_name, mint_number")
     .eq("id", user.id).maybeSingle();
   if (!claimantProfile) return res.status(400).json({ error: "Profile not found." });
-  if (claimantProfile.id_number !== cleanId) return res.status(403).json({ error: "SA ID number does not match your account." });
-  if (!claimantProfile.mint_number) return res.status(403).json({ error: "Please complete your Mint account setup before claiming.", mint_number_required: true });
+  if (id_number?.trim()) {
+    const cleanId = String(id_number).replace(/\D/g, "");
+    if (claimantProfile.id_number !== cleanId) return res.status(403).json({ error: "SA ID number does not match your account." });
+  }
 
   const { data: onboarding } = await db.from("user_onboarding").select("kyc_status").eq("user_id", user.id).maybeSingle();
   const kycStatus = onboarding?.kyc_status;
@@ -9457,21 +9581,13 @@ app.post("/api/gift/claim-v2", async (req, res) => {
     return res.status(403).json({ error: "FICA verification required to claim this gift.", kyc_required: true });
   }
 
-  const { data: gift } = await db.from("gift_claims").select("*").eq("token", cleanCode).eq("status", "pending_claim").maybeSingle();
+  const { data: gift, error: giftLookupErr } = await db.from("gift_claims").select("*").eq("token", cleanCode).eq("status", "pending_claim").maybeSingle();
+  console.log(`[gift/claim-v2] code="${cleanCode}" gift=${gift?.id || "null"} err=${giftLookupErr?.message || "none"}`);
   if (!gift) return res.status(404).json({ error: "Gift not found or already claimed." });
   if (new Date(gift.expires_at) < new Date()) return res.status(400).json({ error: "This gift has expired." });
   if (gift.sender_user_id === user.id) return res.status(400).json({ error: "You cannot claim your own gift." });
 
-  // Debit sender's wallet now that gift is being claimed
-  const giftAmountRands = gift.amount / 100;
-  const { data: senderWallet } = await db.from("wallets").select("balance").eq("user_id", gift.sender_user_id).maybeSingle();
-  if (!senderWallet) return res.status(500).json({ error: "Sender wallet not found." });
-  const senderBalance = Number(senderWallet.balance);
-  if (senderBalance < giftAmountRands) return res.status(400).json({ error: "Sender has insufficient funds. The gift cannot be claimed." });
-
-  const { error: debitErr } = await db.from("wallets").update({ balance: senderBalance - giftAmountRands })
-    .eq("user_id", gift.sender_user_id).eq("balance", senderBalance);
-  if (debitErr) return res.status(500).json({ error: "Failed to process gift payment." });
+  // Sender's wallet was already debited at gift creation time — nothing to deduct here.
 
   let holdingsCreated = 0;
   let holdingId = null;
@@ -9485,37 +9601,34 @@ app.post("/api/gift/claim-v2", async (req, res) => {
   }
 
   if (holdingsCreated === 0) {
-    // Rollback sender wallet debit
-    await db.from("wallets").update({ balance: senderBalance }).eq("user_id", gift.sender_user_id);
     return res.status(500).json({ error: "Failed to allocate holdings. Please try again." });
   }
 
-  const totalExtFees = Number(gift.extension_fees || 0);
-  const totalChargedCents = gift.amount + totalExtFees;
   const now = new Date().toISOString();
 
-  // Sender debit transaction (mark the held amount as posted)
-  try {
-    // Update the held transaction to posted
-    await db.from("transactions")
-      .update({ status: "posted", description: `Gift to recipient — claimed and settled` })
-      .eq("store_reference", `GIFT2-HOLD-${gift.id}`);
-  } catch (e) { console.warn("[gift/claim-v2] update hold tx:", e.message); }
-
-  // Recipient credit transaction
+  // Recipient debit transaction — same format as record-investment.js so the
+  // pending-orders card appears on the home screen exactly like a normal purchase.
+  const txName = gift.asset_type === "strategy"
+    ? `Strategy Investment: ${gift.asset_name}`
+    : `Purchased ${gift.asset_name}`;
   try {
     await db.from("transactions").insert({
-      user_id: user.id, direction: "credit",
-      name: `Gift Received — ${gift.asset_name}`, description: "Investment gift claimed",
+      user_id: user.id, direction: "debit",
+      name: txName, description: "Investment gift claimed",
       amount: gift.amount, store_reference: `GIFT2-CLAIM-${gift.id}`,
-      currency: "ZAR", status: "posted", settlement_status: "pending",
-      transaction_date: now, created_at: now,
+      status: "posted", transaction_date: now,
     });
   } catch (e) { console.warn("[gift/claim-v2] tx:", e.message); }
 
-  await db.from("gift_claims").update({
-    status: "claimed", recipient_user_id: user.id, recipient_identifier: cleanId, claimed_at: now,
-  }).eq("id", gift.id);
+  const claimUpdate = { status: "claimed", recipient_user_id: user.id, claimed_at: now };
+  if (claimantProfile.id_number) claimUpdate.recipient_identifier = claimantProfile.id_number;
+  const { error: updateErr } = await db.from("gift_claims").update(claimUpdate).eq("id", gift.id);
+
+  if (updateErr) {
+    console.error(`[gift/claim-v2] FAILED to update gift_claims status for gift ${gift.id}:`, updateErr.message);
+    return res.status(500).json({ error: "Claim failed to finalise. Please try again." });
+  }
+  console.log(`[gift/claim-v2] gift ${gift.id} status updated to claimed for user ${user.id}`);
 
   const recipientName = [claimantProfile.first_name, claimantProfile.last_name].filter(Boolean).join(" ") || "Your recipient";
   try {

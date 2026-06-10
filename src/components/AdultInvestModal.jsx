@@ -6,6 +6,7 @@ import { formatCurrency } from "../lib/formatCurrency";
 import PdfViewer from "./PdfViewer";
 import { supabase } from "../lib/supabase.js";
 import { calculateMinInvestmentSync, buildHoldingsBySymbol, getHoldingsArray } from "../lib/strategyUtils";
+import GiftToggleV2 from "./GiftToggleV2";
 
 const BROKER_FEE_RATE = 0.0025;
 const ISIN_FEE_PER_ASSET = 69;
@@ -39,6 +40,7 @@ export default function AdultInvestModal({
   const [agreementChecked, setAgreementChecked] = useState(false);
   const [showMandateModal, setShowMandateModal] = useState(false);
   const [walletBalance, setWalletBalance] = useState(null);
+  const [isGift, setIsGift] = useState(false);
 
   // Load minimum + wallet balance when opened
   useEffect(() => {
@@ -275,7 +277,7 @@ export default function AdultInvestModal({
                 {feeExpanded && (
                   <div className="px-4 pb-3 space-y-2.5 border-t border-slate-50">
                     <div className="pt-3 flex justify-between">
-                      <p className="text-xs text-slate-500">Investment + 8% reserve</p>
+                      <p className="text-xs text-slate-500">Investment</p>
                       <p className="text-xs font-semibold text-slate-800">R{fmt(fees.bufferedBase)}</p>
                     </div>
                     <div className="flex justify-between">
@@ -356,39 +358,30 @@ export default function AdultInvestModal({
               </div>
 
               {/* Send as a gift */}
-              <div className="mb-5 rounded-2xl border border-slate-100 bg-white p-4 flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl flex-shrink-0" style={{ background: "linear-gradient(135deg,#f5f3ff,#ede9fe)" }}>
-                  <svg className="h-5 w-5 text-violet-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v-2a2 2 0 10-4 0c0 1.1.9 2 2 2h2zm0 0h2a2 2 0 100-4c-1.1 0-2 .9-2 2v2zm0 0v10m-6-6h12" />
-                  </svg>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold text-slate-800">Send as a gift</p>
-                    <span className="rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{ background: "linear-gradient(90deg,#7c3aed,#6366f1)" }}>SOON</span>
-                  </div>
-                  <p className="text-[11px] text-slate-400 mt-0.5">Recipient claims with their SA ID + code</p>
-                </div>
-                <button
-                  type="button"
-                  disabled
-                  className="relative inline-flex h-6 w-11 items-center rounded-full bg-slate-200 transition-colors cursor-not-allowed flex-shrink-0"
-                  aria-label="Send as a gift (coming soon)"
-                >
-                  <span className="inline-block h-4 w-4 transform rounded-full bg-white shadow translate-x-1 transition-transform" />
-                </button>
+              <div className="mb-5">
+                <GiftToggleV2
+                  enabled={isGift}
+                  onToggle={setIsGift}
+                  onDone={() => { setIsGift(false); onClose?.(); }}
+                  security={{ id: strategy?.id, name: strategy?.name, symbol: strategy?.name }}
+                  totalCostCents={totalCostCents}
+                  amountDisplay={`R ${fmt(fees.totalCost)}`}
+                  assetType="strategy"
+                />
               </div>
 
-              {/* CTA */}
-              <button
-                type="button"
-                onClick={handleConfirm}
-                disabled={!agreementChecked || !minimum || insufficient}
-                className="w-full rounded-2xl py-4 text-sm font-bold text-white shadow-lg active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{ background: "linear-gradient(135deg,#4f46e5,#7c3aed)" }}
-              >
-                Continue
-              </button>
+              {/* CTA — hidden when gift mode is active */}
+              {!isGift && (
+                <button
+                  type="button"
+                  onClick={handleConfirm}
+                  disabled={!agreementChecked || !minimum || insufficient}
+                  className="w-full rounded-2xl py-4 text-sm font-bold text-white shadow-lg active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{ background: "linear-gradient(135deg,#4f46e5,#7c3aed)" }}
+                >
+                  Continue
+                </button>
+              )}
             </div>
           </motion.div>
 
