@@ -34,10 +34,21 @@ function useCountdown(expiresAt) {
   return { h, m, s, isExpired, isLow, remaining };
 }
 
-function CountdownBadge({ expiresAt }) {
+function CountdownBadge({ expiresAt, dark = false }) {
   const { h, m, s, isExpired, isLow } = useCountdown(expiresAt);
-  if (isExpired) return <span className="text-[11px] font-semibold text-red-600 bg-red-50 px-2.5 py-1 rounded-full">Expired</span>;
+  if (isExpired) return (
+    <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${dark ? "text-red-300 bg-red-500/20 border border-red-400/20" : "text-red-600 bg-red-50"}`}>
+      Expired
+    </span>
+  );
   const label = h > 0 ? `${h}h ${m}m` : `${m}m ${s}s`;
+  if (dark) {
+    return (
+      <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5 ${isLow ? "text-red-300 bg-red-500/20 border border-red-400/20" : "text-white/60 bg-white/10 border border-white/10"}`}>
+        <Timer size={10} />{label}
+      </span>
+    );
+  }
   return (
     <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5 ${isLow ? "text-red-600 bg-red-50" : "text-slate-600 bg-slate-100"}`}>
       <Timer size={10} />{label}
@@ -60,19 +71,20 @@ function fmtEventTime(iso) {
     " · " + d.toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" });
 }
 
-function GiftAuditTrail({ events }) {
+function GiftAuditTrail({ events, variant = "light" }) {
   const [open, setOpen] = useState(false);
   if (!events || events.length <= 1) return null;
+  const dark = variant === "dark";
   return (
-    <div className="border-t border-slate-100">
+    <div className={`border-t ${dark ? "border-white/[0.07]" : "border-slate-100"}`}>
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors"
+        className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${dark ? "hover:bg-white/[0.04]" : "hover:bg-slate-50"}`}
       >
-        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">
+        <span className={`text-[11px] font-semibold uppercase tracking-wide ${dark ? "text-white/30" : "text-slate-400"}`}>
           Activity <span className="font-normal normal-case">({events.length} events)</span>
         </span>
-        <ChevronDown size={12} className={`text-slate-400 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+        <ChevronDown size={12} className={`transition-transform duration-200 ${open ? "rotate-180" : ""} ${dark ? "text-white/30" : "text-slate-400"}`} />
       </button>
       {open && (
         <div className="px-4 pb-4">
@@ -85,14 +97,14 @@ function GiftAuditTrail({ events }) {
               <div key={i} className="flex gap-3">
                 <div className="flex flex-col items-center w-3 shrink-0">
                   <div className={`w-2 h-2 rounded-full mt-0.5 shrink-0 ${meta.dot}`} />
-                  {!isLast && <div className="w-px flex-1 bg-slate-100 my-1" />}
+                  {!isLast && <div className={`w-px flex-1 my-1 ${dark ? "bg-white/10" : "bg-slate-100"}`} />}
                 </div>
-                <div className={`pb-3 min-w-0 ${isLast ? "" : ""}`}>
-                  <p className={`text-xs font-semibold ${meta.text}`}>{label}</p>
+                <div className="pb-3 min-w-0">
+                  <p className={`text-xs font-semibold ${dark ? "text-white/70" : meta.text}`}>{label}</p>
                   {e.type === "extended" && e.fee != null && (
-                    <p className="text-[11px] text-slate-400 mt-0.5">Fee: {fmt(e.fee)}</p>
+                    <p className={`text-[11px] mt-0.5 ${dark ? "text-white/30" : "text-slate-400"}`}>Fee: {fmt(e.fee)}</p>
                   )}
-                  {time && <p className="text-[11px] text-slate-400 mt-0.5">{time}</p>}
+                  {time && <p className={`text-[11px] mt-0.5 ${dark ? "text-white/25" : "text-slate-400"}`}>{time}</p>}
                 </div>
               </div>
             );
@@ -261,90 +273,91 @@ function ActiveGiftCard({ gift, onExtend, onCancel }) {
         />
       )}
 
-      <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-        <div className="p-4 space-y-3">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shrink-0">
-                <Gift size={16} className="text-white" />
+      <div className="rounded-3xl overflow-hidden shadow-2xl" style={{ background: "linear-gradient(135deg, #16102a 0%, #221445 55%, #2e1a63 100%)", border: "1px solid rgba(255,255,255,0.07)" }}>
+        <div className="p-5">
+          {/* Header */}
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
+                <span className="text-[10px] font-bold text-amber-400/70 uppercase tracking-widest">Active Gift</span>
               </div>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-800 truncate">{gift.asset_name}</p>
-                <p className="text-xs text-slate-400 mt-0.5">To: {gift.recipient_name || "Recipient"}</p>
-              </div>
+              <p className="text-base font-bold text-white leading-snug truncate">{gift.asset_name}</p>
+              <p className="text-xs text-white/40 mt-0.5">To {gift.recipient_name || "Recipient"}</p>
             </div>
             <div className="text-right shrink-0">
-              <p className="text-sm font-bold text-slate-800">{fmt(gift.amount)}</p>
-              <div className="mt-1"><CountdownBadge expiresAt={gift.expires_at} /></div>
+              <p className="text-xl font-black text-white">{fmt(gift.amount)}</p>
+              <div className="mt-1.5"><CountdownBadge expiresAt={gift.expires_at} dark /></div>
             </div>
           </div>
 
           {gift.personal_message && (
-            <p className="text-xs text-slate-400 italic line-clamp-1 pl-[52px]">"{gift.personal_message}"</p>
+            <p className="text-xs text-white/30 italic mb-4 line-clamp-1">"{gift.personal_message}"</p>
           )}
 
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold text-amber-700 bg-amber-50">
-              <Clock size={10} />Waiting to be claimed
-            </span>
-            {gift.extension_fees > 0 && (
-              <span className="text-[11px] text-slate-400">Fees paid: {fmt(gift.extension_fees)}</span>
-            )}
-          </div>
+          {gift.extension_fees > 0 && (
+            <p className="text-[11px] text-amber-400/50 mb-3">Extension fees paid: {fmt(gift.extension_fees)}</p>
+          )}
 
-          <div className="bg-slate-50 rounded-xl p-3 flex items-center justify-between gap-3">
-            <p className="text-lg font-black tracking-[0.3em] text-slate-900 font-mono">{gift.token}</p>
+          {/* Token box */}
+          <div className="rounded-2xl p-4 flex items-center justify-between gap-3 mb-1" style={{ background: "rgba(0,0,0,0.35)", border: "1px solid rgba(255,255,255,0.06)" }}>
+            <div className="min-w-0">
+              <p className="text-[10px] text-white/25 font-semibold uppercase tracking-widest mb-1.5">Gift Code</p>
+              <p className="text-2xl font-black tracking-[0.32em] text-white font-mono">{gift.token}</p>
+            </div>
             <button
               onClick={handleCopy}
-              className="flex items-center gap-1.5 bg-slate-900 text-white text-xs font-semibold px-3.5 py-2 rounded-lg active:scale-95 transition-all shrink-0"
+              className={`flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl transition-all active:scale-95 shrink-0 border ${copied ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/25" : "bg-white/10 text-white/60 border-white/10 hover:bg-white/[0.15]"}`}
             >
               {copied ? <Check size={12} /> : <Copy size={12} />}
-              {copied ? "Copied" : "Copy"}
+              {copied ? "Copied!" : "Copy"}
             </button>
           </div>
         </div>
 
+        {/* Extend buttons */}
         {!isExpired && (
-          <div className="px-4 pb-4 space-y-2">
+          <div className="px-5 pb-5 space-y-2.5">
             {isLow && (
-              <p className="text-[11px] font-semibold text-amber-700 text-center">Expiring soon — extend to keep active</p>
+              <p className="text-[11px] font-semibold text-amber-300/70 text-center">⚡ Expiring soon — extend to keep active</p>
             )}
-            <div className="flex gap-2">
+            <div className="flex gap-2.5">
               <button
                 onClick={() => openExtendSheet("10h")}
                 disabled={!!extending}
-                className={`flex-1 rounded-xl border py-2.5 text-xs font-semibold active:scale-95 transition-all disabled:opacity-60 ${extendedKey === "10h" ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-700"}`}
+                className={`flex-1 rounded-2xl py-3 text-xs font-bold transition-all active:scale-95 disabled:opacity-50 border ${extendedKey === "10h" ? "bg-emerald-500/20 border-emerald-400/30 text-emerald-300" : "bg-white/[0.07] border-white/10 text-white/75 hover:bg-white/[0.12]"}`}
               >
-                {extending === "10h" ? "Extending…" : extendedKey === "10h" ? "✓ Extended" : `+10 hours (${fmt(fee10)})`}
+                {extending === "10h" ? "Extending…" : extendedKey === "10h" ? "✓ Extended" : `+10h · ${fmt(fee10)}`}
               </button>
               <button
                 onClick={() => openExtendSheet("24h")}
                 disabled={!!extending}
-                className={`flex-1 rounded-xl border py-2.5 text-xs font-semibold active:scale-95 transition-all disabled:opacity-60 ${extendedKey === "24h" ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-700"}`}
+                className={`flex-1 rounded-2xl py-3 text-xs font-bold transition-all active:scale-95 disabled:opacity-50 border ${extendedKey === "24h" ? "bg-emerald-500/20 border-emerald-400/30 text-emerald-300" : "bg-white/[0.07] border-white/10 text-white/75 hover:bg-white/[0.12]"}`}
               >
-                {extending === "24h" ? "Extending…" : extendedKey === "24h" ? "✓ Extended" : `+24 hours (${fmt(fee24)})`}
+                {extending === "24h" ? "Extending…" : extendedKey === "24h" ? "✓ Extended" : `+24h · ${fmt(fee24)}`}
               </button>
             </div>
           </div>
         )}
 
-        <GiftAuditTrail events={gift.events} />
+        <GiftAuditTrail events={gift.events} variant="dark" />
 
-      <div className="border-t border-slate-100 px-4 py-2.5">
+        {/* Cancel footer */}
+        <div className="border-t px-5 py-3" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
           {showCancelConfirm ? (
             <div className="flex items-center gap-2">
-              <p className="text-xs text-slate-500 flex-1">Cancel this gift?</p>
+              <p className="text-xs text-white/35 flex-1">Cancel this gift?</p>
               <button
                 onClick={() => setShowCancelConfirm(false)}
                 disabled={cancelling}
-                className="text-xs font-semibold text-slate-500 px-3 py-1.5 rounded-lg bg-slate-100 active:scale-95 transition-all"
+                className="text-xs font-semibold text-white/50 px-3 py-1.5 rounded-xl bg-white/10 active:scale-95 transition-all"
               >
                 Keep
               </button>
               <button
                 onClick={handleCancelConfirm}
                 disabled={cancelling}
-                className="text-xs font-semibold text-white px-3 py-1.5 rounded-lg bg-red-500 active:scale-95 transition-all disabled:opacity-60"
+                className="text-xs font-semibold text-white px-3 py-1.5 rounded-xl bg-red-500/75 active:scale-95 transition-all disabled:opacity-60"
               >
                 {cancelling ? "Cancelling…" : "Yes, cancel"}
               </button>
@@ -353,7 +366,7 @@ function ActiveGiftCard({ gift, onExtend, onCancel }) {
             <div className="flex justify-end">
               <button
                 onClick={() => setShowCancelConfirm(true)}
-                className="text-xs font-semibold text-red-500 hover:text-red-700 transition-colors"
+                className="text-xs font-semibold text-white/25 hover:text-red-400 transition-colors"
               >
                 Cancel gift
               </button>
@@ -387,78 +400,83 @@ function HistoryCard({ gift, onClaimToSelf }) {
     if (!success) setClaiming(false);
   }
 
+  const accentBar = isClaimed
+    ? "from-emerald-400 to-emerald-500"
+    : gift.status === "cancelled"
+    ? "from-red-400 to-rose-500"
+    : "from-slate-200 to-slate-300";
+
   return (
-    <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+    <div className="bg-white rounded-3xl shadow-sm overflow-hidden" style={{ border: "1px solid rgba(0,0,0,0.06)" }}>
+      <div className={`h-[3px] w-full bg-gradient-to-r ${accentBar}`} />
       <div className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isClaimed ? "bg-emerald-50" : "bg-slate-100"}`}>
-              <Gift size={16} className={isClaimed ? "text-emerald-500" : "text-slate-400"} />
+            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${isClaimed ? "bg-emerald-50" : gift.status === "cancelled" ? "bg-red-50" : "bg-slate-100"}`}>
+              <Gift size={16} className={isClaimed ? "text-emerald-500" : gift.status === "cancelled" ? "text-red-400" : "text-slate-400"} />
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-slate-800 truncate">{gift.asset_name}</p>
-              <p className="text-xs text-slate-400 mt-0.5">To: {gift.recipient_name || "Recipient"}</p>
-              {sentDate && <p className="text-[11px] text-slate-300 mt-0.5">Sent {sentDate}</p>}
+              <p className="text-sm font-bold text-slate-900 truncate">{gift.asset_name}</p>
+              <p className="text-xs text-slate-400 mt-0.5">To {gift.recipient_name || "Recipient"}</p>
+              {sentDate && <p className="text-[11px] text-slate-300 mt-0.5">{sentDate}</p>}
             </div>
           </div>
           <div className="text-right shrink-0">
-            <p className="text-sm font-bold text-slate-800">{fmt(gift.amount)}</p>
-            <div className={`inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium ${meta.color}`}>
-              <Icon size={10} />{meta.label}
+            <p className="text-base font-black text-slate-900">{fmt(gift.amount)}</p>
+            <div className={`inline-flex items-center gap-1 mt-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${meta.color}`}>
+              <Icon size={9} />{meta.label}
             </div>
           </div>
         </div>
 
         {isClaimed && (
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2">
+          <div className="mt-3 pt-3 border-t border-slate-50 flex items-center gap-2">
             <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
-            <p className="text-xs text-slate-600">
-              <span className="font-semibold">{gift.recipient_name || "Recipient"}</span> claimed this gift
+            <p className="text-xs text-slate-500">
+              <span className="font-semibold text-slate-700">{gift.recipient_name || "Recipient"}</span> claimed this
               {claimedDate && <span className="text-slate-400"> · {claimedDate}</span>}
             </p>
           </div>
         )}
       </div>
-      <GiftAuditTrail events={gift.events} />
+      <GiftAuditTrail events={gift.events} variant="light" />
     </div>
   );
 }
 
 function ReceivedActiveCard({ gift, onClaim }) {
   return (
-    <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-      <div className="p-4">
+    <div className="rounded-3xl overflow-hidden shadow-2xl" style={{ background: "linear-gradient(135deg, #0f0c1f 0%, #1c1545 50%, #2d1f6e 100%)", border: "1px solid rgba(167,139,250,0.12)" }}>
+      <div className="p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse shrink-0" />
+          <span className="text-[10px] font-bold text-violet-300/60 uppercase tracking-widest">Gift for you</span>
+        </div>
         <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-violet-50 flex items-center justify-center shrink-0">
-              <Gift size={16} className="text-violet-500" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-slate-800 truncate">{gift.asset_name}</p>
-              <p className="text-xs text-slate-400 mt-0.5">From: {gift.sender_name || "Someone"}</p>
-              {gift.personal_message && (
-                <p className="text-xs text-slate-500 mt-1 italic">"{gift.personal_message}"</p>
-              )}
-            </div>
+          <div className="min-w-0">
+            <p className="text-base font-bold text-white leading-snug truncate">{gift.asset_name}</p>
+            <p className="text-xs text-white/40 mt-0.5">From {gift.sender_name || "Someone"}</p>
+            {gift.personal_message && (
+              <p className="text-xs text-violet-200/40 mt-2 italic line-clamp-2">"{gift.personal_message}"</p>
+            )}
           </div>
           <div className="text-right shrink-0">
-            <p className="text-sm font-bold text-slate-800">{fmt(gift.amount)}</p>
-            <div className="mt-1.5">
-              <CountdownBadge expiresAt={gift.expires_at} />
-            </div>
+            <p className="text-xl font-black text-white">{fmt(gift.amount)}</p>
+            <div className="mt-1.5"><CountdownBadge expiresAt={gift.expires_at} dark /></div>
           </div>
         </div>
       </div>
       {gift.unclaimed ? (
         <button
           onClick={() => onClaim?.()}
-          className="w-full border-t border-violet-100 px-4 py-3 bg-gradient-to-r from-violet-600 to-purple-600 text-white text-xs font-bold text-center active:opacity-80 transition-opacity"
+          className="w-full py-4 text-sm font-bold text-white text-center active:opacity-80 transition-all flex items-center justify-center gap-2"
+          style={{ background: "linear-gradient(90deg, #7c3aed, #6d28d9)" }}
         >
-          Claim Gift →
+          <Gift size={15} />Claim Gift →
         </button>
       ) : (
-        <div className="border-t border-violet-100 px-4 py-2.5 bg-violet-50/50">
-          <p className="text-[11px] text-violet-600 font-medium">Investment pending in your portfolio</p>
+        <div className="px-5 py-3" style={{ borderTop: "1px solid rgba(167,139,250,0.12)", background: "rgba(124,58,237,0.08)" }}>
+          <p className="text-[11px] text-violet-300/50 font-medium text-center">Investment pending in your portfolio</p>
         </div>
       )}
     </div>
@@ -476,30 +494,37 @@ function ReceivedHistoryCard({ gift }) {
   const isClaimed = gift.status === "claimed";
   const meta = RECEIVED_HISTORY_META[gift.status] || RECEIVED_HISTORY_META.expired;
   const Icon = meta.icon;
+  const accentBar = isClaimed
+    ? "from-violet-400 to-purple-500"
+    : gift.status === "cancelled"
+    ? "from-red-400 to-rose-500"
+    : "from-slate-200 to-slate-300";
+
   return (
-    <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+    <div className="bg-white rounded-3xl shadow-sm overflow-hidden" style={{ border: "1px solid rgba(0,0,0,0.06)" }}>
+      <div className={`h-[3px] w-full bg-gradient-to-r ${accentBar}`} />
       <div className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isClaimed ? "bg-emerald-50" : "bg-slate-100"}`}>
-              <Gift size={16} className={isClaimed ? "text-emerald-500" : "text-slate-400"} />
+            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${isClaimed ? "bg-violet-50" : "bg-slate-100"}`}>
+              <Gift size={16} className={isClaimed ? "text-violet-500" : "text-slate-400"} />
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-slate-800 truncate">{gift.asset_name}</p>
-              <p className="text-xs text-slate-400 mt-0.5">From: {gift.sender_name || "Someone"}</p>
+              <p className="text-sm font-bold text-slate-900 truncate">{gift.asset_name}</p>
+              <p className="text-xs text-slate-400 mt-0.5">From {gift.sender_name || "Someone"}</p>
             </div>
           </div>
           <div className="text-right shrink-0">
-            <p className="text-sm font-bold text-slate-800">{fmt(gift.amount)}</p>
-            <div className={`inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium ${meta.color}`}>
-              <Icon size={10} />{meta.label}
+            <p className="text-base font-black text-slate-900">{fmt(gift.amount)}</p>
+            <div className={`inline-flex items-center gap-1 mt-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${meta.color}`}>
+              <Icon size={9} />{meta.label}
             </div>
           </div>
         </div>
         {isClaimed && (
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2">
+          <div className="mt-3 pt-3 border-t border-slate-50 flex items-center gap-2">
             <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
-            <p className="text-xs text-slate-600">
+            <p className="text-xs text-slate-500">
               You claimed this gift
               {claimedDate && <span className="text-slate-400"> · {claimedDate}</span>}
             </p>
