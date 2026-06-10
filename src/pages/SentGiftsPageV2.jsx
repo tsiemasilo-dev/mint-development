@@ -198,9 +198,81 @@ function HistoryCard({ gift, onClaimToSelf }) {
   );
 }
 
+function ReceivedActiveCard({ gift }) {
+  return (
+    <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+      <div className="p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-violet-50 flex items-center justify-center shrink-0">
+              <Gift size={16} className="text-violet-500" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-800 truncate">{gift.asset_name}</p>
+              <p className="text-xs text-slate-400 mt-0.5">From: {gift.sender_name || "Someone"}</p>
+              {gift.personal_message && (
+                <p className="text-xs text-slate-500 mt-1 italic">"{gift.personal_message}"</p>
+              )}
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <p className="text-sm font-bold text-slate-800">{fmt(gift.amount)}</p>
+            <div className="mt-1.5">
+              <CountdownBadge expiresAt={gift.expires_at} />
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="border-t border-violet-100 px-4 py-2.5 bg-violet-50/50">
+        <p className="text-[11px] text-violet-600 font-medium">Investment pending in your portfolio</p>
+      </div>
+    </div>
+  );
+}
+
+function ReceivedHistoryCard({ gift }) {
+  const claimedDate = gift.claimed_at ? new Date(gift.claimed_at).toLocaleDateString("en-ZA") : null;
+  const isClaimed = gift.status === "claimed";
+  return (
+    <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+      <div className="p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isClaimed ? "bg-emerald-50" : "bg-slate-100"}`}>
+              <Gift size={16} className={isClaimed ? "text-emerald-500" : "text-slate-400"} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-800 truncate">{gift.asset_name}</p>
+              <p className="text-xs text-slate-400 mt-0.5">From: {gift.sender_name || "Someone"}</p>
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <p className="text-sm font-bold text-slate-800">{fmt(gift.amount)}</p>
+            <div className={`inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium ${isClaimed ? "text-emerald-700 bg-emerald-50" : "text-slate-500 bg-slate-100"}`}>
+              {isClaimed ? <CheckCircle2 size={10} /> : <Clock size={10} />}
+              {isClaimed ? "Claimed" : gift.status}
+            </div>
+          </div>
+        </div>
+        {isClaimed && (
+          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2">
+            <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
+            <p className="text-xs text-slate-600">
+              You claimed this gift
+              {claimedDate && <span className="text-slate-400"> · {claimedDate}</span>}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function SentGiftsPageV2({ onBack }) {
-  const [active, setActive] = useState([]);
-  const [history, setHistory] = useState([]);
+  const [sentActive, setSentActive] = useState([]);
+  const [sentHistory, setSentHistory] = useState([]);
+  const [receivedActive, setReceivedActive] = useState([]);
+  const [receivedHistory, setReceivedHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -210,13 +282,17 @@ export default function SentGiftsPageV2({ onBack }) {
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
-      const res = await fetch("/api/gift/sent", {
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-      });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      setActive(data.active || []);
-      setHistory(data.history || []);
+      const headers = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+      const [sentRes, receivedRes] = await Promise.all([
+        fetch("/api/gift/sent", { headers }),
+        fetch("/api/gift/received", { headers }),
+      ]);
+      const [sentData, receivedData] = await Promise.all([sentRes.json(), receivedRes.json()]);
+      if (sentData.error) throw new Error(sentData.error);
+      setSentActive(sentData.active || []);
+      setSentHistory(sentData.history || []);
+      setReceivedActive(receivedData.active || []);
+      setReceivedHistory(receivedData.history || []);
     } catch (e) {
       setError(e.message || "Failed to load gifts.");
     } finally {
@@ -237,7 +313,7 @@ export default function SentGiftsPageV2({ onBack }) {
       });
       const data = await res.json();
       if (!res.ok || data.error) { alert(data.error || "Failed to extend."); return; }
-      setActive(prev => prev.map(g => g.id === giftId ? { ...g, expires_at: data.new_expires_at } : g));
+      setSentActive(prev => prev.map(g => g.id === giftId ? { ...g, expires_at: data.new_expires_at } : g));
     } catch { alert("Something went wrong. Please try again."); }
   }
 
@@ -253,30 +329,15 @@ export default function SentGiftsPageV2({ onBack }) {
       });
       const data = await res.json();
       if (!res.ok || data.error) { alert(data.error || "Failed to cancel."); return; }
-      const cancelled = active.find(g => g.id === giftId);
+      const cancelled = sentActive.find(g => g.id === giftId);
       if (cancelled) {
-        setActive(prev => prev.filter(g => g.id !== giftId));
-        setHistory(prev => [{ ...cancelled, status: "cancelled" }, ...prev]);
+        setSentActive(prev => prev.filter(g => g.id !== giftId));
+        setSentHistory(prev => [{ ...cancelled, status: "cancelled" }, ...prev]);
       }
     } catch { alert("Something went wrong."); }
   }
 
-  async function handleClaimToSelf(giftId) {
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-      const res = await fetch("/api/gift/claim-to-self", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
-        body: JSON.stringify({ gift_id: giftId }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) { alert(data.error || "Failed to add to portfolio."); return false; }
-      setHistory(prev => prev.map(g => g.id === giftId ? { ...g, status: "claimed" } : g));
-      alert(`${data.asset_name} has been added to your portfolio!`);
-      return true;
-    } catch { alert("Something went wrong."); return false; }
-  }
+  const hasAnything = sentActive.length > 0 || sentHistory.length > 0 || receivedActive.length > 0 || receivedHistory.length > 0;
 
   return (
     <div className="min-h-screen" style={HOME_BG}>
@@ -289,7 +350,7 @@ export default function SentGiftsPageV2({ onBack }) {
             <h1 className="text-lg font-bold">Gifts</h1>
           </div>
           <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
-            <Send size={16} className="text-white/80" />
+            <Gift size={16} className="text-white/80" />
           </div>
         </div>
       </header>
@@ -308,29 +369,37 @@ export default function SentGiftsPageV2({ onBack }) {
           </div>
         )}
 
-        {!loading && !error && active.length === 0 && history.length === 0 && (
+        {!loading && !error && !hasAnything && (
           <div className="bg-white rounded-2xl p-10 text-center shadow-sm">
             <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
               <Gift size={22} className="text-slate-400" />
             </div>
             <h2 className="text-sm font-bold text-slate-800 mb-1">No gifts yet</h2>
-            <p className="text-xs text-slate-400">Gifts you send will appear here.</p>
+            <p className="text-xs text-slate-400">Gifts you send or receive will appear here.</p>
           </div>
         )}
 
-        {!loading && !error && active.length > 0 && (
+        {!loading && !error && receivedActive.length > 0 && (
           <div className="space-y-3">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Active</p>
-            {active.map(g => (
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Received</p>
+            {receivedActive.map(g => <ReceivedActiveCard key={g.id} gift={g} />)}
+          </div>
+        )}
+
+        {!loading && !error && sentActive.length > 0 && (
+          <div className="space-y-3">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Sent — Active</p>
+            {sentActive.map(g => (
               <ActiveGiftCard key={g.id} gift={g} onExtend={handleExtend} onCancel={handleCancel} />
             ))}
           </div>
         )}
 
-        {!loading && !error && history.length > 0 && (
+        {!loading && !error && (sentHistory.length > 0 || receivedHistory.length > 0) && (
           <div className="space-y-3">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">History</p>
-            {history.map(g => <HistoryCard key={g.id} gift={g} onClaimToSelf={handleClaimToSelf} />)}
+            {receivedHistory.map(g => <ReceivedHistoryCard key={g.id} gift={g} />)}
+            {sentHistory.map(g => <HistoryCard key={g.id} gift={g} />)}
           </div>
         )}
       </div>

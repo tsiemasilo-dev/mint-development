@@ -9058,6 +9058,40 @@ app.get("/api/gift/sent", async (req, res) => {
   });
 });
 
+app.get("/api/gift/received", async (req, res) => {
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.replace("Bearer ", "");
+  const db = supabaseAdmin || supabase;
+  if (!db) return res.status(500).json({ error: "Database not available" });
+
+  const { data: { user }, error: authErr } = await db.auth.getUser(token);
+  if (authErr || !user) return res.status(401).json({ error: "Unauthorized" });
+
+  const { data: gifts, error } = await db.from("gift_claims")
+    .select("id, amount, asset_type, asset_name, status, message, expires_at, created_at, claimed_at, sender_user_id")
+    .eq("recipient_user_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(100);
+
+  if (error) return res.status(500).json({ error: "Failed to load received gifts." });
+
+  const formatted = await Promise.all((gifts || []).map(async (g) => {
+    let sender_name = "Someone";
+    try {
+      const { data: sender } = await db.from("profiles").select("first_name, last_name").eq("id", g.sender_user_id).maybeSingle();
+      if (sender) sender_name = [sender.first_name, sender.last_name].filter(Boolean).join(" ") || "Someone";
+    } catch (_) {}
+    let personal_message = null;
+    try { personal_message = JSON.parse(g.message || "{}").msg || null; } catch (_) {}
+    return { ...g, sender_name, personal_message };
+  }));
+
+  return res.json({
+    active: formatted.filter(g => g.status === "pending_claim"),
+    history: formatted.filter(g => g.status !== "pending_claim"),
+  });
+});
+
 app.get("/api/gift/by-id/:id", async (req, res) => {
   const db = supabaseAdmin || supabase;
   if (!db) return res.status(500).json({ error: "Database not available" });
