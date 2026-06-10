@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { ArrowLeft, Gift, Copy, Check, Clock, CheckCircle2, XCircle, Timer, Send } from "lucide-react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { ArrowLeft, Gift, Copy, Check, Clock, CheckCircle2, XCircle, Timer, RefreshCw } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
 const HOME_BG = {
@@ -274,33 +274,52 @@ export default function SentGiftsPageV2({ onBack }) {
   const [receivedActive, setReceivedActive] = useState([]);
   const [receivedHistory, setReceivedHistory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const pollRef = useRef(null);
+
+  const fetchGiftData = useCallback(async () => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData?.session?.access_token;
+    const headers = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+    const [sentRes, receivedRes] = await Promise.all([
+      fetch("/api/gift/sent", { headers }),
+      fetch("/api/gift/received", { headers }),
+    ]);
+    const [sentData, receivedData] = await Promise.all([sentRes.json(), receivedRes.json()]);
+    if (sentData.error) throw new Error(sentData.error);
+    setSentActive(sentData.active || []);
+    setSentHistory(sentData.history || []);
+    setReceivedActive(receivedData.active || []);
+    setReceivedHistory(receivedData.history || []);
+  }, []);
 
   const loadGifts = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-      const headers = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
-      const [sentRes, receivedRes] = await Promise.all([
-        fetch("/api/gift/sent", { headers }),
-        fetch("/api/gift/received", { headers }),
-      ]);
-      const [sentData, receivedData] = await Promise.all([sentRes.json(), receivedRes.json()]);
-      if (sentData.error) throw new Error(sentData.error);
-      setSentActive(sentData.active || []);
-      setSentHistory(sentData.history || []);
-      setReceivedActive(receivedData.active || []);
-      setReceivedHistory(receivedData.history || []);
+      await fetchGiftData();
     } catch (e) {
       setError(e.message || "Failed to load gifts.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchGiftData]);
 
-  useEffect(() => { loadGifts(); }, [loadGifts]);
+  const silentRefresh = useCallback(async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try { await fetchGiftData(); } catch (_) {}
+    finally { setRefreshing(false); }
+  }, [fetchGiftData, refreshing]);
+
+  useEffect(() => {
+    loadGifts();
+    pollRef.current = setInterval(silentRefresh, 30000);
+    return () => clearInterval(pollRef.current);
+  }, [loadGifts]);
+
+  const handleManualRefresh = () => silentRefresh();
 
   async function handleExtend(giftId, extension) {
     try {
@@ -349,9 +368,12 @@ export default function SentGiftsPageV2({ onBack }) {
           <div className="flex-1">
             <h1 className="text-lg font-bold">Gifts</h1>
           </div>
-          <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
-            <Gift size={16} className="text-white/80" />
-          </div>
+          <button
+            onClick={handleManualRefresh}
+            className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center active:scale-90 transition-transform"
+          >
+            <RefreshCw size={16} className={`text-white/80 ${refreshing ? "animate-spin" : ""}`} />
+          </button>
         </div>
       </header>
 
