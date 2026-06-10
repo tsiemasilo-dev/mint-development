@@ -91,12 +91,17 @@ const OnboardingPage = ({ onCreateAccount, onLogin }) => {
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (data?.status) {
-          if (['claimed', 'cancelled'].includes(data.status)) {
+          if (['claimed', 'completed', 'expired', 'cancelled'].includes(data.status)) {
             localStorage.removeItem('mint_pending_gift_id');
+            localStorage.removeItem('mint_pending_gift_expires');
             setGiftId(null);
           } else {
             setGiftDetails(data);
           }
+        } else if (!data) {
+          localStorage.removeItem('mint_pending_gift_id');
+          localStorage.removeItem('mint_pending_gift_expires');
+          setGiftId(null);
         }
       })
       .catch(() => {});

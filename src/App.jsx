@@ -108,10 +108,21 @@ const initialGiftToken = (() => {
 })();
 
 // Detect ?gift= query param and persist for post-login claim
+// Validates gift status before storing — expired/claimed/cancelled gifts are ignored
 (() => {
   const giftId = new URLSearchParams(window.location.search).get('gift');
   if (giftId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(giftId)) {
+    // Optimistically store, then immediately validate and clear if not claimable
     localStorage.setItem('mint_pending_gift_id', giftId);
+    fetch(`/api/gift/by-id/${giftId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data || ['claimed', 'completed', 'expired', 'cancelled'].includes(data.status)) {
+          localStorage.removeItem('mint_pending_gift_id');
+          localStorage.removeItem('mint_pending_gift_expires');
+        }
+      })
+      .catch(() => {});
   }
 })();
 

@@ -566,11 +566,19 @@ const HomePage = ({
     fetch(`/api/gift/by-id/${pendingGiftId}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
-        if (!data) return;
-        if (data.status === 'claimed' || data.status === 'completed') {
+        if (!data) {
           localStorage.removeItem('mint_pending_gift_id');
           localStorage.removeItem('mint_pending_gift_expires');
-          localStorage.setItem('mint_gift_claimed', pendingGiftId);
+          setPendingGiftId(null);
+          setPendingGiftExpiry(null);
+          return;
+        }
+        if (['claimed', 'completed', 'expired', 'cancelled'].includes(data.status)) {
+          localStorage.removeItem('mint_pending_gift_id');
+          localStorage.removeItem('mint_pending_gift_expires');
+          if (data.status === 'claimed' || data.status === 'completed') {
+            localStorage.setItem('mint_gift_claimed', pendingGiftId);
+          }
           setPendingGiftId(null);
           setPendingGiftExpiry(null);
           return;
