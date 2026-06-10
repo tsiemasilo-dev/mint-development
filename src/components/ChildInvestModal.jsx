@@ -5,6 +5,7 @@ import { X, ArrowLeft, Wallet, BarChart3, Check, ChevronDown, ChevronUp, Trendin
 import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { supabase } from "../lib/supabase.js";
 import { calculateMinInvestmentSync, buildHoldingsBySymbol, getHoldingsArray } from "../lib/strategyUtils";
+import { useDiscretionType } from "../lib/useDiscretionType";
 
 const BROKER_FEE_RATE = 0.0025;
 const ISIN_FEE_PER_ASSET = 69;
@@ -17,8 +18,11 @@ export default function ChildInvestModal({
   initialStep = "preview",
   onClose,
   onOpenFactsheet,
+  onUpdateMandate,
 }) {
   const gradientId = useId();
+  const { isLimited: isLimitedDiscretion } = useDiscretionType();
+  const [showDiscretionModal, setShowDiscretionModal] = useState(false);
   const [step, setStep] = useState(initialStep);
   const [units, setUnits] = useState(1);
   const [saving, setSaving] = useState(false);
@@ -132,6 +136,7 @@ export default function ChildInvestModal({
   const lineColor = (ytdNum ?? 0) > 0 ? "#10b981" : (ytdNum ?? 0) < 0 ? "#ef4444" : "#94a3b8";
 
   async function handleInvest() {
+    if (isLimitedDiscretion) { setShowDiscretionModal(true); return; }
     if (baseAmountCents <= 0) { setError("Select a valid investment amount."); return; }
     if (insufficient) { setError("Insufficient funds in child's wallet."); return; }
     setSaving(true); setError("");
@@ -155,6 +160,7 @@ export default function ChildInvestModal({
   }
 
   async function handleInvestNowClick() {
+    if (isLimitedDiscretion) { setShowDiscretionModal(true); return; }
     if (!minimum || feeChecking) return;
     setFeeChecking(true);
     try {
@@ -643,6 +649,49 @@ export default function ChildInvestModal({
                 </button>
               </div>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Limited-discretion block */}
+      <AnimatePresence>
+        {showDiscretionModal && (
+          <motion.div
+            className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowDiscretionModal(false)}
+          >
+            <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <h3 className="text-center text-lg font-semibold text-slate-900 mb-2">Update your discretionary</h3>
+              <p className="text-center text-sm text-slate-600 mb-6">
+                You selected <span className="font-semibold text-slate-900">limited discretion</span>, which doesn&rsquo;t allow trading our strategies. Please{" "}
+                <button
+                  type="button"
+                  onClick={() => { setShowDiscretionModal(false); if (onUpdateMandate) onUpdateMandate(); }}
+                  className="font-semibold text-violet-600 underline"
+                >
+                  update your discretionary
+                </button>{" "}
+                to trade strategies.
+              </p>
+              <button
+                type="button"
+                onClick={() => { setShowDiscretionModal(false); if (onUpdateMandate) onUpdateMandate(); }}
+                className="w-full rounded-2xl py-3 text-sm font-semibold text-white shadow-lg"
+                style={{ background: "linear-gradient(135deg,#5b21b6,#7c3aed)" }}
+              >
+                Update my discretionary
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowDiscretionModal(false)}
+                className="w-full mt-2 rounded-2xl py-3 text-sm font-semibold text-slate-500"
+              >
+                Not now
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

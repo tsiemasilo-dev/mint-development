@@ -1418,6 +1418,7 @@ const App = () => {
               navigateTo("investAmount");
             }}
             onGiftDone={() => { setShowAdultInvestModal(false); navigateTo("home"); }}
+            onUpdateMandate={() => { setShowAdultInvestModal(false); navigateTo("identityCheck"); }}
           />
         </>
       </Suspense>
@@ -1888,6 +1889,7 @@ const App = () => {
             strategy={selectedStrategy}
             initialStep="amount"
             onClose={() => setShowChildInvestModal(false)}
+            onUpdateMandate={() => { setShowChildInvestModal(false); navigateTo("identityCheck"); }}
           />
         )}
         <AdultInvestModal
@@ -1921,6 +1923,7 @@ const App = () => {
             navigateTo("investAmount");
           }}
           onGiftDone={() => { setShowAdultInvestModal(false); navigateTo("home"); }}
+          onUpdateMandate={() => { setShowAdultInvestModal(false); navigateTo("identityCheck"); }}
         />
       </>
     );
