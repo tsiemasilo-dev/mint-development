@@ -194,17 +194,6 @@ function HistoryCard({ gift, onClaimToSelf }) {
           </div>
         )}
       </div>
-      {canClaimToSelf && (
-        <div className="border-t border-slate-100 px-4 py-3">
-          <button
-            onClick={handleClaimToSelf}
-            disabled={claiming}
-            className="w-full py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 active:scale-95 transition-all disabled:opacity-60"
-          >
-            {claiming ? "Adding…" : "Add to my portfolio"}
-          </button>
-        </div>
-      )}
     </div>
   );
 }
