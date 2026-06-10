@@ -66,10 +66,12 @@ function ActiveGiftCard({ gift, onExtend, onCancel }) {
   async function handleExtend(ext) {
     setExtending(ext);
     setExtendedKey(null);
-    await onExtend(gift.id, ext);
+    const success = await onExtend(gift.id, ext);
     setExtending(null);
-    setExtendedKey(ext);
-    setTimeout(() => setExtendedKey(null), 2500);
+    if (success) {
+      setExtendedKey(ext);
+      setTimeout(() => setExtendedKey(null), 2500);
+    }
   }
 
   async function handleCancelConfirm() {
@@ -378,13 +380,14 @@ export default function SentGiftsPageV2({ onBack, onNavigate }) {
         body: JSON.stringify({ gift_id: giftId, extension }),
       });
       const data = await res.json();
-      if (!res.ok || data.error) { alert(data.error || "Failed to extend."); return; }
+      if (!res.ok || data.error) { alert(data.error || "Failed to extend."); return false; }
       setSentActive(prev => prev.map(g => {
         if (g.id !== giftId) return g;
         const feeAdded = extension === "10h" ? Math.round((g.amount || 0) * 0.05) : Math.round((g.amount || 0) * 0.09);
         return { ...g, expires_at: data.new_expires_at, extension_fees: (g.extension_fees || 0) + feeAdded };
       }));
-    } catch { alert("Something went wrong. Please try again."); }
+      return true;
+    } catch { alert("Something went wrong. Please try again."); return false; }
   }
 
   async function handleCancel(giftId) {
