@@ -2,7 +2,7 @@ import { supabase, supabaseAdmin, authenticateUser } from "../_lib/supabase.js";
 import { Resend } from "resend";
 
 const EXPIRY_HOURS = 4;
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://mint-development.vercel.app";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.mymint.co.za";
 
 function getResend() {
   if (!process.env.RESEND_API_KEY) return null;
