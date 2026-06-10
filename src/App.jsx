@@ -2305,6 +2305,7 @@ const App = () => {
         <NotificationsPage
           onBack={goBack}
           onOpenSettings={() => navigateTo("notificationSettings")}
+          onNavigate={navigateTo}
         />
       </SwipeBackWrapper>
     );

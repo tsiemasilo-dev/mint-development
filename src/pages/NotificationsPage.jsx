@@ -129,7 +129,7 @@ const formatDate = (dateString) => {
   });
 };
 
-const NotificationItem = ({ notification, onMarkRead, onDelete, onOpenDetail }) => {
+const NotificationItem = ({ notification, onMarkRead, onDelete, onOpenDetail, onNavigate }) => {
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
   const [swiped, setSwiped] = useState(false);
@@ -157,10 +157,16 @@ const NotificationItem = ({ notification, onMarkRead, onDelete, onOpenDetail }) 
     }
   };
 
+  const isGiftNotification = notification.payload?.action === "gift_received";
+
   const handleClick = () => {
     if (swiped) return;
     if (!notification.read_at) {
       onMarkRead(notification.id);
+    }
+    if (isGiftNotification) {
+      onNavigate?.("sentGifts");
+      return;
     }
     onOpenDetail(notification);
   };
@@ -191,9 +197,9 @@ const NotificationItem = ({ notification, onMarkRead, onDelete, onOpenDetail }) 
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
         onClick={handleClick}
-        className={`relative flex gap-3 bg-white p-4 shadow-sm transition-transform ${
+        className={`relative flex gap-3 bg-white p-4 shadow-sm transition-transform cursor-pointer ${
           swiped ? "-translate-x-20" : "translate-x-0"
-        } ${!notification.read_at ? "cursor-pointer" : ""}`}
+        } ${isGiftNotification ? "border-l-4 border-violet-400" : ""}`}
       >
         <div className={`flex h-12 w-12 items-center justify-center rounded-full ${color}`}>
           <IconComponent className="h-5 w-5" />
@@ -217,7 +223,7 @@ const NotificationItem = ({ notification, onMarkRead, onDelete, onOpenDetail }) 
   );
 };
 
-const NotificationGroup = ({ title, notifications, onMarkRead, onDelete, onOpenDetail }) => {
+const NotificationGroup = ({ title, notifications, onMarkRead, onDelete, onOpenDetail, onNavigate }) => {
   if (notifications.length === 0) return null;
 
   return (
@@ -232,14 +238,18 @@ const NotificationGroup = ({ title, notifications, onMarkRead, onDelete, onOpenD
           onMarkRead={onMarkRead}
           onDelete={onDelete}
           onOpenDetail={onOpenDetail}
+          onNavigate={onNavigate}
         />
       ))}
     </div>
   );
 };
 
-const NotificationsPage = ({ onBack, onOpenSettings }) => {
+const PAGE_SIZE = 10;
+
+const NotificationsPage = ({ onBack, onOpenSettings, onNavigate }) => {
   const [selectedNotification, setSelectedNotification] = useState(null);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const {
     notifications,
     unreadCount,
@@ -259,7 +269,9 @@ const NotificationsPage = ({ onBack, onOpenSettings }) => {
   }
 
   const hasNotifications = notifications.length > 0;
-  const groupedNotifications = groupNotificationsByDate(notifications);
+  const visibleNotifications = notifications.slice(0, visibleCount);
+  const hasMore = visibleCount < notifications.length;
+  const groupedNotifications = groupNotificationsByDate(visibleNotifications);
 
   const handleOpenDetail = (notification) => {
     setSelectedNotification(notification);
@@ -319,6 +331,7 @@ const NotificationsPage = ({ onBack, onOpenSettings }) => {
               onMarkRead={markAsRead}
               onDelete={deleteNotification}
               onOpenDetail={handleOpenDetail}
+              onNavigate={onNavigate}
             />
             <NotificationGroup
               title="Yesterday"
@@ -326,6 +339,7 @@ const NotificationsPage = ({ onBack, onOpenSettings }) => {
               onMarkRead={markAsRead}
               onDelete={deleteNotification}
               onOpenDetail={handleOpenDetail}
+              onNavigate={onNavigate}
             />
             <NotificationGroup
               title="This Week"
@@ -333,6 +347,7 @@ const NotificationsPage = ({ onBack, onOpenSettings }) => {
               onMarkRead={markAsRead}
               onDelete={deleteNotification}
               onOpenDetail={handleOpenDetail}
+              onNavigate={onNavigate}
             />
             <NotificationGroup
               title="Older"
@@ -340,7 +355,17 @@ const NotificationsPage = ({ onBack, onOpenSettings }) => {
               onMarkRead={markAsRead}
               onDelete={deleteNotification}
               onOpenDetail={handleOpenDetail}
+              onNavigate={onNavigate}
             />
+            {hasMore && (
+              <button
+                type="button"
+                onClick={() => setVisibleCount(c => c + PAGE_SIZE)}
+                className="w-full rounded-2xl border border-slate-200 bg-white py-3.5 text-sm font-semibold text-slate-600 shadow-sm active:scale-95 transition-all"
+              >
+                Show more ({notifications.length - visibleCount} remaining)
+              </button>
+            )}
           </div>
         ) : (
           <div className="mt-16 flex flex-col items-center text-center">
