@@ -9598,9 +9598,15 @@ app.post("/api/gift/claim-v2", async (req, res) => {
     });
   } catch (e) { console.warn("[gift/claim-v2] tx:", e.message); }
 
-  await db.from("gift_claims").update({
+  const { error: updateErr } = await db.from("gift_claims").update({
     status: "claimed", recipient_user_id: user.id, recipient_identifier: claimantProfile.id_number || null, claimed_at: now,
   }).eq("id", gift.id);
+
+  if (updateErr) {
+    console.error(`[gift/claim-v2] FAILED to update gift_claims status for gift ${gift.id}:`, updateErr.message);
+    return res.status(500).json({ error: "Claim failed to finalise. Please try again." });
+  }
+  console.log(`[gift/claim-v2] gift ${gift.id} status updated to claimed for user ${user.id}`);
 
   const recipientName = [claimantProfile.first_name, claimantProfile.last_name].filter(Boolean).join(" ") || "Your recipient";
   try {
