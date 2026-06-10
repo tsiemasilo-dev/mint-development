@@ -1537,7 +1537,7 @@ const HomePage = ({
             {[
               { label: "Invest", icon: LayoutGrid, onClick: onOpenStrategies || onOpenInvest },
               { label: "Deposit", icon: ArrowDownToLine, onClick: onOpenDeposit },
-              { label: "Gifting", icon: Gift, isNew: !giftingIntroSeen, onClick: () => { if (!giftingIntroSeen) { setShowGiftingIntro(true); } else { onNavigate("giftStrategies"); } } },
+              { label: "Gifting", icon: Gift, isNew: true, onClick: () => { if (!giftingIntroSeen) { setShowGiftingIntro(true); } else { onNavigate("giftStrategies"); } } },
               { label: "Goals", icon: Target, onClick: () => setShowGoalsModal(true) },
             ].map((item, index) => {
               const Icon = item.icon;
