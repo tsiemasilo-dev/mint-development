@@ -212,7 +212,6 @@ function HistoryCard({ gift, onClaimToSelf }) {
 export default function SentGiftsPageV2({ onBack }) {
   const [active, setActive] = useState([]);
   const [history, setHistory] = useState([]);
-  const [tab, setTab] = useState("active");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -306,29 +305,13 @@ export default function SentGiftsPageV2({ onBack }) {
         </div>
       </header>
 
-      <div className="px-4 pt-5">
-        <div className="flex bg-white rounded-2xl p-1 shadow-sm max-w-xs">
-          {["active", "history"].map(t => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all capitalize ${tab === t ? "bg-slate-900 text-white shadow-sm" : "text-slate-400"}`}
-            >
-              {t}
-              {t === "active" && active.length > 0 && (
-                <span className={`ml-1.5 text-[10px] rounded-full px-1.5 py-0.5 ${tab === t ? "bg-white/20 text-white" : "bg-violet-600 text-white"}`}>{active.length}</span>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="px-4 py-5 max-w-lg mx-auto space-y-3">
+      <div className="px-4 py-5 max-w-lg mx-auto space-y-6">
         {loading && (
           <div className="flex justify-center py-16">
             <div className="w-8 h-8 rounded-full border-4 border-violet-200 border-t-violet-600 animate-spin" />
           </div>
         )}
+
         {error && !loading && (
           <div className="bg-white rounded-2xl p-5 text-center shadow-sm">
             <p className="text-red-600 text-sm">{error}</p>
@@ -336,30 +319,30 @@ export default function SentGiftsPageV2({ onBack }) {
           </div>
         )}
 
-        {!loading && !error && tab === "active" && (
-          active.length === 0 ? (
-            <div className="bg-white rounded-2xl p-10 text-center shadow-sm">
-              <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
-                <Gift size={22} className="text-slate-400" />
-              </div>
-              <h2 className="text-sm font-bold text-slate-800 mb-1">No active gifts</h2>
-              <p className="text-xs text-slate-400">Active gifts and their claim codes appear here.</p>
+        {!loading && !error && active.length === 0 && history.length === 0 && (
+          <div className="bg-white rounded-2xl p-10 text-center shadow-sm">
+            <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
+              <Gift size={22} className="text-slate-400" />
             </div>
-          ) : (
-            active.map(g => (
-              <ActiveGiftCard key={g.id} gift={g} onExtend={handleExtend} onCancel={handleCancel} />
-            ))
-          )
+            <h2 className="text-sm font-bold text-slate-800 mb-1">No gifts yet</h2>
+            <p className="text-xs text-slate-400">Gifts you send will appear here.</p>
+          </div>
         )}
 
-        {!loading && !error && tab === "history" && (
-          history.length === 0 ? (
-            <div className="bg-white rounded-2xl p-10 text-center shadow-sm">
-              <p className="text-sm text-slate-400">No gift history yet.</p>
-            </div>
-          ) : (
-            history.map(g => <HistoryCard key={g.id} gift={g} onClaimToSelf={handleClaimToSelf} />)
-          )
+        {!loading && !error && active.length > 0 && (
+          <div className="space-y-3">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Active</p>
+            {active.map(g => (
+              <ActiveGiftCard key={g.id} gift={g} onExtend={handleExtend} onCancel={handleCancel} />
+            ))}
+          </div>
+        )}
+
+        {!loading && !error && history.length > 0 && (
+          <div className="space-y-3">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">History</p>
+            {history.map(g => <HistoryCard key={g.id} gift={g} onClaimToSelf={handleClaimToSelf} />)}
+          </div>
         )}
       </div>
     </div>
