@@ -92,7 +92,7 @@ export const useUserStrategies = (familyMemberId = null) => {
          (more accurate than the EOD basket_value snapshot, and matches the CRM). */
       let activeQuery = supabase
         .from("stock_holdings_c")
-        .select("strategy_id, security_id, quantity, transaction_id")
+        .select("strategy_id, security_id, quantity, transaction_id, avg_fill, Expected_fill, Fill_date, market_value")
         .eq("user_id", userId)
         .eq("is_active", true)
         .eq("trade_side", "BUY");
@@ -111,26 +111,56 @@ export const useUserStrategies = (familyMemberId = null) => {
         activeQuery,
       ]);
 
-      /* Live positions value per strategy: open qty × live last_price (rands).
-         Falls back to the EOD basket_value when a live price is missing. */
-      const activeRows = activeResult?.data || [];
+      /* Value positions straight from holdings (NOT the EOD returns snapshot):
+         live price (stock_intraday_c.current_price, cents) × qty, with cost basis
+         on the HIGHER-OF rule max(Expected_fill, avg_fill/100). Only FILLED holdings
+         (avg_fill > 0 && Fill_date set) count. A strategy appears the moment it has
+         filled holdings — no client_strategy_returns_c row needed. */
+      const activeRows = (activeResult?.data || []).filter(
+        (r) => r?.strategy_id && Number(r.avg_fill) > 0 && r.Fill_date != null
+      );
       const liveSecIds = [...new Set(activeRows.map((r) => r.security_id).filter(Boolean))];
       const livePxById = {};
+      const secSymbolById = {};
       if (liveSecIds.length > 0) {
-        const { data: secRows } = await supabase
-          .from("securities_c")
-          .select("id, last_price")
-          .in("id", liveSecIds);
-        (secRows || []).forEach((s) => { livePxById[s.id] = Number(s.last_price) || 0; });
+        const [{ data: intradayRows }, { data: secRows }] = await Promise.all([
+          supabase.from("stock_intraday_c").select("security_id, current_price").in("security_id", liveSecIds).order("timestamp", { ascending: false }),
+          supabase.from("securities_c").select("id, symbol").in("id", liveSecIds),
+        ]);
+        (intradayRows || []).forEach((row) => { if (livePxById[row.security_id] == null) livePxById[row.security_id] = Number(row.current_price) || 0; });
+        (secRows || []).forEach((s) => { secSymbolById[s.id] = s.symbol; });
       }
-      const livePositionsByStrategy = {};
+
+      // Higher-of cost basis per share (rands); legacy-cents guard on Expected_fill.
+      const higherOfCostPerShare = (h) => {
+        const avgFillRands = Number(h?.avg_fill || 0) / 100;
+        const expectedRaw = Number(h?.Expected_fill || 0);
+        const expectedRands = expectedRaw > 0 ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw) : 0;
+        return expectedRands > 0 ? Math.max(expectedRands, avgFillRands) : avgFillRands;
+      };
+
+      const positionsByStrategy = {};   // live value (rands)
+      const costBasisByStrategy = {};    // higher-of cost basis (rands)
+      const holdingPnlBySymbol = {};     // per-strategy → per-symbol P&L for the holdings list
       activeRows.forEach((r) => {
-        if (!r?.strategy_id) return;
-        const px = livePxById[r.security_id] || 0;
-        if (px <= 0) return;
-        livePositionsByStrategy[r.strategy_id] =
-          (livePositionsByStrategy[r.strategy_id] || 0) + (px * Number(r.quantity || 0)) / 100;
+        const sid = r.strategy_id;
+        const qty = Math.abs(Number(r.quantity || 0));
+        const pxCents = livePxById[r.security_id] || 0;
+        const costPerShare = higherOfCostPerShare(r);
+        const liveVal = pxCents > 0 ? (pxCents / 100) * qty : costPerShare * qty; // fall back to cost if no live px
+        const costVal = costPerShare * qty;
+        positionsByStrategy[sid] = (positionsByStrategy[sid] || 0) + liveVal;
+        costBasisByStrategy[sid] = (costBasisByStrategy[sid] || 0) + costVal;
+        const sym = secSymbolById[r.security_id];
+        if (sym) {
+          const pr = liveVal - costVal;
+          (holdingPnlBySymbol[sid] = holdingPnlBySymbol[sid] || {})[sym] = {
+            pnlRands: Number(pr.toFixed(2)),
+            pnlPct: costVal > 0 ? Number(((pr / costVal) * 100).toFixed(2)) : 0,
+          };
+        }
       });
+      const activeStrategyIds = Object.keys(positionsByStrategy);
 
       /* Held 8% buffer (reserve) per strategy = remaining buffer (charged −
          slippage consumed) on the transactions that funded the strategy's
@@ -187,11 +217,6 @@ export const useUserStrategies = (familyMemberId = null) => {
           (realizedRandsByStrategy[row.strategy_id] || 0) + ((exit - fill) / 100) * qty;
       });
 
-      if (allReturns.length === 0) {
-        setData({ strategies: [], selectedStrategy: null, loading: false, error: null });
-        return;
-      }
-
       // Build latest-row and oldest-row per strategy (allReturns is desc order)
       const latestByStrategy = {};
       const oldestByStrategy = {};
@@ -208,17 +233,10 @@ export const useUserStrategies = (familyMemberId = null) => {
         strategiesMap[s.id] = s;
       }
 
-      const formattedStrategies = Object.entries(latestByStrategy).map(([strategyId, returnsRow]) => {
+      const formattedStrategies = activeStrategyIds.map((strategyId) => {
+        const returnsRow = latestByStrategy[strategyId] || {}; // chart/YTD only
         const stratMeta = strategiesMap[strategyId] || {};
         const oldestRow = oldestByStrategy[strategyId];
-
-        const snapshot = (() => {
-          try {
-            return typeof returnsRow.holdings_snapshot === "string"
-              ? JSON.parse(returnsRow.holdings_snapshot)
-              : (returnsRow.holdings_snapshot || []);
-          } catch { return []; }
-        })();
 
         const residualVal = Number((residualRandsByStrategy[strategyId] || 0).toFixed(2));
         const bufferVal = Number((bufferRandsByStrategy[strategyId] || 0).toFixed(2));
@@ -227,28 +245,16 @@ export const useUserStrategies = (familyMemberId = null) => {
            strategy, so it counts toward portfolio value. */
         const cashElement = Number((residualVal + bufferVal).toFixed(2));
 
-        /* Positions value: prefer LIVE (open qty × live price) for accuracy and
-           to match the CRM; fall back to the EOD basket_value snapshot. */
-        const eodPositions = Number((returnsRow.basket_value / 100).toFixed(2));
-        const livePositions = livePositionsByStrategy[strategyId];
-        const positionsVal = Number(((livePositions > 0 ? livePositions : eodPositions)).toFixed(2));
+        /* Positions value + cost basis come STRAIGHT FROM HOLDINGS (live intraday
+           price × qty, higher-of cost basis) — never the client_strategy_returns_c
+           snapshot. So a strategy is valued correctly the instant it's bought. */
+        const positionsVal = Number((positionsByStrategy[strategyId] || 0).toFixed(2));
+        const investedBase = Number((costBasisByStrategy[strategyId] || 0).toFixed(2));
         /* Portfolio value = live positions + cash element (residual + buffer). */
         const currentVal = Number((positionsVal + cashElement).toFixed(2));
-
-        /* "Money in" must be STABLE — anchor the deployed portion to the EOD
-           snapshot (positions + residual), NOT the live value (which would make
-           invested wobble intraday). invested = EOD worth − inception_pnl, then
-           + the buffer the user also paid. The buffer is a PASS-THROUGH cash
-           element: it adds to both invested AND current value, so it never shows
-           as profit/loss, and slippage already consumed stays netted out. */
-        const eodWorth = Number((eodPositions + residualVal).toFixed(2));
-        const inceptionPnlRands = returnsRow.inception_pnl != null ? Number(returnsRow.inception_pnl) / 100 : null;
-        let investedBase;
-        if (inceptionPnlRands != null && eodWorth - inceptionPnlRands > 0) {
-          investedBase = Number((eodWorth - inceptionPnlRands).toFixed(2));
-        } else {
-          investedBase = Number(snapshot.reduce((sum, h) => sum + costBasisRandsPerShare(h) * (h.qty || h.quantity || 0), 0).toFixed(2));
-        }
+        /* invested = cost basis + the buffer the user also paid. The buffer is a
+           PASS-THROUGH: it adds to both invested AND current value, so it never
+           shows as profit/loss. */
         const invested = Number((investedBase + bufferVal).toFixed(2));
         const totalPnl = Number((currentVal - invested).toFixed(2));
         const changePct = invested > 0 ? (totalPnl / invested) * 100 : 0;
@@ -260,23 +266,13 @@ export const useUserStrategies = (familyMemberId = null) => {
         const unrealizedPnl = Number((totalPnl - realizedPnl).toFixed(2));
         const ytdPctDecimal = returnsRow.ytd_pct != null ? returnsRow.ytd_pct / 100 : null;
 
-        // Build snapshot lookup by symbol for augmenting base holdings
-        const snapshotMap = {};
-        snapshot.forEach(h => { snapshotMap[h.symbol] = h; });
-
-        // Use strategies_c.holdings as base (has weight/logo_url); augment with P&L from snapshot
-        const baseHoldings = stratMeta.holdings || snapshot.map(h => ({ symbol: h.symbol, name: h.symbol, weight: 0, logo_url: null }));
+        // strategies_c.holdings as base (weight/logo_url); augment with per-asset
+        // P&L computed from live holdings (live price vs higher-of cost basis).
+        const pnlBySymbol = holdingPnlBySymbol[strategyId] || {};
+        const baseHoldings = stratMeta.holdings || [];
         const augmentedHoldings = baseHoldings.map(h => {
-          const snap = snapshotMap[h.symbol] || snapshotMap[h.ticker];
-          if (snap) {
-            const qty = snap.qty || snap.quantity || 0;
-            const stockCurrentVal = (snap.current_price * qty) / 100;
-            const stockCostBasis = costBasisRandsPerShare(snap) * qty;
-            const pnlRands = stockCurrentVal - stockCostBasis;
-            const pnlPct = stockCostBasis > 0 ? (pnlRands / stockCostBasis) * 100 : 0;
-            return { ...h, pnlRands: Number(pnlRands.toFixed(2)), pnlPct: Number(pnlPct.toFixed(2)) };
-          }
-          return h;
+          const p = pnlBySymbol[h.symbol] || pnlBySymbol[h.ticker];
+          return p ? { ...h, ...p } : h;
         });
 
         return {
@@ -305,12 +301,12 @@ export const useUserStrategies = (familyMemberId = null) => {
           cashElement,
           unitsHeld: 0,
           entryDate: null,
-          lastUpdated: returnsRow.as_of_date,
+          lastUpdated: returnsRow.as_of_date || null,
           previousMonthChange: parseFloat(changePct.toFixed(1)),
           metrics: null,
           firstInvestedDate: oldestRow?.as_of_date || null,
           ytd_pct: ytdPctDecimal,
-          hasReturnsData: true,
+          hasReturnsData: !!latestByStrategy[strategyId],
         };
       });
 
