@@ -292,7 +292,8 @@ const DeleteAccountPage = ({ onBack, onNavigate, onLogout }) => {
                     {b.type === "wallet" && (
                       <button
                         onClick={() => onNavigate?.("transact")}
-                        className="mt-2 text-xs font-semibold text-violet-600 flex items-center gap-1"
+                        className="mt-2 text-xs font-semibold text-slate-400 flex items-center gap-1 cursor-not-allowed opacity-60"
+                        disabled
                       >
                         Go to wallet <ChevronRight className="h-3 w-3" />
                       </button>
