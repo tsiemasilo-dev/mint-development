@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "./supabase";
+import { higherOfCostPerShareRands, fetchStrategyCashCents } from "./strategyValuation";
 import { getStrategyPriceHistory } from "./strategyData";
 import { registerCacheResetCallback } from "./userCacheReset.js";
 
@@ -131,14 +132,6 @@ export const useUserStrategies = (familyMemberId = null) => {
         (secRows || []).forEach((s) => { secSymbolById[s.id] = s.symbol; });
       }
 
-      // Higher-of cost basis per share (rands); legacy-cents guard on Expected_fill.
-      const higherOfCostPerShare = (h) => {
-        const avgFillRands = Number(h?.avg_fill || 0) / 100;
-        const expectedRaw = Number(h?.Expected_fill || 0);
-        const expectedRands = expectedRaw > 0 ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw) : 0;
-        return expectedRands > 0 ? Math.max(expectedRands, avgFillRands) : avgFillRands;
-      };
-
       const positionsByStrategy = {};   // live value (rands)
       const costBasisByStrategy = {};    // higher-of cost basis (rands)
       const holdingPnlBySymbol = {};     // per-strategy → per-symbol P&L for the holdings list
@@ -146,7 +139,7 @@ export const useUserStrategies = (familyMemberId = null) => {
         const sid = r.strategy_id;
         const qty = Math.abs(Number(r.quantity || 0));
         const pxCents = livePxById[r.security_id] || 0;
-        const costPerShare = higherOfCostPerShare(r);
+        const costPerShare = higherOfCostPerShareRands(r);
         const liveVal = pxCents > 0 ? (pxCents / 100) * qty : costPerShare * qty; // fall back to cost if no live px
         const costVal = costPerShare * qty;
         positionsByStrategy[sid] = (positionsByStrategy[sid] || 0) + liveVal;
@@ -162,34 +155,18 @@ export const useUserStrategies = (familyMemberId = null) => {
       });
       const activeStrategyIds = Object.keys(positionsByStrategy);
 
-      /* Held 8% buffer (reserve) per strategy = remaining buffer (charged −
-         slippage consumed) on the transactions that funded the strategy's
-         holdings. Holdings carry strategy_id + transaction_id; transactions carry
-         the buffer. Each transaction counted once. This is the strategy's "cash". */
-      const txnIdsByStrategy = {};
-      const addTxn = (sid, tid) => {
-        if (!sid || !tid) return;
-        (txnIdsByStrategy[sid] = txnIdsByStrategy[sid] || new Set()).add(tid);
-      };
-      activeRows.forEach((r) => addTxn(r.strategy_id, r.transaction_id));
-      (closedResult?.data || []).forEach((r) => addTxn(r.strategy_id, r.transaction_id));
-      const allTxnIds = [...new Set(Object.values(txnIdsByStrategy).flatMap((s) => [...s]))];
-      const bufferByTxn = {};
-      if (allTxnIds.length > 0) {
-        const { data: bufTxns } = await supabase
-          .from("transactions")
-          .select("id, buffer_cents, buffer_consumed_cents")
-          .in("id", allTxnIds);
-        (bufTxns || []).forEach((t) => {
-          bufferByTxn[t.id] = (Number(t.buffer_cents || 0) - Number(t.buffer_consumed_cents || 0)) / 100;
-        });
-      }
-      const bufferRandsByStrategy = {};
-      Object.entries(txnIdsByStrategy).forEach(([sid, set]) => {
-        let sum = 0;
-        set.forEach((tid) => { sum += bufferByTxn[tid] || 0; });
-        bufferRandsByStrategy[sid] = sum;
+      /* Held 8% buffer (reserve) per strategy — shared single source of truth
+         (strategyValuation.js). Residual is fetched separately below, so skip it
+         here. Cents → rands for this hook's downstream math. */
+      const { bufferCentsByStrategy } = await fetchStrategyCashCents({
+        userId,
+        familyMemberId,
+        strategyIds: activeStrategyIds,
+        activeHoldings: activeRows,
+        includeResidual: false,
       });
+      const bufferRandsByStrategy = {};
+      Object.entries(bufferCentsByStrategy).forEach(([sid, cents]) => { bufferRandsByStrategy[sid] = cents / 100; });
 
       if (allReturnsResult.error) {
         console.error("[useUserStrategies] Error fetching returns:", allReturnsResult.error);

@@ -17,6 +17,7 @@ import {
   Tooltip,
 } from "recharts";
 import { supabase } from "../lib/supabase";
+import { fetchStrategyCashCents } from "../lib/strategyValuation";
 import { getStrategyPriceHistory, getClientStrategyReturns } from "../lib/strategyData";
 import { logDebug, CAT } from "../lib/debugLog.js";
 import { getCachedSession } from "../lib/sessionCache.js";
@@ -536,30 +537,11 @@ const SwipeableBalanceCard = ({
         });
         const stratIds = Object.keys(stratAgg);
 
-        const bufferCentsByStrategy = {};
-        const residualCentsByStrategy = {};
+        let bufferCentsByStrategy = {};
+        let residualCentsByStrategy = {};
         if (stratIds.length > 0) {
-          try {
-            // transaction_id per active holding → transactions.buffer_cents − consumed (each txn once)
-            let txQ = supabase.from("stock_holdings_c").select("strategy_id, transaction_id").eq("is_active", true).in("strategy_id", stratIds);
-            txQ = familyMemberId ? txQ.eq("family_member_id", familyMemberId) : txQ.eq("user_id", userId).is("family_member_id", null);
-            const { data: txRows } = await txQ;
-            const txIdsByStrategy = {}; const allTxIds = new Set();
-            (txRows || []).forEach(r => {
-              if (!r.strategy_id || !r.transaction_id) return;
-              (txIdsByStrategy[r.strategy_id] = txIdsByStrategy[r.strategy_id] || new Set()).add(r.transaction_id);
-              allTxIds.add(r.transaction_id);
-            });
-            if (allTxIds.size > 0) {
-              const { data: bufTxns } = await supabase.from("transactions").select("id, buffer_cents, buffer_consumed_cents").in("id", [...allTxIds]);
-              const bufById = {}; (bufTxns || []).forEach(t => { bufById[t.id] = Number(t.buffer_cents || 0) - Number(t.buffer_consumed_cents || 0); });
-              for (const sid of stratIds) { let s = 0; (txIdsByStrategy[sid] ? [...txIdsByStrategy[sid]] : []).forEach(tid => { s += bufById[tid] || 0; }); bufferCentsByStrategy[sid] = s; }
-            }
-            let resQ = supabase.from("strategy_rebalance_residuals").select("strategy_id, balance_cents").in("strategy_id", stratIds);
-            resQ = familyMemberId ? resQ.eq("family_member_id", familyMemberId) : resQ.eq("user_id", userId).is("family_member_id", null);
-            const { data: resRows } = await resQ;
-            (resRows || []).forEach(r => { if (r.strategy_id) residualCentsByStrategy[r.strategy_id] = Number(r.balance_cents || 0); });
-          } catch (cashErr) { console.warn("[SwipeableBalanceCard] strategy cash fetch failed:", cashErr); }
+          // Shared single-source-of-truth cash (buffer + residual), see strategyValuation.js
+          ({ bufferCentsByStrategy, residualCentsByStrategy } = await fetchStrategyCashCents({ userId, familyMemberId, strategyIds: stratIds }));
 
           const { data: stratMeta } = await supabase.from("strategies_c").select("id, name, short_name, icon_url").in("id", stratIds);
           const stratMap = {}; (stratMeta || []).forEach(s => { stratMap[s.id] = s; });
