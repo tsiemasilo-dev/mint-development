@@ -519,98 +519,91 @@ const SwipeableBalanceCard = ({
               };
             });
 
-          // Build proper strategy items for the dropdown + chart:
-          // - Fetch real strategy name/icon from strategies_c
-          // - Aggregate market_value and invested_amount from the underlying stock holdings
-          if (returnsResult.data?.length > 0) {
-            const strategyIdsWithReturns = [
-              ...new Set(returnsResult.data.map(r => r.strategy_id).filter(Boolean))
-            ];
+          // Strategy grouping + per-strategy cash is built in the shared block
+          // below — driven by holdings so fresh buys appear without a returns row.
+        }
 
-            const { data: stratMeta } = await supabase
-              .from("strategies_c")
-              .select("id, name, short_name, icon_url")
-              .in("id", strategyIdsWithReturns);
-            const stratMap = {};
-            (stratMeta || []).forEach(s => { stratMap[s.id] = s; });
+        /* ── Strategy grouping + per-strategy CASH (residual + 8% buffer) ──────────
+           Driven by HOLDINGS (not client_strategy_returns_c): every strategy the
+           user holds gets a grouped item valued as positions + cash, so a fresh buy
+           shows correctly the instant it's made. Cash = rebalance residual + the held
+           8% buffer (transactions.buffer_cents − consumed, via holdings.transaction_id). */
+        const stratAgg = {};
+        enrichedHoldings.filter(h => !h.isStrategy && h.strategy_id).forEach(h => {
+          if (!stratAgg[h.strategy_id]) stratAgg[h.strategy_id] = { market_value: 0, invested_amount: 0 };
+          stratAgg[h.strategy_id].market_value += Number(h.market_value || 0);
+          stratAgg[h.strategy_id].invested_amount += Number(h.invested_amount || 0);
+        });
+        const stratIds = Object.keys(stratAgg);
 
-            // Sum up market_value and invested_amount from individual stock holdings per strategy
-            const stratAgg = {};
-            enrichedHoldings.filter(h => !h.isStrategy && h.strategy_id).forEach(h => {
-              if (!stratAgg[h.strategy_id]) stratAgg[h.strategy_id] = { market_value: 0, invested_amount: 0 };
-              stratAgg[h.strategy_id].market_value += Number(h.market_value || 0);
-              stratAgg[h.strategy_id].invested_amount += Number(h.invested_amount || 0);
+        const bufferCentsByStrategy = {};
+        const residualCentsByStrategy = {};
+        if (stratIds.length > 0) {
+          try {
+            // transaction_id per active holding → transactions.buffer_cents − consumed (each txn once)
+            let txQ = supabase.from("stock_holdings_c").select("strategy_id, transaction_id").eq("is_active", true).in("strategy_id", stratIds);
+            txQ = familyMemberId ? txQ.eq("family_member_id", familyMemberId) : txQ.eq("user_id", userId).is("family_member_id", null);
+            const { data: txRows } = await txQ;
+            const txIdsByStrategy = {}; const allTxIds = new Set();
+            (txRows || []).forEach(r => {
+              if (!r.strategy_id || !r.transaction_id) return;
+              (txIdsByStrategy[r.strategy_id] = txIdsByStrategy[r.strategy_id] || new Set()).add(r.transaction_id);
+              allTxIds.add(r.transaction_id);
             });
-
-            const seenStrategyIds = new Set();
-            for (const row of returnsResult.data) {
-              if (row.strategy_id && !seenStrategyIds.has(row.strategy_id)) {
-                seenStrategyIds.add(row.strategy_id);
-                const meta = stratMap[row.strategy_id] || {};
-                const agg = stratAgg[row.strategy_id] || { market_value: 0, invested_amount: 0 };
-                enrichedHoldings.push({
-                  symbol: meta.short_name || meta.name || "Strategy",
-                  name: meta.name || "Strategy",
-                  market_value: agg.market_value,
-                  invested_amount: agg.invested_amount,
-                  avg_fill: 0, Expected_fill: 0, quantity: 1,
-                  logo_url: meta.icon_url || null,
-                  security_id: null,
-                  strategy_id: row.strategy_id,
-                  isStrategy: true, strategyId: row.strategy_id,
-                  topLogos: [], changePct: 0, holdings: [], firstInvestedDate: null,
-                });
-              }
+            if (allTxIds.size > 0) {
+              const { data: bufTxns } = await supabase.from("transactions").select("id, buffer_cents, buffer_consumed_cents").in("id", [...allTxIds]);
+              const bufById = {}; (bufTxns || []).forEach(t => { bufById[t.id] = Number(t.buffer_cents || 0) - Number(t.buffer_consumed_cents || 0); });
+              for (const sid of stratIds) { let s = 0; (txIdsByStrategy[sid] ? [...txIdsByStrategy[sid]] : []).forEach(tid => { s += bufById[tid] || 0; }); bufferCentsByStrategy[sid] = s; }
             }
+            let resQ = supabase.from("strategy_rebalance_residuals").select("strategy_id, balance_cents").in("strategy_id", stratIds);
+            resQ = familyMemberId ? resQ.eq("family_member_id", familyMemberId) : resQ.eq("user_id", userId).is("family_member_id", null);
+            const { data: resRows } = await resQ;
+            (resRows || []).forEach(r => { if (r.strategy_id) residualCentsByStrategy[r.strategy_id] = Number(r.balance_cents || 0); });
+          } catch (cashErr) { console.warn("[SwipeableBalanceCard] strategy cash fetch failed:", cashErr); }
+
+          const { data: stratMeta } = await supabase.from("strategies_c").select("id, name, short_name, icon_url").in("id", stratIds);
+          const stratMap = {}; (stratMeta || []).forEach(s => { stratMap[s.id] = s; });
+          for (const sid of stratIds) {
+            const meta = stratMap[sid] || {};
+            const agg = stratAgg[sid];
+            const bufC = bufferCentsByStrategy[sid] || 0;
+            const resC = residualCentsByStrategy[sid] || 0;
+            enrichedHoldings.push({
+              symbol: meta.short_name || meta.name || "Strategy",
+              name: meta.name || "Strategy",
+              market_value: agg.market_value + bufC + resC,   // positions + cash (buffer + residual)
+              invested_amount: agg.invested_amount + bufC,     // cost basis + buffer (pass-through)
+              avg_fill: 0, Expected_fill: 0, quantity: 1,
+              logo_url: meta.icon_url || null,
+              security_id: null, strategy_id: sid,
+              isStrategy: true, strategyId: sid,
+              topLogos: [], changePct: 0, holdings: [], firstInvestedDate: null,
+            });
           }
         }
 
-        // Portfolio value: sum market_value (cents → rands) for real holdings only
+        const totalBufferCents = Object.values(bufferCentsByStrategy).reduce((s, v) => s + v, 0);
+        const totalResidualCents = Object.values(residualCentsByStrategy).reduce((s, v) => s + v, 0);
+
+        // Portfolio total (rands): underlying stock positions + total cash (buffer + residual).
         let mValue = enrichedHoldings
           .filter(h => !h.isStrategy)
           .reduce((acc, h) => acc + Number(h.market_value || 0) / 100, 0);
+        mValue += (totalBufferCents + totalResidualCents) / 100;
 
-        /* Per-strategy residual cash (admin-side rebalance leftover) counts
-           toward the headline portfolio total. Scoped to the active view:
-           child mode → family_member_id = familyMemberId,
-           parent mode → family_member_id IS NULL.
-           If userId isn't directly in scope (child mode pulls via family
-           link), we still scope by user_id when we have it. */
-        try {
-          if (familyMemberId) {
-            const { data: residRows } = await supabase
-              .from("strategy_rebalance_residuals")
-              .select("balance_cents")
-              .eq("family_member_id", familyMemberId);
-            const residRands = (residRows || []).reduce((s, r) => s + Number(r.balance_cents || 0) / 100, 0);
-            mValue += residRands;
-          } else if (userId) {
-            const { data: residRows } = await supabase
-              .from("strategy_rebalance_residuals")
-              .select("balance_cents")
-              .eq("user_id", userId)
-              .is("family_member_id", null);
-            const residRands = (residRows || []).reduce((s, r) => s + Number(r.balance_cents || 0) / 100, 0);
-            mValue += residRands;
-          }
-        } catch (residErr) {
-          console.warn("[SwipeableBalanceCard] residual fetch failed:", residErr);
-        }
-
-        // Total cost basis: max(Expected_fill, avg_fill÷100) × qty, already computed per holding
+        // Total cost basis (rands): higher-of stock cost basis + buffer (pass-through).
         const totalCostBasis = enrichedHoldings
           .filter(h => !h.isStrategy)
-          .reduce((acc, h) => acc + Number(h.invested_amount || 0) / 100, 0);
+          .reduce((acc, h) => acc + Number(h.invested_amount || 0) / 100, 0) + totalBufferCents / 100;
 
-        // maxOfCostBasis per item: used when selectedAsset is active (both stock and strategy items).
-        // Strategy items carry the aggregated invested_amount so they display correctly when selected.
-        // For the portfolio total we only sum individual stocks to avoid double-counting.
+        // maxOfCostBasis per item (used when an item is selected). Totals only sum
+        // individual stocks (+ buffer) to avoid double-counting strategy items.
         enrichedHoldings.forEach(h => {
           h.maxOfCostBasis = Number(h.invested_amount || 0) / 100;
         });
         const totalMaxOfCostBasis = enrichedHoldings
           .filter(h => !h.isStrategy)
-          .reduce((acc, h) => acc + Number(h.maxOfCostBasis || 0), 0);
+          .reduce((acc, h) => acc + Number(h.maxOfCostBasis || 0), 0) + totalBufferCents / 100;
 
         console.log("[SwipeableBalanceCard] Loaded holdings:", {
           count: enrichedHoldings.length,
